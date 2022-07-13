@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import static jacsal.TokenType.*;
@@ -127,6 +128,7 @@ class TokeniserTest {
     doTest.accept("D");
     doTest.accept("Dxw12uioi_");
     doTest.accept("__");
+    doTest.accept("a1");
   }
 
   @Test public void numericLiterals() {
@@ -149,6 +151,86 @@ class TokeniserTest {
     doTest.accept("1L", LONG_CONST);
     doTest.accept("1D", DOUBLE_CONST);
     doTest.accept("1.0D", DOUBLE_CONST);
+  }
+
+  @Test public void numbersAndDots() {
+    Tokeniser tokeniser = new Tokeniser("a.1.2.3.b");
+    BiFunction<TokenType,String,Token> checkToken = (type, value) -> {
+      Token token = tokeniser.next();
+      assertEquals(type, token.getType());
+      if (type == IDENTIFIER || type == INTEGER_CONST) {
+        assertEquals(value, token.getValue());
+      }
+      return token;
+    };
+
+    checkToken.apply(IDENTIFIER, "a");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "1");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "2");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "3");
+    checkToken.apply(DOT, null);
+    checkToken.apply(IDENTIFIER, "b");
+  }
+
+  @Test public void numbersAndDots2() {
+    Tokeniser tokeniser = new Tokeniser("1.2.3.b");
+    BiFunction<TokenType,String,Token> checkToken = (type, value) -> {
+      Token token = tokeniser.next();
+      assertEquals(type, token.getType());
+      if (type == IDENTIFIER || type == INTEGER_CONST) {
+        assertEquals(value, token.getValue());
+      }
+      return token;
+    };
+
+    checkToken.apply(DECIMAL_CONST, "1.2");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "3");
+    checkToken.apply(DOT, null);
+    checkToken.apply(IDENTIFIER, "b");
+  }
+
+  @Test public void numbersAndDotsAndRewind() {
+    Tokeniser tokeniser = new Tokeniser("a.1.2.3.b");
+    BiFunction<TokenType,String,Token> checkToken = (type, value) -> {
+      Token token = tokeniser.next();
+      assertEquals(type, token.getType());
+      if (type == IDENTIFIER || type == INTEGER_CONST) {
+        assertEquals(value, token.getValue());
+      }
+      return token;
+    };
+
+    Token token = checkToken.apply(IDENTIFIER, "a");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "1");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "2");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "3");
+    checkToken.apply(DOT, null);
+    checkToken.apply(IDENTIFIER, "b");
+
+    tokeniser.rewind(token);
+    checkToken.apply(IDENTIFIER, "a");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "1");
+    checkToken.apply(DOT, null);
+    token = checkToken.apply(INTEGER_CONST, "2");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "3");
+    checkToken.apply(DOT, null);
+    checkToken.apply(IDENTIFIER, "b");
+
+    tokeniser.rewind(token);
+    checkToken.apply(INTEGER_CONST, "2");
+    checkToken.apply(DOT, null);
+    checkToken.apply(INTEGER_CONST, "3");
+    checkToken.apply(DOT, null);
+    checkToken.apply(IDENTIFIER, "b");
   }
 
   @Test public void multipleTokens() {
@@ -431,5 +513,24 @@ class TokeniserTest {
     assertEquals(EQUAL, token.getType());
     token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
+  }
+
+  @Test public void keywordFollowedByWordChar() {
+    Tokeniser tokeniser = new Tokeniser("!instanceof !instanceofx forx while whilex while2");
+    BiConsumer<TokenType,String> checkToken = (type,identifier) -> {
+      Token token = tokeniser.next();
+      assertEquals(type, token.getType());
+      if (type == IDENTIFIER) {
+        assertEquals(identifier, token.getValue());
+      }
+    };
+
+    checkToken.accept(BANG_INSTANCE_OF, null);
+    checkToken.accept(BANG, null);
+    checkToken.accept(IDENTIFIER, "instanceofx");
+    checkToken.accept(IDENTIFIER, "forx");
+    checkToken.accept(WHILE, null);
+    checkToken.accept(IDENTIFIER, "whilex");
+    checkToken.accept(IDENTIFIER, "while2");
   }
 }

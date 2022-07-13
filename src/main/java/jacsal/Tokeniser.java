@@ -33,13 +33,13 @@ import static jacsal.TokenType.*;
  * amounts.
  */
 public class Tokeniser {
-  private Token  currentToken;      // The current token
-  private Token  previousToken;     // The previous token we parsed
-  private String source;            // The source code of the script
-  private int    length;            // Length of source code
-  private int    line   = 1;        // The current line number
-  private int column = 1;        // The current column number
-  private int offset = 0;        // The current position in the source code as offset
+  private       Token  currentToken;      // The current token
+  private       Token  previousToken;     // The previous token we parsed
+  private final String source;            // The source code of the script
+  private final int    length;            // Length of source code
+  private       int    line   = 1;        // The current line number
+  private       int    column = 1;        // The current column number
+  private       int    offset = 0;        // The current position in the source code as offset
 
   /**
    * Constructor
@@ -114,36 +114,7 @@ public class Tokeniser {
     // Check for numeric literals
     //
     if (symbols.size() == 1 && symbols.get(0).type == INTEGER_CONST) {
-      int i = 1;
-      while (i < remaining && Character.isDigit(charAt(i))) { i++; }
-
-      // Check for double/decimal number
-      boolean decimal = i + 1 < remaining && charAt(i) == '.' && Character.isDigit(charAt(i+1));
-
-      if (decimal) {
-        i += 2;  // Skip '.' and first digit since we have already checked for their presence above
-        while (i < remaining && Character.isDigit(charAt(i))) { i++; }
-      }
-
-      // Now check if there is a trailing 'L' or 'D'
-      // NOTE: by default a decimal point implies a BigDecimal but 'D' will make it a native double
-      TokenType type = decimal ? DECIMAL_CONST : INTEGER_CONST;
-      int numberLength = i;
-      if (i < remaining) {
-        int nextChar = charAt(i);
-        if (nextChar == 'L' && !decimal) {
-          i++;
-          type = LONG_CONST;
-        }
-        else
-        if (nextChar == 'D') {
-          i++;
-          type = DOUBLE_CONST;
-        }
-      }
-      advance(i);
-      return token.setType(type)
-                  .setLength(numberLength);
+      return parseNumber(token, remaining);
     }
 
     //
@@ -153,7 +124,7 @@ public class Tokeniser {
       if (sym.length() > remaining) continue;
 
       // Check that if symbol ends in a word character that following char is not a word character
-      if (sym.endsWithAlpha() && sym.length() + 1 <= remaining && Character.isAlphabetic(charAt(sym.length()))) continue;
+      if (sym.endsWithAlpha() && sym.length() + 1 <= remaining && Character.isJavaIdentifierPart(charAt(sym.length()))) continue;
 
       // Check if string at current offset matches symbol
       int i = 1;
@@ -169,12 +140,12 @@ public class Tokeniser {
     }
 
     // Only remaining possibility is that token is an identifier so make sure we have start of an identifier
-    if (!(c == '_' || Character.isAlphabetic(c))) throw new CompileError("Unexpected character '" + (char)c + "'", token);
+    if (!Character.isJavaIdentifierStart(c)) throw new CompileError("Unexpected character '" + (char)c + "'", token);
 
     int i = 1;
     for (; i < remaining; i++) {
       int nextChar = charAt(i);
-      if (!(Character.isAlphabetic(nextChar) || Character.isDigit(nextChar) || nextChar == '_')) {
+      if (!Character.isJavaIdentifierPart(nextChar)) {
         break;
       }
     }
@@ -182,6 +153,44 @@ public class Tokeniser {
     advance(i);
     return token.setType(IDENTIFIER)
                 .setLength(i);
+  }
+
+  private Token parseNumber(Token token, int remaining) {
+    int i = 1;
+    while (i < remaining && Character.isDigit(charAt(i))) { i++; }
+
+    // Check for double/decimal number but first check for special case where previous token
+    // was a '.' to allow for numbers to be fields in a dotted path. E.g. a.1.2.b
+    // In this case we don't want to return 1.2 as the number but 1 followed by '.' followed by 2.
+    // If previous token was not a '.' then if following char is a '.' we know we have a decimal
+    // number.
+    boolean decimal = (previousToken == null || previousToken.isNot(DOT)) &&
+                      i + 1 < remaining && charAt(i) == '.' && Character.isDigit(charAt(i + 1));
+
+    if (decimal) {
+      i += 2;  // Skip '.' and first digit since we have already checked for their presence above
+      while (i < remaining && Character.isDigit(charAt(i))) { i++; }
+    }
+
+    // Now check if there is a trailing 'L' or 'D'
+    // NOTE: by default a decimal point implies a BigDecimal but 'D' will make it a native double
+    TokenType type = decimal ? DECIMAL_CONST : INTEGER_CONST;
+    int numberLength = i;
+    if (i < remaining) {
+      int nextChar = charAt(i);
+      if (nextChar == 'L' && !decimal) {
+        i++;
+        type = LONG_CONST;
+      }
+      else
+      if (nextChar == 'D') {
+        i++;
+        type = DOUBLE_CONST;
+      }
+    }
+    advance(i);
+    return token.setType(type)
+                .setLength(numberLength);
   }
 
   /**

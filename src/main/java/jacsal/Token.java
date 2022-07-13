@@ -91,6 +91,24 @@ public class Token {
   public TokenType getType() { return type; }
 
   /**
+   * Check if type of token matches type passed in
+   * @param type  the type to check
+   * @return true if type matches
+   */
+  public boolean is(TokenType type) {
+    return this.type == type;
+  }
+
+  /**
+   * Check if type of token is not the same as the type passed in
+   * @param type  the type
+   * @return true if type does not matches
+   */
+  public boolean isNot(TokenType type) {
+    return this.type != type;
+  }
+
+  /**
    * Set length of token
    * @param length  the length
    * @return the token
@@ -100,7 +118,6 @@ public class Token {
     return this;
   }
 
-  public int getOffset()    { return offset; }
   public int getLine()      { return line;   }
   public int getColumn()    { return column; }
 
