@@ -43,6 +43,7 @@ public class Token {
   private int       column;     // Column where token is
   private int       length;     // Length of token
   private String    value;      // String value of token (for string literals)
+  private boolean   isKeyword;  // Whether token is a keyword or not
 
   /**
    * Partially construct a token whose type and length is not yet known
@@ -118,8 +119,21 @@ public class Token {
     return this;
   }
 
-  public int getLine()      { return line;   }
-  public int getColumn()    { return column; }
+  /**
+   * Set flag to indicate whether token is a keyword or not. This is
+   * used in scenarios where a bare field name can be used and allows
+   * keywords to be used as field names
+   * @param isKeyword  true if token is a keyword
+   * @return true if token is a keyword
+   */
+  public Token setKeyword(boolean isKeyword) {
+    this.isKeyword = isKeyword;
+    return this;
+  }
+
+  public boolean isKeyword()    { return isKeyword; }
+  public int     getLine()      { return line;   }
+  public int     getColumn()    { return column; }
 
   /**
    * Get the line of source code with an additional line showing where token starts (used for errors)

@@ -16,21 +16,32 @@
 
 package jacsal;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static jacsal.TokenType.*;
 
 /**
- * This class represents the tokeniser for a given script. It is constructed
- * with the source code and then it parses the source into tokens, returning
- * each token one-by-one.
- * Since tokens have a reference to the next token (once the next one has been
- * parsed), clients can rewind by setting the current token to a previously
- * returned token. This allows us to easily support lookahead by arbitrary
- * amounts.
+ * This class represents the tokeniser for a given script. It is constructed with the source
+ * code and then it parses the source into tokens, returning each token one-by-one. Since
+ * tokens have a reference to the next token (once the next one has been parsed), clients
+ * can rewind by setting the current token to a previously returned token. This allows us
+ * to easily support lookahead by arbitrary amounts.
+ *
+ * This Tokeniser is more complicated than a more straightforward implemention because we
+ * need to keep some state to handle interpolated strings where expressions inside strings
+ * can recursively contain other interpolated strings. We keep track of how nested we are in
+ * our recursive expressions by matching '{' and '}' and we also keep track of whether we are
+ * in a multi-line string expression or not.
+ *
+ * NOTE: we could try to do this all in the Parser but that makes the parser more complicated
+ * and requires shared state between the Parser and the Tokeniser about whether we are in an
+ * expression string, how nested we are, and whether each nesting is single or multi-line.
+ * The Parser would then need to tell the Tokeniser whether to parse a string or a normal
+ * token each time. Keeping this state in the Parser also makes it harder for the Parser to
+ * implement lookahead. While it does add complexity to the Tokeniser, it simplifies the job
+ * of the Parser.
  */
 public class Tokeniser {
   private       Token  currentToken;      // The current token
@@ -40,6 +51,23 @@ public class Tokeniser {
   private       int    line   = 1;        // The current line number
   private       int    column = 1;        // The current column number
   private       int    offset = 0;        // The current position in the source code as offset
+
+  private boolean inString     = false;   // True if parsing expression string content (but not
+                                          // expression within string)
+  private int     nestedBraces = 0;
+
+  // Stack of expression string states showing whether current nested string type is triple quoted
+  // and whether newlines are allowed.
+  private final Deque<StringState> stringState = new ArrayDeque<>();
+  private static class StringState {
+    boolean isTripleQuoted;     // Whether current expression string is triple quoted or not
+    boolean newlinesAllowed;    // Whether we currently allow newlines within our expression string
+    int     braceLevel;         // At what level of brace nesting does the expression string exist
+    StringState(boolean isTripleQuoted, boolean newlinesAllowed) {
+      this.isTripleQuoted  = isTripleQuoted;
+      this.newlinesAllowed = newlinesAllowed;
+    }
+  }
 
   /**
    * Constructor
@@ -51,7 +79,8 @@ public class Tokeniser {
   }
 
   /**
-   * Get the next token
+   * Get the next token. If we have been rewound then we return from that point in
+   * the stream of tokens rather than parsing a new one from the source code.
    * @return the next token in the stream of tokens
    */
   public Token next() {
@@ -79,80 +108,195 @@ public class Tokeniser {
 
   //////////////////////////////////////////////////////////////////
 
+  /**
+   * This is the main method that reads chars and decides what type of token to return.
+   * @return the next token from the source code
+   */
   private Token parseToken() {
     skipSpacesAndComments();
 
     // Create token before knowing type and length so we can record start position
     Token token = createToken();
-    int remaining = source.length() - offset;
 
+    int remaining = source.length() - offset;
     if (remaining == 0) {
       return token.setType(EOF);
     }
 
     int c = charAt(0);
 
-    switch (c) {
-      case '\n':
-        line++;
-        column = 0;
-        advance(1);
-        return token.setType(EOL).setLength(1);
-      case '\'':
-        return parseString();
-      case '"':
-        throw new UnsupportedOperationException("Interpolated strings not supported");
-//        return parseInterpolatedString();
+    // The inString flag indicates we are in an expression string and are just after an embedded
+    // '$' expression that we have already parsed
+    if (inString) {
+      return parseNextStringPart(token, remaining, c);
     }
 
-    if (c > 256) throw new CompileError("Unexpected character '" + (char)c + "'", token);
+    if (c > 256) throw new CompileError("Unexpected character '" + (char) c + "'", token);
 
     // Find list of symbols that match o first character
     List<Symbol> symbols = symbolLookup[c];
 
-    //
     // Check for numeric literals
-    //
     if (symbols.size() == 1 && symbols.get(0).type == INTEGER_CONST) {
       return parseNumber(token, remaining);
     }
 
-    //
     // Iterate through possible symbols from longest to shortest until we find one that matches
-    //
-    for (Symbol sym: symbols) {
-      if (sym.length() > remaining) continue;
+    Optional<Symbol> symbolOptional = symbols.stream().sequential()
+                                             .filter(symbol -> symbolMatches(symbol, remaining))
+                                             .findFirst();
 
-      // Check that if symbol ends in a word character that following char is not a word character
-      if (sym.endsWithAlpha() && sym.length() + 1 <= remaining && Character.isJavaIdentifierPart(charAt(sym.length()))) continue;
-
-      // Check if string at current offset matches symbol
-      int i = 1;
-      for (; i < sym.length(); i++) {
-        if (sym.charAt(i) != charAt(i)) break;
-      }
-      if (i != sym.length()) continue;
-
-      // Found matching symbol so return the token
-      advance(sym.length());
-      return token.setType(sym.type)
-                  .setLength(sym.length());
+    // If we did not find matching symbol then we must have an identifier (or an unknown token character)
+    if (symbolOptional.isEmpty()) {
+      return parseIdentifier(token, remaining);
     }
 
-    // Only remaining possibility is that token is an identifier so make sure we have start of an identifier
-    if (!Character.isJavaIdentifierStart(c)) throw new CompileError("Unexpected character '" + (char)c + "'", token);
+    // We found matching symbol
+    Symbol sym = symbolOptional.get();
+    advance(sym.length());
 
+    // Some special handling for specific tokens
+    switch (sym.type) {
+      case EOL: {
+        if (!newLinesAllowed()) {
+          throw new CompileError("New line not allowed within single line string", token);
+        }
+        line++;
+        column = 1;
+        return token.setType(EOL).setLength(1);
+      }
+      case SINGLE_QUOTE: {
+        // Work out whether we are a multi line string literal or not
+        boolean tripleQuoted = available(2) && charAt(0) == '\'' && charAt(1) == '\'';
+        advance(tripleQuoted ? 2 : 0);
+        Token stringToken = parseString(false, tripleQuoted, newLinesAllowed() && tripleQuoted);
+        advance(tripleQuoted ? 3 : 1);
+        return stringToken;
+      }
+      case DOUBLE_QUOTE: {
+        // Work out whether we are a multi line string expression or not. If we are the outermost string expression
+        // in our nested strings then we can be multi-line. As soon as we hit a single line string expression
+        // or are nested within one we can no longer have newlines even if the nested string starts with a triple
+        // double quote.
+        boolean tripleQuote = available(2) && charAt(0) == '"' && charAt(1) == '"';
+        inString = true;
+        boolean allowNewLines = newLinesAllowed() && tripleQuote;
+        stringState.push(new StringState(tripleQuote, allowNewLines));
+        advance(tripleQuote ? 2 : 0);
+        token = parseString(true, tripleQuote, allowNewLines);
+        return token.setType(EXPR_STRING_START);
+      }
+      case LEFT_BRACE: {
+        nestedBraces++;
+        return token.setType(LEFT_BRACE).setLength(1);
+      }
+      case RIGHT_BRACE: {
+        nestedBraces--;
+        if (nestedBraces < 0) {
+          throw new CompileError("Closing brace '}' does not match any opening brace", token);
+        }
+        if (stringState.size() > 0 && stringState.peek().braceLevel == nestedBraces) {
+          // Go back into string mode if we have found closing '}' of our nested expression within the sring
+          inString = true;
+        }
+        return token.setType(RIGHT_BRACE).setLength(1);
+      }
+    }
+
+    return token.setType(sym.type)
+                .setLength(sym.length())
+                .setKeyword(sym.isKeyword);
+  }
+
+  private boolean symbolMatches(Symbol sym, int remaining) {
+    if (sym.length() > remaining) return false;
+
+    // Check that if symbol ends in a word character that following char is not a word character
+    if (sym.endsWithAlpha() &&
+        sym.length() + 1 <= remaining &&
+        Character.isJavaIdentifierPart(charAt(sym.length()))) {
+      return false;
+    }
+
+    // Check if string at current offset matches symbol
     int i = 1;
-    for (; i < remaining; i++) {
-      int nextChar = charAt(i);
-      if (!Character.isJavaIdentifierPart(nextChar)) {
+    while(i < sym.length() && sym.charAt(i) == charAt(i)) { i++; }
+
+    return i == sym.length();
+  }
+
+  /**
+   * Handle scenario where we are in a string expr (interpolated string). We parse
+   * string as STRING_EXPR_START followed by combinations of STRING_CONST or other
+   * expressions and then ending with STRING_EXPR_END. Each time, we return a
+   * STRING_CONST until we get to a point where we have $identifier or ${...}
+   * Note that the STRING_EXPR_START token will have a value that contains initial
+   * chars of the string but STRING_EXPR_END is always empty.
+   */
+  private Token parseNextStringPart(Token token, int remaining, int c) {
+    StringState currentStringState = stringState.peek();
+    boolean     isTripleQuoted     = currentStringState.isTripleQuoted;
+    switch (c) {
+      case '$': {
+        // We either have an identifer following or as '{'
+        if (charAt(1) == '{') {
+          inString = false;
+          // Remember where we are so that when we see matching '}' we go back into string expr mode
+          currentStringState.braceLevel = nestedBraces++;
+          advance(1);
+          token = createToken().setType(LEFT_BRACE)
+                               .setLength(1);
+          advance(1);
+        }
+        else {
+          // We know that we have an identifier following the '$' in this case because
+          // we would have already swollowed the '$' in previous parseString() call if there
+          // was no identifier following the '$'.
+          advance(1);
+          token = parseIdentifier(createToken(), remaining);
+          if (keyWords.contains(token.getValue())) {
+            throw new CompileError("Keyword found where identifier expected", token);
+          }
+        }
+        return token;
+      }
+      case '"': {
+        if (!isTripleQuoted || available(3) && charAt(1) == '"' && charAt(2) == '"') {
+          advance(isTripleQuoted ? 3 : 1);
+          stringState.pop();
+          inString = false;
+          return token.setType(STRING_EXPR_END)
+                      .setLength(3);
+        }
+        break;
+      }
+      case '\n': {
+        if (!newLinesAllowed()) {
+          throw new CompileError("Unexpected new line within single line string", createToken());
+        }
         break;
       }
     }
+    // No embedded expression or end of string found so parse as STRING_CONST
+    return parseString(true, isTripleQuoted, newLinesAllowed());
+  }
+
+  private Token parseIdentifier(Token token, int remaining) {
+    // Make sure that first character is legal for an identitifer
+    int c = charAt(0);
+    if (!Character.isJavaIdentifierStart(c)) throw new CompileError("Unexpected character '" + (char)c + "'", token);
+
+    // Search for first char the is not a valid identifier char
+    int i = 1;
+    while (i < remaining && Character.isJavaIdentifierPart(charAt(i))) { i++; }
 
     advance(i);
     return token.setType(IDENTIFIER)
                 .setLength(i);
+  }
+
+  private boolean newLinesAllowed() {
+     return stringState.size() == 0 || stringState.peek().newlinesAllowed;
   }
 
   private Token parseNumber(Token token, int remaining) {
@@ -269,26 +413,27 @@ public class Tokeniser {
     }
   }
 
-  private Token parseString() {
-    // Work out whether we are a multi line string literal or not
-    boolean multiLine = available(3) && charAt(1) == '\'' && charAt(2) == '\'';
-    advance(multiLine ? 3 : 1);
+  private Token parseString(boolean stringExpr, boolean tripleQuoted, boolean newlinesAllowed) {
+    char quoteChar = stringExpr ? '"' : '\'';
     Token token = createToken();
     StringBuilder sb = new StringBuilder();
     boolean finished = false;
     for (; !finished && available(1); advance(1)) {
       int c = charAt(0);
       switch (c) {
-        case '\'': {
-          // If close quote/quotes
-          if (!multiLine || available(3) && charAt(1) == '\'' && charAt(2) == '\'') {
-            finished = true;
-            continue;
+        case '\'':
+        case '"': {
+          if (c == quoteChar) {
+            // If close quote/quotes
+            if (!tripleQuoted || available(3) && charAt(1) == quoteChar && charAt(2) == quoteChar) {
+              finished = true;
+              continue;
+            }
           }
           break;
         }
         case '\n': {
-          if (!multiLine) { throw new CompileError("Unexpected end of line in string", token); }
+          if (!newlinesAllowed) { throw new CompileError("New line not allowed nested within single line string", token); }
           line++;
           column = 0;
           break;
@@ -299,6 +444,15 @@ public class Tokeniser {
           c = escapedChar(charAt(0));
           break;
         }
+        case '$': {
+          if (stringExpr) {
+            int nextChar = available(2) ? charAt(1) : -1;
+            if (nextChar == '{' || Character.isJavaIdentifierStart(nextChar)) {
+              finished = true;
+              continue;
+            }
+          }
+        }
         default:
           break;
       }
@@ -306,8 +460,7 @@ public class Tokeniser {
     }
     if (!finished) { throw new CompileError("Unexpected end of file in string", token); }
 
-    // We have already advanced by 1 inside loop so skip final 2 single quotes for multi-line strings
-    advance(multiLine ? 2 : 0);
+    advance(-1);     // Don't swallow '$' or ending quote
     return token.setType(STRING_CONST)
                 .setValue(sb.toString());
   }
@@ -327,6 +480,11 @@ public class Tokeniser {
     return new Token(source, offset, line, column);
   }
 
+  private static boolean isIdentifier(String s) {
+    return Character.isJavaIdentifierStart(s.charAt(0)) &&
+           s.chars().skip(1).allMatch(Character::isJavaIdentifierPart);
+  }
+
   //////////////////////////////////////////////////////////////////////
 
   // = INIT
@@ -335,10 +493,12 @@ public class Tokeniser {
     public String    symbol;
     public int       length;
     public TokenType type;
+    public boolean   isKeyword;
     public Symbol(String symbol, TokenType type) {
-      this.symbol = symbol;
-      this.type   = type;
-      this.length = symbol.length();
+      this.symbol    = symbol;
+      this.type      = type;
+      this.length    = symbol.length();
+      this.isKeyword = isIdentifier(symbol);
     }
     public boolean endsWithAlpha()    { return Character.isAlphabetic(symbol.charAt(symbol.length() - 1)); }
     public int     length()           { return length; }
@@ -400,6 +560,14 @@ public class Tokeniser {
     //new Symbol("", LONG_CONST),
     //new Symbol("", DOUBLE_CONST),
     //new Symbol("", DECIMAL_CONST),
+
+    new Symbol("'", SINGLE_QUOTE),
+    new Symbol("\"", DOUBLE_QUOTE),
+    new Symbol("\n", EOL),
+
+    // Keywords
+    new Symbol("true", TRUE),
+    new Symbol("false", FALSE),
     new Symbol("def", DEF),
     new Symbol("var", VAR),
     new Symbol("it", IT),
@@ -437,10 +605,17 @@ public class Tokeniser {
                                                         .collect(Collectors.toList())
                                                         .toArray(new List[0]);
 
+  private static Set<String> keyWords = new HashSet<>();
+
   static {
     symbols.forEach(sym -> symbolLookup[sym.symbol.charAt(0)].add(sym));
     IntStream.range(0, 256).forEach(i -> symbolLookup[i].sort((a, b) -> b.symbol.compareTo(a.symbol)));
     // Map digits to INT for the moment
     IntStream.range(0, 10).forEach(i -> symbolLookup[Integer.toString(i).charAt(0)] = List.of(new Symbol(Integer.toString(i), INTEGER_CONST)));
+
+    keyWords = symbols.stream()
+                      .filter(sym -> sym.isKeyword)
+                      .map(sym -> sym.symbol)
+                      .collect(Collectors.toSet());
   }
 }
