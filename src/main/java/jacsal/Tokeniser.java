@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -84,18 +85,30 @@ public class Tokeniser {
    * @return the next token in the stream of tokens
    */
   public Token next() {
-    if (currentToken == null) {
-      currentToken = parseToken();
-      if (previousToken != null) {
-        previousToken.setNext(currentToken);
-      }
-    }
+    populateCurrentToken();
 
     Token result  = currentToken;
     previousToken = currentToken;
     currentToken  = previousToken.getNext();
 
     return result;
+  }
+
+  /**
+   * Return the previous token
+   * @return the previous token
+   */
+  public Token previous() {
+    return previousToken;
+  }
+
+  /**
+   * Peek at the next token without advancing
+   * @return the next token
+   */
+  public Token peek() {
+    populateCurrentToken();
+    return currentToken;
   }
 
   /**
@@ -107,6 +120,20 @@ public class Tokeniser {
   }
 
   //////////////////////////////////////////////////////////////////
+
+  /**
+   * If currentToken already has a value then do nothing. If we don't have a current
+   * token then read the next token and update the previous token to point to the new
+   * token.
+   */
+  private void populateCurrentToken() {
+    if (currentToken == null) {
+      currentToken = parseToken();
+      if (previousToken != null) {
+        previousToken.setNext(currentToken);
+      }
+    }
+  }
 
   /**
    * This is the main method that reads chars and decides what type of token to return.
@@ -254,7 +281,7 @@ public class Tokeniser {
           // was no identifier following the '$'.
           advance(1);
           token = parseIdentifier(createToken(), remaining);
-          if (keyWords.contains(token.getValue())) {
+          if (keyWords.contains(token.getStringValue())) {
             throw new CompileError("Keyword found where identifier expected", token);
           }
         }
@@ -265,7 +292,7 @@ public class Tokeniser {
           advance(isTripleQuoted ? 3 : 1);
           stringState.pop();
           inString = false;
-          return token.setType(STRING_EXPR_END)
+          return token.setType(EXPR_STRING_END)
                       .setLength(3);
         }
         break;
@@ -333,8 +360,37 @@ public class Tokeniser {
       }
     }
     advance(i);
-    return token.setType(type)
-                .setLength(numberLength);
+    token.setLength(numberLength);
+    String value = (String)token.getValue();
+    switch (type) {
+      case INTEGER_CONST: {
+        try {
+          token.setValue(Integer.parseInt(value));
+        }
+        catch (NumberFormatException e) {
+          throw new CompileError("Number too large for integer constant", token);
+        }
+        break;
+      }
+      case LONG_CONST: {
+        try {
+          token.setValue(Long.parseLong(value));
+        }
+        catch (NumberFormatException e) {
+          throw new CompileError("Number too large for long constant", token);
+        }
+        break;
+      }
+      case DOUBLE_CONST: {
+        token.setValue(Double.parseDouble(value));
+        break;
+      }
+      case DECIMAL_CONST: {
+        token.setValue(new BigDecimal(value));
+        break;
+      }
+    }
+    return token.setType(type);
   }
 
   /**
@@ -532,6 +588,8 @@ public class Tokeniser {
     new Symbol("|", PIPE),
     new Symbol(":", COLON),
     new Symbol(";", SEMICOLON),
+    new Symbol("--", MINUS_MINUS),
+    new Symbol("++", PLUS_PLUS),
     new Symbol("!=", BANG_EQUAL),
     new Symbol("==", EQUAL_EQUAL),
     new Symbol("<=", LESS_THAN_EQUAL),
@@ -554,6 +612,13 @@ public class Tokeniser {
     new Symbol("<<=", DOUBLE_LESS_THAN_EQUAL),
     new Symbol(">>=", DOUBLE_GREATER_THAN_EQUAL),
     new Symbol(">>>=", TRIPLE_GREATER_THAN_EQUAL),
+    new Symbol("<=>", COMPARE),
+    new Symbol("===", TRIPLE_EQUAL),
+    new Symbol("!==", BANG_EQUAL_EQUAL),
+    new Symbol("=~", EQUAL_GRAVE),
+    new Symbol("**", STAR_STAR),
+    new Symbol("%=", PERCENT_EQUAL),
+    new Symbol("**=", STAR_STAR_EQUAL),
     //new Symbol("", IDENTIFIER),
     //new Symbol("", STRING_CONST),
     //new Symbol("", INTEGER_CONST),
@@ -568,6 +633,7 @@ public class Tokeniser {
     // Keywords
     new Symbol("true", TRUE),
     new Symbol("false", FALSE),
+    new Symbol("null", NULL),
     new Symbol("def", DEF),
     new Symbol("var", VAR),
     new Symbol("it", IT),
@@ -587,7 +653,11 @@ public class Tokeniser {
     new Symbol("as", AS),
     new Symbol("return", RETURN),
     new Symbol("instanceof", INSTANCE_OF),
-    new Symbol("!instanceof", BANG_INSTANCE_OF)
+    new Symbol("!instanceof", BANG_INSTANCE_OF),
+    new Symbol("in", IN),
+    new Symbol("!in", BANG_IN),
+    new Symbol("and", AND),
+    new Symbol("or", OR)
     //    new Symbol("'", SINGLE_QUOTE),
     //    new Symbol("\"", DOUBLE_QUOTE),
     //    new Symbol("''", DOUBLE_SINGLE_QUOTE),
@@ -605,7 +675,7 @@ public class Tokeniser {
                                                         .collect(Collectors.toList())
                                                         .toArray(new List[0]);
 
-  private static Set<String> keyWords = new HashSet<>();
+  private static Set<String> keyWords;
 
   static {
     symbols.forEach(sym -> symbolLookup[sym.symbol.charAt(0)].add(sym));

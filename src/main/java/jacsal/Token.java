@@ -42,7 +42,7 @@ public class Token {
   private int       line;       // Line number where token is
   private int       column;     // Column where token is
   private int       length;     // Length of token
-  private String    value;      // String value of token (for string literals)
+  private Object    value;      // Value of token - int, long, string, etc if literal
   private boolean   isKeyword;  // Whether token is a keyword or not
 
   /**
@@ -57,6 +57,22 @@ public class Token {
     this.offset = offset;
     this.line   = line;
     this.column = column;
+  }
+
+  /**
+   * Construct a new token of different type from an existing token
+   * @param type   the new token type
+   * @param token  the token to copy values from
+   */
+  public Token(TokenType type, Token token) {
+    this.type   = type;
+    this.source = token.source;
+    this.offset = token.offset;
+    this.line   = token.line;
+    this.column = token.column;
+    this.length = token.length;
+    this.value  = token.value;
+    this.isKeyword = token.isKeyword;
   }
 
   /**
@@ -144,20 +160,24 @@ public class Token {
   }
 
   /**
-   * Return string value of token
-   * @return  the string value of the token
+   * Return value of token. For literals returns the Integer, Long, Double, etc.
+   * For non-literals returns the string representation of the token.
+   * @return  the value of the token
    */
-  public String getValue() {
-    return value == null ? source.substring(offset, offset + length) : value;
+  public Object getValue() {
+    return value == null ? getStringValue() : value;
+  }
+
+  public String getStringValue() {
+    return source.substring(offset, offset + length);
   }
 
   /**
-   * Set string value of token for string literals which may have escape characters
-   * and so cannot not be directly reproduced from the source code
+   * Set value of token for literals.
    * @param value  the string value
    * @return the token
    */
-  public Token setValue(String value) {
+  public Token setValue(Object value) {
     this.value = value;
     return this;
   }
@@ -165,12 +185,8 @@ public class Token {
   @Override
   public String toString() {
     return "Token{" +
-           "next=" + next +
+           "type=" + type +
            ", value='" + getValue() + '\'' +
-           ", line=" + line +
-           ", column=" + column +
-           ", offset=" + offset +
-           ", length=" + length +
            '}';
   }
 }

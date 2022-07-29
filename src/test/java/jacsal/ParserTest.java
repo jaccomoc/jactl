@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 
-plugins {
-    id 'java'
-}
+package jacsal;
 
-group 'jacsal'
-version '1.0-SNAPSHOT'
+import org.junit.jupiter.api.Test;
 
-repositories {
-    mavenCentral()
-}
+import java.util.function.Function;
 
-dependencies {
-    implementation 'org.ow2.asm:asm:9.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
+import static org.junit.jupiter.api.Assertions.*;
 
-test {
-    useJUnitPlatform()
+class ParserTest {
+
+  @Test public void simpleExpressions() {
+    Function<String,Expr> parseExpr = code -> new Parser(new Tokeniser(code)).parseExpression();
+    var expr = parseExpr.apply("1 + 2 * 3 + 4");
+    System.out.println(expr);
+  }
 }

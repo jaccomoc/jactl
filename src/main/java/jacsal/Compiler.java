@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-plugins {
-    id 'java'
-}
+package jacsal;
 
-group 'jacsal'
-version '1.0-SNAPSHOT'
+import java.util.Map;
+import java.util.function.Function;
 
-repositories {
-    mavenCentral()
-}
+public class Compiler {
 
-dependencies {
-    implementation 'org.ow2.asm:asm:9.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
+  public static Object run(String source, Map<String,Object> bindings) {
+    Parser parser = new Parser(new Tokeniser(source));
+    Expr   expr   = parser.parseExpression();
+    expr.accept(new Resolver());
+    Function<Map<String,Object>,Object> compiled = compile(expr);
+    return compiled.apply(bindings);
+  }
 
-test {
-    useJUnitPlatform()
+  private static Function<Map<String,Object>,Object> compile(Expr expr) {
+    ClassCompiler compiler = new ClassCompiler(new CompileContext(), expr);
+    return compiler.compile();
+  }
 }

@@ -18,7 +18,10 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -75,8 +78,17 @@ class TokeniserTest {
     doTest.accept("^=", ACCENT_EQUAL);
     doTest.accept("~=", GRAVE_EQUAL);
     doTest.accept("?=", QUESTION_EQUAL);
+    doTest.accept("%=", PERCENT_EQUAL);
+    doTest.accept("**=", STAR_STAR_EQUAL);
     doTest.accept("<<", DOUBLE_LESS_THAN);
     doTest.accept(">>", DOUBLE_GREATER_THAN);
+    doTest.accept("--", MINUS_MINUS);
+    doTest.accept("++", PLUS_PLUS);
+    doTest.accept("**", STAR_STAR);
+    doTest.accept("=~", EQUAL_GRAVE);
+    doTest.accept("<=>", COMPARE);
+    doTest.accept("===", TRIPLE_EQUAL);
+    doTest.accept("!==", BANG_EQUAL_EQUAL);
 //    doTest.accept("'", SINGLE_QUOTE);
 //    doTest.accept("\"", DOUBLE_QUOTE);
 //    doTest.accept("''", DOUBLE_SINGLE_QUOTE);
@@ -107,6 +119,13 @@ class TokeniserTest {
     doTest.accept("return", RETURN);
     doTest.accept("instanceof", INSTANCE_OF);
     doTest.accept("!instanceof", BANG_INSTANCE_OF);
+    doTest.accept("in", IN);
+    doTest.accept("!in", BANG_IN);
+    doTest.accept("and", AND);
+    doTest.accept("or", OR);
+    doTest.accept("true", TRUE);
+    doTest.accept("false", FALSE);
+    doTest.accept("null", NULL);
   }
 
   @Test public void identifiers() {
@@ -129,26 +148,58 @@ class TokeniserTest {
     doTest.accept("a1");
   }
 
+  private static class Pair<X,Y> {
+    X x; Y y; Pair(X x, Y y) { this.x = x; this.y = y; }
+  }
+
   @Test public void numericLiterals() {
-    BiConsumer<String,TokenType> doTest = (source,type) -> {
+    BiConsumer<String, Pair<TokenType,Object>> doTest = (source, typeAndValue) -> {
       Tokeniser tokeniser = new Tokeniser(source);
       Token     token     = tokeniser.next();
-      assertEquals(type,   token.getType());
+      assertEquals(typeAndValue.x,   token.getType());
       String expectedValue = source.endsWith("D") || source.endsWith("L") ? source.substring(0, source.length() - 1) : source;
-      assertEquals(expectedValue, token.getValue());
+      assertEquals(expectedValue, token.getStringValue());
+      assertEquals(typeAndValue.y, token.getValue());
       assertEquals(EOF,    tokeniser.next().getType());
     };
 
-    doTest.accept("0", INTEGER_CONST);
-    doTest.accept("1", INTEGER_CONST);
-    doTest.accept("20", INTEGER_CONST);
-    doTest.accept("30", INTEGER_CONST);
-    doTest.accept("1.0", DECIMAL_CONST);
-    doTest.accept("0.12345", DECIMAL_CONST);
-    doTest.accept(Long.toString(Long.MAX_VALUE), INTEGER_CONST);  // Tokenises as int - we will check for overflow in parser
-    doTest.accept("1L", LONG_CONST);
-    doTest.accept("1D", DOUBLE_CONST);
-    doTest.accept("1.0D", DOUBLE_CONST);
+    doTest.accept("0", new Pair<>(INTEGER_CONST, 0));
+    doTest.accept("1", new Pair<>(INTEGER_CONST, 1));
+    doTest.accept("20", new Pair<>(INTEGER_CONST, 20));
+    doTest.accept("30", new Pair<>(INTEGER_CONST, 30));
+    doTest.accept("1.0", new Pair<>(DECIMAL_CONST, new BigDecimal("1.0")));
+    doTest.accept("0.12345", new Pair<>(DECIMAL_CONST, new BigDecimal("0.12345")));
+    doTest.accept("1L", new Pair<>(LONG_CONST, 1L));
+    doTest.accept("1D", new Pair<>(DOUBLE_CONST, 1D));
+    doTest.accept("1.0D", new Pair<>(DOUBLE_CONST, 1.0D));
+    doTest.accept("" + ((long)Integer.MAX_VALUE + 1L) + "L", new Pair<>(LONG_CONST, (long)Integer.MAX_VALUE + 1L));
+  }
+
+  @Test public void numericOverflow() {
+    BiConsumer<String,Object> doTest = (source,value) -> {
+      Tokeniser tokeniser = new Tokeniser(source);
+      Token     token     = tokeniser.next();
+      assertEquals(value, token.getValue());
+      assertEquals(EOF,    tokeniser.next().getType());
+    };
+
+    doTest.accept("123456789.1234D", 123456789.1234);
+    doTest.accept("123456789", 123456789);
+    doTest.accept("123456789123456789L", 123456789123456789L);
+    try {
+      doTest.accept("123456789123456789", 123456789123456789L);
+      fail("Should have thrown an exception");
+    }
+    catch (CompileError e) {
+      assertTrue(e.getMessage().toLowerCase().contains("number too large"));
+    }
+    try {
+      doTest.accept("123456789123456789123456789123456789L", 123456789123456789L);
+      fail("Should have thrown an exception");
+    }
+    catch (CompileError e) {
+      assertTrue(e.getMessage().toLowerCase().contains("number too large"));
+    }
   }
 
   @Test public void numbersAndDots() {
@@ -157,7 +208,7 @@ class TokeniserTest {
       Token token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
-        assertEquals(value, token.getValue());
+        assertEquals(value, token.getStringValue());
       }
       return token;
     };
@@ -179,7 +230,7 @@ class TokeniserTest {
       Token token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
-        assertEquals(value, token.getValue());
+        assertEquals(value, token.getStringValue());
       }
       return token;
     };
@@ -197,7 +248,7 @@ class TokeniserTest {
       Token token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
-        assertEquals(value, token.getValue());
+        assertEquals(value, token.getStringValue());
       }
       return token;
     };
@@ -244,9 +295,9 @@ class TokeniserTest {
     doTest.accept("-1", List.of(MINUS, INTEGER_CONST));
     doTest.accept("-1.", List.of(MINUS, INTEGER_CONST, DOT));
     doTest.accept(".012", List.of(DOT, INTEGER_CONST));
-    doTest.accept("1.012L", List.of(DECIMAL_CONST, IDENTIFIER));
-    doTest.accept("1.0DD;2.0La", List.of(DOUBLE_CONST, IDENTIFIER, SEMICOLON, DECIMAL_CONST, IDENTIFIER));
-    doTest.accept("1.012L1D_ab;1.0D2.0La", List.of(DECIMAL_CONST, IDENTIFIER, SEMICOLON, DOUBLE_CONST, DECIMAL_CONST, IDENTIFIER));
+    doTest.accept("1.012X", List.of(DECIMAL_CONST, IDENTIFIER));
+    doTest.accept("1.0DD;2.0Xa", List.of(DOUBLE_CONST, IDENTIFIER, SEMICOLON, DECIMAL_CONST, IDENTIFIER));
+    doTest.accept("1.012L1D_ab;1.0D2.0Xa", List.of(DECIMAL_CONST, IDENTIFIER, SEMICOLON, DOUBLE_CONST, DECIMAL_CONST, IDENTIFIER));
     doTest.accept("<<<", List.of(DOUBLE_LESS_THAN, LESS_THAN));
     doTest.accept("<<<<", List.of(DOUBLE_LESS_THAN, DOUBLE_LESS_THAN));
     doTest.accept("<<<<=", List.of(DOUBLE_LESS_THAN, DOUBLE_LESS_THAN_EQUAL));
@@ -258,7 +309,8 @@ class TokeniserTest {
     Tokeniser tokeniser = new Tokeniser("1a b\na\n\na 1.234D c");
     Token token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
-    assertEquals("1", token.getValue());
+    assertEquals(1, token.getValue());
+    assertEquals("1", token.getStringValue());
     assertEquals(1, token.getLine());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
@@ -295,7 +347,8 @@ class TokeniserTest {
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
     assertEquals(DOUBLE_CONST, token.getType());
-    assertEquals("1.234", token.getValue());
+    assertEquals(1.234, token.getValue());
+    assertEquals("1.234", token.getStringValue());
     assertEquals(4, token.getLine());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
@@ -312,7 +365,7 @@ class TokeniserTest {
     Tokeniser tokeniser = new Tokeniser("/**/1a b\nX//<<>><><\n//\n/**/\n/*asdasd*///asdas\n\nY 1.234D/*a\n*/ /*//*/ c");
     Token token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
-    assertEquals("1", token.getValue());
+    assertEquals(1, token.getValue());
     assertEquals(1, token.getLine());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
@@ -361,7 +414,8 @@ class TokeniserTest {
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
     assertEquals(DOUBLE_CONST, token.getType());
-    assertEquals("1.234", token.getValue());
+    assertEquals(1.234, token.getValue());
+    assertEquals("1.234", token.getStringValue());
     assertEquals(7, token.getLine());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
@@ -616,7 +670,7 @@ class TokeniserTest {
     assertEquals(STRING_CONST, token.getType());
     assertEquals(". a test", token.getValue());
     token = tokeniser.next();
-    assertEquals(STRING_EXPR_END, token.getType());
+    assertEquals(EXPR_STRING_END, token.getType());
     assertEquals(EOF, tokeniser.next().getType());
   }
 
@@ -648,18 +702,18 @@ class TokeniserTest {
     assertEquals(EXPR_STRING_START, token.getType());
     assertEquals("a", token.getValue());
     token = tokeniser.next();
-    assertEquals(STRING_EXPR_END, token.getType());
+    assertEquals(EXPR_STRING_END, token.getType());
     token = tokeniser.next();
     assertEquals(RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    assertEquals(STRING_EXPR_END, token.getType());
+    assertEquals(EXPR_STRING_END, token.getType());
     token = tokeniser.next();
     assertEquals(RIGHT_BRACE, token.getType());
     token = tokeniser.next();
     assertEquals(STRING_CONST, token.getType());
     assertEquals(". a test", token.getValue());
     token = tokeniser.next();
-    assertEquals(STRING_EXPR_END, token.getType());
+    assertEquals(EXPR_STRING_END, token.getType());
     assertEquals(EOF, tokeniser.next().getType());
   }
 
@@ -697,8 +751,8 @@ class TokeniserTest {
   @Test public void matchingBraces() {
     Tokeniser tokeniser = new Tokeniser("for { \"${while(true && \"${x}\"){};}\" }");
     List.of(FOR, LEFT_BRACE, EXPR_STRING_START, LEFT_BRACE, WHILE, LEFT_PAREN, TRUE, AMPERSAND_AMPERSAND,
-            EXPR_STRING_START, LEFT_BRACE, IDENTIFIER, RIGHT_BRACE, STRING_EXPR_END, RIGHT_PAREN,
-            LEFT_BRACE, RIGHT_BRACE, SEMICOLON, RIGHT_BRACE, STRING_EXPR_END, RIGHT_BRACE)
+            EXPR_STRING_START, LEFT_BRACE, IDENTIFIER, RIGHT_BRACE, EXPR_STRING_END, RIGHT_PAREN,
+            LEFT_BRACE, RIGHT_BRACE, SEMICOLON, RIGHT_BRACE, EXPR_STRING_END, RIGHT_BRACE)
       .forEach(type -> assertEquals(type, tokeniser.next().getType()));
   }
 
@@ -730,7 +784,7 @@ class TokeniserTest {
     assertEquals(STRING_CONST, token.getType());
     assertEquals("}", token.getValue());
     token = tokeniser.next();
-    assertEquals(STRING_EXPR_END, token.getType());
+    assertEquals(EXPR_STRING_END, token.getType());
     token = tokeniser.next();
     assertEquals(EOF, token.getType());
   }
@@ -754,5 +808,38 @@ class TokeniserTest {
     catch (CompileError e) {
       assertTrue(e.getMessage().toLowerCase().contains("new line not allowed"));
     }
+  }
+
+  @Test public void peek() {
+    Tokeniser tokeniser = new Tokeniser("+ - *");
+    assertEquals(PLUS, tokeniser.peek().getType());
+    Token token = tokeniser.next();
+    assertEquals(PLUS, token.getType());
+    assertEquals(MINUS, tokeniser.peek().getType());
+    tokeniser.rewind(token);
+    assertEquals(PLUS, tokeniser.peek().getType());
+    token = tokeniser.next();
+    assertEquals(PLUS, token.getType());
+    assertEquals(MINUS, tokeniser.peek().getType());
+    assertEquals(MINUS, tokeniser.next().getType());
+    assertEquals(STAR, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.peek().getType());
+    assertEquals(EOF, tokeniser.next().getType());
+  }
+
+  @Test public void peekEmpty() {
+    Tokeniser tokeniser = new Tokeniser("");
+    assertEquals(EOF, tokeniser.peek().getType());
+    Token token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+    assertEquals(EOF, tokeniser.peek().getType());
+  }
+
+  @Test public void peekEmptyComment() {
+    Tokeniser tokeniser = new Tokeniser("/* no tokens */");
+    assertEquals(EOF, tokeniser.peek().getType());
+    Token token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+    assertEquals(EOF, tokeniser.peek().getType());
   }
 }

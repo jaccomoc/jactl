@@ -14,23 +14,21 @@
  * limitations under the License.
  */
 
-plugins {
-    id 'java'
-}
+package jacsal;
 
-group 'jacsal'
-version '1.0-SNAPSHOT'
+public class CompileContext {
 
-repositories {
-    mavenCentral()
-}
+  private final DynamicClassLoader classLoader = new DynamicClassLoader();
 
-dependencies {
-    implementation 'org.ow2.asm:asm:9.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
+  Class<?> loadClass(String name, byte[] bytes) {
+    return classLoader.loadClass(name, bytes);
+  }
 
-test {
-    useJUnitPlatform()
+  //////////////////////////////////
+
+  private static class DynamicClassLoader extends ClassLoader {
+    Class<?> loadClass(String name, byte[] bytes) {
+      return defineClass(name, bytes, 0, bytes.length);
+    }
+  }
 }
