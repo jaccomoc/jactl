@@ -228,6 +228,15 @@ public class Tokeniser {
         }
         return token.setType(RIGHT_BRACE).setLength(1);
       }
+      case TRUE:
+      case FALSE: {
+        token.setValue(sym.type == TRUE);
+        break;
+      }
+      case NULL: {
+        token.setValue(null);
+        break;
+      }
     }
 
     return token.setType(sym.type)

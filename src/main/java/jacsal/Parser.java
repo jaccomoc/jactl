@@ -30,7 +30,9 @@ public class Parser {
   }
 
   public Expr parseExpression() {
-    return expression();
+    Expr expr = expression();
+    expect(EOF);
+    return expr;
   }
 
   ////////////////////////////////////////////
@@ -198,7 +200,12 @@ public class Parser {
     if (matchAny(types)) {
       return previous();
     }
-    error("Unexpected token. Expecting one of " + Arrays.stream(types).map(Enum::toString).collect(Collectors.joining(", ")));
+    if (types.length > 1) {
+      error("Unexpected token. Expecting one of " + Arrays.stream(types).map(Enum::toString).collect(Collectors.joining(", ")));
+    }
+    else {
+      error("Unexpected token. Expecting " + types[0]);
+    }
     return null;
   }
 }

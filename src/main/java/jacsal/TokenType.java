@@ -63,5 +63,29 @@ public enum TokenType {
 
   //= Special
   EOL,            // End of line
-  EOF             // End of file
+  EOF;            // End of file
+
+  boolean isNumericOperator() {
+    switch (this) {
+      case PLUS:
+      case MINUS:
+      case STAR:
+      case SLASH:
+      case PERCENT:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  boolean isBooleanOperator() {
+    switch (this) {
+      case AMPERSAND_AMPERSAND:
+      case PIPE_PIPE:
+      case BANG:
+        return true;
+      default:
+        return false;
+    }
+  }
 }

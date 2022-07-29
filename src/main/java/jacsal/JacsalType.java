@@ -21,6 +21,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static jacsal.TokenType.PLUS;
+
 public enum JacsalType {
 
   BOOLEAN,
@@ -115,7 +117,20 @@ public enum JacsalType {
    * @param type2  type of operand2
    * @return resulting type
    */
-  public static JacsalType result(JacsalType type1, JacsalType type2) {
+  public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
+    if (operator.is(PLUS) && (type1 == STRING || type2 == STRING)) {
+      return STRING;
+    }
+    if (operator.getType().isNumericOperator()) {
+      if (!type1.isNumeric()) { throw new CompileError("Non-numeric operand for left-hand side of '" + operator.getStringValue() + "'", operator); }
+      if (!type2.isNumeric()) { throw new CompileError("Non-numeric operand for right-hand side of '" + operator.getStringValue() + "'", operator); }
+      if (type1 == BOOLEAN && type2 == BOOLEAN) {
+        return INT;
+      }
+    }
+    if (operator.getType().isBooleanOperator()) {
+      return BOOLEAN;
+    }
     if (type1 == type2)               { return type1; }
     if (type1 == ANY || type2 == ANY) { return ANY; }
     return resultMap.get(new TypePair(type1, type2));

@@ -19,9 +19,20 @@ package jacsal;
 public class CompileContext {
 
   private final DynamicClassLoader classLoader = new DynamicClassLoader();
+  private       int                maxScale    = 20;
+
+  CompileContext() {}
+
+  CompileContext(int maxScale) {
+    this.maxScale = maxScale;
+  }
 
   Class<?> loadClass(String name, byte[] bytes) {
     return classLoader.loadClass(name, bytes);
+  }
+
+  int getMaxScale() {
+    return maxScale;
   }
 
   //////////////////////////////////

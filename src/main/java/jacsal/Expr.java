@@ -36,6 +36,10 @@ abstract class Expr {
 
   Token      location;
   JacsalType type;
+  boolean    isConst = false;  // Whether expression consists only of constants
+  Object     constValue;       // If expression is only consts then we keep the
+                               // result of evaluating the expression during the
+                               // resolve phase here.
 
   static class Binary extends Expr {
     Expr  left;

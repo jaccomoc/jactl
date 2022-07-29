@@ -18,6 +18,8 @@ package jacsal;
 
 import java.util.stream.IntStream;
 
+import static jacsal.TokenType.NULL;
+
 /**
  * This class represents a single token parsed from Jacsal source code.
  * Each token keeps track of where it is in terms of line and column
@@ -165,6 +167,9 @@ public class Token {
    * @return  the value of the token
    */
   public Object getValue() {
+    if (is(NULL)) {
+      return null;
+    }
     return value == null ? getStringValue() : value;
   }
 

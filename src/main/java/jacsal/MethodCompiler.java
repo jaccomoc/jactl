@@ -22,7 +22,6 @@ import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-import static jacsal.JacsalType.ANY;
 import static jacsal.JacsalType.BOOLEAN;
 import static jacsal.TokenType.TRUE;
 import static org.objectweb.asm.Opcodes.*;
@@ -33,15 +32,18 @@ public class MethodCompiler implements Expr.Visitor<Void> {
   private MethodVisitor mv;
   private Expr          expr;
 
-  private static class TypeData {
+  // As we generate the byte code we keep a stack where we track the type of the
+  // value that would currently be on the JVM stack at that point in the generated
+  // code. This allows us to know when to do appropriate conversions.
+  private Deque<StackEntry> stack = new ArrayDeque<>();
+  private static class StackEntry {
     JacsalType type;
-    boolean    isRef;   // true if object reference (including boxed prinitives)
-    TypeData(JacsalType type, boolean isRef) {
-      this.type = type;
+    boolean    isRef;   // true if object reference (including boxed primitives)
+    StackEntry(JacsalType type, boolean isRef) {
+      this.type  = type;
       this.isRef = isRef;
     }
   }
-  private Deque<TypeData> typeStack = new ArrayDeque<>();
 
   MethodCompiler(ClassCompiler classCompiler, Expr expr, MethodVisitor mv) {
     this.classCompiler = classCompiler;
@@ -52,11 +54,11 @@ public class MethodCompiler implements Expr.Visitor<Void> {
   void compile() {
     expr.accept(this);
 
-    if (typeStack.size() > 1) {
-      throw new IllegalStateException("Internal error: multiple types on type stack at end of method. Type stack = " + typeStack);
+    if (stack.size() > 1) {
+      throw new IllegalStateException("Internal error: multiple types on type stack at end of method. Type stack = " + stack);
     }
 
-    if (typeStack.isEmpty()) {
+    if (stack.isEmpty()) {
       mv.visitInsn(ACONST_NULL);
     }
     else {
@@ -72,23 +74,35 @@ public class MethodCompiler implements Expr.Visitor<Void> {
 
   @Override
   public Void visitBinary(Expr.Binary expr) {
+    if (expr.isConst) {
+      loadConst(expr.constValue);
+    }
+    else {
+      throw new UnsupportedOperationException();
+    }
+    push(expr.type);
     return null;
   }
 
   @Override
   public Void visitPrefixUnary(Expr.PrefixUnary expr) {
+    if (expr.isConst) {
+      loadConst(expr.constValue);
+    }
+    else {
+      throw new UnsupportedOperationException();
+    }
+    push(expr.type);
     return null;
   }
 
   @Override
   public Void visitPostfixUnary(Expr.PostfixUnary expr) {
-    return null;
+    throw new UnsupportedOperationException();
   }
 
   @Override public Void visitLiteral(Expr.Literal expr) {
     push(expr.type);
-    if (expr.type == BOOLEAN)          { return loadConst(expr.value.is(TRUE) ? 1 : 0); }
-    if (expr.value.is(TokenType.NULL)) { return loadConst(null); }
     return loadConst(expr.value.getValue());
   }
 
@@ -105,15 +119,15 @@ public class MethodCompiler implements Expr.Visitor<Void> {
   //////////////////////////////////////
 
   private void push(JacsalType type) {
-    typeStack.push(new TypeData(type, !type.isPrimitive()));
+    stack.push(new StackEntry(type, !type.isPrimitive()));
   }
 
-  private TypeData peek() {
-    return typeStack.peek();
+  private StackEntry peek() {
+    return stack.peek();
   }
 
-  private TypeData pop() {
-    return typeStack.pop();
+  private StackEntry pop() {
+    return stack.pop();
   }
 
   /**
@@ -144,6 +158,10 @@ public class MethodCompiler implements Expr.Visitor<Void> {
   private Void loadConst(Object obj) {
     if (obj == null) {
       mv.visitInsn(ACONST_NULL);
+    }
+    else
+    if (obj instanceof Boolean) {
+      mv.visitInsn((boolean)obj ? ICONST_1 : ICONST_0);
     }
     else
     if (obj instanceof Integer) {

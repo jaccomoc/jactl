@@ -128,6 +128,23 @@ class TokeniserTest {
     doTest.accept("null", NULL);
   }
 
+  @Test public void booleans() {
+    Tokeniser tokeniser = new Tokeniser("true false");
+    Token token = tokeniser.next();
+    assertEquals(TRUE, token.getType());
+    assertEquals(Boolean.TRUE, token.getValue());
+    token = tokeniser.next();
+    assertEquals(FALSE, token.getType());
+    assertEquals(Boolean.FALSE, token.getValue());
+  }
+
+  @Test public void nullSymbol() {
+    Tokeniser tokeniser = new Tokeniser("null");
+    Token token = tokeniser.next();
+    assertEquals(NULL, token.getType());
+    assertEquals(null, token.getValue());
+  }
+
   @Test public void identifiers() {
     Consumer<String> doTest = source -> {
       Tokeniser tokeniser = new Tokeniser(source);
@@ -153,26 +170,30 @@ class TokeniserTest {
   }
 
   @Test public void numericLiterals() {
-    BiConsumer<String, Pair<TokenType,Object>> doTest = (source, typeAndValue) -> {
+    BiConsumer<String, List<Pair<TokenType,Object>>> doTest = (source, typeAndValues) -> {
       Tokeniser tokeniser = new Tokeniser(source);
-      Token     token     = tokeniser.next();
-      assertEquals(typeAndValue.x,   token.getType());
-      String expectedValue = source.endsWith("D") || source.endsWith("L") ? source.substring(0, source.length() - 1) : source;
-      assertEquals(expectedValue, token.getStringValue());
-      assertEquals(typeAndValue.y, token.getValue());
-      assertEquals(EOF,    tokeniser.next().getType());
+      Token[]     token   = { tokeniser.next() };
+      typeAndValues.forEach(typeAndValue -> {
+        assertEquals(typeAndValue.x, token[0].getType());
+        assertEquals(typeAndValue.y, token[0].getValue());
+        token[0] = tokeniser.next();
+      });
+      assertEquals(EOF, tokeniser.next().getType());
     };
 
-    doTest.accept("0", new Pair<>(INTEGER_CONST, 0));
-    doTest.accept("1", new Pair<>(INTEGER_CONST, 1));
-    doTest.accept("20", new Pair<>(INTEGER_CONST, 20));
-    doTest.accept("30", new Pair<>(INTEGER_CONST, 30));
-    doTest.accept("1.0", new Pair<>(DECIMAL_CONST, new BigDecimal("1.0")));
-    doTest.accept("0.12345", new Pair<>(DECIMAL_CONST, new BigDecimal("0.12345")));
-    doTest.accept("1L", new Pair<>(LONG_CONST, 1L));
-    doTest.accept("1D", new Pair<>(DOUBLE_CONST, 1D));
-    doTest.accept("1.0D", new Pair<>(DOUBLE_CONST, 1.0D));
-    doTest.accept("" + ((long)Integer.MAX_VALUE + 1L) + "L", new Pair<>(LONG_CONST, (long)Integer.MAX_VALUE + 1L));
+    doTest.accept("0", List.of(new Pair<>(INTEGER_CONST, 0)));
+    doTest.accept("1", List.of(new Pair<>(INTEGER_CONST, 1)));
+    doTest.accept("20", List.of(new Pair<>(INTEGER_CONST, 20)));
+    doTest.accept("30", List.of(new Pair<>(INTEGER_CONST, 30)));
+    doTest.accept("1.0", List.of(new Pair<>(DECIMAL_CONST, new BigDecimal("1.0"))));
+    doTest.accept("0.12345", List.of(new Pair<>(DECIMAL_CONST, new BigDecimal("0.12345"))));
+    doTest.accept("1L", List.of(new Pair<>(LONG_CONST, 1L)));
+    doTest.accept("1L 1.0D", List.of(new Pair<>(LONG_CONST, 1L), new Pair<>(DOUBLE_CONST, 1.0D)));
+    doTest.accept("1D 1L", List.of(new Pair<>(DOUBLE_CONST, 1D), new Pair<>(LONG_CONST, 1L)));
+    doTest.accept("1L 1D", List.of(new Pair<>(LONG_CONST, 1L), new Pair<>(DOUBLE_CONST, 1.0D)));
+    doTest.accept("1D", List.of(new Pair<>(DOUBLE_CONST, 1D)));
+    doTest.accept("1.0D", List.of(new Pair<>(DOUBLE_CONST, 1.0D)));
+    doTest.accept("" + ((long)Integer.MAX_VALUE + 1L) + "L", List.of(new Pair<>(LONG_CONST, (long)Integer.MAX_VALUE + 1L)));
   }
 
   @Test public void numericOverflow() {
