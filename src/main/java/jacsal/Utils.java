@@ -118,4 +118,10 @@ public class Utils {
     throw new IllegalStateException("Trying to convert type " + value.getClass().getName() + " to decimal (value=" + value + ")");
   }
 
+  static String toString(Object value) {
+    if (value == null) {
+      return "null";
+    }
+    return value.toString();
+  }
 }

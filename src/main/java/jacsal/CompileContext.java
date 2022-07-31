@@ -18,8 +18,9 @@ package jacsal;
 
 public class CompileContext {
 
-  private final DynamicClassLoader classLoader = new DynamicClassLoader();
-  private       int                maxScale    = 20;
+  private final DynamicClassLoader classLoader     = new DynamicClassLoader();
+  private       int                maxScale        = 20;
+  private       int                maxStringLength = 20_000_000;   // 20Mb
 
   CompileContext() {}
 
@@ -33,6 +34,20 @@ public class CompileContext {
 
   int getMaxScale() {
     return maxScale;
+  }
+
+  CompileContext setMaxScale(int scale) {
+    maxScale = scale;
+    return this;
+  }
+
+  int getMaxStringLength() {
+    return maxStringLength;
+  }
+
+  CompileContext setMaxStringLength(int length) {
+    this.maxStringLength = length;
+    return this;
   }
 
   //////////////////////////////////

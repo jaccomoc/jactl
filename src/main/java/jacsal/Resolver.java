@@ -53,14 +53,23 @@ public class Resolver implements Expr.Visitor<JacsalType> {
     expr.isConst = expr.left.isConst && expr.right.isConst;
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
-      if (expr.left.constValue == null || expr.right.constValue == null) {
-        expr.constValue = null;
-        return expr.type;
-      }
       switch (expr.type) {
         case STRING: {
-          if (expr.operator.isNot(PLUS)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for Strings"); }
-          expr.constValue = expr.left.constValue.toString() + expr.right.constValue.toString();
+          if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for Strings"); }
+          if (expr.operator.is(PLUS)) {
+            expr.constValue = Utils.toString(expr.left.constValue) + Utils.toString(expr.right.constValue);
+          }
+          else {
+            String lhs    = Utils.toString(expr.left.constValue);
+            long   length = Utils.toLong(expr.right.constValue);
+            if (lhs.length() * length > compileContext.getMaxStringLength()) {
+              throw new CompileError("Maximum string length (" + compileContext.getMaxStringLength() + ") exceeeded", expr.operator);
+            }
+            if (length < 0) {
+              throw new CompileError("String repeat count must be >= 0", expr.right.location);
+            }
+            expr.constValue = lhs.repeat((int)length);
+          }
           break;
         }
         case INT: {

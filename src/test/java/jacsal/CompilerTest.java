@@ -113,9 +113,11 @@ class CompilerTest {
     test.accept("!!(!false)", true);
   }
 
-  @Test public void simpleConstExpressions() {
+  @Test public void simpleConstExpressios() {
     testFail.accept("1 + true", "non-numeric operand for right-hand side");
     testFail.accept("false + 1", "non-numeric operand for left-hand side");
+    testFail.accept("1 - 'abc'", "non-numeric operand for right-hand side");
+    testFail.accept("'abc' - 1", "non-numeric operand for left-hand side");
     testFail.accept("false + true", "non-numeric operand for left-hand side");
     testFail.accept("1 + null", "non-numeric operand for right-hand side");
     testFail.accept("null + 1", "non-numeric operand for left-hand side");
@@ -185,6 +187,30 @@ class CompilerTest {
     test.accept("6D / 3.0", "#2");
     test.accept("8.0 % 5D", "#3");
     test.accept("8D % 5.0", "#3");
+  }
+
+  @Test public void constExprArithmeticPrecedence() {
     test.accept("1 + -2 * -3 + 4", 11);
+    test.accept("1 + (2 + 3) * 4 - 5", 16);
+    test.accept("13 + 12 % 7", 18);
+    test.accept("13 + 12 % 7 - 3", 15);
+  }
+
+  @Test public void constStringConcatenation() {
+    testFail.accept("'abc' - '123'", "non-numeric operand");
+    test.accept("'abc' + '123'", "abc123");
+    test.accept("'abc' + null", "abcnull");
+    test.accept("null + 'abc'", "nullabc");
+    test.accept("'abc' + 'def' + 'ghi'", "abcdefghi");
+    test.accept("'abc' + ('1' + '2' + '3') + 'def'", "abc123def");
+    test.accept("'' + 'abc'", "abc");
+    test.accept("'abc' + ''", "abc");
+  }
+
+  @Test public void constStringRepeat() {
+    test.accept("'abc' * 2", "abcabc");
+    test.accept("'abc' * 0", "");
+    testFail.accept("'abc' * -1", "string repeat count must be >= 0");
+    testFail.accept("'abc' * 100000000", "maximum string length");
   }
 }

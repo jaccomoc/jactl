@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import static jacsal.TokenType.PLUS;
+import static jacsal.TokenType.STAR;
 
 public enum JacsalType {
 
@@ -45,6 +46,10 @@ public enum JacsalType {
     }
   }
 
+  public boolean isIntegral() {
+    return this == INT || this == LONG;
+  }
+
   public boolean isPrimitive() {
     switch (this) {
       case BOOLEAN:
@@ -55,7 +60,15 @@ public enum JacsalType {
       default:
         return false;
     }
+  }
 
+  public boolean is(JacsalType... types) {
+    for (JacsalType type: types) {
+      if (this == type) {
+        return true;
+      }
+    }
+    return false;
   }
 
   ///////////////////////////////////////
@@ -119,6 +132,9 @@ public enum JacsalType {
    */
   public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
     if (operator.is(PLUS) && (type1 == STRING || type2 == STRING)) {
+      return STRING;
+    }
+    if (operator.is(STAR) && type1 == STRING && type2.is(INT,LONG,ANY)) {
       return STRING;
     }
     if (operator.getType().isNumericOperator()) {

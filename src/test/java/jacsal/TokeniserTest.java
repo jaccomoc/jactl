@@ -19,9 +19,7 @@ package jacsal;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -33,7 +31,7 @@ class TokeniserTest {
 
   @Test public void simpleTokens() {
     BiConsumer<String,TokenType> doTest = (source,type) -> {
-      Tokeniser tokeniser = new Tokeniser(source);
+      var tokeniser = new Tokeniser(source);
       assertEquals(type, tokeniser.next().getType());
       assertEquals(EOF, tokeniser.next().getType());
     };
@@ -129,8 +127,8 @@ class TokeniserTest {
   }
 
   @Test public void booleans() {
-    Tokeniser tokeniser = new Tokeniser("true false");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("true false");
+    var token = tokeniser.next();
     assertEquals(TRUE, token.getType());
     assertEquals(Boolean.TRUE, token.getValue());
     token = tokeniser.next();
@@ -139,15 +137,15 @@ class TokeniserTest {
   }
 
   @Test public void nullSymbol() {
-    Tokeniser tokeniser = new Tokeniser("null");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("null");
+    var token = tokeniser.next();
     assertEquals(NULL, token.getType());
     assertEquals(null, token.getValue());
   }
 
   @Test public void identifiers() {
     Consumer<String> doTest = source -> {
-      Tokeniser tokeniser = new Tokeniser(source);
+      var tokeniser = new Tokeniser(source);
       Token     token     = tokeniser.next();
       assertEquals(IDENTIFIER, token.getType());
       assertEquals(source,     token.getValue());
@@ -171,8 +169,8 @@ class TokeniserTest {
 
   @Test public void numericLiterals() {
     BiConsumer<String, List<Pair<TokenType,Object>>> doTest = (source, typeAndValues) -> {
-      Tokeniser tokeniser = new Tokeniser(source);
-      Token[]     token   = { tokeniser.next() };
+      var     tokeniser = new Tokeniser(source);
+      Token[] token     = { tokeniser.next() };
       typeAndValues.forEach(typeAndValue -> {
         assertEquals(typeAndValue.x, token[0].getType());
         assertEquals(typeAndValue.y, token[0].getValue());
@@ -198,7 +196,7 @@ class TokeniserTest {
 
   @Test public void numericOverflow() {
     BiConsumer<String,Object> doTest = (source,value) -> {
-      Tokeniser tokeniser = new Tokeniser(source);
+      var tokeniser = new Tokeniser(source);
       Token     token     = tokeniser.next();
       assertEquals(value, token.getValue());
       assertEquals(EOF,    tokeniser.next().getType());
@@ -224,9 +222,9 @@ class TokeniserTest {
   }
 
   @Test public void numbersAndDots() {
-    Tokeniser tokeniser = new Tokeniser("a.1.2.3.b");
+    var tokeniser = new Tokeniser("a.1.2.3.b");
     BiFunction<TokenType,String,Token> checkToken = (type, value) -> {
-      Token token = tokeniser.next();
+      var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
         assertEquals(value, token.getStringValue());
@@ -246,9 +244,9 @@ class TokeniserTest {
   }
 
   @Test public void numbersAndDots2() {
-    Tokeniser tokeniser = new Tokeniser("1.2.3.b");
+    var tokeniser = new Tokeniser("1.2.3.b");
     BiFunction<TokenType,String,Token> checkToken = (type, value) -> {
-      Token token = tokeniser.next();
+      var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
         assertEquals(value, token.getStringValue());
@@ -264,9 +262,9 @@ class TokeniserTest {
   }
 
   @Test public void numbersAndDotsAndRewind() {
-    Tokeniser tokeniser = new Tokeniser("a.1.2.3.b");
+    var tokeniser = new Tokeniser("a.1.2.3.b");
     BiFunction<TokenType,String,Token> checkToken = (type, value) -> {
-      Token token = tokeniser.next();
+      var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
         assertEquals(value, token.getStringValue());
@@ -274,7 +272,7 @@ class TokeniserTest {
       return token;
     };
 
-    Token token = checkToken.apply(IDENTIFIER, "a");
+    var token = checkToken.apply(IDENTIFIER, "a");
     checkToken.apply(DOT, null);
     checkToken.apply(INTEGER_CONST, "1");
     checkToken.apply(DOT, null);
@@ -305,7 +303,7 @@ class TokeniserTest {
 
   @Test public void multipleTokens() {
     BiConsumer<String, List<TokenType>> doTest = (source, types) -> {
-      Tokeniser tokeniser = new Tokeniser(source);
+      var tokeniser = new Tokeniser(source);
       for (TokenType type: types) {
         assertEquals(type, tokeniser.next().getType());
       }
@@ -327,8 +325,8 @@ class TokeniserTest {
   }
 
   @Test public void lineColumnNumbers() {
-    Tokeniser tokeniser = new Tokeniser("1a b\na\n\na 1.234D c");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("1a b\na\n\na 1.234D c");
+    var token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
     assertEquals("1", token.getStringValue());
@@ -383,8 +381,8 @@ class TokeniserTest {
   }
 
   @Test public void comments() {
-    Tokeniser tokeniser = new Tokeniser("/**/1a b\nX//<<>><><\n//\n/**/\n/*asdasd*///asdas\n\nY 1.234D/*a\n*/ /*//*/ c");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("/**/1a b\nX//<<>><><\n//\n/**/\n/*asdasd*///asdas\n\nY 1.234D/*a\n*/ /*//*/ c");
+    var token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
     assertEquals(1, token.getLine());
@@ -450,7 +448,7 @@ class TokeniserTest {
   }
 
   @Test public void unexpectedEofInComment() {
-    Tokeniser tokeniser = new Tokeniser("/*\n/*asdasd");
+    var tokeniser = new Tokeniser("/*\n/*asdasd");
     try {
       tokeniser.next();
       fail("Should have thrown an exception");
@@ -461,7 +459,7 @@ class TokeniserTest {
   }
 
   @Test public void unexpectedCharacter() {
-    Tokeniser tokeniser = new Tokeniser("a b !<#> c");
+    var tokeniser = new Tokeniser("a b !<#> c");
     tokeniser.next();
     tokeniser.next();
     tokeniser.next();
@@ -476,10 +474,10 @@ class TokeniserTest {
   }
 
   @Test public void rewind() {
-    Tokeniser tokeniser = new Tokeniser("a 1 { ]>");
+    var tokeniser = new Tokeniser("a 1 { ]>");
     assertEquals(IDENTIFIER, tokeniser.next().getType());
     assertEquals(INTEGER_CONST, tokeniser.next().getType());
-    Token token = tokeniser.next();
+    var token = tokeniser.next();
     assertEquals(LEFT_BRACE, token.getType());
     assertEquals(RIGHT_SQUARE, tokeniser.next().getType());
     tokeniser.rewind(token);
@@ -490,16 +488,16 @@ class TokeniserTest {
   }
 
   @Test public void simpleString() {
-    Tokeniser tokeniser = new Tokeniser("'abc'");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("'abc'");
+    var token = tokeniser.next();
     assertEquals(STRING_CONST, token.getType());
     assertEquals("abc", token.getValue());
     assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void simpleStrings() {
-    Tokeniser tokeniser = new Tokeniser("'abc''xyz'");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("'abc''xyz'");
+    var token = tokeniser.next();
     assertEquals(STRING_CONST, token.getType());
     assertEquals("abc", token.getValue());
     token = tokeniser.next();
@@ -509,7 +507,7 @@ class TokeniserTest {
   }
 
   @Test public void strings() {
-    Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'\n b = 2");
+    var tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'\n b = 2");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -533,7 +531,7 @@ class TokeniserTest {
   }
 
   @Test public void strings2() {
-    Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'");
+    var tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -551,7 +549,7 @@ class TokeniserTest {
   }
 
   @Test public void stringsUnexpectedEndOfFile() {
-    Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc");
+    var tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -568,7 +566,7 @@ class TokeniserTest {
   }
 
   @Test public void stringsUnexpectedEndOfLine() {
-    Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc\na = 2");
+    var tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc\na = 2");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -586,7 +584,7 @@ class TokeniserTest {
   }
 
   @Test public void exprStringUnexpectedEndOfLine() {
-    Tokeniser tokeniser = new Tokeniser("a = \"a'$b//\\n/*\\t*/\\b\\r\\fc\"\na = 2");
+    var tokeniser = new Tokeniser("a = \"a'$b//\\n/*\\t*/\\b\\r\\fc\"\na = 2");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -610,7 +608,7 @@ class TokeniserTest {
   }
 
   @Test public void exprStringUnexpectedEndOfLine2() {
-    Tokeniser tokeniser = new Tokeniser("a = \"a'//\n/*\\t*/\\b\\r\\fc\"\na = 2");
+    var tokeniser = new Tokeniser("a = \"a'//\n/*\\t*/\\b\\r\\fc\"\na = 2");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -628,7 +626,7 @@ class TokeniserTest {
   }
 
   @Test public void simpleMuliLineString() {
-    Tokeniser tokeniser = new Tokeniser("'''a\\'b//\\n/*\\t*/\\b\\r\\f\nc'''");
+    var tokeniser = new Tokeniser("'''a\\'b//\\n/*\\t*/\\b\\r\\f\nc'''");
     Token     token     = tokeniser.next();
     assertEquals(STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\f\nc", token.getValue());
@@ -637,7 +635,7 @@ class TokeniserTest {
   }
 
   @Test public void multiLineStrings() {
-    Tokeniser tokeniser = new Tokeniser("a = '''a\\'b//\\n/*\\t*/\\b\\r\\f\nc'''\n b = 2");
+    var tokeniser = new Tokeniser("a = '''a\\'b//\\n/*\\t*/\\b\\r\\f\nc'''\n b = 2");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -661,9 +659,9 @@ class TokeniserTest {
   }
 
   @Test public void keywordFollowedByWordChar() {
-    Tokeniser tokeniser = new Tokeniser("!instanceof !instanceofx forx while whilex while2");
+    var tokeniser = new Tokeniser("!instanceof !instanceofx forx while whilex while2");
     BiConsumer<TokenType,String> checkToken = (type,identifier) -> {
-      Token token = tokeniser.next();
+      var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER) {
         assertEquals(identifier, token.getValue());
@@ -680,8 +678,8 @@ class TokeniserTest {
   }
 
   @Test public void stringExpr() {
-    Tokeniser tokeniser = new Tokeniser("\"This is $abc. a test\"");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("\"This is $abc. a test\"");
+    var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     assertEquals("This is ", token.getValue());
     token = tokeniser.next();
@@ -696,8 +694,8 @@ class TokeniserTest {
   }
 
   @Test public void nestedStringExpr() {
-    Tokeniser tokeniser = new Tokeniser("\"\"\"This ${is}${abc + \"x${\"\"\"a\"\"\"}\"}. a test\"\"\"");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("\"\"\"This ${is}${abc + \"x${\"\"\"a\"\"\"}\"}. a test\"\"\"");
+    var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     assertEquals("This ", token.getValue());
     token = tokeniser.next();
@@ -739,8 +737,8 @@ class TokeniserTest {
   }
 
   @Test public void multiLineStringInsideSingleLineString() {
-    Tokeniser tokeniser = new Tokeniser("\"this is a ${'''\n'''} test\"");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("\"this is a ${'''\n'''} test\"");
+    var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     token = tokeniser.next();
     assertEquals(LEFT_BRACE, token.getType());
@@ -754,8 +752,8 @@ class TokeniserTest {
   }
 
   @Test public void dollarKeywordInStringExpr() {
-    Tokeniser tokeniser = new Tokeniser("\"for $whilex $while\"");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("\"for $whilex $while\"");
+    var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     token = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
@@ -770,7 +768,7 @@ class TokeniserTest {
   }
 
   @Test public void matchingBraces() {
-    Tokeniser tokeniser = new Tokeniser("for { \"${while(true && \"${x}\"){};}\" }");
+    var tokeniser = new Tokeniser("for { \"${while(true && \"${x}\"){};}\" }");
     List.of(FOR, LEFT_BRACE, EXPR_STRING_START, LEFT_BRACE, WHILE, LEFT_PAREN, TRUE, AMPERSAND_AMPERSAND,
             EXPR_STRING_START, LEFT_BRACE, IDENTIFIER, RIGHT_BRACE, EXPR_STRING_END, RIGHT_PAREN,
             LEFT_BRACE, RIGHT_BRACE, SEMICOLON, RIGHT_BRACE, EXPR_STRING_END, RIGHT_BRACE)
@@ -778,7 +776,7 @@ class TokeniserTest {
   }
 
   @Test public void unmatchedRightBrace() {
-    Tokeniser tokeniser = new Tokeniser("{}}");
+    var tokeniser = new Tokeniser("{}}");
     List.of(LEFT_BRACE, RIGHT_BRACE).forEach(type -> assertEquals(type, tokeniser.next().getType()));
     try {
       tokeniser.next();
@@ -790,8 +788,8 @@ class TokeniserTest {
   }
 
   @Test public void rightBraceInStringExpr() {
-    Tokeniser tokeniser = new Tokeniser("\"${a}}\"");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("\"${a}}\"");
+    var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
@@ -811,8 +809,8 @@ class TokeniserTest {
   }
 
   @Test public void newLineInExpressionInSingleLineString() {
-    Tokeniser tokeniser = new Tokeniser("\"${a = \n2}\"");
-    Token token = tokeniser.next();
+    var tokeniser = new Tokeniser("\"${a = \n2}\"");
+    var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
@@ -832,9 +830,9 @@ class TokeniserTest {
   }
 
   @Test public void peek() {
-    Tokeniser tokeniser = new Tokeniser("+ - *");
+    var tokeniser = new Tokeniser("+ - *");
     assertEquals(PLUS, tokeniser.peek().getType());
-    Token token = tokeniser.next();
+    var token = tokeniser.next();
     assertEquals(PLUS, token.getType());
     assertEquals(MINUS, tokeniser.peek().getType());
     tokeniser.rewind(token);
@@ -849,17 +847,17 @@ class TokeniserTest {
   }
 
   @Test public void peekEmpty() {
-    Tokeniser tokeniser = new Tokeniser("");
+    var tokeniser = new Tokeniser("");
     assertEquals(EOF, tokeniser.peek().getType());
-    Token token = tokeniser.next();
+    var token = tokeniser.next();
     assertEquals(EOF, token.getType());
     assertEquals(EOF, tokeniser.peek().getType());
   }
 
   @Test public void peekEmptyComment() {
-    Tokeniser tokeniser = new Tokeniser("/* no tokens */");
+    var tokeniser = new Tokeniser("/* no tokens */");
     assertEquals(EOF, tokeniser.peek().getType());
-    Token token = tokeniser.next();
+    var token = tokeniser.next();
     assertEquals(EOF, token.getType());
     assertEquals(EOF, tokeniser.peek().getType());
   }

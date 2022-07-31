@@ -22,17 +22,17 @@ import java.util.function.Function;
 public class Compiler {
 
   public static Object run(String source, Map<String,Object> bindings) {
-    Parser         parser         = new Parser(new Tokeniser(source));
-    Expr           expr           = parser.parseExpression();
-    CompileContext compileContext = new CompileContext();
-    Resolver       resolver       = new Resolver(compileContext, bindings);
+    var parser         = new Parser(new Tokeniser(source));
+    var expr           = parser.parseExpression();
+    var compileContext = new CompileContext();
+    var resolver       = new Resolver(compileContext, bindings);
     resolver.resolve(expr);
     Function<Map<String,Object>,Object> compiled = compile(compileContext, expr);
     return compiled.apply(bindings);
   }
 
   private static Function<Map<String,Object>,Object> compile(CompileContext compileContext, Expr expr) {
-    ClassCompiler compiler = new ClassCompiler(compileContext, expr);
+    var compiler = new ClassCompiler(compileContext, expr);
     return compiler.compile();
   }
 }

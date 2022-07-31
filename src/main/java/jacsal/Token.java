@@ -110,21 +110,31 @@ public class Token {
   public TokenType getType() { return type; }
 
   /**
-   * Check if type of token matches type passed in
-   * @param type  the type to check
-   * @return true if type matches
+   * Check if type of token matches any of types passed in
+   * @param types  the types to check
+   * @return true if type matches one of the supplied types
    */
-  public boolean is(TokenType type) {
-    return this.type == type;
+  public boolean is(TokenType... types) {
+    for (TokenType type: types) {
+      if (type == this.type) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
-   * Check if type of token is not the same as the type passed in
-   * @param type  the type
-   * @return true if type does not matches
+   * Check if type of token is not the same as the types passed in
+   * @param types  the types
+   * @return true if type does not match any of supplied types
    */
-  public boolean isNot(TokenType type) {
-    return this.type != type;
+  public boolean isNot(TokenType... types) {
+    for (TokenType type: types) {
+      if (this.type == type) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
