@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -25,16 +26,23 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CompilerTest {
 
+  private boolean evaluateConstExprs = true;
+
+  @BeforeEach private void setUp() {
+    evaluateConstExprs = true;
+  }
+
   BiConsumer<String,Object> test   = (code, expected) -> {
     assertEquals(expected instanceof String && ((String)expected).startsWith("#") ? new BigDecimal(((String)expected).substring(1)) : expected,
-                 Compiler.run(code, null));
+                 Compiler.run(code, new CompileContext().setEvaluateConstExprs(evaluateConstExprs), null));
   };
+
   BiConsumer<String,String> testFail = (code,expected) -> {
     try {
-      Compiler.run(code, null);
+      Compiler.run(code, new CompileContext().setEvaluateConstExprs(evaluateConstExprs), null);
       fail("Expected CompileError");
     }
-    catch (CompileError e) {
+    catch (JacsalError e) {
       if (!e.getMessage().toLowerCase().contains(expected)) {
         fail("Message did not contain expected string '" + expected + "'. Message=" + e.getMessage());
       }
@@ -76,7 +84,44 @@ class CompilerTest {
     test.accept("null", null);
   }
 
+  @Test public void booleanConversion() {
+    doBooleanConversion();   // Test const expressions
+    evaluateConstExprs = false;
+    doBooleanConversion();   // Now test compiled expressions
+  }
+
+  private void doBooleanConversion() {
+    test.accept("!-1", false);
+    test.accept("!1", false);
+    test.accept("!2", false);
+    test.accept("!0", true);
+    test.accept("!-0", true);
+    test.accept("!-1L", false);
+    test.accept("!2L", false);
+    test.accept("!0L", true);
+    test.accept("!-0L", true);
+    test.accept("!null", true);
+    test.accept("!0.0", true);
+    test.accept("!-0.0", true);
+    test.accept("!1.0", false);
+    test.accept("!-1.0", false);
+    test.accept("!2.0", false);
+    test.accept("!0.0D", true);
+    test.accept("!-0.0D", true);
+    test.accept("!1.0D", false);
+    test.accept("!-1.0D", false);
+    test.accept("!2.0D", false);
+    test.accept("!'x'", false);
+    test.accept("!''", true);
+  }
+
   @Test public void constUnaryExpressions() {
+    doConstUniaryExpressions();
+    evaluateConstExprs = false;
+    doConstUniaryExpressions();
+  }
+
+  private void doConstUniaryExpressions() {
     test.accept("-1", -1);
     test.accept("-1D", -1D);
     test.accept("-1L", -1L);
@@ -114,6 +159,12 @@ class CompilerTest {
   }
 
   @Test public void simpleConstExpressios() {
+    doSimpleConstExpressions();
+    evaluateConstExprs = false;
+    doSimpleConstExpressions();
+  }
+
+  private void doSimpleConstExpressions() {
     testFail.accept("1 + true", "non-numeric operand for right-hand side");
     testFail.accept("false + 1", "non-numeric operand for left-hand side");
     testFail.accept("1 - 'abc'", "non-numeric operand for right-hand side");
@@ -190,6 +241,12 @@ class CompilerTest {
   }
 
   @Test public void constExprArithmeticPrecedence() {
+    doConstExprArithmeticPrecedence();
+    evaluateConstExprs = false;
+    doConstExprArithmeticPrecedence();
+  }
+
+  private void doConstExprArithmeticPrecedence() {
     test.accept("1 + -2 * -3 + 4", 11);
     test.accept("1 + (2 + 3) * 4 - 5", 16);
     test.accept("13 + 12 % 7", 18);
@@ -197,6 +254,12 @@ class CompilerTest {
   }
 
   @Test public void constStringConcatenation() {
+    doConstStringConcatenation();
+    evaluateConstExprs = false;
+    doConstStringConcatenation();
+  }
+
+  private void doConstStringConcatenation() {
     testFail.accept("'abc' - '123'", "non-numeric operand");
     test.accept("'abc' + '123'", "abc123");
     test.accept("'abc' + null", "abcnull");
@@ -208,9 +271,14 @@ class CompilerTest {
   }
 
   @Test public void constStringRepeat() {
+    doConstStringRepeat();
+    evaluateConstExprs = false;
+    doConstStringRepeat();
+  }
+
+  private void doConstStringRepeat() {
     test.accept("'abc' * 2", "abcabc");
     test.accept("'abc' * 0", "");
     testFail.accept("'abc' * -1", "string repeat count must be >= 0");
-    testFail.accept("'abc' * 100000000", "maximum string length");
   }
 }

@@ -16,8 +16,9 @@
 
 package jacsal;
 
+import jacsal.runtime.RuntimeUtils;
+
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Map;
 import java.util.Set;
 
@@ -62,9 +63,6 @@ public class Resolver implements Expr.Visitor<JacsalType> {
           else {
             String lhs    = Utils.toString(expr.left.constValue);
             long   length = Utils.toLong(expr.right.constValue);
-            if (lhs.length() * length > compileContext.getMaxStringLength()) {
-              throw new CompileError("Maximum string length (" + compileContext.getMaxStringLength() + ") exceeeded", expr.operator);
-            }
             if (length < 0) {
               throw new CompileError("String repeat count must be >= 0", expr.right.location);
             }
@@ -114,22 +112,8 @@ public class Resolver implements Expr.Visitor<JacsalType> {
         case DECIMAL: {
           BigDecimal left  = Utils.toDecimal(expr.left.constValue);
           BigDecimal right = Utils.toDecimal(expr.right.constValue);
-          BigDecimal result;
-          switch (expr.operator.getType()) {
-            case PLUS:    result = left.add(right);       break;
-            case MINUS:   result = left.subtract(right);  break;
-            case STAR:    result = left.multiply(right);  break;
-            case PERCENT: result = left.remainder(right); break;
-            case SLASH:
-              result = left.divide(right, compileContext.getMaxScale(), RoundingMode.HALF_EVEN);
-              break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for decimals");
-          }
-          result = result.stripTrailingZeros();
-          if (result.scale() > compileContext.getMaxScale()) {
-            result = result.setScale(compileContext.getMaxScale(), RoundingMode.HALF_EVEN);
-          }
-          expr.constValue = result;
+
+          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.getMaxScale());
           break;
         }
       }
@@ -177,8 +161,11 @@ public class Resolver implements Expr.Visitor<JacsalType> {
   }
 
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
-    expr.isConst = true;
+    // Whether we optimise const expressions by evaluating at compile time
+    // is controlled by CompileContext (defaults to true).
+    expr.isConst    = compileContext.evaluateConstExprs();
     expr.constValue = expr.value.getValue();
+
     switch (expr.value.getType()) {
       case INTEGER_CONST: return expr.type = JacsalType.INT;
       case LONG_CONST:    return expr.type = JacsalType.LONG;

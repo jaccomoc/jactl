@@ -16,25 +16,27 @@
 
 package jacsal;
 
+import jacsal.runtime.Location;
+
 public class JacsalError extends RuntimeException {
 
-  private String errorMessage;
-  private Token  token;
+  private String   errorMessage;
+  private Location location;
 
   /**
    * Constructor
    * @param error              the error message
-   * @param token              the location where error occurred
+   * @param location              the location where error occurred
    * @param captureStackTrace  whether to get stack trace or not
    */
-  public JacsalError(String error, Token token, boolean captureStackTrace) {
+  public JacsalError(String error, Location location, boolean captureStackTrace) {
     super(null, null, false, captureStackTrace);
     this.errorMessage = error;
-    this.token        = token;
+    this.location = location;
   }
 
   @Override
   public String getMessage() {
-    return String.format("%s @ line %d, column %d%n%s", errorMessage, token.getLine(), token.getColumn(), token.getMarkedSourceLine());
+    return String.format("%s @ line %d, column %d%n%s", errorMessage, location.getLineNum(), location.getColumn(), location.getMarkedSourceLine());
   }
 }

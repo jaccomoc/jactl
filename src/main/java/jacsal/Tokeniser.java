@@ -49,8 +49,6 @@ public class Tokeniser {
   private       Token  previousToken;     // The previous token we parsed
   private final String source;            // The source code of the script
   private final int    length;            // Length of source code
-  private       int    line   = 1;        // The current line number
-  private       int    column = 1;        // The current column number
   private       int    offset = 0;        // The current position in the source code as offset
 
   private boolean inString     = false;   // True if parsing expression string content (but not
@@ -188,8 +186,6 @@ public class Tokeniser {
         if (!newLinesAllowed()) {
           throw new CompileError("New line not allowed within single line string", token);
         }
-        line++;
-        column = 1;
         return token.setType(EOL).setLength(1);
       }
       case SINGLE_QUOTE: {
@@ -422,7 +418,6 @@ public class Tokeniser {
    * @param count  the number of chars
    */
   private void advance(int count) {
-    column += count;
     offset += count;
   }
 
@@ -445,11 +440,6 @@ public class Tokeniser {
       }
 
       if (mode == Mode.MULTI_LINE_COMMENT) {
-        if (c == '\n') {
-          line++;
-          column = 0;
-        }
-        else
         if (c == '*' && available(2) && charAt(1) == '/') {
           advance(1);
           mode = Mode.CODE;
@@ -462,7 +452,7 @@ public class Tokeniser {
         int nextChar = charAt(1);
         if (nextChar == '/' || nextChar == '*') {
           mode = nextChar == '/' ? Mode.LINE_COMMENT : Mode.MULTI_LINE_COMMENT;
-          startMultiLineOffset = new Token(source, offset, line, column);
+          startMultiLineOffset = new Token(source, offset);
           advance(1);
           continue;
         }
@@ -499,8 +489,6 @@ public class Tokeniser {
         }
         case '\n': {
           if (!newlinesAllowed) { throw new CompileError("New line not allowed nested within single line string", token); }
-          line++;
-          column = 0;
           break;
         }
         case '\\': {
@@ -542,7 +530,7 @@ public class Tokeniser {
   }
 
   private Token createToken() {
-    return new Token(source, offset, line, column);
+    return new Token(source, offset);
   }
 
   private static boolean isIdentifier(String s) {

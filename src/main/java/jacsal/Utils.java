@@ -39,6 +39,9 @@ public class Utils {
     if (value instanceof BigDecimal) {
       return !((BigDecimal)value).stripTrailingZeros().equals(BigDecimal.ZERO);
     }
+    if (value instanceof String) {
+      return ((String)value).length() > 0;
+    }
     return true;
   }
 

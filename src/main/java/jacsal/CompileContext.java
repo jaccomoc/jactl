@@ -18,15 +18,11 @@ package jacsal;
 
 public class CompileContext {
 
-  private final DynamicClassLoader classLoader     = new DynamicClassLoader();
-  private       int                maxScale        = 20;
-  private       int                maxStringLength = 20_000_000;   // 20Mb
+  private final DynamicClassLoader classLoader        = new DynamicClassLoader();
+  private       boolean            evaluateConstExprs = true;
+  private       int                maxScale           = 20;
 
   CompileContext() {}
-
-  CompileContext(int maxScale) {
-    this.maxScale = maxScale;
-  }
 
   Class<?> loadClass(String name, byte[] bytes) {
     return classLoader.loadClass(name, bytes);
@@ -41,12 +37,12 @@ public class CompileContext {
     return this;
   }
 
-  int getMaxStringLength() {
-    return maxStringLength;
+  boolean evaluateConstExprs() {
+    return evaluateConstExprs;
   }
 
-  CompileContext setMaxStringLength(int length) {
-    this.maxStringLength = length;
+  CompileContext setEvaluateConstExprs(boolean value) {
+    this.evaluateConstExprs = value;
     return this;
   }
 

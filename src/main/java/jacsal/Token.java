@@ -16,7 +16,7 @@
 
 package jacsal;
 
-import java.util.stream.IntStream;
+import jacsal.runtime.Location;
 
 import static jacsal.TokenType.NULL;
 
@@ -36,29 +36,20 @@ import static jacsal.TokenType.NULL;
  * position and continue parsing from there.
  */
 
-public class Token {
-  private Token     next;       // Next token in the stream of tokens
-  private TokenType type;       // Token type
-  private String    source;     // Source code of the script being compiled
-  private int       offset;     // The position/offset in source where token starts
-  private int       line;       // Line number where token is
-  private int       column;     // Column where token is
-  private int       length;     // Length of token
-  private Object    value;      // Value of token - int, long, string, etc if literal
-  private boolean   isKeyword;  // Whether token is a keyword or not
+public class Token extends Location {
+  private Token     next;         // Next token in the stream of tokens
+  private TokenType type;         // Token type
+  private int       length;       // Length of token
+  private Object    value;        // Value of token - int, long, string, etc if literal
+  private boolean   isKeyword;    // Whether token is a keyword or not
 
   /**
    * Partially construct a token whose type and length is not yet known
    * @param source the source code of the script
    * @param offset the offset in source where token starts
-   * @param line   line number of token
-   * @param column column number of token
    */
-  public Token(String source, int offset, int line, int column) {
-    this.source = source;
-    this.offset = offset;
-    this.line   = line;
-    this.column = column;
+  public Token(String source, int offset) {
+    super(source, offset);
   }
 
   /**
@@ -67,13 +58,10 @@ public class Token {
    * @param token  the token to copy values from
    */
   public Token(TokenType type, Token token) {
-    this.type   = type;
-    this.source = token.source;
-    this.offset = token.offset;
-    this.line   = token.line;
-    this.column = token.column;
-    this.length = token.length;
-    this.value  = token.value;
+    super(token);
+    this.type      = type;
+    this.length    = token.length;
+    this.value     = token.value;
     this.isKeyword = token.isKeyword;
   }
 
@@ -160,16 +148,6 @@ public class Token {
   }
 
   public boolean isKeyword()    { return isKeyword; }
-  public int     getLine()      { return line;   }
-  public int     getColumn()    { return column; }
-
-  /**
-   * Get the line of source code with an additional line showing where token starts (used for errors)
-   * @return the source code showing token location
-   */
-  public String getMarkedSourceLine() {
-    return String.format("%s%n%s^", source.split("\n")[line - 1], " ".repeat(column - 1));
-  }
 
   /**
    * Return value of token. For literals returns the Integer, Long, Double, etc.
@@ -184,7 +162,7 @@ public class Token {
   }
 
   public String getStringValue() {
-    return source.substring(offset, offset + length);
+    return source.substring(getOffset(), getOffset() + length);
   }
 
   /**
@@ -204,4 +182,5 @@ public class Token {
            ", value='" + getValue() + '\'' +
            '}';
   }
+
 }

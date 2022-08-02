@@ -95,20 +95,17 @@ public enum JacsalType {
   }
 
   private static       List                     resultTypes = List.of(
-    new TypePair(INT, BOOLEAN),    INT,
     new TypePair(INT, LONG),       LONG,
     new TypePair(INT, DOUBLE),     DOUBLE,
     new TypePair(INT, DECIMAL),    DECIMAL,
     new TypePair(INT, STRING),     STRING,
     new TypePair(INT, ANY),        ANY,
 
-    new TypePair(DOUBLE, BOOLEAN), DOUBLE,
     new TypePair(DOUBLE, LONG),    DOUBLE,
     new TypePair(DOUBLE, DECIMAL), DECIMAL,
     new TypePair(DOUBLE, STRING),  STRING,
     new TypePair(DOUBLE, ANY),     ANY,
 
-    new TypePair(DECIMAL, BOOLEAN), DECIMAL,
     new TypePair(DECIMAL, LONG),    DECIMAL,
     new TypePair(DECIMAL, STRING),  STRING,
     new TypePair(DECIMAL, ANY),     ANY,
@@ -149,6 +146,10 @@ public enum JacsalType {
     }
     if (type1 == type2)               { return type1; }
     if (type1 == ANY || type2 == ANY) { return ANY; }
-    return resultMap.get(new TypePair(type1, type2));
+    JacsalType result = resultMap.get(new TypePair(type1, type2));
+    if (result == null) {
+      throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator " + operator, operator);
+    }
+    return result;
   }
 }
