@@ -146,7 +146,7 @@ public enum JacsalType {
       return STRING;
     }
     if (operator.is(EQUAL)) {
-      if (type2.isNotConvertibleTo(type1)) {
+      if (!type2.isConvertibleTo(type1)) {
         throw new CompileError("Right hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
       return type1;
@@ -174,15 +174,15 @@ public enum JacsalType {
   /**
    * Check if type is compatible and can be converted to given type
    * @param type  the type to be converted to
-   * @return true if not convertible
+   * @return true if convertible
    */
-  public boolean isNotConvertibleTo(JacsalType type) {
-    if (is(type))                                   { return false; }
-    if (type.is(ANY))                               { return false; }
-    if (is(INT)    && type.is(LONG,DOUBLE,DECIMAL)) { return false; }
-    if (is(LONG)   && type.is(DOUBLE,DECIMAL))      { return false; }
-    if (is(DOUBLE) && type.is(DECIMAL))             { return false; }
-    return true;
+  public boolean isConvertibleTo(JacsalType type) {
+    if (is(type))                                   { return true; }
+    if (type.is(ANY))                               { return true; }
+    if (is(INT)  && type.is(LONG,DOUBLE,DECIMAL))   { return true; }
+    if (is(LONG) && type.is(DOUBLE,DECIMAL))        { return true; }
+    if (is(DOUBLE,DECIMAL) && type.isNumeric())     { return true; }
+    return false;
   }
 
   public String descriptor() {

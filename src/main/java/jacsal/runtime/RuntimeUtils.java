@@ -150,6 +150,24 @@ public class RuntimeUtils {
     throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset, true);
   }
 
+  public static Object incNumber(Object obj, String source, int offset) {
+    ensureNonNull(obj, source, offset);
+    if (obj instanceof BigDecimal) { return ((BigDecimal)obj).add(BigDecimal.ONE); }
+    if (obj instanceof Double)     { return (double)obj + 1; }
+    if (obj instanceof Long)       { return (long)obj + 1; }
+    if (obj instanceof Integer)    { return (int)obj + 1; }
+    throw new RuntimeError("Type " + className(obj) + " cannot be incremented", source, offset, true);
+  }
+
+  public static Object decNumber(Object obj, String source, int offset) {
+    ensureNonNull(obj, source, offset);
+    if (obj instanceof BigDecimal) { return ((BigDecimal)obj).subtract(BigDecimal.ONE); }
+    if (obj instanceof Double)     { return (double)obj - 1; }
+    if (obj instanceof Long)       { return (long)obj - 1; }
+    if (obj instanceof Integer)    { return (int)obj - 1; }
+    throw new RuntimeError("Type " + className(obj) + " cannot be decremented", source, offset, true);
+  }
+
   public static String stringRepeat(String str, int count, String source, int offset) {
     if (count < 0) {
       throw new RuntimeError("String repeat count must be >= 0", source, offset, true);

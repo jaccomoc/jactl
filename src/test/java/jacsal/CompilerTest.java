@@ -261,6 +261,7 @@ class CompilerTest {
     test("long v = 1; v", 1L);
     test("var v = 1L; v", 1L);
     test("double v = 1; v", 1D);
+    test("double v = 1.5; v", 1.5D);
     test("var v = 1D; v", 1D);
     test("Decimal v = 1; v", "#1");
     test("var v = 1.0; v", "#1.0");
@@ -548,5 +549,36 @@ class CompilerTest {
     test("Decimal x", "#0");
     test("Decimal x; x", "#0");
     testFail("var x", "Initialiser expression required");
+  }
+
+  @Test public void prefixIncOrDec() {
+    test("++1", 2);
+    test("--1", 0);
+    test("int x = 1; ++x", 2);
+    test("int x = 1; --x", 0);
+    test("int x = 3; --x + --x", 3);
+    test("int x = 3; ++x + ++x", 9);
+    test("++1L", 2L);
+    test("--1L", 0L);
+    test("long x = 1; ++x", 2L);
+    test("long x = 1; --x", 0L);
+    test("long x = 3; --x + --x", 3L);
+    test("long x = 3; ++x + ++x", 9L);
+    test("++1D", 2D);
+    test("--1D", 0D);
+    test("double x = 1; ++x", 2D);
+    test("double x = 1; --x", 0D);
+    test("double x = 1.5D; --x", 0.5D);
+    test("double x = 3; --x + --x", 3D);
+    test("double x = 3.5D; --x + --x", 4D);
+    test("double x = 3.5D; ++x + ++x", 10D);
+    test("++1.0", "#2.0");
+    test("--1.0", "#0.0");
+    test("Decimal x = 1; ++x", "#2");
+    test("Decimal x = 1.5; ++x", "#2.5");
+    test("Decimal x = 1; --x", "#0");
+    test("Decimal x = 1.5; --x", "#0.5");
+    test("Decimal x = 3; --x + --x", "#3");
+    test("Decimal x = 3.5; --x + ++x", "#6.0");
   }
 }

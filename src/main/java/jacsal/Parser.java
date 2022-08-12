@@ -284,7 +284,7 @@ public class Parser {
    * * unary -> ( "!" | "--" | "++" | "-" | "+" ) unary *        | primary;
    */
   private Expr unary() {
-    if (matchAny(BANG, /* MINUS_MINUS, PLUS_PLUS, */ MINUS, PLUS)) {
+    if (matchAny(BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS)) {
       return new Expr.PrefixUnary(previous(), unary());
     }
     return primary();

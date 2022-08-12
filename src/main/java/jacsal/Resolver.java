@@ -108,7 +108,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     resolve(stmt.expr);
-    if (stmt.expr.type.isNotConvertibleTo(stmt.type)) {
+    if (!stmt.expr.type.isConvertibleTo(stmt.type)) {
       throw new CompileError("Expression type not compatible with return type of function", stmt.expr.location);
     }
     return null;
@@ -238,6 +238,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
             case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
           }
         }
+        else
+        if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
+          int incAmount = expr.operator.is(PLUS_PLUS) ? 1 : -1;
+          switch (expr.type) {
+            case INT:     expr.constValue = ((int)expr.constValue) + incAmount;     break;
+            case LONG:    expr.constValue = ((long)expr.constValue) + incAmount;    break;
+            case DOUBLE:  expr.constValue = ((double)expr.constValue) + incAmount;  break;
+            case DECIMAL:
+              expr.constValue = ((BigDecimal)expr.constValue).add(BigDecimal.valueOf(incAmount));
+              break;
+          }
+        }
       }
       return expr.type;
     }
@@ -282,7 +294,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.type = type;
     }
     else
-    if (type != null && type.isNotConvertibleTo(expr.type)) {
+    if (type != null && !type.isConvertibleTo(expr.type)) {
       throw new CompileError("Cannot convert initialiser of type " + type + " to type of variable (" + expr.type + ")", expr.initialiser.location);
     }
     define(expr.name, expr);
@@ -298,7 +310,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitVarAssign(Expr.VarAssign expr) {
     expr.type = resolve(expr.identifierExpr);
     resolve(expr.expr);
-    if (expr.expr.type.isNotConvertibleTo(expr.type)) {
+    if (!expr.expr.type.isConvertibleTo(expr.type)) {
       throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
     return null;

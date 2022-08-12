@@ -47,6 +47,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private final Deque<Stmt.Block> blocks = new ArrayDeque<>();
   private final List<JacsalType>  locals = new ArrayList<>();
 
+  private static final BigDecimal DECIMAL_MINUS_1 = BigDecimal.valueOf(-1);
+
   // As we generate the byte code we keep a stack where we track the type of the
   // value that would currently be on the JVM stack at that point in the generated
   // code. This allows us to know when to do appropriate conversions.
@@ -188,7 +190,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
       // special cases since they already check to see whether they should leave something on
       // the stack.
-      if (!(expr instanceof Expr.VarDecl || expr instanceof Expr.VarAssign)) {
+      if (!(expr instanceof Expr.VarDecl || expr instanceof Expr.VarAssign || expr instanceof Expr.PrefixUnary)) {
         popVal();
         pop();
       }
@@ -334,23 +336,76 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitPrefixUnary(Expr.PrefixUnary expr) {
-    compile(expr.expr);
+    boolean resultIsOnStack = true;
     switch (expr.operator.getType()) {
       case BANG:
+        compile(expr.expr);
         convertToBoolean(true);
+        pop();
         break;
       case MINUS:
+        compile(expr.expr);
         arithmeticNegate(expr.expr.location);
+        pop();
         break;
       case PLUS:
+        compile(expr.expr);
+        pop();
         // Nothing to do for unary plus
+        break;
+      case PLUS_PLUS:
+      case MINUS_MINUS:
+        resultIsOnStack = false;
+        boolean isInc = expr.operator.is(PLUS_PLUS);
+        if (expr.expr instanceof Expr.Identifier) {
+          Expr.VarDecl varDecl = ((Expr.Identifier) expr.expr).varDecl;
+          if (varDecl.type == INT) {
+            // JVM provides special support for ints
+            mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
+          }
+          else {
+            // Long, Double, or Decimal
+            loadLocal(varDecl.slot);
+            switch (varDecl.type) {
+              case LONG:
+                loadConst(isInc ? 1L : -1L);
+                mv.visitInsn(LADD);
+                break;
+              case DOUBLE:
+                loadConst(isInc ? 1D : -1D);
+                mv.visitInsn(DADD);
+                break;
+              case DECIMAL:
+                loadConst(isInc ? BigDecimal.ONE : DECIMAL_MINUS_1);
+                invokeVirtual(BigDecimal.class, "add", BigDecimal.class);
+                break;
+              case ANY:
+                incOrDec(isInc, expr.expr.location);
+                break;
+              default: throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
+            }
+            storeLocal(varDecl.slot);
+          }
+          if (expr.isResultUsed) {
+            resultIsOnStack = true;
+            loadLocal(varDecl.slot);
+          }
+        }
+        else {
+          compile(expr.expr);
+          incOrDec(isInc, expr.expr.location);
+          pop();
+        }
         break;
       default:
         throw new UnsupportedOperationException("Internal error: unknown prefix operator " + expr.operator.getType());
     }
 
-    pop();
     push(expr.type);
+    if (!expr.isResultUsed && resultIsOnStack) {
+      popVal();
+      pop();
+    }
     return null;
   }
 
@@ -754,6 +809,40 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(classCompiler.source);
         loadConst(location.getOffset());
         invokeStatic(RuntimeUtils.class, "negateNumber", Object.class, String.class, Integer.TYPE);
+        break;
+      default:
+        throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+    }
+  }
+
+  /**
+   * Increment or decrement by one the current value on the stack. This is used
+   * when the increment/decrement doesn't actually alter a variable (e.g. ++1).
+   * @param isInc    true if doing inc (false for dec)
+   * @param location location of expression we are incrementing or decrementing
+   */
+  private void incOrDec(boolean isInc, Token location) {
+    switch (peek().type) {
+      case INT:
+        loadConst(isInc ? 1 : -1);
+        mv.visitInsn(IADD);
+        break;
+      case LONG:
+        loadConst(isInc ? 1L : -1L);
+        mv.visitInsn(LADD);
+        break;
+      case DOUBLE:
+        loadConst(isInc ? 1D : -1D);
+        mv.visitInsn(DADD);
+        break;
+      case DECIMAL:
+        loadConst(isInc ? BigDecimal.ONE : DECIMAL_MINUS_1);
+        invokeVirtual(BigDecimal.class, "add", BigDecimal.class);
+        break;
+      case ANY:
+        loadConst(classCompiler.source);
+        loadConst(location.getOffset());
+        invokeStatic(RuntimeUtils.class, isInc ? "incNumber" : "decNumber", Object.class, String.class, Integer.TYPE);
         break;
       default:
         throw new IllegalStateException("Internal error: unexpected type " + peek().type);

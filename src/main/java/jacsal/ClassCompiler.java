@@ -37,7 +37,7 @@ public class ClassCompiler {
   private static       long   counter            = 0;
 
   private       ClassWriter    cw;
-  ClassVisitor   cv;
+                ClassVisitor   cv;
           final CompileContext context;
   private final String         pkg;
   private final String         className;
