@@ -25,6 +25,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -359,32 +360,33 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         boolean isInc = expr.operator.is(PLUS_PLUS);
         if (expr.expr instanceof Expr.Identifier) {
           Expr.VarDecl varDecl = ((Expr.Identifier) expr.expr).varDecl;
-          if (varDecl.type == INT) {
-            // JVM provides special support for ints
-            mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
-          }
-          else {
-            // Long, Double, or Decimal
+          BiConsumer<Object,Runnable> incOrDec = (plusOrMinusOne, runnable) -> {
             loadLocal(varDecl.slot);
-            switch (varDecl.type) {
-              case LONG:
-                loadConst(isInc ? 1L : -1L);
-                mv.visitInsn(LADD);
-                break;
-              case DOUBLE:
-                loadConst(isInc ? 1D : -1D);
-                mv.visitInsn(DADD);
-                break;
-              case DECIMAL:
-                loadConst(isInc ? BigDecimal.ONE : DECIMAL_MINUS_1);
-                invokeVirtual(BigDecimal.class, "add", BigDecimal.class);
-                break;
-              case ANY:
-                incOrDec(isInc, expr.expr.location);
-                break;
-              default: throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
-            }
+            loadConst(plusOrMinusOne);
+            runnable.run();
             storeLocal(varDecl.slot);
+          };
+          switch (varDecl.type) {
+            case INT:
+              // Integer vars have special support and can be incremented in place.
+              mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
+              break;
+            case LONG:
+              incOrDec.accept(isInc ? 1L : -1L, () -> mv.visitInsn(LADD));
+              break;
+            case DOUBLE:
+              incOrDec.accept(isInc ? 1D : -1D, () -> mv.visitInsn(DADD));
+              break;
+            case DECIMAL:
+              BigDecimal amt = isInc ? BigDecimal.ONE : DECIMAL_MINUS_1;
+              incOrDec.accept(amt, () -> invokeVirtual(BigDecimal.class, "add", BigDecimal.class));
+              break;
+            case ANY:
+              loadLocal(varDecl.slot);
+              incOrDec(isInc, expr.expr.location);
+              storeLocal(varDecl.slot);
+              break;
+            default: throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
           }
           if (expr.isResultUsed) {
             resultIsOnStack = true;

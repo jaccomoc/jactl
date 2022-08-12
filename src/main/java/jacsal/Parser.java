@@ -22,6 +22,19 @@ import java.util.stream.Collectors;
 import static jacsal.JacsalType.ANY;
 import static jacsal.TokenType.*;
 
+/**
+ * Recursive descent parser for parsing the Jacsal language.
+ * In general we try to avoid too much lookahead in the parsing to make the parsing efficient
+ * but there are a couple of places where lookahead is required to disambiguate parts of the
+ * grammar.
+ * Usually a single token lookahead suffices.
+ *
+ * After the parsing has been done and the AST generated, the resulting AST needs to be passed
+ * to the Resolver which resolves all variable references and does as much validation as possible
+ * to validate types of operands in expressions.
+ *
+ * Finally the Compiler then should be invoked to compile the AST into JVM byte code.
+ */
 public class Parser {
   Tokeniser          tokeniser;
   Token              firstToken = null;
@@ -59,7 +72,7 @@ public class Parser {
   // = Stmt
 
   /**
-   * * script -> block;
+   *# script -> block;
    */
   private Stmt.Script script() {
     Stmt.FunDecl funDecl = new Stmt.FunDecl(new Token(IDENTIFIER, peek()).setValue(Utils.JACSAL_SCRIPT_MAIN),
@@ -85,7 +98,9 @@ public class Parser {
   }
 
   /**
-   * * block -> "{" stmts "}" *        | stmts EOF      // Special case for top most script block *        ;
+   *# block -> "{" stmts "}"
+   *#        | stmts EOF      // Special case for top most script block
+   *#        ;
    */
   private Stmt.Block block(TokenType endBlock) {
     Stmt.Stmts stmts = new Stmt.Stmts();
@@ -99,7 +114,7 @@ public class Parser {
   }
 
   /**
-   * * stmts -> declaration* ;
+   *# stmts -> declaration* ;
    */
   private void stmts(Stmt.Stmts stmts) {
     Stmt previousStmt = null;
@@ -131,7 +146,8 @@ public class Parser {
   }
 
   /**
-   * * declaration -> varDecl *              | statement;
+   *# declaration -> varDecl
+   *#              | statement;
    */
   private Stmt declaration() {
     if (matchAny(VAR, DEF, INT, LONG, DOUBLE, DECIMAL, STRING)) {
@@ -145,7 +161,8 @@ public class Parser {
   }
 
   /**
-   * * statement -> block *            | exprStatement;
+   *# statement -> block
+   *#            | exprStatement;
    */
   private Stmt statement() {
     if (matchAny(LEFT_BRACE)) {
@@ -158,7 +175,7 @@ public class Parser {
   }
 
   /**
-   * * varDecl -> ("var" | "int" | "long" | "double" | "Decimal" | "String" ) IDENTIFIER ( "=" expression ) ? ;
+   *# varDecl -> ("var" | "int" | "long" | "double" | "Decimal" | "String" ) IDENTIFIER ( "=" expression ) ? ;
    */
   private Stmt.VarDecl varDecl() {
     Token typeToken   = previous();
@@ -191,7 +208,7 @@ public class Parser {
   }
 
   /**
-   * * exprStmt -> expression;
+   *# exprStmt -> expression;
    */
   private Stmt exprStmt() {
     Token location = peek();
@@ -206,7 +223,7 @@ public class Parser {
   }
 
   /**
-   * * returnStmt -> "return" expression;
+   *# returnStmt -> "return" expression;
    */
   private Stmt returnStmt() {
     Token       location   = previous();
@@ -245,10 +262,9 @@ public class Parser {
     );
 
   /**
-   * * expression -> expression operator expression;
-   * <p>
-   * Recursively parse expressions base on operator precedence.
+   *# expression -> expression operator expression;
    *
+   * Recursively parse expressions base on operator precedence.
    * @return the parsed expression
    */
   private Expr expression() {
@@ -281,7 +297,8 @@ public class Parser {
   }
 
   /**
-   * * unary -> ( "!" | "--" | "++" | "-" | "+" ) unary *        | primary;
+   *# unary -> ( "!" | "--" | "++" | "-" | "+" ) unary
+   *#        | primary;
    */
   private Expr unary() {
     if (matchAny(BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS)) {
@@ -291,8 +308,9 @@ public class Parser {
   }
 
   /**
-   * * primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null" *          |
-   * exprString *          | IDENTIFIER;
+   *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
+   *#          | exprString
+   *#          | IDENTIFIER;
    */
   private Expr primary() {
     if (matchAny(INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST, STRING_CONST, TRUE, FALSE, NULL)) {
@@ -317,7 +335,7 @@ public class Parser {
   }
 
   /**
-   * * exprString -> EXPR_STRING_START ( expression | STRING_CONST ) * EXPR_STRING_END;
+   *# exprString -> EXPR_STRING_START ( expression | STRING_CONST ) * EXPR_STRING_END;
    */
   private Expr exprString() {
     Expr.ExprString exprString = new Expr.ExprString(expect(EXPR_STRING_START));
