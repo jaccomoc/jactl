@@ -53,7 +53,7 @@ public enum TokenType {
   EXPR_STRING_START, EXPR_STRING_END,
 
   //= Keywords
-  DEF, VAR, INT, FLOAT, DOUBLE, STRING, VOID,
+  DEF, VAR, INT, LONG, DOUBLE, DECIMAL, STRING, VOID,
   FOR, IF, WHILE, IT,
   CLASS, INTERFACE, EXTENDS, IMPLEMENTS,
   IMPORT, AS, TRUE, FALSE, NULL, IN, BANG_IN,
@@ -64,6 +64,15 @@ public enum TokenType {
   //= Special
   EOL,            // End of line
   EOF;            // End of file
+
+  boolean is(TokenType... types) {
+    for (TokenType type: types) {
+      if (this == type) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   boolean isNumericOperator() {
     switch (this) {
@@ -87,5 +96,11 @@ public enum TokenType {
       default:
         return false;
     }
+  }
+
+  boolean isAssignmentLike() {
+    return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
+                   DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
+                   PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL);
   }
 }

@@ -80,10 +80,20 @@ public class Tokeniser {
   /**
    * Get the next token. If we have been rewound then we return from that point in
    * the stream of tokens rather than parsing a new one from the source code.
+   * Special case for new lines is that we collapse a series of new lines into one
+   * since new lines are syntactially relevant but the number in a row has no
+   * significance.
    * @return the next token in the stream of tokens
    */
   public Token next() {
     populateCurrentToken();
+
+    // If we have already returned EOL last time then keep advancing until we get
+    // something that is not EOL
+    if (currentToken.is(EOL) && previousToken != null && previousToken.is(EOL)) {
+      while ((currentToken = parseToken()).is(EOL)) {}
+      previousToken.setNext(currentToken);
+    }
 
     Token result  = currentToken;
     previousToken = currentToken;
@@ -121,8 +131,7 @@ public class Tokeniser {
 
   /**
    * If currentToken already has a value then do nothing. If we don't have a current
-   * token then read the next token and update the previous token to point to the new
-   * token.
+   * token then read the next token.
    */
   private void populateCurrentToken() {
     if (currentToken == null) {
@@ -635,8 +644,9 @@ public class Tokeniser {
     new Symbol("var", VAR),
     new Symbol("it", IT),
     new Symbol("int", INT),
-    new Symbol("flout", FLOAT),
+    new Symbol("long", LONG),
     new Symbol("double", DOUBLE),
+    new Symbol("Decimal", DECIMAL),
     new Symbol("String", STRING),
     new Symbol("void", VOID),
     new Symbol("for", FOR),

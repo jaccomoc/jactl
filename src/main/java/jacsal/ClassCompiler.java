@@ -34,9 +34,6 @@ import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
 
-  private static final String JACSAL_PKG         = "jacsal/pkg";
-  private static final String JACSAL_PREFIX      = "_$j$";
-  private static final String JACSAL_SCRIPT_MAIN = JACSAL_PREFIX + "main";
   private static       long   counter            = 0;
 
   private       ClassWriter    cw;
@@ -45,11 +42,11 @@ public class ClassCompiler {
   private final String         pkg;
   private final String         className;
   private final String         internalName;
-  private final Expr           expr;
+  private final Stmt.Script    script;
   private       boolean        debug = false;
           final String         source;
 
-  ClassCompiler(String source, CompileContext context, String pkg, String className, Expr expr) {
+  ClassCompiler(String source, CompileContext context, String pkg, String className, Stmt.Script script) {
     cv = cw = new ClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
     if (debug) {
       cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
@@ -57,13 +54,13 @@ public class ClassCompiler {
     this.context   = context;
     this.pkg       = pkg;
     this.className = className;
-    internalName   = JACSAL_PKG + "/" + (pkg == null ? "" : pkg + "/") + className;
-    this.expr      = expr;
+    internalName   = Utils.JACSAL_PKG + "/" + (pkg == null ? "" : pkg + "/") + className;
+    this.script    = script;
     this.source    = source;
   }
 
-  ClassCompiler(String source, CompileContext context, Expr expr) {
-    this(source, context, null, "JacsalScript_" + counter++, expr);
+  ClassCompiler(String source, CompileContext context, Stmt.Script script) {
+    this(source, context, null, "JacsalScript_" + counter++, script);
   }
 
   public Function<Map<String,Object>,Object> compile() {
@@ -72,16 +69,16 @@ public class ClassCompiler {
 
     String methodDescriptor = Type.getMethodDescriptor(Type.getType(Object.class),
                                                        Type.getType(Map.class));
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + ACC_STATIC , JACSAL_SCRIPT_MAIN,
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + ACC_STATIC , (String)script.function.name.getValue(),
                                       methodDescriptor,
                                       null, null);
-    MethodCompiler methodCompiler = new MethodCompiler(this, expr, mv);
+    MethodCompiler methodCompiler = new MethodCompiler(this, script.function, mv);
     methodCompiler.compile();
     mv.visitEnd();
     cv.visitEnd();
     Class<?> clss = context.loadClass(internalName.replaceAll("/", "."), cw.toByteArray());
     try {
-      MethodHandle mh = MethodHandles.publicLookup().findStatic(clss, JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Map.class));
+      MethodHandle mh = MethodHandles.publicLookup().findStatic(clss, Utils.JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Map.class));
       return map -> {
         try {
           return mh.invokeExact(map);

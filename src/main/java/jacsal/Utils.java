@@ -20,6 +20,10 @@ import java.math.BigDecimal;
 
 public class Utils {
 
+  public static final String JACSAL_PKG         = "jacsal/pkg";
+  public static final String JACSAL_PREFIX      = "_$j$";
+  public static final String JACSAL_SCRIPT_MAIN = JACSAL_PREFIX + "main";
+
   static boolean toBoolean(Object value) {
     if (value == null) {
       return false;

@@ -68,8 +68,10 @@ while (<FH>) {
     print "    $className(" . join(', ', map { "$_->[1] $_->[0]"} @constructorFields) . ") {\n";
     @superFields and print "      super(" . join(", ", @superFields) . ");\n";
     print "      this.$_->[0] = $_->[0];\n" for @fields;
-    my $firstTokenArg = @{[ grep { $_->[1] eq 'Token' } @constructorFields ]}[0]->[0] or die "Missing a token field in constructor for $className\n";
-    if (!grep { $_ eq $firstTokenArg } @superFields) {
+    my @tokenFields = @{[ grep {$_->[1] eq 'Token'} @constructorFields ]};
+    my $firstTokenArg = @tokenFields && @tokenFields[0]->[0] if $rootClass eq "Expr";
+    # If no super field has a type Token then assign location in subclass
+    if ($firstTokenArg and !grep { $_ eq $firstTokenArg } @superFields) {
       print "      this.location = $firstTokenArg;\n";
     }
     print "    }\n";
@@ -87,8 +89,8 @@ while (<FH>) {
     @attributes = ();
   } and print and next;
 
-  $inClass and /([A-Z][a-zA-Z]*) +([a-zA-Z0-9]+);/  and push @fields, [$2, $1];
-  $inClass and /([A-Z][a-zA-Z<,>]*) +\@([a-zA-Z0-9]+)/ and push @attributes, $2;
+  $inClass and /([A-Z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/  and push @fields, [$2, $1];
+  $inClass and /([A-Z][a-zA-Z<,>.]*) +\@([a-zA-Z0-9]+)/ and push @attributes, $2;
   s/@//;
 
   /class (.*) extends +(\w*)/ and ($inClass, $className, $extends) = (1, $1, $2)

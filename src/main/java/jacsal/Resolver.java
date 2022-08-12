@@ -19,8 +19,7 @@ package jacsal;
 import jacsal.runtime.RuntimeUtils;
 
 import java.math.BigDecimal;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static jacsal.TokenType.*;
 
@@ -28,12 +27,15 @@ import static jacsal.TokenType.*;
  * The Resolver visits all statements and all expressions and performs the following:
  *  - tracks variables and their type
  *  - resolves references to symbols (variables, methods, etc)
+ *  - allocates and keeps track of what local variable slots are in use
  *  - evaluates any expressions made up of only constants (literals)
  */
-public class Resolver implements Expr.Visitor<JacsalType> {
+public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
-  private final CompileContext     compileContext;
-  private final Map<String,Object> bindings;
+  private final CompileContext      compileContext;
+  private final Map<String,Object>  bindings;
+  private final Deque<Stmt.Block>   blocks = new ArrayDeque<>();
+  private final Deque<Stmt.FunDecl> functions = new ArrayDeque<>();
 
   /**
    * Resolve variables, references, etc
@@ -44,32 +46,123 @@ public class Resolver implements Expr.Visitor<JacsalType> {
     this.bindings       = bindings;
   }
 
-  JacsalType resolve(Expr expr) {
-    return expr.accept(this);
+  Void resolve(Stmt stmt) {
+    if (stmt != null) {
+      return stmt.accept(this);
+    }
+    return null;
   }
+
+  JacsalType resolve(Expr expr) {
+    if (expr != null) {
+      return expr.accept(this);
+    }
+    return null;
+  }
+
+  //////////////////////////////////////////////////////////
+
+  // = Stmt
+
+  @Override public Void visitScript(Stmt.Script stmt) {
+    return resolve(stmt.function);
+  }
+
+  @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
+    functions.push(stmt);
+    stmt.slotIdx = 2;
+    try {
+      return resolve(stmt.block);
+    }
+    finally {
+      functions.pop();
+    }
+  }
+
+  @Override public Void visitStmts(Stmt.Stmts stmt) {
+    stmt.stmts.forEach(this::resolve);
+    return null;
+  }
+
+  @Override public Void visitBlock(Stmt.Block stmt) {
+    blocks.push(stmt);
+    try {
+      return resolve(stmt.stmts);
+    }
+    finally {
+      functions.peek().slotIdx -= blocks.peek().slotsUsed;
+      blocks.pop();
+    }
+  }
+
+  @Override public Void visitVarDecl(Stmt.VarDecl stmt) {
+    resolve(stmt.declExpr);
+    stmt.type = stmt.declExpr.type;
+    return null;
+  }
+
+  @Override public Void visitExprStmt(Stmt.ExprStmt stmt) {
+    resolve(stmt.expr);
+    return null;
+  }
+
+  @Override public Void visitReturn(Stmt.Return stmt) {
+    resolve(stmt.expr);
+    if (stmt.expr.type.isNotConvertibleTo(stmt.type)) {
+      throw new CompileError("Expression type not compatible with return type of function", stmt.expr.location);
+    }
+    return null;
+  }
+
+  @Override
+  public Void visitIf(Stmt.If stmt) {
+    resolve(stmt.condtion);
+    resolve(stmt.trueStmts);
+    resolve(stmt.falseStmts);
+    return null;
+  }
+
+  //////////////////////////////////////////////////////////
+
+  // = Expr
 
   @Override public JacsalType visitBinary(Expr.Binary expr) {
     resolve(expr.left);
     resolve(expr.right);
     expr.isConst = expr.left.isConst && expr.right.isConst;
+    if (expr.left.isConst && expr.left.constValue == null) {
+      throw new CompileError("Left-hand side of '" + expr.operator.getStringValue() + "' cannot be null", expr.left.location);
+    }
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
-      switch (expr.type) {
-        case STRING: {
-          if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for Strings"); }
-          if (expr.operator.is(PLUS)) {
-            expr.constValue = Utils.toString(expr.left.constValue) + Utils.toString(expr.right.constValue);
+      if (expr.type.is(JacsalType.STRING)) {
+        if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for Strings"); }
+        if (expr.operator.is(PLUS)) {
+          if (expr.left.constValue == null) {
+            throw new CompileError("Left-hand side of '+' cannot be null", expr.operator);
           }
-          else {
-            String lhs    = Utils.toString(expr.left.constValue);
-            long   length = Utils.toLong(expr.right.constValue);
-            if (length < 0) {
-              throw new CompileError("String repeat count must be >= 0", expr.right.location);
-            }
-            expr.constValue = lhs.repeat((int)length);
-          }
-          break;
+          expr.constValue = Utils.toString(expr.left.constValue) + Utils.toString(expr.right.constValue);
         }
+        else {
+          if (expr.right.constValue == null) {
+            throw new CompileError("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
+          }
+          String lhs    = Utils.toString(expr.left.constValue);
+          long   length = Utils.toLong(expr.right.constValue);
+          if (length < 0) {
+            throw new CompileError("String repeat count must be >= 0", expr.right.location);
+          }
+          expr.constValue = lhs.repeat((int)length);
+        }
+        return expr.type;
+      }
+
+      // TBD: bitwise operators and boolean operators
+
+      if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
+      if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
+
+      switch (expr.type) {
         case INT: {
           int left  = Utils.toInt(expr.left.constValue);
           int right = Utils.toInt(expr.right.constValue);
@@ -112,7 +205,6 @@ public class Resolver implements Expr.Visitor<JacsalType> {
         case DECIMAL: {
           BigDecimal left  = Utils.toDecimal(expr.left.constValue);
           BigDecimal right = Utils.toDecimal(expr.right.constValue);
-
           expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.getMaxScale());
           break;
         }
@@ -131,21 +223,24 @@ public class Resolver implements Expr.Visitor<JacsalType> {
       }
       return expr.type;
     }
-    else
-    if (expr.expr.type.isNumeric()) {
+    else {
       expr.type = expr.expr.type;
-      expr.constValue = expr.expr.constValue;
-      if (expr.operator.is(MINUS)) {
-        switch (expr.type) {
-          case INT:     expr.constValue = -(int)expr.constValue;                  break;
-          case LONG:    expr.constValue = -(long)expr.constValue;                 break;
-          case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
-          case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
+      if (!expr.type.isNumeric() && !expr.type.is(JacsalType.ANY)) {
+        throw new CompileError("Prefix operator '" + expr.operator.getStringValue() + "' cannot be applied to type " + expr.expr.type, expr.operator);
+      }
+      if (expr.isConst) {
+        expr.constValue = expr.expr.constValue;
+        if (expr.operator.is(MINUS)) {
+          switch (expr.type) {
+            case INT:     expr.constValue = -(int)expr.constValue;                  break;
+            case LONG:    expr.constValue = -(long)expr.constValue;                 break;
+            case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
+            case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
+          }
         }
       }
       return expr.type;
     }
-    throw new CompileError("Unary operator '" + expr.operator.getStringValue() + "' cannot be applied to type " + expr.expr.type, expr.operator);
   }
 
   @Override public JacsalType visitPostfixUnary(Expr.PostfixUnary expr) {
@@ -180,8 +275,33 @@ public class Resolver implements Expr.Visitor<JacsalType> {
     }
   }
 
+  @Override public JacsalType visitVarDecl(Expr.VarDecl expr) {
+    declare(expr.name);
+    JacsalType type = resolve(expr.initialiser);
+    if (expr.type == null) {
+      expr.type = type;
+    }
+    else
+    if (type != null && type.isNotConvertibleTo(expr.type)) {
+      throw new CompileError("Cannot convert initialiser of type " + type + " to type of variable (" + expr.type + ")", expr.initialiser.location);
+    }
+    define(expr.name, expr);
+    return expr.type;
+  }
+
   @Override public JacsalType visitIdentifier(Expr.Identifier expr) {
-    throw new UnsupportedOperationException();
+    Expr.VarDecl varDecl = lookup(expr.identifier);
+    expr.varDecl = varDecl;
+    return expr.type = varDecl.type;
+  }
+
+  @Override public JacsalType visitVarAssign(Expr.VarAssign expr) {
+    expr.type = resolve(expr.identifierExpr);
+    resolve(expr.expr);
+    if (expr.expr.type.isNotConvertibleTo(expr.type)) {
+      throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
+    }
+    return null;
   }
 
   @Override public JacsalType visitExprString(Expr.ExprString expr) {
@@ -190,6 +310,50 @@ public class Resolver implements Expr.Visitor<JacsalType> {
 
   /////////////////////////
 
-  private static Set<TokenType> numericOperators = Set.of(PLUS, MINUS, STAR, SLASH, PERCENT);
+  private void error(String msg, Token location) {
+    throw new CompileError(msg, location);
+  }
+
+  private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null);
+
+  private void declare(Token name) {
+    var        block   = blocks.peek();
+    String     varName = (String)name.getValue();
+    assert block != null;
+    Expr.VarDecl decl = block.variables.get(varName);
+    if (decl != null) {
+      error("Variable with name " + varName + " already declared in this scope", name);
+    }
+    // Add variable with type of UNDEFINED as a marker to indicate variable has been declared but is
+    // not yet usable
+    block.variables.put(name.getStringValue(), UNDEFINED);
+  }
+
+  private void define(Token name, Expr.VarDecl decl) {
+    Stmt.FunDecl function = functions.peek();
+    assert function != null;
+    Stmt.Block block = blocks.peek();
+    assert block != null;
+
+    decl.slot = function.slotIdx;
+    int slotsUsed = decl.type.is(JacsalType.LONG,JacsalType.DOUBLE) ? 2 : 1;
+    function.slotIdx += slotsUsed;
+    function.maxSlot = Math.max(function.slotIdx, function.maxSlot);
+    block.slotsUsed  += slotsUsed;
+    block.variables.put((String)name.getValue(), decl);
+  }
+
+  private Expr.VarDecl lookup(Token identifier) {
+    String name = (String)identifier.getValue();
+    for (Iterator<Stmt.Block> it = blocks.descendingIterator(); it.hasNext(); ) {
+      Stmt.Block   block   = it.next();
+      Expr.VarDecl varDecl = block.variables.get(name);
+      if (varDecl != null) {
+        return varDecl;
+      }
+    }
+    error("Reference to unknown variable " + name, identifier);
+    return null;
+  }
 
 }

@@ -16,7 +16,11 @@
 
 package jacsal;
 
+import java.util.List;
+
 public class CompileError extends JacsalError {
+
+  private List<CompileError> errors;
 
   /**
    * Create a compile error
@@ -25,5 +29,23 @@ public class CompileError extends JacsalError {
    */
   public CompileError(String error, Token token) {
     super(error, token, true);
+  }
+
+  public CompileError(List<CompileError> errors) {
+    super(null, null, true);
+    this.errors = errors;
+  }
+
+  @Override
+  public String getMessage() {
+    if (this.errors != null) {
+      StringBuilder sb = new StringBuilder();
+      sb.append(String.format("%d error%s found:\n", errors.size(), errors.size() > 1));
+      errors.forEach(e -> sb.append(e.getMessage()).append('\n'));
+      return sb.toString();
+    }
+    else {
+      return super.getMessage();
+    }
   }
 }

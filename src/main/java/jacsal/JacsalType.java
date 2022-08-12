@@ -16,22 +16,30 @@
 
 package jacsal;
 
+import org.objectweb.asm.Type;
+
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static jacsal.TokenType.PLUS;
-import static jacsal.TokenType.STAR;
+import static jacsal.TokenType.*;
 
 public enum JacsalType {
 
+  // NOTE: these names must match the corresponding token type names so that
+  //       we can use JacsalType.valueOf(tokenType) to get a JacsalType from
+  //       a TokenType. Only exception is for INSTANCE and ANY since INSTANCE
+  //       doesn't have a corresponding token and ANY which is roughly equivalent
+  //       to DEF.
   BOOLEAN,
   INT,
   LONG,
   DOUBLE,
   DECIMAL,
   STRING,
+  INSTANCE,
   ANY;
 
   public boolean isNumeric() {
@@ -128,28 +136,72 @@ public enum JacsalType {
    * @return resulting type
    */
   public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
-    if (operator.is(PLUS) && (type1 == STRING || type2 == STRING)) {
+    if (type1.is(ANY)) {
+      return ANY;
+    }
+    if (operator.is(PLUS) && type1.is(STRING)) {
       return STRING;
     }
     if (operator.is(STAR) && type1 == STRING && type2.is(INT,LONG,ANY)) {
       return STRING;
     }
-    if (operator.getType().isNumericOperator()) {
-      if (!type1.isNumeric()) { throw new CompileError("Non-numeric operand for left-hand side of '" + operator.getStringValue() + "'", operator); }
-      if (!type2.isNumeric()) { throw new CompileError("Non-numeric operand for right-hand side of '" + operator.getStringValue() + "'", operator); }
-      if (type1 == BOOLEAN && type2 == BOOLEAN) {
-        return INT;
+    if (operator.is(EQUAL)) {
+      if (type2.isNotConvertibleTo(type1)) {
+        throw new CompileError("Right hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
+      return type1;
     }
+
     if (operator.getType().isBooleanOperator()) {
       return BOOLEAN;
     }
+
+    // TBD: Check for bitwise operations which should result in int/long
+
+    // Must be numeric operation
+    checkIsNumeric(type1, "left", operator);
+    checkIsNumeric(type2, "right", operator);
     if (type1 == type2)               { return type1; }
-    if (type1 == ANY || type2 == ANY) { return ANY; }
+    if (type2 == ANY)                 { return ANY; }
+
     JacsalType result = resultMap.get(new TypePair(type1, type2));
     if (result == null) {
       throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator " + operator, operator);
     }
     return result;
+  }
+
+  /**
+   * Check if type is compatible and can be converted to given type
+   * @param type  the type to be converted to
+   * @return true if not convertible
+   */
+  public boolean isNotConvertibleTo(JacsalType type) {
+    if (is(type))                                   { return false; }
+    if (type.is(ANY))                               { return false; }
+    if (is(INT)    && type.is(LONG,DOUBLE,DECIMAL)) { return false; }
+    if (is(LONG)   && type.is(DOUBLE,DECIMAL))      { return false; }
+    if (is(DOUBLE) && type.is(DECIMAL))             { return false; }
+    return true;
+  }
+
+  public String descriptor() {
+    switch (this) {
+      case BOOLEAN:        return Type.getDescriptor(Boolean.TYPE);
+      case INT:            return Type.getDescriptor(Integer.TYPE);
+      case LONG:           return Type.getDescriptor(Long.TYPE);
+      case DOUBLE:         return Type.getDescriptor(Double.TYPE);
+      case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
+      case STRING:         return Type.getDescriptor(String.class);
+      case INSTANCE:       throw new UnsupportedOperationException();
+      case ANY:            return Type.getDescriptor(Object.class);
+      default:             throw new UnsupportedOperationException();
+    }
+  }
+
+  private static void checkIsNumeric(JacsalType type, String leftOrRight, Token operator) {
+    if (!type.isNumeric() && !type.is(ANY)) {
+      throw new CompileError("Non-numeric operand for " + leftOrRight + "-hand side of '" + operator.getStringValue() + "': was " + type, operator);
+    }
   }
 }

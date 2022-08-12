@@ -23,13 +23,13 @@ import java.math.RoundingMode;
 
 public class RuntimeUtils {
 
-  static final char PLUS = '+';
-  static final char MINUS = '-';
-  static final char STAR = '*';
-  static final char SLASH = '/';
-  static final char PERCENT = '%';
+  public static final String PLUS    = "+";
+  public static final String MINUS   = "-";
+  public static final String STAR    = "*";
+  public static final String SLASH   = "/";
+  public static final String PERCENT = "%";
 
-  public static char getOperatorType(TokenType op) {
+  public static String getOperatorType(TokenType op) {
     switch (op) {
       case PLUS:    return PLUS;
       case MINUS:   return MINUS;
@@ -40,7 +40,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, char operator, int maxScale) {
+  public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int maxScale) {
     BigDecimal result;
     switch (operator) {
       case PLUS:    result = left.add(right);       break;
@@ -49,14 +49,105 @@ public class RuntimeUtils {
       case PERCENT: result = left.remainder(right); break;
       case SLASH:
         result = left.divide(right, maxScale, RoundingMode.HALF_EVEN);
+        result = result.stripTrailingZeros();
         break;
       default: throw new IllegalStateException("Internal error: operator " + operator + " not supported for decimals");
     }
-    result = result.stripTrailingZeros();
     if (result.scale() > maxScale) {
       result = result.setScale(maxScale, RoundingMode.HALF_EVEN);
     }
     return result;
+  }
+
+  /**
+   * Perform binary operation when types are not known at compile time.
+   * NOTE: operator is a String that must be one of the static strings defined in this class
+   *       as '==' is used to compare the strings for performance reasons.
+   * @param left      left operand
+   * @param right     right operand
+   * @param operator  operator (as a String)
+   * @param maxScale  maximum scale for BigDecimal operations
+   * @param source    source code
+   * @param offset    offset into source code of operator
+   * @return result of operation
+   */
+  public static Object binaryOp(Object left, Object right, String operator, int maxScale, String source, int offset) {
+    if (left == null) {
+      throw new NullError("Left-hand side of '" + operator + "' cannot be null", source, offset, false);
+    }
+    if (left instanceof String) {
+      if (operator == PLUS) {
+        return ((String) left).concat(toString(right));
+      }
+      if (operator == STAR) {
+        if (right instanceof Number) {
+          return ((String)left).repeat(((Number)right).intValue());
+        }
+        throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset, true);
+      }
+    }
+
+    // If boolean operation...
+    // TBD
+
+    // All other operations expect numbers so check we have numbers
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset, true); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset, true); }
+
+    // Check for bitwise operations since we don't want to unnecessarily convert to double/BigDecimal...
+    // TBD
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number)left).doubleValue();
+      double rhs = ((Number)right).doubleValue();
+      switch (operator) {
+        case PLUS:    return lhs + rhs;
+        case MINUS:   return lhs - rhs;
+        case STAR:    return lhs * rhs;
+        case SLASH:   return lhs / rhs;
+        case PERCENT: return lhs % rhs;
+        default: throw new IllegalStateException("Internal error: unknown operator " + operator);
+      }
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      switch (operator) {
+        case PLUS:    return lhs + rhs;
+        case MINUS:   return lhs - rhs;
+        case STAR:    return lhs * rhs;
+        case SLASH:   return lhs / rhs;
+        case PERCENT: return lhs % rhs;
+        default: throw new IllegalStateException("Internal error: unknown operator " + operator);
+      }
+    }
+
+    // Must be integers
+    int lhs = ((Number)left).intValue();
+    int rhs = ((Number)right).intValue();
+    switch (operator) {
+      case PLUS:    return lhs + rhs;
+      case MINUS:   return lhs - rhs;
+      case STAR:    return lhs * rhs;
+      case SLASH:   return lhs / rhs;
+      case PERCENT: return lhs % rhs;
+      default: throw new IllegalStateException("Internal error: unknown operator " + operator);
+    }
+  }
+
+  public static Object negateNumber(Object obj, String source, int offset) {
+    ensureNonNull(obj, source, offset);
+    if (obj instanceof BigDecimal) { return ((BigDecimal)obj).negate(); }
+    if (obj instanceof Double)     { return -(double)obj; }
+    if (obj instanceof Long)       { return -(long)obj; }
+    if (obj instanceof Integer)    { return -(int)obj; }
+    throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset, true);
   }
 
   public static String stringRepeat(String str, int count, String source, int offset) {
@@ -64,5 +155,39 @@ public class RuntimeUtils {
       throw new RuntimeError("String repeat count must be >= 0", source, offset, true);
     }
     return str.repeat(count);
+  }
+
+  //////////////////////////////////////
+
+  private static BigDecimal toBigDecimal(Object val) {
+    if (val instanceof BigDecimal) { return (BigDecimal)val; }
+    if (val instanceof Integer)    { return BigDecimal.valueOf((int)val); }
+    if (val instanceof Long)       { return BigDecimal.valueOf((long)val); }
+    if (val instanceof Double)     { return BigDecimal.valueOf((double)val); }
+    return null;
+  }
+
+  private static String toString(Object obj) {
+    if (obj == null) {
+      return "null";
+    }
+    return obj.toString();
+  }
+
+  private static String className(Object obj) {
+    if (obj == null)               { return "null"; }
+    if (obj instanceof String)     { return "String"; }
+    if (obj instanceof BigDecimal) { return "Decimal"; }
+    if (obj instanceof Double)     { return "double"; }
+    if (obj instanceof Long)       { return "long"; }
+    if (obj instanceof Integer)    { return "int"; }
+    if (obj instanceof Boolean)    { return "boolean"; }
+    return "def";
+  }
+
+  private static void ensureNonNull(Object obj, String source, int offset) {
+    if (obj == null) {
+      throw new NullError("Null value encountered where null not allowed", source, offset, false);
+    }
   }
 }

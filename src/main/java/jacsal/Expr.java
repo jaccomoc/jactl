@@ -25,6 +25,7 @@ package jacsal;
 
 import java.util.List;
 import java.util.ArrayList;
+import org.objectweb.asm.Label;
 
 /**
  * Expr classes for our AST.
@@ -40,6 +41,14 @@ abstract class Expr {
   Object     constValue;       // If expression is only consts then we keep the
                                // result of evaluating the expression during the
                                // resolve phase here.
+
+  // Flag that indicates whether result for the Expr is actually used. Most expressions
+  // have their value used, for example, when nested within another expression or when
+  // the expression is used as a condition for if/while/for or as assignment to a variable.
+  // For some expressions (e.g. the top Expr in an expression statement) the result of the
+  // expression is ignored so this flag allows us to know whether to leave the result on
+  // the stack or not.
+  boolean isResultUsed = true;
 
   static class Binary extends Expr {
     Expr  left;
@@ -90,13 +99,14 @@ abstract class Expr {
   }
 
   static class Identifier extends Expr {
-    Token identifier;
+    Token        identifier;
+    Expr.VarDecl varDecl;
     Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitIdentifier(this); }
-    @Override public String toString() { return "Identifier[" + "identifier=" + identifier + "]"; }
+    @Override public String toString() { return "Identifier[" + "identifier=" + identifier + ", " + "varDecl=" + varDecl + "]"; }
   }
 
   static class ExprString extends Expr {
@@ -110,6 +120,42 @@ abstract class Expr {
     @Override public String toString() { return "ExprString[" + "exprStringStart=" + exprStringStart + ", " + "exprList=" + exprList + "]"; }
   }
 
+  /**
+   * Variable declaration with optional initialiser.
+   * This is done as an expression in case value of the assignment
+   * is returned implicitly from a function/closure.
+   */
+  static class VarDecl extends Expr {
+    Token      name;
+    Expr       initialiser;
+    int        slot;        // Which local variable slot to use
+    Label      declLabel;   // Where variable comes into scope (for debugger)
+    VarDecl(Token name, Expr initialiser) {
+      this.name = name;
+      this.initialiser = initialiser;
+      this.location = name;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
+    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + ", " + "declLabel=" + declLabel + "]"; }
+  }
+
+  /**
+   * When variable used as lvalue in an assignment
+   */
+  static class VarAssign extends Expr {
+    Identifier identifierExpr;
+    Token      operator;
+    Expr       expr;
+    VarAssign(Identifier identifierExpr, Token operator, Expr expr) {
+      this.identifierExpr = identifierExpr;
+      this.operator = operator;
+      this.expr = expr;
+      this.location = operator;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarAssign(this); }
+    @Override public String toString() { return "VarAssign[" + "identifierExpr=" + identifierExpr + ", " + "operator=" + operator + ", " + "expr=" + expr + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitPrefixUnary(PrefixUnary expr);
@@ -117,5 +163,7 @@ abstract class Expr {
     T visitLiteral(Literal expr);
     T visitIdentifier(Identifier expr);
     T visitExprString(ExprString expr);
+    T visitVarDecl(VarDecl expr);
+    T visitVarAssign(VarAssign expr);
   }
 }

@@ -27,15 +27,15 @@ public class Compiler {
 
   public static Object run(String source, CompileContext compileContext, Map<String,Object> bindings) {
     var parser         = new Parser(new Tokeniser(source));
-    var expr           = parser.parseExpression();
+    var script         = parser.parse();
     var resolver       = new Resolver(compileContext, bindings);
-    resolver.resolve(expr);
-    Function<Map<String,Object>,Object> compiled = compile(source, compileContext, expr);
+    resolver.resolve(script);
+    Function<Map<String,Object>,Object> compiled = compile(source, compileContext, script);
     return compiled.apply(bindings);
   }
 
-  private static Function<Map<String,Object>,Object> compile(String source, CompileContext compileContext, Expr expr) {
-    var compiler = new ClassCompiler(source, compileContext, expr);
+  private static Function<Map<String,Object>,Object> compile(String source, CompileContext compileContext, Stmt.Script script) {
+    var compiler = new ClassCompiler(source, compileContext, script);
     return compiler.compile();
   }
 }
