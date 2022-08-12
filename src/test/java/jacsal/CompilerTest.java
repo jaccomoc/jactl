@@ -552,6 +552,8 @@ class CompilerTest {
   }
 
   @Test public void prefixIncOrDec() {
+    testFail("++null", "null value encountered");
+    testFail("--null", "null value encountered");
     test("++1", 2);
     test("--1", 0);
     test("int x = 1; ++x", 2);
@@ -580,5 +582,133 @@ class CompilerTest {
     test("Decimal x = 1.5; --x", "#0.5");
     test("Decimal x = 3; --x + --x", "#3");
     test("Decimal x = 3.5; --x + ++x", "#6.0");
+
+    test("def x = 1; ++x", 2);
+    test("def x = 1; --x", 0);
+    test("def x = 3; --x + --x", 3);
+    test("def x = 3; ++x + ++x", 9);
+    test("def x = 1L; ++x", 2L);
+    test("def x = 1L; --x", 0L);
+    test("def x = 3L; --x + --x", 3L);
+    test("def x = 3L; ++x + ++x", 9L);
+    test("def x = 1D; ++x", 2D);
+    test("def x = 1D; --x", 0D);
+    test("def x = 1.5D; --x", 0.5D);
+    test("def x = 3D; --x + --x", 3D);
+    test("def x = 3.5D; --x + --x", 4D);
+    test("def x = 3.5D; ++x + ++x", 10D);
+    test("def x = 1.0; ++x", "#2.0");
+    test("def x = 1.5; ++x", "#2.5");
+    test("def x = 1.0; --x", "#0.0");
+    test("def x = 1.5; --x", "#0.5");
+    test("def x = 3.0; --x + --x", "#3.0");
+    test("def x = 3.5; --x + ++x", "#6.0");
+
+    test("def x = 1; (x + x)++", 2);
+    test("def x = 1; (x + x)++; x", 1);
+    testFail("def x = 1; (x + x)++ ++", "expected end of expression");
+  }
+
+  @Test public void postfixIncOrDec() {
+    testFail("null++", "null value encountered");
+    testFail("null--", "null value encountered");
+    test("1++", 1);
+    test("1--", 1);
+    test("int x = 1; x++", 1);
+    test("int x = 1; x--", 1);
+    test("int x = 1; x++; x", 2);
+    test("int x = 1; x--; x", 0);
+    test("int x = 3; x-- + x--", 5);
+    test("int x = 3; x-- + x--; x", 1);
+    test("int x = 3; x++ + x++", 7);
+    test("int x = 3; x++ + x++; x", 5);
+    test("2L++", 2L);
+    test("0L--", 0L);
+    test("long x = 1; x++", 1L);
+    test("long x = 1; x++; x", 2L);
+    test("long x = 1; x--", 1L);
+    test("long x = 1; x--; x", 0L);
+    test("long x = 3; x-- + x--", 5L);
+    test("long x = 3; x-- + x--; x", 1L);
+    test("long x = 3; x++ + x++", 7L);
+    test("long x = 3; x++ + x++; x", 5L);
+    test("1D++", 1D);
+    test("1D--", 1D);
+    test("double x = 1D; x++", 1D);
+    test("double x = 1D; x++; x", 2D);
+    test("double x = 1D; x--", 1D);
+    test("double x = 1D; x--; x", 0D);
+    test("double x = 1.5D; x--", 1.5D);
+    test("double x = 1.5D; x--; x", 0.5D);
+    test("double x = 3D; x-- + x--", 5D);
+    test("double x = 3D; x-- + x--; x", 1D);
+    test("double x = 3.5D; x-- + x--", 6D);
+    test("double x = 3.5D; x-- + x--; x", 1.5D);
+    test("double x = 3.5D; x++ + x++", 8D);
+    test("double x = 3.5D; x++ + x++; x", 5.5D);
+    test("1.0++", "#1.0");
+    test("1.0--", "#1.0");
+    test("Decimal x = 1; x++", "#1");
+    test("Decimal x = 1; x++; x", "#2");
+    test("Decimal x = 1.5; x++", "#1.5");
+    test("Decimal x = 1.5; x++; x", "#2.5");
+    test("Decimal x = 1; x--", "#1");
+    test("Decimal x = 1; x--; x", "#0");
+    test("Decimal x = 1.5; x--", "#1.5");
+    test("Decimal x = 1.5; x--; x", "#0.5");
+    test("Decimal x = 3; x-- + x--", "#5");
+    test("Decimal x = 3; x-- + x--; x", "#1");
+    test("Decimal x = 3.5; x-- + x++", "#6.0");
+    test("Decimal x = 3.5; x-- + x++; x", "#3.5");
+
+    test("def x = 1; x++", 1);
+    test("def x = 1; x--", 1);
+    test("def x = 1; x++; x", 2);
+    test("def x = 1; x--; x", 0);
+    test("def x = 3; x-- + x--", 5);
+    test("def x = 3; x-- + x--; x", 1);
+    test("def x = 3; x++ + x++", 7);
+    test("def x = 3; x++ + x++; x", 5);
+    test("def x = 1L; x++", 1L);
+    test("def x = 1L; x++; x", 2L);
+    test("def x = 1L; x--", 1L);
+    test("def x = 1L; x--; x", 0L);
+    test("def x = 3L; x-- + x--", 5L);
+    test("def x = 3L; x-- + x--; x", 1L);
+    test("def x = 3L; x++ + x++", 7L);
+    test("def x = 3L; x++ + x++; x", 5L);
+    test("def x = 1.0D; x++", 1D);
+    test("def x = 1.0D; x++; x", 2D);
+    test("def x = 1.0D; x--", 1D);
+    test("def x = 1.0D; x--; x", 0D);
+    test("def x = 1.5D; x--", 1.5D);
+    test("def x = 1.5D; x--; x", 0.5D);
+    test("def x = 3.0D; x-- + x--", 5D);
+    test("def x = 3.0D; x-- + x--; x", 1D);
+    test("def x = 3.5D; x-- + x--", 6D);
+    test("def x = 3.5D; x-- + x--; x", 1.5D);
+    test("def x = 3.5D; x++ + x++", 8D);
+    test("def x = 3.5D; x++ + x++; x", 5.5D);
+    test("def x = 1.0; x++", "#1.0");
+    test("def x = 1.0; x++; x", "#2.0");
+    test("def x = 1.5; x++", "#1.5");
+    test("def x = 1.5; x++; x", "#2.5");
+    test("def x = 1.0; x--", "#1.0");
+    test("def x = 1.0; x--; x", "#0.0");
+    test("def x = 1.5; x--", "#1.5");
+    test("def x = 1.5; x--; x", "#0.5");
+    test("def x = 3.0; x-- + x--", "#5.0");
+    test("def x = 3.0; x-- + x--; x", "#1.0");
+    test("def x = 3.5; x-- + x++", "#6.0");
+    test("def x = 3.5; x-- + x++; x", "#3.5");
+
+    test("def x = 1; ++(x + x)", 3);
+    test("def x = 1; ++(x + x)--", 3);
+    test("def x = 1; ++x--", 2);
+    test("def x = 1; ++x--; x", 0);
+    test("def x = 1; ++(x--); x", 0);
+    test("--1", 0);
+    test("----1", -1);
+    test("def x = 1; -- -- -- ++x--", -1);
   }
 }

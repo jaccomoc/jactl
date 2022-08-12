@@ -297,14 +297,21 @@ public class Parser {
   }
 
   /**
-   *# unary -> ( "!" | "--" | "++" | "-" | "+" ) unary
+   *# unary -> ( "!" | "--" | "++" | "-" | "+" ) unary ( "--" | "++" )
    *#        | primary;
    */
   private Expr unary() {
+    Expr expr;
     if (matchAny(BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS)) {
-      return new Expr.PrefixUnary(previous(), unary());
+      expr = new Expr.PrefixUnary(previous(), unary());
     }
-    return primary();
+    else {
+      expr = primary();
+    }
+    if (matchAny(PLUS_PLUS, MINUS_MINUS)) {
+      expr = new Expr.PostfixUnary(expr, previous());
+    }
+    return expr;
   }
 
   /**

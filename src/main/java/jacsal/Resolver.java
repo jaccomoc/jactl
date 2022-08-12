@@ -21,6 +21,7 @@ import jacsal.runtime.RuntimeUtils;
 import java.math.BigDecimal;
 import java.util.*;
 
+import static jacsal.JacsalType.ANY;
 import static jacsal.TokenType.*;
 
 /**
@@ -225,7 +226,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
     else {
       expr.type = expr.expr.type;
-      if (!expr.type.isNumeric() && !expr.type.is(JacsalType.ANY)) {
+      if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
         throw new CompileError("Prefix operator '" + expr.operator.getStringValue() + "' cannot be applied to type " + expr.expr.type, expr.operator);
       }
       if (expr.isConst) {
@@ -240,15 +241,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
         else
         if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
-          int incAmount = expr.operator.is(PLUS_PLUS) ? 1 : -1;
-          switch (expr.type) {
-            case INT:     expr.constValue = ((int)expr.constValue) + incAmount;     break;
-            case LONG:    expr.constValue = ((long)expr.constValue) + incAmount;    break;
-            case DOUBLE:  expr.constValue = ((double)expr.constValue) + incAmount;  break;
-            case DECIMAL:
-              expr.constValue = ((BigDecimal)expr.constValue).add(BigDecimal.valueOf(incAmount));
-              break;
+          if (expr.expr.constValue == null) {
+            throw new CompileError("Prefix operator '" + expr.operator.getStringValue() + "': null value encountered", expr.expr.location);
           }
+          expr.constValue = incOrDec(expr.operator.is(PLUS_PLUS), expr.type, expr.expr.constValue);
         }
       }
       return expr.type;
@@ -258,11 +254,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitPostfixUnary(Expr.PostfixUnary expr) {
     resolve(expr.expr);
     expr.isConst = expr.expr.isConst;
-    if (expr.expr.type == JacsalType.BOOLEAN) {
-      return expr.type = JacsalType.INT;
-    }
-    if (expr.expr.type.isNumeric()) {
-      return expr.type = expr.expr.type;
+    expr.type = expr.expr.type;
+    if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
+      if (expr.isConst) {
+        if (expr.expr.constValue == null) {
+          throw new CompileError("Postfix operator '" + expr.operator.getStringValue() + "': null value encountered", expr.expr.location);
+        }
+        // For const expressions, postfix inc/dec is a no-op
+        expr.constValue = expr.expr.constValue;
+      }
+      return expr.type;
     }
     throw new CompileError("Unary operator " + expr.operator + " cannot be applied to type " + expr.expr.type, expr.operator);
   }
@@ -281,7 +282,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case STRING_CONST:  return expr.type = JacsalType.STRING;
       case TRUE:          return expr.type = JacsalType.BOOLEAN;
       case FALSE:         return expr.type = JacsalType.BOOLEAN;
-      case NULL:          return expr.type = JacsalType.ANY;
+      case NULL:          return expr.type = ANY;
       default:
         throw new IllegalStateException("Unknown literal type " + expr.value.getType());
     }
@@ -319,6 +320,20 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitExprString(Expr.ExprString expr) {
     return expr.type = JacsalType.STRING;
   }
+
+  /////////////////////////
+
+  private static Object incOrDec(boolean isInc, JacsalType type, Object val) {
+    int incAmount = isInc ? 1 : -1;
+    switch (type) {
+      case INT:     return ((int)val) + incAmount;
+      case LONG:    return ((long)val) + incAmount;
+      case DOUBLE:  return ((double)val) + incAmount;
+      case DECIMAL: return ((BigDecimal)val).add(BigDecimal.valueOf(incAmount));
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + type);
+  }
+
 
   /////////////////////////
 

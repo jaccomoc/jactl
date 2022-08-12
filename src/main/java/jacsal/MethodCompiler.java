@@ -191,7 +191,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
       // special cases since they already check to see whether they should leave something on
       // the stack.
-      if (!(expr instanceof Expr.VarDecl || expr instanceof Expr.VarAssign || expr instanceof Expr.PrefixUnary)) {
+      if (!(expr instanceof Expr.VarDecl || expr instanceof Expr.VarAssign ||
+            expr instanceof Expr.PrefixUnary || expr instanceof Expr.PostfixUnary)) {
         popVal();
         pop();
       }
@@ -337,74 +338,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitPrefixUnary(Expr.PrefixUnary expr) {
-    boolean resultIsOnStack = true;
+    if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
+      boolean isInc = expr.operator.is(PLUS_PLUS);
+      incOrDec(true, isInc, expr.expr, expr.isResultUsed, expr.expr.location);
+      return null;
+    }
+
+    compile(expr.expr);
     switch (expr.operator.getType()) {
-      case BANG:
-        compile(expr.expr);
-        convertToBoolean(true);
-        pop();
-        break;
-      case MINUS:
-        compile(expr.expr);
-        arithmeticNegate(expr.expr.location);
-        pop();
-        break;
-      case PLUS:
-        compile(expr.expr);
-        pop();
-        // Nothing to do for unary plus
-        break;
-      case PLUS_PLUS:
-      case MINUS_MINUS:
-        resultIsOnStack = false;
-        boolean isInc = expr.operator.is(PLUS_PLUS);
-        if (expr.expr instanceof Expr.Identifier) {
-          Expr.VarDecl varDecl = ((Expr.Identifier) expr.expr).varDecl;
-          BiConsumer<Object,Runnable> incOrDec = (plusOrMinusOne, runnable) -> {
-            loadLocal(varDecl.slot);
-            loadConst(plusOrMinusOne);
-            runnable.run();
-            storeLocal(varDecl.slot);
-          };
-          switch (varDecl.type) {
-            case INT:
-              // Integer vars have special support and can be incremented in place.
-              mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
-              break;
-            case LONG:
-              incOrDec.accept(isInc ? 1L : -1L, () -> mv.visitInsn(LADD));
-              break;
-            case DOUBLE:
-              incOrDec.accept(isInc ? 1D : -1D, () -> mv.visitInsn(DADD));
-              break;
-            case DECIMAL:
-              BigDecimal amt = isInc ? BigDecimal.ONE : DECIMAL_MINUS_1;
-              incOrDec.accept(amt, () -> invokeVirtual(BigDecimal.class, "add", BigDecimal.class));
-              break;
-            case ANY:
-              loadLocal(varDecl.slot);
-              incOrDec(isInc, expr.expr.location);
-              storeLocal(varDecl.slot);
-              break;
-            default: throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
-          }
-          if (expr.isResultUsed) {
-            resultIsOnStack = true;
-            loadLocal(varDecl.slot);
-          }
-        }
-        else {
-          compile(expr.expr);
-          incOrDec(isInc, expr.expr.location);
-          pop();
-        }
-        break;
+      case BANG:    convertToBoolean(true);        break;
+      case MINUS:   arithmeticNegate(expr.expr.location);  break;
+      case PLUS:    /* Nothing to do for unary plus */     break;
       default:
         throw new UnsupportedOperationException("Internal error: unknown prefix operator " + expr.operator.getType());
     }
-
+    pop();
     push(expr.type);
-    if (!expr.isResultUsed && resultIsOnStack) {
+    if (!expr.isResultUsed) {
       popVal();
       pop();
     }
@@ -412,7 +362,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitPostfixUnary(Expr.PostfixUnary expr) {
-    throw new UnsupportedOperationException();
+    boolean isInc = expr.operator.is(PLUS_PLUS);
+    incOrDec(false, isInc, expr.expr, expr.isResultUsed, expr.expr.location);
+    return null;
   }
 
   @Override public Void visitLiteral(Expr.Literal expr) {
@@ -817,13 +769,84 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private void incOrDec(boolean isPrefix, boolean isInc, Expr expr, boolean isResultUsed, Token location) {
+    if (expr instanceof Expr.Identifier) {
+      Expr.VarDecl varDecl = ((Expr.Identifier) expr).varDecl;
+      // If postfix and we use the value then load value before doing inc/dec so we leave
+      // old value on the stack
+      if (!isPrefix && isResultUsed) {
+        loadLocal(varDecl.slot);
+        push(expr.type);
+      }
+
+      // Helper to do the inc/dec based on the type of the value
+      BiConsumer<Object, Runnable> incOrDec = (plusOrMinusOne, runnable) -> {
+        loadLocal(varDecl.slot);
+        loadConst(plusOrMinusOne);
+        runnable.run();
+        storeLocal(varDecl.slot);
+      };
+
+      switch (varDecl.type) {
+        case INT:
+          // Integer vars have special support and can be incremented in place.
+          mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
+          break;
+        case LONG:
+          incOrDec.accept(isInc ? 1L : -1L, () -> mv.visitInsn(LADD));
+          break;
+        case DOUBLE:
+          incOrDec.accept(isInc ? 1D : -1D, () -> mv.visitInsn(DADD));
+          break;
+        case DECIMAL:
+          BigDecimal amt = isInc ? BigDecimal.ONE : DECIMAL_MINUS_1;
+          incOrDec.accept(amt, () -> invokeVirtual(BigDecimal.class, "add", BigDecimal.class));
+          break;
+        case ANY:
+          loadLocal(varDecl.slot);
+          push(varDecl.type);
+          incOrDecAny(isInc, location);
+          storeLocal(varDecl.slot);
+          pop();
+          break;
+        default:
+          throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
+      }
+      if (isPrefix && isResultUsed) {
+        loadLocal(varDecl.slot);
+        push(expr.type);
+      }
+    }
+    else {
+      compile(expr);
+      if (!isPrefix) {
+        if (isResultUsed) {
+          dup();
+          dupVal();
+        }
+        incOrDecAny(isInc, location);
+        popVal();
+        pop();
+      }
+      else {
+        incOrDecAny(isInc, location);
+        pop();
+        push(expr.type);
+        if (!isResultUsed) {
+          popVal();
+          pop();
+        }
+      }
+    }
+  }
+
   /**
    * Increment or decrement by one the current value on the stack. This is used
    * when the increment/decrement doesn't actually alter a variable (e.g. ++1).
    * @param isInc    true if doing inc (false for dec)
    * @param location location of expression we are incrementing or decrementing
    */
-  private void incOrDec(boolean isInc, Token location) {
+  private void incOrDecAny(boolean isInc, Token location) {
     switch (peek().type) {
       case INT:
         loadConst(isInc ? 1 : -1);
