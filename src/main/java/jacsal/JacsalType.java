@@ -26,24 +26,83 @@ import java.util.Map;
 
 import static jacsal.TokenType.*;
 
-public enum JacsalType {
+public class JacsalType {
 
-  // NOTE: these names must match the corresponding token type names so that
-  //       we can use JacsalType.valueOf(tokenType) to get a JacsalType from
-  //       a TokenType. Only exception is for INSTANCE and ANY since INSTANCE
-  //       doesn't have a corresponding token and ANY which is roughly equivalent
-  //       to DEF.
-  BOOLEAN,
-  INT,
-  LONG,
-  DOUBLE,
-  DECIMAL,
-  STRING,
-  INSTANCE,
-  ANY;
+  enum TypeEnum {
+    BOOLEAN,
+    INT,
+    LONG,
+    DOUBLE,
+    DECIMAL,
+    STRING,
+    MAP,
+    LIST,
+    INSTANCE,
+    ANY
+  }
+
+  public static JacsalType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
+  public static JacsalType BOXED_BOOLEAN = createBoxedType(TypeEnum.BOOLEAN);
+  public static JacsalType INT           = createPrimitive(TypeEnum.INT);
+  public static JacsalType BOXED_INT     = createBoxedType(TypeEnum.INT);
+  public static JacsalType LONG          = createPrimitive(TypeEnum.LONG);
+  public static JacsalType BOXED_LONG    = createBoxedType(TypeEnum.LONG);
+  public static JacsalType DOUBLE        = createPrimitive(TypeEnum.DOUBLE);
+  public static JacsalType BOXED_DOUBLE  = createBoxedType(TypeEnum.DOUBLE);
+  public static JacsalType DECIMAL       = createRefType(TypeEnum.DECIMAL);
+  public static JacsalType STRING        = createRefType(TypeEnum.STRING);
+  public static JacsalType MAP           = createRefType(TypeEnum.MAP);
+  public static JacsalType LIST          = createRefType(TypeEnum.LIST);
+  public static JacsalType ANY           = createRefType(TypeEnum.ANY);
+
+  private TypeEnum type;
+  private boolean  boxed;
+  private boolean  isRef;
+
+  private JacsalType(TypeEnum type, boolean boxed, boolean isRef) {
+    this.type = type;
+    this.boxed = boxed;
+    this.isRef = isRef;
+  }
+
+  private static JacsalType createPrimitive(TypeEnum type) {
+    return new JacsalType(type, false, false);
+  }
+
+  private static JacsalType createBoxedType(TypeEnum type) {
+    return new JacsalType(type, true, true);
+  }
+
+  private static JacsalType createRefType(TypeEnum type) {
+    return new JacsalType(type, false, true);
+  }
+
+  public TypeEnum getType() {
+    return type;
+  }
+
+  /**
+   * Return true if type is a boxed primitive type
+   * @return
+   */
+  public boolean isBoxed() {
+    return boxed;
+  }
+
+  public static JacsalType valueOf(TokenType tokenType) {
+    switch (tokenType) {
+      case BOOLEAN:   return BOOLEAN;
+      case INT:       return INT;
+      case LONG:      return LONG;
+      case DOUBLE:    return DOUBLE;
+      case DECIMAL:   return DECIMAL;
+      case STRING:    return STRING;
+      default:  throw new IllegalStateException("Internal error: unexpected token " + tokenType);
+    }
+  }
 
   public boolean isNumeric() {
-    switch (this) {
+    switch (this.type) {
       case INT:
       case LONG:
       case DOUBLE:
@@ -55,24 +114,56 @@ public enum JacsalType {
   }
 
   public boolean isIntegral() {
-    return this == INT || this == LONG;
+    return this.isBoxedOrUnboxed(INT, LONG);
   }
 
   public boolean isPrimitive() {
-    switch (this) {
-      case BOOLEAN:
-      case INT:
-      case LONG:
-      case DOUBLE:
-        return true;
-      default:
-        return false;
+    return !isRef;
+  }
+
+  public JacsalType boxed() {
+    switch (getType()) {
+      case BOOLEAN:   return BOXED_BOOLEAN;
+      case INT:       return BOXED_INT;
+      case LONG:      return BOXED_LONG;
+      case DOUBLE:    return BOXED_DOUBLE;
+      default: return this;
     }
   }
 
+  public JacsalType unboxed() {
+    switch (getType()) {
+      case BOOLEAN:   return BOOLEAN;
+      case INT:       return INT;
+      case LONG:      return LONG;
+      case DOUBLE:    return DOUBLE;
+      default: return this;
+    }
+  }
+
+  /**
+   * Check if type is one of the supplied types
+   * @param types array of types
+   * @return true if type is one of the types
+   */
   public boolean is(JacsalType... types) {
     for (JacsalType type: types) {
       if (this == type) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if type is one of the supplied types ignoring whether
+   * any type is boxed (allows quick check for INT, LONG, etc
+   * without having to worry about checking whether either type
+   * is boxed).
+   */
+  public boolean isBoxedOrUnboxed(JacsalType... types) {
+    for (JacsalType type: types) {
+      if (this == type || this == type.boxed() || this.boxed() == type) {
         return true;
       }
     }
@@ -102,7 +193,7 @@ public enum JacsalType {
     }
   }
 
-  private static       List                     resultTypes = List.of(
+  private static List resultTypes = List.of(
     new TypePair(INT, LONG),       LONG,
     new TypePair(INT, DOUBLE),     DOUBLE,
     new TypePair(INT, DECIMAL),    DECIMAL,
@@ -142,7 +233,7 @@ public enum JacsalType {
     if (operator.is(PLUS) && type1.is(STRING)) {
       return STRING;
     }
-    if (operator.is(STAR) && type1 == STRING && type2.is(INT,LONG,ANY)) {
+    if (operator.is(STAR) && type1.is(STRING) && type2.is(INT,BOXED_INT,LONG,BOXED_LONG,ANY)) {
       return STRING;
     }
     if (operator.is(EQUAL)) {
@@ -161,12 +252,12 @@ public enum JacsalType {
     // Must be numeric operation
     checkIsNumeric(type1, "left", operator);
     checkIsNumeric(type2, "right", operator);
-    if (type1 == type2)               { return type1; }
-    if (type2 == ANY)                 { return ANY; }
+    if (type1.isBoxedOrUnboxed(type2)) { return type1.unboxed(); }
+    if (type2 == ANY)                  { return ANY; }
 
-    JacsalType result = resultMap.get(new TypePair(type1, type2));
+    JacsalType result = resultMap.get(new TypePair(type1.unboxed(), type2.unboxed()));
     if (result == null) {
-      throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator " + operator, operator);
+      throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator '" + operator.getStringValue() + "'", operator);
     }
     return result;
   }
@@ -177,25 +268,44 @@ public enum JacsalType {
    * @return true if convertible
    */
   public boolean isConvertibleTo(JacsalType type) {
-    if (is(type))                                   { return true; }
-    if (type.is(ANY))                               { return true; }
-    if (is(INT)  && type.is(LONG,DOUBLE,DECIMAL))   { return true; }
-    if (is(LONG) && type.is(DOUBLE,DECIMAL))        { return true; }
-    if (is(DOUBLE,DECIMAL) && type.isNumeric())     { return true; }
+    if (isBoxedOrUnboxed(type))                                                { return true; }
+    if (type.is(ANY))                                                          { return true; }
+    if (isBoxedOrUnboxed(INT) && type.isBoxedOrUnboxed(LONG, DOUBLE, DECIMAL)) { return true; }
+    if (isBoxedOrUnboxed(LONG) && type.isBoxedOrUnboxed(DOUBLE, DECIMAL))      { return true; }
+    if (isBoxedOrUnboxed(DOUBLE, DECIMAL) && type.isNumeric())                 { return true; }
     return false;
   }
 
   public String descriptor() {
-    switch (this) {
+    switch (this.type) {
       case BOOLEAN:        return Type.getDescriptor(Boolean.TYPE);
       case INT:            return Type.getDescriptor(Integer.TYPE);
       case LONG:           return Type.getDescriptor(Long.TYPE);
       case DOUBLE:         return Type.getDescriptor(Double.TYPE);
       case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
       case STRING:         return Type.getDescriptor(String.class);
+      case MAP:            return Type.getDescriptor(Map.class);
+      case LIST:           return Type.getDescriptor(List.class);
       case INSTANCE:       throw new UnsupportedOperationException();
       case ANY:            return Type.getDescriptor(Object.class);
       default:             throw new UnsupportedOperationException();
+    }
+  }
+
+  public String getBoxedClass() {
+    switch (this.type) {
+      case BOOLEAN:  return Type.getInternalName(Boolean.class);
+      case INT:      return Type.getInternalName(Integer.class);
+      case LONG:     return Type.getInternalName(Long.class);
+      case DOUBLE:   return Type.getInternalName(Double.class);
+      case DECIMAL:  return Type.getInternalName(BigDecimal.class);
+      case STRING:   return Type.getInternalName(String.class);
+      case MAP:      return Type.getInternalName(Map.class);
+      case LIST:     return Type.getInternalName(List.class);
+      case INSTANCE: throw new UnsupportedOperationException();
+      case ANY:      return null;
+      default:
+        throw new IllegalStateException("Unexpected value: " + this);
     }
   }
 
@@ -203,5 +313,9 @@ public enum JacsalType {
     if (!type.isNumeric() && !type.is(ANY)) {
       throw new CompileError("Non-numeric operand for " + leftOrRight + "-hand side of '" + operator.getStringValue() + "': was " + type, operator);
     }
+  }
+
+  @Override public String toString() {
+    return "[" + type + ",boxed=" + boxed + "]";
   }
 }

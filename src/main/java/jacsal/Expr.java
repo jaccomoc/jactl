@@ -43,7 +43,7 @@ abstract class Expr {
                                // resolve phase here.
 
   // Flag that indicates whether result for the Expr is actually used. Most expressions
-  // have their value used, for example, when nested within another expression or when
+  // have their value used. For example, when nested within another expression or when
   // the expression is used as a condition for if/while/for or as assignment to a variable.
   // For some expressions (e.g. the top Expr in an expression statement) the result of the
   // expression is ignored so this flag allows us to know whether to leave the result on
@@ -128,6 +128,7 @@ abstract class Expr {
   static class VarDecl extends Expr {
     Token      name;
     Expr       initialiser;
+    boolean    isGlobal;    // Whether global (bindings var) or local
     int        slot;        // Which local variable slot to use
     Label      declLabel;   // Where variable comes into scope (for debugger)
     VarDecl(Token name, Expr initialiser) {

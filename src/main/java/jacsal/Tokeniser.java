@@ -643,6 +643,7 @@ public class Tokeniser {
     new Symbol("def", DEF),
     new Symbol("var", VAR),
     new Symbol("it", IT),
+    new Symbol("boolean", BOOLEAN),
     new Symbol("int", INT),
     new Symbol("long", LONG),
     new Symbol("double", DOUBLE),

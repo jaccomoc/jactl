@@ -175,6 +175,33 @@ public class RuntimeUtils {
     return str.repeat(count);
   }
 
+  /**
+   * Return true if object satisfies truthiness check:
+   *   null    --> false
+   *   boolean --> value of the boolean
+   *   number  --> true if non-zero
+   *   String  --> true if non-empty
+   *   Object  --> true if non-null
+   * If negated is true then test is inverted and we test for "falsiness".
+   */
+  public static boolean isTruth(Object value, boolean negated) {
+    if (value == null)               { return negated; }
+    if (value instanceof Boolean)    { return negated != (boolean) value; }
+    if (value instanceof String)     { return negated == ((String) value).isEmpty(); }
+    if (value instanceof Integer)    { return negated == ((int) value == 0); }
+    if (value instanceof Long)       { return negated == ((long)value == 0); }
+    if (value instanceof Double)     { return negated == ((double)value == 0); }
+    if (value instanceof BigDecimal) { return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO); }
+    return !negated;
+  }
+
+  public static String toString(Object obj) {
+    if (obj == null) {
+      return "null";
+    }
+    return obj.toString();
+  }
+
   //////////////////////////////////////
 
   private static BigDecimal toBigDecimal(Object val) {
@@ -183,13 +210,6 @@ public class RuntimeUtils {
     if (val instanceof Long)       { return BigDecimal.valueOf((long)val); }
     if (val instanceof Double)     { return BigDecimal.valueOf((double)val); }
     return null;
-  }
-
-  private static String toString(Object obj) {
-    if (obj == null) {
-      return "null";
-    }
-    return obj.toString();
   }
 
   private static String className(Object obj) {

@@ -20,25 +20,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.Locale;
-import java.util.function.BiConsumer;
+import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class CompilerTest {
 
-  private boolean evaluateConstExprs = true;
-
-  @BeforeEach private void setUp() {
-    evaluateConstExprs = true;
-  }
-
-  private void doTest(String code, Object expected) {
+  private void doTest(String code, boolean evalConsts, boolean replMode, Object expected) {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
     try {
-      Object result = Compiler.run(code, new CompileContext().setEvaluateConstExprs(evaluateConstExprs), null);
+      Object result = Compiler.run(code, new CompileContext().evaluateConstExprs(evalConsts).replMode(replMode), new HashMap<>());
       assertEquals(expected, result);
     }
     catch (JacsalError e) {
@@ -48,22 +41,22 @@ class CompilerTest {
   }
 
   private void test(String code, Object expected) {
-    evaluateConstExprs = true;
-    doTest(code, expected);
-    evaluateConstExprs = false;
-    doTest(code, expected);
-  };
-  
-  private void testFail(String code, String expectedError) {
-    evaluateConstExprs = true;
-    doTestFail(code, expectedError);
-    evaluateConstExprs = false;
-    doTestFail(code, expectedError);
+    doTest(code, true, false, expected);
+    doTest(code, false, false, expected);
+    doTest(code, true, true, expected);
+    doTest(code, false, true, expected);
   }
 
-  private void doTestFail(String code, String expectedError) {
+  private void testFail(String code, String expectedError) {
+    doTestFail(code, true, false, expectedError);
+    doTestFail(code, false, false, expectedError);
+    doTestFail(code, true, true, expectedError);
+    doTestFail(code, false, true, expectedError);
+  }
+
+  private void doTestFail(String code, boolean evalConsts, boolean replMode, String expectedError) {
     try {
-      Compiler.run(code, new CompileContext().setEvaluateConstExprs(evaluateConstExprs), null);
+      Compiler.run(code, new CompileContext().evaluateConstExprs(evalConsts).replMode(replMode), new HashMap<>());
       fail("Expected JacsalError");
     }
     catch (JacsalError e) {
@@ -72,16 +65,10 @@ class CompilerTest {
         fail("Message did not contain expected string '" + expectedError + "'. Message=" + e.getMessage());
       }
     }
-  };
-
-  private void runTests(Runnable runnable) {
-    evaluateConstExprs = true;
-    runnable.run();
-    evaluateConstExprs = false;
-    runnable.run();
   }
 
-  @Test public void literals() {
+  @Test
+  public void literals() {
     test("42", 42);
     test("0", 0);
     test("1", 1);
@@ -90,13 +77,13 @@ class CompilerTest {
     test("4", 4);
     test("5", 5);
     test("6", 6);
-    test(Byte.toString(Byte.MAX_VALUE), (int)Byte.MAX_VALUE);
-    test(Integer.toString(Byte.MAX_VALUE + 1), (int)Byte.MAX_VALUE + 1);
-    test(Short.toString(Short.MAX_VALUE), (int)Short.MAX_VALUE);
-    test(Integer.toString(Short.MAX_VALUE + 1), (int)Short.MAX_VALUE + 1);
+    test(Byte.toString(Byte.MAX_VALUE), (int) Byte.MAX_VALUE);
+    test(Integer.toString(Byte.MAX_VALUE + 1), (int) Byte.MAX_VALUE + 1);
+    test(Short.toString(Short.MAX_VALUE), (int) Short.MAX_VALUE);
+    test(Integer.toString(Short.MAX_VALUE + 1), (int) Short.MAX_VALUE + 1);
     test(Integer.toString(Integer.MAX_VALUE), Integer.MAX_VALUE);
     testFail("" + (Integer.MAX_VALUE + 1L), "number too large");
-    test("" + ((long)Integer.MAX_VALUE + 1L) + "L", (long)Integer.MAX_VALUE + 1L);
+    test("" + ((long) Integer.MAX_VALUE + 1L) + "L", (long) Integer.MAX_VALUE + 1L);
     test("1D", 1D);
     test("1.0D", 1.0D);
     test("0.0D", 0.0D);
@@ -116,7 +103,8 @@ class CompilerTest {
     test("null", null);
   }
 
-  @Test public void booleanConversion() {
+  @Test
+  public void booleanConversion() {
     test("!-1", false);
     test("!1", false);
     test("!2", false);
@@ -141,7 +129,8 @@ class CompilerTest {
     test("!''", true);
   }
 
-  @Test public void constUnaryExpressions() {
+  @Test
+  public void constUnaryExpressions() {
     test("-1", -1);
     test("-1D", -1D);
     test("-1L", -1L);
@@ -178,7 +167,8 @@ class CompilerTest {
     test("!!(!false)", true);
   }
 
-  @Test public void simpleConstExpressios() {
+  @Test
+  public void simpleConstExpressios() {
     testFail("1 + true", "non-numeric operand for right-hand side");
     testFail("false + 1", "non-numeric operand for left-hand side");
     testFail("1 - 'abc'", "non-numeric operand for right-hand side");
@@ -254,7 +244,14 @@ class CompilerTest {
     test("8D % 5.0", "#3.0");
   }
 
-  @Test public void simpleVariables() {
+  @Test
+  public void simpleVariables() {
+    test("boolean v = false", false);
+    test("boolean v = true", true);
+    test("boolean v = false; v", false);
+    test("boolean v = true; v", true);
+    test("boolean v = !false; v", true);
+    test("boolean v = !true; v", false);
     test("int v = 1; v", 1);
     test("int v = 1", 1);
     test("var v = 1; v", 1);
@@ -267,14 +264,17 @@ class CompilerTest {
     test("var v = 1.0; v", "#1.0");
   }
 
-  @Test public void simpleVariableAssignments() {
+  @Test
+  public void simpleVariableAssignments() {
     test("int v = 1; v = 2; v", 2);
     test("int v = 1; v = 2", 2);
     test("int v = 1; v = v + 1", 2);
     testFail("1 = 2", "valid lvalue");
   }
 
-  @Test public void defVariableArithmetic() {
+  @Test
+  public void defVariableArithmetic() {
+    test("def v = 1", 1);
     testFail("def v = 1; v + true", "non-numeric operand for right-hand side");
     testFail("def v = false; v + 1", "non-numeric operand for left-hand side");
     testFail("def v = true; 1 + v", "non-numeric operand for right-hand side");
@@ -295,6 +295,8 @@ class CompilerTest {
     testFail("def x = 1; null + x", "left-hand side of '+' cannot be null");
     testFail("def x = null; def y = 1; x + y", "left-hand side of '+' cannot be null");
 
+    test("def x = false; !x", true);
+    test("def x = true; !x", false);
     test("def x = 1; x + 2", 3);
     test("def x = 2; 1 + x", 3);
     test("def x = 1; def y = 2; x + y", 3);
@@ -496,7 +498,8 @@ class CompilerTest {
     test("def x = 8D; def y = 5.0; x % y", "#3.0");
   }
 
-  @Test public void explicitReturnFromScript() {
+  @Test
+  public void explicitReturnFromScript() {
     test("double v = 2; return v", 2D);
     test("int v = 2; { v = v + 1; return v } v = v + 3", 3);
     test("String v = '2'; { v = v + 1; { return v }}", "21");
@@ -507,7 +510,8 @@ class CompilerTest {
     testFail("double v = 2; return v; { v = v + 1 }", "unreachable statement");
   }
 
-  @Test public void implicitReturnFromScript() {
+  @Test
+  public void implicitReturnFromScript() {
     test("double v = 2; v", 2D);
     test("int v = 2; { v = v + 1; v }", 3);
     test("String v = '2'; { v = v + 1; { v }}", "21");
@@ -515,14 +519,16 @@ class CompilerTest {
     test("def v = '2'; { v = v + 1; { v }}", "21");
   }
 
-  @Test public void constExprArithmeticPrecedence() {
+  @Test
+  public void constExprArithmeticPrecedence() {
     test("1 + -2 * -3 + 4", 11);
     test("1 + (2 + 3) * 4 - 5", 16);
     test("13 + 12 % 7", 18);
     test("13 + 12 % 7 - 3", 15);
   }
 
-  @Test public void constStringConcatenation() {
+  @Test
+  public void constStringConcatenation() {
     testFail("'abc' - '123'", "non-numeric operand");
     test("'abc' + '123'", "abc123");
     test("'abc' + null", "abcnull");
@@ -533,13 +539,17 @@ class CompilerTest {
     test("'abc' + ''", "abc");
   }
 
-  @Test public void constStringRepeat() {
+  @Test
+  public void constStringRepeat() {
     test("'abc' * 2", "abcabc");
     test("'abc' * 0", "");
     testFail("'abc' * -1", "string repeat count must be >= 0");
   }
 
-  @Test public void defaultValues() {
+  @Test
+  public void defaultValues() {
+    test("boolean x", false);
+    test("boolean x; x", false);
     test("int x", 0);
     test("int x; x", 0);
     test("long x", 0L);
@@ -551,7 +561,8 @@ class CompilerTest {
     testFail("var x", "Initialiser expression required");
   }
 
-  @Test public void prefixIncOrDec() {
+  @Test
+  public void prefixIncOrDec() {
     testFail("++null", "null value encountered");
     testFail("--null", "null value encountered");
     test("++1", 2);
@@ -609,7 +620,8 @@ class CompilerTest {
     testFail("def x = 1; (x + x)++ ++", "expected end of expression");
   }
 
-  @Test public void postfixIncOrDec() {
+  @Test
+  public void postfixIncOrDec() {
     testFail("null++", "null value encountered");
     testFail("null--", "null value encountered");
     test("1++", 1);
@@ -710,5 +722,18 @@ class CompilerTest {
     test("--1", 0);
     test("----1", -1);
     test("def x = 1; -- -- -- ++x--", -1);
+  }
+
+  @Test
+  public void endOfLine() {
+    test("1 + \n2", 3);
+    test("def x =\n1 + \n2", 3);
+    test("def x =\n1 + \n(2\n)", 3);
+    test("def x =\n1 + (\n2)\n", 3);
+    test("def x =\n1 + (\n2)\n", 3);
+  }
+
+  @Test public void varDecl() {
+    testFail("def x = x + 1", "variable initialisation cannot refer to itself");
   }
 }

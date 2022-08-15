@@ -16,10 +16,7 @@
 
 package jacsal;
 
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Type;
+import org.objectweb.asm.*;
 import org.objectweb.asm.util.TraceClassVisitor;
 
 import java.io.PrintWriter;
@@ -36,15 +33,15 @@ public class ClassCompiler {
 
   private static       long   counter            = 0;
 
-  private       ClassWriter    cw;
                 ClassVisitor   cv;
           final CompileContext context;
+          final String         internalName;
+          final String         source;
   private final String         pkg;
   private final String         className;
-  private final String         internalName;
   private final Stmt.Script    script;
   private       boolean        debug = false;
-          final String         source;
+  private       ClassWriter    cw;
 
   ClassCompiler(String source, CompileContext context, String pkg, String className, Stmt.Script script) {
     cv = cw = new ClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
@@ -67,21 +64,40 @@ public class ClassCompiler {
     cv.visit(V11, ACC_PUBLIC, internalName,
              null, "java/lang/Object", null);
 
+    FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
+    globalVars.visitEnd();
+
+    // Default constructor
+    MethodVisitor methodVisitor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+    methodVisitor.visitCode();
+    methodVisitor.visitVarInsn(ALOAD, 0);
+    methodVisitor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+    methodVisitor.visitInsn(RETURN);
+    methodVisitor.visitMaxs(1, 1);
+    methodVisitor.visitEnd();
+
     String methodDescriptor = Type.getMethodDescriptor(Type.getType(Object.class),
                                                        Type.getType(Map.class));
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + ACC_STATIC , (String)script.function.name.getValue(),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, (String)script.function.name.getValue(),
                                       methodDescriptor,
                                       null, null);
+    mv.visitCode();
+    // Assign globals map to field so we can access it from anywhere
+    mv.visitVarInsn(ALOAD, 0);
+    mv.visitVarInsn(ALOAD, 1);
+    mv.visitFieldInsn(PUTFIELD, internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
+
     MethodCompiler methodCompiler = new MethodCompiler(this, script.function, mv);
     methodCompiler.compile();
     mv.visitEnd();
     cv.visitEnd();
     Class<?> clss = context.loadClass(internalName.replaceAll("/", "."), cw.toByteArray());
     try {
-      MethodHandle mh = MethodHandles.publicLookup().findStatic(clss, Utils.JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Map.class));
+      MethodHandle mh = MethodHandles.publicLookup().findVirtual(clss, Utils.JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Map.class));
       return map -> {
         try {
-          return mh.invokeExact(map);
+          Object instance = clss.getDeclaredConstructor().newInstance();
+          return mh.invoke(instance, map);
         }
         catch (JacsalError e) {
           throw e;

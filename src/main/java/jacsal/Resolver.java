@@ -34,17 +34,17 @@ import static jacsal.TokenType.*;
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private final CompileContext      compileContext;
-  private final Map<String,Object>  bindings;
+  private final Map<String,Object>  globals;
   private final Deque<Stmt.Block>   blocks = new ArrayDeque<>();
   private final Deque<Stmt.FunDecl> functions = new ArrayDeque<>();
 
   /**
    * Resolve variables, references, etc
-   * @param bindings  map of global variables (which themseovles can be Maps or Lists or simple values)
+   * @param globals  map of global variables (which themselves can be Maps or Lists or simple values)
    */
-  Resolver(CompileContext compileContext, Map<String,Object> bindings) {
+  Resolver(CompileContext compileContext, Map<String,Object> globals) {
     this.compileContext = compileContext;
-    this.bindings       = bindings;
+    this.globals        = globals;
   }
 
   Void resolve(Stmt stmt) {
@@ -163,7 +163,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
       if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
 
-      switch (expr.type) {
+      switch (expr.type.getType()) {
         case INT: {
           int left  = Utils.toInt(expr.left.constValue);
           int right = Utils.toInt(expr.right.constValue);
@@ -206,7 +206,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         case DECIMAL: {
           BigDecimal left  = Utils.toDecimal(expr.left.constValue);
           BigDecimal right = Utils.toDecimal(expr.right.constValue);
-          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.getMaxScale());
+          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale);
           break;
         }
       }
@@ -232,7 +232,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       if (expr.isConst) {
         expr.constValue = expr.expr.constValue;
         if (expr.operator.is(MINUS)) {
-          switch (expr.type) {
+          switch (expr.type.getType()) {
             case INT:     expr.constValue = -(int)expr.constValue;                  break;
             case LONG:    expr.constValue = -(long)expr.constValue;                 break;
             case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
@@ -271,7 +271,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
     // Whether we optimise const expressions by evaluating at compile time
     // is controlled by CompileContext (defaults to true).
-    expr.isConst    = compileContext.evaluateConstExprs();
+    expr.isConst    = compileContext.evaluateConstExprs;
     expr.constValue = expr.value.getValue();
 
     switch (expr.value.getType()) {
@@ -325,7 +325,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private static Object incOrDec(boolean isInc, JacsalType type, Object val) {
     int incAmount = isInc ? 1 : -1;
-    switch (type) {
+    switch (type.getType()) {
       case INT:     return ((int)val) + incAmount;
       case LONG:    return ((long)val) + incAmount;
       case DOUBLE:  return ((double)val) + incAmount;
@@ -344,41 +344,69 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null);
 
   private void declare(Token name) {
-    var        block   = blocks.peek();
-    String     varName = (String)name.getValue();
-    assert block != null;
-    Expr.VarDecl decl = block.variables.get(varName);
-    if (decl != null) {
-      error("Variable with name " + varName + " already declared in this scope", name);
+    String varName = (String)name.getValue();
+    Map<String,Expr.VarDecl> vars = getVars();
+    if (!compileContext.replMode) {
+      Expr.VarDecl decl = vars.get(varName);
+      if (decl != null) {
+        error("Variable with name " + varName + " already declared in this scope", name);
+      }
     }
     // Add variable with type of UNDEFINED as a marker to indicate variable has been declared but is
     // not yet usable
-    block.variables.put(name.getStringValue(), UNDEFINED);
+    vars.put(name.getStringValue(), UNDEFINED);
   }
 
   private void define(Token name, Expr.VarDecl decl) {
     Stmt.FunDecl function = functions.peek();
     assert function != null;
-    Stmt.Block block = blocks.peek();
-    assert block != null;
+    Map<String,Expr.VarDecl> vars = getVars();
 
-    decl.slot = function.slotIdx;
-    int slotsUsed = decl.type.is(JacsalType.LONG,JacsalType.DOUBLE) ? 2 : 1;
-    function.slotIdx += slotsUsed;
-    function.maxSlot = Math.max(function.slotIdx, function.maxSlot);
-    block.slotsUsed  += slotsUsed;
-    block.variables.put((String)name.getValue(), decl);
+    // In repl mode we don't have a top level block and we store var types in the compileContext
+    // and their actual values will be stored in the globals map.
+    if (blocks.size() == 1 && compileContext.replMode) {
+      decl.isGlobal = true;
+      decl.type = decl.type.boxed();
+    }
+    else {
+      Stmt.Block block = blocks.peek();
+      decl.slot = function.slotIdx;
+      int slotsUsed = decl.type.is(JacsalType.LONG, JacsalType.DOUBLE) ? 2 : 1;
+      function.slotIdx += slotsUsed;
+      function.maxSlot = Math.max(function.slotIdx, function.maxSlot);
+      block.slotsUsed += slotsUsed;
+    }
+    vars.put((String)name.getValue(), decl);
+  }
+
+  private Map<String,Expr.VarDecl> getVars() {
+    // Special case for repl mode where we ignore top level block
+    if (compileContext.replMode && blocks.size() == 1) {
+      return compileContext.globalVars;
+    }
+    return blocks.peek().variables;
   }
 
   private Expr.VarDecl lookup(Token identifier) {
     String name = (String)identifier.getValue();
+    Expr.VarDecl varDecl = null;
     for (Iterator<Stmt.Block> it = blocks.descendingIterator(); it.hasNext(); ) {
       Stmt.Block   block   = it.next();
-      Expr.VarDecl varDecl = block.variables.get(name);
+      varDecl = block.variables.get(name);
       if (varDecl != null) {
-        return varDecl;
+        break;
       }
     }
+    if (varDecl == null && compileContext.replMode) {
+      varDecl = compileContext.globalVars.get(name);
+    }
+    if (varDecl == UNDEFINED) {
+      throw new CompileError("Variable initialisation cannot refer to itself", identifier);
+    }
+    if (varDecl != null) {
+      return varDecl;
+    }
+
     error("Reference to unknown variable " + name, identifier);
     return null;
   }

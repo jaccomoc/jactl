@@ -16,35 +16,35 @@
 
 package jacsal;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class CompileContext {
 
   private final DynamicClassLoader classLoader        = new DynamicClassLoader();
-  private       boolean            evaluateConstExprs = true;
-  private       int                maxScale           = 20;
 
-  CompileContext() {}
+  boolean evaluateConstExprs = true;
+  int     maxScale           = 20;
+
+  // In repl mode top level vars are stored in the globals map and their type
+  // is tracked here. We also allow redefinitions of existing vars. We don't
+  // allow shadowing of actual global vars that already exist in the globals map.
+  boolean            replMode           = false;
+
+  // In repl mode we keep track of the type of the top level vars here
+  // and store their actual values in the globals map that is passed in
+  // at run time.
+  final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
+
+  public CompileContext() {}
 
   Class<?> loadClass(String name, byte[] bytes) {
     return classLoader.loadClass(name, bytes);
   }
 
-  int getMaxScale() {
-    return maxScale;
-  }
-
-  CompileContext setMaxScale(int scale) {
-    maxScale = scale;
-    return this;
-  }
-
-  boolean evaluateConstExprs() {
-    return evaluateConstExprs;
-  }
-
-  CompileContext setEvaluateConstExprs(boolean value) {
-    this.evaluateConstExprs = value;
-    return this;
-  }
+  public CompileContext replMode(boolean mode)            { this.replMode           = mode;  return this; }
+  public CompileContext maxScale(int scale)               { this.maxScale           = scale; return this; }
+  public CompileContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value; return this; }
 
   //////////////////////////////////
 

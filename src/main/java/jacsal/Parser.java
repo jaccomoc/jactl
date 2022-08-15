@@ -150,7 +150,7 @@ public class Parser {
    *#              | statement;
    */
   private Stmt declaration() {
-    if (matchAny(VAR, DEF, INT, LONG, DOUBLE, DECIMAL, STRING)) {
+    if (matchAny(VAR, DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING)) {
       return varDecl();
     }
     if (matchAny(SEMICOLON)) {
@@ -175,7 +175,7 @@ public class Parser {
   }
 
   /**
-   *# varDecl -> ("var" | "int" | "long" | "double" | "Decimal" | "String" ) IDENTIFIER ( "=" expression ) ? ;
+   *# varDecl -> ("var" | "boolean" | "int" | "long" | "double" | "Decimal" | "String" ) IDENTIFIER ( "=" expression ) ? ;
    */
   private Stmt.VarDecl varDecl() {
     Token typeToken   = previous();
@@ -197,7 +197,7 @@ public class Parser {
     else {
       // Convert token to a JacsalType
       type = typeToken.is(DEF) ? ANY
-                               : JacsalType.valueOf(typeToken.getType().toString());
+                               : JacsalType.valueOf(typeToken.getType());
     }
 
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, initialiser);
@@ -315,11 +315,12 @@ public class Parser {
   }
 
   /**
-   *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
+   *# primary -> "\n"? (INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
    *#          | exprString
-   *#          | IDENTIFIER;
+   *#          | IDENTIFIER);
    */
   private Expr primary() {
+    matchAny(EOL);
     if (matchAny(INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST, STRING_CONST, TRUE, FALSE, NULL)) {
       return new Expr.Literal(previous());
     }
@@ -334,6 +335,7 @@ public class Parser {
 
     if (matchAny(LEFT_PAREN)) {
       Expr nested = expression();
+      matchAny(EOL);
       expect(RIGHT_PAREN);
       return nested;
     }
@@ -413,6 +415,9 @@ public class Parser {
   }
 
   private Expr unexpected(String msg) {
+    if (peek().getType().is(EOF)) {
+      throw new EOFError("Unexpected EOF: " + msg, peek());
+    }
     error("Unexpected token " + peek().getType() + ": " + msg);
     return null;
   }

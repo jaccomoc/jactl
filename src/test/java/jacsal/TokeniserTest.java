@@ -101,6 +101,7 @@ class TokeniserTest {
     doTest.accept("var", VAR);
     doTest.accept("it", IT);
     doTest.accept("int", INT);
+    doTest.accept("boolean", BOOLEAN);
     doTest.accept("long", LONG);
     doTest.accept("double", DOUBLE);
     doTest.accept("Decimal", DECIMAL);

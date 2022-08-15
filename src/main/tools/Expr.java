@@ -90,6 +90,7 @@ class Expr {
   class VarDecl extends Expr {
     Token      name;
     Expr       initialiser;
+    boolean    @isGlobal;    // Whether global (bindings var) or local
     int        @slot;        // Which local variable slot to use
     Label      @declLabel;   // Where variable comes into scope (for debugger)
   }

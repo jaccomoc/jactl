@@ -24,6 +24,8 @@ public class Utils {
   public static final String JACSAL_PREFIX      = "_$j$";
   public static final String JACSAL_SCRIPT_MAIN = JACSAL_PREFIX + "main";
 
+  static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
+
   static boolean toBoolean(Object value) {
     if (value == null) {
       return false;

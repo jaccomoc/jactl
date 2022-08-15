@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static jacsal.JacsalType.*;
+import static jacsal.JacsalType.BOOLEAN;
 import static jacsal.JacsalType.DECIMAL;
 import static jacsal.JacsalType.DOUBLE;
 import static jacsal.JacsalType.INT;
@@ -38,6 +39,20 @@ import static jacsal.JacsalType.STRING;
 import static jacsal.TokenType.*;
 import static org.objectweb.asm.Opcodes.*;
 
+/**
+ * This class is the class that does most of the work from a compilation point of view.
+ * It converts the AST for a function/method into byte code.
+ *
+ * To compile into byte code we keep track of the type of the objects on the JVM stack
+ * with a type stack that tries to mirror what would be on the JVM stack at the point
+ * where the code is being generated.
+ *
+ * Methods with names such as loadConst(), loadVar(), storeVar(), dupVal(), popVal(),
+ * etc all manipulate the type stack so that the type stack. There are also other versions
+ * of some of these methods that begin with '_' such as _loadConst(), _dupVal(), _popVal()
+ * that don't touch the type stack. All methods beginning with '_' leave the type stack
+ * unchanged.
+ */
 public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private final ClassCompiler classCompiler;
@@ -53,18 +68,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // As we generate the byte code we keep a stack where we track the type of the
   // value that would currently be on the JVM stack at that point in the generated
   // code. This allows us to know when to do appropriate conversions.
-  private Deque<StackEntry> stack = new ArrayDeque<>();
-  private static class StackEntry {
-    JacsalType type;
-    boolean    isRef;   // true if object reference (including boxed primitives)
-    StackEntry(JacsalType type, boolean isRef) {
-      this.type  = type;
-      this.isRef = isRef;
-    }
-    @Override public String toString() {
-      return "StackEntry[type=" + type + ",isRef=" + isRef + "]";
-    }
-  }
+  private Deque<JacsalType> stack = new ArrayDeque<>();
 
   MethodCompiler(ClassCompiler classCompiler, Stmt.FunDecl funDecl, MethodVisitor mv) {
     this.classCompiler = classCompiler;
@@ -141,7 +145,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(stmt.expr);
     convertTo(stmt.type);
     pop();
-    switch (stmt.type) {
+    switch (stmt.type.getType()) {
       case BOOLEAN:
       case INT:
         mv.visitInsn(IRETURN);
@@ -154,10 +158,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         break;
       case DECIMAL:
       case STRING:
-      case INSTANCE:
       case ANY:
         mv.visitInsn(ARETURN);
         break;
+      default: throw new IllegalStateException("Unexpected type " + stmt.type);
     }
     return null;
   }
@@ -174,7 +178,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.isConst) {
       if (expr.isResultUsed) {
         loadConst(expr.constValue);
-        push(expr.type);
       }
       return null;
     }
@@ -194,7 +197,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (!(expr instanceof Expr.VarDecl || expr instanceof Expr.VarAssign ||
             expr instanceof Expr.PrefixUnary || expr instanceof Expr.PostfixUnary)) {
         popVal();
-        pop();
       }
     }
     return null;
@@ -214,42 +216,35 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private static final int decimalIdx = 3;
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
-    mv.visitLabel(expr.declLabel = new Label());   // Label for debugger
-    defineVar(expr.slot, expr.type);
+    if (!expr.isGlobal) {
+      mv.visitLabel(expr.declLabel = new Label());   // Label for debugger
+      defineVar(expr.slot, expr.type);
+    }
     if (expr.initialiser != null) {
       compile(expr.initialiser);
+      convertTo(expr.type);
     }
     else {
       loadConst(defaultValue(expr.type));
-      push(expr.type);
     }
-    convertTo(expr.type);
-    pop();
-    push(expr.type);
 
     // If value of assignment used as implicit return then duplicate value
     // before storing it so value is left on stack
     if (expr.isResultUsed) {
       dupVal();
-      dup();
     }
 
-    storeLocal(expr.slot);
-    pop();
+    storeVar(expr);
     return null;
   }
 
   @Override public Void visitVarAssign(Expr.VarAssign expr) {
     compile(expr.expr);
     convertTo(expr.type);
-    pop();
-    push(expr.type);
     if (expr.isResultUsed) {
       dupVal();
-      dup();
     }
-    storeLocal(expr.identifierExpr);
-    pop();
+    storeVar(expr.identifierExpr.varDecl);
     return null;
   }
 
@@ -261,16 +256,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.right);
       box();
       loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
-      loadConst(classCompiler.context.getMaxScale());
+      loadConst(classCompiler.context.maxScale);
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
       invokeStatic(RuntimeUtils.class, "binaryOp", Object.class, Object.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
-      pop();
-      pop();
-      push(ANY);             // Result of RuntimeUtils.binaryOp is always ANY
       convertTo(expr.type);  // Convert to expected type
-      pop();
-      push(expr.type);
       return null;
     }
 
@@ -278,12 +268,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(PLUS) && expr.type.is(STRING)) {
       compile(expr.left);
       convertToString();
-      pop();
       compile(expr.right);
       convertToString();
-      pop();
-      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;", false);
-      push(expr.type);
+      invokeVirtual(String.class, "concat", String.class);
       return null;
     }
 
@@ -291,48 +278,43 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(STAR) && expr.type.is(STRING)) {
       compile(expr.left);
       convertToString();
-      pop();
       compile(expr.right);
       convertToInt();
-      pop();
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
-      invokeStatic(RuntimeUtils.class, "stringRepeat");
-      push(expr.type);
+      invokeStatic(RuntimeUtils.class, "stringRepeat", String.class, Integer.TYPE, String.class, Integer.TYPE);
       return null;
     }
 
     // Everything else
     compile(expr.left);
     convertTo(expr.type);
-    pop();
     compile(expr.right);
     convertTo(expr.type);
-    pop();
 
     List<Object> opCodes = opCodesByOperator.get(expr.operator.getType());
     if (opCodes == null) {
       throw new UnsupportedOperationException("Unsupported operator " + expr.operator.getType());
     }
     else
-    if (expr.type.is(INT, LONG, DOUBLE)) {
-      int index = expr.type.is(INT) ? intIdx :
-                  expr.type.is(LONG) ? longIdx
-                                     : doubleIdx;
+    if (expr.type.isBoxedOrUnboxed(INT, LONG, DOUBLE)) {
+      int index = expr.type.isBoxedOrUnboxed(INT)  ? intIdx :
+                  expr.type.isBoxedOrUnboxed(LONG) ? longIdx
+                                                   : doubleIdx;
       int opCode = (int)opCodes.get(index);
       mv.visitInsn(opCode);
+      pop(2);
+      push(expr.type);
     }
     else
     if (expr.type.is(DECIMAL)) {
       loadConst(opCodes.get(decimalIdx));
-      loadConst(classCompiler.context.getMaxScale());
-      invokeStatic(RuntimeUtils.class, "decimalBinaryOperation");
+      loadConst(classCompiler.context.maxScale);
+      invokeStatic(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, Integer.TYPE);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + expr.type + " for operator " + expr.operator.getType());
     }
-
-    push(expr.type);
     return null;
   }
 
@@ -368,13 +350,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitLiteral(Expr.Literal expr) {
-    push(expr.type);
     return loadConst(expr.value.getValue());
   }
 
   @Override public Void visitIdentifier(Expr.Identifier expr) {
-    push(expr.type);
-    return loadLocal(expr.varDecl.slot);
+    loadVar(expr.varDecl);
+    return null;
   }
 
   @Override
@@ -387,44 +368,112 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // = Type stack
 
   private void push(JacsalType type) {
-    stack.push(new StackEntry(type, !type.isPrimitive()));
+    stack.push(type);
   }
 
-  private StackEntry peek() {
+  private void push(Class clss) {
+    if (Void.TYPE.equals(clss))        { /* void */                  return; }
+    if (Boolean.TYPE.equals(clss))     { push(BOOLEAN);   return; }
+    if (Boolean.class.equals(clss))    { push(BOXED_BOOLEAN);        return; }
+    if (Integer.TYPE.equals(clss))     { push(INT);                  return; }
+    if (Integer.class.equals(clss))    { push(BOXED_INT);            return; }
+    if (Long.TYPE.equals(clss))        { push(LONG);                 return; }
+    if (Long.class.equals(clss))       { push(BOXED_LONG);           return; }
+    if (Double.TYPE.equals(clss))      { push(DOUBLE);               return; }
+    if (Double.class.equals(clss))     { push(BOXED_DOUBLE);         return; }
+    if (BigDecimal.class.equals(clss)) { push(DECIMAL);              return; }
+    if (String.class.equals(clss))     { push(STRING);               return; }
+    if (Map.class.equals(clss))        { push(MAP);                  return; }
+    if (List.class.equals(clss))       { push(LIST);                 return; }
+    push(ANY);
+  }
+
+  private JacsalType peek() {
     return stack.peek();
   }
 
-  private StackEntry pop() {
+  private JacsalType pop() {
     return stack.pop();
   }
 
+  private void pop(int count) {
+    for (int i = 0; i < count; i++) {
+      pop();
+    }
+  }
+
   private void dup() {
-    boolean isRef = peek().isRef;
-    push(peek().type);
-    peek().isRef = isRef;
+    push(peek());
   }
 
   /**
-   * Duplicate whatever is on the JVM stack.
+   * Swap types on type stack and also swap values on JVM stack
+   */
+  private void swap() {
+    JacsalType type1 = pop();
+    JacsalType type2 = pop();
+    if (slotsNeeded(type1) == 1 && slotsNeeded(type2) == 1) {
+      mv.visitInsn(SWAP);
+    }
+    else {
+      int slot1 = allocateTemp(type1);
+      int slot2 = allocateTemp(type2);
+      _storeLocal(slot1);
+      _storeLocal(slot2);
+      _loadLocal(slot1);
+      _loadLocal(slot2);
+      freeTemp(slot2);
+      freeTemp(slot1);
+    }
+    stack.push(type1);
+    stack.push(type2);
+  }
+
+  /**
+   * Duplicate whatever is on the JVM stack and duplicate type on type stack.
    * For double and long we need to duplicate top two stack elements
    */
   private void dupVal() {
-    mv.visitInsn(peek().type.is(DOUBLE, LONG) ? DUP2 : DUP);
+    dup();
+    _dupVal();
   }
 
+  /**
+   * Duplicate value on JVM stack but don't touch type stack
+   */
+  private void _dupVal() {
+    mv.visitInsn(peek().is(DOUBLE, LONG) ? DUP2 : DUP);
+  }
+
+  /**
+   * Pop value off JVM stack and corresponding type off type stack
+   */
   private void popVal() {
-    mv.visitInsn(peek().type.is(DOUBLE, LONG) ? POP2 : POP);
+    _popVal();
+    pop();
+  }
+
+  /**
+   * Pop value off JVM stack but don't touch type stack
+   */
+  private void _popVal() {
+    mv.visitInsn(peek().is(DOUBLE, LONG) ? POP2 : POP);
   }
 
   /**
    * Box value on the stack based on the type
    */
   private void box() {
-    if (peek().isRef) {
+    box(peek());
+    push(pop().boxed());
+  }
+
+  private void box(JacsalType type) {
+    if (type.isBoxed()) {
       // Nothing to do if not a primitive
       return;
     }
-    switch (peek().type) {
+    switch (peek().getType()) {
       case BOOLEAN:
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
         break;
@@ -438,51 +487,61 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
         break;
     }
-    peek().isRef = true;
   }
 
   /**
    * Unbox value on the stack based on the type
    */
   private void unbox() {
-    if (!peek().isRef) {
+    unbox(peek());
+    push(pop().unboxed());
+  }
+
+  private void unbox(JacsalType type) {
+    if (type.isPrimitive()) {
       // Nothing to do if not boxed
       return;
     }
-    switch (peek().type) {
+    unboxAlways();
+  }
+
+  private void unboxAlways() {
+    switch (peek().getType()) {
       case BOOLEAN:
-        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+        invokeVirtual(Boolean.class, "booleanValue");
         break;
       case INT:
-        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+        invokeVirtual(Integer.class, "intValue");
         break;
       case LONG:
-        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+        invokeVirtual(Long.class, "longValue");
         break;
       case DOUBLE:
-        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+        invokeVirtual(Double.class, "doubleValue");
         break;
       default:
         // For other types (e.g. DECIMAL) don't do anything if asked to unbox
         return;
     }
-    peek().isRef = false;
+    push(pop().unboxed());
   }
 
   ///////////////////////////////////////////////////////////////
 
   /**
-   * Load constant value onto JVM stack.
+   * Load constant value onto JVM stack and also push type onto type stack.
    * Supports Boolean, numeric types, BigDecimal, String, and null.
    * @param obj  object to load on stack
    */
   private Void loadConst(Object obj) {
     if (obj == null) {
       mv.visitInsn(ACONST_NULL);
+      push(ANY);
     }
     else
     if (obj instanceof Boolean) {
       mv.visitInsn((boolean)obj ? ICONST_1 : ICONST_0);
+      push(BOOLEAN);
     }
     else
     if (obj instanceof Integer || obj instanceof Short || obj instanceof Character) {
@@ -501,6 +560,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           mv.visitLdcInsn(value);
           break;
       }
+      push(INT);
     }
     else
     if (obj instanceof Long) {
@@ -515,6 +575,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         mv.visitLdcInsn((long)value);
       }
+      push(LONG);
     }
     else
     if (obj instanceof Double) {
@@ -529,6 +590,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         mv.visitLdcInsn(obj);
       }
+      push(DOUBLE);
     }
     else
     if (obj instanceof BigDecimal) {
@@ -547,10 +609,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitLdcInsn(((BigDecimal) obj).toPlainString());
         mv.visitMethodInsn(INVOKESPECIAL, "java/math/BigDecimal", "<init>", "(Ljava/lang/String;)V", false);
       }
+      push(DECIMAL);
     }
     else
     if (obj instanceof String) {
       mv.visitLdcInsn((String)obj);
+      push(STRING);
     }
     else {
       throw new IllegalStateException("Constant of type " + obj.getClass().getName() + " not supported");
@@ -558,15 +622,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  /**
+   * Load object onto JVM stack but don't alter type stack
+   */
+  private void _loadConst(Object obj) {
+    loadConst(obj);
+    pop();
+  }
+
   private Object defaultValue(JacsalType type) {
-    switch (type) {
+    switch (type.getType()) {
       case BOOLEAN:  return Boolean.FALSE;
       case INT:      return 0;
       case LONG:     return 0L;
       case DOUBLE:   return 0D;
       case DECIMAL:  return BigDecimal.ZERO;
       case STRING:   return "";
-      case INSTANCE: return null;
       case ANY:      return null;
       default:       throw new IllegalStateException("Internal error: unexpected type " + type);
     }
@@ -577,7 +648,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // = Conversions
 
   private Void convertTo(JacsalType type) {
-    switch (type) {
+    switch (type.getType()) {
       case BOOLEAN: return convertToBoolean();
       case INT:     return convertToInt();
       case LONG:    return convertToLong();
@@ -590,11 +661,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void convertToBoolean() {
-    return convertToBoolean(true);
+    return convertToBoolean(false);
   }
 
   /**
-   * Convert to boolean and leave a 1 or 0 based on whether truthiness is satsified.
+   * Convert to boolean and leave a 1 or 0 based on whether truthiness is satisfied.
    * If negated is true we invert the sense of the conversion so that we leave 0 on
    * the stack for "true" and 1 for "false". This allows us to check for "falsiness"
    * more efficiently.
@@ -605,140 +676,117 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Label isZero = new Label();
       Label end    = new Label();
       mv.visitJumpInsn(opCode, isZero);
-      loadConst(negated ? 0 : 1);
+      _loadConst(negated ? 0 : 1);
       mv.visitJumpInsn(GOTO, end);
       mv.visitLabel(isZero);
-      loadConst(negated ? 1 : 0);
+      _loadConst(negated ? 1 : 0);
       mv.visitLabel(end);
     };
 
-    Label endCast = null;   // Used for boxed types and strings
-
-    // For any type that is an Object check first for null
-    if (peek().isRef) {
-      if (!peek().type.isNumeric() && !peek().type.is(BOOLEAN,STRING)) {
-        // For non-numeric and non-string types we are false if null and true otherwise
-        emitConvertToBoolean.accept(IFNULL);
-        return null;
-      }
-
-      // Since we will check for 0 or empty string if not null we need to duplicate the
-      // value since the null check will swallow whatever is on the stack
-      dupVal();
-      endCast = new Label();
-      Label nonNull = new Label();
-      mv.visitJumpInsn(IFNONNULL, nonNull);
-      popVal();
-      loadConst(negated ? 1 : 0);
-      mv.visitJumpInsn(GOTO, endCast);
-      mv.visitLabel(nonNull);
-
-      if (peek().type.is(STRING)) {
-        mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "isEmpty", "()Z", false);
-        mv.visitLabel(endCast);
-        return null;
-      }
-
-      // For boxed primitives unbox first
-      unbox();
+    // For any type that is an Object
+    if (!peek().isPrimitive()) {
+      loadConst(negated ? true : false);
+      invokeStatic(RuntimeUtils.class, "isTruth", Object.class, Boolean.TYPE);
+      return null;
     }
 
-    switch (peek().type) {
-      case BOOLEAN:  if (negated) { booleanNot(); }       break;
+    switch (peek().getType()) {
+      case BOOLEAN:  if (negated) { _booleanNot(); }      break;
       case INT:      emitConvertToBoolean.accept(IFEQ);   break;
       case LONG: {
-        loadConst((long)0);
+        _loadConst((long)0);
         mv.visitInsn(LCMP);      // Leave 0 on stack if equal to 0
         emitConvertToBoolean.accept(IFEQ);
         break;
       }
       case DOUBLE: {
-        loadConst((double)0);
+        _loadConst((double)0);
         mv.visitInsn(DCMPL);
         emitConvertToBoolean.accept(IFEQ);
         break;
       }
-      case DECIMAL: {
-        mv.visitMethodInsn(INVOKEVIRTUAL, "java/math/BigDecimal", "stripTrailingZeros", "()Ljava/math/BigDecimal;", false);
-        loadConst(BigDecimal.ZERO);
-        mv.visitMethodInsn(INVOKEVIRTUAL, "java/math/BigDecimal", "equals", "(Ljava/lang/Object;)Z", false);
-        if (!negated) {
-          booleanNot();
-        }
-        break;
-      }
       default:
-        throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+        throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
 
-    if (endCast != null) {
-      mv.visitLabel(endCast);
-    }
-
+    pop();
+    push(BOOLEAN);
     return null;
   }
 
   private Void convertToInt() {
-    if (peek().isRef) {
+    if (peek().isBoxed()) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Number", "intValue", "()I", false);
-      return null;
     }
-
-    switch (peek().type) {
-      case INT:                          return null;
-      case LONG:    mv.visitInsn(L2I);   return null;
-      case DOUBLE:  mv.visitInsn(D2I);   return null;
-      default:     throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+    else {
+      switch (peek().getType()) {
+        case INT:                          break;
+        case LONG:    mv.visitInsn(L2I);   break;
+        case DOUBLE:  mv.visitInsn(D2I);   break;
+        default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
+      }
     }
+    pop();
+    push(INT);
+    return null;
   }
 
   private Void convertToLong() {
-    if (peek().isRef) {
+    if (peek().isBoxed()) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Number", "longValue", "()J", false);
-      return null;
     }
-
-    switch (peek().type) {
-      case INT:     mv.visitInsn(I2L);   return null;
-      case LONG:                         return null;
-      case DOUBLE:  mv.visitInsn(D2L);   return null;
-      default:     throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+    else {
+      switch (peek().getType()) {
+        case INT:     mv.visitInsn(I2L);   break;
+        case LONG:                         break;
+        case DOUBLE:  mv.visitInsn(D2L);   break;
+        default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
+      }
     }
+    pop();
+    push(LONG);
+    return null;
   }
 
   private Void convertToDouble() {
-    if (peek().isRef) {
+    if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Number", "doubleValue", "()D", false);
-      return null;
     }
-
-    switch (peek().type) {
-      case INT:     mv.visitInsn(I2D);   return null;
-      case LONG:    mv.visitInsn(L2D);   return null;
-      case DOUBLE:                       return null;
-      default:     throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+    else {
+      switch (peek().getType()) {
+        case INT:     mv.visitInsn(I2D);   break;
+        case LONG:    mv.visitInsn(L2D);   break;
+        case DOUBLE:                       break;
+        default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
+      }
     }
+    pop();
+    push(DOUBLE);
+    return null;
   }
 
   private Void convertToDecimal() {
-    switch (peek().type) {
+    switch (peek().getType()) {
       case INT:
       case LONG:
         convertToLong();
-        mv.visitMethodInsn(INVOKESTATIC, "java/math/BigDecimal", "valueOf", "(J)Ljava/math/BigDecimal;", false);
-        return null;
+        invokeStatic(BigDecimal.class, "valueOf", Long.TYPE);
+        break;
       case DOUBLE:
         convertToDouble();
-        mv.visitMethodInsn(INVOKESTATIC, "java/math/BigDecimal", "valueOf", "(D)Ljava/math/BigDecimal;", false);
-        return null;
+        invokeStatic(BigDecimal.class, "valueOf", Double.TYPE);
+        break;
       case DECIMAL:
-        return null;
+        break;
       default:
-        throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+        throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
+    pop();
+    push(DECIMAL);
+    return null;
   }
 
   private Void convertToAny() {
@@ -746,13 +794,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private void booleanNot() {
-    loadConst(1);
+  private void _booleanNot() {
+    _loadConst(1);
     mv.visitInsn(IXOR);
   }
 
   private void arithmeticNegate(Token location) {
-    switch (peek().type) {
+    unbox();
+    switch (peek().getType()) {
       case INT:     mv.visitInsn(INEG);  break;
       case LONG:    mv.visitInsn(LNEG);  break;
       case DOUBLE:  mv.visitInsn(DNEG);  break;
@@ -765,7 +814,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeStatic(RuntimeUtils.class, "negateNumber", Object.class, String.class, Integer.TYPE);
         break;
       default:
-        throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+        throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
   }
 
@@ -775,66 +824,65 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // If postfix and we use the value then load value before doing inc/dec so we leave
       // old value on the stack
       if (!isPrefix && isResultUsed) {
-        loadLocal(varDecl.slot);
-        push(expr.type);
+        loadVar(varDecl);
       }
 
       // Helper to do the inc/dec based on the type of the value
       BiConsumer<Object, Runnable> incOrDec = (plusOrMinusOne, runnable) -> {
-        loadLocal(varDecl.slot);
+        loadVar(varDecl);
+        unbox();
         loadConst(plusOrMinusOne);
         runnable.run();
-        storeLocal(varDecl.slot);
+        storeVar(varDecl);
       };
 
-      switch (varDecl.type) {
+      switch (varDecl.type.getType()) {
         case INT:
-          // Integer vars have special support and can be incremented in place.
-          mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
+          if (varDecl.type.isBoxed()) {
+            incOrDec.accept(isInc ? 1 : -1, () -> { mv.visitInsn(IADD); pop(); });
+          }
+          else {
+            // Integer vars have special support and can be incremented in place.
+            mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
+          }
           break;
         case LONG:
-          incOrDec.accept(isInc ? 1L : -1L, () -> mv.visitInsn(LADD));
+          incOrDec.accept(isInc ? 1L : -1L, () -> { mv.visitInsn(LADD); pop(); });
           break;
         case DOUBLE:
-          incOrDec.accept(isInc ? 1D : -1D, () -> mv.visitInsn(DADD));
+          incOrDec.accept(isInc ? 1D : -1D, () -> { mv.visitInsn(DADD); pop(); });
           break;
         case DECIMAL:
           BigDecimal amt = isInc ? BigDecimal.ONE : DECIMAL_MINUS_1;
           incOrDec.accept(amt, () -> invokeVirtual(BigDecimal.class, "add", BigDecimal.class));
           break;
         case ANY:
-          loadLocal(varDecl.slot);
-          push(varDecl.type);
-          incOrDecAny(isInc, location);
-          storeLocal(varDecl.slot);
-          pop();
+          // When we don't know the type
+          loadVar(varDecl);
+          incOrDecValue(isInc, location);
+          storeVar(varDecl);
           break;
         default:
           throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
       }
       if (isPrefix && isResultUsed) {
-        loadLocal(varDecl.slot);
-        push(expr.type);
+        loadVar(varDecl);
       }
     }
     else {
       compile(expr);
       if (!isPrefix) {
         if (isResultUsed) {
-          dup();
           dupVal();
         }
-        incOrDecAny(isInc, location);
+        incOrDecValue(isInc, location);
         popVal();
-        pop();
       }
       else {
-        incOrDecAny(isInc, location);
-        pop();
-        push(expr.type);
+        incOrDecValue(isInc, location);
+        convertTo(expr.type);
         if (!isResultUsed) {
           popVal();
-          pop();
         }
       }
     }
@@ -846,18 +894,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param isInc    true if doing inc (false for dec)
    * @param location location of expression we are incrementing or decrementing
    */
-  private void incOrDecAny(boolean isInc, Token location) {
-    switch (peek().type) {
+  private void incOrDecValue(boolean isInc, Token location) {
+    unbox();
+    switch (peek().getType()) {
       case INT:
-        loadConst(isInc ? 1 : -1);
+        _loadConst(isInc ? 1 : -1);
         mv.visitInsn(IADD);
         break;
       case LONG:
-        loadConst(isInc ? 1L : -1L);
+        _loadConst(isInc ? 1L : -1L);
         mv.visitInsn(LADD);
         break;
       case DOUBLE:
-        loadConst(isInc ? 1D : -1D);
+        _loadConst(isInc ? 1D : -1D);
         mv.visitInsn(DADD);
         break;
       case DECIMAL:
@@ -870,33 +919,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeStatic(RuntimeUtils.class, isInc ? "incNumber" : "decNumber", Object.class, String.class, Integer.TYPE);
         break;
       default:
-        throw new IllegalStateException("Internal error: unexpected type " + peek().type);
+        throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
   }
 
   private Void convertToString() {
-    if (peek().type.is(STRING)) {
+    if (peek().is(STRING)) {
       return null;
     }
     Label end = null;
-    if (!peek().isRef) {
+    if (peek().isPrimitive()) {
       box();
     }
-    else {
-      dupVal();
-      Label nonNull = new Label();
-      end = new Label();
-      mv.visitJumpInsn(IFNONNULL, nonNull);
-      popVal();
-      loadConst("null");
-      mv.visitJumpInsn(GOTO, end);
-      mv.visitLabel(nonNull);
-    }
-    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "toString", "()Ljava/lang/String;", false);
+    invokeStatic(RuntimeUtils.class, "toString", Object.class);
     if (end != null) {
       mv.visitLabel(end);
     }
     return null;
+  }
+
+  private void castToBoxedType(JacsalType type) {
+    String boxedClass = type.getBoxedClass();
+    if (boxedClass != null) {
+      mv.visitTypeInsn(CHECKCAST, boxedClass);
+    }
   }
 
   //////////////////////////////////////////////////////
@@ -907,12 +953,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Emit invokeVirtual call by looking for method with given name (and optionally parameter types).
    * @param clss       class containing method
    * @param methodName name of the method
-   * @param paramTypes optional array of paramter types to narrow down search if multiple methods
+   * @param paramTypes optional array of parameter types to narrow down search if multiple methods
    *                   of same name
    */
   private void invokeVirtual(Class<?> clss, String methodName, Class<?>... paramTypes) {
     Method method = findMethod(clss, methodName, m -> !Modifier.isStatic(m.getModifiers()), paramTypes);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(clss), methodName,Type.getMethodDescriptor(method), false);
+    pop(paramTypes.length + 1);        // Pop types for object and each argument
+    push(method.getReturnType());
+  }
+
+  /**
+   * Emit invokeInterface call by looking for method with given name (and optionally parameter types).
+   * @param clss       class containing method
+   * @param methodName name of the method
+   * @param paramTypes optional array of parameter types to narrow down search if multiple methods
+   *                   of same name
+   */
+  private void invokeInterface(Class<?> clss, String methodName, Class<?>... paramTypes) {
+    Method method = findMethod(clss, methodName, m -> !Modifier.isStatic(m.getModifiers()), paramTypes);
+    mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(clss), methodName,Type.getMethodDescriptor(method), true);
+    pop(paramTypes.length + 1);        // Pop types for object and each argument
+    push(method.getReturnType());
   }
 
   /**
@@ -925,6 +987,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeStatic(Class<?> clss, String methodName, Class<?>... paramTypes) {
     Method method = findMethod(clss, methodName, m -> Modifier.isStatic(m.getModifiers()), paramTypes);
     mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(clss), methodName,Type.getMethodDescriptor(method), false);
+    pop(paramTypes.length);        // Pop types for each argument
+    push(method.getReturnType());
   }
 
   /**
@@ -936,25 +1000,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    *                   of same name
    */
   private Method findMethod(Class<?> clss, String methodName, Function<Method,Boolean> filter, Class<?>... paramTypes) {
-    Method method = null;
     try {
-      method = clss.getDeclaredMethod(methodName, paramTypes);
+      return clss.getDeclaredMethod(methodName, paramTypes);
     }
     catch (NoSuchMethodException e) {
-      if (paramTypes.length == 0) {
-        Optional<Method> optionalMethod = Arrays.stream(clss.getDeclaredMethods())
-                                                .filter(filter::apply)
-                                                .filter(m -> m.getName().equals(methodName))
-                                                .findFirst();
-        if (optionalMethod.isPresent()) {
-          method = optionalMethod.get();
-        }
-      }
+      throw new IllegalStateException("Internal error: could not find static method " + methodName + " for class " +
+                                      clss.getName() + " with param types " + Arrays.toString(paramTypes));
     }
-    if (method == null) {
-      throw new IllegalStateException("Internal error: could not find static method " + methodName + " for class " + clss.getName());
-    }
-    return method;
   }
 
   //////////////////////////////////////////////////////
@@ -1013,7 +1065,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     undefineVar(slot);
   }
 
-  private int slotsNeeded(JacsalType type) {
+  private static int slotsNeeded(JacsalType type) {
     if (type == null) {
       return 1;
     }
@@ -1041,13 +1093,54 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void storeLocal(Expr.Identifier identifier) {
-    storeLocal(identifier.varDecl.slot);
+  private void loadGlobals() {
+    mv.visitVarInsn(ALOAD, 0);
+    mv.visitFieldInsn(GETFIELD, classCompiler.internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
+    push(JacsalType.MAP);
+  }
+
+  private void loadVar(Expr.VarDecl varDecl) {
+    if (varDecl.isGlobal) {
+      loadGlobals();
+      loadConst(varDecl.name.getValue());
+      invokeInterface(Map.class, "get", Object.class);
+      castToBoxedType(varDecl.type);
+      pop();
+      push(varDecl.type);
+    }
+    else {
+      loadLocal(varDecl.slot);
+    }
+  }
+
+  private void storeVar(Expr.VarDecl varDecl) {
+    if (varDecl.isGlobal) {
+      box();
+      loadGlobals();
+      swap();
+      loadConst(varDecl.name.getValue());
+      swap();
+      invokeInterface(Map.class, "put", Object.class, Object.class);
+      // Pop result of put since we are not interested in previous value
+      popVal();
+    }
+    else {
+      storeLocal(varDecl.slot);
+    }
   }
 
   private void storeLocal(int slot) {
     JacsalType type = locals.get(slot);
-    switch (type) {
+    if (type.isPrimitive()) {
+      unbox();
+    }
+    _storeLocal(slot);
+    pop();
+  }
+
+  private void _storeLocal(int slot) {
+    JacsalType type = locals.get(slot);
+    switch (type.getType()) {
       case BOOLEAN:   mv.visitVarInsn(ISTORE, slot); break;
       case INT:       mv.visitVarInsn(ISTORE, slot); break;
       case LONG:      mv.visitVarInsn(LSTORE, slot); break;
@@ -1055,7 +1148,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       case DECIMAL:
       case STRING:
-      case INSTANCE:
       case ANY:
         mv.visitVarInsn(ASTORE, slot);
         break;
@@ -1065,8 +1157,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void loadLocal(int slot) {
+    _loadLocal(slot);
     JacsalType type = locals.get(slot);
-    switch (type) {
+    push(type);
+    return null;
+  }
+
+  private void _loadLocal(int slot) {
+    JacsalType type = locals.get(slot);
+    switch (type.getType()) {
       case BOOLEAN:   mv.visitVarInsn(ILOAD, slot); break;
       case INT:       mv.visitVarInsn(ILOAD, slot); break;
       case LONG:      mv.visitVarInsn(LLOAD, slot); break;
@@ -1074,14 +1173,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       case DECIMAL:
       case STRING:
-      case INSTANCE:
       case ANY:
         mv.visitVarInsn(ALOAD, slot);
         break;
 
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
-    return null;
   }
 
   ////////////////////////////////////////////////////////
