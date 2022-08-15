@@ -165,10 +165,6 @@ class TokeniserTest {
     doTest.accept("a1");
   }
 
-  private static class Pair<X,Y> {
-    X x; Y y; Pair(X x, Y y) { this.x = x; this.y = y; }
-  }
-
   @Test public void numericLiterals() {
     BiConsumer<String, List<Pair<TokenType,Object>>> doTest = (source, typeAndValues) -> {
       var     tokeniser = new Tokeniser(source);

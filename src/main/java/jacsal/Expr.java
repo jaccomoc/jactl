@@ -43,7 +43,7 @@ abstract class Expr {
                                // resolve phase here.
 
   // Flag that indicates whether result for the Expr is actually used. Most expressions
-  // have their value used. For example, when nested within another expression or when
+  // have their value used, for example, when nested within another expression or when
   // the expression is used as a condition for if/while/for or as assignment to a variable.
   // For some expressions (e.g. the top Expr in an expression statement) the result of the
   // expression is ignored so this flag allows us to know whether to leave the result on
@@ -96,6 +96,28 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitLiteral(this); }
     @Override public String toString() { return "Literal[" + "value=" + value + "]"; }
+  }
+
+  static class ListLiteral extends Expr {
+    Token start;
+    List<Expr> exprs = new ArrayList<>();
+    ListLiteral(Token start) {
+      this.start = start;
+      this.location = start;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitListLiteral(this); }
+    @Override public String toString() { return "ListLiteral[" + "start=" + start + ", " + "exprs=" + exprs + "]"; }
+  }
+
+  static class MapLiteral extends Expr {
+    Token start;
+    List<Pair<Expr,Expr>> entries = new ArrayList<>();
+    MapLiteral(Token start) {
+      this.start = start;
+      this.location = start;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitMapLiteral(this); }
+    @Override public String toString() { return "MapLiteral[" + "start=" + start + ", " + "entries=" + entries + "]"; }
   }
 
   static class Identifier extends Expr {
@@ -162,6 +184,8 @@ abstract class Expr {
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);
     T visitLiteral(Literal expr);
+    T visitListLiteral(ListLiteral expr);
+    T visitMapLiteral(MapLiteral expr);
     T visitIdentifier(Identifier expr);
     T visitExprString(ExprString expr);
     T visitVarDecl(VarDecl expr);

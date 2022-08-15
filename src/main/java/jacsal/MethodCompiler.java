@@ -353,6 +353,38 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return loadConst(expr.value.getValue());
   }
 
+  @Override public Void visitListLiteral(Expr.ListLiteral expr) {
+    mv.visitTypeInsn(NEW, "java/util/ArrayList");
+    mv.visitInsn(DUP);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "()V", false);
+    push(LIST);
+    expr.exprs.forEach(entry -> {
+      dupVal();
+      compile(entry);
+      box();
+      invokeInterface(List.class, "add", Object.class);
+      popVal();    // Pop boolean return value of add
+    });
+    return null;
+  }
+
+  @Override public Void visitMapLiteral(Expr.MapLiteral expr) {
+    mv.visitTypeInsn(NEW, "java/util/HashMap");
+    mv.visitInsn(DUP);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+    push(MAP);
+    expr.entries.forEach(entry -> {
+      dupVal();
+      compile(entry.x);
+      convertTo(STRING);
+      compile(entry.y);
+      box();
+      invokeInterface(Map.class, "put", Object.class, Object.class);
+      popVal();    // Ignore return value from put
+    });
+    return null;
+  }
+
   @Override public Void visitIdentifier(Expr.Identifier expr) {
     loadVar(expr.varDecl);
     return null;
@@ -360,6 +392,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitExprString(Expr.ExprString expr) {
+    _loadConst(expr.exprList.size());
+    mv.visitTypeInsn(ANEWARRAY, "java/lang/String");
+    for (int i = 0; i < expr.exprList.size(); i++) {
+      mv.visitInsn(DUP);
+      _loadConst(i);
+      compile(expr.exprList.get(i));
+      convertTo(STRING);
+      mv.visitInsn(AASTORE);
+      pop();
+    }
+    push(ANY);          // For the String[]
+    loadConst(""); // Join string
+    swap();
+    invokeStatic(String.class, "join", CharSequence.class, CharSequence[].class);
     return null;
   }
 

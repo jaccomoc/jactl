@@ -21,7 +21,7 @@ import jacsal.runtime.RuntimeUtils;
 import java.math.BigDecimal;
 import java.util.*;
 
-import static jacsal.JacsalType.ANY;
+import static jacsal.JacsalType.*;
 import static jacsal.TokenType.*;
 
 /**
@@ -283,9 +283,27 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case TRUE:          return expr.type = JacsalType.BOOLEAN;
       case FALSE:         return expr.type = JacsalType.BOOLEAN;
       case NULL:          return expr.type = ANY;
+      case IDENTIFIER:    return expr.type = JacsalType.STRING;
       default:
-        throw new IllegalStateException("Unknown literal type " + expr.value.getType());
+        // In some circumstances (e.g. map keys) we support literals that are keywords
+        if (!expr.value.isKeyword()) {
+          throw new IllegalStateException("Internal error: unexpected token for literal - " + expr.value);
+        }
+        return expr.type = JacsalType.STRING;
     }
+  }
+
+  @Override public JacsalType visitListLiteral(Expr.ListLiteral expr) {
+    expr.exprs.forEach(this::resolve);
+    return expr.type = LIST;
+  }
+
+  @Override public JacsalType visitMapLiteral(Expr.MapLiteral expr) {
+    expr.entries.forEach(entry -> {
+      resolve(entry.x);
+      resolve(entry.y);
+    });
+    return expr.type = MAP;
   }
 
   @Override public JacsalType visitVarDecl(Expr.VarDecl expr) {
@@ -318,6 +336,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitExprString(Expr.ExprString expr) {
+    expr.exprList.forEach(this::resolve);
     return expr.type = JacsalType.STRING;
   }
 

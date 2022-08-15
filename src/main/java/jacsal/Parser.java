@@ -17,6 +17,7 @@
 package jacsal;
 
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.ANY;
@@ -80,16 +81,7 @@ public class Parser {
     functions.push(funDecl);
     try {
       Stmt.Block block = block(EOF);
-      try {
-        explicitReturn(block, ANY);
-      }
-      catch (CompileError e) {
-        // Error could be due to previous error so if there have been previous
-        // errors ignore this one
-        if (errors.size() == 0) {
-          throw e;
-        }
-      }
+      explicitReturn(block, ANY);
       funDecl.block = block;
       return new Stmt.Script(funDecl);
     } finally {
@@ -165,6 +157,12 @@ public class Parser {
    *#            | exprStatement;
    */
   private Stmt statement() {
+    // Special case of a Map literal as an expression statement
+    if (peek().is(LEFT_BRACE)) {
+      if (isMapLiteral()) {
+        return exprStmt();
+      }
+    }
     if (matchAny(LEFT_BRACE)) {
       return block(RIGHT_BRACE);
     }
@@ -315,9 +313,12 @@ public class Parser {
   }
 
   /**
-   *# primary -> "\n"? (INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
+   *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
+   *#          | IDENTIFIER
+   *#          | lisOrMaptLiteral
    *#          | exprString
-   *#          | IDENTIFIER);
+   *#          | "(" expression ")"
+   *#          ;
    */
   private Expr primary() {
     matchAny(EOL);
@@ -325,13 +326,14 @@ public class Parser {
       return new Expr.Literal(previous());
     }
 
-    if (peek().is(EXPR_STRING_START)) {
-      return exprString();
+    if (peek().is(EXPR_STRING_START)) { return exprString(); }
+    if (matchAny(IDENTIFIER))         { return new Expr.Identifier(previous()); }
+    if (peek().is(LEFT_SQUARE,LEFT_BRACE)) {
+      if (isMapLiteral()) {
+        return mapLiteral();
+      }
     }
-
-    if (matchAny(IDENTIFIER)) {
-      return new Expr.Identifier(previous());
-    }
+    if (matchAny(LEFT_SQUARE))        { return listLiteral(); }
 
     if (matchAny(LEFT_PAREN)) {
       Expr nested = expression();
@@ -344,7 +346,63 @@ public class Parser {
   }
 
   /**
-   *# exprString -> EXPR_STRING_START ( expression | STRING_CONST ) * EXPR_STRING_END;
+   *# listLiteral -> "[" ( expression ( "," expression ) * ) ? "]"
+   */
+  private Expr.ListLiteral listLiteral() {
+    Expr.ListLiteral expr = new Expr.ListLiteral(previous());
+    while (!matchAny(RIGHT_SQUARE)) {
+      if (expr.exprs.size() > 0) {
+        expect(COMMA);
+      }
+      expr.exprs.add(expression());
+    }
+    return expr;
+  }
+
+  /**
+   *# mapLiteral -> "[" ":" "]"
+   *#             | "{" ":" "}"
+   *#             | "[" ( mapKey ":" expression ) + "]"
+   *#             | "{" ( mapKey ":" expression ) + "}"
+   *#             ;
+   * Return a map literal. For maps we support Groovy map syntax using "[" and "]"
+   * as well as JSON syntax using "{" and "}".
+   */
+  private Expr.MapLiteral mapLiteral() {
+    expect(LEFT_SQUARE,LEFT_BRACE);
+    Token startToken = previous();
+    TokenType endToken = startToken.is(LEFT_BRACE) ? RIGHT_BRACE : RIGHT_SQUARE;
+    Expr.MapLiteral expr = new Expr.MapLiteral(startToken);
+    if (matchAny(COLON)) {
+      // Empty map
+      expect(endToken);
+    }
+    else {
+      while (!matchAny(endToken)) {
+        if (expr.entries.size() > 0) {
+          expect(COMMA);
+        }
+        Expr key = mapKey();
+        expect(COLON);
+        Expr value = expression();
+        expr.entries.add(Pair.create(key, value));
+      }
+    }
+    return expr;
+  }
+
+  /**
+   *# mapKey -> STRING_CONST | IDENTIFIER | exprString | keyWord ;
+   */
+  private Expr mapKey() {
+    if (matchAny(STRING_CONST,IDENTIFIER)) { return new Expr.Literal(previous()); }
+    if (peek().is(EXPR_STRING_START))      { return exprString(); }
+    if (peek().isKeyword())                { advance(); return new Expr.Literal(previous()); }
+    return null;
+  }
+
+  /**
+   *# exprString -> EXPR_STRING_START ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END;
    */
   private Expr exprString() {
     Expr.ExprString exprString = new Expr.ExprString(expect(EXPR_STRING_START));
@@ -354,11 +412,38 @@ public class Parser {
       if (matchAny(STRING_CONST)) {
         exprString.exprList.add(new Expr.Literal(previous()));
       }
+      else
+      if (matchAny(IDENTIFIER)) {
+        exprString.exprList.add(new Expr.Identifier(previous()));
+      }
+      else
+      if (matchAny(LEFT_BRACE)) {
+        exprString.exprList.add(blockExpression());
+      }
       else {
-        exprString.exprList.add(expression());
+        unexpected("Error in expression string");
       }
     }
     return exprString;
+  }
+
+  /**
+   *# blockExpression -> "{" block "}"
+   *
+   * Used inside expression strings. If no return statement there is an implicit
+   * return on last statement in block that gives the value to then interpolate
+   * into surrounding expression string.
+   */
+  private Expr blockExpression() {
+    throw new UnsupportedOperationException();
+  }
+
+  /////////////////////////////////////////////////
+
+  private boolean isMapLiteral() {
+    // Could be map in JSON style or could be closure
+    return lookahead(() -> matchAny(LEFT_SQUARE, LEFT_BRACE), () -> matchAny(COLON)) ||
+           lookahead(() -> matchAny(LEFT_SQUARE, LEFT_BRACE), () -> mapKey() != null, () -> matchAny(COLON));
   }
 
   /////////////////////////////////////////////////
@@ -384,8 +469,8 @@ public class Parser {
   }
 
   /**
-   * Check if next token matches any of the given types. If it matches then consume the token and return true. If it
-   * does not match one of the types then return false and stay in current position in stream of tokens.
+   * Check if next token matches any of the given types. If it matches then consume the token and return true.
+   * If it does not match one of the types then return false and stay in current position in stream of tokens.
    *
    * @param types the types to match agains
    * @return true if next token matches, false is not
@@ -409,6 +494,43 @@ public class Parser {
     }
     return false;
   }
+
+  /**
+   * Provide lookahead by remembering current token and state then checking for series
+   * productions (lambdas returning true). If lookahead succeeds we return true. If
+   * we get an error (due to any of the productions failing) we return false.
+   * Either way we rewind to point where we were at and restore our state.
+   * @param productions  array of lambdas returning true/false
+   */
+  @SafeVarargs
+  private boolean lookahead(Supplier<Boolean>... productions) {
+    Token current = peek();
+    List<CompileError>  currentErrors    = new ArrayList<>(errors);
+    Deque<Stmt.Block>   currentBlocks    = new ArrayDeque<>(blockStack);
+    Deque<Stmt.FunDecl> currentFunctions = new ArrayDeque<>(functions);
+
+    try {
+      for (Supplier<Boolean> production: productions) {
+        try {
+          if (!production.get()) {
+            return false;
+          }
+        }
+        catch (CompileError e) {
+          return false;
+        }
+      }
+      return true;
+    }
+    finally {
+      tokeniser.rewind(current);
+      errors = currentErrors;
+      blockStack = currentBlocks;
+      functions = currentFunctions;
+    }
+  }
+
+  /////////////////////////////////////
 
   private Expr error(String msg) {
     throw new CompileError(msg, peek());
@@ -436,7 +558,7 @@ public class Parser {
       error("Unexpected token. Expecting one of " + Arrays.stream(types).map(Enum::toString).collect(Collectors.joining(", ")));
     }
     else {
-      error("Unexpected token. Expecting " + types[0]);
+      error("Unexpected token '" + peek().getStringValue() + "'. Expecting " + types[0]);
     }
     return null;
   }
@@ -452,6 +574,20 @@ public class Parser {
    * implicit returns in functions into explicit returns to simplify the job of the Resolver and Compiler phases.
    */
   private Stmt explicitReturn(Stmt stmt, JacsalType returnType) {
+    try {
+      return doExplicitReturn(stmt, returnType);
+    }
+    catch (CompileError e) {
+      // Error could be due to previous error so if there have been previous
+      // errors ignore this one
+      if (errors.size() == 0) {
+        throw e;
+      }
+    }
+    return null;
+  }
+
+  private Stmt doExplicitReturn(Stmt stmt, JacsalType returnType) {
     if (stmt instanceof Stmt.Return) {
       // Nothing to do
       return stmt;
@@ -473,8 +609,8 @@ public class Parser {
         throw new CompileError("Missing explicit/implicit return in empty block for " +
                                (ifStmt.trueStmts == null ? "true" : "false") + " condition of if statment", stmt.location);
       }
-      ifStmt.trueStmts = explicitReturn(((Stmt.If) stmt).trueStmts, returnType);
-      ifStmt.falseStmts = explicitReturn(((Stmt.If) stmt).falseStmts, returnType);
+      ifStmt.trueStmts = doExplicitReturn(((Stmt.If) stmt).trueStmts, returnType);
+      ifStmt.falseStmts = doExplicitReturn(((Stmt.If) stmt).falseStmts, returnType);
       return stmt;
     }
 

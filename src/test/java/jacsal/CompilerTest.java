@@ -20,7 +20,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -735,5 +738,47 @@ class CompilerTest {
 
   @Test public void varDecl() {
     testFail("def x = x + 1", "variable initialisation cannot refer to itself");
+  }
+
+  // TODO: not yet supported
+  public void exprStrings() {
+    test("\"${\"${1}\"}\"", "1");
+    test("\"${}\"", "null");
+    test("\"'a'\"", "'a'");
+    test("\"${1 + 2}\"", "3");
+    test("\"x${1 + 2}y\"", "x3y");
+    test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
+    test("\"x${\"1\" + 2}y\"", "x12y");
+    test("\"x${\"${2*4}\" + 2}y\"", "x82y");
+    test("boolean x; \"$x${\"${2*4}\" + 2}y\"", "false82y");
+    test("boolean x; boolean y = true; \"$x${\"${\"$x\"*4}\" + 2}$y\"", "falsefalsefalsefalsefalse2true");
+  }
+
+  @Test public void listLiterals() {
+    test("[]", new ArrayList<>());
+    test("[1]", List.of(1));
+    testFail("[1,", "unexpected EOF");
+    test("[1,2,3]", List.of(1,2,3));
+    test("[1,2+3,3]", List.of(1,5,3));
+    test("[[]]", List.of(new ArrayList()));
+    test("[[1]]", List.of(List.of(1)));
+    test("[[1],2]", List.of(List.of(1),2));
+  }
+
+  @Test public void mapLiterals() {
+    test("[:]", new HashMap<>());
+    test("[a:1]", Map.of("a",1));
+    testFail("[:", "unexpected token");
+    test("[for:1]", Map.of("for",1));
+    test("['for':1]", Map.of("for",1));
+    test("[a:1,b:2]", Map.of("a",1, "b", 2));
+    test("[a:1,b:[c:2]]", Map.of("a",1, "b", Map.of("c",2)));
+    test("{:}", new HashMap<>());
+    test("{a:1}", Map.of("a",1));
+    testFail("{:", "unexpected token");
+    test("{for:1}", Map.of("for",1));
+    test("{'for':1}", Map.of("for",1));
+    test("{a:1,b:2}", Map.of("a",1, "b", 2));
+    test("{a:1,b:{c:2}}", Map.of("a",1, "b", Map.of("c",2)));
   }
 }

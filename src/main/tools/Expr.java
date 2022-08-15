@@ -72,6 +72,16 @@ class Expr {
     Token value;
   }
 
+  class ListLiteral extends Expr {
+    Token start;
+    List<Expr> @exprs = new ArrayList<>();
+  }
+
+  class MapLiteral extends Expr {
+    Token start;
+    List<Pair<Expr,Expr>> @entries = new ArrayList<>();
+  }
+
   class Identifier extends Expr {
     Token        identifier;
     Expr.VarDecl @varDecl;
