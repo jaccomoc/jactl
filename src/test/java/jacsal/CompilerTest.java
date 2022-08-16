@@ -752,15 +752,18 @@ class CompilerTest {
     test("\"x${\"${2*4}\" + 2}y\"", "x82y");
     test("boolean x; \"$x${\"${2*4}\" + 2}y\"", "false82y");
     test("boolean x; boolean y = true; \"$x${\"${\"$x\"*4}\" + 2}$y\"", "falsefalsefalsefalsefalse2true");
+    test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
+    test("def x = 3;\"x = ${x}\"", "x = 3");
+    test("def x = 3;\"x = $x\"", "x = 3");
   }
 
   @Test public void listLiterals() {
-    test("[]", new ArrayList<>());
+    test("[]", List.of());
     test("[1]", List.of(1));
     testFail("[1,", "unexpected EOF");
     test("[1,2,3]", List.of(1,2,3));
     test("[1,2+3,3]", List.of(1,5,3));
-    test("[[]]", List.of(new ArrayList()));
+    test("[[]]", List.of(List.of()));
     test("[[1]]", List.of(List.of(1)));
     test("[[1],2]", List.of(List.of(1),2));
   }

@@ -441,7 +441,8 @@ public class Parser {
   /////////////////////////////////////////////////
 
   private boolean isMapLiteral() {
-    // Could be map in JSON style or could be closure
+    // Check for start of a Map literal. We need to lookahead to know the difference between
+    // a Map literal using '{' and '}' and a statement block or a closure.
     return lookahead(() -> matchAny(LEFT_SQUARE, LEFT_BRACE), () -> matchAny(COLON)) ||
            lookahead(() -> matchAny(LEFT_SQUARE, LEFT_BRACE), () -> mapKey() != null, () -> matchAny(COLON));
   }
@@ -496,23 +497,36 @@ public class Parser {
   }
 
   /**
-   * Provide lookahead by remembering current token and state then checking for series
-   * productions (lambdas returning true). If lookahead succeeds we return true. If
-   * we get an error (due to any of the productions failing) we return false.
-   * Either way we rewind to point where we were at and restore our state.
-   * @param productions  array of lambdas returning true/false
+   * Provide lookahead by remembering current token and state then checking that the list
+   * of lambdas all return true. Each lambda should check for a token or invoke one of the
+   * productions to partially parse some syntax. If the token is found or production succeeds
+   * in parsing then the lambda should return true. If the lamdba returns false or throws a
+   * CompileError then it is deemed to have failed and lookahead stops at that point.
+   * If all lambdas succeed then the lookahead succeeds and we return true. If we get an
+   * error (exception) or if any of the lamdbas returns false then we return false to
+   * indicate that the lookahead has failed.
+   * Either way, we rewind to the point where we were at and restore our state.
+   * Example usage:
+   *   // Check for beginning of a map literal
+   *   if (lookahead(() -> matchAny(LEFT_SQUARE),
+   *                 () -> mapKey() != null,
+   *                 () -> matchAny(COLON)) {
+   *     ...
+   *   }
+   * @param lambdas  array of lambdas returning true/false
    */
   @SafeVarargs
-  private boolean lookahead(Supplier<Boolean>... productions) {
+  private boolean lookahead(Supplier<Boolean>... lambdas) {
+    // Remember current state
     Token current = peek();
     List<CompileError>  currentErrors    = new ArrayList<>(errors);
     Deque<Stmt.Block>   currentBlocks    = new ArrayDeque<>(blockStack);
     Deque<Stmt.FunDecl> currentFunctions = new ArrayDeque<>(functions);
 
     try {
-      for (Supplier<Boolean> production: productions) {
+      for (Supplier<Boolean> lamdba: lambdas) {
         try {
-          if (!production.get()) {
+          if (!lamdba.get()) {
             return false;
           }
         }
@@ -523,10 +537,11 @@ public class Parser {
       return true;
     }
     finally {
+      // Restore state
       tokeniser.rewind(current);
-      errors = currentErrors;
+      errors     = currentErrors;
       blockStack = currentBlocks;
-      functions = currentFunctions;
+      functions  = currentFunctions;
     }
   }
 
