@@ -17,7 +17,6 @@
 package jacsal.runtime;
 
 import jacsal.JacsalError;
-import jacsal.Token;
 
 public class RuntimeError extends JacsalError {
 
@@ -31,7 +30,7 @@ public class RuntimeError extends JacsalError {
     super(error, location, captureStackTrace);
   }
 
-  public RuntimeError(String error, String source, int offset, boolean captureStackTrace) {
-    super(error, new Location(source,offset), captureStackTrace);
+  public RuntimeError(String error, String source, int offset) {
+    super(error, new Location(source,offset), false);
   }
 }

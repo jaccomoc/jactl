@@ -65,6 +65,8 @@ class TokeniserTest {
     doTest.accept("<=", LESS_THAN_EQUAL);
     doTest.accept(">=", GREATER_THAN_EQUAL);
     doTest.accept("?:", QUESTION_COLON);
+    doTest.accept("?.", QUESTION_DOT);
+    doTest.accept("?[", QUESTION_SQUARE);
     doTest.accept("&&", AMPERSAND_AMPERSAND);
     doTest.accept("||", PIPE_PIPE);
     doTest.accept("-=", MINUS_EQUAL);
@@ -106,6 +108,8 @@ class TokeniserTest {
     doTest.accept("double", DOUBLE);
     doTest.accept("Decimal", DECIMAL);
     doTest.accept("String", STRING);
+    doTest.accept("Map", MAP);
+    doTest.accept("List", LIST);
     doTest.accept("void", VOID);
     doTest.accept("for", FOR);
     doTest.accept("if", IF);

@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import jacsal.runtime.Location;
 import jacsal.runtime.RuntimeUtils;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -34,7 +35,9 @@ import static jacsal.JacsalType.BOOLEAN;
 import static jacsal.JacsalType.DECIMAL;
 import static jacsal.JacsalType.DOUBLE;
 import static jacsal.JacsalType.INT;
+import static jacsal.JacsalType.LIST;
 import static jacsal.JacsalType.LONG;
+import static jacsal.JacsalType.MAP;
 import static jacsal.JacsalType.STRING;
 import static jacsal.TokenType.*;
 import static org.objectweb.asm.Opcodes.*;
@@ -81,9 +84,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   void compile() {
     compile(funDecl.block);
 
-    if (stack.size() > 0) {
-      throw new IllegalStateException("Internal error: non-empty stack at end of method. Type stack = " + stack);
-    }
+    check(stack.isEmpty(), "non-empty stack at end of method. Type stack = " + stack);
 
     if (classCompiler.debug()) {
       mv.visitEnd();
@@ -143,7 +144,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     compile(stmt.expr);
-    convertTo(stmt.type);
+    convertTo(stmt.type, stmt.expr.location);
     pop();
     switch (stmt.type.getType()) {
       case BOOLEAN:
@@ -222,7 +223,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (expr.initialiser != null) {
       compile(expr.initialiser);
-      convertTo(expr.type);
+      convertTo(expr.type, expr.initialiser.location);
     }
     else {
       loadConst(defaultValue(expr.type));
@@ -240,7 +241,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitVarAssign(Expr.VarAssign expr) {
     compile(expr.expr);
-    convertTo(expr.type);
+    convertTo(expr.type, expr.expr.location);
     if (expr.isResultUsed) {
       dupVal();
     }
@@ -248,9 +249,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private static TokenType[] numericOperators = new TokenType[] { PLUS, MINUS, STAR, SLASH, PERCENT };
+
   @Override public Void visitBinary(Expr.Binary expr) {
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
-    if (expr.left.type.is(ANY) || expr.right.type.is(ANY)) {
+    if (expr.operator.is(numericOperators) && expr.left.type.is(ANY) || expr.right.type.is(ANY)) {
       compile(expr.left);
       box();
       compile(expr.right);
@@ -260,7 +263,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
       invokeStatic(RuntimeUtils.class, "binaryOp", Object.class, Object.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
-      convertTo(expr.type);  // Convert to expected type
+      convertTo(expr.type, expr.operator);  // Convert to expected type
       return null;
     }
 
@@ -288,9 +291,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Everything else
     compile(expr.left);
-    convertTo(expr.type);
+    convertTo(expr.type, expr.left.location);
     compile(expr.right);
-    convertTo(expr.type);
+    convertTo(expr.type, expr.right.location);
+
+    // Check for Map/List field access
+    if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
+      box();                        // Field name/index passed as Object
+      loadConst(expr.operator.getStringValue());
+      loadConst(classCompiler.source);
+      loadConst(expr.operator.getOffset());
+      invokeStatic(RuntimeUtils.class, "getField", Object.class, Object.class, String.class, String.class, Integer.TYPE);
+      return null;
+    }
 
     List<Object> opCodes = opCodesByOperator.get(expr.operator.getType());
     if (opCodes == null) {
@@ -375,8 +388,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     push(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
-      compile(entry.x);
-      convertTo(STRING);
+      Expr key = entry.x;
+      compile(key);
+      convertTo(STRING, key.location);
       compile(entry.y);
       box();
       invokeInterface(Map.class, "put", Object.class, Object.class);
@@ -397,8 +411,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     for (int i = 0; i < expr.exprList.size(); i++) {
       mv.visitInsn(DUP);
       _loadConst(i);
-      compile(expr.exprList.get(i));
-      convertTo(STRING);
+      Expr subExpr = expr.exprList.get(i);
+      compile(subExpr);
+      convertTo(STRING, subExpr.location);
       mv.visitInsn(AASTORE);
       pop();
     }
@@ -693,7 +708,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Conversions
 
-  private Void convertTo(JacsalType type) {
+  private Void convertTo(JacsalType type, Location location) {
     switch (type.getType()) {
       case BOOLEAN: return convertToBoolean();
       case INT:     return convertToInt();
@@ -701,6 +716,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DOUBLE:  return convertToDouble();
       case DECIMAL: return convertToDecimal();
       case STRING:  return convertToString();
+      case MAP:     return convertToMap(location);
+      case LIST:    return convertToList(location);
       case ANY:     return convertToAny();
       default:      throw new IllegalStateException("Unknown type " + type);
     }
@@ -835,6 +852,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private Void convertToMap(Location location) {
+    if (peek().is(MAP)) { return null; }
+    if (peek().is(ANY)) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "castToMap", Object.class, String.class, Integer.TYPE);
+      return null;
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + peek());
+  }
+
+  private Void convertToList(Location location) {
+    if (peek().is(LIST)) { return null; }
+    if (peek().is(ANY)) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
+      return null;
+    }
+    return null;
+  }
+
   private Void convertToAny() {
     box();
     return null;
@@ -926,7 +965,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         incOrDecValue(isInc, location);
-        convertTo(expr.type);
+        convertTo(expr.type, location);
         if (!isResultUsed) {
           popVal();
         }
@@ -989,6 +1028,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (boxedClass != null) {
       mv.visitTypeInsn(CHECKCAST, boxedClass);
     }
+  }
+
+  private void throwIfNull(String msg, Location location) {
+    _dupVal();
+    Label isNotNull = new Label();
+    mv.visitJumpInsn(IFNONNULL, isNotNull);
+    _popVal();
+    mv.visitTypeInsn(NEW, "jacsal/runtime/NullError");
+    mv.visitInsn(DUP);
+    _loadConst(msg);
+    _loadConst(location.getSource());
+    _loadConst(location.getOffset());
+    mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/NullError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+    mv.visitLabel(isNotNull);
   }
 
   //////////////////////////////////////////////////////
@@ -1065,9 +1119,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param type JacsalType
    */
   private void defineVar(int slot, JacsalType type) {
-    if (locals.get(slot) != null) {
-      throw new IllegalStateException("Internal error: local var slot (idx=" + slot + ") already allocated (type=" + locals.get(slot) + ")");
-    }
+    check(locals.get(slot) == null, "local var slot (idx=" + slot + ") already allocated (type=" + locals.get(slot) + ")");
     locals.set(slot, type);
     if (type.is(LONG,DOUBLE)) {
       locals.set(slot + 1, ANY);  // Use ANY to mark slot as used
@@ -1142,7 +1194,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadGlobals() {
     mv.visitVarInsn(ALOAD, 0);
     mv.visitFieldInsn(GETFIELD, classCompiler.internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
-    push(JacsalType.MAP);
+    push(MAP);
   }
 
   private void loadVar(Expr.VarDecl varDecl) {
@@ -1194,6 +1246,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       case DECIMAL:
       case STRING:
+      case MAP:
+      case LIST:
       case ANY:
         mv.visitVarInsn(ASTORE, slot);
         break;
@@ -1219,6 +1273,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       case DECIMAL:
       case STRING:
+      case MAP:
+      case LIST:
       case ANY:
         mv.visitVarInsn(ALOAD, slot);
         break;
@@ -1234,6 +1290,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void ntimes(int count, Runnable runnable) {
     for (int i = 0; i < count; i++) {
       runnable.run();
+    }
+  }
+
+  private void check(boolean condition, String msg) {
+    if (!condition) {
+      throw new IllegalStateException("Internal error: " + msg);
     }
   }
 }

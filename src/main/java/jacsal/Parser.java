@@ -142,7 +142,7 @@ public class Parser {
    *#              | statement;
    */
   private Stmt declaration() {
-    if (matchAny(VAR, DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING)) {
+    if (matchAny(VAR, DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST)) {
       return varDecl();
     }
     if (matchAny(SEMICOLON)) {
@@ -173,7 +173,8 @@ public class Parser {
   }
 
   /**
-   *# varDecl -> ("var" | "boolean" | "int" | "long" | "double" | "Decimal" | "String" ) IDENTIFIER ( "=" expression ) ? ;
+   *# varDecl -> ("var" | "boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List" )
+   *#                      IDENTIFIER ( "=" expression ) ? ;
    */
   private Stmt.VarDecl varDecl() {
     Token typeToken   = previous();
@@ -254,9 +255,10 @@ public class Parser {
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
 */
       List.of(MINUS, PLUS),
-      List.of(STAR, SLASH, PERCENT)
+      List.of(STAR, SLASH, PERCENT),
       //      List.of(STAR_STAR)
       //      List.of(GRAVE, BANG, MINUS_MINUS, PLUS_PLUS),
+      List.of(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)
     );
 
   /**
@@ -287,7 +289,17 @@ public class Parser {
         expr = new Expr.VarAssign((Expr.Identifier) expr, operator, parseExpression(level + 1));
       }
       else {
-        expr = new Expr.Binary(expr, operator, parseExpression(level + 1));
+        Expr rhs = parseExpression(level + 1);
+        // Check for '.' and '?.' where we treat identifiers as literals for field access.
+        // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
+        if (operator.is(DOT,QUESTION_DOT) && rhs instanceof Expr.Identifier) {
+          rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
+        }
+        expr = new Expr.Binary(expr, operator, rhs);
+      }
+      // Check for closing ']' if required
+      if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
+        expect(RIGHT_SQUARE);
       }
     }
 
@@ -314,8 +326,7 @@ public class Parser {
 
   /**
    *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
-   *#          | IDENTIFIER
-   *#          | lisOrMaptLiteral
+   *#          | lisOrMapLiteral
    *#          | exprString
    *#          | "(" expression ")"
    *#          ;
@@ -326,14 +337,14 @@ public class Parser {
       return new Expr.Literal(previous());
     }
 
-    if (peek().is(EXPR_STRING_START)) { return exprString(); }
-    if (matchAny(IDENTIFIER))         { return new Expr.Identifier(previous()); }
+    if (peek().is(EXPR_STRING_START))             { return exprString(); }
+    if (matchAny(IDENTIFIER) || matchKeyword())   { return new Expr.Identifier(previous()); }
     if (peek().is(LEFT_SQUARE,LEFT_BRACE)) {
       if (isMapLiteral()) {
         return mapLiteral();
       }
     }
-    if (matchAny(LEFT_SQUARE))        { return listLiteral(); }
+    if (matchAny(LEFT_SQUARE))                    { return listLiteral(); }
 
     if (matchAny(LEFT_PAREN)) {
       Expr nested = expression();
@@ -392,13 +403,26 @@ public class Parser {
   }
 
   /**
-   *# mapKey -> STRING_CONST | IDENTIFIER | exprString | keyWord ;
+   *# mapKey -> STRING_CONST | IDENTIFIER | "(" expression() + ")" | exprString | keyWord ;
    */
   private Expr mapKey() {
     if (matchAny(STRING_CONST,IDENTIFIER)) { return new Expr.Literal(previous()); }
     if (peek().is(EXPR_STRING_START))      { return exprString(); }
     if (peek().isKeyword())                { advance(); return new Expr.Literal(previous()); }
+    if (matchAny(LEFT_PAREN)) {
+      Expr expr = expression();
+      expect(RIGHT_PAREN);
+      return expr;
+    }
     return null;
+  }
+
+  private Expr expectMapKey() {
+    Expr expr = mapKey();
+    if (expr == null) {
+      unexpected("Expected string or identifier");
+    }
+    return expr;
   }
 
   /**
@@ -492,6 +516,18 @@ public class Parser {
         advance();
         return true;
       }
+    }
+    return false;
+  }
+
+  /**
+   * If next token is a keyword then return true and advance
+   * @return true if next token is a keyword
+   */
+  private boolean matchKeyword() {
+    if (peek().isKeyword()) {
+      advance();
+      return true;
     }
     return false;
   }

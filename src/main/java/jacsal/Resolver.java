@@ -22,6 +22,9 @@ import java.math.BigDecimal;
 import java.util.*;
 
 import static jacsal.JacsalType.*;
+import static jacsal.JacsalType.LIST;
+import static jacsal.JacsalType.MAP;
+import static jacsal.JacsalType.STRING;
 import static jacsal.TokenType.*;
 
 /**
@@ -134,9 +137,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (expr.left.isConst && expr.left.constValue == null) {
       throw new CompileError("Left-hand side of '" + expr.operator.getStringValue() + "' cannot be null", expr.left.location);
     }
+
+    // Field access operators
+    if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
+      // TODO: if we have a concrete type on left-hand side we can work out type of field here
+      //       for the moment all field access returns ANY since we don't know what has been
+      //       stored in a Map or List
+      return expr.type = ANY;
+    }
+
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
-      if (expr.type.is(JacsalType.STRING)) {
+      if (expr.type.is(STRING)) {
         if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for Strings"); }
         if (expr.operator.is(PLUS)) {
           if (expr.left.constValue == null) {
@@ -279,17 +291,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case LONG_CONST:    return expr.type = JacsalType.LONG;
       case DOUBLE_CONST:  return expr.type = JacsalType.DOUBLE;
       case DECIMAL_CONST: return expr.type = JacsalType.DECIMAL;
-      case STRING_CONST:  return expr.type = JacsalType.STRING;
+      case STRING_CONST:  return expr.type = STRING;
       case TRUE:          return expr.type = JacsalType.BOOLEAN;
       case FALSE:         return expr.type = JacsalType.BOOLEAN;
       case NULL:          return expr.type = ANY;
-      case IDENTIFIER:    return expr.type = JacsalType.STRING;
+      case IDENTIFIER:    return expr.type = STRING;
       default:
         // In some circumstances (e.g. map keys) we support literals that are keywords
         if (!expr.value.isKeyword()) {
           throw new IllegalStateException("Internal error: unexpected token for literal - " + expr.value);
         }
-        return expr.type = JacsalType.STRING;
+        return expr.type = STRING;
     }
   }
 
@@ -337,7 +349,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitExprString(Expr.ExprString expr) {
     expr.exprList.forEach(this::resolve);
-    return expr.type = JacsalType.STRING;
+    return expr.type = STRING;
   }
 
   /////////////////////////

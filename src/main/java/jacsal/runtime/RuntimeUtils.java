@@ -20,6 +20,8 @@ import jacsal.TokenType;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
 
 public class RuntimeUtils {
 
@@ -73,7 +75,7 @@ public class RuntimeUtils {
    */
   public static Object binaryOp(Object left, Object right, String operator, int maxScale, String source, int offset) {
     if (left == null) {
-      throw new NullError("Left-hand side of '" + operator + "' cannot be null", source, offset, false);
+      throw new NullError("Left-hand side of '" + operator + "' cannot be null", source, offset);
     }
     if (left instanceof String) {
       if (operator == PLUS) {
@@ -83,7 +85,7 @@ public class RuntimeUtils {
         if (right instanceof Number) {
           return ((String)left).repeat(((Number)right).intValue());
         }
-        throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset, true);
+        throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
     }
 
@@ -91,8 +93,8 @@ public class RuntimeUtils {
     // TBD
 
     // All other operations expect numbers so check we have numbers
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset, true); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset, true); }
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
 
     // Check for bitwise operations since we don't want to unnecessarily convert to double/BigDecimal...
     // TBD
@@ -147,7 +149,7 @@ public class RuntimeUtils {
     if (obj instanceof Double)     { return -(double)obj; }
     if (obj instanceof Long)       { return -(long)obj; }
     if (obj instanceof Integer)    { return -(int)obj; }
-    throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset, true);
+    throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset);
   }
 
   public static Object incNumber(Object obj, String source, int offset) {
@@ -156,7 +158,7 @@ public class RuntimeUtils {
     if (obj instanceof Double)     { return (double)obj + 1; }
     if (obj instanceof Long)       { return (long)obj + 1; }
     if (obj instanceof Integer)    { return (int)obj + 1; }
-    throw new RuntimeError("Type " + className(obj) + " cannot be incremented", source, offset, true);
+    throw new RuntimeError("Type " + className(obj) + " cannot be incremented", source, offset);
   }
 
   public static Object decNumber(Object obj, String source, int offset) {
@@ -165,12 +167,12 @@ public class RuntimeUtils {
     if (obj instanceof Double)     { return (double)obj - 1; }
     if (obj instanceof Long)       { return (long)obj - 1; }
     if (obj instanceof Integer)    { return (int)obj - 1; }
-    throw new RuntimeError("Type " + className(obj) + " cannot be decremented", source, offset, true);
+    throw new RuntimeError("Type " + className(obj) + " cannot be decremented", source, offset);
   }
 
   public static String stringRepeat(String str, int count, String source, int offset) {
     if (count < 0) {
-      throw new RuntimeError("String repeat count must be >= 0", source, offset, true);
+      throw new RuntimeError("String repeat count must be >= 0", source, offset);
     }
     return str.repeat(count);
   }
@@ -202,6 +204,62 @@ public class RuntimeUtils {
     return obj.toString();
   }
 
+  public static Object getField(Object parent, Object field, String operator, String source, int offset) {
+    if (parent == null) {
+      if (operator.charAt(0) == '?') {
+        return null;
+      }
+      throw new NullError("Null value for Map/List during field access", source, offset);
+    }
+
+    if (parent instanceof Map) {
+      if (field == null) {
+        throw new NullError("Null value for field name", source, offset);
+      }
+      String fieldName = field.toString();
+      return ((Map)parent).get(fieldName);
+    }
+
+    if (!(parent instanceof List)) {
+      throw new RuntimeError("Invalid object type (" + className(parent) + "): expected Map/List", source, offset);
+    }
+
+    // Check that we are doing a list operation
+    if (operator.equals(".") || operator.equals("?.")) {
+      throw new RuntimeError("Field access not supported for List object", source, offset);
+    }
+
+    // Must be a List
+    if (!(field instanceof Number)) {
+      throw new RuntimeError("Non-numeric value for index during List access", source, offset);
+    }
+
+    List list = (List)parent;
+    int index = ((Number)field).intValue();
+    if (index < 0) {
+      throw new RuntimeError("Index for List access must be >= 0 (was " + index + ")", source, offset);
+    }
+    if (index > list.size()) {
+      throw new RuntimeError("Index out of bounds error (value " + index + " > list size of " + list.size() + ")", source, offset);
+    }
+
+    return list.get(index);
+  }
+
+  public static Map castToMap(Object obj, String source, int offset) {
+    if (obj instanceof Map) {
+      return (Map)obj;
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
+  }
+
+  public static List castToList(Object obj, String source, int offset) {
+    if (obj instanceof List) {
+      return (List)obj;
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
+  }
+
   //////////////////////////////////////
 
   private static BigDecimal toBigDecimal(Object val) {
@@ -225,7 +283,7 @@ public class RuntimeUtils {
 
   private static void ensureNonNull(Object obj, String source, int offset) {
     if (obj == null) {
-      throw new NullError("Null value encountered where null not allowed", source, offset, false);
+      throw new NullError("Null value encountered where null not allowed", source, offset);
     }
   }
 }

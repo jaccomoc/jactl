@@ -97,6 +97,8 @@ public class JacsalType {
       case DOUBLE:    return DOUBLE;
       case DECIMAL:   return DECIMAL;
       case STRING:    return STRING;
+      case MAP:       return MAP;
+      case LIST:      return LIST;
       default:  throw new IllegalStateException("Internal error: unexpected token " + tokenType);
     }
   }
@@ -315,7 +317,23 @@ public class JacsalType {
     }
   }
 
+  public String typeName() {
+    switch (type) {
+      case BOOLEAN:    return isBoxed() ? "Boolean" : "boolean";
+      case INT:        return isBoxed() ? "Integer" : "int";
+      case LONG:       return isBoxed() ? "Long" : "long";
+      case DOUBLE:     return isBoxed() ? "Double" : "double";
+      case DECIMAL:    return "Decimal";
+      case STRING:     return "String";
+      case MAP:        return "Map";
+      case LIST:       return "List";
+      case INSTANCE:   return "Instance<>";
+      case ANY:        return "def";
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + type);
+  }
+
   @Override public String toString() {
-    return "[" + type + ",boxed=" + boxed + "]";
+    return typeName();
   }
 }

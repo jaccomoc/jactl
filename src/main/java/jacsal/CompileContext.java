@@ -36,6 +36,9 @@ public class CompileContext {
   // at run time.
   final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
 
+  // Whether to dump byte code during compilation
+  boolean debug = false;
+
   public CompileContext() {}
 
   Class<?> loadClass(String name, byte[] bytes) {
@@ -45,6 +48,7 @@ public class CompileContext {
   public CompileContext replMode(boolean mode)            { this.replMode           = mode;  return this; }
   public CompileContext maxScale(int scale)               { this.maxScale           = scale; return this; }
   public CompileContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value; return this; }
+  public CompileContext debug(boolean value)              { this.debug              = value; return this; }
 
   //////////////////////////////////
 

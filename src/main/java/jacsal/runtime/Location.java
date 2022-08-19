@@ -35,6 +35,7 @@ public class Location {
     this.column    = location.column;
   }
 
+  public String  getSource()     { return source; }
   public int     getOffset()     { return offset; }
 
   public int getLineNum() {

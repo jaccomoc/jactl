@@ -772,9 +772,13 @@ class CompilerTest {
     test("[:]", new HashMap<>());
     test("[a:1]", Map.of("a",1));
     testFail("[:", "unexpected token");
+    testFail("[:123]", "unexpected token");
     test("[for:1]", Map.of("for",1));
     test("['for':1]", Map.of("for",1));
     test("[a:1,b:2]", Map.of("a",1, "b", 2));
+    test("['a':1,'b':2]", Map.of("a",1, "b", 2));
+    test("[('a'+'b'):1,b:2]", Map.of("ab",1, "b", 2));
+    test("[\"ab\":1,b:2]", Map.of("ab",1, "b", 2));
     test("[a:1,b:[c:2]]", Map.of("a",1, "b", Map.of("c",2)));
     test("{:}", new HashMap<>());
     test("{a:1}", Map.of("a",1));
@@ -783,5 +787,50 @@ class CompilerTest {
     test("{'for':1}", Map.of("for",1));
     test("{a:1,b:2}", Map.of("a",1, "b", 2));
     test("{a:1,b:{c:2}}", Map.of("a",1, "b", Map.of("c",2)));
+    test("[a:1].a", 1);
+    test("[a:[b:2]].a.b", 2);
+    test("[a:[b:2]]?.a?.b", 2);
+    test("[a:[b:2]]?.a?['b']", 2);
+    test("[a:[b:2]]['a']['b']", 2);
+    test("[a:[b:2]].c", null);
+  }
+
+//  @Test public void notYetImplemented() {
+//    test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
+//  }
+
+  @Test public void listMapVariables() {
+    testFail("Map x = 1", "cannot convert");
+    testFail("List x = 1", "cannot convert");
+    test("Map x = [a:1]; x.a", 1);
+    test("Map x = [a:1]", Map.of("a", 1));
+    test("Map x = [a:1]; 1", 1);
+    testFail("List list = [1]; list.a", "field access not supported");
+    testFail("int x = 1; x.a", "invalid object type (int)");
+    testFail("int x = 1; x[0]", "invalid object type (int)");
+    test("Map map = [:]; map[0]", null);
+    testFail("Map map = [:]; map = 1", "cannot convert from type of right hand side");
+    testFail("List list = []; list = 1", "cannot convert from type of right hand side");
+
+    test("var x = [a:1]; x.a", 1);
+    test("var x = [a:1]", Map.of("a", 1));
+    test("var x = [a:1]; 1", 1);
+    testFail("var list = [1]; list.a", "field access not supported");
+    testFail("var x = 1; x.a", "invalid object type (int)");
+    testFail("var x = 1; x[0]", "invalid object type (int)");
+    test("var map = [:]; map[0]", null);
+    testFail("var map = [:]; map = 1", "cannot convert from type of right hand side");
+    testFail("var list = []; list = 1", "cannot convert from type of right hand side");
+
+    test("def m = [a:1]", Map.of("a",1));
+    test("def m = [1]", List.of(1));
+    test("def m = [a:1]; m.a", 1);
+    test("def m = [a:1]; m.b", null);
+    test("def m = [a:[b:2]]; m.a.b", 2);
+    test("def m = [a:[b:2]]; m?.a?.b", 2);
+    test("def m = [a:[b:2]]; m?['a']?['b']", 2);
+    test("def m = [a:[b:2]]; m?['a'].b", 2);
+    test("def m = [a:[b:2]]; m.a.x?.y", null);
+    testFail("def m = [a:[b:2]]; m.a.x?.y.z", "null value");
   }
 }

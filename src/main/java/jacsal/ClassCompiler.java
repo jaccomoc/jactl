@@ -40,20 +40,19 @@ public class ClassCompiler {
   private final String         pkg;
   private final String         className;
   private final Stmt.Script    script;
-  private       boolean        debug = false;
   private       ClassWriter    cw;
 
   ClassCompiler(String source, CompileContext context, String pkg, String className, Stmt.Script script) {
-    cv = cw = new ClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-    if (debug) {
-      cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
-    }
     this.context   = context;
     this.pkg       = pkg;
     this.className = className;
     internalName   = Utils.JACSAL_PKG + "/" + (pkg == null ? "" : pkg + "/") + className;
     this.script    = script;
     this.source    = source;
+    cv = cw = new ClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    if (debug()) {
+      cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
+    }
   }
 
   ClassCompiler(String source, CompileContext context, Stmt.Script script) {
@@ -113,6 +112,6 @@ public class ClassCompiler {
   }
 
   boolean debug() {
-    return debug;
+    return context.debug;
   }
 }
