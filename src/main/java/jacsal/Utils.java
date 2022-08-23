@@ -26,6 +26,16 @@ public class Utils {
 
   static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
 
+  static Object convertNumberTo(JacsalType type, Object number) {
+    switch (type.getType()) {
+      case INT:     return toInt(number);
+      case LONG:    return toLong(number);
+      case DOUBLE:  return toDouble(number);
+      case DECIMAL: return toDecimal(number);
+      default:      throw new IllegalStateException("Internal error: unexpected type " + type);
+    }
+  }
+
   static boolean toBoolean(Object value) {
     if (value == null) {
       return false;

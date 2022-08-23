@@ -20,6 +20,8 @@ import jacsal.TokenType;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -42,16 +44,38 @@ public class RuntimeUtils {
     }
   }
 
-  public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int maxScale) {
+  public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int maxScale, String source, int offset) {
     BigDecimal result;
     switch (operator) {
       case PLUS:    result = left.add(right);       break;
       case MINUS:   result = left.subtract(right);  break;
       case STAR:    result = left.multiply(right);  break;
-      case PERCENT: result = left.remainder(right); break;
+      case PERCENT:
+        try {
+          result = left.remainder(right);
+        }
+        catch (ArithmeticException e) {
+          if (e.getMessage().startsWith("Division by zero")) {
+            throw new RuntimeError("Divide by zero error", source, offset);
+          }
+          else {
+            throw new RuntimeError("Decimal error: " + e.getMessage(), source, offset);
+          }
+        }
+        break;
       case SLASH:
-        result = left.divide(right, maxScale, RoundingMode.HALF_EVEN);
-        result = result.stripTrailingZeros();
+        try {
+          result = left.divide(right);
+        }
+        catch (ArithmeticException e) {
+          if (e.getMessage().startsWith("Division by zero")) {
+            throw new RuntimeError("Divide by zero error", source, offset);
+          }
+
+          // Result is non-terminating so try again with restricted scale
+          result = left.divide(right, maxScale, RoundingMode.HALF_EVEN);
+          result = result.stripTrailingZeros();
+        }
         break;
       default: throw new IllegalStateException("Internal error: operator " + operator + " not supported for decimals");
     }
@@ -79,7 +103,7 @@ public class RuntimeUtils {
     }
     if (left instanceof String) {
       if (operator == PLUS) {
-        return ((String) left).concat(toString(right));
+        return ((String) left).concat(right == null ? "null" : toString(right));
       }
       if (operator == STAR) {
         if (right instanceof Number) {
@@ -101,7 +125,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -124,8 +148,15 @@ public class RuntimeUtils {
         case PLUS:    return lhs + rhs;
         case MINUS:   return lhs - rhs;
         case STAR:    return lhs * rhs;
-        case SLASH:   return lhs / rhs;
-        case PERCENT: return lhs % rhs;
+
+        case PERCENT:
+        case SLASH:
+          try {
+            return operator == PERCENT ? lhs % rhs : lhs / rhs;
+          }
+          catch (ArithmeticException e) {
+          throw new RuntimeError("Divide by zero", source, offset);
+          }
         default: throw new IllegalStateException("Internal error: unknown operator " + operator);
       }
     }
@@ -137,8 +168,15 @@ public class RuntimeUtils {
       case PLUS:    return lhs + rhs;
       case MINUS:   return lhs - rhs;
       case STAR:    return lhs * rhs;
-      case SLASH:   return lhs / rhs;
-      case PERCENT: return lhs % rhs;
+
+      case PERCENT:
+      case SLASH:
+        try {
+          return operator == PERCENT ?  lhs % rhs : lhs / rhs;
+        }
+        catch (ArithmeticException e) {
+          throw new RuntimeError("Divide by zero", source, offset);
+        }
       default: throw new IllegalStateException("Internal error: unknown operator " + operator);
     }
   }
@@ -199,14 +237,64 @@ public class RuntimeUtils {
 
   public static String toString(Object obj) {
     if (obj == null) {
-      return "null";
+      return null;
     }
     return obj.toString();
   }
 
-  public static Object getField(Object parent, Object field, String operator, String source, int offset) {
+  /**
+   * Load field from map/list or return default value if field does not exist
+   * @param parent        parent (map or list)
+   * @param field         field (field name or list index)
+   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param isOptional    true if access type is '?.' or '?['
+   * @param defaultValue  default value to return if field does not exist
+   * @param source        source code
+   * @param offset        offset into source for operation
+   * @return the field value or the default value
+   */
+  public static Object loadFieldOrDefault(Object parent, Object field, boolean isDot, boolean isOptional, Object defaultValue, String source, int offset) {
+    Object value = loadField(parent, field, isDot, isOptional, source, offset);
+    if (value == null) {
+      return defaultValue;
+    }
+    return value;
+  }
+
+  /**
+   * Load field from map/list (return null if field or index does not exist)
+   * @param parent        parent (map or list)
+   * @param field         field (field name or list index)
+   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param isOptional    true if access type is '?.' or '?['
+   * @param source        source code
+   * @param offset        offset into source for operation
+   * @return the field value or null
+   */
+  public static Object loadField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
+    return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, false, false);
+  }
+
+  /**
+   * Load field from map/list (return null if field or index does not exist)
+   * @param parent        parent (map or list)
+   * @param field         field (field name or list index)
+   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param isOptional    true if access type is '?.' or '?['
+   * @param isMap         if creating missing field we create a Map if true or a List if false
+   * @param source        source code
+   * @param offset        offset into source for operation
+   * @return the field value or null
+   */
+  public static Object loadOrCreateField(Object parent, Object field, boolean isDot, boolean isOptional,
+                                         boolean isMap, String source, int offset) {
+    return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, true, isMap);
+  }
+
+  private static Object doLoadOrCreateField(Object parent, Object field, boolean isDot, boolean isOptional,
+                                            String source, int offset, boolean createIfMissing, boolean isMap) {
     if (parent == null) {
-      if (operator.charAt(0) == '?') {
+      if (isOptional) {
         return null;
       }
       throw new NullError("Null value for Map/List during field access", source, offset);
@@ -217,15 +305,90 @@ public class RuntimeUtils {
         throw new NullError("Null value for field name", source, offset);
       }
       String fieldName = field.toString();
-      return ((Map)parent).get(fieldName);
+      Map    map       = (Map) parent;
+      Object value     = map.get(fieldName);
+      if (createIfMissing && value == null) {
+        value = isMap ? new HashMap<>() : new ArrayList<>();
+        map.put(fieldName, value);
+      }
+      return value;
     }
 
-    if (!(parent instanceof List)) {
-      throw new RuntimeError("Invalid object type (" + className(parent) + "): expected Map/List", source, offset);
+    if (!(parent instanceof List) && !(parent instanceof String)) {
+      throw new RuntimeError("Invalid object type (" + className(parent) + "): expected Map/List" +
+                             (isDot ? "" : " or String"), source, offset);
     }
 
     // Check that we are doing a list operation
-    if (operator.equals(".") || operator.equals("?.")) {
+    if (isDot) {
+      throw new RuntimeError("Field access not supported for " +
+                             (parent instanceof List ? "List" : "String") +
+                             " object", source, offset);
+    }
+
+    // Must be a List
+    if (!(field instanceof Number)) {
+      throw new RuntimeError("Non-numeric value for indexed access", source, offset);
+    }
+
+    int index = ((Number)field).intValue();
+    if (index < 0) {
+      throw new RuntimeError("Index must be >= 0 (was " + index + ")", source, offset);
+    }
+
+    if (parent instanceof String) {
+      String str = (String)parent;
+      if (index >= str.length()) {
+        throw new RuntimeError("Index (" + index + ") too large for String (length=" + str.length() + ")", source, offset);
+      }
+      return Character.toString(str.charAt(index));
+    }
+
+    List list = (List)parent;
+    Object value = null;
+    if (index < list.size()) {
+      value = list.get(index);
+    }
+
+    if (createIfMissing && value == null) {
+      value = isMap ? new HashMap<>() : new ArrayList<>();
+      for (int i = list.size(); i < index + 1; i++) {
+        list.add(null);
+      }
+      list.set(index, value);
+    }
+    return value;
+  }
+
+  /**
+   * Store value into map/list field
+   * @param parent        parent (map or list)
+   * @param field         field (field name or list index)
+   * @param value         the value to store
+   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param source        source code
+   * @param offset        offset into source for operation
+   */
+  public static void storeField(Object parent, Object field, Object value, boolean isDot, String source, int offset) {
+    if (parent == null) {
+      throw new NullError("Null value for Map/List storing field value", source, offset);
+    }
+
+    if (parent instanceof Map) {
+      if (field == null) {
+        throw new NullError("Null value for field name", source, offset);
+      }
+      String fieldName = field.toString();
+      ((Map)parent).put(fieldName, value);
+      return;
+    }
+
+    if (!(parent instanceof List)) {
+      throw new RuntimeError("Invalid object type (" + className(parent) + ") for storing value: expected Map/List", source, offset);
+    }
+
+    // Check that we are doing a list operation
+    if (isDot) {
       throw new RuntimeError("Field access not supported for List object", source, offset);
     }
 
@@ -239,11 +402,13 @@ public class RuntimeUtils {
     if (index < 0) {
       throw new RuntimeError("Index for List access must be >= 0 (was " + index + ")", source, offset);
     }
-    if (index > list.size()) {
-      throw new RuntimeError("Index out of bounds error (value " + index + " > list size of " + list.size() + ")", source, offset);
+    if (index >= list.size()) {
+      // Grow list to required size
+      for (int i = list.size(); i < index + 1; i++) {
+        list.add(null);
+      }
     }
-
-    return list.get(index);
+    ((List)parent).set(index, value);
   }
 
   public static Map castToMap(Object obj, String source, int offset) {
@@ -258,6 +423,20 @@ public class RuntimeUtils {
       return (List)obj;
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
+  }
+
+  public static Number castToNumber(Object obj, String source, int offset) {
+    if (obj instanceof Number) {
+      return (Number)obj;
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Number", source, offset);
+  }
+
+  public static Number castToDecimal(Object obj, String source, int offset) {
+    if (obj instanceof Number) {
+      return toBigDecimal(obj);
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
   }
 
   //////////////////////////////////////
@@ -278,7 +457,9 @@ public class RuntimeUtils {
     if (obj instanceof Long)       { return "long"; }
     if (obj instanceof Integer)    { return "int"; }
     if (obj instanceof Boolean)    { return "boolean"; }
-    return "def";
+    if (obj instanceof Map)        { return "Map"; }
+    if (obj instanceof List)       { return "List"; }
+    return obj.getClass().getName();
   }
 
   private static void ensureNonNull(Object obj, String source, int offset) {

@@ -99,6 +99,12 @@ public enum TokenType {
     }
   }
 
+  /**
+   * Check if operator is an operator that mutates the value of the variable or field
+   * that it acts on. This is true for assignment and any assignment like operator such
+   * as +=, -=, etc
+   * @return true if operator is an assignment operator
+   */
   boolean isAssignmentLike() {
     return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
                    DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,

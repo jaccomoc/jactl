@@ -237,13 +237,21 @@ public class Parser {
 
   // = Expr
 
-  private static List<List<TokenType>> operatorsByPrecedence =
+  private static TokenType[] fieldAccessOp = new TokenType[] { DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
+
+  private static List<TokenType> unaryOps = List.of(/*GRAVE,*/ BANG, MINUS_MINUS, PLUS_PLUS);
+
+  // Operators from least precedence to highest precedence. Each entry in list is
+  // a pair of a boolean and a list of the operators at that level of precedene.
+  // The boolean indicates whether the operators are left-associative (true) or
+  // right-associative (false).
+  private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
     List.of(
 /*
       List.of(AND, OR), */
-      List.of(EQUAL), /* STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
-              DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
-              PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL),
+      Pair.create(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
+      /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
+         PIPE_EQUAL, ACCENT_EQUAL),
       List.of(QUESTION, QUESTION_COLON),
       List.of(PIPE_PIPE),
       List.of(AMPERSAND_AMPERSAND),
@@ -254,15 +262,17 @@ public class Parser {
       List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF, AS),
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
 */
-      List.of(MINUS, PLUS),
-      List.of(STAR, SLASH, PERCENT),
+      Pair.create(true, List.of(MINUS, PLUS)),
+      Pair.create(true, List.of(STAR, SLASH, PERCENT)),
       //      List.of(STAR_STAR)
-      //      List.of(GRAVE, BANG, MINUS_MINUS, PLUS_PLUS),
-      List.of(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)
+      Pair.create(true, unaryOps),
+      Pair.create(true, List.of(fieldAccessOp))
     );
 
   /**
-   *# expression -> expression operator expression;
+   *# expression -> expression operator expression
+   *#             | unary
+   *#             | primary;
    *
    * Recursively parse expressions base on operator precedence.
    * @return the parsed expression
@@ -271,25 +281,45 @@ public class Parser {
     return parseExpression(0);
   }
 
+  // Parse expressions (mostly binary operations).
+  // We parse based on operator precedence. If we reach highest level of precedence
+  // then we return a primaru().
+  // We check whether current level of precedence corresponds to the unary ops and
+  // return unary() if that is the case.
   private Expr parseExpression(int level) {
+    // If we have reached highest precedence
     if (level == operatorsByPrecedence.size()) {
-      return unary();
+      return primary();
+    }
+
+    // Get list of operators at this level of precedence along with flag
+    // indicating whether they are left-associative or not.
+    var operatorsPair = operatorsByPrecedence.get(level);
+    boolean isLeftAssociative = operatorsPair.x;
+    List<TokenType> operators = operatorsPair.y;
+
+    // If this level of precedence is for our unary operators
+    if (operators == unaryOps) {
+      return unary(level);
     }
 
     var expr = parseExpression(level + 1);
 
-    var operators = operatorsByPrecedence.get(level);
     while (matchAny(operators)) {
       Token operator = previous();
-      // Check for lvalue for assignment operators
-      if (operator.getType().isAssignmentLike()) {
-        if (!(expr instanceof Expr.Identifier)) {
-          throw new CompileError("Need a valid lvalue for assignment", operator);
-        }
-        expr = new Expr.VarAssign((Expr.Identifier) expr, operator, parseExpression(level + 1));
+      Expr rhs;
+      if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
+        // '[' and '?[' can be followed by any expression and then a ']'
+        rhs = expression();
       }
       else {
-        Expr rhs = parseExpression(level + 1);
+        rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
+      }
+      // Check for lvalue for assignment operators
+      if (operator.getType().isAssignmentLike()) {
+        expr = convertToLValue(expr, operator, rhs, false);
+      }
+      else {
         // Check for '.' and '?.' where we treat identifiers as literals for field access.
         // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
         if (operator.is(DOT,QUESTION_DOT) && rhs instanceof Expr.Identifier) {
@@ -308,18 +338,54 @@ public class Parser {
 
   /**
    *# unary -> ( "!" | "--" | "++" | "-" | "+" ) unary ( "--" | "++" )
-   *#        | primary;
+   *#        | expression;
    */
-  private Expr unary() {
+  private Expr unary(int precedenceLevel) {
     Expr expr;
     if (matchAny(BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS)) {
-      expr = new Expr.PrefixUnary(previous(), unary());
+      Token operator = previous();
+      Expr unary = unary(precedenceLevel);
+      if (operator.is(PLUS_PLUS,MINUS_MINUS) &&
+          unary instanceof Expr.Binary &&
+          ((Expr.Binary) unary).operator.is(fieldAccessOp)) {
+        // If we are acting on a field (rather than directly on a variable) then
+        // we might need to create intermediate fields etc so turn the inc/dec
+        // into the equivalent of:
+        //   ++a.b.c ==> a.b.c += 1
+        //   --a.b.c ==> a.b.c -= 1
+        // That way we can use the lvalue mechanism of creating missing fields if
+        // necessary.
+        expr = convertToLValue(unary,
+                               new Token(operator.is(PLUS_PLUS) ? PLUS_EQUAL : MINUS_EQUAL, operator),
+                               new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),
+                               false);
+      }
+      else {
+        expr = new Expr.PrefixUnary(operator, unary);
+      }
     }
     else {
-      expr = primary();
+      expr = parseExpression(precedenceLevel + 1);
     }
     if (matchAny(PLUS_PLUS, MINUS_MINUS)) {
-      expr = new Expr.PostfixUnary(expr, previous());
+      Token operator = previous();
+      if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(fieldAccessOp)) {
+        // If we are acting on a field (rather than directly on a variable) then
+        // we might need to create intermediate fields etc so turn the inc/dec
+        // into the equivalent of:
+        //   a.b.c++ ==> a.b.c += 1
+        //   a.b.c-- ==> a.b.c -= 1
+        // That way we can use the lvalue mechanism of creating missing fields if
+        // necessary.
+        // NOTE: for postfix we need the beforeValue if result is being used.
+        expr = convertToLValue(expr,
+                               new Token(operator.is(PLUS_PLUS) ? PLUS_EQUAL : MINUS_EQUAL, operator),
+                               new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),
+                               true);
+      }
+      else {
+        expr = new Expr.PostfixUnary(expr, previous());
+      }
     }
     return expr;
   }
@@ -704,4 +770,103 @@ public class Parser {
     // Other statements are not supported for implicit return
     throw new CompileError("Unsupported statement type for implicit return", stmt.location);
   }
+
+  /**
+   * Convert an expression that represents some sort of field path into an assignment
+   * expression by converting the expression type into a Expr.FieldAssign component.
+   * Note that when a field path occurs on the left hand side of an assignment-like operator
+   * we mark all parts of the path with createIfMissing so that if the map field or list entry
+   * is not there we automatically create the entry.
+   * The other thing to note is that operators such as '+=', '-=', etc need the value of the
+   * left hand side in order to compute the final value. The rules are that something like
+   *    x += 5
+   * is equivalent to
+   *    x = x + 5
+   * and similarly for all other such operators.
+   * We could, therefore, just mutate our AST to replace the 'x += 5' with the equivalent of
+   * 'x = x + 5' but for situations like 'a.b.c.d += 5' we have a couple of issues:
+   *  1. We would duplicate the work to lookup all of the intermediate fields that result in
+   *     a.b.c.d, and
+   *  2. If a.b.c.d did no yet exist and we want to create it as part of the assigment we need
+   *     to create it with a suitable default value before it can be used on the rhs.
+   * A better solution is to replace our binary expression with something like this:
+   *   new OpAssign(parent = new Binary('a.b.c'),
+   *                accessOperator = '.',
+   *                field = new Expr('d'),
+   *                expr = new Binary(Noop, '+', '5'))
+   * This way we now have a component in our AST that can do all the work of finding the parent
+   * and creating any missing subfields just once and load the original value (or create a default
+   * value) before evaluating the rest of the expression. Finally it can store the result back
+   * into the right field (or element) of the Map/List.
+   */
+  private Expr convertToLValue(Expr variable, Token assignmentOperator, Expr rhs, boolean beforeValue) {
+    // Get the arithmetic operator type for assignments such as +=, -=
+    // If assignment is just = or ?= then arithmeticOp will be null.
+    TokenType arithmeticOp   = arithmeticOperator.get(assignmentOperator.getType());
+
+    // Field path is either a BinaryOp whose last operator is a field access operation
+    // (map or list lookup), or fieldPath is just an identifier for a simple variable.
+    if (variable instanceof Expr.Identifier) {
+      if (arithmeticOp == null) {
+        return new Expr.VarAssign((Expr.Identifier) variable, assignmentOperator, rhs);
+      }
+      return new Expr.VarOpAssign((Expr.Identifier) variable, assignmentOperator,
+                                  new Expr.Binary(new Expr.Noop(assignmentOperator), new Token(arithmeticOp, assignmentOperator), rhs));
+    }
+
+    if (!(variable instanceof Expr.Binary)) {
+      throw new CompileError("Left hand side of assignment is not a valid lvalue", assignmentOperator);
+    }
+
+    Expr.Binary fieldPath = (Expr.Binary)variable;
+
+    // Make sure lhs is a valid lvalue
+    if (!fieldPath.operator.is(fieldAccessOp)) {
+      throw new CompileError("Cannot assign to value on left-hand side (invalid lvalue)", assignmentOperator);
+    }
+
+    Expr parent = fieldPath.left;
+
+    // Now set createIfMissing flag on all field access operations (but only those at the "top" level)
+    // and only up to the last field. So a.b.c only has the a.b lookup changed to set "createIfMissing".
+    setCreateIfMissing(parent);
+
+    Token     accessOperator = fieldPath.operator;
+    Expr      field          = fieldPath.right;
+
+    // If arithmeticOp is null it means we have a simple = or ?=
+    if (arithmeticOp == null) {
+      return new Expr.Assign(parent, accessOperator, field, assignmentOperator, rhs);
+    }
+
+    // For all other assignment ops like +=, -=, *= we extract the arithmetic operation
+    // (+, -, *, ...) and create a new Binary expression with null as lhs (since value
+    // will come from the field value) and with the arithmetic op as the operation and
+    // the original rhs as the new rhs of the binary operation
+    Token operator = new Token(arithmeticOp, assignmentOperator);
+    Expr.OpAssign expr = new Expr.OpAssign(parent, accessOperator, field, assignmentOperator,
+                                           new Expr.Binary(new Expr.Noop(operator), operator, rhs));
+
+    // For postfix ++ and -- of fields where we convert to a.b.c += 1 etc we need the pre value
+    // (before the inc/dec) as the result
+    expr.resultIsPreValue = beforeValue;
+    return expr;
+  }
+
+  private void setCreateIfMissing(Expr expr) {
+    if (expr instanceof Expr.Binary) {
+      Expr.Binary binary = (Expr.Binary) expr;
+      if (binary.operator.is(fieldAccessOp)) {
+        binary.createIfMissing = true;
+      }
+      setCreateIfMissing(binary.left);
+    }
+  }
+
+  private static final Map<TokenType,TokenType> arithmeticOperator =
+    Map.of(PLUS_EQUAL,    PLUS,
+           MINUS_EQUAL,   MINUS,
+           STAR_EQUAL,    STAR,
+           SLASH_EQUAL,   SLASH,
+           PERCENT_EQUAL, PERCENT);
 }

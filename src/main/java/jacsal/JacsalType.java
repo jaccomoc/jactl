@@ -238,6 +238,9 @@ public class JacsalType {
     if (operator.is(STAR) && type1.is(STRING) && type2.is(INT,BOXED_INT,LONG,BOXED_LONG,ANY)) {
       return STRING;
     }
+    if (operator.is(LEFT_SQUARE,QUESTION_SQUARE) && type1.is(STRING)) {
+      return STRING;
+    }
     if (operator.is(EQUAL)) {
       if (!type2.isConvertibleTo(type1)) {
         throw new CompileError("Right hand operand of type " + type2 + " cannot be converted to " + type1, operator);
@@ -271,7 +274,7 @@ public class JacsalType {
    */
   public boolean isConvertibleTo(JacsalType type) {
     if (isBoxedOrUnboxed(type))                                                { return true; }
-    if (type.is(ANY))                                                          { return true; }
+    if (is(ANY) || type.is(ANY))                                               { return true; }
     if (isBoxedOrUnboxed(INT) && type.isBoxedOrUnboxed(LONG, DOUBLE, DECIMAL)) { return true; }
     if (isBoxedOrUnboxed(LONG) && type.isBoxedOrUnboxed(DOUBLE, DECIMAL))      { return true; }
     if (isBoxedOrUnboxed(DOUBLE, DECIMAL) && type.isNumeric())                 { return true; }

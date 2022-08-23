@@ -80,7 +80,8 @@ while (<FH>) {
     push @fieldsAndAttrs, map { $_->[0] } @constructorFields;
     push @fieldsAndAttrs, @attributes;
     my $fieldValues = join(" + \", \" + ", map { "\"$_=\" + $_" } @fieldsAndAttrs);
-    print "    \@Override public String toString() { return \"$className" . "[\" + " . $fieldValues. " + \"]\"; }\n";
+    $fieldValues .= ' + ' if $fieldValues;
+    print "    \@Override public String toString() { return \"$className" . "[\" + " . $fieldValues . "\"]\"; }\n";
     # Remember fields in case another class extends us
     my @a = map { $_ } @fields;
     $baseClasses{$className} = \@a;

@@ -75,6 +75,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
     functions.push(stmt);
     stmt.slotIdx = 2;
+    stmt.maxSlot = 2;
     try {
       return resolve(stmt.block);
     }
@@ -133,6 +134,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitBinary(Expr.Binary expr) {
     resolve(expr.left);
     resolve(expr.right);
+
     expr.isConst = expr.left.isConst && expr.right.isConst;
     if (expr.left.isConst && expr.left.constValue == null) {
       throw new CompileError("Left-hand side of '" + expr.operator.getStringValue() + "' cannot be null", expr.left.location);
@@ -140,10 +142,31 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // Field access operators
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
-      // TODO: if we have a concrete type on left-hand side we can work out type of field here
-      //       for the moment all field access returns ANY since we don't know what has been
-      //       stored in a Map or List
-      return expr.type = ANY;
+      expr.isConst = false;
+      if (!expr.left.type.is(ANY)) {
+        // Do some level of validation
+        if (expr.operator.is(DOT,QUESTION_DOT) && !expr.left.type.is(MAP)) {
+          throw new CompileError("Invalid object type (" + expr.left.type + ") for field access", expr.operator);
+        }
+        // '[' and '?['
+        if (!expr.left.type.is(MAP,LIST,STRING)) {
+          throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
+        }
+
+        // TODO: if we have a concrete type on left-hand side we can work out type of field here
+        //       for the moment all field access returns ANY since we don't know what has been
+        //       stored in a Map or List
+      }
+
+      expr.type = ANY;
+
+      // Since we now know we are doing a map/list lookup we know what parent type should
+      // be so if parent type was ANY we can change to Map/List. This is used when field
+      // path is an lvalue to create missing fields/elements of the correct type.
+      if (expr.left.type.is(ANY) && expr.createIfMissing) {
+        expr.left.type = expr.operator.is(DOT,QUESTION_DOT) ? MAP : LIST;
+      }
+      return expr.type;
     }
 
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
@@ -179,6 +202,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         case INT: {
           int left  = Utils.toInt(expr.left.constValue);
           int right = Utils.toInt(expr.right.constValue);
+          throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
           switch (expr.operator.getType()) {
             case PLUS:    expr.constValue = left + right; break;
             case MINUS:   expr.constValue = left - right; break;
@@ -192,6 +216,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         case LONG: {
           long left  = Utils.toLong(expr.left.constValue);
           long right = Utils.toLong(expr.right.constValue);
+          throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
           switch (expr.operator.getType()) {
             case PLUS:    expr.constValue = left + right; break;
             case MINUS:   expr.constValue = left - right; break;
@@ -218,7 +243,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         case DECIMAL: {
           BigDecimal left  = Utils.toDecimal(expr.left.constValue);
           BigDecimal right = Utils.toDecimal(expr.right.constValue);
-          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale);
+          throwIf(expr.operator.is(SLASH,PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
+          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale,
+                                                                expr.operator.getSource(), expr.operator.getOffset());
           break;
         }
       }
@@ -344,7 +371,59 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (!expr.expr.type.isConvertibleTo(expr.type)) {
       throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
-    return null;
+    if (expr.operator.is(QUESTION_EQUAL)) {
+      // If using ?= have to allow for null being result when assignment doesn't occur
+      expr.type = expr.type.boxed();
+    }
+    return expr.type;
+  }
+
+  @Override public JacsalType visitVarOpAssign(Expr.VarOpAssign expr) {
+    expr.type = resolve(expr.identifierExpr);
+    Expr.Binary valueExpr = (Expr.Binary) expr.expr;
+
+    // Set the type of the Noop in our binary expression to the variable type and then
+    // resolve the binary expression
+    valueExpr.left.type = expr.identifierExpr.varDecl.type;
+    resolve(valueExpr);
+
+    if (!expr.expr.type.isConvertibleTo(expr.type)) {
+      throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
+    }
+    return expr.type;
+  }
+
+  @Override public JacsalType visitNoop(Expr.Noop expr) {
+    expr.isConst = false;
+    expr.type = ANY;
+    return expr.type;
+  }
+
+  @Override public JacsalType visitAssign(Expr.Assign expr) {
+    return resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
+  }
+
+  @Override public JacsalType visitOpAssign(Expr.OpAssign expr) {
+    Expr.Binary valueExpr = (Expr.Binary) expr.expr;
+
+    resolveFieldAssignment(expr, expr.parent, expr.field, valueExpr, expr.accessType);
+
+    return expr.type;
+  }
+
+  private JacsalType resolveFieldAssignment(Expr expr, Expr parent, Expr field, Expr valueExpr, Token accessType) {
+    resolve(parent);
+    // Adjust type of parent based on type of access being done
+    if (parent instanceof Expr.Binary) {
+      Expr.Binary binaryParent = (Expr.Binary) parent;
+      if (binaryParent.createIfMissing) {
+        binaryParent.type = accessType.is(DOT, QUESTION_DOT) ? MAP : LIST;
+      }
+    }
+    resolve(field);
+    resolve(valueExpr);
+    // Type will be type of expression but boxed if primitive since we are storing in a map/list
+    return expr.type = valueExpr.type.boxed();
   }
 
   @Override public JacsalType visitExprString(Expr.ExprString expr) {
@@ -442,4 +521,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private void throwIf(boolean condition, String msg, Token location) {
+    if (condition) {
+      throw new CompileError(msg, location);
+    }
+  }
 }

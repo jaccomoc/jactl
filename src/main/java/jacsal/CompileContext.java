@@ -24,6 +24,8 @@ public class CompileContext {
   private final DynamicClassLoader classLoader        = new DynamicClassLoader();
 
   boolean evaluateConstExprs = true;
+
+  // TODO: make BigDecimal division work same as for Groovy
   int     maxScale           = 20;
 
   // In repl mode top level vars are stored in the globals map and their type

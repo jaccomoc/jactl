@@ -50,10 +50,16 @@ abstract class Expr {
   // the stack or not.
   boolean isResultUsed = true;
 
+  // Marker interface to indicate whether MethodCompiler visitor for that element type
+  // handles leaving result or not (based on isResultUsed flag) or whether result management
+  // needs to be done for it.
+  interface ManagesResult {}
+
   static class Binary extends Expr {
     Expr  left;
     Token operator;
     Expr  right;
+    boolean createIfMissing = false;  // Used for field access used as lvalues
     Binary(Expr left, Token operator, Expr right) {
       this.left = left;
       this.operator = operator;
@@ -64,7 +70,7 @@ abstract class Expr {
     @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + "]"; }
   }
 
-  static class PrefixUnary extends Expr {
+  static class PrefixUnary extends Expr implements ManagesResult {
     Token operator;
     Expr  expr;
     PrefixUnary(Token operator, Expr expr) {
@@ -76,7 +82,7 @@ abstract class Expr {
     @Override public String toString() { return "PrefixUnary[" + "operator=" + operator + ", " + "expr=" + expr + "]"; }
   }
 
-  static class PostfixUnary extends Expr {
+  static class PostfixUnary extends Expr implements ManagesResult {
     Expr  expr;
     Token operator;
     PostfixUnary(Expr expr, Token operator) {
@@ -147,7 +153,7 @@ abstract class Expr {
    * This is done as an expression in case value of the assignment
    * is returned implicitly from a function/closure.
    */
-  static class VarDecl extends Expr {
+  static class VarDecl extends Expr implements ManagesResult {
     Token      name;
     Expr       initialiser;
     boolean    isGlobal;    // Whether global (bindings var) or local
@@ -165,7 +171,7 @@ abstract class Expr {
   /**
    * When variable used as lvalue in an assignment
    */
-  static class VarAssign extends Expr {
+  static class VarAssign extends Expr implements ManagesResult {
     Identifier identifierExpr;
     Token      operator;
     Expr       expr;
@@ -179,6 +185,85 @@ abstract class Expr {
     @Override public String toString() { return "VarAssign[" + "identifierExpr=" + identifierExpr + ", " + "operator=" + operator + ", " + "expr=" + expr + "]"; }
   }
 
+  /**
+   * When variable used as lvalue in an assignment of type +=, -=, ...
+   */
+  static class VarOpAssign extends Expr implements ManagesResult {
+    Identifier identifierExpr;
+    Token      operator;
+    Expr       expr;
+    VarOpAssign(Identifier identifierExpr, Token operator, Expr expr) {
+      this.identifierExpr = identifierExpr;
+      this.operator = operator;
+      this.expr = expr;
+      this.location = operator;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarOpAssign(this); }
+    @Override public String toString() { return "VarOpAssign[" + "identifierExpr=" + identifierExpr + ", " + "operator=" + operator + ", " + "expr=" + expr + "]"; }
+  }
+
+  /**
+   * Used to represent assignment to a field or list element
+   */
+  static class Assign extends Expr implements ManagesResult {
+    Expr  parent;
+    Token accessType;
+    Expr  field;
+    Token assignmentOperator;
+    Expr  expr;
+    Assign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
+      this.parent = parent;
+      this.accessType = accessType;
+      this.field = field;
+      this.assignmentOperator = assignmentOperator;
+      this.expr = expr;
+      this.location = accessType;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitAssign(this); }
+    @Override public String toString() { return "Assign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + "]"; }
+  }
+
+  /**
+   * Used to represent assignment to a field or list element where assignment is done with
+   * one of the +=, -=, *=, ... operations
+   */
+  static class OpAssign extends Expr implements ManagesResult {
+    Expr  parent;
+    Token accessType;
+    Expr  field;
+    Token assignmentOperator;
+    Expr  expr;
+
+    // true if value before operation should be result - used for post inc/dec of fields
+    // where we covert to a binary += or -= and then need the before value as the result
+    boolean resultIsPreValue;
+    OpAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
+      this.parent = parent;
+      this.accessType = accessType;
+      this.field = field;
+      this.assignmentOperator = assignmentOperator;
+      this.expr = expr;
+      this.location = accessType;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitOpAssign(this); }
+    @Override public String toString() { return "OpAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + "]"; }
+  }
+
+  /**
+   * Marker for when we need an Expr but we already have a value on the stack. This is used
+   * for x += y type expressions which turn into x = _Noop_ + y where _Noop_ is used to mark
+   * the place where the x value will be inserted into the binary expressions.
+   */
+  static class Noop extends Expr {
+    Token operator;
+    Noop(Token operator) {
+      this.operator = operator;
+      this.location = operator;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitNoop(this); }
+    @Override public String toString() { return "Noop[" + "operator=" + operator + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitPrefixUnary(PrefixUnary expr);
@@ -190,5 +275,9 @@ abstract class Expr {
     T visitExprString(ExprString expr);
     T visitVarDecl(VarDecl expr);
     T visitVarAssign(VarAssign expr);
+    T visitVarOpAssign(VarOpAssign expr);
+    T visitAssign(Assign expr);
+    T visitOpAssign(OpAssign expr);
+    T visitNoop(Noop expr);
   }
 }

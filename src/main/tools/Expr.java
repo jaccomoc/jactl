@@ -52,18 +52,24 @@ class Expr {
   // the stack or not.
   boolean isResultUsed = true;
 
+  // Marker interface to indicate whether MethodCompiler visitor for that element type
+  // handles leaving result or not (based on isResultUsed flag) or whether result management
+  // needs to be done for it.
+  interface ManagesResult {}
+
   class Binary extends Expr {
     Expr  left;
     Token operator;
     Expr  right;
+    boolean @createIfMissing = false;  // Used for field access used as lvalues
   }
 
-  class PrefixUnary extends Expr {
+  class PrefixUnary extends Expr implements ManagesResult {
     Token operator;
     Expr  expr;
   }
 
-  class PostfixUnary extends Expr {
+  class PostfixUnary extends Expr implements ManagesResult {
     Expr  expr;
     Token operator;
   }
@@ -97,7 +103,7 @@ class Expr {
    * This is done as an expression in case value of the assignment
    * is returned implicitly from a function/closure.
    */
-  class VarDecl extends Expr {
+  class VarDecl extends Expr implements ManagesResult {
     Token      name;
     Expr       initialiser;
     boolean    @isGlobal;    // Whether global (bindings var) or local
@@ -108,9 +114,54 @@ class Expr {
   /**
    * When variable used as lvalue in an assignment
    */
-  class VarAssign extends Expr {
+  class VarAssign extends Expr implements ManagesResult {
     Identifier identifierExpr;
     Token      operator;
     Expr       expr;
+  }
+
+  /**
+   * When variable used as lvalue in an assignment of type +=, -=, ...
+   */
+  class VarOpAssign extends Expr implements ManagesResult {
+    Identifier identifierExpr;
+    Token      operator;
+    Expr       expr;
+  }
+
+  /**
+   * Used to represent assignment to a field or list element
+   */
+  class Assign extends Expr implements ManagesResult {
+    Expr  parent;
+    Token accessType;
+    Expr  field;
+    Token assignmentOperator;
+    Expr  expr;
+  }
+
+  /**
+   * Used to represent assignment to a field or list element where assignment is done with
+   * one of the +=, -=, *=, ... operations
+   */
+  class OpAssign extends Expr implements ManagesResult {
+    Expr  parent;
+    Token accessType;
+    Expr  field;
+    Token assignmentOperator;
+    Expr  expr;
+
+    // true if value before operation should be result - used for post inc/dec of fields
+    // where we covert to a binary += or -= and then need the before value as the result
+    boolean @resultIsPreValue;
+  }
+
+  /**
+   * Marker for when we need an Expr but we already have a value on the stack. This is used
+   * for x += y type expressions which turn into x = _Noop_ + y where _Noop_ is used to mark
+   * the place where the x value will be inserted into the binary expressions.
+   */
+  class Noop extends Expr {
+    Token operator;
   }
 }

@@ -31,6 +31,6 @@ public class RuntimeError extends JacsalError {
   }
 
   public RuntimeError(String error, String source, int offset) {
-    super(error, new Location(source,offset), false);
+    super(error, new Location(source,offset), true);
   }
 }

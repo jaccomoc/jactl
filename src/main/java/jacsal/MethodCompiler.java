@@ -17,6 +17,7 @@
 package jacsal;
 
 import jacsal.runtime.Location;
+import jacsal.runtime.NullError;
 import jacsal.runtime.RuntimeUtils;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -26,7 +27,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -144,7 +144,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     compile(stmt.expr);
-    convertTo(stmt.type, stmt.expr.location);
+    convertTo(stmt.type, true, stmt.expr.location);
     pop();
     switch (stmt.type.getType()) {
       case BOOLEAN:
@@ -176,6 +176,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // Expr
 
   private Void compile(Expr expr) {
+    if (expr == null) {
+      return null;
+    }
     if (expr.isConst) {
       if (expr.isResultUsed) {
         loadConst(expr.constValue);
@@ -183,7 +186,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    if (expr.location.getLineNum() != currentLineNum) {
+    if (expr.location != null && expr.location.getLineNum() != currentLineNum) {
       currentLineNum = expr.location.getLineNum();
       Label label = new Label();
       mv.visitLabel(label);
@@ -195,8 +198,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
       // special cases since they already check to see whether they should leave something on
       // the stack.
-      if (!(expr instanceof Expr.VarDecl || expr instanceof Expr.VarAssign ||
-            expr instanceof Expr.PrefixUnary || expr instanceof Expr.PostfixUnary)) {
+      if (!(expr instanceof Expr.ManagesResult)) {
         popVal();
       }
     }
@@ -223,10 +225,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (expr.initialiser != null) {
       compile(expr.initialiser);
-      convertTo(expr.type, expr.initialiser.location);
+      convertTo(expr.type, true, expr.initialiser.location);
     }
     else {
-      loadConst(defaultValue(expr.type));
+      loadDefaultValue(expr.type);
     }
 
     // If value of assignment used as implicit return then duplicate value
@@ -240,8 +242,74 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitVarAssign(Expr.VarAssign expr) {
+    boolean isConditionalAssign = expr.operator.is(QUESTION_EQUAL);
+
+    // If doing ?= then if rhs is null or throws a NullError we don't perform
+    // the assignment
+    if (isConditionalAssign) {
+      Label end = new Label();
+      tryCatch(NullError.class,
+               // Try block: get rhs value and if not null assign
+               () -> {
+                 compile(expr.expr);
+                 _dupVal();
+                 // If non null then jump to assignment
+                 Label haveRhsValue = new Label();
+                 mv.visitJumpInsn(IFNONNULL, haveRhsValue);
+                 // Pop null off stack if we don't need a value as a result
+                 if (!expr.isResultUsed) {
+                   _popVal();
+                 }
+                 mv.visitJumpInsn(GOTO, end);
+                 mv.visitLabel(haveRhsValue);    // :haveRhsValue
+                 // If conditional assign then we know by now whether we have a null value or not
+                 // so we don't need to check again when checking for type conversion
+                 convertTo(expr.type, !isConditionalAssign, expr.expr.location);
+                 if (expr.isResultUsed) {
+                   dupVal();
+                 }
+                 storeVar(expr.identifierExpr.varDecl);
+                 if (expr.isResultUsed) {
+                   box();
+                 }
+               },
+
+               // Catch block: if NullError thrown then don't assign and return
+               // null if result needed
+               () -> {
+                 if (expr.isResultUsed) {
+                   // Need a null value if no value from rhs
+                   _loadConst(null);
+                 }
+               });
+      mv.visitLabel(end);
+    }
+    else {
+      // Normal assignment
+      compile(expr.expr);
+      convertTo(expr.type, true, expr.expr.location);
+      if (expr.isResultUsed) {
+        dupVal();
+      }
+      storeVar(expr.identifierExpr.varDecl);
+    }
+
+    return null;
+  }
+
+  @Override public Void visitVarOpAssign(Expr.VarOpAssign expr) {
+    // If we have += or -= with a const value then there are optimisations that are possible
+    // (especially if local variable of type int).
+    if (expr.operator.is(PLUS_EQUAL,MINUS_EQUAL) &&
+        !expr.identifierExpr.varDecl.isGlobal    &&
+        expr.expr.isConst) {
+      incOrDecVar(true, expr.operator.is(PLUS_EQUAL), expr.identifierExpr, expr.expr.constValue, expr.isResultUsed, expr.operator);
+      return null;
+    }
+
+    loadVar(expr.identifierExpr.varDecl);
     compile(expr.expr);
-    convertTo(expr.type, expr.expr.location);
+    convertTo(expr.type, true, expr.expr.location);
     if (expr.isResultUsed) {
       dupVal();
     }
@@ -249,11 +317,120 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private static TokenType[] numericOperators = new TokenType[] { PLUS, MINUS, STAR, SLASH, PERCENT };
+  @Override public Void visitNoop(Expr.Noop expr) {
+    // Nothing to do
+    return null;
+  }
+
+  @Override public Void visitAssign(Expr.Assign expr) {
+    if (expr.assignmentOperator.is(QUESTION_EQUAL)) {
+      Label end = new Label();
+      tryCatch(NullError.class,
+               // Try block:
+               () -> {
+                 compile(expr.expr);
+                 _dupVal();
+                 // If non null then jump to assignment
+                 Label haveRhsValue = new Label();
+                 mv.visitJumpInsn(IFNONNULL, haveRhsValue);
+                 // Pop null off stack if we don't need a value as a result
+                 if (!expr.isResultUsed) {
+                   _popVal();
+                 }
+                 mv.visitJumpInsn(GOTO, end);
+                 mv.visitLabel(haveRhsValue);    // :haveRhsValue
+                 if (expr.isResultUsed) {
+                   dupVal();
+                 }
+                 // If conditional assign then we know by now whether we have a null value or not
+                 // so we don't need to check again when checking for type conversion
+                 convertTo(expr.type, false, expr.expr.location);
+
+                 compile(expr.parent);
+                 swap();
+                 compile(expr.field);
+                 box();
+                 swap();
+                 storeField(expr.accessType);
+               },
+               // Catch block:
+               () -> {
+                 if (expr.isResultUsed) {
+                   // Need a null value if no value from rhs
+                   _loadConst(null);
+                 }
+               });
+      mv.visitLabel(end);
+    }
+    else {
+      compile(expr.expr);
+      convertTo(ANY, true, expr.expr.location);    // Convert to ANY since all map/list entries are ANY
+      if (expr.isResultUsed) {
+        dupVal();
+      }
+      compile(expr.parent);
+      swap();
+      compile(expr.field);
+      box();
+      swap();
+      storeField(expr.accessType);
+    }
+    return null;
+  }
+
+  @Override public Void visitOpAssign(Expr.OpAssign expr) {
+    compile(expr.parent);
+    compile(expr.field);
+    box();
+
+    // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
+    // and field again to get value and to store value so duplicate parent and field on
+    // stack to get:
+    // ... parent, field, parent, field
+    dupVal2();
+
+    Expr.Binary valueExpr = (Expr.Binary) expr.expr;
+
+    // Load the field value onto stack (or suitable default value).
+    // Default value will be based on the type of the rhs of the += or -= etc.
+    loadField(expr.accessType, false, valueExpr.right.type);
+
+    // If we need the before value as the result then stash in a temp for later
+    int temp = -1;
+    if (expr.isResultUsed && expr.resultIsPreValue) {
+      dupVal();
+      temp = allocateTemp(expr.type);
+      storeLocal(temp);
+    }
+
+    // Evaluate expression
+    compile(valueExpr);
+    convertTo(expr.type, true, expr.location);
+
+    // If we need the after result then stash in a temp
+    if (expr.isResultUsed && !expr.resultIsPreValue) {
+      dupVal();
+      temp = allocateTemp(expr.type);
+      storeLocal(temp);
+    }
+
+    // Store result back into field
+    storeField(expr.accessType);
+
+    // Retrieve the required value as result if used
+    if (expr.isResultUsed) {
+      loadLocal(temp);
+      freeTemp(temp);
+    }
+
+    return null;
+  }
+
+  private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT };
 
   @Override public Void visitBinary(Expr.Binary expr) {
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
-    if (expr.operator.is(numericOperators) && expr.left.type.is(ANY) || expr.right.type.is(ANY)) {
+    if (expr.operator.is(numericOperator) && (expr.left.type.is(ANY) || expr.right.type.is(ANY))) {
       compile(expr.left);
       box();
       compile(expr.right);
@@ -263,7 +440,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
       invokeStatic(RuntimeUtils.class, "binaryOp", Object.class, Object.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
-      convertTo(expr.type, expr.operator);  // Convert to expected type
+      convertTo(expr.type, true, expr.operator);  // Convert to expected type
       return null;
     }
 
@@ -282,28 +459,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.left);
       convertToString();
       compile(expr.right);
-      convertToInt();
+      convertToInt(true, expr.right.location);
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
       invokeStatic(RuntimeUtils.class, "stringRepeat", String.class, Integer.TYPE, String.class, Integer.TYPE);
       return null;
     }
 
-    // Everything else
-    compile(expr.left);
-    convertTo(expr.type, expr.left.location);
-    compile(expr.right);
-    convertTo(expr.type, expr.right.location);
-
-    // Check for Map/List field access
+    // Check for Map/List/String access via field/index
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
-      box();                        // Field name/index passed as Object
-      loadConst(expr.operator.getStringValue());
-      loadConst(classCompiler.source);
-      loadConst(expr.operator.getOffset());
-      invokeStatic(RuntimeUtils.class, "getField", Object.class, Object.class, String.class, String.class, Integer.TYPE);
+      compile(expr.left);
+      compile(expr.right);
+      loadField(expr.operator, expr.createIfMissing, expr.type);
       return null;
     }
+
+    // Everything else
+    compile(expr.left);
+    convertTo(expr.type, true, expr.left.location);
+    compile(expr.right);
+    convertTo(expr.type, true, expr.right.location);
 
     List<Object> opCodes = opCodesByOperator.get(expr.operator.getType());
     if (opCodes == null) {
@@ -315,7 +490,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                   expr.type.isBoxedOrUnboxed(LONG) ? longIdx
                                                    : doubleIdx;
       int opCode = (int)opCodes.get(index);
-      mv.visitInsn(opCode);
+      if (expr.operator.is(SLASH,PERCENT) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
+        tryCatch(ArithmeticException.class,
+                 () -> mv.visitInsn(opCode),
+                 () -> throwError("Divide by zero error", expr.operator));
+      }
+      else {
+        mv.visitInsn(opCode);
+      }
       pop(2);
       push(expr.type);
     }
@@ -323,7 +505,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.type.is(DECIMAL)) {
       loadConst(opCodes.get(decimalIdx));
       loadConst(classCompiler.context.maxScale);
-      invokeStatic(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, Integer.TYPE);
+      loadConst(expr.operator.getSource());
+      loadConst(expr.operator.getOffset());
+      invokeStatic(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + expr.type + " for operator " + expr.operator.getType());
@@ -390,7 +574,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       dupVal();
       Expr key = entry.x;
       compile(key);
-      convertTo(STRING, key.location);
+      convertTo(STRING, true, key.location);
       compile(entry.y);
       box();
       invokeInterface(Map.class, "put", Object.class, Object.class);
@@ -413,7 +597,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       _loadConst(i);
       Expr subExpr = expr.exprList.get(i);
       compile(subExpr);
-      convertTo(STRING, subExpr.location);
+      convertTo(STRING, true, subExpr.location);
       mv.visitInsn(AASTORE);
       pop();
     }
@@ -504,6 +688,39 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void _dupVal() {
     mv.visitInsn(peek().is(DOUBLE, LONG) ? DUP2 : DUP);
+  }
+
+  /**
+   * Duplicate top two elemenets on the stack:
+   *   ... x, y ->
+   *   ... x, y, x, y
+   *
+   * Note that we need to take care whether any of the types are long or double
+   * since the JVM operation dup2 only duplicates the top two slots of the stack
+   * rather than the top two values.
+   */
+  private void dupVal2() {
+    JacsalType type1 = pop();
+    JacsalType type2 = pop();
+    if (slotsNeeded(type1) == 1 && slotsNeeded(type2) == 1) {
+      mv.visitInsn(DUP2);
+    }
+    else {
+      int slot1 = allocateTemp(type1);
+      int slot2 = allocateTemp(type2);
+      _storeLocal(slot1);
+      _storeLocal(slot2);
+      _loadLocal(slot2);
+      _loadLocal(slot1);
+      _loadLocal(slot2);
+      _loadLocal(slot1);
+      freeTemp(slot2);
+      freeTemp(slot1);
+    }
+    stack.push(type2);
+    stack.push(type1);
+    stack.push(type2);
+    stack.push(type1);
   }
 
   /**
@@ -691,15 +908,43 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     pop();
   }
 
-  private Object defaultValue(JacsalType type) {
+  private void loadDefaultValue(JacsalType type) {
     switch (type.getType()) {
-      case BOOLEAN:  return Boolean.FALSE;
-      case INT:      return 0;
-      case LONG:     return 0L;
-      case DOUBLE:   return 0D;
-      case DECIMAL:  return BigDecimal.ZERO;
-      case STRING:   return "";
-      case ANY:      return null;
+      case BOOLEAN:  loadConst(Boolean.FALSE);     break;
+      case INT:      loadConst(0);            break;
+      case LONG:     loadConst(0L);           break;
+      case DOUBLE:   loadConst( 0D);          break;
+      case DECIMAL:  loadConst(BigDecimal.ZERO);   break;
+      case STRING:   loadConst("");           break;
+      case ANY:      loadConst(null);         break;
+      case MAP:
+        mv.visitTypeInsn(NEW, "java/util/HashMap");
+        mv.visitInsn(DUP);
+        mv.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+        push(MAP);
+        break;
+      case LIST:
+        mv.visitTypeInsn(NEW, "java/util/ArrayList");
+        mv.visitInsn(DUP);
+        mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "()V", false);
+        push(LIST);
+        break;
+      default:       throw new IllegalStateException("Internal error: unexpected type " + type);
+    }
+  }
+
+  /**
+   * Convert given int to actual type required
+   * @param type   type needed
+   * @param value  int value to turn into type
+   * @return the Object for the value
+   */
+  private Object valueOf(JacsalType type, int value) {
+    switch (type.getType()) {
+      case INT:      return value;
+      case LONG:     return (long)value;
+      case DOUBLE:   return (double)value;
+      case DECIMAL:  return BigDecimal.valueOf(value);
       default:       throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }
@@ -708,13 +953,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Conversions
 
-  private Void convertTo(JacsalType type, Location location) {
+  private Void convertTo(JacsalType type, boolean couldBeNull, Location location) {
     switch (type.getType()) {
       case BOOLEAN: return convertToBoolean();
-      case INT:     return convertToInt();
-      case LONG:    return convertToLong();
-      case DOUBLE:  return convertToDouble();
-      case DECIMAL: return convertToDecimal();
+      case INT:     return convertToInt(couldBeNull, location);
+      case LONG:    return convertToLong(couldBeNull, location);
+      case DOUBLE:  return convertToDouble(couldBeNull, location);
+      case DECIMAL: return convertToDecimal(couldBeNull, location);
       case STRING:  return convertToString();
       case MAP:     return convertToMap(location);
       case LIST:    return convertToList(location);
@@ -777,10 +1022,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToInt() {
+  private Void convertToInt(boolean couldBeNull, Location location) {
+    if (!peek().isPrimitive() && couldBeNull) {
+      throwIfNull("Cannot convert null value to int", location);
+    }
+
+    if (peek().is(ANY)) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
+      invokeVirtual(Number.class, "intValue");
+    }
+    else
     if (peek().isBoxed()) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Number", "intValue", "()I", false);
+      invokeVirtual(Number.class, "intValue");
     }
     else {
       switch (peek().getType()) {
@@ -795,10 +1051,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToLong() {
+  private Void convertToLong(boolean couldBeNull, Location location) {
+    if (!peek().isPrimitive() && couldBeNull) {
+      throwIfNull("Cannot convert null value to long", location);
+    }
+
+    if (peek().is(ANY)) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
+      invokeVirtual(Number.class, "longValue");
+    }
+    else
     if (peek().isBoxed()) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Number", "longValue", "()J", false);
+      invokeVirtual(Number.class, "longValue");
     }
     else {
       switch (peek().getType()) {
@@ -813,10 +1080,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToDouble() {
+  private Void convertToDouble(boolean couldBeNull, Location location) {
+    if (!peek().isPrimitive() && couldBeNull) {
+      throwIfNull("Cannot convert null value to double", location);
+    }
+
+    if (peek().is(ANY)) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
+      invokeVirtual(Number.class, "doubleValue");
+    }
+    else
     if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Number", "doubleValue", "()D", false);
+      invokeVirtual(Number.class, "doubleValue");
     }
     else {
       switch (peek().getType()) {
@@ -831,15 +1109,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToDecimal() {
+  private Void convertToDecimal(boolean couldBeNull, Location location) {
+    if (!peek().isPrimitive() && couldBeNull) {
+      throwIfNull("Cannot convert null value to Decimal", location);
+    }
+
+    if (peek().is(ANY)) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "castToDecimal", Object.class, String.class, Integer.TYPE);
+    }
+    else
     switch (peek().getType()) {
       case INT:
       case LONG:
-        convertToLong();
+        convertToLong(false, location);
         invokeStatic(BigDecimal.class, "valueOf", Long.TYPE);
         break;
       case DOUBLE:
-        convertToDouble();
+        convertToDouble(false, location);
         invokeStatic(BigDecimal.class, "valueOf", Double.TYPE);
         break;
       case DECIMAL:
@@ -905,54 +1193,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void incOrDec(boolean isPrefix, boolean isInc, Expr expr, boolean isResultUsed, Token location) {
     if (expr instanceof Expr.Identifier) {
-      Expr.VarDecl varDecl = ((Expr.Identifier) expr).varDecl;
-      // If postfix and we use the value then load value before doing inc/dec so we leave
-      // old value on the stack
-      if (!isPrefix && isResultUsed) {
-        loadVar(varDecl);
-      }
-
-      // Helper to do the inc/dec based on the type of the value
-      BiConsumer<Object, Runnable> incOrDec = (plusOrMinusOne, runnable) -> {
-        loadVar(varDecl);
-        unbox();
-        loadConst(plusOrMinusOne);
-        runnable.run();
-        storeVar(varDecl);
-      };
-
-      switch (varDecl.type.getType()) {
-        case INT:
-          if (varDecl.type.isBoxed()) {
-            incOrDec.accept(isInc ? 1 : -1, () -> { mv.visitInsn(IADD); pop(); });
-          }
-          else {
-            // Integer vars have special support and can be incremented in place.
-            mv.visitIincInsn(varDecl.slot, isInc ? 1 : -1);
-          }
-          break;
-        case LONG:
-          incOrDec.accept(isInc ? 1L : -1L, () -> { mv.visitInsn(LADD); pop(); });
-          break;
-        case DOUBLE:
-          incOrDec.accept(isInc ? 1D : -1D, () -> { mv.visitInsn(DADD); pop(); });
-          break;
-        case DECIMAL:
-          BigDecimal amt = isInc ? BigDecimal.ONE : DECIMAL_MINUS_1;
-          incOrDec.accept(amt, () -> invokeVirtual(BigDecimal.class, "add", BigDecimal.class));
-          break;
-        case ANY:
-          // When we don't know the type
-          loadVar(varDecl);
-          incOrDecValue(isInc, location);
-          storeVar(varDecl);
-          break;
-        default:
-          throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
-      }
-      if (isPrefix && isResultUsed) {
-        loadVar(varDecl);
-      }
+      incOrDecVar(isPrefix, isInc, (Expr.Identifier)expr, 1, isResultUsed, location);
     }
     else {
       compile(expr);
@@ -960,12 +1201,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (isResultUsed) {
           dupVal();
         }
-        incOrDecValue(isInc, location);
+        incOrDecValue(isInc, 1, location);
         popVal();
       }
       else {
-        incOrDecValue(isInc, location);
-        convertTo(expr.type, location);
+        incOrDecValue(isInc, 1, location);
+        convertTo(expr.type, true, location);
         if (!isResultUsed) {
           popVal();
         }
@@ -974,37 +1215,117 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Increment or decrement by one the current value on the stack. This is used
-   * when the increment/decrement doesn't actually alter a variable (e.g. ++1).
-   * @param isInc    true if doing inc (false for dec)
-   * @param location location of expression we are incrementing or decrementing
+   * Increment or decrement variable by given amount.
+   * Used for --,++ and for += and -= operations
+   * @param isPrefix          whether we are a prefix or postfix -- or ++
+   * @param isInc             whether we are incrementing/adding or decrementing/subtracting
+   * @param identifierExpr    the Expr.Identifier for the local variable
+   * @param amount            the amount to inc/dec or null if amount is already on the stack
+   * @param isResultUsed      whether the result is used after the inc/dec
+   * @param location          location of operation
    */
-  private void incOrDecValue(boolean isInc, Token location) {
-    unbox();
-    switch (peek().getType()) {
+  private void incOrDecVar(boolean isPrefix, boolean isInc, Expr.Identifier identifierExpr, Object amount, boolean isResultUsed, Token location) {
+    Expr.VarDecl varDecl = identifierExpr.varDecl;
+    // If postfix and we use the value then load value before doing inc/dec so we leave
+    // old value on the stack
+    if (!isPrefix && isResultUsed) {
+      loadVar(varDecl);
+    }
+
+    // Helper to do the inc/dec based on the type of the value
+    Consumer<Runnable> incOrDec = (runnable) -> {
+      loadVar(varDecl);
+      unbox();
+
+      // If amount is null then value is already on the stack so swap otherwise
+      // load the inc/dec amount
+      if (amount == null) {
+        swap();
+      }
+      else {
+        loadConst(Utils.convertNumberTo(varDecl.type, amount));
+      }
+
+      runnable.run();
+      storeVar(varDecl);
+    };
+
+    switch (varDecl.type.getType()) {
       case INT:
-        _loadConst(isInc ? 1 : -1);
-        mv.visitInsn(IADD);
+        if (varDecl.type.isBoxed() || amount == null) {
+          incOrDec.accept(() -> { mv.visitInsn(isInc ? IADD : ISUB); pop(); });
+        }
+        else {
+          mv.visitIincInsn(varDecl.slot, isInc ? (int) amount : -(int) amount);
+        }
         break;
       case LONG:
-        _loadConst(isInc ? 1L : -1L);
-        mv.visitInsn(LADD);
+        incOrDec.accept(() -> { mv.visitInsn(isInc ? LADD : LSUB); pop(); });
         break;
       case DOUBLE:
-        _loadConst(isInc ? 1D : -1D);
-        mv.visitInsn(DADD);
+        incOrDec.accept(() -> { mv.visitInsn(isInc ? DADD : DSUB); pop(); });
         break;
       case DECIMAL:
-        loadConst(isInc ? BigDecimal.ONE : DECIMAL_MINUS_1);
-        invokeVirtual(BigDecimal.class, "add", BigDecimal.class);
+        incOrDec.accept(() -> invokeVirtual(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class));
         break;
       case ANY:
-        loadConst(classCompiler.source);
-        loadConst(location.getOffset());
-        invokeStatic(RuntimeUtils.class, isInc ? "incNumber" : "decNumber", Object.class, String.class, Integer.TYPE);
+        // When we don't know the type
+        loadVar(varDecl);
+        if (amount == null) {
+          swap();
+        }
+        incOrDecValue(isInc, amount, location);
+        storeVar(varDecl);
         break;
       default:
-        throw new IllegalStateException("Internal error: unexpected type " + peek());
+        throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
+    }
+    if (isPrefix && isResultUsed) {
+      loadVar(varDecl);
+    }
+  }
+
+  /**
+   * Increment or decrement by given amount the current value on the stack.
+   * If amount is null then amount to inc/dec is also on the stack.
+   * @param isInc    true if doing inc (false for dec)
+   * @param amount   amount to inc/dec or null if value is already on the stack
+   * @param location location of expression we are incrementing or decrementing
+   */
+  private void incOrDecValue(boolean isInc, Object amount, Token location) {
+    unbox();
+    if (peek().is(ANY)) {
+      if (amount != null) {
+        // Special case if amount is 1
+        if (amount instanceof Integer && (int)amount == 1) {
+          loadConst(classCompiler.source);
+          loadConst(location.getOffset());
+          invokeStatic(RuntimeUtils.class, isInc ? "incNumber" : "decNumber", Object.class, String.class, Integer.TYPE);
+          return;
+        }
+
+        loadConst(amount);
+        box();
+      }
+
+      // Invoke binary + or - as needed
+      loadConst(RuntimeUtils.getOperatorType(isInc ? PLUS : MINUS));
+      loadConst(classCompiler.context.maxScale);
+      loadConst(classCompiler.source);
+      loadConst(location.getOffset());
+      invokeStatic(RuntimeUtils.class, "binaryOp", Object.class, Object.class, String.class, String.class, Integer.TYPE);
+      return;
+    }
+
+    if (amount != null) {
+      loadConst(valueOf(peek(), 1));
+    }
+    switch (peek().getType()) {
+      case INT:     mv.visitInsn(isInc ? IADD : ISUB);   pop();                                    break;
+      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);   pop();                                    break;
+      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);   pop();                                    break;
+      case DECIMAL: invokeVirtual(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class); break;
+      default:      throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
   }
 
@@ -1043,6 +1364,33 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/NullError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
     mv.visitLabel(isNotNull);
+  }
+
+  private void throwError(String msg, Location location) {
+    mv.visitTypeInsn(NEW, "jacsal/runtime/RuntimeError");
+    mv.visitInsn(DUP);
+    _loadConst(msg);
+    _loadConst(location.getSource());
+    _loadConst(location.getOffset());
+    mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+  }
+
+  private void tryCatch(Class exceptionClass, Runnable tryBlock, Runnable catchBlock) {
+    Label blockStart = new Label();
+    Label blockEnd   = new Label();
+    Label catchLabel = new Label();
+    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(exceptionClass));
+
+    mv.visitLabel(blockStart);   // :blockStart
+    tryBlock.run();
+    Label after = new Label();
+    mv.visitJumpInsn(GOTO, after);
+    mv.visitLabel(blockEnd);     // :blockEnd
+    mv.visitLabel(catchLabel);   // :catchLabel
+    mv.visitInsn(POP);           // Don't need the exception
+    catchBlock.run();
+    mv.visitLabel(after);
   }
 
   //////////////////////////////////////////////////////
@@ -1254,6 +1602,51 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
+  }
+
+  /**
+   * Load field value from a map or list.
+   * Stack is expected to have: ..., parent, field
+   * Optionally the defaultType (if non-null) will determine the type of default value to return
+   * if the field does not exist.
+   * The createIfMissing flag will create the field if missing of the type specified by defaultType
+   * (which must be MAP or LIST in this case).
+   * @param accessOperator  the type of field access ('.', '?.', '[', '?[')
+   * @param createIfMissing true if we should create the field if it is missing
+   * @param defaultType     if non-null create default value of this type if field does not exist
+   */
+  private void loadField(Token accessOperator, boolean createIfMissing, JacsalType defaultType) {
+    box();                        // Field name/index passed as Object
+    loadConst(accessOperator.is(DOT,QUESTION_DOT));
+    loadConst(accessOperator.is(QUESTION_DOT,QUESTION_SQUARE));
+    if (defaultType != null && !createIfMissing) {
+      loadDefaultValue(defaultType);
+      box();
+      loadConst(accessOperator.getSource());
+      loadConst(accessOperator.getOffset());
+      invokeStatic(RuntimeUtils.class, "loadFieldOrDefault", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, String.class, Integer.TYPE);
+    }
+    else
+    if (createIfMissing) {
+      check(defaultType.is(MAP,LIST), "Type must be MAP/LIST when createIfMissing set");
+      loadConst(defaultType.is(MAP));
+      loadConst(accessOperator.getSource());
+      loadConst(accessOperator.getOffset());
+      invokeStatic(RuntimeUtils.class, "loadOrCreateField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+    }
+    else {
+      loadConst(accessOperator.getSource());
+      loadConst(accessOperator.getOffset());
+      invokeStatic(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+    }
+  }
+
+  private void storeField(Token accessOperator) {
+    box();     // Primitive values need to be boxed to store into heap location
+    loadConst(accessOperator.is(DOT,QUESTION_DOT));
+    loadConst(accessOperator.getSource());
+    loadConst(accessOperator.getOffset());
+    invokeStatic(RuntimeUtils.class, "storeField", Object.class, Object.class, Object.class, Boolean.TYPE, String.class, Integer.TYPE);
   }
 
   private Void loadLocal(int slot) {
