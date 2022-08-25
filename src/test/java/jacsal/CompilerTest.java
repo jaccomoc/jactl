@@ -332,6 +332,12 @@ class CompilerTest {
     test("double x = 1; int y = 3; x += y", 4.0D);
     test("def x = 1.0D; int y = 3; y += x", 4);
     test("def x = 1.0D; int y = 3; x += y", 4.0D);
+    test("def x = [a:2]; x.a += (x.a += 3)", 7);
+    test("Map x = [a:2]; x.a += (x.a += 3)", 7);
+    test("def x = [:]; x.a += (x.a += 3)", 3);
+    test("Map x; x.a += (x.a += 3)", 3);
+    test("def x = [:]; x.a += 'xxx'", "xxx");
+    test("Map x; x.a += 'xxx'", "xxx");
   }
 
   @Test public void minusEquals() {
@@ -402,6 +408,8 @@ class CompilerTest {
     test("double x = 2; int y = 3; x *= y", 6.0D);
     test("def x = 2.0D; int y = 3; y *= x", 6);
     test("def x = 2.0D; int y = 3; x *= y", 6.0D);
+    testFail("def x; x *= 2", "cannot be null");
+    test("def x = [:]; x.a *= 2", 0);
   }
 
   @Test public void slashEquals(){
@@ -827,6 +835,9 @@ class CompilerTest {
     test("def x = 1; (x + x)++", 2);
     test("def x = 1; (x + x)++; x", 1);
     testFail("def x = 1; (x + x)++ ++", "expected end of expression");
+
+    testFail("def x = 'a'; ++x", "cannot be incremented");
+    testFail("def x = [a:'a']; ++x.a", "cannot be incremented");
   }
 
   @Test
@@ -935,6 +946,15 @@ class CompilerTest {
     test("def x = 1; def y = 3; x + --y * ++y++ - 2", 5);
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2", 7);
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2; y", 3);
+
+    testFail("def x = 'a'; x++", "string cannot be incremented");
+    testFail("def x = [a:'a']; x.a++", "string cannot be incremented");
+    testFail("def x = 'a'; x--", "string cannot be decremented");
+    testFail("def x = [a:'a']; x.a--", "string cannot be decremented");
+    testFail("def x = 'a'; ++x", "string cannot be incremented");
+    testFail("def x = [a:'a']; ++x.a", "string cannot be incremented");
+    testFail("def x = 'a'; --x", "string cannot be decremented");
+    testFail("def x = [a:'a']; --x.a", "string cannot be decremented");
   }
 
   @Test
@@ -1111,8 +1131,16 @@ class CompilerTest {
     test("Map m = [a:1]; m.a++; m.a", 2);
     test("Map m = [a:1]; ++m.a", 2);
     test("Map m = [a:1]; ++m.a; m.a", 2);
+    test("Map m = [:]; m.a++", 0);
+    test("Map m = [:]; ++m.a", 1);
+    test("Map m = [:]; m.a++; m.a", 1);
+    test("Map m = [:]; ++m.a; m.a", 1);
     test("Map m = [:]; m.a.b++", 0);
     test("Map m = [:]; ++m.a.b", 1);
+    test("Map m = [:]; m.a.b++; m.a.b", 1);
+    test("Map m = [:]; ++m.a.b; m.a.b", 1);
+    test("Map m = [:]; m.a.b *= 1", 0);
+    test("Map m = [:]; m.a.b *= 1; m.a.b", 0);
 
     test("def m = []; m[0].a.b = 1", 1);
     test("def m = []; m[0].a.b += 1", 1);
@@ -1144,10 +1172,59 @@ class CompilerTest {
     test("Map m; def x; m.a.b.c ?= x.a; m.a", null);
     test("Map m; def x; m.a.b.c ?= x.a; m.a?.b", null);
     test("Map m; def x = [a:3]; m.a.b.c ?= x.a; m.a?.b", Map.of("c",3));
-  }
+    test("Map m; def x = [a:3]; m.a.b ?= 3", 3);
+    test("def x; x ?= 2", 2);
+    test("def x; x ?= 2L", 2L);
+    test("def x; x ?= 2.0D", 2.0D);
+    test("def x; x ?= 2.0", "#2.0");
+    test("def x = [:]; x.a[1].b ?= 2", 2);
+    test("def x = [:]; x.a[1].b ?= 2L", 2L);
+    test("def x = [:]; x.a[1].b ?= 2.0D", 2.0D);
+    test("def x = [:]; x.a[1].b ?= 2.0", "#2.0");
+    test("int x; x ?= 2", 2);
+    test("long x; x ?= 2L", 2L);
+    test("double x; x ?= 2.0D", 2.0D);
+    test("Decimal x; x ?= 2.0", "#2.0");
+    test("def y; int x = 1; x ?= y", null);
+    test("def y; long x = 1; x ?= y", null);
+    test("def y; double x = 1; x ?= y", null);
+    test("def y; Decimal x = 1; x ?= y", null);
+    test("def y; int x = 1; x ?= y; x", 1);
+    test("def y; long x = 1; x ?= y; x", 1L);
+    test("def y; double x = 1; x ?= y; x", 1D);
+    test("def y; Decimal x = 1; x ?= y; x", "#1");
+    test("def y; String x = '1'; x ?= y", null);
+    test("def y; String x = '1'; x ?= y; x", "1");
 
-  @Test public void testStuff() {
-    test("def x; int i; i ?= x.a", null);
+    test("Map m; def x = [a:3]; 1 + (m.a.b ?= 2) + (m.a.c ?= 3)", 6);
+    testFail("Map m; def x = [a:3]; 1 + (m.a.b ?= m.xxx) + (m.a.c ?= 3)", "non-numeric operand");
+    test("def x = [:]; def y; 1 + (x.a.b ?= 2) + (x.a.c ?= 3)", 6);
+    test("def x = [a:3]; def y; y ?= x.z", null);
+    test("def x = [a:3]; def y; y ?= x.a", 3);
+    test("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.a)", 6);
+    testFail("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.xxx)", "non-numeric operand");
+    testFail("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "cannot be null");
+    test("def x = [a:3]; def y; (y ?= x.a) + (x.b.b[2].c ?= 3)", 6);
+    testFail("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "cannot be null");
+    test("Map m; def x = [a:3]; (m.a.b.c ?= x.a) + (m.a.b ?= 3)", 6);
+
+    test("def x = [a:3]; def y; x.b += (y ?= x.a)", 3);
+    testFail("def x = [a:3]; def y; x.b += (y ?= x.xxx)", "non-numeric operand");
+
+    test("def x; 1 + (x ?= 2)", 3);
+    test("def x; 1 + (x ?= 2L)", 3L);
+    test("def x; 1 + (x ?= 2.0D)", 3D);
+    test("def x; 1 + (x ?= 2.0)", "#3.0");
+
+    test("def x; def y; (x ?= 1) + (y ?= 2)", 3);
+    test("def x; def y; def z = 1; (x ?= z) + (y ?= z)", 2);
+    test("Map m; Map x; (m.a ?= 1) + (x.a ?= 2)", 3);
+    test("Map m; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += 2", 3);
+    test("Map m; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += (x.c ?= 2)", 3);
+    test("Map m; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += (x.c ?= 2); m.a.b.c", 3);
+    test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += 2", 3);
+    test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2)", 3);
+    test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2); m.a.b.c", 3);
   }
 
   @Test public void nullValues() {

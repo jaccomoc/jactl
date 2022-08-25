@@ -27,19 +27,44 @@ import java.util.Map;
 
 public class RuntimeUtils {
 
-  public static final String PLUS    = "+";
-  public static final String MINUS   = "-";
-  public static final String STAR    = "*";
-  public static final String SLASH   = "/";
-  public static final String PERCENT = "%";
+  public static final String PLUS_PLUS     = "++";
+  public static final String MINUS_MINUS   = "--";
+  public static final String PLUS          = "+";
+  public static final String MINUS         = "-";
+  public static final String STAR          = "*";
+  public static final String SLASH         = "/";
+  public static final String PERCENT       = "%";
+  public static final String PLUS_EQUAL    = "+=";
+  public static final String MINUS_EQUAL   = "-=";
+  public static final String STAR_EQUAL    = "*=";
+  public static final String SLASH_EQUAL   = "/=";
+  public static final String PERCENT_EQUAL = "%=";
+
+  // Special marker value to indicate that we should use whatever type of default makes sense
+  // in the context of the operation being performed. Note that we use an integer value of 0
+  // as a special marker since that way when we need the before value of an inc/dec it will
+  // have the right value but we can still check specifically for this value when doing
+  // x.a += 'some string' as this turns into x.a = DEFAULT_VALUE + 'some string' and so
+  // when the rhs is a string we turn DEFAULT_VALUE into ''.
+  public static final Object DEFAULT_VALUE = new Integer(0);
 
   public static String getOperatorType(TokenType op) {
+    if (op == null) {
+      return null;
+    }
     switch (op) {
-      case PLUS:    return PLUS;
-      case MINUS:   return MINUS;
-      case STAR:    return STAR;
-      case SLASH:   return SLASH;
-      case PERCENT: return PERCENT;
+      case PLUS_PLUS:     return PLUS_PLUS;
+      case MINUS_MINUS:   return MINUS_MINUS;
+      case PLUS:          return PLUS;
+      case MINUS:         return MINUS;
+      case STAR:          return STAR;
+      case SLASH:         return SLASH;
+      case PERCENT:       return PERCENT;
+      case PLUS_EQUAL:    return PLUS_EQUAL;
+      case MINUS_EQUAL:   return MINUS_EQUAL;
+      case STAR_EQUAL:    return STAR_EQUAL;
+      case SLASH_EQUAL:   return SLASH_EQUAL;
+      case PERCENT_EQUAL: return PERCENT_EQUAL;
       default: throw new IllegalStateException("Internal error: operator " + op + " not supported");
     }
   }
@@ -89,19 +114,33 @@ public class RuntimeUtils {
    * Perform binary operation when types are not known at compile time.
    * NOTE: operator is a String that must be one of the static strings defined in this class
    *       as '==' is used to compare the strings for performance reasons.
-   * @param left      left operand
-   * @param right     right operand
-   * @param operator  operator (as a String)
-   * @param maxScale  maximum scale for BigDecimal operations
-   * @param source    source code
-   * @param offset    offset into source code of operator
+   * @param left              left operand
+   * @param right             right operand
+   * @param operator          operator (as a String)
+   * @param originalOperator  original operator (as a String) (will be -- or ++ if inc/dec turned
+   *                          into binaryOp or null otherwise)
+   * @param maxScale          maximum scale for BigDecimal operations
+   * @param source            source code
+   * @param offset            offset into source code of operator
    * @return result of operation
    */
-  public static Object binaryOp(Object left, Object right, String operator, int maxScale, String source, int offset) {
+  public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
     if (left == null) {
       throw new NullError("Left-hand side of '" + operator + "' cannot be null", source, offset);
     }
+    if (left == DEFAULT_VALUE && right instanceof String && operator == PLUS) {
+      // Special case to support: x.a += 'some string'
+      // If x.a doesn't yet exist we create with default of empty string in this context.
+      left = "";
+    }
+
     if (left instanceof String) {
+      // Make sure we are not trying to inc/dec a string since -- or ++ on an unknown type
+      // will be turned into equivalent of x = x + 1 (for example) and it won't be until we
+      // get here that we can check if x is a string or not.
+      if (originalOperator == PLUS_PLUS || originalOperator == MINUS_MINUS) {
+        throw new RuntimeError("String cannot be " + (originalOperator == PLUS_PLUS ? "incremented" : "decremented"), source, offset);
+      }
       if (operator == PLUS) {
         return ((String) left).concat(right == null ? "null" : toString(right));
       }

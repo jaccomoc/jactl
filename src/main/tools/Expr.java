@@ -62,6 +62,7 @@ class Expr {
     Token operator;
     Expr  right;
     boolean @createIfMissing = false;  // Used for field access used as lvalues
+    Token @originalOperator;           // When -- or ++ is turned into x = x + 1 this is the actual --/++ op
   }
 
   class PrefixUnary extends Expr implements ManagesResult {
@@ -153,7 +154,7 @@ class Expr {
 
     // true if value before operation should be result - used for post inc/dec of fields
     // where we covert to a binary += or -= and then need the before value as the result
-    boolean @resultIsPreValue;
+    boolean @isPreIncOrDec;
   }
 
   /**

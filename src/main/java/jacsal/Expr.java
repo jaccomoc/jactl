@@ -60,6 +60,7 @@ abstract class Expr {
     Token operator;
     Expr  right;
     boolean createIfMissing = false;  // Used for field access used as lvalues
+    Token originalOperator;           // When -- or ++ is turned into x = x + 1 this is the actual --/++ op
     Binary(Expr left, Token operator, Expr right) {
       this.left = left;
       this.operator = operator;
@@ -67,7 +68,7 @@ abstract class Expr {
       this.location = operator;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBinary(this); }
-    @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + "]"; }
+    @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "originalOperator=" + originalOperator + "]"; }
   }
 
   static class PrefixUnary extends Expr implements ManagesResult {
@@ -236,7 +237,7 @@ abstract class Expr {
 
     // true if value before operation should be result - used for post inc/dec of fields
     // where we covert to a binary += or -= and then need the before value as the result
-    boolean resultIsPreValue;
+    boolean isPreIncOrDec;
     OpAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
       this.parent = parent;
       this.accessType = accessType;

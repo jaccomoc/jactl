@@ -32,7 +32,19 @@ import static jacsal.TokenType.*;
  *  - tracks variables and their type
  *  - resolves references to symbols (variables, methods, etc)
  *  - allocates and keeps track of what local variable slots are in use
- *  - evaluates any expressions made up of only constants (literals)
+ *  - evaluates any simple expressions made up of only constants (literals)
+ *
+ * The Resolver also needs to check for subexpressions where we might have a try/catch
+ * required. This could occur, for example, with ?= assignment where we catch NullError
+ * during evaluation of the rhs, or where we can throw a Continuation to suspend execution.
+ * The problem is that JVM will discard any intermediate values on the stack when the
+ * exception is thrown so we can't rely on use of the stack for complex expressions if
+ * we know we might need to catch an exception in the middle of the expression.
+ *
+ * The Resolver finds all such examples where it is possible that an expression needs
+ * to catch an exception and marks earlier expressions where we would normally have left
+ * something on the stack to preserve these intermediate values in temporary locals
+ * instead.
  */
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
@@ -255,7 +267,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
-    expr.isConst = expr.expr.isConst;
+    expr.isConst      = expr.expr.isConst;
     if (expr.operator.is(BANG)) {
       expr.type = JacsalType.BOOLEAN;
       if (expr.isConst) {
@@ -292,8 +304,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitPostfixUnary(Expr.PostfixUnary expr) {
     resolve(expr.expr);
-    expr.isConst = expr.expr.isConst;
-    expr.type = expr.expr.type;
+    expr.isConst      = expr.expr.isConst;
+    expr.type         = expr.expr.type;
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
       if (expr.isConst) {
         if (expr.expr.constValue == null) {

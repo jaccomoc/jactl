@@ -247,8 +247,8 @@ public class Parser {
   // right-associative (false).
   private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
     List.of(
-/*
-      List.of(AND, OR), */
+//      Pair.create(true, List.of(AND, OR)),
+//      Pair.create(true, List.of(NOT)),
       Pair.create(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
       /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
          PIPE_EQUAL, ACCENT_EQUAL),
@@ -355,10 +355,7 @@ public class Parser {
         //   --a.b.c ==> a.b.c -= 1
         // That way we can use the lvalue mechanism of creating missing fields if
         // necessary.
-        expr = convertToLValue(unary,
-                               new Token(operator.is(PLUS_PLUS) ? PLUS_EQUAL : MINUS_EQUAL, operator),
-                               new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),
-                               false);
+        expr = convertToLValue(unary, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),false);
       }
       else {
         expr = new Expr.PrefixUnary(operator, unary);
@@ -378,10 +375,7 @@ public class Parser {
         // That way we can use the lvalue mechanism of creating missing fields if
         // necessary.
         // NOTE: for postfix we need the beforeValue if result is being used.
-        expr = convertToLValue(expr,
-                               new Token(operator.is(PLUS_PLUS) ? PLUS_EQUAL : MINUS_EQUAL, operator),
-                               new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),
-                               true);
+        expr = convertToLValue(expr, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),true);
       }
       else {
         expr = new Expr.PostfixUnary(expr, previous());
@@ -810,8 +804,10 @@ public class Parser {
       if (arithmeticOp == null) {
         return new Expr.VarAssign((Expr.Identifier) variable, assignmentOperator, rhs);
       }
+      Expr.Binary expr = new Expr.Binary(new Expr.Noop(assignmentOperator), new Token(arithmeticOp, assignmentOperator), rhs);
+      expr.originalOperator = assignmentOperator;
       return new Expr.VarOpAssign((Expr.Identifier) variable, assignmentOperator,
-                                  new Expr.Binary(new Expr.Noop(assignmentOperator), new Token(arithmeticOp, assignmentOperator), rhs));
+                                  expr);
     }
 
     if (!(variable instanceof Expr.Binary)) {
@@ -844,12 +840,14 @@ public class Parser {
     // will come from the field value) and with the arithmetic op as the operation and
     // the original rhs as the new rhs of the binary operation
     Token operator = new Token(arithmeticOp, assignmentOperator);
+    Expr.Binary binaryExpr = new Expr.Binary(new Expr.Noop(operator), operator, rhs);
+    binaryExpr.originalOperator = assignmentOperator;
     Expr.OpAssign expr = new Expr.OpAssign(parent, accessOperator, field, assignmentOperator,
-                                           new Expr.Binary(new Expr.Noop(operator), operator, rhs));
+                                           binaryExpr);
 
     // For postfix ++ and -- of fields where we convert to a.b.c += 1 etc we need the pre value
     // (before the inc/dec) as the result
-    expr.resultIsPreValue = beforeValue;
+    expr.isPreIncOrDec = beforeValue;
     return expr;
   }
 
@@ -864,7 +862,9 @@ public class Parser {
   }
 
   private static final Map<TokenType,TokenType> arithmeticOperator =
-    Map.of(PLUS_EQUAL,    PLUS,
+    Map.of(PLUS_PLUS,     PLUS,
+           MINUS_MINUS,   MINUS,
+           PLUS_EQUAL,    PLUS,
            MINUS_EQUAL,   MINUS,
            STAR_EQUAL,    STAR,
            SLASH_EQUAL,   SLASH,
