@@ -229,6 +229,9 @@ public class JacsalType {
    * @return resulting type
    */
   public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
+    if (operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
+      return BOOLEAN;
+    }
     if (type1.is(ANY)) {
       return ANY;
     }

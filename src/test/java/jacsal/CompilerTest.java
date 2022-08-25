@@ -173,6 +173,26 @@ class CompilerTest {
     test("!!false", false);
     test("!(!!true)", false);
     test("!!(!false)", true);
+    test("true && true", true);
+    test("false && true", false);
+    test("true && false", false);
+    test("false && false", false);
+    test("true || true", true);
+    test("false || true", true);
+    test("true || false", true);
+    test("false || false", false);
+    test("!false || false", true);
+    test("false || true && false", false);
+    test("true  || true && false", true);
+    test("true  || true && true", true);
+    test("false || !false && true", true);
+    test("null && true", false);
+    test("true && null", false);
+    test("null && null", false);
+    test("null || true", true);
+    test("true || null", true);
+    test("false || null", false);
+    test("null || false", false);
   }
 
   @Test
@@ -712,6 +732,177 @@ class CompilerTest {
     testFail("def x = 1.0; x / 0", "divide by zero");
     testFail("def x = 1L; x / 0", "divide by zero");
     test("def x = 1.0D; x / 0", Double.POSITIVE_INFINITY);
+  }
+
+  @Test public void booleanValues() {
+    test("boolean TRUE=true; boolean FALSE=false; !TRUE", false);
+    test("boolean TRUE=true; boolean FALSE=false; !FALSE", true);
+    test("boolean TRUE=true; boolean FALSE=false; !!TRUE", true);
+    test("boolean TRUE=true; boolean FALSE=false; !!FALSE", false);
+    test("boolean TRUE=true; boolean FALSE=false; !(!!TRUE)", false);
+    test("boolean TRUE=true; boolean FALSE=false; !!(!FALSE)", true);
+    test("boolean TRUE=true; boolean FALSE=false; TRUE && TRUE", true);
+    test("boolean TRUE=true; boolean FALSE=false; FALSE && TRUE", false);
+    test("boolean TRUE=true; boolean FALSE=false; TRUE && FALSE", false);
+    test("boolean TRUE=true; boolean FALSE=false; FALSE && FALSE", false);
+    test("boolean TRUE=true; boolean FALSE=false; TRUE || TRUE", true);
+    test("boolean TRUE=true; boolean FALSE=false; FALSE || TRUE", true);
+    test("boolean TRUE=true; boolean FALSE=false; TRUE || FALSE", true);
+    test("boolean TRUE=true; boolean FALSE=false; FALSE || FALSE", false);
+    test("boolean TRUE=true; boolean FALSE=false; !FALSE || FALSE", true);
+    test("boolean TRUE=true; boolean FALSE=false; FALSE || TRUE && FALSE", false);
+    test("boolean TRUE=true; boolean FALSE=false; TRUE  || TRUE && FALSE", true);
+    test("boolean TRUE=true; boolean FALSE=false; TRUE  || TRUE && TRUE", true);
+    test("boolean TRUE=true; boolean FALSE=false; FALSE || !FALSE && TRUE", true);
+
+    test("var TRUE=true; var FALSE=false; !TRUE", false);
+    test("var TRUE=true; var FALSE=false; !FALSE", true);
+    test("var TRUE=true; var FALSE=false; !!TRUE", true);
+    test("var TRUE=true; var FALSE=false; !!FALSE", false);
+    test("var TRUE=true; var FALSE=false; !(!!TRUE)", false);
+    test("var TRUE=true; var FALSE=false; !!(!FALSE)", true);
+    test("var TRUE=true; var FALSE=false; TRUE && TRUE", true);
+    test("var TRUE=true; var FALSE=false; FALSE && TRUE", false);
+    test("var TRUE=true; var FALSE=false; TRUE && FALSE", false);
+    test("var TRUE=true; var FALSE=false; FALSE && FALSE", false);
+    test("var TRUE=true; var FALSE=false; TRUE || TRUE", true);
+    test("var TRUE=true; var FALSE=false; FALSE || TRUE", true);
+    test("var TRUE=true; var FALSE=false; TRUE || FALSE", true);
+    test("var TRUE=true; var FALSE=false; FALSE || FALSE", false);
+    test("var TRUE=true; var FALSE=false; !FALSE || FALSE", true);
+    test("var TRUE=true; var FALSE=false; FALSE || TRUE && FALSE", false);
+    test("var TRUE=true; var FALSE=false; TRUE  || TRUE && FALSE", true);
+    test("var TRUE=true; var FALSE=false; TRUE  || TRUE && TRUE", true);
+    test("var TRUE=true; var FALSE=false; FALSE || !FALSE && TRUE", true);
+
+    test("def TRUE=true; def FALSE=false; !TRUE", false);
+    test("def TRUE=true; def FALSE=false; !FALSE", true);
+    test("def TRUE=true; def FALSE=false; !!TRUE", true);
+    test("def TRUE=true; def FALSE=false; !!FALSE", false);
+    test("def TRUE=true; def FALSE=false; !(!!TRUE)", false);
+    test("def TRUE=true; def FALSE=false; !!(!FALSE)", true);
+    test("def TRUE=true; def FALSE=false; TRUE && TRUE", true);
+    test("def TRUE=true; def FALSE=false; FALSE && TRUE", false);
+    test("def TRUE=true; def FALSE=false; TRUE && FALSE", false);
+    test("def TRUE=true; def FALSE=false; FALSE && FALSE", false);
+    test("def TRUE=true; def FALSE=false; TRUE || TRUE", true);
+    test("def TRUE=true; def FALSE=false; FALSE || TRUE", true);
+    test("def TRUE=true; def FALSE=false; TRUE || FALSE", true);
+    test("def TRUE=true; def FALSE=false; FALSE || FALSE", false);
+    test("def TRUE=true; def FALSE=false; !FALSE || FALSE", true);
+    test("def TRUE=true; def FALSE=false; FALSE || TRUE && FALSE", false);
+    test("def TRUE=true; def FALSE=false; TRUE  || TRUE && FALSE", true);
+    test("def TRUE=true; def FALSE=false; TRUE  || TRUE && TRUE", true);
+    test("def TRUE=true; def FALSE=false; FALSE || !FALSE && TRUE", true);
+
+    test("def TRUE=true; def FALSE=null; !FALSE", true);
+    test("def TRUE=true; def FALSE=null; !!FALSE", false);
+    test("def TRUE=true; def FALSE=null; !!(!FALSE)", true);
+    test("def TRUE=true; def FALSE=null; FALSE && TRUE", false);
+    test("def TRUE=true; def FALSE=null; TRUE && FALSE", false);
+    test("def TRUE=true; def FALSE=null; FALSE && FALSE", false);
+    test("def TRUE=true; def FALSE=null; FALSE || TRUE", true);
+    test("def TRUE=true; def FALSE=null; TRUE || FALSE", true);
+    test("def TRUE=true; def FALSE=null; FALSE || FALSE", false);
+    test("def TRUE=true; def FALSE=null; !FALSE || FALSE", true);
+    test("def TRUE=true; def FALSE=null; FALSE || TRUE && FALSE", false);
+    test("def TRUE=true; def FALSE=null; TRUE  || TRUE && FALSE", true);
+    test("def TRUE=true; def FALSE=null; TRUE  || TRUE && TRUE", true);
+    test("def TRUE=true; def FALSE=null; FALSE || !FALSE && TRUE", true);
+
+    test("int TRUE=7; def FALSE=null; !FALSE", true);
+    test("int TRUE=7; def FALSE=null; !!FALSE", false);
+    test("int TRUE=7; def FALSE=null; !!(!FALSE)", true);
+    test("int TRUE=7; def FALSE=null; FALSE && TRUE", false);
+    test("int TRUE=7; def FALSE=null; TRUE && FALSE", false);
+    test("int TRUE=7; def FALSE=null; FALSE && FALSE", false);
+    test("int TRUE=7; def FALSE=null; FALSE || TRUE", true);
+    test("int TRUE=7; def FALSE=null; TRUE || FALSE", true);
+    test("int TRUE=7; def FALSE=null; FALSE || FALSE", false);
+    test("int TRUE=7; def FALSE=null; !FALSE || FALSE", true);
+    test("int TRUE=7; def FALSE=null; FALSE || TRUE && FALSE", false);
+    test("int TRUE=7; def FALSE=null; TRUE  || TRUE && FALSE", true);
+    test("int TRUE=7; def FALSE=null; TRUE  || TRUE && TRUE", true);
+    test("int TRUE=7; def FALSE=null; FALSE || !FALSE && TRUE", true);
+
+    test("int TRUE=7; def FALSE=''; !FALSE", true);
+    test("int TRUE=7; def FALSE=''; !!FALSE", false);
+    test("int TRUE=7; def FALSE=''; !!(!FALSE)", true);
+    test("int TRUE=7; def FALSE=''; FALSE && TRUE", false);
+    test("int TRUE=7; def FALSE=''; TRUE && FALSE", false);
+    test("int TRUE=7; def FALSE=''; FALSE && FALSE", false);
+    test("int TRUE=7; def FALSE=''; FALSE || TRUE", true);
+    test("int TRUE=7; def FALSE=''; TRUE || FALSE", true);
+    test("int TRUE=7; def FALSE=''; FALSE || FALSE", false);
+    test("int TRUE=7; def FALSE=''; !FALSE || FALSE", true);
+    test("int TRUE=7; def FALSE=''; FALSE || TRUE && FALSE", false);
+    test("int TRUE=7; def FALSE=''; TRUE  || TRUE && FALSE", true);
+    test("int TRUE=7; def FALSE=''; TRUE  || TRUE && TRUE", true);
+    test("int TRUE=7; def FALSE=''; FALSE || !FALSE && TRUE", true);
+
+    test("int TRUE=7; def FALSE=0; !FALSE", true);
+    test("int TRUE=7; def FALSE=0; !!FALSE", false);
+    test("int TRUE=7; def FALSE=0; !!(!FALSE)", true);
+    test("int TRUE=7; def FALSE=0; FALSE && TRUE", false);
+    test("int TRUE=7; def FALSE=0; TRUE && FALSE", false);
+    test("int TRUE=7; def FALSE=0; FALSE && FALSE", false);
+    test("int TRUE=7; def FALSE=0; FALSE || TRUE", true);
+    test("int TRUE=7; def FALSE=0; TRUE || FALSE", true);
+    test("int TRUE=7; def FALSE=0; FALSE || FALSE", false);
+    test("int TRUE=7; def FALSE=0; !FALSE || FALSE", true);
+    test("int TRUE=7; def FALSE=0; FALSE || TRUE && FALSE", false);
+    test("int TRUE=7; def FALSE=0; TRUE  || TRUE && FALSE", true);
+    test("int TRUE=7; def FALSE=0; TRUE  || TRUE && TRUE", true);
+    test("int TRUE=7; def FALSE=0; FALSE || !FALSE && TRUE", true);
+
+    test("def TRUE=7; double FALSE=0; !FALSE", true);
+    test("def TRUE=7; double FALSE=0; !!FALSE", false);
+    test("def TRUE=7; double FALSE=0; !!(!FALSE)", true);
+    test("def TRUE=7; double FALSE=0; FALSE && TRUE", false);
+    test("def TRUE=7; double FALSE=0; TRUE && FALSE", false);
+    test("def TRUE=7; double FALSE=0; FALSE && FALSE", false);
+    test("def TRUE=7; double FALSE=0; FALSE || TRUE", true);
+    test("def TRUE=7; double FALSE=0; TRUE || FALSE", true);
+    test("def TRUE=7; double FALSE=0; FALSE || FALSE", false);
+    test("def TRUE=7; double FALSE=0; !FALSE || FALSE", true);
+    test("def TRUE=7; double FALSE=0; FALSE || TRUE && FALSE", false);
+    test("def TRUE=7; double FALSE=0; TRUE  || TRUE && FALSE", true);
+    test("def TRUE=7; double FALSE=0; TRUE  || TRUE && TRUE", true);
+    test("def TRUE=7; double FALSE=0; FALSE || !FALSE && TRUE", true);
+
+    test("double TRUE=7; Decimal FALSE=0; !FALSE", true);
+    test("double TRUE=7; Decimal FALSE=0; !!FALSE", false);
+    test("double TRUE=7; Decimal FALSE=0; !!(!FALSE)", true);
+    test("double TRUE=7; Decimal FALSE=0; FALSE && TRUE", false);
+    test("double TRUE=7; Decimal FALSE=0; TRUE && FALSE", false);
+    test("double TRUE=7; Decimal FALSE=0; FALSE && FALSE", false);
+    test("double TRUE=7; Decimal FALSE=0; FALSE || TRUE", true);
+    test("double TRUE=7; Decimal FALSE=0; TRUE || FALSE", true);
+    test("double TRUE=7; Decimal FALSE=0; FALSE || FALSE", false);
+    test("double TRUE=7; Decimal FALSE=0; !FALSE || FALSE", true);
+    test("double TRUE=7; Decimal FALSE=0; FALSE || TRUE && FALSE", false);
+    test("double TRUE=7; Decimal FALSE=0; TRUE  || TRUE && FALSE", true);
+    test("double TRUE=7; Decimal FALSE=0; TRUE  || TRUE && TRUE", true);
+    test("double TRUE=7; Decimal FALSE=0; FALSE || !FALSE && TRUE", true);
+
+    test("Decimal TRUE=7; Decimal FALSE=0; !FALSE", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; !!FALSE", false);
+    test("Decimal TRUE=7; Decimal FALSE=0; !!(!FALSE)", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; FALSE && TRUE", false);
+    test("Decimal TRUE=7; Decimal FALSE=0; TRUE && FALSE", false);
+    test("Decimal TRUE=7; Decimal FALSE=0; FALSE && FALSE", false);
+    test("Decimal TRUE=7; Decimal FALSE=0; FALSE || TRUE", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; TRUE || FALSE", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; FALSE || FALSE", false);
+    test("Decimal TRUE=7; Decimal FALSE=0; !FALSE || FALSE", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; FALSE || TRUE && FALSE", false);
+    test("Decimal TRUE=7; Decimal FALSE=0; TRUE  || TRUE && FALSE", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; TRUE  || TRUE && TRUE", true);
+    test("Decimal TRUE=7; Decimal FALSE=0; FALSE || !FALSE && TRUE", true);
+
+    testFail("def x; x.a && true", "null value");
+    test("def x; true || x.a", true);
+    test("def x; false && x.a", false);
   }
 
   @Test

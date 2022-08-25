@@ -496,6 +496,52 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    // Boolean && or ||
+    if (expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
+      compile(expr.left);
+      convertTo(BOOLEAN, true, expr.left.location);
+
+      // Look for short-cutting && or || (i.e. if we already know the result
+      // we don't need to evaluate right hand side)
+      if (expr.operator.is(AMPERSAND_AMPERSAND)) {
+        // Handle case for &&
+        Label isFalse = new Label();
+        Label end     = new Label();
+        mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
+        pop();
+        compile(expr.right);
+        convertTo(BOOLEAN, true, expr.right.location);
+        mv.visitJumpInsn(IFEQ, isFalse);
+        pop();
+        _loadConst(true);
+        mv.visitJumpInsn(GOTO, end);
+        mv.visitLabel(isFalse);            // :isFalse
+        _loadConst(false);
+        mv.visitLabel(end);
+      }
+      else {
+        // Handle case for ||
+        Label end    = new Label();
+        Label isTrue = new Label();
+        mv.visitJumpInsn(IFNE, isTrue);
+        pop();
+        compile(expr.right);
+        convertTo(BOOLEAN, true, expr.right.location);
+        pop();
+        mv.visitJumpInsn(IFNE, isTrue);
+        _loadConst(false);
+        mv.visitJumpInsn(GOTO, end);
+        mv.visitLabel(isTrue);
+        _loadConst(true);
+        mv.visitLabel(end);
+      }
+      push(BOOLEAN);
+      if (expr.type.isBoxed()) {
+        box();
+      }
+      return null;
+    }
+
     // Everything else
     compile(expr.left);
     convertTo(expr.type, true, expr.left.location);

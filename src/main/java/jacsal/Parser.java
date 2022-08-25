@@ -252,9 +252,10 @@ public class Parser {
       Pair.create(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
       /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
          PIPE_EQUAL, ACCENT_EQUAL),
-      List.of(QUESTION, QUESTION_COLON),
-      List.of(PIPE_PIPE),
-      List.of(AMPERSAND_AMPERSAND),
+      List.of(QUESTION, QUESTION_COLON), */
+      Pair.create(true, List.of(PIPE_PIPE)),
+      Pair.create(true, List.of(AMPERSAND_AMPERSAND)),
+      /*
       List.of(PIPE),
       List.of(ACCENT),
       List.of(AMPERSAND),

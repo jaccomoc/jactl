@@ -148,7 +148,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.right);
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
-    if (expr.left.isConst && expr.left.constValue == null) {
+    if (expr.left.isConst && expr.left.constValue == null && !expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
       throw new CompileError("Left-hand side of '" + expr.operator.getStringValue() + "' cannot be null", expr.left.location);
     }
 
@@ -205,7 +205,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         return expr.type;
       }
 
-      // TBD: bitwise operators and boolean operators
+      if (expr.operator.is(AMPERSAND_AMPERSAND)) {
+        expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) &&
+                          RuntimeUtils.isTruth(expr.right.constValue, false);
+        return expr.type;
+      }
+      if (expr.operator.is(PIPE_PIPE)) {
+        expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) ||
+                          RuntimeUtils.isTruth(expr.right.constValue, false);
+        return expr.type;
+      }
 
       if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
       if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
