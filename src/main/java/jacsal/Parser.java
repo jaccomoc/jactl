@@ -196,7 +196,7 @@ public class Parser {
       matchAny(EOL);
       stmts.stmts.add(singleVarDecl(typeToken));
     }
-    if (stmts.stmts.size() > 0) {
+    if (stmts.stmts.size() > 1) {
       // Multiple variables so return list of VarDecls
       return stmts;
     }
