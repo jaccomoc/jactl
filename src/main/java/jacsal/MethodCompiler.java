@@ -98,6 +98,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // Stmt
 
   private Void compile(Stmt stmt) {
+    if (stmt == null) { return null; }
     return stmt.accept(this);
   }
 
@@ -144,9 +145,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     compile(stmt.expr);
-    convertTo(stmt.type, true, stmt.expr.location);
+    convertTo(stmt.returnType, true, stmt.expr.location);
     pop();
-    switch (stmt.type.getType()) {
+    switch (stmt.returnType.getType()) {
       case BOOLEAN:
       case INT:
         mv.visitInsn(IRETURN);
@@ -162,13 +163,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case ANY:
         mv.visitInsn(ARETURN);
         break;
-      default: throw new IllegalStateException("Unexpected type " + stmt.type);
+      default: throw new IllegalStateException("Unexpected type " + stmt.returnType);
     }
     return null;
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
-    throw new UnsupportedOperationException();
+    compile(stmt.condtion);
+    convertTo(BOOLEAN, true, stmt.condtion.location);
+    pop();
+    Label ifFalse = new Label();
+    mv.visitJumpInsn(IFEQ, ifFalse);
+    compile(stmt.trueStmt);
+    Label end = new Label();
+    if (stmt.falseStmt != null) {
+      mv.visitJumpInsn(GOTO, end);
+    }
+    mv.visitLabel(ifFalse);
+    compile(stmt.falseStmt);
+    mv.visitLabel(end);
+    return null;
   }
 
   /////////////////////////////////////////////
@@ -539,6 +553,67 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.type.isBoxed()) {
         box();
       }
+      return null;
+    }
+
+    // For remaining comparison operators
+    if (expr.operator.isBooleanOperator()) {
+      // If we don't have primitive types then delegate to RuntimeUtils.booleanOp
+      if (!expr.left.type.isPrimitive() || !expr.right.type.isPrimitive()) {
+        compile(expr.left);
+        box();
+        compile(expr.right);
+        box();
+        loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
+        loadConst(expr.operator.getSource());
+        loadConst(expr.operator.getOffset());
+        invokeStatic(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, Integer.TYPE);
+        return null;
+      }
+
+      // Left with boolean, int, long, double types
+      if ((expr.left.type.is(BOOLEAN) || expr.right.type.is(BOOLEAN)) && !expr.left.type.equals(expr.right.type)) {
+        // If one type is boolean and the other isn't then we must be doing == or != comparison
+        // since Resolver would have already given compile error if other type of comparison
+        check(expr.operator.is(EQUAL_EQUAL,BANG_EQUAL), "Unexpected operator " + expr.operator + " comparing boolean and non-boolean");
+        // Since types are not compatible we already know that they are not equal so pop values and
+        // load result
+        compile(expr.left);
+        compile(expr.right);
+        popVal();
+        popVal();
+        loadConst(expr.operator.is(BANG_EQUAL));    // true when op is !=
+        return null;
+      }
+
+      // We have two booleans or two numbers (int,long, or double)
+      JacsalType operandType = expr.left.type.is(BOOLEAN)                              ? INT :
+                               expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
+                               expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
+                                                                                         INT;
+      compile(expr.left);
+      convertTo(operandType, false, expr.left.location);
+      compile(expr.right);
+      convertTo(operandType, false, expr.right.location);
+      mv.visitInsn(operandType.is(INT) ? ISUB : operandType.is(LONG) ? LCMP : DCMPL);
+      pop(2);
+      int opCode = expr.operator.is(EQUAL_EQUAL)        ? IFEQ :
+                   expr.operator.is(BANG_EQUAL)         ? IFNE :
+                   expr.operator.is(LESS_THAN)          ? IFLT :
+                   expr.operator.is(LESS_THAN_EQUAL)    ? IFLE :
+                   expr.operator.is(GREATER_THAN)       ? IFGT :
+                   expr.operator.is(GREATER_THAN_EQUAL) ? IFGE :
+                   -1;
+      check(opCode != -1, "Unexpected operator " + expr.operator);
+      Label resultIsTrue = new Label();
+      Label end          = new Label();
+      mv.visitJumpInsn(opCode, resultIsTrue);
+      _loadConst(false);
+      mv.visitJumpInsn(GOTO, end);
+      mv.visitLabel(resultIsTrue);   // :resultIsTrue
+      _loadConst(true);
+      mv.visitLabel(end);            // :end
+      push(BOOLEAN);
       return null;
     }
 
@@ -1123,6 +1198,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       switch (peek().getType()) {
+        case BOOLEAN:
         case INT:                          break;
         case LONG:    mv.visitInsn(L2I);   break;
         case DOUBLE:  mv.visitInsn(D2I);   break;

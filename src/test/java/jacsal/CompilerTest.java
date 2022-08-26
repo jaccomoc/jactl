@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -470,22 +471,22 @@ class CompilerTest {
   }
 
   @Test public void percentEquals(){
-    test("int x = 18; x %= 7", 4);
+    test("int x = 18; x %= 7L", 4);
     test("int x = 18; x %= 7; x", 4);
     test("int x = 18; (x %= 7) + (x %= 3)", 5);
     test("int x = 18; (x %= 7) + (x %= 3); x", 1);
     test("int x = 18; x %= 7; x", 4);
-    test("def x = 18; x %= 7", 4);
+    test("def x = 18; x %= 7L", 4L);
     test("def x = 18; x %= 7; x", 4);
-    test("var x = 18; x %= 7", 4);
+    test("var x = 18; x %= 7L", 4);
     test("var x = 18; x %= 7; x", 4);
-    test("long x = 18; x %= 7", 4L);
+    test("long x = 18; x %= 7L", 4L);
     test("long x = 18; x %= 7; x", 4L);
-    test("double x = 18; x %= 7", 4.0D);
+    test("double x = 18; x %= 7L", 4.0D);
     test("double x = 18; x %= 7; x", 4.0D);
-    test("Decimal x = 18.0; x %= 7", "#4.0");
+    test("Decimal x = 18.0; x %= 7L", "#4.0");
     test("Decimal x = 18.0; x %= 7; x", "#4.0");
-    test("var x = 18.0; x %= 7", "#4.0");
+    test("var x = 18.0; x %= 7L", "#4.0");
     test("var x = 18.0; x %= 7; x", "#4.0");
     test("def x = 18; int y = 7; x %= y", 4);
     test("def x = 18; int y = 7; x %= y; x", 4);
@@ -908,7 +909,7 @@ class CompilerTest {
   @Test
   public void explicitReturnFromScript() {
     test("double v = 2; return v", 2D);
-    test("int v = 2; { v = v + 1; return v } v = v + 3", 3);
+    test("int v = 2; { v = v + 1; return v }; v = v + 3", 3);
     test("String v = '2'; { v = v + 1; { return v }}", "21");
     test("var v = 2.0; { v = v + 1; { return v }}", "#3.0");
     test("Decimal v = 2.0; { v = v + 1; { return v }}", "#3.0");
@@ -930,7 +931,7 @@ class CompilerTest {
   public void constExprArithmeticPrecedence() {
     test("1 + -2 * -3 + 4", 11);
     test("1 + (2 + 3) * 4 - 5", 16);
-    test("13 + 12 % 7", 18);
+    test("13 + 12 % 7L", 18L);
     test("13 + 12 % 7 - 3", 15);
     test("13 + 12 % ++6 - 3", 15);
   }
@@ -1025,14 +1026,13 @@ class CompilerTest {
 
     test("def x = 1; (x + x)++", 2);
     test("def x = 1; (x + x)++; x", 1);
-    testFail("def x = 1; (x + x)++ ++", "expected end of expression");
+    testFail("def x = 1; (x + x)++ ++", "expecting end of statement");
 
     testFail("def x = 'a'; ++x", "cannot be incremented");
     testFail("def x = [a:'a']; ++x.a", "cannot be incremented");
   }
 
-  @Test
-  public void postfixIncOrDec() {
+  @Test public void postfixIncOrDec() {
     testFail("null++", "null value encountered");
     testFail("null--", "null value encountered");
     test("1++", 1);
@@ -1440,4 +1440,185 @@ class CompilerTest {
     testFail("def s = 'abc'; s.a", "field access not supported");
   }
 
+  @Test public void ifStatement() {
+    test("if (true) true", true);
+    test("if (true) true else false", true);
+    test("if (false) true", null);
+    test("if (false) true else false", false);
+    testFail("if (true) int i = 2", "unexpected token int");
+    test("int x; if (x) { x += 1 } else { x += 2 }", 2);
+    test("int x; if (x) { x += 1 }", null);
+    test("int x; if (x) { x += 1; x+= 2\n}", null);
+    test("int x; if (x) { x += 1 } else { x += 2;\n}", 2);
+    test("int x; if (x) { x += 1 } else { x += 2\n}", 2);
+    test("int x; if (x)\n{\nx += 1\nx+=7\n}\n else \n{\n x += 2;\n x+=3 }\n", 5);
+    test("long x = 2; if (x * 2 == 4) ++x", 3L);
+    test("long x = 2; if (x * 2 == 4) ++x else if (!x) { x-- }", 3L);
+    test("def x = 2; if (x * 2 < 5) ++x else { --x }", 3);
+    test("def x = 2; if (x * 2 < -5) ++x else { --x }", 1);
+  }
+
+  @Test public void constBooleanComparisons() {
+    test("null == null", true);
+    test("null == true", false);
+    test("true == null", false);
+    test("null == false", false);
+    test("false == null", false);
+    test("false == true", false);
+    test("false == false", true);
+    test("true == false", false);
+    test("true == true", true);
+
+    test("null != null", false);
+    test("null != true", true);
+    test("true != null", true);
+    test("null != false", true);
+    test("false != null", true);
+    test("false != true", true);
+    test("false != false", false);
+    test("true != false", true);
+    test("true != true", false);
+
+    test("null < null", false);
+    test("null < true", true);
+    test("true < null", false);
+    test("null < false", true);
+    test("false < null", false);
+    test("false < true", true);
+    test("false < false", false);
+    test("true < false", false);
+    test("true < true", false);
+
+    test("null <= null", true);
+    test("null <= true", true);
+    test("true <= null", false);
+    test("null <= false", true);
+    test("false <= null", false);
+    test("false <= true", true);
+    test("false <= false", true);
+    test("true <= false", false);
+    test("true <= true", true);
+
+    test("null > null", false);
+    test("null > true", false);
+    test("true > null", true);
+    test("null > false", false);
+    test("false > null", true);
+    test("false > true", false);
+    test("false > false", false);
+    test("true > false", true);
+    test("true > true", false);
+
+    test("null >= null", true);
+    test("null >= true", false);
+    test("true >= null", true);
+    test("null >= false", false);
+    test("false >= null", true);
+    test("false >= true", false);
+    test("false >= false", true);
+    test("true >= false", true);
+    test("true >= true", true);
+  }
+
+  BiConsumer<String,String> comparisonTests = (smaller, bigger) -> {
+    String init = "int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
+                  "def di3=3; def dl5=5L; def dd7=7.0D; def ddec13=13.0; def dsabc = 'abc';";
+    test(init + "null == " + bigger, false);
+    test(init + bigger + " == null", false);
+    test(init + "null == " + smaller, false);
+    test(init + smaller + " == null", false);
+    test(init + smaller + " == " + bigger, false);
+    test(init + smaller + " == " + smaller, true);
+    test(init + bigger + " == " + smaller, false);
+    test(init + bigger + " == " + bigger, true);
+
+    test(init + "null != " + bigger, true);
+    test(init + bigger + " != null", true);
+    test(init + "null != " + smaller, true);
+    test(init + smaller + " != null", true);
+    test(init + smaller + " != " + bigger, true);
+    test(init + smaller + " != " + smaller, false);
+    test(init + bigger + " != " + smaller, true);
+    test(init + bigger + " != " + bigger, false);
+
+    test(init + "null < " + bigger, true);
+    test(init + bigger + " < null", false);
+    test(init + "null < " + smaller, true);
+    test(init + smaller + " < null", false);
+    test(init + smaller + " < " + bigger, true);
+    test(init + smaller + " < " + smaller, false);
+    test(init + bigger + " < " + smaller, false);
+    test(init + bigger + " < " + bigger, false);
+
+    test(init + "null <= " + bigger, true);
+    test(init + bigger + " <= null", false);
+    test(init + "null <= " + smaller, true);
+    test(init + smaller + " <= null", false);
+    test(init + smaller + " <= " + bigger, true);
+    test(init + smaller + " <= " + smaller, true);
+    test(init + bigger + " <= " + smaller, false);
+    test(init + bigger + " <= " + bigger, true);
+
+    test(init + "null > " + bigger, false);
+    test(init + bigger + " > null", true);
+    test(init + "null > " + smaller, false);
+    test(init + smaller + " > null", true);
+    test(init + smaller + " > " + bigger, false);
+    test(init + smaller + " > " + smaller, false);
+    test(init + bigger + " > " + smaller, true);
+    test(init + bigger + " > " + bigger, false);
+
+    test(init + "null >= " + bigger, false);
+    test(init + bigger + " >= null", true);
+    test(init + "null >= " + smaller, false);
+    test(init + smaller + " >= null", true);
+    test(init + smaller + " >= " + bigger, false);
+    test(init + smaller + " >= " + smaller, true);
+    test(init + bigger + " >= " + smaller, true);
+    test(init + bigger + " >= " + bigger, true);
+  };
+
+  @Test public void constComparisons() {
+    comparisonTests.accept("-3", "7");
+    comparisonTests.accept("-3L", "7L");
+    comparisonTests.accept("-3.0D", "7.0D");
+    comparisonTests.accept("-3.0", "7.0");
+
+    comparisonTests.accept("-3", "7L");
+    comparisonTests.accept("-3L", "7");
+    comparisonTests.accept("-3", "7D");
+    comparisonTests.accept("-3D", "7");
+    comparisonTests.accept("-3L", "7D");
+    comparisonTests.accept("-3D", "7L");
+
+    comparisonTests.accept("-3", "7.0");
+    comparisonTests.accept("-3.0", "7");
+    comparisonTests.accept("-3L", "7.0");
+    comparisonTests.accept("-3.0", "7L");
+    comparisonTests.accept("-3.0D", "7.0");
+    comparisonTests.accept("-3.0", "7.0D");
+
+    comparisonTests.accept("'axcde'", "'azcde'");
+    comparisonTests.accept("'axcde'", "'axcdef'");
+
+    comparisonTests.accept("4*2", "-3*-7");
+  }
+
+  @Test public void expressionComparisons() {
+    //String init = "int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
+    //              "def di3=3; def dl5=5L; def dd7=7.0D; def ddec13=13.0; def dsabc = 'abc';";
+    comparisonTests.accept("-i3", "l5");
+    comparisonTests.accept("-i3 * d7", "dec13");
+    comparisonTests.accept("-i3 * l5", "dec13");
+    comparisonTests.accept("-di3 * 5", "l5");
+    comparisonTests.accept("-di3 * 5", "l5 * ddec13");
+
+    comparisonTests.accept("sabc", "sabc + 'z'");
+    comparisonTests.accept("sabc", "dsabc + 'z'");
+    comparisonTests.accept("sabc * 2", "sabc * 3");
+    comparisonTests.accept("dsabc * 2", "dsabc * 3");
+
+    test("def x = 2L; 2 * x == 4", true);
+    test("long x = 2L; 2 * x == 4", true);
+  }
 }

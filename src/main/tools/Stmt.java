@@ -39,7 +39,6 @@ import java.util.HashMap;
 class Stmt {
 
   Token      location = null;
-  JacsalType type     = null;   // Used for last statement of a block in a function to indicate type to be returned
 
   /**
    * Each script is parsed into a Script object. This is true even if the script
@@ -62,6 +61,7 @@ class Stmt {
    * declared by statements within the block.
    */
   class Block extends Stmt {
+    Token openBrace;
     Stmts stmts;
     Map<String,Expr.VarDecl> @variables = new HashMap<>();
     int @slotsUsed = 0;   // How many local var slots used by vars in this block
@@ -72,9 +72,10 @@ class Stmt {
    * and statement(s) to execute if false.
    */
   class If extends Stmt {
+    Token ifToken;
     Expr condtion;
-    Stmt trueStmts;
-    Stmt falseStmts;
+    Stmt trueStmt;
+    Stmt falseStmt;
   }
 
   /**
@@ -82,6 +83,7 @@ class Stmt {
    * Expr type where the work is done.
    */
   class VarDecl extends Stmt {
+    Token typeToken;
     Expr.VarDecl declExpr;
   }
 
@@ -94,14 +96,16 @@ class Stmt {
     Block      @block;
     int        @slotIdx;          // Current slot available for allocation
     int        @maxSlot;          // Maximum slot used for local vars
-    boolean    @returnValue; // Value used as implicit return from function
+    boolean    @returnValue;      // Value used as implicit return from function
   }
 
   /**
    * Return statement
    */
   class Return extends Stmt {
+    Token      returnToken;
     Expr       expr;
+    JacsalType returnType;      // Return type of the function we are embedded in
   }
 
   /**
@@ -112,6 +116,7 @@ class Stmt {
    * an assignment has a value (the value being assigned), an assignment is actually an expression.
    */
   class ExprStmt extends Stmt {
+    Token exprLocation;
     Expr expr;
   }
 }

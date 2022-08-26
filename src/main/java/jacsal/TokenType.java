@@ -55,7 +55,7 @@ public enum TokenType {
 
   //= Keywords
   DEF, VAR, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, VOID, MAP, LIST,
-  FOR, IF, WHILE, IT,
+  FOR, IF, WHILE, IT, ELSE,
   CLASS, INTERFACE, EXTENDS, IMPLEMENTS,
   IMPORT, AS, TRUE, FALSE, NULL, IN, BANG_IN,
   INSTANCE_OF, BANG_INSTANCE_OF,
@@ -88,17 +88,6 @@ public enum TokenType {
     }
   }
 
-  boolean isBooleanOperator() {
-    switch (this) {
-      case AMPERSAND_AMPERSAND:
-      case PIPE_PIPE:
-      case BANG:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   /**
    * Check if operator is an operator that mutates the value of the variable or field
    * that it acts on. This is true for assignment and any assignment like operator such
@@ -109,5 +98,10 @@ public enum TokenType {
     return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
                    DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
                    PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL);
+  }
+
+  boolean isBooleanOperator() {
+    return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, LESS_THAN, LESS_THAN_EQUAL,
+                   GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF);
   }
 }

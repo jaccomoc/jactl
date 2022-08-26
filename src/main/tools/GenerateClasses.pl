@@ -69,7 +69,7 @@ while (<FH>) {
     @superFields and print "      super(" . join(", ", @superFields) . ");\n";
     print "      this.$_->[0] = $_->[0];\n" for @fields;
     my @tokenFields = @{[ grep {$_->[1] eq 'Token'} @constructorFields ]};
-    my $firstTokenArg = @tokenFields && @tokenFields[0]->[0] if $rootClass eq "Expr";
+    my $firstTokenArg = @tokenFields && @tokenFields[0]->[0];
     # If no super field has a type Token then assign location in subclass
     if ($firstTokenArg and !grep { $_ eq $firstTokenArg } @superFields) {
       print "      this.location = $firstTokenArg;\n";

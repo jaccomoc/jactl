@@ -125,6 +125,14 @@ public class Token extends Location {
     return true;
   }
 
+  public boolean isNumericOperator() {
+    return getType().isNumericOperator();
+  }
+
+  public boolean isBooleanOperator() {
+    return getType().isBooleanOperator();
+  }
+
   /**
    * Set length of token
    * @param length  the length

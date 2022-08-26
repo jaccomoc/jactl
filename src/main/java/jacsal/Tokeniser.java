@@ -656,6 +656,7 @@ public class Tokeniser {
     new Symbol("void", VOID),
     new Symbol("for", FOR),
     new Symbol("if", IF),
+    new Symbol("else", ELSE),
     new Symbol("while", WHILE),
     new Symbol("class", CLASS),
     new Symbol("interface", INTERFACE),

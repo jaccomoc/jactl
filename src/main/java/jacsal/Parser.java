@@ -96,8 +96,7 @@ public class Parser {
    */
   private Stmt.Block block(TokenType endBlock) {
     Stmt.Stmts stmts = new Stmt.Stmts();
-    Stmt.Block block = new Stmt.Block(stmts);
-    block.location = peek();
+    Stmt.Block block = new Stmt.Block(peek(), stmts);
     blockStack.push(block);
     stmts(stmts);
     expect(endBlock);
@@ -126,6 +125,10 @@ public class Parser {
             throw new CompileError("Unreachable statement", location);
           }
           previousStmt = declaration;
+
+          if (peek().isNot(EOL, EOF, SEMICOLON, RIGHT_BRACE)) {
+            unexpected("Expecting end of statement");
+          }
         }
       }
       catch (CompileError e) {
@@ -154,21 +157,21 @@ public class Parser {
 
   /**
    *# statement -> block
+   *#            | ifStmt
+   *#            | returnStmt
    *#            | exprStatement;
    */
   private Stmt statement() {
+    matchAny(EOL);
     // Special case of a Map literal as an expression statement
     if (peek().is(LEFT_BRACE)) {
       if (isMapLiteral()) {
         return exprStmt();
       }
     }
-    if (matchAny(LEFT_BRACE)) {
-      return block(RIGHT_BRACE);
-    }
-    if (matchAny(RETURN)) {
-      return returnStmt();
-    }
+    if (matchAny(LEFT_BRACE)) { return block(RIGHT_BRACE); }
+    if (matchAny(RETURN))     { return returnStmt();       }
+    if (matchAny(IF))         { return ifStmt();           }
     return exprStmt();
   }
 
@@ -202,8 +205,25 @@ public class Parser {
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
-    varDecl.location = typeToken;
-    return new Stmt.VarDecl(varDecl);
+    return new Stmt.VarDecl(typeToken, varDecl);
+  }
+
+  /**
+   *# ifStmt -> "if" "(" expression ")" statement ( "else" statement ) ?
+   */
+  private Stmt.If ifStmt() {
+    Token ifToken = previous();
+    expect(LEFT_PAREN);
+    Expr cond      = expression();
+    matchAny(EOL);
+    expect(RIGHT_PAREN);
+    Stmt trueStmt  = statement();
+    Stmt falseStmt = null;
+    matchAny(EOL);
+    if (matchAny(ELSE)) {
+      falseStmt = statement();
+    }
+    return new Stmt.If(ifToken, cond, trueStmt, falseStmt);
   }
 
   /**
@@ -213,11 +233,10 @@ public class Parser {
     Token location = peek();
     Expr  expr     = expression();
     expr.isResultUsed = false;    // Expression is a statement so result not used
-    Stmt stmt = new Stmt.ExprStmt(expr);
-    stmt.location = location;
-    if (peek().isNot(EOF, EOL, SEMICOLON, RIGHT_BRACE)) {
-      unexpected("Expected end of expression");
-    }
+    Stmt stmt = new Stmt.ExprStmt(location, expr);
+//    if (peek().isNot(EOF, EOL, SEMICOLON, RIGHT_BRACE)) {
+//      unexpected("Expected end of expression");
+//    }
     return stmt;
   }
 
@@ -226,11 +245,7 @@ public class Parser {
    */
   private Stmt returnStmt() {
     Token       location   = previous();
-    Stmt.Return returnStmt = new Stmt.Return(expression());
-    returnStmt.location = location;
-    // Return statement must convert expression to return type of function
-    returnStmt.type = functions.peek().returnType;
-    return returnStmt;
+    return new Stmt.Return(location, expression(), functions.peek().returnType);
   }
 
   ////////////////////////////////////////////
@@ -259,8 +274,10 @@ public class Parser {
       List.of(PIPE),
       List.of(ACCENT),
       List.of(AMPERSAND),
-      List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL),
-      List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF, AS),
+      */
+      Pair.create(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
+      Pair.create(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL /*, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF, AS*/)),
+/*
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
 */
       Pair.create(true, List.of(MINUS, PLUS)),
@@ -279,6 +296,7 @@ public class Parser {
    * @return the parsed expression
    */
   private Expr expression() {
+    matchAny(EOL);
     return parseExpression(0);
   }
 
@@ -393,26 +411,22 @@ public class Parser {
    *#          ;
    */
   private Expr primary() {
-    matchAny(EOL);
-    if (matchAny(INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST, STRING_CONST, TRUE, FALSE, NULL)) {
-      return new Expr.Literal(previous());
-    }
-
-    if (peek().is(EXPR_STRING_START))             { return exprString(); }
-    if (matchAny(IDENTIFIER) || matchKeyword())   { return new Expr.Identifier(previous()); }
-    if (peek().is(LEFT_SQUARE,LEFT_BRACE)) {
-      if (isMapLiteral()) {
-        return mapLiteral();
-      }
-    }
-    if (matchAny(LEFT_SQUARE))                    { return listLiteral(); }
-
-    if (matchAny(LEFT_PAREN)) {
+    Supplier<Expr> nestedExpression = () -> {
       Expr nested = expression();
       matchAny(EOL);
       expect(RIGHT_PAREN);
       return nested;
-    }
+    };
+
+    matchAny(EOL);
+    if (matchAny(INTEGER_CONST, LONG_CONST,
+                 DECIMAL_CONST, DOUBLE_CONST,
+                 STRING_CONST, TRUE, FALSE, NULL)) { return new Expr.Literal(previous());         }
+    if (peek().is(EXPR_STRING_START))              { return exprString();                         }
+    if (matchAny(IDENTIFIER))                      { return new Expr.Identifier(previous());      }
+    if (peek().is(LEFT_SQUARE,LEFT_BRACE))         { if (isMapLiteral()) { return mapLiteral(); } }
+    if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
+    if (matchAny(LEFT_PAREN))                      { return nestedExpression.get();               }
 
     return unexpected("Expecting literal or identifier or bracketed expression");
   }
@@ -717,12 +731,20 @@ public class Parser {
 
     if (stmt instanceof Stmt.If) {
       Stmt.If ifStmt = (Stmt.If) stmt;
-      if (ifStmt.trueStmts == null || ifStmt.falseStmts == null) {
-        throw new CompileError("Missing explicit/implicit return in empty block for " +
-                               (ifStmt.trueStmts == null ? "true" : "false") + " condition of if statment", stmt.location);
+      if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
+        if (returnType.isPrimitive()) {
+          throw new CompileError("Implicit return of null for  " +
+                                 (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
+        }
+        if (ifStmt.trueStmt == null) {
+          ifStmt.trueStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+        }
+        if (ifStmt.falseStmt == null) {
+          ifStmt.falseStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+        }
       }
-      ifStmt.trueStmts = doExplicitReturn(((Stmt.If) stmt).trueStmts, returnType);
-      ifStmt.falseStmts = doExplicitReturn(((Stmt.If) stmt).falseStmts, returnType);
+      ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
+      ifStmt.falseStmt = doExplicitReturn(((Stmt.If) stmt).falseStmt, returnType);
       return stmt;
     }
 
@@ -731,9 +753,7 @@ public class Parser {
       Stmt.ExprStmt exprStmt = (Stmt.ExprStmt) stmt;
       Expr          expr     = exprStmt.expr;
       expr.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(expr);
-      returnStmt.type = returnType;
-      returnStmt.location = exprStmt.location;
+      Stmt.Return returnStmt = new Stmt.Return(exprStmt.location, expr, returnType);
       return returnStmt;
     }
 
@@ -743,9 +763,7 @@ public class Parser {
     if (stmt instanceof Stmt.VarDecl) {
       Expr.VarDecl declExpr = ((Stmt.VarDecl) stmt).declExpr;
       declExpr.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(declExpr);
-      returnStmt.location = stmt.location;
-      returnStmt.type = returnType;
+      Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
       return returnStmt;
     }
 
@@ -755,9 +773,7 @@ public class Parser {
     if (returnType.is(ANY)) {
       Stmt.Stmts stmts = new Stmt.Stmts();
       stmts.stmts.add(stmt);
-      Stmt.Return returnStmt = new Stmt.Return(new Expr.Literal(new Token(NULL, stmt.location)));
-      returnStmt.location = stmt.location;
-      returnStmt.type = returnType;
+      Stmt.Return returnStmt = new Stmt.Return(stmt.location, new Expr.Literal(new Token(NULL, stmt.location)), returnType);
       stmts.stmts.add(returnStmt);
       return stmts;
     }

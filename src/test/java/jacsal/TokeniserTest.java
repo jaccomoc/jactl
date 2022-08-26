@@ -113,6 +113,7 @@ class TokeniserTest {
     doTest.accept("void", VOID);
     doTest.accept("for", FOR);
     doTest.accept("if", IF);
+    doTest.accept("else", ELSE);
     doTest.accept("while", WHILE);
     doTest.accept("class", CLASS);
     doTest.accept("interface", INTERFACE);

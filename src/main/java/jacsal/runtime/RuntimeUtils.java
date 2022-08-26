@@ -40,6 +40,17 @@ public class RuntimeUtils {
   public static final String SLASH_EQUAL   = "/=";
   public static final String PERCENT_EQUAL = "%=";
 
+  public static final String BANG_EQUAL         = "!=";
+  public static final String EQUAL_EQUAL        = "==";
+  public static final String LESS_THAN          = "<";
+  public static final String LESS_THAN_EQUAL    = "<=";
+  public static final String GREATER_THAN       = ">";
+  public static final String GREATER_THAN_EQUAL = ">=";
+  public static final String IN                 = "in";
+  public static final String BANG_IN            = "!in";
+  public static final String INSTANCE_OF        = "instanceof";
+  public static final String BANG_INSTANCE_OF   = "!instanceof";
+
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
   // as a special marker since that way when we need the before value of an inc/dec it will
@@ -53,18 +64,28 @@ public class RuntimeUtils {
       return null;
     }
     switch (op) {
-      case PLUS_PLUS:     return PLUS_PLUS;
-      case MINUS_MINUS:   return MINUS_MINUS;
-      case PLUS:          return PLUS;
-      case MINUS:         return MINUS;
-      case STAR:          return STAR;
-      case SLASH:         return SLASH;
-      case PERCENT:       return PERCENT;
-      case PLUS_EQUAL:    return PLUS_EQUAL;
-      case MINUS_EQUAL:   return MINUS_EQUAL;
-      case STAR_EQUAL:    return STAR_EQUAL;
-      case SLASH_EQUAL:   return SLASH_EQUAL;
-      case PERCENT_EQUAL: return PERCENT_EQUAL;
+      case PLUS_PLUS:          return PLUS_PLUS;
+      case MINUS_MINUS:        return MINUS_MINUS;
+      case PLUS:               return PLUS;
+      case MINUS:              return MINUS;
+      case STAR:               return STAR;
+      case SLASH:              return SLASH;
+      case PERCENT:            return PERCENT;
+      case PLUS_EQUAL:         return PLUS_EQUAL;
+      case MINUS_EQUAL:        return MINUS_EQUAL;
+      case STAR_EQUAL:         return STAR_EQUAL;
+      case SLASH_EQUAL:        return SLASH_EQUAL;
+      case PERCENT_EQUAL:      return PERCENT_EQUAL;
+      case BANG_EQUAL:         return BANG_EQUAL;
+      case EQUAL_EQUAL:        return EQUAL_EQUAL;
+      case LESS_THAN:          return LESS_THAN;
+      case LESS_THAN_EQUAL:    return LESS_THAN_EQUAL;
+      case GREATER_THAN:       return GREATER_THAN;
+      case GREATER_THAN_EQUAL: return GREATER_THAN_EQUAL;
+      case IN:                 return IN;
+      case BANG_IN:            return BANG_IN;
+      case INSTANCE_OF:        return INSTANCE_OF;
+      case BANG_INSTANCE_OF:   return BANG_INSTANCE_OF;
       default: throw new IllegalStateException("Internal error: operator " + op + " not supported");
     }
   }
@@ -152,9 +173,6 @@ public class RuntimeUtils {
       }
     }
 
-    // If boolean operation...
-    // TBD
-
     // All other operations expect numbers so check we have numbers
     if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
     if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
@@ -218,6 +236,66 @@ public class RuntimeUtils {
         }
       default: throw new IllegalStateException("Internal error: unknown operator " + operator);
     }
+  }
+
+  public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
+    // Use == to compare since we guarantee that the actual string for the operator is passed in
+    if (operator == EQUAL_EQUAL) {
+      if (left == right)                 { return true;  }
+      if (left == null || right == null) { return false; }
+    }
+    if (operator == BANG_EQUAL) {
+      if (left == right)                 { return false; }
+      if (left == null || right == null) { return true;  }
+    }
+    if (operator == IN || operator == BANG_IN) {
+      throw new UnsupportedOperationException();
+    }
+    if (operator == INSTANCE_OF || operator == BANG_INSTANCE_OF) {
+      throw new UnsupportedOperationException();
+    }
+
+    // We are left with the comparison operators
+    int comparison;
+    if (left == null && right == null)  { comparison = 0;  }
+    else if (left == null)              { comparison = -1; }
+    else if (right == null)             { comparison = 1;  }
+    else if (left instanceof Boolean && right instanceof Boolean) {
+      comparison = Boolean.compare((boolean)left, (boolean)right);
+    }
+    else if (left instanceof Number && right instanceof Number) {
+      if (left instanceof BigDecimal || right instanceof BigDecimal) {
+        comparison = toBigDecimal(left).compareTo(toBigDecimal(right));
+      }
+      else
+      if (left instanceof Double || right instanceof Double) {
+        comparison = Double.compare(((Number)left).doubleValue(), ((Number)right).doubleValue());
+      }
+      else
+      if (left instanceof Long || right instanceof Long) {
+        comparison = Long.compare(((Number)left).longValue(), ((Number)right).longValue());
+      }
+      else {
+        comparison = Integer.compare((int)left, (int)right);
+      }
+    }
+    else if (left instanceof String && right instanceof String) {
+      comparison = ((String)left).compareTo((String)right);
+    }
+    else if (operator == EQUAL_EQUAL || operator == BANG_EQUAL) {
+      return (operator == EQUAL_EQUAL) == (left == right);
+    }
+    else {
+      throw new RuntimeError("Object of type " + className(left) + " not comparable with object of type " + className(right), source, offset);
+    }
+
+    if (operator == EQUAL_EQUAL)        { return comparison == 0; }
+    if (operator == BANG_EQUAL)         { return comparison != 0; }
+    if (operator == LESS_THAN)          { return comparison < 0; }
+    if (operator == LESS_THAN_EQUAL)    { return comparison <= 0; }
+    if (operator == GREATER_THAN)       { return comparison > 0; }
+    if (operator == GREATER_THAN_EQUAL) { return comparison >= 0; }
+    throw new IllegalStateException("Internal error: unexpected operator " + operator);
   }
 
   public static Object negateNumber(Object obj, String source, int offset) {

@@ -114,7 +114,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitVarDecl(Stmt.VarDecl stmt) {
     resolve(stmt.declExpr);
-    stmt.type = stmt.declExpr.type;
     return null;
   }
 
@@ -125,7 +124,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     resolve(stmt.expr);
-    if (!stmt.expr.type.isConvertibleTo(stmt.type)) {
+    if (!stmt.expr.type.isConvertibleTo(stmt.returnType)) {
       throw new CompileError("Expression type not compatible with return type of function", stmt.expr.location);
     }
     return null;
@@ -134,8 +133,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override
   public Void visitIf(Stmt.If stmt) {
     resolve(stmt.condtion);
-    resolve(stmt.trueStmts);
-    resolve(stmt.falseStmts);
+    resolve(stmt.trueStmt);
+    resolve(stmt.falseStmt);
     return null;
   }
 
@@ -148,7 +147,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.right);
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
-    if (expr.left.isConst && expr.left.constValue == null && !expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
+    if (expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
       throw new CompileError("Left-hand side of '" + expr.operator.getStringValue() + "' cannot be null", expr.left.location);
     }
 
@@ -214,6 +213,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) ||
                           RuntimeUtils.isTruth(expr.right.constValue, false);
         return expr.type;
+      }
+
+      if (expr.operator.getType().isBooleanOperator()) {
+        expr.constValue = RuntimeUtils.booleanOp(expr.left.constValue, expr.right.constValue,
+                                                 RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                                 expr.operator.getSource(), expr.operator.getOffset());
+        return expr.type = JacsalType.BOOLEAN;
       }
 
       if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
@@ -285,7 +291,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type;
     }
     else {
-      expr.type = expr.expr.type;
+      expr.type = expr.expr.type.unboxed();
       if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
         throw new CompileError("Prefix operator '" + expr.operator.getStringValue() + "' cannot be applied to type " + expr.expr.type, expr.operator);
       }

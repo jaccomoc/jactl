@@ -37,7 +37,6 @@ abstract class Stmt {
 
 
   Token      location = null;
-  JacsalType type     = null;   // Used for last statement of a block in a function to indicate type to be returned
 
   /**
    * Each script is parsed into a Script object. This is true even if the script
@@ -69,14 +68,17 @@ abstract class Stmt {
    * declared by statements within the block.
    */
   static class Block extends Stmt {
+    Token openBrace;
     Stmts stmts;
     Map<String,Expr.VarDecl> variables = new HashMap<>();
     int slotsUsed = 0;   // How many local var slots used by vars in this block
-    Block(Stmts stmts) {
+    Block(Token openBrace, Stmts stmts) {
+      this.openBrace = openBrace;
       this.stmts = stmts;
+      this.location = openBrace;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
-    @Override public String toString() { return "Block[" + "stmts=" + stmts + ", " + "variables=" + variables + "]"; }
+    @Override public String toString() { return "Block[" + "openBrace=" + openBrace + ", " + "stmts=" + stmts + ", " + "variables=" + variables + "]"; }
   }
 
   /**
@@ -84,16 +86,19 @@ abstract class Stmt {
    * and statement(s) to execute if false.
    */
   static class If extends Stmt {
+    Token ifToken;
     Expr condtion;
-    Stmt trueStmts;
-    Stmt falseStmts;
-    If(Expr condtion, Stmt trueStmts, Stmt falseStmts) {
+    Stmt trueStmt;
+    Stmt falseStmt;
+    If(Token ifToken, Expr condtion, Stmt trueStmt, Stmt falseStmt) {
+      this.ifToken = ifToken;
       this.condtion = condtion;
-      this.trueStmts = trueStmts;
-      this.falseStmts = falseStmts;
+      this.trueStmt = trueStmt;
+      this.falseStmt = falseStmt;
+      this.location = ifToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitIf(this); }
-    @Override public String toString() { return "If[" + "condtion=" + condtion + ", " + "trueStmts=" + trueStmts + ", " + "falseStmts=" + falseStmts + "]"; }
+    @Override public String toString() { return "If[" + "ifToken=" + ifToken + ", " + "condtion=" + condtion + ", " + "trueStmt=" + trueStmt + ", " + "falseStmt=" + falseStmt + "]"; }
   }
 
   /**
@@ -101,12 +106,15 @@ abstract class Stmt {
    * Expr type where the work is done.
    */
   static class VarDecl extends Stmt {
+    Token typeToken;
     Expr.VarDecl declExpr;
-    VarDecl(Expr.VarDecl declExpr) {
+    VarDecl(Token typeToken, Expr.VarDecl declExpr) {
+      this.typeToken = typeToken;
       this.declExpr = declExpr;
+      this.location = typeToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
-    @Override public String toString() { return "VarDecl[" + "declExpr=" + declExpr + "]"; }
+    @Override public String toString() { return "VarDecl[" + "typeToken=" + typeToken + ", " + "declExpr=" + declExpr + "]"; }
   }
 
   /**
@@ -118,10 +126,11 @@ abstract class Stmt {
     Block      block;
     int        slotIdx;          // Current slot available for allocation
     int        maxSlot;          // Maximum slot used for local vars
-    boolean    returnValue; // Value used as implicit return from function
+    boolean    returnValue;      // Value used as implicit return from function
     FunDecl(Token name, JacsalType returnType) {
       this.name = name;
       this.returnType = returnType;
+      this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
     @Override public String toString() { return "FunDecl[" + "name=" + name + ", " + "returnType=" + returnType + ", " + "block=" + block + "]"; }
@@ -131,12 +140,17 @@ abstract class Stmt {
    * Return statement
    */
   static class Return extends Stmt {
+    Token      returnToken;
     Expr       expr;
-    Return(Expr expr) {
+    JacsalType returnType;      // Return type of the function we are embedded in
+    Return(Token returnToken, Expr expr, JacsalType returnType) {
+      this.returnToken = returnToken;
       this.expr = expr;
+      this.returnType = returnType;
+      this.location = returnToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
-    @Override public String toString() { return "Return[" + "expr=" + expr + "]"; }
+    @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + ", " + "returnType=" + returnType + "]"; }
   }
 
   /**
@@ -147,12 +161,15 @@ abstract class Stmt {
    * an assignment has a value (the value being assigned), an assignment is actually an expression.
    */
   static class ExprStmt extends Stmt {
+    Token exprLocation;
     Expr expr;
-    ExprStmt(Expr expr) {
+    ExprStmt(Token exprLocation, Expr expr) {
+      this.exprLocation = exprLocation;
       this.expr = expr;
+      this.location = exprLocation;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitExprStmt(this); }
-    @Override public String toString() { return "ExprStmt[" + "expr=" + expr + "]"; }
+    @Override public String toString() { return "ExprStmt[" + "exprLocation=" + exprLocation + ", " + "expr=" + expr + "]"; }
   }
 
   interface Visitor<T> {
