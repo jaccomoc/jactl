@@ -786,10 +786,10 @@ public class Parser {
       return previous();
     }
     if (types.length > 1) {
-      error("Unexpected token. Expecting one of " + Arrays.stream(types).map(Enum::toString).collect(Collectors.joining(", ")));
+      unexpected("Expecting one of " + Arrays.stream(types).map(Enum::toString).collect(Collectors.joining(", ")));
     }
     else {
-      error("Unexpected token '" + peek().getStringValue() + "'. Expecting " + types[0]);
+      unexpected("Expecting " + types[0]);
     }
     return null;
   }
