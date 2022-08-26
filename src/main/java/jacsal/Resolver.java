@@ -130,11 +130,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override
-  public Void visitIf(Stmt.If stmt) {
+  @Override public Void visitIf(Stmt.If stmt) {
     resolve(stmt.condtion);
     resolve(stmt.trueStmt);
     resolve(stmt.falseStmt);
+    return null;
+  }
+
+  @Override public Void visitWhile(Stmt.While stmt) {
+    resolve(stmt.condition);
+    resolve(stmt.body);
     return null;
   }
 
@@ -527,7 +532,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private Expr.VarDecl lookup(Token identifier) {
     String name = (String)identifier.getValue();
     Expr.VarDecl varDecl = null;
-    for (Iterator<Stmt.Block> it = blocks.descendingIterator(); it.hasNext(); ) {
+    for (Iterator<Stmt.Block> it = blocks.iterator(); it.hasNext(); ) {
       Stmt.Block   block   = it.next();
       varDecl = block.variables.get(name);
       if (varDecl != null) {

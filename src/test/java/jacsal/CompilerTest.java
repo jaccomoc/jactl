@@ -287,8 +287,7 @@ class CompilerTest {
     test("8D % 5.0", "#3.0");
   }
 
-  @Test
-  public void simpleVariables() {
+  @Test public void simpleVariables() {
     test("boolean v = false", false);
     test("boolean v = true", true);
     test("boolean v = false; v", false);
@@ -305,6 +304,13 @@ class CompilerTest {
     test("var v = 1D; v", 1D);
     test("Decimal v = 1; v", "#1");
     test("var v = 1.0; v", "#1.0");
+  }
+
+  @Test public void multipleVarDecls() {
+    test("int i,j; i + j", 0);
+    test("int i = 1,j; i + j", 1);
+    test("int i = 1,j=3; i + j", 4);
+    test("int i =\n1,\nj =\n3\n; i + j", 4);
   }
 
   @Test public void variableAssignments() {
@@ -1157,8 +1163,10 @@ class CompilerTest {
     test("def x =\n1 + (\n2)\n", 3);
   }
 
-  @Test public void varDecl() {
+  @Test public void varScoping() {
     testFail("def x = x + 1", "variable initialisation cannot refer to itself");
+    test("def x = 2; if (true) { def x = 4; x++ }; x", 2);
+    test("def x = 2; if (true) { def x = 4; x++; { def x = 17; x = x + 5 } }; x", 2);
   }
 
   // TODO: not yet supported
@@ -1456,6 +1464,8 @@ class CompilerTest {
     test("long x = 2; if (x * 2 == 4) ++x else if (!x) { x-- }", 3L);
     test("def x = 2; if (x * 2 < 5) ++x else { --x }", 3);
     test("def x = 2; if (x * 2 < -5) ++x else { --x }", 1);
+    test("def x = 2; if (x == 2) { def x = 5; x++ }; x", 2);
+    test("def x = 2; if (x == 2) { def x = 5; x++; if (true) { def x = 1; x-- } }; x", 2);
   }
 
   @Test public void constBooleanComparisons() {
@@ -1620,5 +1630,24 @@ class CompilerTest {
 
     test("def x = 2L; 2 * x == 4", true);
     test("long x = 2L; 2 * x == 4", true);
+  }
+
+  @Test public void whileLoops() {
+    test("int i = 0; while (i < 10) i++; i", 10);
+    test("int i = 0; int sum = 0; while (i < 10) sum += i++; sum", 45);
+    test("int i = 0; int sum = 0; while (i < 10) { sum += i; i++ }; sum", 45);
+    test("int i = 0; int sum = 0; while (i < 10) i++", null);
+    testFail("while (false) i++;", "unknown variable i");
+    test("int i = 1; while (false) i++; i", 1);
+    test("int i = 1; while (false) ;", null);
+    test("int i = 1; while (++i < 10); i", 10);
+  }
+
+  @Test public void forLoops() {
+    test("int sum = 0; for (int i = 0; i < 10; i++) sum += i; sum", 45);
+    testFail("int sum = 0; for (int i = 0; i < 10; i++) sum += i; i", "unknown variable");
+    test("int sum = 0; for (int i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 100);
+    test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 120);
+    test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) { sum += i + j; def i = 3; i++ }; sum", 120);
   }
 }

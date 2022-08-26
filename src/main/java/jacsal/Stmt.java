@@ -102,6 +102,23 @@ abstract class Stmt {
   }
 
   /**
+   * While loop
+   */
+  static class While extends Stmt {
+    Token whileToken;
+    Expr condition;
+    Stmt body;
+    While(Token whileToken, Expr condition, Stmt body) {
+      this.whileToken = whileToken;
+      this.condition = condition;
+      this.body = body;
+      this.location = whileToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
+    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + ", " + "body=" + body + "]"; }
+  }
+
+  /**
    * Variable declaration with optional initialiser. Statement wraps the corresponding
    * Expr type where the work is done.
    */
@@ -177,6 +194,7 @@ abstract class Stmt {
     T visitStmts(Stmts stmt);
     T visitBlock(Block stmt);
     T visitIf(If stmt);
+    T visitWhile(While stmt);
     T visitVarDecl(VarDecl stmt);
     T visitFunDecl(FunDecl stmt);
     T visitReturn(Return stmt);

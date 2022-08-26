@@ -79,6 +79,15 @@ class Stmt {
   }
 
   /**
+   * While loop
+   */
+  class While extends Stmt {
+    Token whileToken;
+    Expr condition;
+    Stmt body;
+  }
+
+  /**
    * Variable declaration with optional initialiser. Statement wraps the corresponding
    * Expr type where the work is done.
    */

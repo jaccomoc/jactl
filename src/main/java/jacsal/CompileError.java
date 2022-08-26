@@ -40,7 +40,7 @@ public class CompileError extends JacsalError {
   public String getMessage() {
     if (this.errors != null) {
       StringBuilder sb = new StringBuilder();
-      sb.append(String.format("%d error%s found:\n", errors.size(), errors.size() > 1));
+      sb.append(String.format("%d error%s found:\n", errors.size(), errors.size() > 1 ? "s" : ""));
       errors.forEach(e -> sb.append(e.getMessage()).append('\n'));
       return sb.toString();
     }

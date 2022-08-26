@@ -185,6 +185,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitWhile(Stmt.While stmt) {
+    Label end  = new Label();
+    Label loop = new Label();
+    mv.visitLabel(loop);
+    compile(stmt.condition);
+    convertTo(BOOLEAN, true, stmt.condition.location);
+    pop();
+    mv.visitJumpInsn(IFEQ, end);
+    compile(stmt.body);
+    mv.visitJumpInsn(GOTO, loop);
+    mv.visitLabel(end);
+    return null;
+  }
+
   /////////////////////////////////////////////
 
   // Expr

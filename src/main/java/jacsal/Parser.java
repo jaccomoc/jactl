@@ -72,6 +72,8 @@ public class Parser {
 
   // = Stmt
 
+  private static final TokenType[] varDeclStart = new TokenType[] { VAR, DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST };
+
   /**
    *# script -> block;
    */
@@ -145,7 +147,7 @@ public class Parser {
    *#              | statement;
    */
   private Stmt declaration() {
-    if (matchAny(VAR, DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST)) {
+    if (matchAny(varDeclStart)) {
       return varDecl();
     }
     if (matchAny(SEMICOLON)) {
@@ -158,6 +160,8 @@ public class Parser {
   /**
    *# statement -> block
    *#            | ifStmt
+   *#            | forStmt
+   *#            | whileStmt
    *#            | returnStmt
    *#            | exprStatement;
    */
@@ -172,18 +176,39 @@ public class Parser {
     if (matchAny(LEFT_BRACE)) { return block(RIGHT_BRACE); }
     if (matchAny(RETURN))     { return returnStmt();       }
     if (matchAny(IF))         { return ifStmt();           }
+    if (matchAny(WHILE))      { return whileStmt();        }
+    if (matchAny(FOR))        { return forStmt();          }
+    if (peek().is(SEMICOLON)) { return null;               }
     return exprStmt();
   }
 
   /**
    *# varDecl -> ("var" | "boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List" )
-   *#                      IDENTIFIER ( "=" expression ) ? ;
+   *#                      IDENTIFIER ( "=" expression ) ? ( "," IDENTIFIER ( "=" expression ) ? ) * ;
+   * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
+   *       a list of VarDecls if multiple variables declared.
    */
-  private Stmt.VarDecl varDecl() {
-    Token typeToken   = previous();
+  private Stmt varDecl() {
+    Token typeToken = previous();
+    Stmt.Stmts stmts = new Stmt.Stmts();
+    stmts.stmts.add(singleVarDecl(typeToken));
+    while (matchAny(COMMA)) {
+      matchAny(EOL);
+      stmts.stmts.add(singleVarDecl(typeToken));
+    }
+    if (stmts.stmts.size() > 0) {
+      // Multiple variables so return list of VarDecls
+      return stmts;
+    }
+    // Single variable so return just that one
+    return stmts.stmts.get(0);
+  }
+
+  private Stmt.VarDecl singleVarDecl(Token typeToken) {
     Token identifier  = expect(IDENTIFIER);
     Expr  initialiser = null;
     if (matchAny(EQUAL)) {
+      matchAny(EOL);
       initialiser = expression();
     }
 
@@ -209,7 +234,7 @@ public class Parser {
   }
 
   /**
-   *# ifStmt -> "if" "(" expression ")" statement ( "else" statement ) ?
+   *# ifStmt -> "if" "(" expression ")" statement ( "else" statement ) ? ;
    */
   private Stmt.If ifStmt() {
     Token ifToken = previous();
@@ -224,6 +249,80 @@ public class Parser {
       falseStmt = statement();
     }
     return new Stmt.If(ifToken, cond, trueStmt, falseStmt);
+  }
+
+  /**
+   *# whileStmt -> "while" "(" expression ")" statement ;
+   */
+  private Stmt.While whileStmt() {
+    Token whileToken = previous();
+    expect(LEFT_PAREN);
+    Expr cond      = expression();
+    matchAny(EOL);
+    expect(RIGHT_PAREN);
+    Stmt body  = statement();
+    return new Stmt.While(whileToken, cond, body);
+  }
+
+  /**
+   *# forStmt -> "for" "(" declaration ";" expression ";" commaSeparatedStatements ")" statement ;
+   */
+  private Stmt forStmt() {
+    Token forToken = previous();
+    expect(LEFT_PAREN);
+    Stmt initialisation;
+    if (peek().is(varDeclStart)) {
+      initialisation    = declaration();
+    }
+    else {
+      initialisation    = commaSeparatedStatements();
+    }
+    if (!previous().is(SEMICOLON)) {
+      matchAny(EOL);
+      expect(SEMICOLON);
+    }
+    Expr cond           = expression();
+    matchAny(EOL);
+    expect(SEMICOLON);
+    Stmt update         = commaSeparatedStatements();
+    matchAny(EOL);
+    Token rightParen = expect(RIGHT_PAREN);
+    Stmt body           = statement();
+
+    // Turn body into body + updates
+    if (update != null) {
+      body = stmtBlock(rightParen, body, update);
+    }
+
+    Stmt forStmt;
+
+    // For loop is turned into a while loop. If we have new vars then declare a new
+    // block for the scope of those vars
+    if (initialisation != null) {
+      forStmt = stmtBlock(forToken, initialisation, new Stmt.While(forToken, cond, body));
+    }
+    else {
+      // If we don't have any initialisation we just turn into a while loop
+      forStmt = new Stmt.While(forToken, cond, body);
+    }
+
+    return forStmt;
+  }
+
+  /**
+   *# commaSeparatedStatements -> ( statement ( "," statement ) * ) ? ;
+   */
+  Stmt.Stmts commaSeparatedStatements() {
+    matchAny(EOL);
+    if (peek().is(RIGHT_PAREN)) {
+      return null;
+    }
+    Stmt.Stmts stmts = new Stmt.Stmts();
+    stmts.stmts.add(statement());
+    while (matchAny(COMMA)) {
+      stmts.stmts.add(statement());
+    }
+    return stmts;
   }
 
   /**
@@ -246,6 +345,12 @@ public class Parser {
   private Stmt returnStmt() {
     Token       location   = previous();
     return new Stmt.Return(location, expression(), functions.peek().returnType);
+  }
+
+  private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
+    Stmt.Stmts stmts = new Stmt.Stmts();
+    stmts.stmts.addAll(List.of(statements));
+    return new Stmt.Block(startToken, stmts);
   }
 
   ////////////////////////////////////////////
