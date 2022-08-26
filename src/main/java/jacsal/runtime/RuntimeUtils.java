@@ -556,6 +556,16 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
   }
 
+  public static void print(Object obj) {
+    if (obj == null) { obj = "null"; }
+    System.out.print(obj);
+  }
+
+  public static void println(Object obj) {
+    if (obj == null) { obj = "null"; }
+    System.out.println(obj);
+  }
+
   //////////////////////////////////////
 
   private static BigDecimal toBigDecimal(Object val) {

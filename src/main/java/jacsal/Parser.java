@@ -173,12 +173,13 @@ public class Parser {
         return exprStmt();
       }
     }
-    if (matchAny(LEFT_BRACE)) { return block(RIGHT_BRACE); }
-    if (matchAny(RETURN))     { return returnStmt();       }
-    if (matchAny(IF))         { return ifStmt();           }
-    if (matchAny(WHILE))      { return whileStmt();        }
-    if (matchAny(FOR))        { return forStmt();          }
-    if (peek().is(SEMICOLON)) { return null;               }
+    if (matchAny(LEFT_BRACE))    { return block(RIGHT_BRACE); }
+    if (matchAny(RETURN))        { return returnStmt();       }
+    if (matchAny(IF))            { return ifStmt();           }
+    if (matchAny(WHILE))         { return whileStmt();        }
+    if (matchAny(FOR))           { return forStmt();          }
+    if (matchAny(PRINT,PRINTLN)) { return printStmt();        }
+    if (peek().is(SEMICOLON))    { return null;               }
     return exprStmt();
   }
 
@@ -345,6 +346,14 @@ public class Parser {
   private Stmt returnStmt() {
     Token       location   = previous();
     return new Stmt.Return(location, expression(), functions.peek().returnType);
+  }
+
+  /**
+   *# printStmt -> ("print" | "println") expr ?;
+   */
+  private Stmt.Print printStmt() {
+    Token printToken = previous();
+    return new Stmt.Print(printToken, expression(), printToken.is(PRINTLN));
   }
 
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
@@ -639,7 +648,21 @@ public class Parser {
    * into surrounding expression string.
    */
   private Expr blockExpression() {
-    throw new UnsupportedOperationException();
+    Token leftBrace = previous();
+    Stmt.Block block = block(RIGHT_BRACE);
+    if (block.stmts.stmts.size() > 1) {
+      throw new CompileError("Only single expression allowed", leftBrace);
+    }
+    if (block.stmts.stmts.size() == 0) {
+      return new Expr.Literal(new Token(NULL, leftBrace));
+    }
+    Stmt stmt = block.stmts.stmts.get(0);
+    if (!(stmt instanceof Stmt.ExprStmt)) {
+      throw new CompileError("Not an expression", leftBrace);
+    }
+    Expr expr = ((Stmt.ExprStmt)stmt).expr;
+    expr.isResultUsed = true;
+    return expr;
   }
 
   /////////////////////////////////////////////////

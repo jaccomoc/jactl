@@ -90,8 +90,8 @@ while (<FH>) {
     @attributes = ();
   } and print and next;
 
-  $inClass and /([A-Z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/  and push @fields, [$2, $1];
-  $inClass and /([A-Z][a-zA-Z<,>.]*) +\@([a-zA-Z0-9]+)/ and push @attributes, $2;
+  $inClass and /([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/  and push @fields, [$2, $1];
+  $inClass and /([A-Za-z][a-zA-Z<,>.]*) +\@([a-zA-Z0-9]+)/ and push @attributes, $2;
   s/@//;
 
   /class (.*) extends +(\w*)/ and ($inClass, $className, $extends) = (1, $1, $2)

@@ -131,6 +131,8 @@ class TokeniserTest {
     doTest.accept("true", TRUE);
     doTest.accept("false", FALSE);
     doTest.accept("null", NULL);
+    doTest.accept("print", PRINT);
+    doTest.accept("println", PRINTLN);
   }
 
   @Test public void booleans() {
@@ -807,6 +809,45 @@ class TokeniserTest {
     assertEquals(EXPR_STRING_END, token.getType());
     token = tokeniser.next();
     assertEquals(EOF, token.getType());
+  }
+
+  @Test public void nestedExprStrings() {
+    var tokeniser = new Tokeniser("\"$x${\"${2*4}\" + 2}\"");
+    var token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    assertEquals("", token.getValue());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("x", token.getValue());
+    token = tokeniser.next();
+    assertEquals(LEFT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    assertEquals("", token.getValue());
+    token = tokeniser.next();
+    assertEquals(LEFT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(INTEGER_CONST, token.getType());
+    assertEquals(2, token.getValue());
+    token = tokeniser.next();
+    assertEquals(STAR, token.getType());
+    token = tokeniser.next();
+    assertEquals(INTEGER_CONST, token.getType());
+    assertEquals(4, token.getValue());
+    token = tokeniser.next();
+    assertEquals(RIGHT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_END, token.getType());
+    token = tokeniser.next();
+    assertEquals(PLUS, token.getType());
+    token = tokeniser.next();
+    assertEquals(INTEGER_CONST, token.getType());
+    assertEquals(2, token.getValue());
+    token = tokeniser.next();
+    assertEquals(RIGHT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_END, token.getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void newLineInExpressionInSingleLineString() {

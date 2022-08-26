@@ -143,6 +143,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitPrint(Stmt.Print stmt) {
+    resolve(stmt.expr);
+    return null;
+  }
+
   //////////////////////////////////////////////////////////
 
   // = Expr

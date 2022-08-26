@@ -199,6 +199,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitPrint(Stmt.Print stmt) {
+    compile(stmt.expr);
+    convertTo(STRING, true, stmt.expr.location);
+    invokeStatic(RuntimeUtils.class, stmt.printToken.getStringValue(), Object.class);
+    return null;
+  }
+
   /////////////////////////////////////////////
 
   // Expr

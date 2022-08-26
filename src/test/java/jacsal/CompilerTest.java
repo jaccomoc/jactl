@@ -1169,10 +1169,12 @@ class CompilerTest {
     test("def x = 2; if (true) { def x = 4; x++; { def x = 17; x = x + 5 } }; x", 2);
   }
 
-  // TODO: not yet supported
-  public void exprStrings() {
-    test("\"${\"${1}\"}\"", "1");
+  @Test public void exprStrings() {
+    test("def x = 1; \"$x\"", "1");
+    test("\"${1}\"", "1");
+    test("def x = 1; \"${x}\"", "1");
     test("\"${}\"", "null");
+    test("\"${\"${1}\"}\"", "1");
     test("\"'a'\"", "'a'");
     test("\"${1 + 2}\"", "3");
     test("\"x${1 + 2}y\"", "x3y");
@@ -1181,9 +1183,11 @@ class CompilerTest {
     test("\"x${\"${2*4}\" + 2}y\"", "x82y");
     test("boolean x; \"$x${\"${2*4}\" + 2}y\"", "false82y");
     test("boolean x; boolean y = true; \"$x${\"${\"$x\"*4}\" + 2}$y\"", "falsefalsefalsefalsefalse2true");
-    test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
     test("def x = 3;\"x = ${x}\"", "x = 3");
     test("def x = 3;\"x = $x\"", "x = 3");
+
+    // TODO: test with multiple statements within block once supported
+    //test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
   }
 
   @Test public void listLiterals() {
@@ -1204,7 +1208,7 @@ class CompilerTest {
   @Test public void mapLiterals() {
     test("[:]", new HashMap<>());
     test("[a:1]", Map.of("a",1));
-    testFail("[:", "unexpected token");
+    testFail("[:", "unexpected EOF");
     testFail("[:123]", "unexpected token");
     test("[for:1]", Map.of("for",1));
     test("['for':1]", Map.of("for",1));
@@ -1215,7 +1219,7 @@ class CompilerTest {
     test("[a:1,b:[c:2]]", Map.of("a",1, "b", Map.of("c",2)));
     test("{:}", new HashMap<>());
     test("{a:1}", Map.of("a",1));
-    testFail("{:", "unexpected token");
+    testFail("{:", "unexpected EOF");
     test("{for:1}", Map.of("for",1));
     test("{'for':1}", Map.of("for",1));
     test("{a:1,b:2}", Map.of("a",1, "b", 2));

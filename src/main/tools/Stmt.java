@@ -128,4 +128,13 @@ class Stmt {
     Token exprLocation;
     Expr expr;
   }
+
+  /**
+   * Print statement
+   */
+  class Print extends Stmt {
+    Token   printToken;
+    Expr    expr;
+    boolean newLine;    // Whether to print newline
+  }
 }

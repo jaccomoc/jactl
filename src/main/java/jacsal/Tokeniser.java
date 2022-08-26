@@ -255,7 +255,7 @@ public class Tokeniser {
     // Check that if symbol ends in a word character that following char is not a word character
     if (sym.endsWithAlpha() &&
         sym.length() + 1 <= remaining &&
-        Character.isJavaIdentifierPart(charAt(sym.length()))) {
+        isIdentifierPart(charAt(sym.length()))) {
       return false;
     }
 
@@ -325,15 +325,23 @@ public class Tokeniser {
   private Token parseIdentifier(Token token, int remaining) {
     // Make sure that first character is legal for an identitifer
     int c = charAt(0);
-    if (!Character.isJavaIdentifierStart(c)) throw new CompileError("Unexpected character '" + (char)c + "'", token);
+    if (!isIdentifierStart(c)) throw new CompileError("Unexpected character '" + (char)c + "'", token);
 
     // Search for first char the is not a valid identifier char
     int i = 1;
-    while (i < remaining && Character.isJavaIdentifierPart(charAt(i))) { i++; }
+    while (i < remaining && isIdentifierPart(charAt(i))) { i++; }
 
     advance(i);
     return token.setType(IDENTIFIER)
                 .setLength(i);
+  }
+
+  private static boolean isIdentifierStart(int c) {
+    return Character.isJavaIdentifierStart(c) && c != '$';
+  }
+
+  private static boolean isIdentifierPart(int c) {
+    return Character.isJavaIdentifierPart(c) && c != '$';
   }
 
   private boolean newLinesAllowed() {
@@ -509,7 +517,7 @@ public class Tokeniser {
         case '$': {
           if (stringExpr) {
             int nextChar = available(2) ? charAt(1) : -1;
-            if (nextChar == '{' || Character.isJavaIdentifierStart(nextChar)) {
+            if (nextChar == '{' || isIdentifierStart(nextChar)) {
               finished = true;
               continue;
             }
@@ -543,8 +551,8 @@ public class Tokeniser {
   }
 
   private static boolean isIdentifier(String s) {
-    return Character.isJavaIdentifierStart(s.charAt(0)) &&
-           s.chars().skip(1).allMatch(Character::isJavaIdentifierPart);
+    return isIdentifierStart(s.charAt(0)) &&
+           s.chars().skip(1).allMatch(Tokeniser::isIdentifierPart);
   }
 
   //////////////////////////////////////////////////////////////////////
@@ -670,7 +678,9 @@ public class Tokeniser {
     new Symbol("in", IN),
     new Symbol("!in", BANG_IN),
     new Symbol("and", AND),
-    new Symbol("or", OR)
+    new Symbol("or", OR),
+    new Symbol("print", PRINT),
+    new Symbol("println", PRINTLN)
     //    new Symbol("'", SINGLE_QUOTE),
     //    new Symbol("\"", DOUBLE_QUOTE),
     //    new Symbol("''", DOUBLE_SINGLE_QUOTE),

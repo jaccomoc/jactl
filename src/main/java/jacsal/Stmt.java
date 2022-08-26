@@ -78,7 +78,7 @@ abstract class Stmt {
       this.location = openBrace;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
-    @Override public String toString() { return "Block[" + "openBrace=" + openBrace + ", " + "stmts=" + stmts + ", " + "variables=" + variables + "]"; }
+    @Override public String toString() { return "Block[" + "openBrace=" + openBrace + ", " + "stmts=" + stmts + ", " + "variables=" + variables + ", " + "slotsUsed=" + slotsUsed + "]"; }
   }
 
   /**
@@ -150,7 +150,7 @@ abstract class Stmt {
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
-    @Override public String toString() { return "FunDecl[" + "name=" + name + ", " + "returnType=" + returnType + ", " + "block=" + block + "]"; }
+    @Override public String toString() { return "FunDecl[" + "name=" + name + ", " + "returnType=" + returnType + ", " + "block=" + block + ", " + "slotIdx=" + slotIdx + ", " + "maxSlot=" + maxSlot + ", " + "returnValue=" + returnValue + "]"; }
   }
 
   /**
@@ -189,6 +189,23 @@ abstract class Stmt {
     @Override public String toString() { return "ExprStmt[" + "exprLocation=" + exprLocation + ", " + "expr=" + expr + "]"; }
   }
 
+  /**
+   * Print statement
+   */
+  static class Print extends Stmt {
+    Token   printToken;
+    Expr    expr;
+    boolean newLine;    // Whether to print newline
+    Print(Token printToken, Expr expr, boolean newLine) {
+      this.printToken = printToken;
+      this.expr = expr;
+      this.newLine = newLine;
+      this.location = printToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitPrint(this); }
+    @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
+  }
+
   interface Visitor<T> {
     T visitScript(Script stmt);
     T visitStmts(Stmts stmt);
@@ -199,5 +216,6 @@ abstract class Stmt {
     T visitFunDecl(FunDecl stmt);
     T visitReturn(Return stmt);
     T visitExprStmt(ExprStmt stmt);
+    T visitPrint(Print stmt);
   }
 }

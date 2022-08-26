@@ -61,6 +61,7 @@ public enum TokenType {
   INSTANCE_OF, BANG_INSTANCE_OF,
   RETURN,
   AND, OR,
+  PRINT, PRINTLN,
 
   //= Special
   EOL,            // End of line
