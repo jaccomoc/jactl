@@ -139,7 +139,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitWhile(Stmt.While stmt) {
     resolve(stmt.condition);
+    resolve(stmt.updates);
     resolve(stmt.body);
+    return null;
+  }
+
+  @Override public Void visitBreak(Stmt.Break stmt) {
+    return null;
+  }
+
+  @Override public Void visitContinue(Stmt.Continue stmt) {
     return null;
   }
 

@@ -666,6 +666,8 @@ public class Tokeniser {
     new Symbol("if", IF),
     new Symbol("else", ELSE),
     new Symbol("while", WHILE),
+    new Symbol("continue", CONTINUE),
+    new Symbol("break", BREAK),
     new Symbol("class", CLASS),
     new Symbol("interface", INTERFACE),
     new Symbol("extends", EXTENDS),

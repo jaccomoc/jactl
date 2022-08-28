@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import org.objectweb.asm.Label;
 
 /**
  * Stmt classes for our AST.
@@ -79,15 +80,6 @@ class Stmt {
   }
 
   /**
-   * While loop
-   */
-  class While extends Stmt {
-    Token whileToken;
-    Expr condition;
-    Stmt body;
-  }
-
-  /**
    * Variable declaration with optional initialiser. Statement wraps the corresponding
    * Expr type where the work is done.
    */
@@ -106,6 +98,19 @@ class Stmt {
     int        @slotIdx;          // Current slot available for allocation
     int        @maxSlot;          // Maximum slot used for local vars
     boolean    @returnValue;      // Value used as implicit return from function
+    Stmt.While @currentWhileLoop; // Used during parsing to find target of break/continue stmts
+  }
+
+  /**
+   * While and For loop
+   */
+  class While extends Stmt {
+    Token whileToken;
+    Expr  condition;
+    Stmt  @body;
+    Stmt  @updates;       // used for For loops
+    Label @endLoopLabel;  // where to jump to on break stmt
+    Label @continueLabel; // where to jump to on a continue stmt
   }
 
   /**
@@ -115,6 +120,22 @@ class Stmt {
     Token      returnToken;
     Expr       expr;
     JacsalType returnType;      // Return type of the function we are embedded in
+  }
+
+  /**
+   * Break statement
+   */
+  class Break extends Stmt {
+    Token breakToken;
+    While whileLoop;
+  }
+
+  /**
+   * Continue statement
+   */
+  class Continue extends Stmt {
+    Token continueToken;
+    While whileLoop;
   }
 
   /**

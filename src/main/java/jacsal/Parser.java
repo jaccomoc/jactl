@@ -41,9 +41,6 @@ public class Parser {
   Token              firstToken = null;
   List<CompileError> errors     = new ArrayList<>();
 
-  // Stack of blocks so we can always quickly find the current block
-  Deque<Stmt.Block> blockStack = new ArrayDeque<>();
-
   // Stack of function declarations (including nested closures) so we can find current function
   Deque<Stmt.FunDecl> functions = new ArrayDeque<>();
 
@@ -99,10 +96,10 @@ public class Parser {
   private Stmt.Block block(TokenType endBlock) {
     Stmt.Stmts stmts = new Stmt.Stmts();
     Stmt.Block block = new Stmt.Block(peek(), stmts);
-    blockStack.push(block);
+    //blockStack.push(block);
     stmts(stmts);
     expect(endBlock);
-    blockStack.pop();
+    //blockStack.pop();
     return block;
   }
 
@@ -179,6 +176,8 @@ public class Parser {
     if (matchAny(WHILE))         { return whileStmt();        }
     if (matchAny(FOR))           { return forStmt();          }
     if (matchAny(PRINT,PRINTLN)) { return printStmt();        }
+    if (matchAny(BREAK))         { return new Stmt.Break(previous(), currentWhileLoop()); }
+    if (matchAny(CONTINUE))      { return new Stmt.Continue(previous(), currentWhileLoop()); }
     if (peek().is(SEMICOLON))    { return null;               }
     return exprStmt();
   }
@@ -261,8 +260,15 @@ public class Parser {
     Expr cond      = expression();
     matchAny(EOL);
     expect(RIGHT_PAREN);
-    Stmt body  = statement();
-    return new Stmt.While(whileToken, cond, body);
+    Stmt.While whileStmt = new Stmt.While(whileToken, cond);
+
+    // We need to keep track of what the current while loop is so that break/continue
+    // statements within body of the loop can find the right Stmt.While object
+    Stmt.While oldWhileStmt = functions.peek().currentWhileLoop;
+    functions.peek().currentWhileLoop = whileStmt;
+    whileStmt.body = statement();
+    functions.peek().currentWhileLoop = oldWhileStmt;   // Restore old one
+    return whileStmt;
   }
 
   /**
@@ -288,25 +294,27 @@ public class Parser {
     Stmt update         = commaSeparatedStatements();
     matchAny(EOL);
     Token rightParen = expect(RIGHT_PAREN);
-    Stmt body           = statement();
 
-    // Turn body into body + updates
-    if (update != null) {
-      body = stmtBlock(rightParen, body, update);
-    }
+    Stmt.While whileStmt = new Stmt.While(forToken, cond);
+    whileStmt.updates = update;
+    Stmt.While oldWhileLoop = functions.peek().currentWhileLoop;
+    functions.peek().currentWhileLoop = whileStmt;
+
+    whileStmt.body = statement();
 
     Stmt forStmt;
-
-    // For loop is turned into a while loop. If we have new vars then declare a new
-    // block for the scope of those vars
     if (initialisation != null) {
-      forStmt = stmtBlock(forToken, initialisation, new Stmt.While(forToken, cond, body));
+      // If there are initialisers then wrap the while loop in a block that has
+      // the initialisers as the first statements (this way any vars declared
+      // will have a scope that includes only the for/while loop)
+      forStmt = stmtBlock(forToken, initialisation, whileStmt);
     }
     else {
       // If we don't have any initialisation we just turn into a while loop
-      forStmt = new Stmt.While(forToken, cond, body);
+      forStmt = whileStmt;
     }
 
+    functions.peek().currentWhileLoop = oldWhileLoop;
     return forStmt;
   }
 
@@ -759,7 +767,6 @@ public class Parser {
     // Remember current state
     Token current = peek();
     List<CompileError>  currentErrors    = new ArrayList<>(errors);
-    Deque<Stmt.Block>   currentBlocks    = new ArrayDeque<>(blockStack);
     Deque<Stmt.FunDecl> currentFunctions = new ArrayDeque<>(functions);
 
     try {
@@ -779,12 +786,19 @@ public class Parser {
       // Restore state
       tokeniser.rewind(current);
       errors     = currentErrors;
-      blockStack = currentBlocks;
       functions  = currentFunctions;
     }
   }
 
   /////////////////////////////////////
+
+  private Stmt.While currentWhileLoop() {
+    Stmt.While whileStmt = functions.peek().currentWhileLoop;
+    if (whileStmt == null) {
+      throw new CompileError(previous().getStringValue() + " must be within a while/for loop", previous());
+    }
+    return whileStmt;
+  }
 
   private Expr error(String msg) {
     throw new CompileError(msg, peek());

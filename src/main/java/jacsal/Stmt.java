@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import org.objectweb.asm.Label;
 
 /**
  * Stmt classes for our AST.
@@ -102,23 +103,6 @@ abstract class Stmt {
   }
 
   /**
-   * While loop
-   */
-  static class While extends Stmt {
-    Token whileToken;
-    Expr condition;
-    Stmt body;
-    While(Token whileToken, Expr condition, Stmt body) {
-      this.whileToken = whileToken;
-      this.condition = condition;
-      this.body = body;
-      this.location = whileToken;
-    }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
-    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + ", " + "body=" + body + "]"; }
-  }
-
-  /**
    * Variable declaration with optional initialiser. Statement wraps the corresponding
    * Expr type where the work is done.
    */
@@ -144,13 +128,33 @@ abstract class Stmt {
     int        slotIdx;          // Current slot available for allocation
     int        maxSlot;          // Maximum slot used for local vars
     boolean    returnValue;      // Value used as implicit return from function
+    Stmt.While currentWhileLoop; // Used during parsing to find target of break/continue stmts
     FunDecl(Token name, JacsalType returnType) {
       this.name = name;
       this.returnType = returnType;
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
-    @Override public String toString() { return "FunDecl[" + "name=" + name + ", " + "returnType=" + returnType + ", " + "block=" + block + ", " + "slotIdx=" + slotIdx + ", " + "maxSlot=" + maxSlot + ", " + "returnValue=" + returnValue + "]"; }
+    @Override public String toString() { return "FunDecl[" + "name=" + name + ", " + "returnType=" + returnType + ", " + "block=" + block + ", " + "slotIdx=" + slotIdx + ", " + "maxSlot=" + maxSlot + ", " + "returnValue=" + returnValue + ", " + "currentWhileLoop=" + currentWhileLoop + "]"; }
+  }
+
+  /**
+   * While and For loop
+   */
+  static class While extends Stmt {
+    Token whileToken;
+    Expr  condition;
+    Stmt  body;
+    Stmt  updates;       // used for For loops
+    Label endLoopLabel;  // where to jump to on break stmt
+    Label continueLabel; // where to jump to on a continue stmt
+    While(Token whileToken, Expr condition) {
+      this.whileToken = whileToken;
+      this.condition = condition;
+      this.location = whileToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
+    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + ", " + "body=" + body + ", " + "updates=" + updates + ", " + "endLoopLabel=" + endLoopLabel + ", " + "continueLabel=" + continueLabel + "]"; }
   }
 
   /**
@@ -168,6 +172,36 @@ abstract class Stmt {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
     @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + ", " + "returnType=" + returnType + "]"; }
+  }
+
+  /**
+   * Break statement
+   */
+  static class Break extends Stmt {
+    Token breakToken;
+    While whileLoop;
+    Break(Token breakToken, While whileLoop) {
+      this.breakToken = breakToken;
+      this.whileLoop = whileLoop;
+      this.location = breakToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
+    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + ", " + "whileLoop=" + whileLoop + "]"; }
+  }
+
+  /**
+   * Continue statement
+   */
+  static class Continue extends Stmt {
+    Token continueToken;
+    While whileLoop;
+    Continue(Token continueToken, While whileLoop) {
+      this.continueToken = continueToken;
+      this.whileLoop = whileLoop;
+      this.location = continueToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
+    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + ", " + "whileLoop=" + whileLoop + "]"; }
   }
 
   /**
@@ -211,10 +245,12 @@ abstract class Stmt {
     T visitStmts(Stmts stmt);
     T visitBlock(Block stmt);
     T visitIf(If stmt);
-    T visitWhile(While stmt);
     T visitVarDecl(VarDecl stmt);
     T visitFunDecl(FunDecl stmt);
+    T visitWhile(While stmt);
     T visitReturn(Return stmt);
+    T visitBreak(Break stmt);
+    T visitContinue(Continue stmt);
     T visitExprStmt(ExprStmt stmt);
     T visitPrint(Print stmt);
   }

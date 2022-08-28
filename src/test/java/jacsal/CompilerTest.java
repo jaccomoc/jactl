@@ -1654,4 +1654,19 @@ class CompilerTest {
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 120);
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) { sum += i + j; def i = 3; i++ }; sum", 120);
   }
+
+  @Test public void breakContinue() {
+    testFail("break", "break must be within");
+    testFail("continue", "continue must be within");
+    testFail("if (true) { break }", "break must be within");
+    testFail("if (true) { continue }", "continue must be within");
+    test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) continue; sum += i }; sum", 15);
+    test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5 && i < 7) continue; sum += i }; sum", 49);
+    test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5 && i < 7) { if (true) continue } ; sum += i }; sum", 49);
+    test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) break; sum += i }; sum", 15);
+    test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) { if (true) break}; sum += i }; sum", 15);
+    test("int sum = 0; for (double i = 0; i < 10; i++) { if (i > 5) continue; sum += i }; sum", 15);
+    test("int sum = 0; for (double i = 0; i < 10; i++) { if (i > 5 && i < 7) continue; sum += i }; sum", 39);
+    test("int sum = 0; for (double i = 0; i < 10; i++) { if (i > 5) break; sum += i }; sum", 15);
+  }
 }

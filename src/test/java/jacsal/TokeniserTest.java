@@ -133,6 +133,8 @@ class TokeniserTest {
     doTest.accept("null", NULL);
     doTest.accept("print", PRINT);
     doTest.accept("println", PRINTLN);
+    doTest.accept("continue", CONTINUE);
+    doTest.accept("break", BREAK);
   }
 
   @Test public void booleans() {

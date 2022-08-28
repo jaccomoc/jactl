@@ -186,16 +186,36 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitWhile(Stmt.While stmt) {
-    Label end  = new Label();
+    stmt.endLoopLabel = new Label();
     Label loop = new Label();
+    if (stmt.updates == null) {
+      stmt.continueLabel = loop;
+    }
+    else {
+      stmt.continueLabel = new Label();
+    }
     mv.visitLabel(loop);
     compile(stmt.condition);
     convertTo(BOOLEAN, true, stmt.condition.location);
     pop();
-    mv.visitJumpInsn(IFEQ, end);
+    mv.visitJumpInsn(IFEQ, stmt.endLoopLabel);
     compile(stmt.body);
+    if (stmt.updates != null) {
+      mv.visitLabel(stmt.continueLabel);
+      compile(stmt.updates);
+    }
     mv.visitJumpInsn(GOTO, loop);
-    mv.visitLabel(end);
+    mv.visitLabel(stmt.endLoopLabel);
+    return null;
+  }
+
+  @Override public Void visitBreak(Stmt.Break stmt) {
+    mv.visitJumpInsn(GOTO, stmt.whileLoop.endLoopLabel);
+    return null;
+  }
+
+  @Override public Void visitContinue(Stmt.Continue stmt) {
+    mv.visitJumpInsn(GOTO, stmt.whileLoop.continueLabel);
     return null;
   }
 
