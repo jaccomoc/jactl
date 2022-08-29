@@ -279,11 +279,9 @@ public class JacsalType {
    * @return true if convertible
    */
   public boolean isConvertibleTo(JacsalType type) {
-    if (isBoxedOrUnboxed(type))                                                { return true; }
-    if (is(ANY) || type.is(ANY))                                               { return true; }
-    if (isBoxedOrUnboxed(INT) && type.isBoxedOrUnboxed(LONG, DOUBLE, DECIMAL)) { return true; }
-    if (isBoxedOrUnboxed(LONG) && type.isBoxedOrUnboxed(DOUBLE, DECIMAL))      { return true; }
-    if (isBoxedOrUnboxed(DOUBLE, DECIMAL) && type.isNumeric())                 { return true; }
+    if (isBoxedOrUnboxed(type))              { return true; }
+    if (is(ANY) || type.is(ANY))             { return true; }
+    if (isNumeric() && type.isNumeric())     { return true; }
     return false;
   }
 

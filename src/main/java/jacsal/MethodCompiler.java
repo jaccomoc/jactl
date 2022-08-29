@@ -367,8 +367,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // (especially if local variable of type int).
     if (expr.operator.is(PLUS_EQUAL,MINUS_EQUAL,PLUS_PLUS,MINUS_MINUS) &&
         !expr.identifierExpr.varDecl.isGlobal    &&
-        expr.expr.isConst) {
-      incOrDecVar(true, expr.operator.is(PLUS_EQUAL,PLUS_PLUS), expr.identifierExpr, expr.expr.constValue, expr.isResultUsed, expr.operator);
+        expr.expr.right.isConst) {
+      incOrDecVar(true, expr.operator.is(PLUS_EQUAL,PLUS_PLUS), expr.identifierExpr, expr.expr.right.constValue, expr.isResultUsed, expr.operator);
       return null;
     }
 
@@ -1233,7 +1233,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeVirtual(Number.class, "intValue");
     }
     else
-    if (peek().isBoxed()) {
+    if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       invokeVirtual(Number.class, "intValue");
     }
@@ -1263,7 +1263,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeVirtual(Number.class, "longValue");
     }
     else
-    if (peek().isBoxed()) {
+    if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       invokeVirtual(Number.class, "longValue");
     }
@@ -1441,6 +1441,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // load the inc/dec amount
       if (amount == null) {
         swap();
+        convertTo(varDecl.type, true, operator);
       }
       else {
         loadConst(Utils.convertNumberTo(varDecl.type, amount));
@@ -1456,7 +1457,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           incOrDec.accept(() -> { mv.visitInsn(isInc ? IADD : ISUB); pop(); });
         }
         else {
-          mv.visitIincInsn(varDecl.slot, isInc ? (int) amount : -(int) amount);
+          int intAmt = (int)Utils.convertNumberTo(INT, amount);
+          mv.visitIincInsn(varDecl.slot, isInc ? intAmt : -intAmt);
         }
         break;
       case LONG:

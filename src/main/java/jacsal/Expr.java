@@ -68,7 +68,7 @@ abstract class Expr {
       this.location = operator;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBinary(this); }
-    @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "originalOperator=" + originalOperator + "]"; }
+    @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "createIfMissing=" + createIfMissing + ", " + "originalOperator=" + originalOperator + "]"; }
   }
 
   static class PrefixUnary extends Expr implements ManagesResult {
@@ -166,7 +166,7 @@ abstract class Expr {
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
-    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + ", " + "declLabel=" + declLabel + "]"; }
+    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + ", " + "isGlobal=" + isGlobal + ", " + "slot=" + slot + ", " + "declLabel=" + declLabel + "]"; }
   }
 
   /**
@@ -192,8 +192,8 @@ abstract class Expr {
   static class VarOpAssign extends Expr implements ManagesResult {
     Identifier identifierExpr;
     Token      operator;
-    Expr       expr;
-    VarOpAssign(Identifier identifierExpr, Token operator, Expr expr) {
+    Binary     expr;
+    VarOpAssign(Identifier identifierExpr, Token operator, Binary expr) {
       this.identifierExpr = identifierExpr;
       this.operator = operator;
       this.expr = expr;
@@ -247,7 +247,7 @@ abstract class Expr {
       this.location = accessType;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitOpAssign(this); }
-    @Override public String toString() { return "OpAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + "]"; }
+    @Override public String toString() { return "OpAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + ", " + "isPreIncOrDec=" + isPreIncOrDec + "]"; }
   }
 
   /**

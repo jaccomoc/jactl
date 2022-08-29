@@ -127,7 +127,7 @@ class Expr {
   class VarOpAssign extends Expr implements ManagesResult {
     Identifier identifierExpr;
     Token      operator;
-    Expr       expr;
+    Binary     expr;
   }
 
   /**
