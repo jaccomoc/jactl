@@ -481,7 +481,7 @@ public class Parser {
       Pair.create(true, List.of(STAR, SLASH, PERCENT)),
       //      List.of(STAR_STAR)
       Pair.create(true, unaryOps),
-      Pair.create(true, List.of(fieldAccessOp))
+      Pair.create(true, Utils.concat(fieldAccessOp, LEFT_PAREN))
     );
 
   /**
@@ -505,7 +505,7 @@ public class Parser {
   private Expr parseExpression(int level) {
     // If we have reached highest precedence
     if (level == operatorsByPrecedence.size()) {
-      return primaryOrCall();
+      return primary();
     }
 
     // Get list of operators at this level of precedence along with flag
@@ -523,6 +523,12 @@ public class Parser {
 
     while (matchAny(operators)) {
       Token operator = previous();
+      if (operator.is(LEFT_PAREN)) {
+        List<Expr> args = expressionList(RIGHT_PAREN);
+        expr = new Expr.Call(operator, expr, args);
+        continue;
+      }
+
       Expr rhs;
       if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
         // '[' and '?[' can be followed by any expression and then a ']'
@@ -596,19 +602,6 @@ public class Parser {
       else {
         expr = new Expr.PostfixUnary(expr, previous());
       }
-    }
-    return expr;
-  }
-
-  /**
-   *# primaryOrCall -> primary ( "(" expressionList ? ")" ) * ;
-   */
-  private Expr primaryOrCall() {
-    Expr expr = primary();
-    while(matchAny(LEFT_PAREN)) {
-      Token argsToken = previous();
-      List<Expr> args = expressionList(RIGHT_PAREN);
-      expr = new Expr.Call(argsToken, expr, args);
     }
     return expr;
   }

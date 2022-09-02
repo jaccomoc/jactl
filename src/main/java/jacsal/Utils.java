@@ -20,6 +20,8 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static jacsal.JacsalType.*;
@@ -230,5 +232,21 @@ public class Utils {
     }
     // All params have an initialiser
     return 0;
+  }
+
+  static List concat(Object... objs) {
+    var result = new ArrayList<>();
+    for (Object obj: objs) {
+      if (obj instanceof List) {
+        result.addAll((List) obj);
+      }
+      if (obj instanceof Object[]) {
+        result.addAll(Arrays.asList((Object[])obj));
+      }
+      else {
+        result.add(obj);
+      }
+    }
+    return result;
   }
 }

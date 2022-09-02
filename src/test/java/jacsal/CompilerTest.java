@@ -2214,6 +2214,10 @@ class CompilerTest {
     test("def f(x) { x + x }; def g = f; g('abc')", "abcabc");
     testFail("def f(x) { x + x }; def g = f; g()", "missing mandatory arguments");
     test("def f() { def g() { 3 } }; def h = f(); h()", 3);
+    test("def f() { def g(){ def h(x){x*x} } }; f()()(3)", 9);
+    test("def f() { def g(){ def h(x){x*x} }; [a:g] }; f().a()(3)", 9);
+    test("def x = [:]; int f(x){x*x}; x.a = f; (x.a)(2)", 4);
+    test("def x = [:]; int f(x){x*x}; x.a = f; x.a(2)", 4);
   }
 
   @Test public void functionsForwardReference() {
@@ -2245,10 +2249,5 @@ class CompilerTest {
 
   @Test public void functionsWithClosedOverVars() {
 //    test("def F; def G; def f(x) { if (x==1) x else 2 * G(x) }; def g(x) { x + F(x-1) }; F=f; G=g; F(3)", 18);
-  }
-
-  @Test public void testStuff() {
-    debug = true;
-    test("def f() { def g() { 3 } }; def h = f(); h()", 3);
   }
 }

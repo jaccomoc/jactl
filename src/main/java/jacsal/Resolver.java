@@ -36,6 +36,8 @@ import static jacsal.TokenType.*;
  *  - evaluates any simple expressions made up of only constants (literals)
  *  - matches the break/continue statements to their enclosing while/for loop
  *  - sets type of return statement to match return type of function that return belongs to
+ *  - finds all instances of implicit returns from functions/closures and converts them into
+ *    an explicit "return" statement
  *
  * One of the jobs of the Resolver is to work out which local variables should be truly
  * local (and have a JVM slot allocated) and which should be turned into heap variables
