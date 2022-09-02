@@ -25,6 +25,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static jacsal.JacsalType.ANY;
 import static org.objectweb.asm.ClassWriter.*;
@@ -69,7 +70,8 @@ public class ClassCompiler {
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
 
-    classDecl.methods.forEach(classDec -> compileMethod(classDec, constructor));
+    classDecl.methods.forEach(method -> compileMethod(method, constructor));
+    classDecl.closures.forEach(closure -> compileMethod(closure, constructor));
 
     constructor.visitInsn(RETURN);
     constructor.visitMaxs(0, 0);
@@ -114,10 +116,10 @@ public class ClassCompiler {
     classInit.visitVarInsn(ASTORE, 0);
 
     // For every method except the script main method
-    classDecl.methods.stream()
-                     .filter(m -> !m.methodName.equals(Utils.JACSAL_SCRIPT_MAIN))
-                     .forEach(method -> {
-
+    Stream<Expr.FunDecl> methodsAndClosures = Stream.concat(classDecl.methods.stream()
+                                                                             .filter(m -> !m.methodName.equals(Utils.JACSAL_SCRIPT_MAIN)),
+                                                            classDecl.closures.stream());
+    methodsAndClosures.forEach(method -> {
       // Create the method descriptor for the method to be looked up.
       // Since we create a handle to the wrapper method the signature will be based on
       // the closed over vars it needs plus the source, offset, and then an Object that

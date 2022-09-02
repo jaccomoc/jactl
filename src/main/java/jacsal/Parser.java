@@ -43,6 +43,12 @@ public class Parser {
   List<CompileError>    errors     = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes    = new ArrayDeque<>();
 
+  // Whether we are currently doing a lookahead in which case we don't bother keeping
+  // track of state such as functions declared per block and nested functions.
+  // We increment every time we start a lookahead (which can then do another lookahead)
+  // and decrement when we finish. If value is 0 then we are not in a lookahead.
+  int lookaheadCount = 0;
+
   public Parser(Tokeniser tokeniser) {
     this.tokeniser = tokeniser;
   }
@@ -207,8 +213,8 @@ public class Parser {
     // immediately invoked and we will treat it is a code block.
     if (stmt.expr instanceof Expr.Closure) {
       Expr.Closure closure = (Expr.Closure)stmt.expr;
-      if (closure.funDecl.parameters.size() == 0) {
-        classes.peek().closures.remove(closure.funDecl);
+      if (closure.noParamsDefined) {
+        removeClosure(closure.funDecl);
         return closure.funDecl.block;   // Treat closure as code block since no parameters
       }
     }
@@ -776,18 +782,77 @@ public class Parser {
   private Expr closure() {
     Token openBrace = previous();
     // We need to do a lookahead to see if we have a parameter list or not
-    List<Stmt.VarDecl> parameters = Collections.EMPTY_LIST;
+    List<Stmt.VarDecl> parameters;
+    boolean noParamsDefined = false;
     if (lookahead(() -> parameters(ARROW) != null)) {
       parameters = parameters(ARROW);
+      if (parameters.size() == 0) {
+        parameters = List.of(createItParam(openBrace));
+      }
+    }
+    else {
+      // No parameter and no "->" so fill in with default "it" parameter
+      noParamsDefined = true;
+      parameters = List.of(createItParam(openBrace));
     }
     Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false);
-    return new Expr.Closure(funDecl.declExpr);
+    funDecl.declExpr.isResultUsed = true;
+    return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
   }
 
   /////////////////////////////////////////////////
 
+  private Stmt.VarDecl createItParam(Token token) {
+    Token        itToken = new Token(IDENTIFIER, token).setValue("it");
+    Expr.VarDecl itDecl  = new Expr.VarDecl(itToken, new Expr.Literal(new Token(NULL, token)));
+    itDecl.isParam = true;
+    itDecl.isResultUsed = false;
+    itDecl.type = ANY;
+    return new Stmt.VarDecl(new Token(IDENTIFIER, token).setValue("def"), itDecl);
+  }
+
+  private Deque<Expr.FunDecl> functionStack() {
+    return classes.peek().nestedFunctions;
+  }
+
+  private void pushFunDecl(Expr.FunDecl funDecl) {
+    if (lookaheadCount == 0) {
+      functionStack().push(funDecl);
+    }
+  }
+
+  private void popFunDecl() {
+    if (lookaheadCount == 0) {
+      functionStack().pop();
+    }
+  }
+
   private Deque<Stmt.Block> blockStack() {
-    return classes.peek().nestedFunctions.peek().blocks;
+    return functionStack().peek().blocks;
+  }
+
+  private void addFunDeclToBlock(Expr.FunDecl funDecl) {
+    if (lookaheadCount == 0) {
+      blockStack().peek().functions.add(funDecl);
+    }
+  }
+
+  private void addMethod(Expr.FunDecl funDecl) {
+    if (lookaheadCount == 0) {
+      classes.peek().methods.add(funDecl);
+    }
+  }
+
+  private void addClosure(Expr.FunDecl funDecl) {
+    if (lookaheadCount == 0) {
+      classes.peek().closures.add(funDecl);
+    }
+  }
+
+  private void removeClosure(Expr.FunDecl funDecl) {
+    if (lookaheadCount == 0) {
+      classes.peek().closures.remove(funDecl);
+    }
   }
 
   private Stmt.FunDecl parseFunDecl(Token start,
@@ -799,27 +864,26 @@ public class Parser {
     Expr.FunDecl funDecl = new Expr.FunDecl(start, name, returnType, params);
     if (!isScriptMain && !funDecl.isClosure()) {
       // Add to functions in block so we can support forward references during Resolver phase
-      blockStack().peek().functions.add(funDecl);
+      addFunDeclToBlock(funDecl);
     }
-    classes.peek().nestedFunctions.push(funDecl);
+    pushFunDecl(funDecl);
     try {
       Stmt.Block block = block(endToken);
       insertStmtsInto(params, block);
       funDecl.block = block;
       // Add to list of closures/functions
-      Stmt.ClassDecl currentClass = classes.peek();
       if (funDecl.isClosure()) {
-        currentClass.closures.add(funDecl);
+        addClosure(funDecl);
       }
       else {
-        currentClass.methods.add(funDecl);
+        addMethod(funDecl);
       }
       funDecl.isResultUsed = false;
       funDecl.type = FUNCTION;
       return new Stmt.FunDecl(start, funDecl);
     }
     finally {
-      classes.peek().nestedFunctions.pop();
+      popFunDecl();
     }
   }
 
@@ -914,7 +978,11 @@ public class Parser {
   private boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
     Token current = peek();
-    List<CompileError>  currentErrors    = new ArrayList<>(errors);
+    List<CompileError>    currentErrors    = new ArrayList<>(errors);
+
+    // Set flag so that we know not to collect state such as functions per block etc
+    // while doing a lookahead
+    lookaheadCount++;
 
     try {
       for (Supplier<Boolean> lamdba: lambdas) {
@@ -932,7 +1000,8 @@ public class Parser {
     finally {
       // Restore state
       tokeniser.rewind(current);
-      errors     = currentErrors;
+      errors        = currentErrors;
+      lookaheadCount--;
     }
   }
 

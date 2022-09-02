@@ -224,7 +224,9 @@ class Expr {
   /**
    * Closure definition
    */
-  class Closure extends Expr {
+  class Closure extends Expr implements ManagesResult {
+    Token        startToken;
     Expr.FunDecl funDecl;
+    boolean      noParamsDefined;
   }
 }

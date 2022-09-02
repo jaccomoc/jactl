@@ -340,13 +340,18 @@ abstract class Expr {
   /**
    * Closure definition
    */
-  static class Closure extends Expr {
+  static class Closure extends Expr implements ManagesResult {
+    Token        startToken;
     Expr.FunDecl funDecl;
-    Closure(Expr.FunDecl funDecl) {
+    boolean      noParamsDefined;
+    Closure(Token startToken, Expr.FunDecl funDecl, boolean noParamsDefined) {
+      this.startToken = startToken;
       this.funDecl = funDecl;
+      this.noParamsDefined = noParamsDefined;
+      this.location = startToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClosure(this); }
-    @Override public String toString() { return "Closure[" + "funDecl=" + funDecl + "]"; }
+    @Override public String toString() { return "Closure[" + "startToken=" + startToken + ", " + "funDecl=" + funDecl + ", " + "noParamsDefined=" + noParamsDefined + "]"; }
   }
 
   interface Visitor<T> {

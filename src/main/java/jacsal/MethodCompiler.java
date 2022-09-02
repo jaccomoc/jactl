@@ -93,7 +93,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Allocate slots for heap local vars passed to us as implicit parameters from
     // parent function
-    funDecl.heapVars.forEach((name,varDecl) -> defineVar(varDecl));
+    //funDecl.heapVars.forEach((name,varDecl) -> defineVar(varDecl));
 
     // Compile statements.
     // NOTE: the first statements will be the parameter declarations which will allocate
@@ -102,7 +102,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Label endBlock = new Label();
     mv.visitLabel(endBlock);
-    funDecl.heapVars.forEach((name,varDecl)-> undefineVar(varDecl, endBlock));
+    //funDecl.heapVars.forEach((name,varDecl)-> undefineVar(varDecl, endBlock));
 
     if (classCompiler.debug()) {
       mv.visitEnd();
@@ -110,7 +110,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     mv.visitMaxs(0, 0);
 
-    check(stack.isEmpty(), "non-empty stack at end of method " + funDecl.name.getStringValue() + ". Type stack = " + stack);
+    check(stack.isEmpty(), "non-empty stack at end of method " + funDecl.methodName + ". Type stack = " + stack);
   }
 
   /////////////////////////////////////////////
@@ -240,7 +240,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     mv.visitMaxs(0, 0);
 
-    check(stack.isEmpty(), "non-empty stack at end of wrapper method " + funDecl.name.getStringValue() + ". Type stack = " + stack);
+    check(stack.isEmpty(), "non-empty stack at end of wrapper method " + funDecl.methodName + ". Type stack = " + stack);
   }
 
   /////////////////////////////////////////////
@@ -948,6 +948,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClosure(Expr.Closure expr) {
+    // Find our MethodHandle and put that on the stack
+    loadClassField(Utils.handleName(expr.funDecl.methodName), FUNCTION, false);
     return null;
   }
 

@@ -102,7 +102,6 @@ class TokeniserTest {
     doTest.accept(">>>=", TRIPLE_GREATER_THAN_EQUAL);
     doTest.accept("def", DEF);
     doTest.accept("var", VAR);
-    doTest.accept("it", IT);
     doTest.accept("int", INT);
     doTest.accept("boolean", BOOLEAN);
     doTest.accept("long", LONG);

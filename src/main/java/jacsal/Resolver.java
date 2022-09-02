@@ -465,7 +465,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Generate our method name by appending to parent's name separated by '$'
       // (unless we are at the top level in which case we just use our given name).
       // For closures we use _$cN where N is incrementing count per parent function.
-      String methodName = expr.name == null ? "_$c" + ++parent.closureCount : expr.name.getStringValue();
+      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.name.getStringValue();
       expr.methodName = functions.size() == 1 ? methodName : functions.peek().methodName + "$" + methodName;
     }
     else {

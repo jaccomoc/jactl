@@ -2162,10 +2162,6 @@ class CompilerTest {
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
   }
 
-  @Test public void simpleClosures() {
-    test("int i = 1; { int i = 2; i++; }; i", 1);
-  }
-
   @Test public void simpleFunctions() {
     test("int f(int x) { x * x }; f(2)", 4);
     test("def f(def x) { x * x }; f(2)", 4);
@@ -2245,9 +2241,40 @@ class CompilerTest {
     test("String f(x='abc') { x + x }; f()", "abcabc");
     test("String f(x=\"a${'b'+'c'}\") { x + x }; f()", "abcabc");
     test("String f(x=\"a${'b'+'c'}\") { x + x }; f('x')", "xx");
+    test("int f(x = f(1)) { if (x == 1) 4 else x + f(x-1) }; f()", 13);
+    test("int f(x = f(1)) { if (x == 1) 4 else x + f(x-1) }; f(2)", 6);
   }
 
   @Test public void functionsWithClosedOverVars() {
 //    test("def F; def G; def f(x) { if (x==1) x else 2 * G(x) }; def g(x) { x + F(x-1) }; F=f; G=g; F(3)", 18);
+  }
+
+  @Test public void simpleClosures() {
+    test("int i = 1; { int i = 2; i++; }; i", 1);
+    test("def f = { x -> x * x }; f(2)", 4);
+    test("def f = { int x -> x * x }; f(2)", 4);
+    test("def f = { int x=3 -> x * x }; f(2)", 4);
+    test("def f = { int x=3 -> x * x }; f()", 9);
+    test("{ x -> x * x }(2)", 4);
+    test("def f = { x -> { x -> x * x }(x) }; f(2)", 4);
+    test("def f = { int x=3, long y=9 -> x * y }; f()", 27L);
+    test("def f = { int x=3, long y=9 -> x * y }; f(2,3)", 6L);
+    test("var f = { int x=3, long y=9 -> x * y * 1.0 }; f(2,3)", "#6.0");
+    testFail("var f = { x -> x*x }; f = 3", "cannot convert from type of right hand side");
+    test("def f = { x -> def g(x) { x*x }; g(x) }; f(3)", 9);
+    test("def f = { def g(x) { x*x } }; f()(3)", 9);
+    test("def f = { def g = { 3 } }; f()()", 3);
+    test("def f = { -> 3 }; f()", 3);
+    test("def f = { it -> it * it }; f(3)", 9);
+    test("def f = { it * it }; f(3)", 9);
+    test("def f = { -> it * it }; f(3)", 9);
+    test("def f = { { it * it }(it) }; f(3)", 9);
+    test("def f = { it = 2 -> { it * it }(it) }; f(3)", 9);
+    test("def f = { it = 2 -> { it * it }(it) }; f()", 4);
+    testFail("def f = { it = f(it) -> { it * it }(it) }; f()", "variable initialisation cannot refer to itself");
+
+// TODO: add support for accessing globals from within functions
+// TOOD: add support for closed over vars
+//    test("def f; f = { it = f(2) -> { it * it }(it) }; f()", 16);
   }
 }
