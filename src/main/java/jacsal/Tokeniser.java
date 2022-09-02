@@ -295,7 +295,7 @@ public class Tokeniser {
           // was no identifier following the '$'.
           advance(1);
           token = parseIdentifier(createToken(), remaining);
-          if (keyWords.contains(token.getStringValue())) {
+          if (keyWords.contains(token.getChars())) {
             throw new CompileError("Keyword found where identifier expected", token);
           }
         }
@@ -383,7 +383,7 @@ public class Tokeniser {
     }
     advance(i);
     token.setLength(numberLength);
-    String value = (String)token.getValue();
+    String value = token.getStringValue();
     switch (type) {
       case INTEGER_CONST: {
         try {
@@ -635,6 +635,7 @@ public class Tokeniser {
     new Symbol("**", STAR_STAR),
     new Symbol("%=", PERCENT_EQUAL),
     new Symbol("**=", STAR_STAR_EQUAL),
+    new Symbol("->", ARROW),
     //new Symbol("", IDENTIFIER),
     //new Symbol("", STRING_CONST),
     //new Symbol("", INTEGER_CONST),

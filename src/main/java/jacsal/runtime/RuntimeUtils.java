@@ -18,6 +18,7 @@ package jacsal.runtime;
 
 import jacsal.TokenType;
 
+import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -532,12 +533,18 @@ public class RuntimeUtils {
     if (obj instanceof Map) {
       return (Map)obj;
     }
+    if (obj == null) {
+      throw new NullError("Null value for Map", source, offset);
+    }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
   }
 
   public static List castToList(Object obj, String source, int offset) {
     if (obj instanceof List) {
       return (List)obj;
+    }
+    if (obj == null) {
+      throw new NullError("Null value for List", source, offset);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
   }
@@ -546,14 +553,30 @@ public class RuntimeUtils {
     if (obj instanceof Number) {
       return (Number)obj;
     }
+    if (obj == null) {
+      throw new NullError("Cannot convert null value to Number", source, offset);
+    }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Number", source, offset);
   }
 
-  public static Number castToDecimal(Object obj, String source, int offset) {
+  public static BigDecimal castToDecimal(Object obj, String source, int offset) {
     if (obj instanceof Number) {
       return toBigDecimal(obj);
     }
+    if (obj == null) {
+      throw new NullError("Null value for Decimal", source, offset);
+    }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
+  }
+
+  public static MethodHandle castToFunction(Object obj, String source, int offset) {
+    if (obj instanceof MethodHandle) {
+      return (MethodHandle)obj;
+    }
+    if (obj == null) {
+      throw new NullError("Null value for Function", source, offset);
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Function", source, offset);
   }
 
   public static void print(Object obj) {

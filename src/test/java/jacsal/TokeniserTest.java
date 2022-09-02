@@ -60,6 +60,7 @@ class TokeniserTest {
     doTest.accept("|", PIPE);
     doTest.accept(":", COLON);
     doTest.accept(";", SEMICOLON);
+    doTest.accept("->", ARROW);
     doTest.accept("!=", BANG_EQUAL);
     doTest.accept("==", EQUAL_EQUAL);
     doTest.accept("<=", LESS_THAN_EQUAL);
@@ -234,7 +235,7 @@ class TokeniserTest {
       var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
-        assertEquals(value, token.getStringValue());
+        assertEquals(value, token.getChars());
       }
       return token;
     };
@@ -256,7 +257,7 @@ class TokeniserTest {
       var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
-        assertEquals(value, token.getStringValue());
+        assertEquals(value, token.getChars());
       }
       return token;
     };
@@ -274,7 +275,7 @@ class TokeniserTest {
       var token = tokeniser.next();
       assertEquals(type, token.getType());
       if (type == IDENTIFIER || type == INTEGER_CONST) {
-        assertEquals(value, token.getStringValue());
+        assertEquals(value, token.getChars());
       }
       return token;
     };
@@ -354,7 +355,7 @@ class TokeniserTest {
     var token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
-    assertEquals("1", token.getStringValue());
+    assertEquals("1", token.getChars());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
@@ -388,7 +389,7 @@ class TokeniserTest {
     token = tokeniser.next();
     assertEquals(DOUBLE_CONST, token.getType());
     assertEquals(1.234, token.getValue());
-    assertEquals("1.234", token.getStringValue());
+    assertEquals("1.234", token.getChars());
     assertEquals(4, token.getLineNum());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
@@ -439,7 +440,7 @@ class TokeniserTest {
     token = tokeniser.next();
     assertEquals(DOUBLE_CONST, token.getType());
     assertEquals(1.234, token.getValue());
-    assertEquals("1.234", token.getStringValue());
+    assertEquals("1.234", token.getChars());
     assertEquals(7, token.getLineNum());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();

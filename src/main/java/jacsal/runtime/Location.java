@@ -16,7 +16,7 @@
 
 package jacsal.runtime;
 
-public class Location {
+public class Location implements SourceLocation {
   protected String source;       // Source code of the script being compiled
   protected int    offset;       // The position/offset in source where token starts
   protected String line;         // The source line

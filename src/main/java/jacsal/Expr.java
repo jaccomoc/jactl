@@ -25,6 +25,12 @@ package jacsal;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.ArrayDeque;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+
 import org.objectweb.asm.Label;
 
 /**
@@ -55,6 +61,13 @@ abstract class Expr {
   // needs to be done for it.
   interface ManagesResult {}
 
+  // Whether expression is a direct function call (and not a closure)
+  public boolean isFunctionCall() {
+    return this instanceof Expr.Identifier &&
+           ((Expr.Identifier) this).varDecl.type.is(JacsalType.FUNCTION) &&
+           ((Expr.Identifier) this).varDecl.funDecl != null;
+  }
+
   static class Binary extends Expr {
     Expr  left;
     Token operator;
@@ -68,7 +81,7 @@ abstract class Expr {
       this.location = operator;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBinary(this); }
-    @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "createIfMissing=" + createIfMissing + ", " + "originalOperator=" + originalOperator + "]"; }
+    @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + "]"; }
   }
 
   static class PrefixUnary extends Expr implements ManagesResult {
@@ -95,6 +108,20 @@ abstract class Expr {
     @Override public String toString() { return "PostfixUnary[" + "expr=" + expr + ", " + "operator=" + operator + "]"; }
   }
 
+  static class Call extends Expr {
+    Token      token;
+    Expr       callee;
+    List<Expr> args;
+    Call(Token token, Expr callee, List<Expr> args) {
+      this.token = token;
+      this.callee = callee;
+      this.args = args;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCall(this); }
+    @Override public String toString() { return "Call[" + "token=" + token + ", " + "callee=" + callee + ", " + "args=" + args + "]"; }
+  }
+
   static class Literal extends Expr {
     Token value;
     Literal(Token value) {
@@ -113,7 +140,7 @@ abstract class Expr {
       this.location = start;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitListLiteral(this); }
-    @Override public String toString() { return "ListLiteral[" + "start=" + start + ", " + "exprs=" + exprs + "]"; }
+    @Override public String toString() { return "ListLiteral[" + "start=" + start + "]"; }
   }
 
   static class MapLiteral extends Expr {
@@ -124,7 +151,7 @@ abstract class Expr {
       this.location = start;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitMapLiteral(this); }
-    @Override public String toString() { return "MapLiteral[" + "start=" + start + ", " + "entries=" + entries + "]"; }
+    @Override public String toString() { return "MapLiteral[" + "start=" + start + "]"; }
   }
 
   static class Identifier extends Expr {
@@ -135,7 +162,7 @@ abstract class Expr {
       this.location = identifier;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitIdentifier(this); }
-    @Override public String toString() { return "Identifier[" + "identifier=" + identifier + ", " + "varDecl=" + varDecl + "]"; }
+    @Override public String toString() { return "Identifier[" + "identifier=" + identifier + "]"; }
   }
 
   static class ExprString extends Expr {
@@ -146,7 +173,7 @@ abstract class Expr {
       this.location = exprStringStart;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitExprString(this); }
-    @Override public String toString() { return "ExprString[" + "exprStringStart=" + exprStringStart + ", " + "exprList=" + exprList + "]"; }
+    @Override public String toString() { return "ExprString[" + "exprStringStart=" + exprStringStart + "]"; }
   }
 
   /**
@@ -155,18 +182,63 @@ abstract class Expr {
    * is returned implicitly from a function/closure.
    */
   static class VarDecl extends Expr implements ManagesResult {
-    Token      name;
-    Expr       initialiser;
-    boolean    isGlobal;    // Whether global (bindings var) or local
-    int        slot;        // Which local variable slot to use
-    Label      declLabel;   // Where variable comes into scope (for debugger)
+    Token        name;
+    Expr         initialiser;
+    boolean      isGlobal = false; // Whether global (bindings var) or local
+    boolean      isHeap = false;   // Local vars that are closed over are push to heap
+    boolean      isParam = false;  // True if variable is a parameter of function
+    int          slot;             // Which local variable slot
+    int          nestingLevel;     // What level of nested function owns this variable (1 is top level)
+    Label        declLabel;        // Where variable comes into scope (for debugger)
+    Expr.FunDecl owner;            // Which function variable belongs to (for local vars)
+    Expr.FunDecl funDecl;          // If type is FUNCTION then this is the function declaration
+    VarDecl      varDecl;          // If this is a HeapVar parameter then this is the original VarDecl
     VarDecl(Token name, Expr initialiser) {
       this.name = name;
       this.initialiser = initialiser;
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
-    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + ", " + "isGlobal=" + isGlobal + ", " + "slot=" + slot + ", " + "declLabel=" + declLabel + "]"; }
+    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + "]"; }
+  }
+
+  /**
+   * Function declaration
+   * We make this an expression so we can have last statement in a block be a function declaration
+   * and have it then returned as the return value of the function.
+   */
+  static class FunDecl extends Expr implements ManagesResult {
+    Token              startToken;   // Either identifier for function decl or start brace for closure
+    Token              name;         // Null for closures and script main
+    JacsalType         returnType;
+    List<Stmt.VarDecl> parameters;
+    Stmt.Block         block;
+
+    String             methodName;  // Name of method that we compile into
+    Expr.VarDecl       varDecl;     // For the variable that we will create to hold our MethodHandle
+
+    boolean    isStatic = false;
+    int        closureCount = 0;
+    Stmt.While currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
+
+    // Stack of blocks used during Resolver phase to track variables and which scope they
+    // are declared in and used during Parser phase to track function declarations so we
+    // can handle forward references during Resolver phase
+    Deque<Stmt.Block> blocks = new ArrayDeque<>();
+
+    // Which heap locals from our parent we need passed in to us
+    LinkedHashMap<String,Expr.VarDecl> heapVars = new LinkedHashMap<>();
+
+    FunDecl(Token startToken, Token name, JacsalType returnType, List<Stmt.VarDecl> parameters) {
+      this.startToken = startToken;
+      this.name = name;
+      this.returnType = returnType;
+      this.parameters = parameters;
+      this.location = startToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
+    @Override public String toString() { return "FunDecl[" + "startToken=" + startToken + ", " + "name=" + name + ", " + "returnType=" + returnType + ", " + "parameters=" + parameters + "]"; }
+    public boolean isClosure() { return name == null; }
   }
 
   /**
@@ -247,7 +319,7 @@ abstract class Expr {
       this.location = accessType;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitOpAssign(this); }
-    @Override public String toString() { return "OpAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + ", " + "isPreIncOrDec=" + isPreIncOrDec + "]"; }
+    @Override public String toString() { return "OpAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + "]"; }
   }
 
   /**
@@ -265,20 +337,35 @@ abstract class Expr {
     @Override public String toString() { return "Noop[" + "operator=" + operator + "]"; }
   }
 
+  /**
+   * Closure definition
+   */
+  static class Closure extends Expr {
+    Expr.FunDecl funDecl;
+    Closure(Expr.FunDecl funDecl) {
+      this.funDecl = funDecl;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClosure(this); }
+    @Override public String toString() { return "Closure[" + "funDecl=" + funDecl + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);
+    T visitCall(Call expr);
     T visitLiteral(Literal expr);
     T visitListLiteral(ListLiteral expr);
     T visitMapLiteral(MapLiteral expr);
     T visitIdentifier(Identifier expr);
     T visitExprString(ExprString expr);
     T visitVarDecl(VarDecl expr);
+    T visitFunDecl(FunDecl expr);
     T visitVarAssign(VarAssign expr);
     T visitVarOpAssign(VarOpAssign expr);
     T visitAssign(Assign expr);
     T visitOpAssign(OpAssign expr);
     T visitNoop(Noop expr);
+    T visitClosure(Closure expr);
   }
 }

@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.ANY;
+import static jacsal.JacsalType.FUNCTION;
 import static jacsal.TokenType.*;
 
 /**
@@ -37,26 +38,34 @@ import static jacsal.TokenType.*;
  * Finally the Compiler then should be invoked to compile the AST into JVM byte code.
  */
 public class Parser {
-  Tokeniser          tokeniser;
-  Token              firstToken = null;
-  List<CompileError> errors     = new ArrayList<>();
-
-  // Stack of function declarations (including nested closures) so we can find current function
-  Deque<Stmt.FunDecl> functions = new ArrayDeque<>();
+  Tokeniser             tokeniser;
+  Token                 firstToken = null;
+  List<CompileError>    errors     = new ArrayList<>();
+  Deque<Stmt.ClassDecl> classes    = new ArrayDeque<>();
 
   public Parser(Tokeniser tokeniser) {
     this.tokeniser = tokeniser;
   }
 
-  public Stmt.Script parse() {
-    Stmt.Script script = script();
-    if (errors.size() > 1) {
-      throw new CompileError(errors);
+  public Stmt.ClassDecl parse() {
+    Token start = peek();
+    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(new Token(IDENTIFIER, start).setValue(Utils.JACSAL_PREFIX));
+    classes.push(scriptClass);
+    Expr.VarDecl globalsField = new Expr.VarDecl(new Token(IDENTIFIER, start).setValue(Utils.JACSAL_GLOBALS_NAME), null);
+    globalsField.type = JacsalType.MAP;
+    try {
+      scriptClass.scriptMain = script();
+      if (errors.size() > 1) {
+        throw new CompileError(errors);
+      }
+      if (errors.size() == 1) {
+        throw errors.get(0);
+      }
+      return scriptClass;
     }
-    if (errors.size() == 1) {
-      throw errors.get(0);
+    finally {
+      classes.pop();
     }
-    return script;
   }
 
   public Expr parseExpression() {
@@ -69,23 +78,22 @@ public class Parser {
 
   // = Stmt
 
-  private static final TokenType[] varDeclStart = new TokenType[] { VAR, DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST };
+  private static final TokenType[] types = new TokenType[] { DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST };
 
   /**
    *# script -> block;
    */
-  private Stmt.Script script() {
-    Stmt.FunDecl funDecl = new Stmt.FunDecl(new Token(IDENTIFIER, peek()).setValue(Utils.JACSAL_SCRIPT_MAIN),
-                                            ANY);
-    functions.push(funDecl);
-    try {
-      Stmt.Block block = block(EOF);
-      explicitReturn(block, ANY);
-      funDecl.block = block;
-      return new Stmt.Script(funDecl);
-    } finally {
-      functions.pop();
-    }
+  private Stmt.FunDecl script() {
+    Token start = peek();
+    Token scriptName = new Token(IDENTIFIER, start).setValue(Utils.JACSAL_SCRIPT_MAIN);
+    // Script take a single parameter which is a Map of globals
+    Token        name     = new Token(IDENTIFIER, start).setValue(Utils.JACSAL_GLOBALS_NAME);
+    Expr.VarDecl declExpr = new Expr.VarDecl(name, null);
+    declExpr.type = JacsalType.MAP;
+    declExpr.isParam = true;
+    Stmt.VarDecl globals  = new Stmt.VarDecl(new Token(MAP, start), declExpr);
+    Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true);
+    return funDecl;
   }
 
   /**
@@ -96,11 +104,15 @@ public class Parser {
   private Stmt.Block block(TokenType endBlock) {
     Stmt.Stmts stmts = new Stmt.Stmts();
     Stmt.Block block = new Stmt.Block(peek(), stmts);
-    //blockStack.push(block);
-    stmts(stmts);
-    expect(endBlock);
-    //blockStack.pop();
-    return block;
+    blockStack().push(block);
+    try {
+      stmts(stmts);
+      expect(endBlock);
+      return block;
+    }
+    finally {
+      blockStack().pop();
+    }
   }
 
   /**
@@ -140,11 +152,18 @@ public class Parser {
   }
 
   /**
-   *# declaration -> varDecl
+   *# declaration -> funDecl
+   *#              | varDecl
    *#              | statement;
    */
   private Stmt declaration() {
-    if (matchAny(varDeclStart)) {
+    // Look for function declaration: <type> <identifier> "(" ...
+    if (lookahead(() -> matchAny(types),
+                  () -> matchAny(IDENTIFIER),
+                  () -> matchAny(LEFT_PAREN))) {
+      return funDecl();
+    }
+    if (matchAny(types) || matchAny(VAR)) {
       return varDecl();
     }
     if (matchAny(SEMICOLON)) {
@@ -170,16 +189,83 @@ public class Parser {
         return exprStmt();
       }
     }
-    if (matchAny(LEFT_BRACE))    { return block(RIGHT_BRACE); }
     if (matchAny(RETURN))        { return returnStmt();       }
     if (matchAny(IF))            { return ifStmt();           }
     if (matchAny(WHILE))         { return whileStmt();        }
     if (matchAny(FOR))           { return forStmt();          }
     if (matchAny(PRINT,PRINTLN)) { return printStmt();        }
-    if (matchAny(BREAK))         { return new Stmt.Break(previous(), currentWhileLoop()); }
-    if (matchAny(CONTINUE))      { return new Stmt.Continue(previous(), currentWhileLoop()); }
+    if (matchAny(BREAK))         { return new Stmt.Break(previous()); }
+    if (matchAny(CONTINUE))      { return new Stmt.Continue(previous()); }
     if (peek().is(SEMICOLON))    { return null;               }
-    return exprStmt();
+
+    Stmt.ExprStmt stmt = exprStmt();
+    // We need to check if exprStmt was a parameterless closure and if so convert back into
+    // statement block. The problem is that we can't tell the difference between a closure with
+    // no parameters and a code block until after we have parsed them. If the parameterless
+    // closure is called immediately then we know it was a closure and expression type won't be
+    // a closure. Otherwise, if the type is a closure and it has no parameters we know it wasn't
+    // immediately invoked and we will treat it is a code block.
+    if (stmt.expr instanceof Expr.Closure) {
+      Expr.Closure closure = (Expr.Closure)stmt.expr;
+      if (closure.funDecl.parameters.size() == 0) {
+        classes.peek().closures.remove(closure.funDecl);
+        return closure.funDecl.block;   // Treat closure as code block since no parameters
+      }
+    }
+    return stmt;
+  }
+
+  /**
+   *# funDecl -> ("oolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List")
+   *#              IDENTIFIER "(" ( varDecl ( "," varDecl ) * ) ? ")" "{" block "}" ;
+   */
+  private Stmt.FunDecl funDecl() {
+    Token returnTypeToken = expect(types);
+    JacsalType returnType = JacsalType.valueOf(returnTypeToken.getType());
+    Token name = expect(IDENTIFIER);
+    expect(LEFT_PAREN);
+    matchAny(EOL);
+    List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
+    matchAny(EOL);
+    expect(LEFT_BRACE);
+    matchAny(EOL);
+    Stmt.FunDecl funDecl = parseFunDecl(name, name, returnType, parameters, RIGHT_BRACE, false);
+
+    // Create a "variable" for the function that will have the MethodHandle as its value
+    // so we can get the function by value
+    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.name, null);
+    varDecl.type = FUNCTION;
+    varDecl.funDecl = funDecl.declExpr;
+    varDecl.isResultUsed = false;
+    funDecl.declExpr.varDecl = varDecl;
+    return funDecl;
+  }
+
+  /**
+   *# parameters -> ( varDecl ( "," varDecl ) * ) ? ;
+   */
+  private List<Stmt.VarDecl> parameters(TokenType endToken) {
+    List<Stmt.VarDecl> parameters = new ArrayList<>();
+    while (!matchAny(endToken)) {
+      if (parameters.size() > 0) {
+        expect(COMMA);
+        matchAny(EOL);
+      }
+      // Check for optional type. Default to "def".
+      Token typeToken = new Token(DEF, previous());
+      if (!peek().is(IDENTIFIER)) {
+        // Allow "var" or a valid type
+        typeToken = peek().is(VAR) ? expect(VAR) : expect(types);
+      }
+      // Note that unlike a normal varDecl where commas separate different vars of the same type,
+      // with parameters we expect a separate comma for parameter with a separate type for each one
+      // so we build up a list of singleVarDecl.
+      Stmt.VarDecl varDecl = singleVarDecl(typeToken);
+      varDecl.declExpr.isParam = true;
+      parameters.add(varDecl);
+      matchAny(EOL);
+    }
+    return parameters;
   }
 
   /**
@@ -261,13 +347,7 @@ public class Parser {
     matchAny(EOL);
     expect(RIGHT_PAREN);
     Stmt.While whileStmt = new Stmt.While(whileToken, cond);
-
-    // We need to keep track of what the current while loop is so that break/continue
-    // statements within body of the loop can find the right Stmt.While object
-    Stmt.While oldWhileStmt = functions.peek().currentWhileLoop;
-    functions.peek().currentWhileLoop = whileStmt;
     whileStmt.body = statement();
-    functions.peek().currentWhileLoop = oldWhileStmt;   // Restore old one
     return whileStmt;
   }
 
@@ -278,7 +358,7 @@ public class Parser {
     Token forToken = previous();
     expect(LEFT_PAREN);
     Stmt initialisation;
-    if (peek().is(varDeclStart)) {
+    if (peek().is(types) || peek().is(VAR)) {
       initialisation    = declaration();
     }
     else {
@@ -297,9 +377,6 @@ public class Parser {
 
     Stmt.While whileStmt = new Stmt.While(forToken, cond);
     whileStmt.updates = update;
-    Stmt.While oldWhileLoop = functions.peek().currentWhileLoop;
-    functions.peek().currentWhileLoop = whileStmt;
-
     whileStmt.body = statement();
 
     Stmt forStmt;
@@ -313,8 +390,6 @@ public class Parser {
       // If we don't have any initialisation we just turn into a while loop
       forStmt = whileStmt;
     }
-
-    functions.peek().currentWhileLoop = oldWhileLoop;
     return forStmt;
   }
 
@@ -337,11 +412,11 @@ public class Parser {
   /**
    *# exprStmt -> expression;
    */
-  private Stmt exprStmt() {
+  private Stmt.ExprStmt exprStmt() {
     Token location = peek();
     Expr  expr     = expression();
     expr.isResultUsed = false;    // Expression is a statement so result not used
-    Stmt stmt = new Stmt.ExprStmt(location, expr);
+    Stmt.ExprStmt stmt = new Stmt.ExprStmt(location, expr);
 //    if (peek().isNot(EOF, EOL, SEMICOLON, RIGHT_BRACE)) {
 //      unexpected("Expected end of expression");
 //    }
@@ -353,7 +428,7 @@ public class Parser {
    */
   private Stmt returnStmt() {
     Token       location   = previous();
-    return new Stmt.Return(location, expression(), functions.peek().returnType);
+    return new Stmt.Return(location, expression(), null);  // returnType will be set by Resolver
   }
 
   /**
@@ -430,7 +505,7 @@ public class Parser {
   private Expr parseExpression(int level) {
     // If we have reached highest precedence
     if (level == operatorsByPrecedence.size()) {
-      return primary();
+      return primaryOrCall();
     }
 
     // Get list of operators at this level of precedence along with flag
@@ -526,10 +601,38 @@ public class Parser {
   }
 
   /**
+   *# primaryOrCall -> primary ( "(" expressionList ? ")" ) * ;
+   */
+  private Expr primaryOrCall() {
+    Expr expr = primary();
+    while(matchAny(LEFT_PAREN)) {
+      Token argsToken = previous();
+      List<Expr> args = expressionList(RIGHT_PAREN);
+      expr = new Expr.Call(argsToken, expr, args);
+    }
+    return expr;
+  }
+
+  /**
+   *# expressionList -> expression ( "," expression ) * ;
+   */
+  private List<Expr> expressionList(TokenType endToken) {
+    List<Expr> exprs = new ArrayList<>();
+    while (!matchAny(endToken)) {
+      if (exprs.size() > 0) {
+        expect(COMMA);
+      }
+      exprs.add(expression());
+    }
+    return exprs;
+  }
+
+  /**
    *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
    *#          | lisOrMapLiteral
    *#          | exprString
    *#          | "(" expression ")"
+   *#          | "{" closure "}"
    *#          ;
    */
   private Expr primary() {
@@ -549,6 +652,7 @@ public class Parser {
     if (peek().is(LEFT_SQUARE,LEFT_BRACE))         { if (isMapLiteral()) { return mapLiteral(); } }
     if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
     if (matchAny(LEFT_PAREN))                      { return nestedExpression.get();               }
+    if (matchAny(LEFT_BRACE))                      { return closure();                            }
 
     return unexpected("Expecting literal or identifier or bracketed expression");
   }
@@ -673,7 +777,58 @@ public class Parser {
     return expr;
   }
 
+  /**
+   *# closure -> "{" (parameters "->" ) ? block "}"
+   */
+  private Expr closure() {
+    Token openBrace = previous();
+    // We need to do a lookahead to see if we have a parameter list or not
+    List<Stmt.VarDecl> parameters = Collections.EMPTY_LIST;
+    if (lookahead(() -> parameters(ARROW) != null)) {
+      parameters = parameters(ARROW);
+    }
+    Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false);
+    return new Expr.Closure(funDecl.declExpr);
+  }
+
   /////////////////////////////////////////////////
+
+  private Deque<Stmt.Block> blockStack() {
+    return classes.peek().nestedFunctions.peek().blocks;
+  }
+
+  private Stmt.FunDecl parseFunDecl(Token start,
+                                    Token name,
+                                    JacsalType returnType,
+                                    List<Stmt.VarDecl> params,
+                                    TokenType endToken,
+                                    boolean isScriptMain) {
+    Expr.FunDecl funDecl = new Expr.FunDecl(start, name, returnType, params);
+    if (!isScriptMain && !funDecl.isClosure()) {
+      // Add to functions in block so we can support forward references during Resolver phase
+      blockStack().peek().functions.add(funDecl);
+    }
+    classes.peek().nestedFunctions.push(funDecl);
+    try {
+      Stmt.Block block = block(endToken);
+      insertStmtsInto(params, block);
+      funDecl.block = block;
+      // Add to list of closures/functions
+      Stmt.ClassDecl currentClass = classes.peek();
+      if (funDecl.isClosure()) {
+        currentClass.closures.add(funDecl);
+      }
+      else {
+        currentClass.methods.add(funDecl);
+      }
+      funDecl.isResultUsed = false;
+      funDecl.type = FUNCTION;
+      return new Stmt.FunDecl(start, funDecl);
+    }
+    finally {
+      classes.peek().nestedFunctions.pop();
+    }
+  }
 
   private boolean isMapLiteral() {
     // Check for start of a Map literal. We need to lookahead to know the difference between
@@ -767,7 +922,6 @@ public class Parser {
     // Remember current state
     Token current = peek();
     List<CompileError>  currentErrors    = new ArrayList<>(errors);
-    Deque<Stmt.FunDecl> currentFunctions = new ArrayDeque<>(functions);
 
     try {
       for (Supplier<Boolean> lamdba: lambdas) {
@@ -786,19 +940,10 @@ public class Parser {
       // Restore state
       tokeniser.rewind(current);
       errors     = currentErrors;
-      functions  = currentFunctions;
     }
   }
 
   /////////////////////////////////////
-
-  private Stmt.While currentWhileLoop() {
-    Stmt.While whileStmt = functions.peek().currentWhileLoop;
-    if (whileStmt == null) {
-      throw new CompileError(previous().getStringValue() + " must be within a while/for loop", previous());
-    }
-    return whileStmt;
-  }
 
   private Expr error(String msg) {
     throw new CompileError(msg, peek());
@@ -838,90 +983,17 @@ public class Parser {
   }
 
   /**
-   * Find last statement and turn it into a return statement if not already a return statement. This is used to turn
-   * implicit returns in functions into explicit returns to simplify the job of the Resolver and Compiler phases.
+   * Insert given statements at start of stmts for a block
+   * @param stmts  list of statements to insert
+   * @param block  block in which to insert statements
    */
-  private Stmt explicitReturn(Stmt stmt, JacsalType returnType) {
-    try {
-      return doExplicitReturn(stmt, returnType);
+  private static void insertStmtsInto(List<Stmt.VarDecl> stmts, Stmt.Block block) {
+    if (stmts.size() == 0) {
+      return;  // Nothing to do
     }
-    catch (CompileError e) {
-      // Error could be due to previous error so if there have been previous
-      // errors ignore this one
-      if (errors.size() == 0) {
-        throw e;
-      }
-    }
-    return null;
-  }
-
-  private Stmt doExplicitReturn(Stmt stmt, JacsalType returnType) {
-    if (stmt instanceof Stmt.Return) {
-      // Nothing to do
-      return stmt;
-    }
-
-    if (stmt instanceof Stmt.Block) {
-      List<Stmt> stmts = ((Stmt.Block) stmt).stmts.stmts;
-      if (stmts.size() == 0) {
-        throw new CompileError("Missing explicit/implicit return statement for function", stmt.location);
-      }
-      Stmt newStmt = explicitReturn(stmts.get(stmts.size() - 1), returnType);
-      stmts.set(stmts.size() - 1, newStmt);   // Replace implicit return with explicit if necessary
-      return stmt;
-    }
-
-    if (stmt instanceof Stmt.If) {
-      Stmt.If ifStmt = (Stmt.If) stmt;
-      if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
-        if (returnType.isPrimitive()) {
-          throw new CompileError("Implicit return of null for  " +
-                                 (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
-        }
-        if (ifStmt.trueStmt == null) {
-          ifStmt.trueStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
-        }
-        if (ifStmt.falseStmt == null) {
-          ifStmt.falseStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
-        }
-      }
-      ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
-      ifStmt.falseStmt = doExplicitReturn(((Stmt.If) stmt).falseStmt, returnType);
-      return stmt;
-    }
-
-    // Turn implicit return into explicit return
-    if (stmt instanceof Stmt.ExprStmt) {
-      Stmt.ExprStmt exprStmt = (Stmt.ExprStmt) stmt;
-      Expr          expr     = exprStmt.expr;
-      expr.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(exprStmt.location, expr, returnType);
-      return returnStmt;
-    }
-
-    // If last statement is an assignment then value of assignment is the returned value.
-    // We set a flag on the statement so that Compiler knows to leave result on the stack
-    // and replace the assignment statement with a return wrapping the assignment expression.
-    if (stmt instanceof Stmt.VarDecl) {
-      Expr.VarDecl declExpr = ((Stmt.VarDecl) stmt).declExpr;
-      declExpr.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
-      return returnStmt;
-    }
-
-    // For functions that return ANY there is an implicit "return null" even if last statement
-    // does not have a value so replace stmt with list of statements that include the stmt and
-    // then a "return null" statement.
-    if (returnType.is(ANY)) {
-      Stmt.Stmts stmts = new Stmt.Stmts();
-      stmts.stmts.add(stmt);
-      Stmt.Return returnStmt = new Stmt.Return(stmt.location, new Expr.Literal(new Token(NULL, stmt.location)), returnType);
-      stmts.stmts.add(returnStmt);
-      return stmts;
-    }
-
-    // Other statements are not supported for implicit return
-    throw new CompileError("Unsupported statement type for implicit return", stmt.location);
+    List<Stmt> originalStmts = block.stmts.stmts;
+    block.stmts.stmts = new ArrayList<>(stmts);
+    block.stmts.stmts.addAll(originalStmts);
   }
 
   /**

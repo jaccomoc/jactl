@@ -78,7 +78,7 @@ while (<FH>) {
     print "    \@Override <T> T accept(Visitor<T> visitor) { return visitor.visit$className(this); }\n";
     my @fieldsAndAttrs;
     push @fieldsAndAttrs, map { $_->[0] } @constructorFields;
-    push @fieldsAndAttrs, @attributes;
+    #push @fieldsAndAttrs, @attributes;
     my $fieldValues = join(" + \", \" + ", map { "\"$_=\" + $_" } @fieldsAndAttrs);
     $fieldValues .= ' + ' if $fieldValues;
     print "    \@Override public String toString() { return \"$className" . "[\" + " . $fieldValues . "\"]\"; }\n";

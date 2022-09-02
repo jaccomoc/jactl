@@ -31,27 +31,41 @@ import static jacsal.TokenType.*;
  * The Resolver visits all statements and all expressions and performs the following:
  *  - tracks variables and their type
  *  - resolves references to symbols (variables, methods, etc)
- *  - allocates and keeps track of what local variable slots are in use
+ *  - tracks what local variables exist in each code block
+ *  - promotes local variables to closed over variabels when used in nested functions/closures
  *  - evaluates any simple expressions made up of only constants (literals)
+ *  - matches the break/continue statements to their enclosing while/for loop
+ *  - sets type of return statement to match return type of function that return belongs to
  *
- * The Resolver also needs to check for subexpressions where we might have a try/catch
- * required. This could occur, for example, with ?= assignment where we catch NullError
- * during evaluation of the rhs, or where we can throw a Continuation to suspend execution.
- * The problem is that JVM will discard any intermediate values on the stack when the
- * exception is thrown so we can't rely on use of the stack for complex expressions if
- * we know we might need to catch an exception in the middle of the expression.
+ * One of the jobs of the Resolver is to work out which local variables should be truly
+ * local (and have a JVM slot allocated) and which should be turned into heap variables
+ * because they are referred to by a nested function/closure (i.e. they are "closed over").
  *
- * The Resolver finds all such examples where it is possible that an expression needs
- * to catch an exception and marks earlier expressions where we would normally have left
- * something on the stack to preserve these intermediate values in temporary locals
- * instead.
+ * A heap local variable is stored in a HeapVar object which is just a wrapper around the
+ * actual value. By using this extra level of indirection we make sure that if the value
+ * of the variable changes, all functions using that variable will see the changed value.
+ *
+ * We pass any such heap local variables as impicit parameters to nested functions that
+ * need access to these variables from their parents. Note that sometimes a nested function
+ * will access a variable that is not in its immediate parent but from a level higher up so
+ * even if the parent has no need of the heap variable it needs it in order to be able to
+ * pass it to a nested function that it invokes at some point. In this way nested functions
+ * (and functions nested within them) can effect which heap vars need to get passed into the
+ * current function from its parent.
+ *
+ * If we consider a single heap local variable. It can be used in multiple nested functions
+ * and its location in the list of implicit parameters for each function can be different.
+ * Normally we use the Expr.VarDecl object to track which local variable slot it resides in
+ * but with HeapVar objects we need to track the slot used in each function so we need a per
+ * function object to track the slot for a given HeapVar. We create a new VarDecl that points
+ * to the original VarDecl for every such nested function.
  */
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
-  private final CompileContext      compileContext;
-  private final Map<String,Object>  globals;
-  private final Deque<Stmt.Block>   blocks = new ArrayDeque<>();
-  private final Deque<Stmt.FunDecl> functions = new ArrayDeque<>();
+  private final CompileContext        compileContext;
+  private final Map<String,Object>    globals;
+  private final Deque<Expr.FunDecl>   functions = new ArrayDeque<>();
+  private final Deque<Stmt.ClassDecl> classes   = new ArrayDeque<>();
 
   /**
    * Resolve variables, references, etc
@@ -69,6 +83,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  Void resolve(List<Stmt> stmts) {
+    if (stmts != null) {
+      stmts.forEach(this::resolve);
+    }
+    return null;
+  }
+
   JacsalType resolve(Expr expr) {
     if (expr != null) {
       return expr.accept(this);
@@ -80,20 +101,28 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   // = Stmt
 
-  @Override public Void visitScript(Stmt.Script stmt) {
-    return resolve(stmt.function);
+  @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
+    classes.push(stmt);
+    try {
+      stmt.classes.forEach(this::resolve);
+      stmt.fields.forEach(this::resolve);
+
+      // Don't resolve methods and closures since that will be done by the FunDecl statements
+      // within the scriptMain function
+        //stmt.methods.forEach(this::resolve);
+        //stmt.closures.forEach(this::resolve);
+
+      resolve(stmt.scriptMain);
+    }
+    finally {
+      classes.pop();
+    }
+    return null;
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
-    functions.push(stmt);
-    stmt.slotIdx = 2;
-    stmt.maxSlot = 2;
-    try {
-      return resolve(stmt.block);
-    }
-    finally {
-      functions.pop();
-    }
+    resolve(stmt.declExpr);
+    return null;
   }
 
   @Override public Void visitStmts(Stmt.Stmts stmt) {
@@ -102,13 +131,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitBlock(Stmt.Block stmt) {
-    blocks.push(stmt);
+    functions.peek().blocks.push(stmt);
     try {
+      // We first define our nested functions so that we can support
+      // forward references to functions declared at same level as us
+      stmt.functions.forEach(nested -> define(nested.name, nested.varDecl));
+
       return resolve(stmt.stmts);
     }
     finally {
-      functions.peek().slotIdx -= blocks.peek().slotsUsed;
-      blocks.pop();
+      functions.peek().blocks.pop();
     }
   }
 
@@ -124,6 +156,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     resolve(stmt.expr);
+    stmt.returnType = functions.peek().returnType;
     if (!stmt.expr.type.isConvertibleTo(stmt.returnType)) {
       throw new CompileError("Expression type not compatible with return type of function", stmt.expr.location);
     }
@@ -140,15 +173,25 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public Void visitWhile(Stmt.While stmt) {
     resolve(stmt.condition);
     resolve(stmt.updates);
+
+    // We need to keep track of what the current while loop is so that break/continue
+    // statements within body of the loop can find the right Stmt.While object
+    Stmt.While oldWhileStmt = functions.peek().currentWhileLoop;
+    functions.peek().currentWhileLoop = stmt;
+
     resolve(stmt.body);
+
+    functions.peek().currentWhileLoop = oldWhileStmt;   // Restore old one
     return null;
   }
 
   @Override public Void visitBreak(Stmt.Break stmt) {
+    stmt.whileLoop = currentWhileLoop(stmt.breakToken);
     return null;
   }
 
   @Override public Void visitContinue(Stmt.Continue stmt) {
+    stmt.whileLoop = currentWhileLoop(stmt.continueToken);
     return null;
   }
 
@@ -167,7 +210,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
     if (expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
-      throw new CompileError("Left-hand side of '" + expr.operator.getStringValue() + "' cannot be null", expr.left.location);
+      throw new CompileError("Left-hand side of '" + expr.operator.getChars() + "' cannot be null", expr.left.location);
     }
 
     // Field access operators
@@ -202,7 +245,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
       if (expr.type.is(STRING)) {
-        if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for Strings"); }
+        if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings"); }
         if (expr.operator.is(PLUS)) {
           if (expr.left.constValue == null) {
             throw new CompileError("Left-hand side of '+' cannot be null", expr.operator);
@@ -241,8 +284,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         return expr.type = JacsalType.BOOLEAN;
       }
 
-      if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
-      if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getStringValue() + "': cannot be null", expr.operator); }
+      if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
+      if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
 
       switch (expr.type.getType()) {
         case INT: {
@@ -255,7 +298,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
             case STAR:    expr.constValue = left * right; break;
             case SLASH:   expr.constValue = left / right; break;
             case PERCENT: expr.constValue = left % right; break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for ints");
+            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
           }
           break;
         }
@@ -269,7 +312,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
             case STAR:    expr.constValue = left * right; break;
             case SLASH:   expr.constValue = left / right; break;
             case PERCENT: expr.constValue = left % right; break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for longs");
+            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
           }
           break;
         }
@@ -282,7 +325,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
             case STAR:    expr.constValue = left * right; break;
             case SLASH:   expr.constValue = left / right; break;
             case PERCENT: expr.constValue = left % right; break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getStringValue() + " not supported for doubles");
+            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
           }
           break;
         }
@@ -312,7 +355,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     else {
       expr.type = expr.expr.type.unboxed();
       if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
-        throw new CompileError("Prefix operator '" + expr.operator.getStringValue() + "' cannot be applied to type " + expr.expr.type, expr.operator);
+        throw new CompileError("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
       }
       if (expr.isConst) {
         expr.constValue = expr.expr.constValue;
@@ -327,7 +370,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         else
         if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
           if (expr.expr.constValue == null) {
-            throw new CompileError("Prefix operator '" + expr.operator.getStringValue() + "': null value encountered", expr.expr.location);
+            throw new CompileError("Prefix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
           }
           expr.constValue = incOrDec(expr.operator.is(PLUS_PLUS), expr.type, expr.expr.constValue);
         }
@@ -343,7 +386,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
       if (expr.isConst) {
         if (expr.expr.constValue == null) {
-          throw new CompileError("Postfix operator '" + expr.operator.getStringValue() + "': null value encountered", expr.expr.location);
+          throw new CompileError("Postfix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
         }
         // For const expressions, postfix inc/dec is a no-op
         expr.constValue = expr.expr.constValue;
@@ -392,7 +435,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitVarDecl(Expr.VarDecl expr) {
+    // Functions have previously been declared by the block they belong to
+    if (expr.funDecl != null) {
+      return expr.type = FUNCTION;
+    }
+
+    // Declare the variable (but don't define it yet) so that we can detect self-references
+    // in the initialiser. E.g. we can catch:  int x = x + 1
     declare(expr.name);
+
     JacsalType type = resolve(expr.initialiser);
     if (expr.type == null) {
       expr.type = type;
@@ -404,6 +455,44 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     define(expr.name, expr);
     return expr.type;
   }
+
+  @Override public JacsalType visitFunDecl(Expr.FunDecl expr) {
+    resolve(expr.varDecl);
+    Expr.FunDecl parent = functions.peek();
+    if (functions.size() > 0) {
+      // Generate our method name by appending to parent's name separated by '$'
+      // (unless we are at the top level in which case we just use our given name).
+      // For closures we use _$cN where N is incrementing count per parent function.
+      String methodName = expr.name == null ? "_$c" + ++parent.closureCount : expr.name.getStringValue();
+      expr.methodName = functions.size() == 1 ? methodName : functions.peek().methodName + "$" + methodName;
+    }
+    else {
+      // Top level script main function
+      expr.methodName = expr.name.getStringValue();
+    }
+
+    functions.push(expr);
+    try {
+      // Add explicit return if needed in places where we would implicity return the result
+      explicitReturn(expr.block, expr.returnType);
+      resolve(expr.block);
+      return expr.type = FUNCTION;
+    }
+    finally {
+      functions.pop();
+      if (parent != null) {
+        // Check if parent needs to have any additional heap vars passed to it in order to be able
+        // to pass to nested function and add them to the parent.heapVars map
+        expr.heapVars.entrySet()
+                     .stream()
+                     .filter(e -> e.getValue().owner != parent)
+                     .filter(e -> !parent.heapVars.containsKey(e.getKey()))
+                     .forEach(e -> parent.heapVars.put(e.getKey(), varDeclWrapper(e.getValue())));
+      }
+    }
+  }
+
+
 
   @Override public JacsalType visitIdentifier(Expr.Identifier expr) {
     Expr.VarDecl varDecl = lookup(expr.identifier);
@@ -441,7 +530,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitNoop(Expr.Noop expr) {
     expr.isConst = false;
-    expr.type = ANY;
+    // Type will already have been set by parent (e.g. in visitVarOpAssign)
     return expr.type;
   }
 
@@ -451,7 +540,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitOpAssign(Expr.OpAssign expr) {
     Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-
+    valueExpr.left.type = ANY;     // for fields use ANY for the moment
     resolveFieldAssignment(expr, expr.parent, expr.field, valueExpr, expr.accessType);
 
     return expr.type;
@@ -477,7 +566,54 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type = STRING;
   }
 
-  /////////////////////////
+  @Override public JacsalType visitClosure(Expr.Closure expr) {
+    resolve(expr.funDecl);
+    return expr.type = FUNCTION;
+  }
+
+  @Override public JacsalType visitCall(Expr.Call expr) {
+    resolve(expr.callee);
+    expr.args.forEach(this::resolve);
+    if (!expr.callee.type.is(FUNCTION,ANY) || expr.callee.isConst && expr.callee.constValue == null) {
+      throw new CompileError("Expression of type " + expr.callee.type + " cannot be called", expr.token);
+    }
+    expr.type = ANY;
+    if (expr.callee.isFunctionCall()) {
+      // Special case where we know the function directly and get its return type
+      Expr.FunDecl funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
+      expr.type = funDecl.returnType;
+
+      // Validate argument count and types against parameter types
+      int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
+      int argCount       = expr.args.size();
+      int paramCount     = funDecl.parameters.size();
+      if (argCount < mandatoryCount) {
+        String atLeast = mandatoryCount == paramCount ? "" : "at least ";
+        throw new CompileError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", expr.token);
+      }
+      if (argCount > paramCount) {
+        throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", expr.token);
+      }
+      for (int i = 0; i < argCount; i++) {
+        Expr       arg       = expr.args.get(i);
+        JacsalType argType   = arg.type;
+        JacsalType paramType = funDecl.parameters.get(i).declExpr.type;
+        if (!argType.isConvertibleTo(paramType)) {
+          throw new CompileError(nth(i + 1) + " argument of type " + argType + " cannot be converted to parameter type of " + paramType, arg.location);
+        }
+      }
+    }
+    return null;
+  }
+
+  ////////////////////////////////////////////
+
+  private static String nth(int i) {
+    if (i % 10 == 1 && i % 100 != 11) { return i + "st"; }
+    if (i % 10 == 2 && i % 100 != 12) { return i + "nd"; }
+    if (i % 10 == 3 && i % 100 != 13) { return i + "rd"; }
+    return i + "th";
+  }
 
   private static Object incOrDec(boolean isInc, JacsalType type, Object val) {
     int incAmount = isInc ? 1 : -1;
@@ -490,8 +626,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }
 
-
   /////////////////////////
+
+  private Stmt.While currentWhileLoop(Token token) {
+    Stmt.While whileStmt = functions.peek().currentWhileLoop;
+    if (whileStmt == null) {
+      throw new CompileError(token.getChars() + " must be within a while/for loop", token);
+    }
+    return whileStmt;
+  }
 
   private void error(String msg, Token location) {
     throw new CompileError(msg, location);
@@ -500,9 +643,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null);
 
   private void declare(Token name) {
-    String varName = (String)name.getValue();
+    String varName = name.getStringValue();
     Map<String,Expr.VarDecl> vars = getVars();
-    if (!compileContext.replMode) {
+    if (!compileContext.replMode || !isAtTopLevel()) {
       Expr.VarDecl decl = vars.get(varName);
       if (decl != null) {
         error("Variable with name " + varName + " already declared in this scope", name);
@@ -514,45 +657,67 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private void define(Token name, Expr.VarDecl decl) {
-    Stmt.FunDecl function = functions.peek();
+    Expr.FunDecl function = functions.peek();
     assert function != null;
     Map<String,Expr.VarDecl> vars = getVars();
 
     // In repl mode we don't have a top level block and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (blocks.size() == 1 && compileContext.replMode) {
+    if (isAtTopLevel() && decl.type != FUNCTION && compileContext.replMode) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }
-    else {
-      Stmt.Block block = blocks.peek();
-      decl.slot = function.slotIdx;
-      int slotsUsed = decl.type.is(JacsalType.LONG, JacsalType.DOUBLE) ? 2 : 1;
-      function.slotIdx += slotsUsed;
-      function.maxSlot = Math.max(function.slotIdx, function.maxSlot);
-      block.slotsUsed += slotsUsed;
-    }
-    vars.put((String)name.getValue(), decl);
+    // Remember at what nesting level this variable is declared. If we then later have a
+    // nested function that refers to this variable (closes over it) we will promote the
+    // variable to a heap variable and use the difference in nesting level to work out
+    // where the variable is at runtime.
+    decl.nestingLevel = functions.size();
+    decl.owner = function;
+    vars.put(name.getStringValue(), decl);
+  }
+
+  private boolean isAtTopLevel() {
+    return functions.size() == 1 && functions.peek().blocks.size() == 1;
   }
 
   private Map<String,Expr.VarDecl> getVars() {
     // Special case for repl mode where we ignore top level block
-    if (compileContext.replMode && blocks.size() == 1) {
+    if (compileContext.replMode && isAtTopLevel()) {
       return compileContext.globalVars;
     }
-    return blocks.peek().variables;
+    return functions.peek().blocks.peek().variables;
   }
 
+  // We look up variables in our local scope and parent scopes within the same function.
+  // If we still can't find the variable we search in parent functions to see if the
+  // variable exists there (at which point we close over it and it becomes a heap variable
+  // rather than one that is a JVM local).
   private Expr.VarDecl lookup(Token identifier) {
-    String name = (String)identifier.getValue();
+    String name = identifier.getStringValue();
     Expr.VarDecl varDecl = null;
-    for (Iterator<Stmt.Block> it = blocks.iterator(); it.hasNext(); ) {
-      Stmt.Block   block   = it.next();
-      varDecl = block.variables.get(name);
-      if (varDecl != null) {
-        break;
+    // Search blocks in each function until we find the variable
+    FUNC_LOOP:
+    for (Iterator<Expr.FunDecl> funcIt = functions.iterator(); funcIt.hasNext(); ) {
+      Expr.FunDecl funDecl = funcIt.next();
+      for (Iterator<Stmt.Block> it = funDecl.blocks.iterator(); it.hasNext(); ) {
+        Stmt.Block block = it.next();
+        varDecl = block.variables.get(name);
+        if (varDecl != null) {
+          break FUNC_LOOP;  // Break out of both loops
+        }
       }
     }
+
+    // Look for field in classes
+    if (varDecl == null) {
+      for (Iterator<Stmt.ClassDecl> it = classes.iterator(); it.hasNext();) {
+        varDecl = it.next().fieldVars.get(name);
+        if (varDecl != null) {
+          break;
+        }
+      }
+    }
+
     if (varDecl == null && compileContext.replMode) {
       varDecl = compileContext.globalVars.get(name);
     }
@@ -560,7 +725,27 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Variable initialisation cannot refer to itself", identifier);
     }
     if (varDecl != null) {
-      return varDecl;
+      if (varDecl.isGlobal || varDecl.type.is(FUNCTION) || varDecl.nestingLevel == functions.size()) {
+        // Normal local or global variable (not a closed over var) or a function.
+        // Functions can be called from wherever they are visible and not stored in local stack vars.
+        return varDecl;
+      }
+
+      // If nesting level is different and if variable is a local variable then turn it into
+      // a heap var
+      varDecl.isHeap = true;
+
+      Expr.FunDecl currentFunc = functions.peek();
+
+      // Add this var to our list of heap vars we need passed in to us
+      Expr.VarDecl heapVarDecl = currentFunc.heapVars.get(name);
+      if (heapVarDecl == null) {
+        // Wrap in another VarDecl so we can have per-function slot allocated
+        heapVarDecl = varDeclWrapper(varDecl);
+        currentFunc.heapVars.put(name, heapVarDecl);
+      }
+      // Return VarDecl for our function
+      return heapVarDecl;
     }
 
     error("Reference to unknown variable " + name, identifier);
@@ -572,4 +757,116 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError(msg, location);
     }
   }
+
+  private Expr.VarDecl varDeclWrapper(Expr.VarDecl varDecl) {
+    Expr.VarDecl heapVarDecl = new Expr.VarDecl(varDecl.name, null);
+    heapVarDecl.type = varDecl.type.boxed();
+    heapVarDecl.varDecl = varDecl;
+    heapVarDecl.isHeap = true;
+    heapVarDecl.isParam = true;
+    return heapVarDecl;
+  }
+
+  /////////////////////////////////////////////////
+
+  /**
+   * Find last statement and turn it into a return statement if not already a return statement. This is used to turn
+   * implicit returns in functions into explicit returns to simplify the job of the Resolver and Compiler phases.
+   */
+  private Stmt explicitReturn(Stmt stmt, JacsalType returnType) {
+//    try {
+      return doExplicitReturn(stmt, returnType);
+//    }
+//    catch (CompileError e) {
+//      // Error could be due to previous error so if there have been previous
+//      // errors ignore this one
+//      if (errors.size() == 0) {
+//        throw e;
+//      }
+//    }
+//    return null;
+  }
+
+  private Stmt doExplicitReturn(Stmt stmt, JacsalType returnType) {
+    if (stmt instanceof Stmt.Return) {
+      // Nothing to do
+      return stmt;
+    }
+
+    if (stmt instanceof Stmt.Block) {
+      List<Stmt> stmts = ((Stmt.Block) stmt).stmts.stmts;
+      if (stmts.size() == 0) {
+        throw new CompileError("Missing explicit/implicit return statement for function", stmt.location);
+      }
+      Stmt newStmt = explicitReturn(stmts.get(stmts.size() - 1), returnType);
+      stmts.set(stmts.size() - 1, newStmt);   // Replace implicit return with explicit if necessary
+      return stmt;
+    }
+
+    if (stmt instanceof Stmt.If) {
+      Stmt.If ifStmt = (Stmt.If) stmt;
+      if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
+        if (returnType.isPrimitive()) {
+          throw new CompileError("Implicit return of null for  " +
+                                 (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
+        }
+        if (ifStmt.trueStmt == null) {
+          ifStmt.trueStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+        }
+        if (ifStmt.falseStmt == null) {
+          ifStmt.falseStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+        }
+      }
+      ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
+      ifStmt.falseStmt = doExplicitReturn(((Stmt.If) stmt).falseStmt, returnType);
+      return stmt;
+    }
+
+    // Turn implicit return into explicit return
+    if (stmt instanceof Stmt.ExprStmt) {
+      Stmt.ExprStmt exprStmt = (Stmt.ExprStmt) stmt;
+      Expr          expr     = exprStmt.expr;
+      expr.isResultUsed = true;
+      Stmt.Return returnStmt = new Stmt.Return(exprStmt.location, expr, returnType);
+      return returnStmt;
+    }
+
+    // If last statement is an assignment then value of assignment is the returned value.
+    // We set a flag on the statement so that Compiler knows to leave result on the stack
+    // and replace the assignment statement with a return wrapping the assignment expression.
+    if (stmt instanceof Stmt.VarDecl) {
+      Expr.VarDecl declExpr = ((Stmt.VarDecl) stmt).declExpr;
+      declExpr.isResultUsed = true;
+      Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
+      return returnStmt;
+    }
+
+    // If last statement is a function declaration then we return the MethodHandle for the
+    // function as the return value of our function
+    // We set a flag on the statement so that Compiler knows to leave result on the stack
+    // and replace the assignment statement with a return wrapping the assignment expression.
+    if (stmt instanceof Stmt.FunDecl) {
+      Expr.FunDecl declExpr = ((Stmt.FunDecl)stmt).declExpr;
+      declExpr.isResultUsed = true;
+      declExpr.varDecl.isResultUsed = true;
+      Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
+      return returnStmt;
+    }
+
+    // For functions that return ANY there is an implicit "return null" even if last statement
+    // does not have a value so replace stmt with list of statements that include the stmt and
+    // then a "return null" statement.
+    if (returnType.is(ANY)) {
+      Stmt.Stmts stmts = new Stmt.Stmts();
+      stmts.stmts.add(stmt);
+      stmts.location = stmt.location;
+      Stmt.Return returnStmt = new Stmt.Return(stmt.location, new Expr.Literal(new Token(NULL, stmt.location)), returnType);
+      stmts.stmts.add(returnStmt);
+      return stmts;
+    }
+
+    // Other statements are not supported for implicit return
+    throw new CompileError("Unsupported statement type for implicit return", stmt.location);
+  }
+
 }

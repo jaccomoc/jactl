@@ -19,6 +19,7 @@ package jacsal;
 import jacsal.runtime.Location;
 import jacsal.runtime.NullError;
 import jacsal.runtime.RuntimeUtils;
+import jacsal.runtime.SourceLocation;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
@@ -29,6 +30,8 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.BOOLEAN;
@@ -60,8 +63,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private final ClassCompiler classCompiler;
   private final MethodVisitor mv;
-  private final Stmt.FunDecl  funDecl;
+  private final Expr.FunDecl  funDecl;
   private       int           currentLineNum = 0;
+  private       int           minimumSlot = 0;
 
   private final Deque<Stmt.Block> blocks = new ArrayDeque<>();
   private final List<JacsalType>  locals = new ArrayList<>();
@@ -73,24 +77,170 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // code. This allows us to know when to do appropriate conversions.
   private Deque<JacsalType> stack = new ArrayDeque<>();
 
-  MethodCompiler(ClassCompiler classCompiler, Stmt.FunDecl funDecl, MethodVisitor mv) {
+  MethodCompiler(ClassCompiler classCompiler, Expr.FunDecl funDecl, MethodVisitor mv) {
     this.classCompiler = classCompiler;
     this.funDecl = funDecl;
     this.mv = mv;
-    // Pre-initialise locals to max size allocated
-    ntimes(funDecl.maxSlot, () -> locals.add(null));
   }
 
   void compile() {
+    // Allow room for object instance at idx 0 and optional heap vars array at idx 1.
+    // We know we need heap vars array passed to us if our top level access level is
+    // less than our current level (i.e. we access vars from one of our parents).
+    if (!funDecl.isStatic) {
+      allocateSlot(ANY);     // Object reference
+    }
+
+    // Allocate slots for heap local vars passed to us as implicit parameters from
+    // parent function
+    funDecl.heapVars.forEach((name,varDecl) -> defineVar(varDecl));
+
+    // Compile statements.
+    // NOTE: the first statements will be the parameter declarations which will allocate
+    //       the slots for the parameters
     compile(funDecl.block);
 
-    check(stack.isEmpty(), "non-empty stack at end of method. Type stack = " + stack);
+    Label endBlock = new Label();
+    mv.visitLabel(endBlock);
+    funDecl.heapVars.forEach((name,varDecl)-> undefineVar(varDecl, endBlock));
 
     if (classCompiler.debug()) {
       mv.visitEnd();
       classCompiler.cv.visitEnd();
     }
     mv.visitMaxs(0, 0);
+
+    check(stack.isEmpty(), "non-empty stack at end of method " + funDecl.name.getStringValue() + ". Type stack = " + stack);
+  }
+
+  /////////////////////////////////////////////
+
+  /**
+   * Compile method that handles vararg invocation of actual method. This wrapper method
+   * takes an array or a map of arguments and fills in values for missing args before
+   * invoking the real method with the exact arguments required.
+   */
+  void compileWrapper() {
+    if (!funDecl.isStatic) {
+      allocateSlot(ANY);     // Slot 0 is always "this" for non-static methods
+    }
+
+    int sourceSlot = allocateSlot(STRING);
+    int offsetSlot = allocateSlot(INT);
+
+    // Args passed as Object and we then check type and store as correct type into another slot
+    int arg          = allocateSlot(ANY);   // args as Object
+    int arraySlot    = allocateSlot(ANY);   // If args passed as Object[]
+    int mapSlot      = allocateSlot(MAP);   // If args passed as Map
+    int argCountSlot = allocateSlot(INT);   // Count of args
+
+    loadLocal(0);       // "this" must be first on stack for later invocation
+
+    Label checkType = new Label();
+    _loadLocal(arg);
+    mv.visitTypeInsn(INSTANCEOF, "[Ljava/lang/Object;");
+    Label isMap = new Label();
+    mv.visitJumpInsn(IFEQ, isMap);
+
+    // Is Object[] so check count and fill in additional args or throw exception if missing mandatory args
+    _loadLocal(arg);
+    mv.visitTypeInsn(CHECKCAST, "[Ljava/lang/Object;");
+    _storeLocal(arraySlot);
+    _loadLocal(arraySlot);
+    mv.visitInsn(ARRAYLENGTH);
+    _storeLocal(argCountSlot);
+    int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
+    Label enoughArgs = new Label();
+    if (mandatoryCount > 0) {
+      _loadLocal(argCountSlot);
+      _loadConst(mandatoryCount);
+      mv.visitJumpInsn(IF_ICMPGE, enoughArgs);
+      throwError("Missing mandatory arguments", sourceSlot, offsetSlot);
+    }
+    mv.visitLabel(enoughArgs);   // :enoughArgs
+    Label notTooMany = new Label();
+    _loadLocal(argCountSlot);
+    int paramCount = funDecl.parameters.size();
+    _loadConst(paramCount);
+    mv.visitJumpInsn(IF_ICMPLE, notTooMany);
+    throwError("Too many args", sourceSlot, offsetSlot);
+    mv.visitLabel(notTooMany);  // :notTooMany
+
+    // For each parameter we now either load argument from Object[] or put default value
+    // onto stack depending on number of arguments passed in Object[]
+    // If a parameter has a default value but is mandatory (when passing Object[]) due
+    // to subsequent parameters not having a default then we don't bother compiling the
+    // code for its default value - we will for named parameter passing (see below) but
+    // not for Object[] arg passing since we will never use it.
+    for (int i = 0; i < paramCount; i++) {
+      // We have already checked that we have enough args so for mandatory args we
+      // just load the value without needing to check whether arg is present. We only
+      // need check whether we have the argument if this is an optional arg.
+      Label useDefaultValue = new Label();
+      boolean isOptional    = i >= mandatoryCount;
+      if (isOptional) {
+        // If we have the argument load it from Object[]
+        _loadConst(i);
+        _loadLocal(argCountSlot);
+        mv.visitJumpInsn(IF_ICMPGE, useDefaultValue);
+      }
+
+      // Load value from Object[]
+      _loadLocal(arraySlot);
+      _loadConst(i);
+      mv.visitInsn(AALOAD);
+      push(ANY);
+      convertTo(funDecl.parameters.get(i).declExpr.type, true, location(sourceSlot, offsetSlot));
+
+      if (isOptional) {
+        pop();  // We will put same type back on stack when we load default value
+        Label nextArg = new Label();
+        mv.visitJumpInsn(GOTO, nextArg);
+
+        // Load default value
+        mv.visitLabel(useDefaultValue);   // :useDefaultValue
+        Stmt.VarDecl param = funDecl.parameters.get(i);
+        compile(param.declExpr.initialiser);
+        convertTo(param.declExpr.type, true, param.declExpr.initialiser.location);
+        mv.visitLabel(nextArg);           // :nextArg
+      }
+    }
+
+    Label invocation = new Label();
+    mv.visitJumpInsn(GOTO, invocation);
+
+    // TODO: save stack so we can check against other code path
+    //Deque<JacsalType> stackCopy = stack;
+    //stack = new ArrayDeque<>();
+
+    ////////////////////////////////
+
+    mv.visitLabel(isMap);           // :isMap
+    mv.visitInsn(POP);     // For the moment we don't need "this"
+    _loadLocal(arg);
+    mv.visitTypeInsn(CHECKCAST, "java/util/Map");
+    _storeLocal(mapSlot);
+    throwError("Named parameter invoction not yet supported", location(sourceSlot, offsetSlot));
+
+    // TODO: check stacks match
+    //check(equals(stack, stackCopy), "Mismatch in type stack for Object[] and Map paths");
+
+    /////////////////////////////////
+
+    mv.visitLabel(invocation);     // :invocation
+    invokeMethod(funDecl);
+    convertToAny();
+    emitReturn(ANY);        // Wrapper has to return ANY since when invoked as MethodHandle we
+                            // have no idea what its real signature is
+    pop();
+
+    if (classCompiler.debug()) {
+      mv.visitEnd();
+      classCompiler.cv.visitEnd();
+    }
+    mv.visitMaxs(0, 0);
+
+    check(stack.isEmpty(), "non-empty stack at end of wrapper method " + funDecl.name.getStringValue() + ". Type stack = " + stack);
   }
 
   /////////////////////////////////////////////
@@ -100,10 +250,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private Void compile(Stmt stmt) {
     if (stmt == null) { return null; }
     return stmt.accept(this);
-  }
-
-  @Override public Void visitScript(Stmt.Script stmt) {
-    throw new IllegalStateException("Internal error: visitScript() should never be called");
   }
 
   @Override public Void visitStmts(Stmt.Stmts stmt) {
@@ -121,10 +267,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (stmt.variables.size() > 0) {
         Label endBlock = new Label();
         mv.visitLabel(endBlock);
-        stmt.variables.values().forEach(v -> {
-          mv.visitLocalVariable((String) v.name.getValue(), v.type.descriptor(), null,
-                                v.declLabel, endBlock, v.slot);
-        });
+        stmt.variables.values().forEach(v -> undefineVar(v, endBlock));
       }
       blocks.pop();
     }
@@ -136,7 +279,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
-    throw new UnsupportedOperationException();
+    compile(stmt.declExpr);
+    return null;
   }
 
   @Override public Void visitExprStmt(Stmt.ExprStmt stmt) {
@@ -147,24 +291,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(stmt.expr);
     convertTo(stmt.returnType, true, stmt.expr.location);
     pop();
-    switch (stmt.returnType.getType()) {
-      case BOOLEAN:
-      case INT:
-        mv.visitInsn(IRETURN);
-        break;
-      case LONG:
-        mv.visitInsn(LRETURN);
-        break;
-      case DOUBLE:
-        mv.visitInsn(DRETURN);
-        break;
-      case DECIMAL:
-      case STRING:
-      case ANY:
-        mv.visitInsn(ARETURN);
-        break;
-      default: throw new IllegalStateException("Unexpected type " + stmt.returnType);
-    }
+    emitReturn(stmt.returnType);
     return null;
   }
 
@@ -222,7 +349,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitPrint(Stmt.Print stmt) {
     compile(stmt.expr);
     convertTo(STRING, true, stmt.expr.location);
-    invokeStatic(RuntimeUtils.class, stmt.printToken.getStringValue(), Object.class);
+    invokeStatic(RuntimeUtils.class, stmt.printToken.getChars(), Object.class);
+    return null;
+  }
+
+  @Override
+  public Void visitClassDecl(Stmt.ClassDecl stmt) {
     return null;
   }
 
@@ -275,9 +407,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
     if (!expr.isGlobal) {
-      mv.visitLabel(expr.declLabel = new Label());   // Label for debugger
-      defineVar(expr.slot, expr.type);
+      defineVar(expr);
     }
+    if (expr.isParam) {
+      return null;     // Nothing else to do since value is already stored for parameters
+    }
+
+    // If actual function (not closure)
+    if (expr.type.is(FUNCTION) && expr.funDecl != null) {
+      // Value of the variable will be the handle for the function
+      loadClassField(expr.funDecl.isStatic ? Utils.staticHandleName(expr.funDecl.methodName)
+                                           : Utils.handleName(expr.funDecl.methodName),
+                     FUNCTION,
+                     expr.funDecl.isStatic);
+    }
+    else
     if (expr.initialiser != null) {
       compile(expr.initialiser);
       convertTo(expr.type, true, expr.initialiser.location);
@@ -293,6 +437,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     storeVar(expr);
+    return null;
+  }
+
+  @Override public Void visitFunDecl(Expr.FunDecl expr) {
+    compile(expr.varDecl);
     return null;
   }
 
@@ -475,7 +624,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int temp = -1;
     if (expr.isResultUsed && expr.isPreIncOrDec) {
       dupVal();
-      temp = allocateTemp(expr.type);
+      temp = allocateSlot(expr.type);
       storeLocal(temp);
     }
 
@@ -486,7 +635,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we need the after result then stash in a temp
     if (expr.isResultUsed && !expr.isPreIncOrDec) {
       dupVal();
-      temp = allocateTemp(expr.type);
+      temp = allocateSlot(expr.type);
       storeLocal(temp);
     }
 
@@ -536,7 +685,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.left);
       convertToString();
       compile(expr.right);
-      convertToInt(true, expr.right.location);
+      convertTo(INT, true, expr.right.location);
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
       invokeStatic(RuntimeUtils.class, "stringRepeat", String.class, Integer.TYPE, String.class, Integer.TYPE);
@@ -798,7 +947,97 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitClosure(Expr.Closure expr) {
+    return null;
+  }
+
+  @Override public Void visitCall(Expr.Call expr) {
+    // If we have an explicit function name and exact number of args then we can invoke
+    // directly without needing to go through a method handle or via method wrapper that
+    // fills in missing args
+    if (expr.callee.isFunctionCall()) {
+      Expr.FunDecl funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
+      if (expr.args.size() == funDecl.parameters.size()) {
+        if (!funDecl.isStatic) {
+          // Load this
+          loadLocal(0);
+        }
+        for (int i = 0; i < expr.args.size(); i++) {
+          Expr arg = expr.args.get(i);
+          compile(arg);
+          convertTo(funDecl.parameters.get(i).declExpr.type, !arg.type.isPrimitive(), arg.location);
+        }
+        invokeMethod(funDecl);
+        return null;
+      }
+    }
+
+    // Need to get the method handle
+    compile(expr.callee);
+    convertTo(FUNCTION, true, expr.callee.location);
+
+    // Load source and offset
+    loadLocation(expr.location);
+
+    // Any arguments will be stored in an Object[]
+    // TODO: support named args
+    _loadConst(expr.args.size());
+    mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+    push(ANY);
+    for (int i = 0; i < expr.args.size(); i++) {
+      mv.visitInsn(DUP);
+      _loadConst(i);
+      compile(expr.args.get(i));
+      convertToAny();
+      mv.visitInsn(AASTORE);
+      pop();
+    }
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/Object;", false);
+    pop(4);   // callee, source, offset, Object[]
+    push(ANY);
+
+    return null;
+  }
+
   ///////////////////////////////////////////////////////////////
+
+  private void emitReturn(JacsalType returnType) {
+    switch (returnType.getType()) {
+      case BOOLEAN:
+      case INT:
+        mv.visitInsn(IRETURN);
+        break;
+      case LONG:
+        mv.visitInsn(LRETURN);
+        break;
+      case DOUBLE:
+        mv.visitInsn(DRETURN);
+        break;
+      case DECIMAL:
+      case STRING:
+      case ANY:
+        mv.visitInsn(ARETURN);
+        break;
+      default: throw new IllegalStateException("Unexpected type " + returnType);
+    }
+  }
+
+  private void invokeMethod(Expr.FunDecl funDecl) {
+    mv.visitMethodInsn(funDecl.isStatic ? INVOKESTATIC : INVOKEVIRTUAL,
+                       classCompiler.internalName,
+                       funDecl.methodName,
+                       getMethodDescriptor(funDecl),
+                       false);
+    pop(funDecl.parameters.size() + (funDecl.isStatic ? 0 : 1));
+    push(funDecl.returnType);
+  }
+
+  private String getMethodDescriptor(Expr.FunDecl funDecl) {
+    return Type.getMethodDescriptor(funDecl.returnType.descriptorType(),
+                                    funDecl.parameters.stream()
+                                                      .map(p -> p.declExpr.type.descriptorType())
+                                                      .toArray(Type[]::new));
+  }
 
   // = Type stack
 
@@ -851,8 +1090,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitInsn(SWAP);
     }
     else {
-      int slot1 = allocateTemp(type1);
-      int slot2 = allocateTemp(type2);
+      int slot1 = allocateSlot(type1);
+      int slot2 = allocateSlot(type2);
       _storeLocal(slot1);
       _storeLocal(slot2);
       _loadLocal(slot1);
@@ -896,8 +1135,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitInsn(DUP2);
     }
     else {
-      int slot1 = allocateTemp(type1);
-      int slot2 = allocateTemp(type2);
+      int slot1 = allocateSlot(type1);
+      int slot2 = allocateSlot(type2);
       _storeLocal(slot1);
       _storeLocal(slot2);
       _loadLocal(slot2);
@@ -1011,100 +1250,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param obj  object to load on stack
    */
   private Void loadConst(Object obj) {
-    if (obj == null) {
-      mv.visitInsn(ACONST_NULL);
-      push(ANY);
-    }
-    else
-    if (obj instanceof Boolean) {
-      mv.visitInsn((boolean)obj ? ICONST_1 : ICONST_0);
-      push(BOOLEAN);
-    }
-    else
-    if (obj instanceof Integer || obj instanceof Short || obj instanceof Character) {
-      int value = obj instanceof Character ? (char)obj : ((Number)obj).intValue();
-      switch (value) {
-        case -1:  mv.visitInsn(ICONST_M1);   break;
-        case 0:   mv.visitInsn(ICONST_0);    break;
-        case 1:   mv.visitInsn(ICONST_1);    break;
-        case 2:   mv.visitInsn(ICONST_2);    break;
-        case 3:   mv.visitInsn(ICONST_3);    break;
-        case 4:   mv.visitInsn(ICONST_4);    break;
-        case 5:   mv.visitInsn(ICONST_5);    break;
-        default:
-          if (value >= Byte.MIN_VALUE && value <= Byte.MAX_VALUE)   { mv.visitIntInsn(BIPUSH, value); break; }
-          if (value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) { mv.visitIntInsn(SIPUSH, value); break; }
-          mv.visitLdcInsn(value);
-          break;
-      }
-      push(INT);
-    }
-    else
-    if (obj instanceof Long) {
-      long value = (long)obj;
-      if (value == 0L) {
-        mv.visitInsn(LCONST_0);
-      }
-      else
-      if (value == 1L) {
-        mv.visitInsn(LCONST_1);
-      }
-      else {
-        mv.visitLdcInsn((long)value);
-      }
-      push(LONG);
-    }
-    else
-    if (obj instanceof Double) {
-      double value = (double)obj;
-      if (value == 0D) {
-        mv.visitInsn(DCONST_0);
-      }
-      else
-      if (value == 1.0D) {
-        mv.visitInsn(DCONST_1);
-      }
-      else {
-        mv.visitLdcInsn(obj);
-      }
-      push(DOUBLE);
-    }
-    else
-    if (obj instanceof BigDecimal) {
-      if (obj.equals(BigDecimal.ZERO)) {
-        mv.visitFieldInsn(GETSTATIC, "java/math/BigDecimal", "ZERO", "Ljava/math/BigDecimal;");
-      }
-      else if (obj.equals(BigDecimal.ONE)) {
-        mv.visitFieldInsn(GETSTATIC, "java/math/BigDecimal", "ONE", "Ljava/math/BigDecimal;");
-      }
-      else if (obj.equals(BigDecimal.TEN)) {
-        mv.visitFieldInsn(GETSTATIC, "java/math/BigDecimal", "TEN", "Ljava/math/BigDecimal;");
-      }
-      else {
-        mv.visitTypeInsn(NEW, "java/math/BigDecimal");
-        mv.visitInsn(DUP);
-        mv.visitLdcInsn(((BigDecimal) obj).toPlainString());
-        mv.visitMethodInsn(INVOKESPECIAL, "java/math/BigDecimal", "<init>", "(Ljava/lang/String;)V", false);
-      }
-      push(DECIMAL);
-    }
-    else
-    if (obj instanceof String) {
-      mv.visitLdcInsn((String)obj);
-      push(STRING);
-    }
-    else {
-      throw new IllegalStateException("Constant of type " + obj.getClass().getName() + " not supported");
-    }
+    push(_loadConst(obj));
     return null;
   }
 
   /**
    * Load object onto JVM stack but don't alter type stack
    */
-  private void _loadConst(Object obj) {
-    loadConst(obj);
-    pop();
+  private JacsalType _loadConst(Object obj) {
+    return Utils.loadConst(mv, obj);
   }
 
   private void loadDefaultValue(JacsalType type) {
@@ -1152,17 +1306,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Conversions
 
-  private Void convertTo(JacsalType type, boolean couldBeNull, Location location) {
+  private Void convertTo(JacsalType type, boolean couldBeNull, SourceLocation location) {
+    if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
+    if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull) {
+      throwIfNull("Cannot convert null value to " + type, location);
+    }
     switch (type.getType()) {
-      case BOOLEAN: return convertToBoolean();
-      case INT:     return convertToInt(couldBeNull, location);
-      case LONG:    return convertToLong(couldBeNull, location);
-      case DOUBLE:  return convertToDouble(couldBeNull, location);
-      case DECIMAL: return convertToDecimal(couldBeNull, location);
-      case STRING:  return convertToString();
-      case MAP:     return convertToMap(location);
-      case LIST:    return convertToList(location);
-      case ANY:     return convertToAny();
+      case INT:      return convertToInt(location);
+      case LONG:     return convertToLong(location);
+      case DOUBLE:   return convertToDouble(location);
+      case DECIMAL:  return convertToDecimal(location);
+      case STRING:   return convertToString();
+      case MAP:      return convertToMap(location);
+      case LIST:     return convertToList(location);
+      case ANY:      return convertToAny();
+      case FUNCTION: return convertToFunction(location);
       default:      throw new IllegalStateException("Unknown type " + type);
     }
   }
@@ -1221,14 +1379,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToInt(boolean couldBeNull, Location location) {
-    if (!peek().isPrimitive() && couldBeNull) {
-      throwIfNull("Cannot convert null value to int", location);
-    }
-
+  private Void convertToInt(SourceLocation location) {
     if (peek().is(ANY)) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
+      loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeVirtual(Number.class, "intValue");
     }
@@ -1251,14 +1404,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToLong(boolean couldBeNull, Location location) {
-    if (!peek().isPrimitive() && couldBeNull) {
-      throwIfNull("Cannot convert null value to long", location);
-    }
-
+  private Void convertToLong(SourceLocation location) {
     if (peek().is(ANY)) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
+      loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeVirtual(Number.class, "longValue");
     }
@@ -1280,14 +1428,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToDouble(boolean couldBeNull, Location location) {
-    if (!peek().isPrimitive() && couldBeNull) {
-      throwIfNull("Cannot convert null value to double", location);
-    }
-
+  private Void convertToDouble(SourceLocation location) {
     if (peek().is(ANY)) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
+      loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeVirtual(Number.class, "doubleValue");
     }
@@ -1309,25 +1452,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToDecimal(boolean couldBeNull, Location location) {
-    if (!peek().isPrimitive() && couldBeNull) {
-      throwIfNull("Cannot convert null value to Decimal", location);
-    }
-
+  private Void convertToDecimal(SourceLocation location) {
     if (peek().is(ANY)) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
+      loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToDecimal", Object.class, String.class, Integer.TYPE);
     }
     else
     switch (peek().getType()) {
       case INT:
       case LONG:
-        convertToLong(false, location);
+        convertToLong(location);
         invokeStatic(BigDecimal.class, "valueOf", Long.TYPE);
         break;
       case DOUBLE:
-        convertToDouble(false, location);
+        convertToDouble(location);
         invokeStatic(BigDecimal.class, "valueOf", Double.TYPE);
         break;
       case DECIMAL:
@@ -1340,23 +1478,31 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToMap(Location location) {
+  private Void convertToMap(SourceLocation location) {
     if (peek().is(MAP)) { return null; }
     if (peek().is(ANY)) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
+      loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToMap", Object.class, String.class, Integer.TYPE);
       return null;
     }
     throw new IllegalStateException("Internal error: unexpected type " + peek());
   }
 
-  private Void convertToList(Location location) {
+  private Void convertToList(SourceLocation location) {
     if (peek().is(LIST)) { return null; }
     if (peek().is(ANY)) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
+      loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
+      return null;
+    }
+    return null;
+  }
+
+  private Void convertToFunction(SourceLocation location) {
+    if (peek().is(FUNCTION)) { return null; }
+    if (peek().is(ANY)) {
+      loadLocation(location);
+      invokeStatic(RuntimeUtils.class, "castToFunction", Object.class, String.class, Integer.TYPE);
       return null;
     }
     return null;
@@ -1554,7 +1700,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void throwIfNull(String msg, Location location) {
+  private void throwIfNull(String msg, SourceLocation location) {
     _dupVal();
     Label isNotNull = new Label();
     mv.visitJumpInsn(IFNONNULL, isNotNull);
@@ -1562,19 +1708,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitTypeInsn(NEW, "jacsal/runtime/NullError");
     mv.visitInsn(DUP);
     _loadConst(msg);
-    _loadConst(location.getSource());
-    _loadConst(location.getOffset());
+    _loadLocation(location);
     mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/NullError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
     mv.visitLabel(isNotNull);
   }
 
-  private void throwError(String msg, Location location) {
+  private void throwError(String msg, SourceLocation location) {
     mv.visitTypeInsn(NEW, "jacsal/runtime/RuntimeError");
     mv.visitInsn(DUP);
     _loadConst(msg);
-    _loadConst(location.getSource());
-    _loadConst(location.getOffset());
+    _loadLocation(location);
+    mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+  }
+
+  private void throwError(String msg, int sourceSlot, int offsetSlot) {
+    mv.visitTypeInsn(NEW, "jacsal/runtime/RuntimeError");
+    mv.visitInsn(DUP);
+    _loadConst(msg);
+    _loadLocal(sourceSlot);
+    _loadLocal(offsetSlot);
     mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
   }
@@ -1595,7 +1749,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int[] temps = new int[stack.size()];
     if (stack.size() > 0) {
       for (int i = 0; i < temps.length; i++) {
-        temps[i] = allocateTemp(peek());
+        temps[i] = allocateSlot(peek());
         storeLocal(temps[i]);
       }
     }
@@ -1686,7 +1840,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void invokeStatic(Class<?> clss, String methodName, Class<?>... paramTypes) {
     Method method = findMethod(clss, methodName, m -> Modifier.isStatic(m.getModifiers()), paramTypes);
-    mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(clss), methodName,Type.getMethodDescriptor(method), false);
+    mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(clss), methodName, Type.getMethodDescriptor(method), false);
     pop(paramTypes.length);        // Pop types for each argument
     push(method.getReturnType());
   }
@@ -1714,22 +1868,39 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // = Local variables
 
   /**
-   * Define a local variable. For long and double we use two slots.
-   * @param slot slot
-   * @param type JacsalType
+   * Define a variable. It will either be a local slot variable or a heap variable
+   * if it has been closed over.
+   * For local vars of type long and double we use two slots. All others use one slot.
+   * For heap vars we allocate an entry in an Object array.
    */
-  private void defineVar(int slot, JacsalType type) {
-    check(locals.get(slot) == null, "local var slot (idx=" + slot + ") already allocated (type=" + locals.get(slot) + ")");
-    locals.set(slot, type);
-    if (type.is(LONG,DOUBLE)) {
-      locals.set(slot + 1, ANY);  // Use ANY to mark slot as used
+  private void defineVar(Expr.VarDecl var) {
+    mv.visitLabel(var.declLabel = new Label());   // Label for debugger
+    JacsalType type = var.isHeap ? ANY : var.type;
+    var.slot = allocateSlot(type);
+    locals.set(var.slot, type);
+    if (type.is(LONG, DOUBLE)) {
+      locals.set(var.slot + 1, ANY);  // Use ANY to mark slot as used
+    }
+
+    // If var is a parameter then we bump the minimum slot that we use when searching
+    // for a free slot since we will never unallocate parameters so there is no point
+    // searching those slots for a free one
+    if (var.isParam) {
+      minimumSlot = locals.size();
     }
   }
 
   /**
    * Undefine variable when no longer needed
    */
-  private void undefineVar(int slot) {
+  private void undefineVar(Expr.VarDecl varDecl, Label endBlock) {
+    JacsalType type = varDecl.isHeap ? ANY : varDecl.type;
+    mv.visitLocalVariable(varDecl.name.getStringValue(), type.descriptor(), null,
+                          varDecl.declLabel, endBlock, varDecl.slot);
+    freeSlot(varDecl.slot);
+  }
+
+  private void freeSlot(int slot) {
     int slots = slotsNeeded(locals.get(slot));
     for (int i = 0; i < slots; i++) {
       locals.set(slot + i, null);
@@ -1737,16 +1908,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Allocate a temporary value for storing an intermediate value.
-   * We grab the first slot available after the maximum one used for the actual
-   * local variables declared in the code.
+   * Allocate a slot for storing a value of given type.
+   * We search for first free gap in our local slots big enough for our type.
    * Supports allocation of double slots for long and double values.
    * @param type the type to allocate
    * @return the slot allocated
    */
-  private int allocateTemp(JacsalType type) {
+  private int allocateSlot(JacsalType type) {
     int i;
-    for (i = funDecl.maxSlot; i < locals.size(); i += slotsNeeded(locals.get(i))) {
+    for (i = minimumSlot; i < locals.size(); i += slotsNeeded(locals.get(i))) {
       if (slotsFree(i, slotsNeeded(type))) {
         break;
       }
@@ -1761,7 +1931,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void freeTemp(int slot) {
     if (slot == -1) { return; }
-    undefineVar(slot);
+    freeSlot(slot);
   }
 
   private static int slotsNeeded(JacsalType type) {
@@ -1793,9 +1963,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadGlobals() {
-    mv.visitVarInsn(ALOAD, 0);
-    mv.visitFieldInsn(GETFIELD, classCompiler.internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
-    push(MAP);
+    loadClassField(Utils.JACSAL_GLOBALS_NAME, JacsalType.MAP, false);
+  }
+
+  private void loadClassField(String fieldName, JacsalType type, boolean isStatic) {
+    if (!isStatic) {
+      mv.visitVarInsn(ALOAD, 0);
+    }
+    mv.visitFieldInsn(GETFIELD, classCompiler.internalName, fieldName, type.descriptor());
+    push(type);
   }
 
   private void loadVar(Expr.VarDecl varDecl) {
@@ -1961,5 +2137,42 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     return true;
+  }
+
+  ///////////////////////////////////
+
+  private static SourceLocation location(int sourceSlot, int offsetSlot) {
+    return new LocalLocation(sourceSlot, offsetSlot);
+  }
+
+  private static class LocalLocation implements SourceLocation {
+    int sourceSlot;
+    int offsetSlot;
+    LocalLocation(int sourceSlot, int offsetSlot) {
+      this.sourceSlot = sourceSlot;
+      this.offsetSlot = offsetSlot;
+    }
+  }
+
+  private void loadLocation(SourceLocation location) {
+    _loadLocation(location);
+    push(STRING);
+    push(INT);
+  }
+
+  private void _loadLocation(SourceLocation sourceLocation) {
+    if (sourceLocation instanceof LocalLocation) {
+      LocalLocation localLocation = (LocalLocation) sourceLocation;
+      _loadLocal(localLocation.sourceSlot);
+      _loadLocal(localLocation.offsetSlot);
+      return;
+    }
+    if (sourceLocation instanceof Location) {
+      Location location = (Location) sourceLocation;
+      _loadConst(location.getSource());
+      _loadConst(location.getOffset());
+      return;
+    }
+    throw new IllegalStateException("Unexpected SourceLocation type " + sourceLocation.getClass().getName());
   }
 }

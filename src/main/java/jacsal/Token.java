@@ -166,10 +166,20 @@ public class Token extends Location {
     if (is(NULL)) {
       return null;
     }
-    return value == null ? getStringValue() : value;
+    return value == null ? getChars() : value;
   }
 
+  /**
+   * Get the value of the token when value is a String
+   */
   public String getStringValue() {
+    return (String)getValue();
+  }
+
+  /**
+   * Get the actual characters of the token in the source
+   */
+  public String getChars() {
     return source.substring(getOffset(), getOffset() + length);
   }
 

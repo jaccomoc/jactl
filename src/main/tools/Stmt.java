@@ -30,8 +30,11 @@ package jacsal;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import org.objectweb.asm.Label;
 
 /**
@@ -40,15 +43,6 @@ import org.objectweb.asm.Label;
 class Stmt {
 
   Token      location = null;
-
-  /**
-   * Each script is parsed into a Script object. This is true even if the script
-   * is just a declaration of a class (or classes) and there are no actual statements
-   * to execute outside of the class declaration.
-   */
-  class Script extends Stmt {
-    FunDecl function;
-  }
 
   /**
    * Represents a sequence of statments.
@@ -62,10 +56,10 @@ class Stmt {
    * declared by statements within the block.
    */
   class Block extends Stmt {
-    Token openBrace;
-    Stmts stmts;
-    Map<String,Expr.VarDecl> @variables = new HashMap<>();
-    int @slotsUsed = 0;   // How many local var slots used by vars in this block
+    Token                    openBrace;
+    Stmts                    stmts;
+    Map<String,Expr.VarDecl> @variables  = new HashMap<>();
+    List<Expr.FunDecl>       @functions  = new ArrayList<>();
   }
 
   /**
@@ -74,9 +68,24 @@ class Stmt {
    */
   class If extends Stmt {
     Token ifToken;
-    Expr condtion;
-    Stmt trueStmt;
-    Stmt falseStmt;
+    Expr  condtion;
+    Stmt  trueStmt;
+    Stmt  falseStmt;
+  }
+
+  /**
+   * Class declaration
+   */
+  class ClassDecl extends Stmt {
+    Token                name;
+    List<Expr.VarDecl>   @fields   = new ArrayList<>();
+    List<Expr.FunDecl>   @methods  = new ArrayList<>();
+    List<Expr.FunDecl>   @closures = new ArrayList<>();
+    List<Stmt.ClassDecl> @classes  = new ArrayList<>();
+
+    Stmt.FunDecl             @scriptMain;   // Mainline of script
+    Map<String,Expr.VarDecl> @fieldVars = new HashMap<>();
+    Deque<Expr.FunDecl>      @nestedFunctions = new ArrayDeque<>();
   }
 
   /**
@@ -84,7 +93,7 @@ class Stmt {
    * Expr type where the work is done.
    */
   class VarDecl extends Stmt {
-    Token typeToken;
+    Token        typeToken;
     Expr.VarDecl declExpr;
   }
 
@@ -92,13 +101,8 @@ class Stmt {
    * Function declaration
    */
   class FunDecl extends Stmt {
-    Token      name;
-    JacsalType returnType;
-    Block      @block;
-    int        @slotIdx;          // Current slot available for allocation
-    int        @maxSlot;          // Maximum slot used for local vars
-    boolean    @returnValue;      // Value used as implicit return from function
-    Stmt.While @currentWhileLoop; // Used during parsing to find target of break/continue stmts
+    Token        startToken;   // Either identifier for function decl or start brace for closure
+    Expr.FunDecl declExpr;
   }
 
   /**
@@ -127,7 +131,7 @@ class Stmt {
    */
   class Break extends Stmt {
     Token breakToken;
-    While whileLoop;
+    While @whileLoop;
   }
 
   /**
@@ -135,7 +139,7 @@ class Stmt {
    */
   class Continue extends Stmt {
     Token continueToken;
-    While whileLoop;
+    While @whileLoop;
   }
 
   /**

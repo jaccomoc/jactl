@@ -30,6 +30,12 @@ package jacsal;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.ArrayDeque;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+
 import org.objectweb.asm.Label;
 
 /**
@@ -57,6 +63,13 @@ class Expr {
   // needs to be done for it.
   interface ManagesResult {}
 
+  // Whether expression is a direct function call (and not a closure)
+  public boolean isFunctionCall() {
+    return this instanceof Expr.Identifier &&
+           ((Expr.Identifier) this).varDecl.type.is(JacsalType.FUNCTION) &&
+           ((Expr.Identifier) this).varDecl.funDecl != null;
+  }
+
   class Binary extends Expr {
     Expr  left;
     Token operator;
@@ -73,6 +86,12 @@ class Expr {
   class PostfixUnary extends Expr implements ManagesResult {
     Expr  expr;
     Token operator;
+  }
+
+  class Call extends Expr {
+    Token      token;
+    Expr       callee;
+    List<Expr> args;
   }
 
   class Literal extends Expr {
@@ -105,11 +124,47 @@ class Expr {
    * is returned implicitly from a function/closure.
    */
   class VarDecl extends Expr implements ManagesResult {
-    Token      name;
-    Expr       initialiser;
-    boolean    @isGlobal;    // Whether global (bindings var) or local
-    int        @slot;        // Which local variable slot to use
-    Label      @declLabel;   // Where variable comes into scope (for debugger)
+    Token        name;
+    Expr         initialiser;
+    boolean      @isGlobal = false; // Whether global (bindings var) or local
+    boolean      @isHeap = false;   // Local vars that are closed over are push to heap
+    boolean      @isParam = false;  // True if variable is a parameter of function
+    int          @slot;             // Which local variable slot
+    int          @nestingLevel;     // What level of nested function owns this variable (1 is top level)
+    Label        @declLabel;        // Where variable comes into scope (for debugger)
+    Expr.FunDecl @owner;            // Which function variable belongs to (for local vars)
+    Expr.FunDecl @funDecl;          // If type is FUNCTION then this is the function declaration
+    VarDecl      @varDecl;          // If this is a HeapVar parameter then this is the original VarDecl
+  }
+
+  /**
+   * Function declaration
+   * We make this an expression so we can have last statement in a block be a function declaration
+   * and have it then returned as the return value of the function.
+   */
+  class FunDecl extends Expr implements ManagesResult {
+    Token              startToken;   // Either identifier for function decl or start brace for closure
+    Token              name;         // Null for closures and script main
+    JacsalType         returnType;
+    List<Stmt.VarDecl> parameters;
+    Stmt.Block         @block;
+
+    String             @methodName;  // Name of method that we compile into
+    Expr.VarDecl       @varDecl;     // For the variable that we will create to hold our MethodHandle
+
+    boolean    @isStatic = false;
+    int        @closureCount = 0;
+    Stmt.While @currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
+
+    // Stack of blocks used during Resolver phase to track variables and which scope they
+    // are declared in and used during Parser phase to track function declarations so we
+    // can handle forward references during Resolver phase
+    Deque<Stmt.Block> @blocks = new ArrayDeque<>();
+
+    // Which heap locals from our parent we need passed in to us
+    LinkedHashMap<String,Expr.VarDecl> @heapVars = new LinkedHashMap<>();
+
+    public boolean isClosure() { return name == null; }
   }
 
   /**
@@ -164,5 +219,12 @@ class Expr {
    */
   class Noop extends Expr {
     Token operator;
+  }
+
+  /**
+   * Closure definition
+   */
+  class Closure extends Expr {
+    Expr.FunDecl funDecl;
   }
 }

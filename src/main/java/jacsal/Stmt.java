@@ -25,8 +25,11 @@ package jacsal;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import org.objectweb.asm.Label;
 
 /**
@@ -40,20 +43,6 @@ abstract class Stmt {
   Token      location = null;
 
   /**
-   * Each script is parsed into a Script object. This is true even if the script
-   * is just a declaration of a class (or classes) and there are no actual statements
-   * to execute outside of the class declaration.
-   */
-  static class Script extends Stmt {
-    FunDecl function;
-    Script(FunDecl function) {
-      this.function = function;
-    }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitScript(this); }
-    @Override public String toString() { return "Script[" + "function=" + function + "]"; }
-  }
-
-  /**
    * Represents a sequence of statments.
    */
   static class Stmts extends Stmt {
@@ -61,7 +50,7 @@ abstract class Stmt {
     Stmts() {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitStmts(this); }
-    @Override public String toString() { return "Stmts[" + "stmts=" + stmts + "]"; }
+    @Override public String toString() { return "Stmts[" + "]"; }
   }
 
   /**
@@ -69,17 +58,17 @@ abstract class Stmt {
    * declared by statements within the block.
    */
   static class Block extends Stmt {
-    Token openBrace;
-    Stmts stmts;
-    Map<String,Expr.VarDecl> variables = new HashMap<>();
-    int slotsUsed = 0;   // How many local var slots used by vars in this block
+    Token                    openBrace;
+    Stmts                    stmts;
+    Map<String,Expr.VarDecl> variables  = new HashMap<>();
+    List<Expr.FunDecl>       functions  = new ArrayList<>();
     Block(Token openBrace, Stmts stmts) {
       this.openBrace = openBrace;
       this.stmts = stmts;
       this.location = openBrace;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
-    @Override public String toString() { return "Block[" + "openBrace=" + openBrace + ", " + "stmts=" + stmts + ", " + "variables=" + variables + ", " + "slotsUsed=" + slotsUsed + "]"; }
+    @Override public String toString() { return "Block[" + "openBrace=" + openBrace + ", " + "stmts=" + stmts + "]"; }
   }
 
   /**
@@ -88,9 +77,9 @@ abstract class Stmt {
    */
   static class If extends Stmt {
     Token ifToken;
-    Expr condtion;
-    Stmt trueStmt;
-    Stmt falseStmt;
+    Expr  condtion;
+    Stmt  trueStmt;
+    Stmt  falseStmt;
     If(Token ifToken, Expr condtion, Stmt trueStmt, Stmt falseStmt) {
       this.ifToken = ifToken;
       this.condtion = condtion;
@@ -103,11 +92,32 @@ abstract class Stmt {
   }
 
   /**
+   * Class declaration
+   */
+  static class ClassDecl extends Stmt {
+    Token                name;
+    List<Expr.VarDecl>   fields   = new ArrayList<>();
+    List<Expr.FunDecl>   methods  = new ArrayList<>();
+    List<Expr.FunDecl>   closures = new ArrayList<>();
+    List<Stmt.ClassDecl> classes  = new ArrayList<>();
+
+    Stmt.FunDecl             scriptMain;   // Mainline of script
+    Map<String,Expr.VarDecl> fieldVars = new HashMap<>();
+    Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
+    ClassDecl(Token name) {
+      this.name = name;
+      this.location = name;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
+    @Override public String toString() { return "ClassDecl[" + "name=" + name + "]"; }
+  }
+
+  /**
    * Variable declaration with optional initialiser. Statement wraps the corresponding
    * Expr type where the work is done.
    */
   static class VarDecl extends Stmt {
-    Token typeToken;
+    Token        typeToken;
     Expr.VarDecl declExpr;
     VarDecl(Token typeToken, Expr.VarDecl declExpr) {
       this.typeToken = typeToken;
@@ -122,20 +132,15 @@ abstract class Stmt {
    * Function declaration
    */
   static class FunDecl extends Stmt {
-    Token      name;
-    JacsalType returnType;
-    Block      block;
-    int        slotIdx;          // Current slot available for allocation
-    int        maxSlot;          // Maximum slot used for local vars
-    boolean    returnValue;      // Value used as implicit return from function
-    Stmt.While currentWhileLoop; // Used during parsing to find target of break/continue stmts
-    FunDecl(Token name, JacsalType returnType) {
-      this.name = name;
-      this.returnType = returnType;
-      this.location = name;
+    Token        startToken;   // Either identifier for function decl or start brace for closure
+    Expr.FunDecl declExpr;
+    FunDecl(Token startToken, Expr.FunDecl declExpr) {
+      this.startToken = startToken;
+      this.declExpr = declExpr;
+      this.location = startToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
-    @Override public String toString() { return "FunDecl[" + "name=" + name + ", " + "returnType=" + returnType + ", " + "block=" + block + ", " + "slotIdx=" + slotIdx + ", " + "maxSlot=" + maxSlot + ", " + "returnValue=" + returnValue + ", " + "currentWhileLoop=" + currentWhileLoop + "]"; }
+    @Override public String toString() { return "FunDecl[" + "startToken=" + startToken + ", " + "declExpr=" + declExpr + "]"; }
   }
 
   /**
@@ -154,7 +159,7 @@ abstract class Stmt {
       this.location = whileToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
-    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + ", " + "body=" + body + ", " + "updates=" + updates + ", " + "endLoopLabel=" + endLoopLabel + ", " + "continueLabel=" + continueLabel + "]"; }
+    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + "]"; }
   }
 
   /**
@@ -180,13 +185,12 @@ abstract class Stmt {
   static class Break extends Stmt {
     Token breakToken;
     While whileLoop;
-    Break(Token breakToken, While whileLoop) {
+    Break(Token breakToken) {
       this.breakToken = breakToken;
-      this.whileLoop = whileLoop;
       this.location = breakToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
-    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + ", " + "whileLoop=" + whileLoop + "]"; }
+    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + "]"; }
   }
 
   /**
@@ -195,13 +199,12 @@ abstract class Stmt {
   static class Continue extends Stmt {
     Token continueToken;
     While whileLoop;
-    Continue(Token continueToken, While whileLoop) {
+    Continue(Token continueToken) {
       this.continueToken = continueToken;
-      this.whileLoop = whileLoop;
       this.location = continueToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
-    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + ", " + "whileLoop=" + whileLoop + "]"; }
+    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + "]"; }
   }
 
   /**
@@ -241,10 +244,10 @@ abstract class Stmt {
   }
 
   interface Visitor<T> {
-    T visitScript(Script stmt);
     T visitStmts(Stmts stmt);
     T visitBlock(Block stmt);
     T visitIf(If stmt);
+    T visitClassDecl(ClassDecl stmt);
     T visitVarDecl(VarDecl stmt);
     T visitFunDecl(FunDecl stmt);
     T visitWhile(While stmt);

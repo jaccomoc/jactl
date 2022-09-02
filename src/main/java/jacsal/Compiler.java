@@ -17,24 +17,32 @@
 package jacsal;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 public class Compiler {
+
+  private static final AtomicInteger counter = new AtomicInteger();
 
   public static Object run(String source, Map<String,Object> bindings) {
     return run(source, new CompileContext(), bindings);
   }
 
   public static Object run(String source, CompileContext compileContext, Map<String,Object> bindings) {
-    var parser         = new Parser(new Tokeniser(source));
-    var script         = parser.parse();
-    var resolver       = new Resolver(compileContext, bindings);
-    resolver.resolve(script);
-    Function<Map<String,Object>,Object> compiled = compile(source, compileContext, script);
+    Function<Map<String, Object>, Object> compiled = compile(source, compileContext, bindings);
     return compiled.apply(bindings);
   }
 
-  private static Function<Map<String,Object>,Object> compile(String source, CompileContext compileContext, Stmt.Script script) {
+  public static Function<Map<String, Object>, Object> compile(String source, CompileContext compileContext, Map<String, Object> bindings) {
+    var parser   = new Parser(new Tokeniser(source));
+    var script   = parser.parse();
+    var resolver = new Resolver(compileContext, bindings);
+    resolver.resolve(script);
+    script.name = new Token(TokenType.IDENTIFIER, script.name).setValue("JacsalScript_" + counter.incrementAndGet());
+    return compile(source, compileContext, script);
+  }
+
+  private static Function<Map<String,Object>,Object> compile(String source, CompileContext compileContext, Stmt.ClassDecl script) {
     var compiler = new ClassCompiler(source, compileContext, script);
     return compiler.compile();
   }

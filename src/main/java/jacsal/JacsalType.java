@@ -18,6 +18,7 @@ package jacsal;
 
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -38,7 +39,8 @@ public class JacsalType {
     MAP,
     LIST,
     INSTANCE,
-    ANY
+    ANY,
+    FUNCTION
   }
 
   public static JacsalType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
@@ -54,6 +56,7 @@ public class JacsalType {
   public static JacsalType MAP           = createRefType(TypeEnum.MAP);
   public static JacsalType LIST          = createRefType(TypeEnum.LIST);
   public static JacsalType ANY           = createRefType(TypeEnum.ANY);
+  public static JacsalType FUNCTION      = createRefType(TypeEnum.FUNCTION);
 
   private TypeEnum type;
   private boolean  boxed;
@@ -99,6 +102,7 @@ public class JacsalType {
       case STRING:    return STRING;
       case MAP:       return MAP;
       case LIST:      return LIST;
+      case DEF:       return ANY;
       default:  throw new IllegalStateException("Internal error: unexpected token " + tokenType);
     }
   }
@@ -113,10 +117,6 @@ public class JacsalType {
       default:
         return false;
     }
-  }
-
-  public boolean isIntegral() {
-    return this.isBoxedOrUnboxed(INT, LONG);
   }
 
   public boolean isPrimitive() {
@@ -268,7 +268,7 @@ public class JacsalType {
 
     JacsalType result = resultMap.get(new TypePair(type1.unboxed(), type2.unboxed()));
     if (result == null) {
-      throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator '" + operator.getStringValue() + "'", operator);
+      throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator '" + operator.getChars() + "'", operator);
     }
     return result;
   }
@@ -287,16 +287,34 @@ public class JacsalType {
 
   public String descriptor() {
     switch (this.type) {
-      case BOOLEAN:        return Type.getDescriptor(Boolean.TYPE);
-      case INT:            return Type.getDescriptor(Integer.TYPE);
-      case LONG:           return Type.getDescriptor(Long.TYPE);
-      case DOUBLE:         return Type.getDescriptor(Double.TYPE);
+      case BOOLEAN:        return Type.getDescriptor(isBoxed() ? Boolean.class : Boolean.TYPE);
+      case INT:            return Type.getDescriptor(isBoxed() ? Integer.class : Integer.TYPE);
+      case LONG:           return Type.getDescriptor(isBoxed() ? Long.class : Long.TYPE);
+      case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class : Double.TYPE);
       case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
       case STRING:         return Type.getDescriptor(String.class);
       case MAP:            return Type.getDescriptor(Map.class);
       case LIST:           return Type.getDescriptor(List.class);
       case INSTANCE:       throw new UnsupportedOperationException();
       case ANY:            return Type.getDescriptor(Object.class);
+      case FUNCTION:       return Type.getDescriptor(MethodHandle.class);
+      default:             throw new UnsupportedOperationException();
+    }
+  }
+
+  public Type descriptorType() {
+    switch (this.type) {
+      case BOOLEAN:        return Type.getType(isBoxed() ? Boolean.class : Boolean.TYPE);
+      case INT:            return Type.getType(isBoxed() ? Integer.class : Integer.TYPE);
+      case LONG:           return Type.getType(isBoxed() ? Long.class : Long.TYPE);
+      case DOUBLE:         return Type.getType(isBoxed() ? Double.class : Double.TYPE);
+      case DECIMAL:        return Type.getType(BigDecimal.class);
+      case STRING:         return Type.getType(String.class);
+      case MAP:            return Type.getType(Map.class);
+      case LIST:           return Type.getType(List.class);
+      case INSTANCE:       throw new UnsupportedOperationException();
+      case ANY:            return Type.getType(Object.class);
+      case FUNCTION:       return Type.getType(MethodHandle.class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -312,7 +330,8 @@ public class JacsalType {
       case MAP:      return Type.getInternalName(Map.class);
       case LIST:     return Type.getInternalName(List.class);
       case INSTANCE: throw new UnsupportedOperationException();
-      case ANY:      return null;
+      case ANY:      return Type.getInternalName(Object.class);
+      case FUNCTION: return Type.getInternalName(MethodHandle.class);
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -320,7 +339,7 @@ public class JacsalType {
 
   private static void checkIsNumeric(JacsalType type, String leftOrRight, Token operator) {
     if (!type.isNumeric() && !type.is(ANY)) {
-      throw new CompileError("Non-numeric operand for " + leftOrRight + "-hand side of '" + operator.getStringValue() + "': was " + type, operator);
+      throw new CompileError("Non-numeric operand for " + leftOrRight + "-hand side of '" + operator.getChars() + "': was " + type, operator);
     }
   }
 
@@ -336,6 +355,7 @@ public class JacsalType {
       case LIST:       return "List";
       case INSTANCE:   return "Instance<>";
       case ANY:        return "def";
+      case FUNCTION:   return "Function";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }

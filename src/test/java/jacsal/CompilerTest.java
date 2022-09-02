@@ -112,8 +112,7 @@ class CompilerTest {
     test("null", null);
   }
 
-  @Test
-  public void booleanConversion() {
+  @Test public void booleanConversion() {
     test("!-1", false);
     test("!1", false);
     test("!2", false);
@@ -1371,8 +1370,7 @@ class CompilerTest {
     testFail("'abc' * -1", "string repeat count must be >= 0");
   }
 
-  @Test
-  public void defaultValues() {
+  @Test public void defaultValues() {
     test("boolean x", false);
     test("boolean x; x", false);
     test("int x", 0);
@@ -1577,6 +1575,9 @@ class CompilerTest {
     testFail("def x = x + 1", "variable initialisation cannot refer to itself");
     test("def x = 2; if (true) { def x = 4; x++ }; x", 2);
     test("def x = 2; if (true) { def x = 4; x++; { def x = 17; x = x + 5 } }; x", 2);
+    testFail("def x = 2; { def x = 3; def x = 4; }", "already declared in this scope");
+    testFail("int f() { def x = 3; def x = 4; }", "already declared in this scope");
+    testFail("int f(x) { def x = 3; }", "already declared in this scope");
   }
 
   @Test public void exprStrings() {
@@ -2146,6 +2147,9 @@ class CompilerTest {
     testFail("if (true) { break }", "break must be within");
     testFail("if (true) { continue }", "continue must be within");
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) continue; sum += i }; sum", 15);
+    test("def sum = 0; def i = 0.0D; while (i++ < 10) { if (i > 5) continue; sum += i }; sum", 15.0D);
+    test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) continue; sum = sum * 1 + i }; sum", 15);
+    test("def sum = 0; def i = 0.0D; while (i++ < 10) { if (i > 5) continue; sum = sum * 1 + i }; sum", 15.0D);
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5 && i < 7) continue; sum += i }; sum", 49);
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5 && i < 7) { if (true) continue } ; sum += i }; sum", 49);
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) break; sum += i }; sum", 15);
@@ -2156,5 +2160,95 @@ class CompilerTest {
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { sum += i * j } }; sum", 36);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) break; sum += i * j } }; sum", 18);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
+  }
+
+  @Test public void simpleClosures() {
+    test("int i = 1; { int i = 2; i++; }; i", 1);
+  }
+
+  @Test public void simpleFunctions() {
+    test("int f(int x) { x * x }; f(2)", 4);
+    test("def f(def x) { x * x }; f(2)", 4);
+    test("def f(x) { x * x }; f(2)", 4);
+    test("int f(x) { if (x == 1) 1 else x * f(x - 1) }; f(3)", 6);
+    test("def f(x) { if (x == 1) 1 else x * f(x - 1) }; f(3) + f(4)", 30);
+    testFail("def f(int x) { def x = 1; x++ }", "already declared");
+
+    test("int f(x) { { def x = 3; return x } }; f(1)", 3);
+    test("int f(x) { { def x = 3; x } }; f(1)", 3);
+    test("int f() { 3L }; f()", 3);
+    test("int f() { 3.0 }; f()", 3);
+    test("int f() { 3.0D }; f()", 3);
+    test("long f() { 3 }; f()", 3L);
+    test("long f() { 3.0 }; f()", 3L);
+    test("long f() { 3.0D }; f()", 3L);
+    test("double f() { 3 }; f()", 3D);
+    test("Decimal f() { 3 }; f()", "#3");
+
+    test("def f(x,y) { x + y }; f(1,2)", 3);
+    test("def f(x,y) { x + y }; f(1L,2D)", 3D);
+    test("def f(x,y) { x + y }; f(1L,2.0)", "#3.0");
+    test("int f(x,y) { x + y }; f(1L,2.0)", 3);
+    test("int f(long x, double y, Decimal z) { ++x + ++y + ++z }; f(1,2,3)", 9);
+
+    test("def f(x) { x + x }; f('abc')", "abcabc");
+    test("def f(x) { x * 2 }; f('abc')", "abcabc");
+    test("String f(String x, int y) { x * y }; f('abc', 2)", "abcabc");
+
+    test("def f(x) { def g(x) { x * x }; g(x) }; f(3)", 9);
+    test("def f(x) { def g(x) { x * x }; g(x) }; def g(x) { f(x) }; g(3)", 9);
+    test("def f(x) { def g(x) { def f(x) {x+x}; f(x) }; g(x) * g(x) }; f(3)", 36);
+
+    //    testFail("null()", "cannot be called");
+//    testFail("3()", "cannot be called");
+//    testFail("'abc'()", "cannot be called");
+//    testFail("1D()", "cannot be called");
+//    testFail("(3.0 + 2.0)()", "cannot be called");
+
+//    test("def f(int x = f(1)) { if (x == 1) 9 else x }; f(3)", 3);
+//    test("def f(int x = f(1)) { if (x == 1) 9 else x }; f()", 9);
+  }
+
+  @Test public void functionsAsValues() {
+    test("def f(x) { x + x }; def g = f; g(2)", 4);
+    test("def f(x) { x + x }; def g = f; g('abc')", "abcabc");
+    testFail("def f(x) { x + x }; def g = f; g()", "missing mandatory arguments");
+    test("def f() { def g() { 3 } }; def h = f(); h()", 3);
+  }
+
+  @Test public void functionsForwardReference() {
+    test("def f(x) { 2 * g(x) }; def g(x) { x * x }; f(3)", 18);
+    test("def f(x) { if (x==1) x else 2 * g(x) }; def g(x) { x + f(x-1) }; f(3)", 18);
+    test("def f(x) { g(x) }; def g(x) { x }; f(3)", 3);
+//    testFail("def f(x) { g(x) }; def y = 2; def g(x) { x * y }; f(3)", " xxx");
+  }
+
+  @Test public void functionsWithOptionalArgs() {
+    test("def f(int x = 5) { x * x }; f()", 25);
+    test("def f(int x = 5) { x * x }; f(3)", 9);
+    test("def f(int x = 5) { x * x }; def g = f; g()", 25);
+    test("def f(int x = 5) { x * x }; def g = f; g(3)", 9);
+    test("def f(int x = 5) { x * x }; var g = f; g()", 25);
+    test("def f(int x = 5) { x * x }; var g = f; g(3)", 9);
+    test("int f(int x = 5) { x * x }; f()", 25);
+    test("int f(int x = 5) { x * x }; f(3)", 9);
+    test("int f(int x = 5) { x * x }; var g = f; g()", 25);
+    test("int f(int x = 5) { x * x }; var g = f; g(3)", 9);
+    testFail("def f(int x = 5) { x * x }; def g = f; g(1,2)", "too many args");
+    testFail("Decimal f(long x,int y=5,def z){x+y+z}; f(1)", "missing mandatory arguments");
+    test("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1,2,3)", "#6");
+    testFail("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1)", "missing mandatory arguments");
+    test("String f(x='abc') { x + x }; f()", "abcabc");
+    test("String f(x=\"a${'b'+'c'}\") { x + x }; f()", "abcabc");
+    test("String f(x=\"a${'b'+'c'}\") { x + x }; f('x')", "xx");
+  }
+
+  @Test public void functionsWithClosedOverVars() {
+//    test("def F; def G; def f(x) { if (x==1) x else 2 * G(x) }; def g(x) { x + F(x-1) }; F=f; G=g; F(3)", 18);
+  }
+
+  @Test public void testStuff() {
+    debug = true;
+    test("def f() { def g() { 3 } }; def h = f(); h()", 3);
   }
 }
