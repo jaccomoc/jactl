@@ -282,6 +282,7 @@ public class JacsalType {
     if (isBoxedOrUnboxed(type))              { return true; }
     if (is(ANY) || type.is(ANY))             { return true; }
     if (isNumeric() && type.isNumeric())     { return true; }
+    if (type.is(STRING) && !is(FUNCTION))    { return true; }
     return false;
   }
 

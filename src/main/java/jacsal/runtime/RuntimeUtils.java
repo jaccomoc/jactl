@@ -21,10 +21,7 @@ import jacsal.TokenType;
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class RuntimeUtils {
 
@@ -356,6 +353,38 @@ public class RuntimeUtils {
   public static String toString(Object obj) {
     if (obj == null) {
       return null;
+    }
+    if (obj instanceof List) {
+      StringBuilder sb = new StringBuilder();
+      sb.append('[');
+      List list = (List)obj;
+      for (int i = 0; i < list.size(); i++) {
+        if (i > 0) { sb.append(", "); }
+        sb.append(toString(list.get(i)));
+      }
+      sb.append(']');
+      return sb.toString();
+    }
+    if (obj instanceof Map) {
+      StringBuilder sb = new StringBuilder();
+      sb.append('[');
+      boolean first = true;
+      for (Iterator<Map.Entry<String,Object>> iter = ((Map)obj).entrySet().iterator(); iter.hasNext();) {
+        if (!first) {
+          sb.append(", ");
+        }
+        else {
+          first = false;
+        }
+        Map.Entry entry = iter.next();
+        sb.append(toString(entry.getKey())).append(':').append(toString(entry.getValue()));
+      }
+      if (first) {
+        // Empty map
+        sb.append(':');
+      }
+      sb.append(']');
+      return sb.toString();
     }
     return obj.toString();
   }

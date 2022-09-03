@@ -163,7 +163,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int paramCount = funDecl.parameters.size();
     _loadConst(paramCount);
     mv.visitJumpInsn(IF_ICMPLE, notTooMany);
-    throwError("Too many args", sourceSlot, offsetSlot);
+    throwError("Too many arguments", sourceSlot, offsetSlot);
     mv.visitLabel(notTooMany);  // :notTooMany
 
     // For each parameter we now either load argument from Object[] or put default value

@@ -1614,6 +1614,9 @@ class CompilerTest {
     test("[1,2,3][0]", 1);
     test("[1,2,3][3]", null);
     test("[1,[2,3,4],5][1]", List.of(2,3,4));
+    test("String x = []", "[]");
+    test("String x = [1,2,3]", "[1, 2, 3]");
+    test("String x = [1,2,[3,4]]", "[1, 2, [3, 4]]");
   }
 
   @Test public void mapLiterals() {
@@ -1641,6 +1644,12 @@ class CompilerTest {
     test("[a:[b:2]]?.a?['b']", 2);
     test("[a:[b:2]]['a']['b']", 2);
     test("[a:[b:2]].c", null);
+    test("String x = [a:1]", "[a:1]");
+    test("String x = [a:1,b:2]", "[a:1, b:2]");
+    test("String x = {a:1,b:2}", "[a:1, b:2]");
+    test("String x = [:]", "[:]");
+    test("String x = [a:[1,2,3]]", "[a:[1, 2, 3]]");
+    test("String x = [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
   }
 
 //  @Test public void notYetImplemented() {
@@ -2194,6 +2203,9 @@ class CompilerTest {
     test("def f(x) { def g(x) { x * x }; g(x) }; f(3)", 9);
     test("def f(x) { def g(x) { x * x }; g(x) }; def g(x) { f(x) }; g(3)", 9);
     test("def f(x) { def g(x) { def f(x) {x+x}; f(x) }; g(x) * g(x) }; f(3)", 36);
+    test("def f(String x) { x + x }; f(1)", "11");
+    test("def f(String x) { x }; f([1,2,3])", "[1, 2, 3]");
+    test("def f(String x) { x }; f([a:1,b:2])", "[a:1, b:2]");
 
     //    testFail("null()", "cannot be called");
 //    testFail("3()", "cannot be called");
@@ -2234,7 +2246,7 @@ class CompilerTest {
     test("int f(int x = 5) { x * x }; f(3)", 9);
     test("int f(int x = 5) { x * x }; var g = f; g()", 25);
     test("int f(int x = 5) { x * x }; var g = f; g(3)", 9);
-    testFail("def f(int x = 5) { x * x }; def g = f; g(1,2)", "too many args");
+    testFail("def f(int x = 5) { x * x }; def g = f; g(1,2)", "too many arguments");
     testFail("Decimal f(long x,int y=5,def z){x+y+z}; f(1)", "missing mandatory arguments");
     test("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1,2,3)", "#6");
     testFail("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1)", "missing mandatory arguments");
@@ -2272,9 +2284,18 @@ class CompilerTest {
     test("def f = { it = 2 -> { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f()", 4);
     testFail("def f = { it = f(it) -> { it * it }(it) }; f()", "variable initialisation cannot refer to itself");
+    testFail("def f = { x, y=1, z -> x + y + z }; f(0)", "missing mandatory arguments");
+    testFail("def f = { x, y=1, z -> x + y + z }; f(1,2,3,4)", "too many arguments");
+    testFail("def f = { x, y=1, z='abc' -> x + y + z }; f(1)", "non-numeric operand");
+    test("def f = { x, y=1, z='abc' -> x + y + z }; f('z')", "z1abc");
+    test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f('z')", "z1abc");
+    test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f(123)", "1231abc");
 
 // TODO: add support for accessing globals from within functions
 // TOOD: add support for closed over vars
 //    test("def f; f = { it = f(2) -> { it * it }(it) }; f()", 16);
+  }
+
+  @Test public void testStuff() {
   }
 }
