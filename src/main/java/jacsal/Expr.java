@@ -27,11 +27,12 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.ArrayDeque;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 import org.objectweb.asm.Label;
+import org.objectweb.asm.Type;
+
+import static jacsal.JacsalType.HEAPLOCAL;
 
 /**
  * Expr classes for our AST.
@@ -82,6 +83,28 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBinary(this); }
     @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + "]"; }
+  }
+
+  /**
+   * Ternary expression - only used for:
+   *     cond ? trueExpr : falseExpr
+   */
+  static class Ternary extends Expr {
+    Expr  first;
+    Token operator1;
+    Expr  second;
+    Token operator2;
+    Expr  third;
+    Ternary(Expr first, Token operator1, Expr second, Token operator2, Expr third) {
+      this.first = first;
+      this.operator1 = operator1;
+      this.second = second;
+      this.operator2 = operator2;
+      this.third = third;
+      this.location = operator1;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitTernary(this); }
+    @Override public String toString() { return "Ternary[" + "first=" + first + ", " + "operator1=" + operator1 + ", " + "second=" + second + ", " + "operator2=" + operator2 + ", " + "third=" + third + "]"; }
   }
 
   static class PrefixUnary extends Expr implements ManagesResult {
@@ -184,15 +207,24 @@ abstract class Expr {
   static class VarDecl extends Expr implements ManagesResult {
     Token        name;
     Expr         initialiser;
-    boolean      isGlobal = false; // Whether global (bindings var) or local
-    boolean      isHeap = false;   // Local vars that are closed over are push to heap
-    boolean      isParam = false;  // True if variable is a parameter of function
-    int          slot;             // Which local variable slot
-    int          nestingLevel;     // What level of nested function owns this variable (1 is top level)
-    Label        declLabel;        // Where variable comes into scope (for debugger)
-    Expr.FunDecl owner;            // Which function variable belongs to (for local vars)
-    Expr.FunDecl funDecl;          // If type is FUNCTION then this is the function declaration
-    VarDecl      varDecl;          // If this is a HeapVar parameter then this is the original VarDecl
+    boolean      isGlobal;            // Whether global (bindings var) or local
+    boolean      isHeapLocal;         // Is this a heap local var
+    boolean      isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
+    boolean      isParam;             // True if variable is a parameter of function (explicit or implicit)
+    boolean      isExplicitParam;     // True if explicit declared parameter of function
+    int          slot = -1;           // Which local variable slot
+    int          nestingLevel;        // What level of nested function owns this variable (1 is top level)
+    Label        declLabel;           // Where variable comes into scope (for debugger)
+    Expr.FunDecl owner;               // Which function variable belongs to (for local vars)
+    Expr.FunDecl funDecl;             // If type is FUNCTION then this is the function declaration
+    VarDecl      parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
+    VarDecl      originalVarDecl;     // VarDecl for actual original variable declaration
+
+    // When we are in the wrapper function we create a variable for every parameter.
+    // This points to the parameter so we can turn it into HeapLocal if necessary and
+    // to set its type (if it was declared as "var") once we know the type of the initialiser.
+    VarDecl      paramVarDecl;
+
     VarDecl(Token name, Expr initialiser) {
       this.name = name;
       this.initialiser = initialiser;
@@ -200,6 +232,7 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
     @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + "]"; }
+    Type descriptorType() { return isPassedAsHeapLocal ? HEAPLOCAL.descriptorType() : type.descriptorType(); }
   }
 
   /**
@@ -217,6 +250,9 @@ abstract class Expr {
     String             methodName;  // Name of method that we compile into
     Expr.VarDecl       varDecl;     // For the variable that we will create to hold our MethodHandle
 
+    boolean            isWrapper;   // Whether this is the wrapper function or the real one
+    Expr.FunDecl       wrapper;     // The wrapper method that handles var arg and named arg invocations
+
     boolean    isStatic = false;
     int        closureCount = 0;
     Stmt.While currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
@@ -227,7 +263,7 @@ abstract class Expr {
     Deque<Stmt.Block> blocks = new ArrayDeque<>();
 
     // Which heap locals from our parent we need passed in to us
-    LinkedHashMap<String,Expr.VarDecl> heapVars = new LinkedHashMap<>();
+    LinkedHashMap<String,Expr.VarDecl> heapLocalParams = new LinkedHashMap<>();
 
     FunDecl(Token startToken, Token name, JacsalType returnType, List<Stmt.VarDecl> parameters) {
       this.startToken = startToken;
@@ -354,8 +390,79 @@ abstract class Expr {
     @Override public String toString() { return "Closure[" + "startToken=" + startToken + ", " + "funDecl=" + funDecl + ", " + "noParamsDefined=" + noParamsDefined + "]"; }
   }
 
+  ////////////////////////////////////////////////////////////////////
+
+  // = Used when generating wrapper method
+
+  /**
+   * Array length
+   */
+  static class ArrayLength extends Expr implements ManagesResult {
+    Token token;
+    Expr array;
+    ArrayLength(Token token, Expr array) {
+      this.token = token;
+      this.array = array;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitArrayLength(this); }
+    @Override public String toString() { return "ArrayLength[" + "token=" + token + ", " + "array=" + array + "]"; }
+  }
+
+  /**
+   * Array get
+   */
+  static class ArrayGet extends Expr implements ManagesResult {
+    Token token;
+    Expr  array;
+    Expr  index;
+    ArrayGet(Token token, Expr array, Expr index) {
+      this.token = token;
+      this.array = array;
+      this.index = index;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitArrayGet(this); }
+    @Override public String toString() { return "ArrayGet[" + "token=" + token + ", " + "array=" + array + ", " + "index=" + index + "]"; }
+  }
+
+  /**
+   * LoadParamValue - load value needed for a param.
+   * Can be HeapLocal if isPassedAsHeapLocal is set or just a standard value.
+   */
+  static class LoadParamValue extends Expr implements ManagesResult {
+    Token name;
+    Expr.VarDecl paramDecl;
+    Expr.VarDecl varDecl;
+    LoadParamValue(Token name, Expr.VarDecl paramDecl) {
+      this.name = name;
+      this.paramDecl = paramDecl;
+      this.location = name;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitLoadParamValue(this); }
+    @Override public String toString() { return "LoadParamValue[" + "name=" + name + ", " + "paramDecl=" + paramDecl + "]"; }
+  }
+
+  /**
+   * Invoke a function - internal use only
+   */
+  static class InvokeFunction extends Expr implements ManagesResult {
+    Token        token;
+    Expr.FunDecl funDecl;
+    List<Expr>   args;
+    InvokeFunction(Token token, Expr.FunDecl funDecl, List<Expr> args) {
+      this.token = token;
+      this.funDecl = funDecl;
+      this.args = args;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunction(this); }
+    @Override public String toString() { return "InvokeFunction[" + "token=" + token + ", " + "funDecl=" + funDecl + ", " + "args=" + args + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
+    T visitTernary(Ternary expr);
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);
     T visitCall(Call expr);
@@ -372,5 +479,9 @@ abstract class Expr {
     T visitOpAssign(OpAssign expr);
     T visitNoop(Noop expr);
     T visitClosure(Closure expr);
+    T visitArrayLength(ArrayLength expr);
+    T visitArrayGet(ArrayGet expr);
+    T visitLoadParamValue(LoadParamValue expr);
+    T visitInvokeFunction(InvokeFunction expr);
   }
 }

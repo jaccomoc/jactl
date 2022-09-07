@@ -53,7 +53,7 @@ public class Utils {
   }
 
   static String wrapperName(String methodName) {
-    return methodName + "$w";
+    return methodName + "$$w";
   }
 
   static Object convertNumberTo(JacsalType type, Object number) {

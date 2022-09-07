@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-package jacsal;
-
-import jacsal.runtime.RuntimeUtils;
+package jacsal.runtime;
 
 import java.math.BigDecimal;
 
@@ -26,25 +24,17 @@ import java.math.BigDecimal;
  * to the value of the variable. We pass these handles around and can then mutate the
  * underlying value via the handle so everyone using the variable sees the same value.
  */
-public class HeapVar extends Number {
+public class HeapLocal extends Number {
 
   Object value;
 
-  @Override public int intValue() {
-    return ((Number)value).intValue();
-  }
+  public void   setValue(Object value) { this.value = value; }
+  public Object getValue()             { return value; }
 
-  @Override public long longValue() {
-    return ((Number)value).longValue();
-  }
-
-  @Override public float floatValue() {
-    return ((Number)value).floatValue();
-  }
-
-  @Override public double doubleValue() {
-    return ((Number)value).doubleValue();
-  }
+  @Override public int    intValue()    { return ((Number)value).intValue();    }
+  @Override public long   longValue()   { return ((Number)value).longValue();   }
+  @Override public float  floatValue()  { return ((Number)value).floatValue();  }
+  @Override public double doubleValue() { return ((Number)value).doubleValue(); }
 
   public BigDecimal decimalValue() {
     if (value instanceof BigDecimal) {

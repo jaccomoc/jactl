@@ -20,8 +20,12 @@ import jacsal.runtime.RuntimeUtils;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
+import static jacsal.JacsalType.INT;
 import static jacsal.JacsalType.LIST;
 import static jacsal.JacsalType.MAP;
 import static jacsal.JacsalType.STRING;
@@ -29,38 +33,55 @@ import static jacsal.TokenType.*;
 
 /**
  * The Resolver visits all statements and all expressions and performs the following:
- *  - tracks variables and their type
- *  - resolves references to symbols (variables, methods, etc)
- *  - tracks what local variables exist in each code block
- *  - promotes local variables to closed over variabels when used in nested functions/closures
- *  - evaluates any simple expressions made up of only constants (literals)
- *  - matches the break/continue statements to their enclosing while/for loop
- *  - sets type of return statement to match return type of function that return belongs to
- *  - finds all instances of implicit returns from functions/closures and converts them into
- *    an explicit "return" statement
+ * <ul>
+ *   <li>tracks variables and their type</li>
+ *   <li>resolves references to symbols (variables, methods, etc)</li>
+ *   <li>tracks what local variables exist in each code block</li>
+ *   <li>promotes local variables to closed over variabels when used in nested functions/closures</li>
+ *   <li>evaluates any simple expressions made up of only constants (literals)</li>
+ *   <li>matches the break/continue statements to their enclosing while/for loop</li>
+ *   <li>sets type of return statement to match return type of function that return belongs to</li>
+ *   <li>finds all instances of implicit returns from functions/closures and converts them into
+ *       an explicit "return" statement</li>
+ *   <li>creates the "wrapper function" for all functions/closures</li>
+ * </ul>
  *
- * One of the jobs of the Resolver is to work out which local variables should be truly
+ * <h2>HeapLocal Variables</h2>
+ *
+ * <p>One of the jobs of the Resolver is to work out which local variables should be truly
  * local (and have a JVM slot allocated) and which should be turned into heap variables
- * because they are referred to by a nested function/closure (i.e. they are "closed over").
+ * because they are referred to by a nested function/closure (i.e. they are "closed over").</p>
  *
- * A heap local variable is stored in a HeapVar object which is just a wrapper around the
+ * <p>A heap local variable is stored in a HeapLocal  object which is just a wrapper around the
  * actual value. By using this extra level of indirection we make sure that if the value
- * of the variable changes, all functions using that variable will see the changed value.
+ * of the variable changes, all functions using that variable will see the changed value.</p>
  *
- * We pass any such heap local variables as impicit parameters to nested functions that
+ * <p>We pass any such heap local variables as impicit parameters to nested functions that
  * need access to these variables from their parents. Note that sometimes a nested function
  * will access a variable that is not in its immediate parent but from a level higher up so
  * even if the parent has no need of the heap variable it needs it in order to be able to
  * pass it to a nested function that it invokes at some point. In this way nested functions
  * (and functions nested within them) can effect which heap vars need to get passed into the
- * current function from its parent.
+ * current function from its parent.</p>
  *
- * If we consider a single heap local variable. It can be used in multiple nested functions
+ * <p>If we consider a single heap local variable. It can be used in multiple nested functions
  * and its location in the list of implicit parameters for each function can be different.
  * Normally we use the Expr.VarDecl object to track which local variable slot it resides in
- * but with HeapVar objects we need to track the slot used in each function so we need a per
- * function object to track the slot for a given HeapVar. We create a new VarDecl that points
- * to the original VarDecl for every such nested function.
+ * but with HeapLocal  objects we need to track the slot used in each function so we need a per
+ * function object to track the slot for a given HeapLocal . We create a new VarDecl that points
+ * to the original VarDecl for every such nested function.</p>
+ *
+ * <h2>Wrapper Functions</h2>
+ *
+ * <p>Each function/closure that we create has a wrapper function created for it. Since functions
+ * can have optional paremeters with default values the wrapper function is the place where we
+ * fill in any missing arguments with the appropriate defaults. The wrapper function also has the
+ * job of handling named argument passing when arguments are passed as a Map of name:value pairs.</p>
+ *
+ * <p>The Resolver creates a new Stmt.FunDecl object that has the "code" for the wrapper function
+ * and ensures that the actual function is declared as a nested function within this wrapper
+ * function so that closed over variables are passed appropriately as additional arguments to
+ * both the wrapper function and the actual function.</p>
  */
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
@@ -137,7 +158,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     try {
       // We first define our nested functions so that we can support
       // forward references to functions declared at same level as us
-      stmt.functions.forEach(nested -> define(nested.name, nested.varDecl));
+      stmt.functions.forEach(nested -> {
+        nested.varDecl.owner = functions.peek();
+        define(nested.name, nested.varDecl);
+      });
 
       return resolve(stmt.stmts);
     }
@@ -147,7 +171,19 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitVarDecl(Stmt.VarDecl stmt) {
+    if (stmt.declExpr.isExplicitParam) {
+      // When resolving parameter initialisers we can have an initialiser close over another
+      // parameter of the same function: E.g.:  def f(x,y={x++}) { x + y() }
+      // Hard to see why anyone would do this but we need to handle it just in case.
+      // We flag the block as being in the middle of parameter resolution so that if one of
+      // its parameters is then closed over we know that we have to convert the parameter
+      // into one that is passed as a HeapLocal (and this also means that all invocations will
+      // then need to be done via the method wrapper that knows which parameters to convert
+      // into HeapLocals before invoking the actual function).
+      functions.peek().blocks.peek().isResolvingParams = true;
+    }
     resolve(stmt.declExpr);
+    functions.peek().blocks.peek().isResolvingParams = false;
     return null;
   }
 
@@ -202,6 +238,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitThrowError(Stmt.ThrowError stmt) {
+    resolve(stmt.source);
+    resolve(stmt.offset);
+    return null;
+  }
+
   //////////////////////////////////////////////////////////
 
   // = Expr
@@ -211,7 +253,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.right);
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
-    if (expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
+
+    if (expr.operator.is(QUESTION_COLON)) {
+      // No support for const evaluation of ?: yet
+      expr.isConst = false;
+    }
+
+    if (expr.isConst && expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
       throw new CompileError("Left-hand side of '" + expr.operator.getChars() + "' cannot be null", expr.left.location);
     }
 
@@ -242,6 +290,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         expr.left.type = expr.operator.is(DOT,QUESTION_DOT) ? MAP : LIST;
       }
       return expr.type;
+    }
+
+    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
+      if (!(expr.right instanceof Expr.Literal && ((Expr.Literal)expr.right).value.getType().isType())) {
+        throw new CompileError("Right-hand side of " + expr.operator.getChars() + " must be a valid type", expr.right.location);
+      }
+      expr.isConst = false;
+      return expr.type = JacsalType.BOOLEAN;
     }
 
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
@@ -344,9 +400,30 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type;
   }
 
+  @Override public JacsalType visitTernary(Expr.Ternary expr) {
+    // This is only used currently for:   first ? second : third
+    resolve(expr.first);
+    resolve(expr.second);
+    resolve(expr.third);
+    if (!expr.third.type.isConvertibleTo(expr.second.type)) {
+      throw new CompileError("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
+    }
+    return expr.type = JacsalType.result(expr.second.type, expr.operator1, expr.third.type);
+  }
+
   @Override public JacsalType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
-    expr.isConst      = expr.expr.isConst;
+    if (expr.operator.getType().isType()) {
+      // Type case so if we already know we have a bad cast then throw error
+      if (!expr.expr.type.isConvertibleTo(JacsalType.valueOf(expr.operator.getType()))) {
+        throw new CompileError("Cannot cast from " + expr.expr.type + " to " + expr.operator.getChars(), expr.operator);
+      }
+
+      // We have a cast so our type is the type we are casting to
+      return expr.type = JacsalType.valueOf(expr.operator.getType());
+    }
+
+    expr.isConst = expr.expr.isConst;
     if (expr.operator.is(BANG)) {
       expr.type = JacsalType.BOOLEAN;
       if (expr.isConst) {
@@ -354,31 +431,30 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       return expr.type;
     }
-    else {
-      expr.type = expr.expr.type.unboxed();
-      if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
-        throw new CompileError("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
-      }
-      if (expr.isConst) {
-        expr.constValue = expr.expr.constValue;
-        if (expr.operator.is(MINUS)) {
-          switch (expr.type.getType()) {
-            case INT:     expr.constValue = -(int)expr.constValue;                  break;
-            case LONG:    expr.constValue = -(long)expr.constValue;                 break;
-            case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
-            case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
-          }
-        }
-        else
-        if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
-          if (expr.expr.constValue == null) {
-            throw new CompileError("Prefix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
-          }
-          expr.constValue = incOrDec(expr.operator.is(PLUS_PLUS), expr.type, expr.expr.constValue);
-        }
-      }
-      return expr.type;
+
+    expr.type = expr.expr.type.unboxed();
+    if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
+      throw new CompileError("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
     }
+    if (expr.isConst) {
+      expr.constValue = expr.expr.constValue;
+      if (expr.operator.is(MINUS)) {
+        switch (expr.type.getType()) {
+          case INT:     expr.constValue = -(int)expr.constValue;                  break;
+          case LONG:    expr.constValue = -(long)expr.constValue;                 break;
+          case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
+          case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
+        }
+      }
+      else
+      if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
+        if (expr.expr.constValue == null) {
+          throw new CompileError("Prefix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
+        }
+        expr.constValue = incOrDec(expr.operator.is(PLUS_PLUS), expr.type, expr.expr.constValue);
+      }
+    }
+    return expr.type;
   }
 
   @Override public JacsalType visitPostfixUnary(Expr.PostfixUnary expr) {
@@ -405,7 +481,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     expr.constValue = expr.value.getValue();
 
     switch (expr.value.getType()) {
-      case INTEGER_CONST: return expr.type = JacsalType.INT;
+      case INTEGER_CONST: return expr.type = INT;
       case LONG_CONST:    return expr.type = JacsalType.LONG;
       case DOUBLE_CONST:  return expr.type = JacsalType.DOUBLE;
       case DECIMAL_CONST: return expr.type = JacsalType.DECIMAL;
@@ -414,6 +490,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case FALSE:         return expr.type = JacsalType.BOOLEAN;
       case NULL:          return expr.type = ANY;
       case IDENTIFIER:    return expr.type = STRING;
+      case OBJECT_ARR:    return expr.type = STRING;
       default:
         // In some circumstances (e.g. map keys) we support literals that are keywords
         if (!expr.value.isKeyword()) {
@@ -437,6 +514,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitVarDecl(Expr.VarDecl expr) {
+    expr.owner = functions.peek();
+
     // Functions have previously been declared by the block they belong to
     if (expr.funDecl != null) {
       return expr.type = FUNCTION;
@@ -448,34 +527,71 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     JacsalType type = resolve(expr.initialiser);
     if (expr.type == null) {
+      // If variable was declared as "var"
       expr.type = type;
+
+      // If variable was a parameter then we have moved the initialiser to the wrapper function
+      // and now we need to update the parameter on the real function with its actual type
+      if (expr.paramVarDecl != null) {
+        expr.paramVarDecl.type = type;
+      }
     }
     else
     if (type != null && !type.isConvertibleTo(expr.type)) {
-      throw new CompileError("Cannot convert initialiser of type " + type + " to type of variable (" + expr.type + ")", expr.initialiser.location);
+      throw new CompileError("Cannot convert initialiser of type " + type + " to type of variable " +
+                             expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
     }
     define(expr.name, expr);
     return expr.type;
   }
 
   @Override public JacsalType visitFunDecl(Expr.FunDecl expr) {
-    resolve(expr.varDecl);
-    Expr.FunDecl parent = functions.peek();
-    if (functions.size() > 0) {
-      // Generate our method name by appending to parent's name separated by '$'
-      // (unless we are at the top level in which case we just use our given name).
-      // For closures we use _$cN where N is incrementing count per parent function.
-      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.name.getStringValue();
-      expr.methodName = functions.size() == 1 ? methodName : functions.peek().methodName + "$" + methodName;
-    }
-    else {
-      // Top level script main function
+    // If the script main function
+    if (functions.size() == 0) {
       expr.methodName = expr.name.getStringValue();
+      return doVisitFunDecl(expr, false);
     }
 
+    // Nested functions
+    if (!expr.isWrapper && expr.wrapper == null) {
+      // Create a name if we are a closure
+      Expr.FunDecl parent = functions.peek();
+      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.name.getStringValue();
+
+      // Method name is parent + $ + functionName unless at top level in which case
+      // there is no parent so we use just functionName
+      expr.methodName = functions.size() == 1 ? methodName
+                                              : parent.methodName + "$" + methodName;
+
+      // Create a wrapper function that takes var of var arg and named argument handling
+      expr.wrapper = createWrapperFunction(expr);
+      expr.wrapper.methodName = Utils.wrapperName(expr.methodName);
+
+      // Resolve the wrapper. The wrapper has us as an embeeded statement so we will
+      // get resolved as a nested function of the wrapper and the next time through here
+      // our wrapper will be set
+      return doVisitFunDecl(expr.wrapper, true);
+    }
+    else {
+      // We are the real function and are being called again as a result of the wrapper resolving
+      return doVisitFunDecl(expr, false);
+    }
+  }
+
+  private JacsalType doVisitFunDecl(Expr.FunDecl expr, boolean defineVar) {
+    // Only define a variable for the wrapper function. We don't define a variable
+    // for the function itself within the wrapper as we never invoke it that way.
+    // The variable exists to hold the MethodHandle that points to the wrapper function
+    // so we don't want yet another MethodHandle to the actual function since all calls
+    // where we would use a MethodHandle have to go through the wrapper function to get
+    // the var args/named args treatment.
+    if (defineVar) {
+      resolve(expr.varDecl);
+    }
+    Expr.FunDecl parent = functions.peek();
     functions.push(expr);
     try {
-      // Add explicit return if needed in places where we would implicity return the result
+      // Add explicit return in places where we would implicity return the result
       explicitReturn(expr.block, expr.returnType);
       resolve(expr.block);
       return expr.type = FUNCTION;
@@ -483,23 +599,32 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     finally {
       functions.pop();
       if (parent != null) {
-        // Check if parent needs to have any additional heap vars passed to it in order to be able
-        // to pass to nested function and add them to the parent.heapVars map
-        expr.heapVars.entrySet()
-                     .stream()
-                     .filter(e -> e.getValue().owner != parent)
-                     .filter(e -> !parent.heapVars.containsKey(e.getKey()))
-                     .forEach(e -> parent.heapVars.put(e.getKey(), varDeclWrapper(e.getValue())));
+        // Check if parent needs to have any additional heap vars passed to it in order for it to
+        // be able to pass them to its nested function and add them to the parent.heapLocal s map.
+        // These vars are the ones that our nested functions close over. They will all be vars that
+        // belong to a scope in our parent or in one of its antecedents.
+        // We only need add these vars to our parent's list of heap vars if the var's scope is not
+        // the parent itself.
+        // We need to create new varDecls for every level between the owner and the function that
+        // refers to the var. Each varDecl for a nested function will link to the varDecl of its
+        // immediate parent. That way each parent will know how to copy the heap var from its own
+        // parameter list (or its actual variable decl) into the appropriate arg for invoking the
+        // nested function.
+        expr.heapLocalParams.forEach((name, varDecl) -> addHeapLocalToParents(name, varDecl));
       }
     }
   }
-
-
 
   @Override public JacsalType visitIdentifier(Expr.Identifier expr) {
     Expr.VarDecl varDecl = lookup(expr.identifier);
     expr.varDecl = varDecl;
     return expr.type = varDecl.type;
+  }
+
+  @Override public JacsalType visitLoadParamValue(Expr.LoadParamValue expr) {
+    Expr.VarDecl varDecl = lookup(expr.paramDecl.name);
+    expr.varDecl = varDecl;
+    return expr.type = expr.varDecl.type;
   }
 
   @Override public JacsalType visitVarAssign(Expr.VarAssign expr) {
@@ -576,8 +701,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitCall(Expr.Call expr) {
     resolve(expr.callee);
     expr.args.forEach(this::resolve);
-    if (!expr.callee.type.is(FUNCTION,ANY) || expr.callee.isConst && expr.callee.constValue == null) {
+    if (!expr.callee.type.is(FUNCTION,ANY)) {
       throw new CompileError("Expression of type " + expr.callee.type + " cannot be called", expr.token);
+    }
+    if (expr.callee.isConst && expr.callee.constValue == null) {
+      throw new CompileError("Null value for Function", expr.token);
     }
     expr.type = ANY;
     if (expr.callee.isFunctionCall()) {
@@ -601,14 +729,75 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         JacsalType argType   = arg.type;
         JacsalType paramType = funDecl.parameters.get(i).declExpr.type;
         if (!argType.isConvertibleTo(paramType)) {
-          throw new CompileError(nth(i + 1) + " argument of type " + argType + " cannot be converted to parameter type of " + paramType, arg.location);
+          throw new CompileError("Cannot convert " + nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
         }
       }
     }
     return null;
   }
 
+  @Override public JacsalType visitArrayLength(Expr.ArrayLength expr) {
+    resolve(expr.array);
+    return expr.type = INT;
+  }
+
+  @Override public JacsalType visitArrayGet(Expr.ArrayGet expr) {
+    resolve(expr.array);
+    resolve(expr.index);
+    return expr.type = ANY;
+  }
+
+  @Override public JacsalType visitInvokeFunction(Expr.InvokeFunction expr) {
+    expr.args.forEach(this::resolve);
+    return expr.type = expr.funDecl.returnType;
+  }
+
   ////////////////////////////////////////////
+
+  private void addHeapLocalToParents(String name, Expr.VarDecl varDecl) {
+    Expr.VarDecl childVarDecl = varDecl;
+
+    // Now iterate through parents linking VarDecls until we get to one that already
+    // has a var by that name (which will be the actual VarDecl or an intermediate function
+    // that already has it being passed in as a parameter).
+    for (Iterator<Expr.FunDecl> iter = functions.iterator(); iter.hasNext(); ) {
+      // If parent already has this var as a parameter then point child to this and return
+      Expr.FunDecl funDecl       = iter.next();
+      Expr.VarDecl parentVarDecl = funDecl.heapLocalParams.get(name);
+      if (parentVarDecl != null) {
+        childVarDecl.parentVarDecl = parentVarDecl;
+        return;
+      }
+
+      // If we have reached function that originally declared this var then point child
+      // to this one and return
+      if (funDecl == varDecl.owner) {
+        childVarDecl.parentVarDecl = varDecl.originalVarDecl;
+        return;
+      }
+
+      // Otherwise build a new VarDecl for an intermediate value and make it a parameter
+      // of the current function by adding to its heapLocal Parameters
+      parentVarDecl = createVarDecl(name, varDecl, funDecl);
+      childVarDecl.parentVarDecl = parentVarDecl;
+
+      // Now parent becomes the child for the next iteration
+      childVarDecl = parentVarDecl;
+    }
+    throw new IllegalStateException("Internal error: couldn't find owner of variable " + varDecl.name.getStringValue());
+  }
+
+  private Expr.VarDecl createVarDecl(String name, Expr.VarDecl varDecl, Expr.FunDecl funDecl) {
+    Expr.VarDecl newVarDecl    = new Expr.VarDecl(varDecl.name, null);
+    newVarDecl.type            = varDecl.type.boxed();
+    newVarDecl.owner           = varDecl.owner;
+    newVarDecl.isHeapLocal     = true;
+    newVarDecl.isParam         = true;
+    newVarDecl.originalVarDecl = varDecl.originalVarDecl;
+
+    funDecl.heapLocalParams.put(name, newVarDecl);
+    return newVarDecl;
+  }
 
   private static String nth(int i) {
     if (i % 10 == 1 && i % 100 != 11) { return i + "st"; }
@@ -669,12 +858,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }
-    // Remember at what nesting level this variable is declared. If we then later have a
-    // nested function that refers to this variable (closes over it) we will promote the
-    // variable to a heap variable and use the difference in nesting level to work out
-    // where the variable is at runtime.
+    // Remember at what nesting level this variable is declared. This allows us to work
+    // out when looking up vars whether this belongs to the current function or not.
     decl.nestingLevel = functions.size();
-    decl.owner = function;
     vars.put(name.getStringValue(), decl);
   }
 
@@ -697,12 +883,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private Expr.VarDecl lookup(Token identifier) {
     String name = identifier.getStringValue();
     Expr.VarDecl varDecl = null;
+    Stmt.Block block = null;
     // Search blocks in each function until we find the variable
     FUNC_LOOP:
     for (Iterator<Expr.FunDecl> funcIt = functions.iterator(); funcIt.hasNext(); ) {
       Expr.FunDecl funDecl = funcIt.next();
       for (Iterator<Stmt.Block> it = funDecl.blocks.iterator(); it.hasNext(); ) {
-        Stmt.Block block = it.next();
+        block = it.next();
         varDecl = block.variables.get(name);
         if (varDecl != null) {
           break FUNC_LOOP;  // Break out of both loops
@@ -710,8 +897,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
 
-    // Look for field in classes
     if (varDecl == null) {
+      block = null;
+
+      // Look for field in classes
       for (Iterator<Stmt.ClassDecl> it = classes.iterator(); it.hasNext();) {
         varDecl = it.next().fieldVars.get(name);
         if (varDecl != null) {
@@ -727,27 +916,52 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Variable initialisation cannot refer to itself", identifier);
     }
     if (varDecl != null) {
-      if (varDecl.isGlobal || varDecl.type.is(FUNCTION) || varDecl.nestingLevel == functions.size()) {
-        // Normal local or global variable (not a closed over var) or a function.
-        // Functions can be called from wherever they are visible and not stored in local stack vars.
+      // Normal local or global variable (not a closed over var)
+      if (varDecl.isGlobal || varDecl.nestingLevel == functions.size()) {
         return varDecl;
       }
 
-      // If nesting level is different and if variable is a local variable then turn it into
+      // NOTE: Function calls also need to be turned into heap vars that are passed as parameters.
+      // This is because the function may have heap var params that need to be passed to it. Even
+      // if it doesn't currently have heap var params it could be that later code causes a heap
+      // var param to be added to it. With a bit of work we could probably optimise to allow
+      // direct calls (instead of via handle) to functions defined in a parent for cases where
+      // it is possible but for the moment we will not add that complication.
+
+      // Nesting level is different and variable is a local variable so turn it into
       // a heap var
-      varDecl.isHeap = true;
+      varDecl.isHeapLocal = true;
+
+      // If the variable is a parameter and we are resolving the initialisers for parameters of
+      // the same function then it means we have a parameter that is closed over by a nested
+      // closure/function within the initialiser of another parameter: def f(x,y={x}) {...}
+      // We need to know this so we can get the wrapper method to turn the parameter into a
+      // HeapLocal _before_ invoking the actual method. Usually we only need do the conversion
+      // within the method itself if the parameter is then passed to a nested function but in
+      // this case the nested function is created in the parameter initialiser which is compiled
+      // within the wrapper method and so the HeapLocal needs to be passed to this nested function
+      // before the actual method has been invoked.
+      if (block != null && block.isResolvingParams && varDecl.paramVarDecl != null) {
+        varDecl.paramVarDecl.isHeapLocal = true;
+        varDecl.paramVarDecl.owner = varDecl.owner;
+        varDecl.paramVarDecl.originalVarDecl = varDecl;
+        varDecl.paramVarDecl.isPassedAsHeapLocal = true;
+      }
 
       Expr.FunDecl currentFunc = functions.peek();
 
-      // Add this var to our list of heap vars we need passed in to us
-      Expr.VarDecl heapVarDecl = currentFunc.heapVars.get(name);
-      if (heapVarDecl == null) {
-        // Wrap in another VarDecl so we can have per-function slot allocated
-        heapVarDecl = varDeclWrapper(varDecl);
-        currentFunc.heapVars.put(name, heapVarDecl);
+      // Check if we already have it in our list of heapLocal Params
+      if (currentFunc.heapLocalParams.containsKey(name)) {
+        return currentFunc.heapLocalParams.get(name);
       }
-      // Return VarDecl for our function
-      return heapVarDecl;
+
+      // Add this var to our list of heap vars we need passed in to us.
+      // Construct a new VarDecl since we will have our own slot that is local
+      // to this function and add it the heapLocal Params of the currentFunc
+      Expr.VarDecl newVarDecl = createVarDecl(name, varDecl, currentFunc);
+      newVarDecl.originalVarDecl = varDecl;
+
+      return newVarDecl;
     }
 
     error("Reference to unknown variable " + name, identifier);
@@ -760,15 +974,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
   }
 
-  private Expr.VarDecl varDeclWrapper(Expr.VarDecl varDecl) {
-    Expr.VarDecl heapVarDecl = new Expr.VarDecl(varDecl.name, null);
-    heapVarDecl.type = varDecl.type.boxed();
-    heapVarDecl.varDecl = varDecl;
-    heapVarDecl.isHeap = true;
-    heapVarDecl.isParam = true;
-    return heapVarDecl;
-  }
-
   /////////////////////////////////////////////////
 
   /**
@@ -776,22 +981,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
    * implicit returns in functions into explicit returns to simplify the job of the Resolver and Compiler phases.
    */
   private Stmt explicitReturn(Stmt stmt, JacsalType returnType) {
-//    try {
       return doExplicitReturn(stmt, returnType);
-//    }
-//    catch (CompileError e) {
-//      // Error could be due to previous error so if there have been previous
-//      // errors ignore this one
-//      if (errors.size() == 0) {
-//        throw e;
-//      }
-//    }
-//    return null;
   }
 
   private Stmt doExplicitReturn(Stmt stmt, JacsalType returnType) {
     if (stmt instanceof Stmt.Return) {
       // Nothing to do
+      return stmt;
+    }
+
+    if (stmt instanceof Stmt.ThrowError) {
+      // Nothing to do if last statement throws an exception
       return stmt;
     }
 
@@ -868,7 +1068,160 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     // Other statements are not supported for implicit return
-    throw new CompileError("Unsupported statement type for implicit return", stmt.location);
+    throw new CompileError("Unsupported statement type " + stmt.getClass().getName()  + " for implicit return", stmt.location);
   }
 
+  private Expr.FunDecl createWrapperFunction(Expr.FunDecl funDecl) {
+    Token startToken = funDecl.startToken;
+
+    Function<TokenType,Token>        token      = type -> new Token(type, startToken);
+    Function<String,Token>           identToken = name -> token.apply(IDENTIFIER).setValue(name);
+    Function<String,Expr.Identifier> ident      = name -> new Expr.Identifier(identToken.apply(name));
+    Function<Object,Expr.Literal>    intLiteral = value -> new Expr.Literal(new Token(INTEGER_CONST, startToken).setValue(value));
+
+    BiFunction<String,JacsalType,Stmt.VarDecl> createParam =
+      (name,type) -> {
+        Token nameToken = new Token(IDENTIFIER, funDecl.startToken).setValue(name);
+        var declExpr = new Expr.VarDecl(nameToken,null);
+        declExpr.type = type;
+        declExpr.isParam = true;
+        declExpr.isExplicitParam = true;
+        return new Stmt.VarDecl(startToken,
+                                declExpr);
+      };
+
+    List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
+
+    Expr.FunDecl wrapperFunDecl = new Expr.FunDecl(startToken,
+                                                   identToken.apply(Utils.wrapperName(funDecl.methodName)),
+                                                   funDecl.returnType,
+                                                   wrapperParams);
+
+    String sourceName = "_$source";
+    wrapperParams.add(createParam.apply(sourceName, STRING));
+    var sourceIdent = ident.apply(sourceName);
+
+    String offsetName = "_$offset";
+    wrapperParams.add(createParam.apply(offsetName, INT));
+    var offsetIdent = ident.apply(offsetName);
+
+    String argsName = "_$args";
+    wrapperParams.add(createParam.apply(argsName, ANY));
+    var argsIdent = ident.apply(argsName);
+
+    Stmt.Stmts stmts = new Stmt.Stmts();
+    List<Stmt> stmtList = stmts.stmts;
+    stmtList.addAll(wrapperParams);
+
+    //  : if (_$args instanceof Object[]) {
+    var ifStmts = new Stmt.Stmts();
+    var ifStmt  = new Stmt.If(startToken,
+                              new Expr.Binary(ident.apply(argsName),
+                                              token.apply(INSTANCE_OF),
+                                              new Expr.Literal(token.apply(TokenType.OBJECT_ARR))),
+                              new Stmt.Block(startToken, ifStmts),
+                              new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Named arguments not yet supported"));
+
+    //  :   Object[] _$argArr = (Object[])_$args
+    String argArrName = "_$argArr";
+    ifStmts.stmts.add(varDecl(wrapperFunDecl, argArrName, JacsalType.OBJECT_ARR, argsIdent, startToken));
+
+    //  :   int _$argCount = argArr.length
+    var argArr = ident.apply(argArrName);
+    String argCountName = "_$argCount";
+    ifStmts.stmts.add(varDecl(wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argArr), startToken));
+    var argCountIdent = ident.apply(argCountName);
+
+    int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
+    if (mandatoryCount > 0) {
+      //:   if (argCount < mandatoryCount) throw new RuntimeError("Missing mandatory arguments")
+      var throwIf = new Stmt.If(startToken,
+                                new Expr.Binary(argCountIdent, token.apply(LESS_THAN), intLiteral.apply(mandatoryCount)),
+                                new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Missing mandatory arguments"),
+                                null);
+      ifStmts.stmts.add(throwIf);
+    }
+
+    int paramCount = funDecl.parameters.size();
+    //  :   if (argCount > paramCount) throw new RuntimeError("Too many arguments)
+    var throwIf = new Stmt.If(startToken,
+                              new Expr.Binary(argCountIdent, token.apply(GREATER_THAN), intLiteral.apply(paramCount)),
+                              new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Too many arguments"),
+                              null);
+    ifStmts.stmts.add(throwIf);
+
+    // For each parameter we now either load argument from Object[] or run the initialiser
+    // and store value into a local variable.
+    for (int i = 0; i < paramCount; i++) {
+      var param = funDecl.parameters.get(i).declExpr;
+      // If we have not reached mandatory arg count yet then we just create a var for the parameter
+      // from the value in our Object[]
+      if (i < mandatoryCount) {
+        // :   def <param_i> = _$argArr[i]
+        ifStmts.stmts.add(paramVarDecl(wrapperFunDecl, param, new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i))));
+      }
+      else {
+        // We have a parameter with an initialiser so load value from Object[] if present otherwise
+        // use the initialiser
+        // :   def <param_i> = i < _$argCount ? _$argArr[i] : <param_initialiser>
+        var initialiser = new Expr.Ternary(new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent),
+                                           new Token(QUESTION, startToken),
+                                           new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i)),
+                                           new Token(COLON, startToken),
+                                           param.initialiser);
+        var varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
+        ifStmts.stmts.add(varDecl);
+      }
+    }
+
+    // Add original function as a statement so that it gets resolved as a nested function of wrapper
+    Stmt.FunDecl realFunction = new Stmt.FunDecl(startToken, funDecl);
+    realFunction.createVar = false;   // When in wrapper don't create a variable for the MethodHandle
+    ifStmts.stmts.add(realFunction);
+
+    // Now invoke the real function
+    List<Expr> args = funDecl.parameters.stream()
+                                        .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
+                                        .collect(Collectors.toList());
+    ifStmts.stmts.add(new Stmt.Return(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
+
+    // : }
+    stmtList.add(ifStmt);
+
+    wrapperFunDecl.block      = new Stmt.Block(startToken, stmts);
+    wrapperFunDecl.isWrapper  = true;
+
+    // Return type must be ANY since if function is invoked by value, caller won't know return type
+    wrapperFunDecl.returnType = ANY;
+    wrapperFunDecl.varDecl = funDecl.varDecl;
+    return wrapperFunDecl;
+  }
+
+  private Stmt.VarDecl varDecl(Expr.FunDecl ownerFunDecl, String name, JacsalType type, Expr init, Token token) {
+    return varDecl(ownerFunDecl, new Token(IDENTIFIER, token).setValue(name), type, init);
+  }
+
+  private Stmt.VarDecl varDecl(Expr.FunDecl ownerFunDecl, Token name, JacsalType type, Expr init) {
+    Expr.VarDecl varDecl = new Expr.VarDecl(name, init);
+    varDecl.type = type;
+    varDecl.isResultUsed = false;
+    varDecl.owner = ownerFunDecl;
+    return new Stmt.VarDecl(new Token(type == null ? VAR : type.tokenType(), name), varDecl);
+  }
+
+  private Stmt.VarDecl paramVarDecl(Expr.FunDecl ownerFunDecl, Expr.VarDecl param, Expr init) {
+    Stmt.VarDecl varDecl = varDecl(ownerFunDecl, param.name, param.type, init);
+    // Remember our original parameter because if it was declared as a "var" type then
+    // we will need to change its type once we have been resolved and worked out what
+    // our type is. And since we are using the initialiser from the parameter in the
+    // wrapper function and not the real function we should remove the initialiser from
+    // the parameter in the real function so we don't resolve it multiple times and we
+    // don't compile it multiple times. Since the initialiser will be nulled out this
+    // is another reason why we won't be able to work out the actual parameter type for
+    // "var" types if we don't link to the parameter here.
+    varDecl.declExpr.paramVarDecl = param;
+    param.initialiser = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
+    varDecl.declExpr.isExplicitParam = true;
+    return varDecl;
+  }
 }

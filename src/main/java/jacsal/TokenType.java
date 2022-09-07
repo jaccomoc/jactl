@@ -65,7 +65,10 @@ public enum TokenType {
 
   //= Special
   EOL,            // End of line
-  EOF;            // End of file
+  EOF,            // End of file
+
+  // Internal use only
+  OBJECT_ARR;
 
   boolean is(TokenType... types) {
     for (TokenType type: types) {
@@ -104,5 +107,9 @@ public enum TokenType {
   boolean isBooleanOperator() {
     return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, LESS_THAN, LESS_THAN_EQUAL,
                    GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF);
+  }
+
+  boolean isType() {
+    return this.is(BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, DEF, OBJECT_ARR);
   }
 }

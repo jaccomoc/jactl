@@ -16,7 +16,6 @@
 
 package jacsal;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -53,14 +52,14 @@ class CompilerTest {
     doTest(code, false, true, expected);
   }
 
-  private void testFail(String code, String expectedError) {
-    doTestFail(code, true, false, expectedError);
-    doTestFail(code, false, false, expectedError);
-    doTestFail(code, true, true, expectedError);
-    doTestFail(code, false, true, expectedError);
+  private void testError(String code, String expectedError) {
+    doTestError(code, true, false, expectedError);
+    doTestError(code, false, false, expectedError);
+    doTestError(code, true, true, expectedError);
+    doTestError(code, false, true, expectedError);
   }
 
-  private void doTestFail(String code, boolean evalConsts, boolean replMode, String expectedError) {
+  private void doTestError(String code, boolean evalConsts, boolean replMode, String expectedError) {
     try {
       CompileContext compileContext = new CompileContext().evaluateConstExprs(evalConsts)
                                                           .replMode(replMode)
@@ -91,7 +90,7 @@ class CompilerTest {
     test(Short.toString(Short.MAX_VALUE), (int) Short.MAX_VALUE);
     test(Integer.toString(Short.MAX_VALUE + 1), (int) Short.MAX_VALUE + 1);
     test(Integer.toString(Integer.MAX_VALUE), Integer.MAX_VALUE);
-    testFail("" + (Integer.MAX_VALUE + 1L), "number too large");
+    testError("" + (Integer.MAX_VALUE + 1L), "number too large");
     test("" + ((long) Integer.MAX_VALUE + 1L) + "L", (long) Integer.MAX_VALUE + 1L);
     test("1D", 1D);
     test("1.0D", 1.0D);
@@ -163,10 +162,10 @@ class CompilerTest {
     test("-(-1D)", 1D);
     test("-(-1L)", 1L);
     test("-(-1.0)", "#1.0");
-    testFail("-true", "cannot be applied to type");
-    testFail("-'abc'", "cannot be applied to type");
-    testFail("+true", "cannot be applied to type");
-    testFail("+'abc'", "cannot be applied to type");
+    testError("-true", "cannot be applied to type");
+    testError("-'abc'", "cannot be applied to type");
+    testError("+true", "cannot be applied to type");
+    testError("+'abc'", "cannot be applied to type");
     test("!true", false);
     test("!false", true);
     test("!!true", true);
@@ -196,25 +195,25 @@ class CompilerTest {
   }
 
   @Test public void simpleConstExpressions() {
-    testFail("1 + true", "non-numeric operand for right-hand side");
-    testFail("false + 1", "non-numeric operand for left-hand side");
-    testFail("1 - 'abc'", "non-numeric operand for right-hand side");
-    testFail("'abc' - 1", "non-numeric operand for left-hand side");
-    testFail("false + true", "non-numeric operand for left-hand side");
-    testFail("1 + null", "non-numeric operand for right-hand side");
-    testFail("null + 1", "left-hand side of '+' cannot be null");
-    testFail("1/0", "divide by zero");
+    testError("1 + true", "non-numeric operand for right-hand side");
+    testError("false + 1", "non-numeric operand for left-hand side");
+    testError("1 - 'abc'", "non-numeric operand for right-hand side");
+    testError("'abc' - 1", "non-numeric operand for left-hand side");
+    testError("false + true", "non-numeric operand for left-hand side");
+    testError("1 + null", "non-numeric operand for right-hand side");
+    testError("null + 1", "left-hand side of '+' cannot be null");
+    testError("1/0", "divide by zero");
     test("1.0D/0", Double.POSITIVE_INFINITY);
     test("-1.0D/0", Double.NEGATIVE_INFINITY);
-    testFail("1L/0", "divide by zero");
-    testFail("1.0/0", "divide by zero");
-    testFail("1/0.0", "divide by zero");
-    testFail("1%0", "divide by zero");
+    testError("1L/0", "divide by zero");
+    testError("1.0/0", "divide by zero");
+    testError("1/0.0", "divide by zero");
+    testError("1%0", "divide by zero");
     test("1.0D%0", Double.NaN);
     test("-1.0D%0", Double.NaN);
-    testFail("1L%0", "divide by zero");
-    testFail("1.0%0", "divide by zero");
-    testFail("1%0.0", "divide by zero");
+    testError("1L%0", "divide by zero");
+    testError("1.0%0", "divide by zero");
+    testError("1%0.0", "divide by zero");
     test("1 + 2", 3);
     test("1 - 2", -1);
     test("1 - -2", 3);
@@ -286,53 +285,53 @@ class CompilerTest {
   }
 
   @Test public void simpleVariableArithmetic() {
-    testFail("int x = 1; boolean b = true; x + b", "non-numeric operand for right-hand side");
-    testFail("def x = 1; def b = true; x + b", "non-numeric operand for right-hand side");
-    testFail("boolean b = false; int x = 1; b + x", "non-numeric operand for left-hand side");
-    testFail("def b = false; def x = 1; b + x", "non-numeric operand for left-hand side");
-    testFail("int i = 1; String s = 'abc'; i - s", "non-numeric operand for right-hand side");
-    testFail("def i = 1; def s = 'abc'; i - s", "non-numeric operand for right-hand side");
-    testFail("'abc' - 1", "non-numeric operand for left-hand side");
-    testFail("String s = 'abc'; int x = 1; s - x", "non-numeric operand for left-hand side");
-    testFail("def s = 'abc'; def x = 1; s - x", "non-numeric operand for left-hand side");
-    testFail("boolean b1 = false; boolean b2 = true; b1 + b2", "non-numeric operand for left-hand side");
-    testFail("def b1 = false; def b2 = true; b1 + b2", "non-numeric operand for left-hand side");
-    testFail("int i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
-    testFail("def i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
-    testFail("def x = null; int i = 1; x + i", "left-hand side of '+' cannot be null");
-    testFail("def x = null; def i = 1; x + i", "left-hand side of '+' cannot be null");
-    testFail("int x = 1; int y = 0; x/y", "divide by zero");
-    testFail("def x = 1; def y = 0; x/y", "divide by zero");
+    testError("int x = 1; boolean b = true; x + b", "non-numeric operand for right-hand side");
+    testError("def x = 1; def b = true; x + b", "non-numeric operand for right-hand side");
+    testError("boolean b = false; int x = 1; b + x", "non-numeric operand for left-hand side");
+    testError("def b = false; def x = 1; b + x", "non-numeric operand for left-hand side");
+    testError("int i = 1; String s = 'abc'; i - s", "non-numeric operand for right-hand side");
+    testError("def i = 1; def s = 'abc'; i - s", "non-numeric operand for right-hand side");
+    testError("'abc' - 1", "non-numeric operand for left-hand side");
+    testError("String s = 'abc'; int x = 1; s - x", "non-numeric operand for left-hand side");
+    testError("def s = 'abc'; def x = 1; s - x", "non-numeric operand for left-hand side");
+    testError("boolean b1 = false; boolean b2 = true; b1 + b2", "non-numeric operand for left-hand side");
+    testError("def b1 = false; def b2 = true; b1 + b2", "non-numeric operand for left-hand side");
+    testError("int i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
+    testError("def i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
+    testError("def x = null; int i = 1; x + i", "left-hand side of '+' cannot be null");
+    testError("def x = null; def i = 1; x + i", "left-hand side of '+' cannot be null");
+    testError("int x = 1; int y = 0; x/y", "divide by zero");
+    testError("def x = 1; def y = 0; x/y", "divide by zero");
     test("double x = 1.0D; int y = 0; x/y", Double.POSITIVE_INFINITY);
     test("def x = 1.0D; def y = 0; x/y", Double.POSITIVE_INFINITY);
     test("double x = -1.0D; int y = 0; x / y", Double.NEGATIVE_INFINITY);
     test("double x = -1.0D; double y = 0; x / y", Double.NEGATIVE_INFINITY);
     test("def x = -1.0D; def y = 0; x / y", Double.NEGATIVE_INFINITY);
-    testFail("long x = 1L; int y = 0; x/y", "divide by zero");
-    testFail("def x = 1L; def y = 0; x/y", "divide by zero");
-    testFail("Decimal x = 1.0; int y = 0; x/y", "divide by zero");
-    testFail("Decimal x = 1.0; Decimal y = 0; x/y", "divide by zero");
-    testFail("Decimal x = 1.0; long y = 0; x/y", "divide by zero");
-    testFail("Decimal x = 1.0; double y = 0; x/y", "divide by zero");
-    testFail("def x = 1.0; def y = 0; x/y", "divide by zero");
-    testFail("def x = 1.0; def y = 0D; x/y", "divide by zero");
-    testFail("def x = 1.0; def y = 0L; x/y", "divide by zero");
-    testFail("def x = 1.0; def y = 0.0; x/y", "divide by zero");
-    testFail("int x = 1; Decimal y = 0.0; x/y", "divide by zero");
-    testFail("def x = 1; def y = 0.0; x/y", "divide by zero");
-    testFail("int x = 1; int y = 0; x % y", "divide by zero");
-    testFail("def x = 1; def y = 0; x % y", "divide by zero");
+    testError("long x = 1L; int y = 0; x/y", "divide by zero");
+    testError("def x = 1L; def y = 0; x/y", "divide by zero");
+    testError("Decimal x = 1.0; int y = 0; x/y", "divide by zero");
+    testError("Decimal x = 1.0; Decimal y = 0; x/y", "divide by zero");
+    testError("Decimal x = 1.0; long y = 0; x/y", "divide by zero");
+    testError("Decimal x = 1.0; double y = 0; x/y", "divide by zero");
+    testError("def x = 1.0; def y = 0; x/y", "divide by zero");
+    testError("def x = 1.0; def y = 0D; x/y", "divide by zero");
+    testError("def x = 1.0; def y = 0L; x/y", "divide by zero");
+    testError("def x = 1.0; def y = 0.0; x/y", "divide by zero");
+    testError("int x = 1; Decimal y = 0.0; x/y", "divide by zero");
+    testError("def x = 1; def y = 0.0; x/y", "divide by zero");
+    testError("int x = 1; int y = 0; x % y", "divide by zero");
+    testError("def x = 1; def y = 0; x % y", "divide by zero");
     test("double x = 1.0D; int y = 0; x % y", Double.NaN);
     test("def x = 1.0D; def y = 0; x % y", Double.NaN);
     test("def x = 1.0D; def y = 0L; x % y", Double.NaN);
     test("double x = -1.0D; int y = 0; x % y", Double.NaN);
     test("def x = -1.0D; def y = 0; x % y", Double.NaN);
-    testFail("long x = 1L; int y = 0; x % y", "divide by zero");
-    testFail("def x = 1L; def y = 0; x % y", "divide by zero");
-    testFail("Decimal x = 1.0; int y = 0; x % y", "divide by zero");
-    testFail("def x = 1.0; def y = 0; x % y", "divide by zero");
-    testFail("int x = 1; Decimal y = 0.0; x % y", "divide by zero");
-    testFail("def x = 1; def y = 0.0; x % y", "divide by zero");
+    testError("long x = 1L; int y = 0; x % y", "divide by zero");
+    testError("def x = 1L; def y = 0; x % y", "divide by zero");
+    testError("Decimal x = 1.0; int y = 0; x % y", "divide by zero");
+    testError("def x = 1.0; def y = 0; x % y", "divide by zero");
+    testError("int x = 1; Decimal y = 0.0; x % y", "divide by zero");
+    testError("def x = 1; def y = 0.0; x % y", "divide by zero");
     test("int x = 1; int y = 2; x + y", 3);
     test("def x = 1; def y = 2; x + y", 3);
     test("int x = 1; def y = 2; x + y", 3);
@@ -726,7 +725,7 @@ class CompilerTest {
     test("int v = 1; v = 2; v", 2);
     test("int v = 1; v = 2", 2);
     test("int v = 1; v = v + 1", 2);
-    testFail("1 = 2", "valid lvalue");
+    testError("1 = 2", "valid lvalue");
     test("def x = 1; int y = x + 1", 2);
     test("int x = 1; int y = 2; x = y = 4", 4);
     test("int x = 1; int y = 2; x = y = 4; x", 4);
@@ -735,6 +734,27 @@ class CompilerTest {
     test("int x = 1; int y = 2; def z = 5; x = y = z = 3; y", 3);
     test("int x = 1; int y = 2; def z = 5; 4 + (x = y = z = 3) + y", 10);
     test("int x = 1; int y = 2; def z = 5; 4 + (x = y = z = 3) + y; x", 3);
+  }
+
+  @Test public void questionColon() {
+    test("null ?: 1", 1);
+    test("null ? 0 : 1", 1);
+    test("1 ?: null", 1);
+    test("1 ? 1 : null", 1);
+    test("1 ? null : 1", null);
+    test("1 ?: 2", 1);
+    test("1 ?: 2", 1);
+    test("def x; x ?: 2", 2);
+    test("def x; x ? 1 : 2", 2);
+    testError("true ? 'abc':1", "not compatible");
+    test("false ? 'abc':'1'", "1");
+    test("def x = 'abc'; true ? x:1", "abc");
+    test("def x = 'abc'; true ? 1:x", 1);
+    test("def x = 'abc'; false ? x:1", 1);
+    testError("def x; x ? 1 : [1,2,3]", "are not compatible");
+    testError("def x; x ? { 1 } : 2", "not compatible");
+    test("def x; var y = true ? x : 1", null);
+    test("def x; var y = true ? 1 : x", 1);
   }
 
   @Test public void plusEquals(){
@@ -844,7 +864,7 @@ class CompilerTest {
     test("double x = 2; int y = 3; x *= y", 6.0D);
     test("def x = 2.0D; int y = 3; y *= x", 6);
     test("def x = 2.0D; int y = 3; x *= y", 6.0D);
-    testFail("def x; x *= 2", "cannot be null");
+    testError("def x; x *= 2", "cannot be null");
     test("def x = [:]; x.a *= 2", 0);
   }
 
@@ -879,10 +899,10 @@ class CompilerTest {
     test("double x = 18; int y = 3; x /= y", 6.0D);
     test("def x = 3.0D; int y = 18; y /= x", 6);
     test("def x = 18.0D; int y = 3; x /= y", 6.0D);
-    testFail("int x = 1; x /= 0", "divide by zero");
-    testFail("long x = 1; x /= 0", "divide by zero");
+    testError("int x = 1; x /= 0", "divide by zero");
+    testError("long x = 1; x /= 0", "divide by zero");
     test("double x = 1; x /= 0", Double.POSITIVE_INFINITY);
-    testFail("Decimal x = 1; x /= 0", "divide by zero");
+    testError("Decimal x = 1; x /= 0", "divide by zero");
   }
 
   @Test public void percentEquals(){
@@ -922,25 +942,25 @@ class CompilerTest {
   @Test
   public void defVariableArithmetic() {
     test("def v = 1", 1);
-    testFail("def v = 1; v + true", "non-numeric operand for right-hand side");
-    testFail("def v = false; v + 1", "non-numeric operand for left-hand side");
-    testFail("def v = true; 1 + v", "non-numeric operand for right-hand side");
-    testFail("def v = 1; false + 1", "non-numeric operand for left-hand side");
-    testFail("def x = 1; def y = true; x + y", "non-numeric operand for right-hand side");
-    testFail("def x = 1; x - 'abc'", "non-numeric operand for right-hand side");
-    testFail("def x = 'abc'; 1 - x", "non-numeric operand for right-hand side");
-    testFail("def x = 'abc'; x - 1", "non-numeric operand for left-hand side");
-    testFail("def x = 'abc'; def y = 1; x - y", "non-numeric operand for left-hand side");
-    testFail("def x = 1; 'abc' - x", "non-numeric operand for left-hand side");
-    testFail("def x = false; x + true", "non-numeric operand for left-hand side");
-    testFail("def x = true; false + x", "non-numeric operand for left-hand side");
-    testFail("def x = false; def y = true; x + y", "non-numeric operand for left-hand side");
-    testFail("def x = 1; x + null", "non-numeric operand for right-hand side");
-    testFail("def x = null; 1 + x", "non-numeric operand for right-hand side");
-    testFail("def x = 1; def y =null; x + y", "non-numeric operand for right-hand side");
-    testFail("def x = null; x + 1", "left-hand side of '+' cannot be null");
-    testFail("def x = 1; null + x", "left-hand side of '+' cannot be null");
-    testFail("def x = null; def y = 1; x + y", "left-hand side of '+' cannot be null");
+    testError("def v = 1; v + true", "non-numeric operand for right-hand side");
+    testError("def v = false; v + 1", "non-numeric operand for left-hand side");
+    testError("def v = true; 1 + v", "non-numeric operand for right-hand side");
+    testError("def v = 1; false + 1", "non-numeric operand for left-hand side");
+    testError("def x = 1; def y = true; x + y", "non-numeric operand for right-hand side");
+    testError("def x = 1; x - 'abc'", "non-numeric operand for right-hand side");
+    testError("def x = 'abc'; 1 - x", "non-numeric operand for right-hand side");
+    testError("def x = 'abc'; x - 1", "non-numeric operand for left-hand side");
+    testError("def x = 'abc'; def y = 1; x - y", "non-numeric operand for left-hand side");
+    testError("def x = 1; 'abc' - x", "non-numeric operand for left-hand side");
+    testError("def x = false; x + true", "non-numeric operand for left-hand side");
+    testError("def x = true; false + x", "non-numeric operand for left-hand side");
+    testError("def x = false; def y = true; x + y", "non-numeric operand for left-hand side");
+    testError("def x = 1; x + null", "non-numeric operand for right-hand side");
+    testError("def x = null; 1 + x", "non-numeric operand for right-hand side");
+    testError("def x = 1; def y =null; x + y", "non-numeric operand for right-hand side");
+    testError("def x = null; x + 1", "left-hand side of '+' cannot be null");
+    testError("def x = 1; null + x", "left-hand side of '+' cannot be null");
+    testError("def x = null; def y = 1; x + y", "left-hand side of '+' cannot be null");
 
     test("def x = false; !x", true);
     test("def x = true; !x", false);
@@ -1144,9 +1164,9 @@ class CompilerTest {
     test("def x =  5.0; 8D % x", "#3.0");
     test("def x = 8D; def y = 5.0; x % y", "#3.0");
 
-    testFail("def x = 1; x / 0", "divide by zero");
-    testFail("def x = 1.0; x / 0", "divide by zero");
-    testFail("def x = 1L; x / 0", "divide by zero");
+    testError("def x = 1; x / 0", "divide by zero");
+    testError("def x = 1.0; x / 0", "divide by zero");
+    testError("def x = 1L; x / 0", "divide by zero");
     test("def x = 1.0D; x / 0", Double.POSITIVE_INFINITY);
   }
 
@@ -1316,7 +1336,7 @@ class CompilerTest {
     test("Decimal TRUE=7; Decimal FALSE=0; TRUE  || TRUE && TRUE", true);
     test("Decimal TRUE=7; Decimal FALSE=0; FALSE || !FALSE && TRUE", true);
 
-    testFail("def x; x.a && true", "null value");
+    testError("def x; x.a && true", "null value");
     test("def x; true || x.a", true);
     test("def x; false && x.a", false);
   }
@@ -1329,8 +1349,8 @@ class CompilerTest {
     test("var v = 2.0; { v = v + 1; { return v }}", "#3.0");
     test("Decimal v = 2.0; { v = v + 1; { return v }}", "#3.0");
     test("def v = '2'; { v = v + 1; { return v }}", "21");
-    testFail("double v = 2; return v; v = v + 1", "unreachable statement");
-    testFail("double v = 2; return v; { v = v + 1 }", "unreachable statement");
+    testError("double v = 2; return v; v = v + 1", "unreachable statement");
+    testError("double v = 2; return v; { v = v + 1 }", "unreachable statement");
   }
 
   @Test
@@ -1353,10 +1373,10 @@ class CompilerTest {
 
   @Test
   public void constStringConcatenation() {
-    testFail("'abc' - '123'", "non-numeric operand");
+    testError("'abc' - '123'", "non-numeric operand");
     test("'abc' + '123'", "abc123");
     test("'abc' + null", "abcnull");
-    testFail("null + 'abc'", "left-hand side of '+' cannot be null");
+    testError("null + 'abc'", "left-hand side of '+' cannot be null");
     test("'abc' + 'def' + 'ghi'", "abcdefghi");
     test("'abc' + ('1' + '2' + '3') + 'def'", "abc123def");
     test("'' + 'abc'", "abc");
@@ -1367,7 +1387,7 @@ class CompilerTest {
   public void constStringRepeat() {
     test("'abc' * 2", "abcabc");
     test("'abc' * 0", "");
-    testFail("'abc' * -1", "string repeat count must be >= 0");
+    testError("'abc' * -1", "string repeat count must be >= 0");
   }
 
   @Test public void defaultValues() {
@@ -1381,13 +1401,13 @@ class CompilerTest {
     test("double x; x", 0D);
     test("Decimal x", "#0");
     test("Decimal x; x", "#0");
-    testFail("var x", "Initialiser expression required");
+    testError("var x", "Initialiser expression required");
   }
 
   @Test
   public void prefixIncOrDec() {
-    testFail("++null", "null value encountered");
-    testFail("--null", "null value encountered");
+    testError("++null", "null value encountered");
+    testError("--null", "null value encountered");
     test("++1", 2);
     test("--1", 0);
     test("int x = 1; ++x", 2);
@@ -1440,15 +1460,15 @@ class CompilerTest {
 
     test("def x = 1; (x + x)++", 2);
     test("def x = 1; (x + x)++; x", 1);
-    testFail("def x = 1; (x + x)++ ++", "expecting end of statement");
+    testError("def x = 1; (x + x)++ ++", "expecting end of statement");
 
-    testFail("def x = 'a'; ++x", "cannot be incremented");
-    testFail("def x = [a:'a']; ++x.a", "cannot be incremented");
+    testError("def x = 'a'; ++x", "cannot be incremented");
+    testError("def x = [a:'a']; ++x.a", "cannot be incremented");
   }
 
   @Test public void postfixIncOrDec() {
-    testFail("null++", "null value encountered");
-    testFail("null--", "null value encountered");
+    testError("null++", "null value encountered");
+    testError("null--", "null value encountered");
     test("1++", 1);
     test("1--", 1);
     test("int x = 1; x++", 1);
@@ -1552,14 +1572,14 @@ class CompilerTest {
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2", 7);
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2; y", 3);
 
-    testFail("def x = 'a'; x++", "string cannot be incremented");
-    testFail("def x = [a:'a']; x.a++", "string cannot be incremented");
-    testFail("def x = 'a'; x--", "string cannot be decremented");
-    testFail("def x = [a:'a']; x.a--", "string cannot be decremented");
-    testFail("def x = 'a'; ++x", "string cannot be incremented");
-    testFail("def x = [a:'a']; ++x.a", "string cannot be incremented");
-    testFail("def x = 'a'; --x", "string cannot be decremented");
-    testFail("def x = [a:'a']; --x.a", "string cannot be decremented");
+    testError("def x = 'a'; x++", "string cannot be incremented");
+    testError("def x = [a:'a']; x.a++", "string cannot be incremented");
+    testError("def x = 'a'; x--", "string cannot be decremented");
+    testError("def x = [a:'a']; x.a--", "string cannot be decremented");
+    testError("def x = 'a'; ++x", "string cannot be incremented");
+    testError("def x = [a:'a']; ++x.a", "string cannot be incremented");
+    testError("def x = 'a'; --x", "string cannot be decremented");
+    testError("def x = [a:'a']; --x.a", "string cannot be decremented");
   }
 
   @Test
@@ -1572,12 +1592,12 @@ class CompilerTest {
   }
 
   @Test public void varScoping() {
-    testFail("def x = x + 1", "variable initialisation cannot refer to itself");
+    testError("def x = x + 1", "variable initialisation cannot refer to itself");
     test("def x = 2; if (true) { def x = 4; x++ }; x", 2);
     test("def x = 2; if (true) { def x = 4; x++; { def x = 17; x = x + 5 } }; x", 2);
-    testFail("def x = 2; { def x = 3; def x = 4; }", "already declared in this scope");
-    testFail("int f() { def x = 3; def x = 4; }", "already declared in this scope");
-    testFail("int f(x) { def x = 3; }", "already declared in this scope");
+    testError("def x = 2; { def x = 3; def x = 4; }", "already declared in this scope");
+    testError("int f() { def x = 3; def x = 4; }", "already declared in this scope");
+    testError("int f(x) { def x = 3; }", "already declared in this scope");
   }
 
   @Test public void exprStrings() {
@@ -1604,7 +1624,7 @@ class CompilerTest {
   @Test public void listLiterals() {
     test("[]", List.of());
     test("[1]", List.of(1));
-    testFail("[1,", "unexpected EOF");
+    testError("[1,", "unexpected EOF");
     test("[1,2,3]", List.of(1,2,3));
     test("[1,2+3,3]", List.of(1,5,3));
     test("[[]]", List.of(List.of()));
@@ -1614,16 +1634,23 @@ class CompilerTest {
     test("[1,2,3][0]", 1);
     test("[1,2,3][3]", null);
     test("[1,[2,3,4],5][1]", List.of(2,3,4));
-    test("String x = []", "[]");
-    test("String x = [1,2,3]", "[1, 2, 3]");
-    test("String x = [1,2,[3,4]]", "[1, 2, [3, 4]]");
+    testError("String x = []", "cannot convert");
+    testError("String x = [1,2,3]", "cannot convert");
+    testError("def y = []; String x = y", "cannot convert");
+    testError("def y = [1,2,3]; String x = y", "cannot convert");
+    test("'' + [1,2,3]", "[1, 2, 3]");
+    test("'' + []", "[]");
+    test("'' + [1,[2,3]]", "[1, [2, 3]]");
+    test("def x = [1,2,3]; ''+x", "[1, 2, 3]");
+    test("def x = []; ''+x", "[]");
+    test("def x = [1,[2,3]]; ''+x", "[1, [2, 3]]");
   }
 
   @Test public void mapLiterals() {
     test("[:]", new HashMap<>());
     test("[a:1]", Map.of("a",1));
-    testFail("[:", "unexpected EOF");
-    testFail("[:123]", "unexpected token");
+    testError("[:", "unexpected EOF");
+    testError("[:123]", "unexpected token");
     test("[for:1]", Map.of("for",1));
     test("['for':1]", Map.of("for",1));
     test("[a:1,b:2]", Map.of("a",1, "b", 2));
@@ -1633,7 +1660,7 @@ class CompilerTest {
     test("[a:1,b:[c:2]]", Map.of("a",1, "b", Map.of("c",2)));
     test("{:}", new HashMap<>());
     test("{a:1}", Map.of("a",1));
-    testFail("{:", "unexpected EOF");
+    testError("{:", "unexpected EOF");
     test("{for:1}", Map.of("for",1));
     test("{'for':1}", Map.of("for",1));
     test("{a:1,b:2}", Map.of("a",1, "b", 2));
@@ -1644,40 +1671,42 @@ class CompilerTest {
     test("[a:[b:2]]?.a?['b']", 2);
     test("[a:[b:2]]['a']['b']", 2);
     test("[a:[b:2]].c", null);
-    test("String x = [a:1]", "[a:1]");
-    test("String x = [a:1,b:2]", "[a:1, b:2]");
-    test("String x = {a:1,b:2}", "[a:1, b:2]");
-    test("String x = [:]", "[:]");
-    test("String x = [a:[1,2,3]]", "[a:[1, 2, 3]]");
-    test("String x = [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
+    testError("String x = [a:1]", "cannot convert");
+    testError("String x = {a:1,b:2}", "cannot convert");
+    testError("String x = [:]", "cannot convert");
+
+    test("String x = '' + [a:1]", "[a:1]");
+    test("String x = '' + [a:1,b:2]", "[a:1, b:2]");
+    test("String x = '' + {a:1,b:2}", "[a:1, b:2]");
+    test("String x = '' + [:]", "[:]");
+    test("String x = '' + [a:[1,2,3]]", "[a:[1, 2, 3]]");
+    test("String x = '' + [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
+
+    test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
   }
 
-//  @Test public void notYetImplemented() {
-//    test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2))
-//  }
-
   @Test public void listMapVariables() {
-    testFail("Map x = 1", "cannot convert");
-    testFail("List x = 1", "cannot convert");
+    testError("Map x = 1", "cannot convert");
+    testError("List x = 1", "cannot convert");
     test("Map x = [a:1]; x.a", 1);
     test("Map x = [a:1]", Map.of("a", 1));
     test("Map x = [a:1]; 1", 1);
-    testFail("List list = [1]; list.a", "invalid object type");
-    testFail("int x = 1; x.a", "invalid object type");
-    testFail("int x = 1; x[0]", "invalid object type");
+    testError("List list = [1]; list.a", "invalid object type");
+    testError("int x = 1; x.a", "invalid object type");
+    testError("int x = 1; x[0]", "invalid object type");
     test("Map map = [:]; map[0]", null);
-    testFail("Map map = [:]; map = 1", "cannot convert from type of right hand side");
-    testFail("List list = []; list = 1", "cannot convert from type of right hand side");
+    testError("Map map = [:]; map = 1", "cannot convert from type of right hand side");
+    testError("List list = []; list = 1", "cannot convert from type of right hand side");
 
     test("var x = [a:1]; x.a", 1);
     test("var x = [a:1]", Map.of("a", 1));
     test("var x = [a:1]; 1", 1);
-    testFail("var list = [1]; list.a", "invalid object type");
-    testFail("var x = 1; x.a", "invalid object type");
-    testFail("var x = 1; x[0]", "invalid object type");
+    testError("var list = [1]; list.a", "invalid object type");
+    testError("var x = 1; x.a", "invalid object type");
+    testError("var x = 1; x[0]", "invalid object type");
     test("var map = [:]; map[0]", null);
-    testFail("var map = [:]; map = 1", "cannot convert from type of right hand side");
-    testFail("var list = []; list = 1", "cannot convert from type of right hand side");
+    testError("var map = [:]; map = 1", "cannot convert from type of right hand side");
+    testError("var list = []; list = 1", "cannot convert from type of right hand side");
 
     test("def m = [a:1]", Map.of("a",1));
     test("def m = [1]", List.of(1));
@@ -1688,14 +1717,14 @@ class CompilerTest {
     test("def m = [a:[b:2]]; m?['a']?['b']", 2);
     test("def m = [a:[b:2]]; m?['a'].b", 2);
     test("def m = [a:[b:2]]; m.a.x?.y", null);
-    testFail("def m = [a:[b:2]]; m.a.x?.y.z", "null value");
+    testError("def m = [a:[b:2]]; m.a.x?.y.z", "null value");
 
     test("def x = [1,2,3]", List.of(1,2,3));
     test("def x = []", List.of());
     test("def x = []; x[0]", null);
     test("def x = [1,2,3][4]; x", null);
     test("def x = [1,2,3]; x[1]", 2);
-    testFail("def x = []; x[-1]", "index must be >= 0");
+    testError("def x = []; x[-1]", "index must be >= 0");
     test("def x = []; def y = 7; x[y + y * y - y]", null);
     test("def x = [1,2,3,4]; def y = 7; x[y + y * y - y * y - 5]", 3);
     test("def x = [0,1,2,3,4]; def y = [a:7]; x[--y.a - y.a-- + --y.a - 3]", 1);
@@ -1711,7 +1740,7 @@ class CompilerTest {
   }
 
   @Test public void fieldAssignments() {
-    testFail("Map m = [a:1]; m*a = 2", "invalid lvalue");
+    testError("Map m = [a:1]; m*a = 2", "invalid lvalue");
     test("Map m = [:]; m.a = 1", 1);
     test("Map m = [:]; m.a = 1; m.a", 1);
     test("var m = [:]; m.a = 1", 1);
@@ -1724,7 +1753,7 @@ class CompilerTest {
     // def without initialiser is always null. We don't automatically create
     // the value for m itself. Only subfields are automatically created if
     // required when used as lvalues.
-    testFail("def m; m.a = 1", "null value");
+    testError("def m; m.a = 1", "null value");
 
     test("Map m; m.a.b = 1", 1);
     test("Map m; m.a.b = 1; m.a", Map.of("b",1));
@@ -1744,7 +1773,7 @@ class CompilerTest {
     test("Map m = [:]; m.a.b += 4", 4);
     test("def m = [:]; m.a.b += 4", 4);
 
-    testFail("def x = [:]; x.a['b'] = 1", "non-numeric value for index");
+    testError("def x = [:]; x.a['b'] = 1", "non-numeric value for index");
     test("Map m = [:]; m.a[1] = 4; m.a[1]", 4);
     test("Map m = [:]; m.a[1] += 4; m.a[1]", 4);
     test("def m = [:]; m.a[2].b += 4; m.a[2].b", 4);
@@ -1820,19 +1849,19 @@ class CompilerTest {
     test("def y; String x = '1'; x ?= y; x", "1");
 
     test("Map m; def x = [a:3]; 1 + (m.a.b ?= 2) + (m.a.c ?= 3)", 6);
-    testFail("Map m; def x = [a:3]; 1 + (m.a.b ?= m.xxx) + (m.a.c ?= 3)", "non-numeric operand");
+    testError("Map m; def x = [a:3]; 1 + (m.a.b ?= m.xxx) + (m.a.c ?= 3)", "non-numeric operand");
     test("def x = [:]; def y; 1 + (x.a.b ?= 2) + (x.a.c ?= 3)", 6);
     test("def x = [a:3]; def y; y ?= x.z", null);
     test("def x = [a:3]; def y; y ?= x.a", 3);
     test("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.a)", 6);
-    testFail("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.xxx)", "non-numeric operand");
-    testFail("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "cannot be null");
+    testError("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.xxx)", "non-numeric operand");
+    testError("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "cannot be null");
     test("def x = [a:3]; def y; (y ?= x.a) + (x.b.b[2].c ?= 3)", 6);
-    testFail("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "cannot be null");
+    testError("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "cannot be null");
     test("Map m; def x = [a:3]; (m.a.b.c ?= x.a) + (m.a.b ?= 3)", 6);
 
     test("def x = [a:3]; def y; x.b += (y ?= x.a)", 3);
-    testFail("def x = [a:3]; def y; x.b += (y ?= x.xxx)", "non-numeric operand");
+    testError("def x = [a:3]; def y; x.b += (y ?= x.xxx)", "non-numeric operand");
 
     test("def x; 1 + (x ?= 2)", 3);
     test("def x; 1 + (x ?= 2L)", 3L);
@@ -1851,15 +1880,15 @@ class CompilerTest {
   }
 
   @Test public void nullValues() {
-    test("String s = null", null);
-    testFail("int i = null", "cannot convert null");
-    testFail("1.0 + null", "non-numeric operand");
-    testFail("def x; int i = x", "cannot convert null");
+    testError("String s = null", "null value");
+    testError("int i = null", "cannot convert null");
+    testError("1.0 + null", "non-numeric operand");
+    testError("def x; int i = x", "cannot convert null");
   }
 
   @Test public void stringIndexing() {
     test("'abc'[0]", "a");
-    testFail("''[0]", "index (0) too large");
+    testError("''[0]", "index (0) too large");
     test("def x = 'abcdef'; def i = 3; x[i]", "d");
     test("def x = 'abcdef'; def i = 3; x?[i]", "d");
     test("String x = 'abcdef'; def i = 3; x[i]", "d");
@@ -1867,9 +1896,9 @@ class CompilerTest {
     test("var x = 'abcdef'; def i = 3; x[i]", "d");
     test("var x = 'abcdef'; def i = 3; x?[i]", "d");
     test("def x; x?[0]", null);
-    testFail("String s = 'abc'; s[1] = s[2]", "invalid object type");
-    testFail("String s = 'abc'; s.a", "invalid object type");
-    testFail("def s = 'abc'; s.a", "field access not supported");
+    testError("String s = 'abc'; s[1] = s[2]", "invalid object type");
+    testError("String s = 'abc'; s.a", "invalid object type");
+    testError("def s = 'abc'; s.a", "field access not supported");
   }
 
   @Test public void ifStatement() {
@@ -1877,7 +1906,7 @@ class CompilerTest {
     test("if (true) true else false", true);
     test("if (false) true", null);
     test("if (false) true else false", false);
-    testFail("if (true) int i = 2", "unexpected token int");
+    testError("if (true) int i = 2", "unexpected token int");
     test("int x; if (x) { x += 1 } else { x += 2 }", 2);
     test("int x; if (x) { x += 1 }", null);
     test("int x; if (x) { x += 1; x+= 2\n}", null);
@@ -1897,10 +1926,10 @@ class CompilerTest {
     test("true == 1", false);
     test("1 != false", true);
     test ("1 == false", false);
-    testFail("1 < true", "cannot be compared");
-    testFail("1L < true", "cannot be compared");
-    testFail("1D < true", "cannot be compared");
-    testFail("1.0 < true", "cannot be compared");
+    testError("1 < true", "cannot be compared");
+    testError("1L < true", "cannot be compared");
+    testError("1D < true", "cannot be compared");
+    testError("1.0 < true", "cannot be compared");
     test("true != 1L", true);
     test("true == 1L", false);
     test("1L != false", true);
@@ -2131,12 +2160,364 @@ class CompilerTest {
     test("long x = 2L; 2 * x == 4", true);
   }
 
+  @Test public void instanceOfTests() {
+    test("true instanceof boolean", true);
+    test("1 instanceof boolean", false);
+    test("def x = true; x instanceof boolean", true);
+    test("def x = true; (x && x || x) instanceof boolean", true);
+    test("String x; x instanceof boolean", false);
+    test("String x; x instanceof boolean || x instanceof String", true);
+    test("def x = 'abc'; x instanceof boolean || x instanceof String", true);
+
+    test("1 instanceof Map", false);
+    test("1 instanceof List", false);
+    test("1 instanceof boolean", false);
+    test("1 instanceof String", false);
+    test("1 instanceof int", true);
+    test("1 instanceof long", false);
+    test("1 instanceof double", false);
+    test("1 instanceof Decimal", false);
+    test("1L instanceof Map", false);
+    test("1L instanceof List", false);
+    test("1L instanceof boolean", false);
+    test("1L instanceof String", false);
+    test("1L instanceof int", false);
+    test("1L instanceof long", true);
+    test("1L instanceof double", false);
+    test("1L instanceof Decimal", false);
+
+    test("1D instanceof Map", false);
+    test("1D instanceof List", false);
+    test("1D instanceof boolean", false);
+    test("1D instanceof String", false);
+    test("1D instanceof int", false);
+    test("1D instanceof long", false);
+    test("1D instanceof double", true);
+    test("1D instanceof Decimal", false);
+
+    test("1.0 instanceof Map", false);
+    test("1.0 instanceof List", false);
+    test("1.0 instanceof boolean", false);
+    test("1.0 instanceof String", false);
+    test("1.0 instanceof int", false);
+    test("1.0 instanceof long", false);
+    test("1.0 instanceof double", false);
+    test("1.0 instanceof Decimal", true);
+
+    test("[] instanceof Map", false);
+    test("[] instanceof List", true);
+    test("[] instanceof boolean", false);
+    test("[] instanceof String", false);
+    test("[] instanceof int", false);
+    test("[] instanceof long", false);
+    test("[] instanceof double", false);
+    test("[] instanceof Decimal", false);
+
+    test("[:] instanceof Map", true);
+    test("[:] instanceof List", false);
+    test("[:] instanceof boolean", false);
+    test("[:] instanceof String", false);
+    test("[:] instanceof int", false);
+    test("[:] instanceof long", false);
+    test("[:] instanceof double", false);
+    test("[:] instanceof Decimal", false);
+
+    test("def x = 1 ; x instanceof Map", false);
+    test("def x = 1 ; x instanceof List", false);
+    test("def x = 1 ; x instanceof boolean", false);
+    test("def x = 1 ; x instanceof String", false);
+    test("def x = 1 ; x instanceof int", true);
+    test("def x = 1 ; x instanceof long", false);
+    test("def x = 1 ; x instanceof double", false);
+    test("def x = 1 ; x instanceof Decimal", false);
+    test("def x = 1L ; x instanceof Map", false);
+    test("def x = 1L ; x instanceof List", false);
+    test("def x = 1L ; x instanceof boolean", false);
+    test("def x = 1L ; x instanceof String", false);
+    test("def x = 1L ; x instanceof int", false);
+    test("def x = 1L ; x instanceof long", true);
+    test("def x = 1L ; x instanceof double", false);
+    test("def x = 1L ; x instanceof Decimal", false);
+
+    test("def x = 1D ; x instanceof Map", false);
+    test("def x = 1D ; x instanceof List", false);
+    test("def x = 1D ; x instanceof boolean", false);
+    test("def x = 1D ; x instanceof String", false);
+    test("def x = 1D ; x instanceof int", false);
+    test("def x = 1D ; x instanceof long", false);
+    test("def x = 1D ; x instanceof double", true);
+    test("def x = 1D ; x instanceof Decimal", false);
+
+    test("def x = 1.0 ; x instanceof Map", false);
+    test("def x = 1.0 ; x instanceof List", false);
+    test("def x = 1.0 ; x instanceof boolean", false);
+    test("def x = 1.0 ; x instanceof String", false);
+    test("def x = 1.0 ; x instanceof int", false);
+    test("def x = 1.0 ; x instanceof long", false);
+    test("def x = 1.0 ; x instanceof double", false);
+    test("def x = 1.0 ; x instanceof Decimal", true);
+
+    test("def x = [] ; x instanceof Map", false);
+    test("def x = [] ; x instanceof List", true);
+    test("def x = [] ; x instanceof boolean", false);
+    test("def x = [] ; x instanceof String", false);
+    test("def x = [] ; x instanceof int", false);
+    test("def x = [] ; x instanceof long", false);
+    test("def x = [] ; x instanceof double", false);
+    test("def x = [] ; x instanceof Decimal", false);
+
+    test("def x = [:] ; x instanceof Map", true);
+    test("def x = [:] ; x instanceof List", false);
+    test("def x = [:] ; x instanceof boolean", false);
+    test("def x = [:] ; x instanceof String", false);
+    test("def x = [:] ; x instanceof int", false);
+    test("def x = [:] ; x instanceof long", false);
+    test("def x = [:] ; x instanceof double", false);
+    test("def x = [:] ; x instanceof Decimal", false);
+
+
+    test("true !instanceof boolean", false);
+    test("1 !instanceof boolean", true);
+    test("def x = true; x !instanceof boolean", false);
+    test("def x = true; (x && x || x) !instanceof boolean", false);
+    test("String x; x !instanceof boolean", true);
+    test("String x; x !instanceof boolean && x !instanceof String", false);
+    test("def x = 'abc'; x !instanceof boolean && x !instanceof String", false);
+
+    test("1 !instanceof Map", true);
+    test("1 !instanceof List", true);
+    test("1 !instanceof boolean", true);
+    test("1 !instanceof String", true);
+    test("1 !instanceof int", false);
+    test("1 !instanceof long", true);
+    test("1 !instanceof double", true);
+    test("1 !instanceof Decimal", true);
+    test("1L !instanceof Map", true);
+    test("1L !instanceof List", true);
+    test("1L !instanceof boolean", true);
+    test("1L !instanceof String", true);
+    test("1L !instanceof int", true);
+    test("1L !instanceof long", false);
+    test("1L !instanceof double", true);
+    test("1L !instanceof Decimal", true);
+
+    test("1D !instanceof Map", true);
+    test("1D !instanceof List", true);
+    test("1D !instanceof boolean", true);
+    test("1D !instanceof String", true);
+    test("1D !instanceof int", true);
+    test("1D !instanceof long", true);
+    test("1D !instanceof double", false);
+    test("1D !instanceof Decimal", true);
+
+    test("1.0 !instanceof Map", true);
+    test("1.0 !instanceof List", true);
+    test("1.0 !instanceof boolean", true);
+    test("1.0 !instanceof String", true);
+    test("1.0 !instanceof int", true);
+    test("1.0 !instanceof long", true);
+    test("1.0 !instanceof double", true);
+    test("1.0 !instanceof Decimal", false);
+
+    test("[] !instanceof Map", true);
+    test("[] !instanceof List", false);
+    test("[] !instanceof boolean", true);
+    test("[] !instanceof String", true);
+    test("[] !instanceof int", true);
+    test("[] !instanceof long", true);
+    test("[] !instanceof double", true);
+    test("[] !instanceof Decimal", true);
+
+    test("[:] !instanceof Map", false);
+    test("[:] !instanceof List", true);
+    test("[:] !instanceof boolean", true);
+    test("[:] !instanceof String", true);
+    test("[:] !instanceof int", true);
+    test("[:] !instanceof long", true);
+    test("[:] !instanceof double", true);
+    test("[:] !instanceof Decimal", true);
+
+    test("def x = 1 ; x !instanceof Map", true);
+    test("def x = 1 ; x !instanceof List", true);
+    test("def x = 1 ; x !instanceof boolean", true);
+    test("def x = 1 ; x !instanceof String", true);
+    test("def x = 1 ; x !instanceof int", false);
+    test("def x = 1 ; x !instanceof long", true);
+    test("def x = 1 ; x !instanceof double", true);
+    test("def x = 1 ; x !instanceof Decimal", true);
+    test("def x = 1L ; x !instanceof Map", true);
+    test("def x = 1L ; x !instanceof List", true);
+    test("def x = 1L ; x !instanceof boolean", true);
+    test("def x = 1L ; x !instanceof String", true);
+    test("def x = 1L ; x !instanceof int", true);
+    test("def x = 1L ; x !instanceof long", false);
+    test("def x = 1L ; x !instanceof double", true);
+    test("def x = 1L ; x !instanceof Decimal", true);
+
+    test("def x = 1D ; x !instanceof Map", true);
+    test("def x = 1D ; x !instanceof List", true);
+    test("def x = 1D ; x !instanceof boolean", true);
+    test("def x = 1D ; x !instanceof String", true);
+    test("def x = 1D ; x !instanceof int", true);
+    test("def x = 1D ; x !instanceof long", true);
+    test("def x = 1D ; x !instanceof double", false);
+    test("def x = 1D ; x !instanceof Decimal", true);
+
+    test("def x = 1.0 ; x !instanceof Map", true);
+    test("def x = 1.0 ; x !instanceof List", true);
+    test("def x = 1.0 ; x !instanceof boolean", true);
+    test("def x = 1.0 ; x !instanceof String", true);
+    test("def x = 1.0 ; x !instanceof int", true);
+    test("def x = 1.0 ; x !instanceof long", true);
+    test("def x = 1.0 ; x !instanceof double", true);
+    test("def x = 1.0 ; x !instanceof Decimal", false);
+
+    test("def x = [] ; x !instanceof Map", true);
+    test("def x = [] ; x !instanceof List", false);
+    test("def x = [] ; x !instanceof boolean", true);
+    test("def x = [] ; x !instanceof String", true);
+    test("def x = [] ; x !instanceof int", true);
+    test("def x = [] ; x !instanceof long", true);
+    test("def x = [] ; x !instanceof double", true);
+    test("def x = [] ; x !instanceof Decimal", true);
+
+    test("def x = [:] ; x !instanceof Map", false);
+    test("def x = [:] ; x !instanceof List", true);
+    test("def x = [:] ; x !instanceof boolean", true);
+    test("def x = [:] ; x !instanceof String", true);
+    test("def x = [:] ; x !instanceof int", true);
+    test("def x = [:] ; x !instanceof long", true);
+    test("def x = [:] ; x !instanceof double", true);
+    test("def x = [:] ; x !instanceof Decimal", true);
+
+    testError("def x = 'int'; x instanceof x", "unexpected token identifier");
+    testError("def x = 'int'; x !instanceof x", "unexpected token identifier");
+
+    test("def x = [a:[1,2]]; x.a instanceof List", true);
+    test("def x = [a:[1,2]]; x.a !instanceof Map", true);
+    test("def x = [a:[1,2]]; x.a[0] instanceof int", true);
+    test("def x = [a:[1,2]]; x.a[0] !instanceof Map", true);
+
+    test("null instanceof Map", false);
+    test("null instanceof List", false);
+    test("null instanceof boolean", false);
+    test("null instanceof String", false);
+    test("null instanceof int", false);
+    test("null instanceof long", false);
+    test("null instanceof double", false);
+    test("null instanceof Decimal", false);
+    test("null !instanceof Map", true);
+    test("null !instanceof List", true);
+    test("null !instanceof boolean", true);
+    test("null !instanceof String", true);
+    test("null !instanceof int", true);
+    test("null !instanceof long", true);
+    test("null !instanceof double", true);
+    test("null !instanceof Decimal", true);
+
+    test("def x = null; x instanceof Map", false);
+    test("def x = null; x instanceof List", false);
+    test("def x = null; x instanceof boolean", false);
+    test("def x = null; x instanceof String", false);
+    test("def x = null; x instanceof int", false);
+    test("def x = null; x instanceof long", false);
+    test("def x = null; x instanceof double", false);
+    test("def x = null; x instanceof Decimal", false);
+    test("def x = null; x !instanceof Map", true);
+    test("def x = null; x !instanceof List", true);
+    test("def x = null; x !instanceof boolean", true);
+    test("def x = null; x !instanceof String", true);
+    test("def x = null; x !instanceof int", true);
+    test("def x = null; x !instanceof long", true);
+    test("def x = null; x !instanceof double", true);
+    test("def x = null; x !instanceof Decimal", true);
+  }
+
+  @Test public void typeCasts() {
+    test("(int)1L", 1);
+    test("(int)1L instanceof int", true);
+    testError("(String)1", "cannot cast");
+    testError("def x = 1; (String)x", "cannot convert");
+    testError("(String)null", "null value");
+    testError("(Map)null", "null value");
+    testError("(List)null", "null value");
+    testError("def x = null; (Map)x", "null value");
+    testError("def x = null; (List)x", "null value");
+    testError("(int)null", "cannot convert null");
+    testError("(long)null", "cannot convert null");
+    testError("(double)null", "cannot convert null");
+    testError("(Decimal)null", "null value for decimal");
+    testError("def x; (int)x", "cannot convert null");
+    testError("def x; (long)x", "cannot convert null");
+    testError("def x; (double)x", "cannot convert null");
+    testError("def x; (Decimal)x", "null value for decimal");
+
+    testError("(Map)1", "cannot cast from int to map");
+    testError("(List)1", "cannot cast from int to list");
+    testError("int x = 1; (Map)x", "cannot cast from");
+    testError("int x = 1; (List)x", "cannot cast from");
+    testError("def x = 1; (Map)x", "cannot be cast");
+    testError("def x = 1; (List)x", "cannot be cast");
+    testError("def x = { it }; (Map)x", "cannot be cast");
+    testError("def x = { it }; (List)x", "cannot be cast");
+    testError("def x(){ 1 }; (Map)x", "cannot cast from");
+    testError("def x(){ 1 }; (List)x", "cannot cast from");
+    testError("def x = { it }; (int)x", "cannot be cast");
+    testError("def x = { it }; (long)x", "cannot be cast");
+    testError("def x = { it }; (double)x", "cannot be cast");
+    testError("def x = { it }; (Decimal)x", "cannot be cast");
+    testError("def x = { it }; (String)x", "cannot convert");
+    test("def x = { it }; '' + x", "MethodHandle(String,int,Object)Object");
+    testError("def x(){ 1 }; (int)x", "cannot cast from");
+    testError("def x(){ 1 }; (long)x", "cannot cast from");
+    testError("def x(){ 1 }; (double)x", "cannot cast from");
+    testError("def x(){ 1 }; (Decimal)x", "cannot cast from");
+
+    testError("def x(){ 1 }; (String)x", "cannot cast from");
+
+    test("(int)1", 1);
+    test("int x = 1; (int)x", 1);
+    test("(long)1", 1L);
+    test("int x = 1; (long)x", 1L);
+    test("(double)1", 1D);
+    test("int x = 1; (double)x", 1D);
+    test("(Decimal)1", "#1");
+    test("int x = 1; (Decimal)x", "#1");
+
+    test("(int)1L", 1);
+    test("long x = 1L; (int)x", 1);
+    test("(long)1L", 1L);
+    test("long x = 1L; (long)x", 1L);
+    test("(double)1L", 1D);
+    test("long x = 1L; (double)x", 1D);
+    test("(Decimal)1L", "#1");
+    test("long x = 1L; (Decimal)x", "#1");
+
+    test("(int)1D", 1);
+    test("double x = 1D; (int)x", 1);
+    test("(long)1D", 1L);
+    test("double x = 1D; (long)x", 1L);
+    test("(double)1D", 1D);
+    test("double x = 1D; (double)x", 1D);
+    test("(Decimal)1D", "#1.0");
+    test("double x = 1D; (Decimal)x", "#1.0");
+
+    test("(int)1.0", 1);
+    test("Decimal x = 1.0; (int)x", 1);
+    test("(long)1.0", 1L);
+    test("Decimal x = 1.0; (long)x", 1L);
+    test("(double)1.0", 1D);
+    test("Decimal x = 1.0; (double)x", 1D);
+    test("(Decimal)1.0", "#1.0");
+    test("Decimal x = 1.0; (Decimal)x", "#1.0");
+  }
+
   @Test public void whileLoops() {
     test("int i = 0; while (i < 10) i++; i", 10);
     test("int i = 0; int sum = 0; while (i < 10) sum += i++; sum", 45);
     test("int i = 0; int sum = 0; while (i < 10) { sum += i; i++ }; sum", 45);
     test("int i = 0; int sum = 0; while (i < 10) i++", null);
-    testFail("while (false) i++;", "unknown variable i");
+    testError("while (false) i++;", "unknown variable i");
     test("int i = 1; while (false) i++; i", 1);
     test("int i = 1; while (false) ;", null);
     test("int i = 1; while (++i < 10); i", 10);
@@ -2144,17 +2525,17 @@ class CompilerTest {
 
   @Test public void forLoops() {
     test("int sum = 0; for (int i = 0; i < 10; i++) sum += i; sum", 45);
-    testFail("int sum = 0; for (int i = 0; i < 10; i++) sum += i; i", "unknown variable");
+    testError("int sum = 0; for (int i = 0; i < 10; i++) sum += i; i", "unknown variable");
     test("int sum = 0; for (int i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 100);
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 120);
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) { sum += i + j; def i = 3; i++ }; sum", 120);
   }
 
   @Test public void breakContinue() {
-    testFail("break", "break must be within");
-    testFail("continue", "continue must be within");
-    testFail("if (true) { break }", "break must be within");
-    testFail("if (true) { continue }", "continue must be within");
+    testError("break", "break must be within");
+    testError("continue", "continue must be within");
+    testError("if (true) { break }", "break must be within");
+    testError("if (true) { continue }", "continue must be within");
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) continue; sum += i }; sum", 15);
     test("def sum = 0; def i = 0.0D; while (i++ < 10) { if (i > 5) continue; sum += i }; sum", 15.0D);
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) continue; sum = sum * 1 + i }; sum", 15);
@@ -2177,7 +2558,7 @@ class CompilerTest {
     test("def f(x) { x * x }; f(2)", 4);
     test("int f(x) { if (x == 1) 1 else x * f(x - 1) }; f(3)", 6);
     test("def f(x) { if (x == 1) 1 else x * f(x - 1) }; f(3) + f(4)", 30);
-    testFail("def f(int x) { def x = 1; x++ }", "already declared");
+    testError("def f(int x) { def x = 1; x++ }", "already declared");
 
     test("int f(x) { { def x = 3; return x } }; f(1)", 3);
     test("int f(x) { { def x = 3; x } }; f(1)", 3);
@@ -2203,24 +2584,26 @@ class CompilerTest {
     test("def f(x) { def g(x) { x * x }; g(x) }; f(3)", 9);
     test("def f(x) { def g(x) { x * x }; g(x) }; def g(x) { f(x) }; g(3)", 9);
     test("def f(x) { def g(x) { def f(x) {x+x}; f(x) }; g(x) * g(x) }; f(3)", 36);
-    test("def f(String x) { x + x }; f(1)", "11");
-    test("def f(String x) { x }; f([1,2,3])", "[1, 2, 3]");
-    test("def f(String x) { x }; f([a:1,b:2])", "[a:1, b:2]");
+    testError("def f(String x) { x + x }; f(1)", "cannot convert");
+    test("def f(def x) { '' + x + x }; f(1)", "11");
+    testError("def f(String x) { x }; f([1,2,3])", "cannot convert");
+    test("def f(def x) { '' + x }; f([1,2,3])", "[1, 2, 3]");
+    testError("def f(String x) { x }; f([a:1,b:2])", "cannot convert");
+    test("def f(def x) { '' + x }; f([a:1,b:2])", "[a:1, b:2]");
 
-    //    testFail("null()", "cannot be called");
-//    testFail("3()", "cannot be called");
-//    testFail("'abc'()", "cannot be called");
-//    testFail("1D()", "cannot be called");
-//    testFail("(3.0 + 2.0)()", "cannot be called");
+    testError("null()", "null value for function");
+    testError("3()", "cannot be called");
+    testError("'abc'()", "cannot be called");
+    testError("1D()", "cannot be called");
+    testError("(3.0 + 2.0)()", "cannot be called");
 
-//    test("def f(int x = f(1)) { if (x == 1) 9 else x }; f(3)", 3);
-//    test("def f(int x = f(1)) { if (x == 1) 9 else x }; f()", 9);
+    test("def f(x) { if (x == 1) 1 else x + f(x-1) }; f(4)", 10);
   }
 
   @Test public void functionsAsValues() {
     test("def f(x) { x + x }; def g = f; g(2)", 4);
     test("def f(x) { x + x }; def g = f; g('abc')", "abcabc");
-    testFail("def f(x) { x + x }; def g = f; g()", "missing mandatory arguments");
+    testError("def f(x) { x + x }; def g = f; g()", "missing mandatory arguments");
     test("def f() { def g() { 3 } }; def h = f(); h()", 3);
     test("def f() { def g(){ def h(x){x*x} } }; f()()(3)", 9);
     test("def f() { def g(){ def h(x){x*x} }; [a:g] }; f().a()(3)", 9);
@@ -2229,10 +2612,12 @@ class CompilerTest {
   }
 
   @Test public void functionsForwardReference() {
+    test("def x = f(2); def f(z){3*z}; x", 6);
     test("def f(x) { 2 * g(x) }; def g(x) { x * x }; f(3)", 18);
     test("def f(x) { if (x==1) x else 2 * g(x) }; def g(x) { x + f(x-1) }; f(3)", 18);
     test("def f(x) { g(x) }; def g(x) { x }; f(3)", 3);
-//    testFail("def f(x) { g(x) }; def y = 2; def g(x) { x * y }; f(3)", " xxx");
+//    testError("def x = f(2); def y = 3; def f(z){y*z}; x", "forward reference to function that closes over as yet undefined variable");
+//    testError("def f(x) { g(x) }; def y = 2; def g(x) { x + y}; f(3)", "forward reference to function that closes over var not yet declared");
   }
 
   @Test public void functionsWithOptionalArgs() {
@@ -2246,19 +2631,22 @@ class CompilerTest {
     test("int f(int x = 5) { x * x }; f(3)", 9);
     test("int f(int x = 5) { x * x }; var g = f; g()", 25);
     test("int f(int x = 5) { x * x }; var g = f; g(3)", 9);
-    testFail("def f(int x = 5) { x * x }; def g = f; g(1,2)", "too many arguments");
-    testFail("Decimal f(long x,int y=5,def z){x+y+z}; f(1)", "missing mandatory arguments");
+    testError("def f(int x = 5) { x * x }; def g = f; g(1,2)", "too many arguments");
+    testError("Decimal f(long x,int y=5,def z){x+y+z}; f(1)", "missing mandatory arguments");
     test("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1,2,3)", "#6");
-    testFail("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1)", "missing mandatory arguments");
+    testError("Decimal f(long x,int y=5,def z){x+y+z}; def g=f; g(1)", "missing mandatory arguments");
     test("String f(x='abc') { x + x }; f()", "abcabc");
     test("String f(x=\"a${'b'+'c'}\") { x + x }; f()", "abcabc");
     test("String f(x=\"a${'b'+'c'}\") { x + x }; f('x')", "xx");
     test("int f(x = f(1)) { if (x == 1) 4 else x + f(x-1) }; f()", 13);
     test("int f(x = f(1)) { if (x == 1) 4 else x + f(x-1) }; f(2)", 6);
-  }
-
-  @Test public void functionsWithClosedOverVars() {
-//    test("def F; def G; def f(x) { if (x==1) x else 2 * G(x) }; def g(x) { x + F(x-1) }; F=f; G=g; F(3)", 18);
+    test("def f(int x,int y=x+1) { x + y }; f(2)", 5);
+    test("def f(int x,int y=++x+1) { x + y }; f(2)", 7);
+    test("def f(int x,int y=++x+1, int z=x+1) { x + y + z }; f(2)", 11);
+    test("def f(x,y=x+1) { x + y }; f(2)", 5);
+    testError("def f(x,y=z+1,z=2) { x + y }; f(2)", "reference to unknown variable");
+    test("def f(int x = f(1)) { if (x == 1) 9 else x }; f(3)", 3);
+    test("def f(int x = f(1)) { if (x == 1) 9 else x }; f()", 9);
   }
 
   @Test public void simpleClosures() {
@@ -2272,7 +2660,7 @@ class CompilerTest {
     test("def f = { int x=3, long y=9 -> x * y }; f()", 27L);
     test("def f = { int x=3, long y=9 -> x * y }; f(2,3)", 6L);
     test("var f = { int x=3, long y=9 -> x * y * 1.0 }; f(2,3)", "#6.0");
-    testFail("var f = { x -> x*x }; f = 3", "cannot convert from type of right hand side");
+    testError("var f = { x -> x*x }; f = 3", "cannot convert from type of right hand side");
     test("def f = { x -> def g(x) { x*x }; g(x) }; f(3)", 9);
     test("def f = { def g(x) { x*x } }; f()(3)", 9);
     test("def f = { def g = { 3 } }; f()()", 3);
@@ -2283,17 +2671,55 @@ class CompilerTest {
     test("def f = { { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f()", 4);
-    testFail("def f = { it = f(it) -> { it * it }(it) }; f()", "variable initialisation cannot refer to itself");
-    testFail("def f = { x, y=1, z -> x + y + z }; f(0)", "missing mandatory arguments");
-    testFail("def f = { x, y=1, z -> x + y + z }; f(1,2,3,4)", "too many arguments");
-    testFail("def f = { x, y=1, z='abc' -> x + y + z }; f(1)", "non-numeric operand");
+    testError("def f = { it = f(it) -> { it * it }(it) }; f()", "variable initialisation cannot refer to itself");
+    testError("def f = { x, y=1, z -> x + y + z }; f(0)", "missing mandatory arguments");
+    testError("def f = { x, y=1, z -> x + y + z }; f(1,2,3,4)", "too many arguments");
+    testError("def f = { x, y=1, z='abc' -> x + y + z }; f(1)", "non-numeric operand");
     test("def f = { x, y=1, z='abc' -> x + y + z }; f('z')", "z1abc");
     test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f('z')", "z1abc");
-    test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f(123)", "1231abc");
+    testError("def f = { String x, int y=1, var z='abc' -> x + y + z }; f(123)", "cannot convert");
+    test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f('123')", "1231abc");
+    test("def f = { for(var i=0;i<10;i++); }; f()", null);
+    test("def f; f = { it = 2 -> { it * it }(it) }; f()", 4);
+  }
 
-// TODO: add support for accessing globals from within functions
-// TOOD: add support for closed over vars
-//    test("def f; f = { it = f(2) -> { it * it }(it) }; f()", 16);
+  @Test public void closedOverVars() {
+    test("int x = 1; def f() { x-- }; x = 2", 2);
+    test("int x = 1; def f() { x-- }; x++", 1);
+    test("int x = 1; def f() { x-- }; ++x", 2);
+    test("int x = 1; def f() { x++ }; f(); x", 2);
+    test("int x = 1; def f() { x++ }; f() + x", 3);
+    test("int x = 1; def f() { def g() { x++ }; g() }; f(); x", 2);
+    test("int x = 1; def f = { x++ }; f(); x", 2);
+    test("int x = 1; def f = { x++ }; f() + x", 3);
+    test("int x = 1; def f = { def g() { x++ }; g() }; f(); x", 2);
+    test("def F; def G; def f(x) { if (x==1) x else 2 * G(x) }; def g(x) { x + F(x-1) }; F=f; G=g; F(3)", 18);
+    test("String x = '1'; def f = { def g() { x + x }; g() }; f(); x", "1");
+    test("String x = '1'; def f = { def g() { x + x }; g() }; f()", "11");
+    test("long x = 1; def f = { def g() { x + x }; g() }; f()", 2L);
+    test("double x = 1; def f = { def g() { x + x }; g() }; f()", 2D);
+    test("Decimal x = 1; def f = { def g() { x + x }; g() }; f()", "#2");
+    test("def x = { it=2 -> it + it }; def f = { def g() { x() + x() }; g() }; f()", 8);
+    test("def x(y=2) { y+y }; def f = { def g() { x() + x() }; g() }; f()", 8);
+    test("def x = { y=2 -> y+y }; def f = { def g() { x() + x() }; g() }; f()", 8);
+    test("def x = { y=2 -> y+y }; def f = { def g = { x() + x() }; g() }; f()", 8);
+    test("def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }; f()", 16);
+    test("def f(x) { def g() { x+x }; g() }; f(3)", 6);
+    test("def f(x,y=x) { def g() { x+y }; g() }; f(3)", 6);
+    test("def f(x,y=++x) { def g() { x+y }; g() }; f(3)", 8);
+    test("def f(x,y={++x}) { def g() { y()+x }; g() }; f(3)", 8);
+    test("def f(x,y=++x+2,z={++x + ++y}) { def g() { x++ + y++ + z() }; g() }; f(3)", 24);
+    test("def f(x,y={++x}()) { def g() { y+x }; g() }; f(3)", 8);
+    test("def f(x) { def g(x) { f(x) + f(x) }; if (x == 1) 1 else g(x-1) }; f(3)", 4);
+    test("def f(x=1) { def g={x+x}; x++; g() }; f()", 4);
+    test("def f(x=1,y=2) { def g(x) { f(x) + f(x) + y }; if (x == 1) 1 else g(x-1) }; f(3)", 10);
+    test("def f(x=1,y=2) { def g(x) { f(x,y) + f(x,y) + y }; if (x == 1) 1 else g(x-1) }; f(3)", 10);
+    test("def f(x=1,y=f(1,1)+1) { def g(x) { f(x,y) + f(x,y) + y }; if (x == 1) 1 else g(x-1) }; f(3)", 10);
+    test("def f() { int x = 1; [{ it + x++}, {it - x++}]}; def x = f(); x[0](5) + x[0](5) + x[1](0) + x[1](0)", 6);
+    test("def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }; f(2)", 5);
+    test("def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }; f(4)", 19);
+    test("def x=16; def f = { it = x -> it }; f()", 16);
+    test("def f; f = { it = f(2) -> { it * it }(it) }; f()", 16);
   }
 
   @Test public void testStuff() {

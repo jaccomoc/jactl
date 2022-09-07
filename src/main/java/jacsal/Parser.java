@@ -215,6 +215,12 @@ public class Parser {
       Expr.Closure closure = (Expr.Closure)stmt.expr;
       if (closure.noParamsDefined) {
         removeClosure(closure.funDecl);
+        // Remove the default parameter declaration for "it" from the statements in the block
+        Stmt itParameter = closure.funDecl.block.stmts.stmts.remove(0);
+        if (!(itParameter instanceof Stmt.VarDecl &&
+              ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals("it"))) {
+          throw new IllegalStateException("Internal error: expecting parameter declaration for 'it' but got " + itParameter);
+        }
         return closure.funDecl.block;   // Treat closure as code block since no parameters
       }
     }
@@ -222,7 +228,7 @@ public class Parser {
   }
 
   /**
-   *# funDecl -> ("oolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List")
+   *# funDecl -> ("boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List")
    *#              IDENTIFIER "(" ( varDecl ( "," varDecl ) * ) ? ")" "{" block "}" ;
    */
   private Stmt.FunDecl funDecl() {
@@ -457,7 +463,8 @@ public class Parser {
 
   private static TokenType[] fieldAccessOp = new TokenType[] { DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
-  private static List<TokenType> unaryOps = List.of(/*GRAVE,*/ BANG, MINUS_MINUS, PLUS_PLUS);
+  // NOTE: type case also has same precendence as unaryOps but has no specific operator
+  private static List<TokenType> unaryOps = List.of(/*GRAVE,*/ BANG, MINUS_MINUS, PLUS_PLUS /*, (type) */);
 
   // Operators from least precedence to highest precedence. Each entry in list is
   // a pair of a boolean and a list of the operators at that level of precedene.
@@ -469,8 +476,8 @@ public class Parser {
 //      Pair.create(true, List.of(NOT)),
       Pair.create(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
       /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
-         PIPE_EQUAL, ACCENT_EQUAL),
-      List.of(QUESTION, QUESTION_COLON), */
+         PIPE_EQUAL, ACCENT_EQUAL), */
+      Pair.create(true, List.of(QUESTION, QUESTION_COLON)),
       Pair.create(true, List.of(PIPE_PIPE)),
       Pair.create(true, List.of(AMPERSAND_AMPERSAND)),
       /*
@@ -479,7 +486,7 @@ public class Parser {
       List.of(AMPERSAND),
       */
       Pair.create(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
-      Pair.create(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL /*, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF, AS*/)),
+      Pair.create(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF /*, IN, BANG_IN, AS*/)),
 /*
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
 */
@@ -520,7 +527,7 @@ public class Parser {
     boolean isLeftAssociative = operatorsPair.x;
     List<TokenType> operators = operatorsPair.y;
 
-    // If this level of precedence is for our unary operators
+    // If this level of precedence is for our unary operators (includes type cast)
     if (operators == unaryOps) {
       return unary(level);
     }
@@ -529,6 +536,20 @@ public class Parser {
 
     while (matchAny(operators)) {
       Token operator = previous();
+      if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF)) {
+        Token type = expect(types);
+        expr = new Expr.Binary(expr, operator, new Expr.Literal(type));
+        continue;
+      }
+
+      if (operator.is(QUESTION)) {
+        Expr trueExpr = parseExpression(level + (isLeftAssociative ? 1 : 0));
+        Token operator2 = expect(COLON);
+        Expr falseExpr = parseExpression(level + (isLeftAssociative ? 1 : 0));
+        expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
+        continue;
+      }
+
       if (operator.is(LEFT_PAREN)) {
         List<Expr> args = expressionList(RIGHT_PAREN);
         expr = new Expr.Call(operator, expr, args);
@@ -565,11 +586,21 @@ public class Parser {
   }
 
   /**
-   *# unary -> ( "!" | "--" | "++" | "-" | "+" ) unary ( "--" | "++" )
+   *# unary -> ( "!" | "--" | "++" | "-" | "+" | "(" type ")" ) unary ( "--" | "++" )
    *#        | expression;
    */
   private Expr unary(int precedenceLevel) {
     Expr expr;
+    if (lookahead(() -> matchAny(LEFT_PAREN), () -> matchAny(types), () -> matchAny(RIGHT_PAREN))) {
+      // Type cast. Rather than create a separate operator for each type case we just use the
+      // token for the type as the operator if we detect a type cast.
+      expect(LEFT_PAREN);
+      Token type = expect(types);
+      expect(RIGHT_PAREN);
+      Expr unary = unary(precedenceLevel);
+      expr = new Expr.PrefixUnary(type, unary);
+    }
+    else
     if (matchAny(BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS)) {
       Token operator = previous();
       Expr unary = unary(precedenceLevel);
@@ -628,8 +659,9 @@ public class Parser {
 
   /**
    *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
-   *#          | lisOrMapLiteral
    *#          | exprString
+   *#          | IDENTIFIER
+   *#          | listOrMapLiteral
    *#          | "(" expression ")"
    *#          | "{" closure "}"
    *#          ;
@@ -861,7 +893,9 @@ public class Parser {
                                     List<Stmt.VarDecl> params,
                                     TokenType endToken,
                                     boolean isScriptMain) {
+    params.forEach(p -> p.declExpr.isExplicitParam = true);
     Expr.FunDecl funDecl = new Expr.FunDecl(start, name, returnType, params);
+    params.forEach(p -> p.declExpr.owner = funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
       // Add to functions in block so we can support forward references during Resolver phase
       addFunDeclToBlock(funDecl);

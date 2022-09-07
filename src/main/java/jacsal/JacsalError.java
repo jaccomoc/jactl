@@ -37,6 +37,9 @@ public class JacsalError extends RuntimeException {
 
   @Override
   public String getMessage() {
+    if (location == null) {
+      return String.format("%s @ unknown location", errorMessage);
+    }
     return String.format("%s @ line %d, column %d%n%s", errorMessage, location.getLineNum(), location.getColumn(), location.getMarkedSourceLine());
   }
 }

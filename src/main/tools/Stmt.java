@@ -34,7 +34,7 @@ import java.util.Deque;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+
 import org.objectweb.asm.Label;
 
 /**
@@ -60,6 +60,11 @@ class Stmt {
     Stmts                    stmts;
     Map<String,Expr.VarDecl> @variables  = new HashMap<>();
     List<Expr.FunDecl>       @functions  = new ArrayList<>();
+
+    boolean @isResolvingParams = false;   // Used during resolution to tell if we are resolving function/closure
+                                          // parameters so we can tell when we need to convert a decalred parameter
+                                          // into one that is passed as a HeapLocal (because it is closed over by
+                                          // an initialiser for another parameter of the same function).
   }
 
   /**
@@ -103,6 +108,11 @@ class Stmt {
   class FunDecl extends Stmt {
     Token        startToken;   // Either identifier for function decl or start brace for closure
     Expr.FunDecl declExpr;
+
+    // Create a var that points to MethodHandle (which points to wrapper).
+    // Exception is when inside wrapper function we don't create var that points to
+    // the function since the MethodHandle must go through the wrapper function.
+    boolean      @createVar = true;
   }
 
   /**
@@ -161,5 +171,15 @@ class Stmt {
     Token   printToken;
     Expr    expr;
     boolean newLine;    // Whether to print newline
+  }
+
+  /**
+   * Internal use only - throw RuntimeError
+   */
+  class ThrowError extends Stmt {
+    Token token;
+    Expr.Identifier source;
+    Expr.Identifier offset;
+    String msg;
   }
 }

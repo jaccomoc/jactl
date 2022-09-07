@@ -29,7 +29,7 @@ import java.util.Deque;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+
 import org.objectweb.asm.Label;
 
 /**
@@ -62,6 +62,11 @@ abstract class Stmt {
     Stmts                    stmts;
     Map<String,Expr.VarDecl> variables  = new HashMap<>();
     List<Expr.FunDecl>       functions  = new ArrayList<>();
+
+    boolean isResolvingParams = false;   // Used during resolution to tell if we are resolving function/closure
+                                          // parameters so we can tell when we need to convert a decalred parameter
+                                          // into one that is passed as a HeapLocal (because it is closed over by
+                                          // an initialiser for another parameter of the same function).
     Block(Token openBrace, Stmts stmts) {
       this.openBrace = openBrace;
       this.stmts = stmts;
@@ -134,6 +139,11 @@ abstract class Stmt {
   static class FunDecl extends Stmt {
     Token        startToken;   // Either identifier for function decl or start brace for closure
     Expr.FunDecl declExpr;
+
+    // Create a var that points to MethodHandle (which points to wrapper).
+    // Exception is when inside wrapper function we don't create var that points to
+    // the function since the MethodHandle must go through the wrapper function.
+    boolean      createVar = true;
     FunDecl(Token startToken, Expr.FunDecl declExpr) {
       this.startToken = startToken;
       this.declExpr = declExpr;
@@ -243,6 +253,25 @@ abstract class Stmt {
     @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
   }
 
+  /**
+   * Internal use only - throw RuntimeError
+   */
+  static class ThrowError extends Stmt {
+    Token token;
+    Expr.Identifier source;
+    Expr.Identifier offset;
+    String msg;
+    ThrowError(Token token, Expr.Identifier source, Expr.Identifier offset, String msg) {
+      this.token = token;
+      this.source = source;
+      this.offset = offset;
+      this.msg = msg;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitThrowError(this); }
+    @Override public String toString() { return "ThrowError[" + "token=" + token + ", " + "source=" + source + ", " + "offset=" + offset + ", " + "msg=" + msg + "]"; }
+  }
+
   interface Visitor<T> {
     T visitStmts(Stmts stmt);
     T visitBlock(Block stmt);
@@ -256,5 +285,6 @@ abstract class Stmt {
     T visitContinue(Continue stmt);
     T visitExprStmt(ExprStmt stmt);
     T visitPrint(Print stmt);
+    T visitThrowError(ThrowError stmt);
   }
 }

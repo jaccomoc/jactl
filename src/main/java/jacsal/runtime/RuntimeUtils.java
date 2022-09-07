@@ -558,7 +558,25 @@ public class RuntimeUtils {
     ((List)parent).set(index, value);
   }
 
+  public static String castToString(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
+    if (obj instanceof String) {
+      return (String)obj;
+    }
+    if (obj == null) {
+      throw new NullError("Null value for String", source, offset);
+    }
+    throw new RuntimeError("Cannot convert object of type " + className(obj) + " to String", source, offset);
+  }
+
   public static Map castToMap(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
     if (obj instanceof Map) {
       return (Map)obj;
     }
@@ -569,6 +587,10 @@ public class RuntimeUtils {
   }
 
   public static List castToList(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
     if (obj instanceof List) {
       return (List)obj;
     }
@@ -579,6 +601,10 @@ public class RuntimeUtils {
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
     if (obj instanceof Number) {
       return (Number)obj;
     }
@@ -589,6 +615,10 @@ public class RuntimeUtils {
   }
 
   public static BigDecimal castToDecimal(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
     if (obj instanceof Number) {
       return toBigDecimal(obj);
     }
@@ -599,6 +629,10 @@ public class RuntimeUtils {
   }
 
   public static MethodHandle castToFunction(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
     if (obj instanceof MethodHandle) {
       return (MethodHandle)obj;
     }
@@ -606,6 +640,20 @@ public class RuntimeUtils {
       throw new NullError("Null value for Function", source, offset);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Function", source, offset);
+  }
+
+  public static Object[] castToObjectArr(Object obj, String source, int offset) {
+    if (obj instanceof HeapLocal) {
+      obj = ((HeapLocal)obj).getValue();
+    }
+
+    if (obj instanceof Object[]) {
+      return (Object[])obj;
+    }
+    if (obj == null) {
+      throw new NullError("Null value for Object[]", source, offset);
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Object[]", source, offset);
   }
 
   public static void print(Object obj) {

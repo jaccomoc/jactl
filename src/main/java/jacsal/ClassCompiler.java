@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import jacsal.runtime.HeapLocal;
 import org.objectweb.asm.*;
 import org.objectweb.asm.util.TraceClassVisitor;
 
@@ -119,7 +120,8 @@ public class ClassCompiler {
     Stream<Expr.FunDecl> methodsAndClosures = Stream.concat(classDecl.methods.stream()
                                                                              .filter(m -> !m.methodName.equals(Utils.JACSAL_SCRIPT_MAIN)),
                                                             classDecl.closures.stream());
-    methodsAndClosures.forEach(method -> {
+    // Iterate over the wrapper methods
+    methodsAndClosures.map(m -> m.wrapper).forEach(method -> {
       // Create the method descriptor for the method to be looked up.
       // Since we create a handle to the wrapper method the signature will be based on
       // the closed over vars it needs plus the source, offset, and then an Object that
@@ -128,21 +130,37 @@ public class ClassCompiler {
       classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
       String methodName = method.methodName;
       String staticHandleName = Utils.staticHandleName(methodName);
-      String wrapperMethodName = Utils.wrapperName(methodName);
-      classInit.visitLdcInsn(wrapperMethodName);
+      classInit.visitLdcInsn(methodName);
       // Wrapper methods return Object since caller won't know what type they would normally return
       Utils.loadConst(classInit, ANY);
-      // TODO: handle closed over vars (heap locals)
-      Utils.loadConst(classInit, JacsalType.STRING);
+      if (method.heapLocalParams.size() > 0) {
+       Utils.loadConst(classInit, jacsal.runtime.HeapLocal.class);
+      }
+      else {
+        Utils.loadConst(classInit, JacsalType.STRING);
+      }
       // We need an array for the rest of the type args
-      Utils.loadConst(classInit, 2);
+      Utils.loadConst(classInit, method.heapLocalParams.size() - 1 + 3);
       classInit.visitTypeInsn(ANEWARRAY, "java/lang/Class");
+      int i;
+      for (i = 0; i < method.heapLocalParams.size() - 1; i++) {
+        classInit.visitInsn(DUP);
+        Utils.loadConst(classInit, i);
+        Utils.loadConst(classInit, HeapLocal.class);
+        classInit.visitInsn(AASTORE);
+      }
+      if (method.heapLocalParams.size() > 0) {
+        classInit.visitInsn(DUP);
+        Utils.loadConst(classInit, i++);
+        Utils.loadConst(classInit, JacsalType.STRING);
+        classInit.visitInsn(AASTORE);
+      }
       classInit.visitInsn(DUP);
-      Utils.loadConst(classInit, 0);
+      Utils.loadConst(classInit, i++);
       Utils.loadConst(classInit, JacsalType.INT);
       classInit.visitInsn(AASTORE);
       classInit.visitInsn(DUP);
-      Utils.loadConst(classInit, 1);
+      Utils.loadConst(classInit, i++);
       Utils.loadConst(classInit, ANY);
       classInit.visitInsn(AASTORE);
       classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
@@ -191,7 +209,8 @@ public class ClassCompiler {
     if (!isScriptMain) {
       // We compile the method and create a static method handle field that points to the method
       // so that we can pass the method by value (by passing the method handle).
-      FieldVisitor handleVar = cv.visitField(ACC_PRIVATE + ACC_STATIC, Utils.staticHandleName(methodName), Type.getDescriptor(MethodHandle.class), null, null);
+      String       handleName = Utils.staticHandleName(method.wrapper.methodName);
+      FieldVisitor handleVar = cv.visitField(ACC_PRIVATE + ACC_STATIC, handleName, Type.getDescriptor(MethodHandle.class), null, null);
       handleVar.visitEnd();
       if (!method.isStatic) {
         // For non-static methods we also create a non-static method handle that will be bound to the instance.
@@ -200,18 +219,48 @@ public class ClassCompiler {
 
         // Add code to constructor to initialise this handle
         constructor.visitVarInsn(ALOAD, 0);
-        constructor.visitFieldInsn(GETSTATIC, internalName, Utils.staticHandleName(methodName), "Ljava/lang/invoke/MethodHandle;");
+        constructor.visitFieldInsn(GETSTATIC, internalName, handleName, "Ljava/lang/invoke/MethodHandle;");
         constructor.visitVarInsn(ALOAD, 0);
         constructor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "bindTo", "(Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;", false);
         constructor.visitFieldInsn(PUTFIELD, internalName, Utils.handleName(methodName), "Ljava/lang/invoke/MethodHandle;");
       }
     }
 
-    var paramDescriptors = method.parameters.stream().map(varDecl -> varDecl.declExpr.type.descriptorType()).toArray(Type[]::new);
-    String methodDescriptor = Type.getMethodDescriptor(method.returnType.descriptorType(),
-                                                       paramDescriptors);
+    doCompileMethod(method, methodName, isScriptMain);
+    // For all methods that have parameters (apart from script main method), we generate a wrapper
+    // method to handle filling in of optional parameter values and to support named parameter
+    // invocation
+    if (!isScriptMain) {
+      doCompileMethod(method.wrapper, method.wrapper.methodName, false);
+
+
+//      MethodVisitor  mv;
+//      MethodCompiler methodCompiler;
+//
+//      Type returnType = ANY.descriptorType();    // Wrappers return Object
+//      String wrapperDescriptor =
+//        Type.getMethodDescriptor(returnType,
+//                                 Stream.concat(Collections.nCopies(method.heapLocalParams.size(),
+//                                                                   HEAPLOCAL.descriptorType()).stream(),
+//                                               Stream.of(Type.getType(String.class),
+//                                                         Type.getType(int.class),
+//                                                         Type.getType(Object.class)))
+//                                       .toArray(Type[]::new));
+//      mv = cv.visitMethod(ACC_PUBLIC, Utils.wrapperName(methodName),
+//                          wrapperDescriptor,
+//                          null, null);
+//      mv.visitCode();
+//
+//      methodCompiler = new MethodCompiler(this, method, mv);
+//      methodCompiler.compileWrapper();
+//      mv.visitEnd();
+    }
+  }
+
+  private void doCompileMethod(Expr.FunDecl method, String methodName, boolean isScriptMain) {
+    // Parameter types: heapLocals + params
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, methodName,
-                                      methodDescriptor,
+                                      MethodCompiler.getMethodDescriptor(method),
                                       null, null);
     mv.visitCode();
 
@@ -226,25 +275,6 @@ public class ClassCompiler {
     MethodCompiler methodCompiler = new MethodCompiler(this, method, mv);
     methodCompiler.compile();
     mv.visitEnd();
-
-    // For all methods that have parameters (apart from script main method), we generate a wrapper
-    // method to handle filling in of optional parameter values and to support named parameter
-    // invocation
-    if (!isScriptMain) {
-      Type returnType = ANY.descriptorType();    // Wrappers return Object
-      String wrapperDescriptor = Type.getMethodDescriptor(returnType,
-                                                          Type.getType(String.class),
-                                                          Type.getType(int.class),
-                                                          Type.getType(Object.class));
-      mv = cv.visitMethod(ACC_PUBLIC, Utils.wrapperName(methodName),
-                          wrapperDescriptor,
-                          null, null);
-      mv.visitCode();
-
-      methodCompiler = new MethodCompiler(this, method, mv);
-      methodCompiler.compileWrapper();
-      mv.visitEnd();
-    }
   }
 
   boolean debug() {

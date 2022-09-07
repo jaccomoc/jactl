@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import jacsal.runtime.HeapLocal;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -40,7 +41,9 @@ public class JacsalType {
     LIST,
     INSTANCE,
     ANY,
-    FUNCTION
+    FUNCTION,
+    HEAPLOCAL,
+    OBJECT_ARR  // internal use only
   }
 
   public static JacsalType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
@@ -57,6 +60,8 @@ public class JacsalType {
   public static JacsalType LIST          = createRefType(TypeEnum.LIST);
   public static JacsalType ANY           = createRefType(TypeEnum.ANY);
   public static JacsalType FUNCTION      = createRefType(TypeEnum.FUNCTION);
+  public static JacsalType HEAPLOCAL     = createRefType(TypeEnum.HEAPLOCAL);
+  public static JacsalType OBJECT_ARR    = createRefType(TypeEnum.OBJECT_ARR);  // internal use only
 
   private TypeEnum type;
   private boolean  boxed;
@@ -92,19 +97,47 @@ public class JacsalType {
     return boxed;
   }
 
+  /**
+   * Create a JacsalType from a TokenType
+   */
   public static JacsalType valueOf(TokenType tokenType) {
     switch (tokenType) {
-      case BOOLEAN:   return BOOLEAN;
-      case INT:       return INT;
-      case LONG:      return LONG;
-      case DOUBLE:    return DOUBLE;
-      case DECIMAL:   return DECIMAL;
-      case STRING:    return STRING;
-      case MAP:       return MAP;
-      case LIST:      return LIST;
-      case DEF:       return ANY;
+      case BOOLEAN:    return BOOLEAN;
+      case INT:        return INT;
+      case LONG:       return LONG;
+      case DOUBLE:     return DOUBLE;
+      case DECIMAL:    return DECIMAL;
+      case STRING:     return STRING;
+      case MAP:        return MAP;
+      case LIST:       return LIST;
+      case DEF:        return ANY;
+      case OBJECT_ARR: return OBJECT_ARR;
       default:  throw new IllegalStateException("Internal error: unexpected token " + tokenType);
     }
+  }
+
+  /**
+   * Return the TokenType that would generate this JacsalType
+   */
+  public TokenType tokenType() {
+    switch (this.type) {
+      case BOOLEAN:    return TokenType.BOOLEAN;
+      case INT:        return TokenType.INT;
+      case LONG:       return TokenType.LONG;
+      case DOUBLE:     return TokenType.DOUBLE;
+      case DECIMAL:    return TokenType.DECIMAL;
+      case STRING:     return TokenType.STRING;
+      case MAP:        return TokenType.MAP;
+      case LIST:       return TokenType.LIST;
+      case ANY:        return TokenType.DEF;
+      case FUNCTION:   return TokenType.DEF;
+      case OBJECT_ARR: return TokenType.OBJECT_ARR;
+      default: throw new IllegalStateException("Internal error: unexpected type " + this.type);
+    }
+  }
+
+  public boolean isRef() {
+    return isRef;
   }
 
   public boolean isNumeric() {
@@ -247,9 +280,9 @@ public class JacsalType {
     if (operator.is(LEFT_SQUARE,QUESTION_SQUARE) &&
         type1.is(STRING))                            { return STRING;    }
 
-    if (operator.is(EQUAL)) {
+    if (operator.is(EQUAL,QUESTION_COLON,QUESTION)) {
       if (!type2.isConvertibleTo(type1)) {
-        throw new CompileError("Right hand operand of type " + type2 + " cannot be converted to " + type1, operator);
+        throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
       return type1;
     }
@@ -282,7 +315,7 @@ public class JacsalType {
     if (isBoxedOrUnboxed(type))              { return true; }
     if (is(ANY) || type.is(ANY))             { return true; }
     if (isNumeric() && type.isNumeric())     { return true; }
-    if (type.is(STRING) && !is(FUNCTION))    { return true; }
+    //if (type.is(STRING) && !is(FUNCTION))    { return true; }
     return false;
   }
 
@@ -290,8 +323,8 @@ public class JacsalType {
     switch (this.type) {
       case BOOLEAN:        return Type.getDescriptor(isBoxed() ? Boolean.class : Boolean.TYPE);
       case INT:            return Type.getDescriptor(isBoxed() ? Integer.class : Integer.TYPE);
-      case LONG:           return Type.getDescriptor(isBoxed() ? Long.class : Long.TYPE);
-      case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class : Double.TYPE);
+      case LONG:           return Type.getDescriptor(isBoxed() ? Long.class    : Long.TYPE);
+      case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class  : Double.TYPE);
       case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
       case STRING:         return Type.getDescriptor(String.class);
       case MAP:            return Type.getDescriptor(Map.class);
@@ -299,6 +332,8 @@ public class JacsalType {
       case INSTANCE:       throw new UnsupportedOperationException();
       case ANY:            return Type.getDescriptor(Object.class);
       case FUNCTION:       return Type.getDescriptor(MethodHandle.class);
+      case HEAPLOCAL:      return Type.getDescriptor(jacsal.runtime.HeapLocal.class);
+      case OBJECT_ARR:     return Type.getDescriptor(Object[].class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -307,8 +342,8 @@ public class JacsalType {
     switch (this.type) {
       case BOOLEAN:        return Type.getType(isBoxed() ? Boolean.class : Boolean.TYPE);
       case INT:            return Type.getType(isBoxed() ? Integer.class : Integer.TYPE);
-      case LONG:           return Type.getType(isBoxed() ? Long.class : Long.TYPE);
-      case DOUBLE:         return Type.getType(isBoxed() ? Double.class : Double.TYPE);
+      case LONG:           return Type.getType(isBoxed() ? Long.class    : Long.TYPE);
+      case DOUBLE:         return Type.getType(isBoxed() ? Double.class  : Double.TYPE);
       case DECIMAL:        return Type.getType(BigDecimal.class);
       case STRING:         return Type.getType(String.class);
       case MAP:            return Type.getType(Map.class);
@@ -316,23 +351,27 @@ public class JacsalType {
       case INSTANCE:       throw new UnsupportedOperationException();
       case ANY:            return Type.getType(Object.class);
       case FUNCTION:       return Type.getType(MethodHandle.class);
+      case HEAPLOCAL:      return Type.getType(HeapLocal.class);
+      case OBJECT_ARR:     return Type.getType(Object[].class);
       default:             throw new UnsupportedOperationException();
     }
   }
 
   public String getBoxedClass() {
     switch (this.type) {
-      case BOOLEAN:  return Type.getInternalName(Boolean.class);
-      case INT:      return Type.getInternalName(Integer.class);
-      case LONG:     return Type.getInternalName(Long.class);
-      case DOUBLE:   return Type.getInternalName(Double.class);
-      case DECIMAL:  return Type.getInternalName(BigDecimal.class);
-      case STRING:   return Type.getInternalName(String.class);
-      case MAP:      return Type.getInternalName(Map.class);
-      case LIST:     return Type.getInternalName(List.class);
-      case INSTANCE: throw new UnsupportedOperationException();
-      case ANY:      return Type.getInternalName(Object.class);
-      case FUNCTION: return Type.getInternalName(MethodHandle.class);
+      case BOOLEAN:    return Type.getInternalName(Boolean.class);
+      case INT:        return Type.getInternalName(Integer.class);
+      case LONG:       return Type.getInternalName(Long.class);
+      case DOUBLE:     return Type.getInternalName(Double.class);
+      case DECIMAL:    return Type.getInternalName(BigDecimal.class);
+      case STRING:     return Type.getInternalName(String.class);
+      case MAP:        return Type.getInternalName(Map.class);
+      case LIST:       return Type.getInternalName(List.class);
+      case INSTANCE:   throw new UnsupportedOperationException();
+      case ANY:        return Type.getInternalName(Object.class);
+      case FUNCTION:   return Type.getInternalName(MethodHandle.class);
+      case HEAPLOCAL:  return Type.getInternalName(HeapLocal.class);
+      case OBJECT_ARR: return Type.getInternalName(Object[].class);
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -357,6 +396,8 @@ public class JacsalType {
       case INSTANCE:   return "Instance<>";
       case ANY:        return "def";
       case FUNCTION:   return "Function";
+      case HEAPLOCAL:  return "HeapLocal" ;
+      case OBJECT_ARR: return "Object[]" ;
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }
