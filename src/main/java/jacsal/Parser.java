@@ -495,7 +495,7 @@ public class Parser {
       Pair.create(true, List.of(STAR, SLASH, PERCENT)),
       //      List.of(STAR_STAR)
       Pair.create(true, unaryOps),
-      Pair.create(true, Utils.concat(fieldAccessOp, LEFT_PAREN))
+      Pair.create(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
     );
 
   /**
@@ -551,8 +551,10 @@ public class Parser {
         continue;
       }
 
-      if (operator.is(LEFT_PAREN)) {
-        List<Expr> args = expressionList(RIGHT_PAREN);
+      // Call starts with "(" but sometimes can have just "{" if no args before
+      // a closure arg
+      if (operator.is(LEFT_PAREN,LEFT_BRACE)) {
+        List<Expr> args = argList();
         expr = new Expr.Call(operator, expr, args);
         continue;
       }
@@ -656,6 +658,33 @@ public class Parser {
       exprs.add(expression());
     }
     return exprs;
+  }
+
+  /**
+   *# argList -> expressionList ? ( "{" closure "}" ) * ;
+   */
+  private List<Expr> argList() {
+    Token token = previous();
+    List<Expr> args = new ArrayList<>();
+    if (token.is(LEFT_PAREN)) {
+      args.addAll(expressionList(RIGHT_PAREN));
+      if (peek().is(LEFT_BRACE)) {
+        token = expect(LEFT_BRACE);
+      }
+    }
+    // If closure appears immediately after a function call it is passed as last argument.
+    // E.g.:  execNtimes(10) { println it } --> execNtimes(10, { println it })
+    // In fact any number of closures immediately following will be added to the args and
+    // if the function/closure only takes closures as arguments no parentheses are needed
+    // at all.
+    // E.g. time{ fib(10) }  -->  time({ fib(10) })
+    //      ntimes(10){ fib(10) }{ println "done" }  --> ntimes(10, {fib(10)},{ println "done" })
+    if (token.is(LEFT_BRACE)) {
+      do {
+        args.add(closure());
+      } while (matchAny(LEFT_BRACE));
+    }
+    return args;
   }
 
   /**

@@ -2760,4 +2760,22 @@ class CompilerTest {
     testError("def f() { def a = g; a() }; def g(){4}; f()", "closes over variable g that has not yet been initialised");
     testError("def f() { def a = g; def b=y; a()+b() }; def y(){2}; def g(){4}; f()", "closes over variables g,y that have not yet been initialised");
   }
+
+  @Test public void closurePassingSyntax() {
+    test("def f(n,x){ for(int i=0;i<n;i++) x(i) }; int sum=0; f(10,{sum+=it}); sum", 45);
+    test("def f(n,x){ for(int i=0;i<n;i++) x(i) }; int sum=0; f(10){sum+=it}; sum", 45);
+    test("def f(x){ x() }; int sum=0; f{sum=30}; sum", 30);
+    test("def f(x,y){ x(); y() }; int sum=0; f{sum+=20}{sum+=30}; sum", 50);
+    testError("def f(x,y){ x(); y() }; int sum=0; f{sum+=20}{sum+=30}{sum+=40}; sum", "too many arguments");
+    test("def f = { n,x -> for(int i=0;i<n;i++) x(i) }; int sum=0; f(10,{sum+=it}); sum", 45);
+    test("def f = { n,x -> for(int i=0;i<n;i++) x(i) }; int sum=0; f(10){sum+=it}; sum", 45);
+    test("def f = { it() }; int sum=0; f{sum=30}; sum", 30);
+    test("def f = { x,y -> x(); y() }; int sum=0; f{sum+=20}{sum+=30}; sum", 50);
+    testError("def f = { x,y -> x(); y() }; int sum=0; f{sum+=20}{sum+=30}{sum+=40}; sum", "too many arguments");
+    test("def f(n,x){ for(int i=0;i<n;i++) x(i) }; int sum=0; def g=f; g(10,{sum+=it}); sum", 45);
+    test("def f(n,x){ for(int i=0;i<n;i++) x(i) }; int sum=0; def g=f; g(10){sum+=it}; sum", 45);
+    test("def f(x){ x() }; int sum=0; def g=f; g{sum=30}; sum", 30);
+    test("def f(x,y){ x(); y() }; int sum=0; def g=f; g{sum+=20}{sum+=30}; sum", 50);
+    testError("def f(x,y){ x(); y() }; int sum=0; def g=f; g{sum+=20}{sum+=30}{sum+=40}; sum", "too many arguments");
+  }
 }
