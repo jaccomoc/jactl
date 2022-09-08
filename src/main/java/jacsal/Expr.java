@@ -180,6 +180,7 @@ abstract class Expr {
   static class Identifier extends Expr {
     Token        identifier;
     Expr.VarDecl varDecl;
+    boolean      couldBeFunctionCall = false;
     Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
@@ -264,6 +265,10 @@ abstract class Expr {
 
     // Which heap locals from our parent we need passed in to us
     LinkedHashMap<String,Expr.VarDecl> heapLocalParams = new LinkedHashMap<>();
+
+    // Remember earlies (in the code) forward reference to us so we can make sure that
+    // no variables we close over are declared after that reference
+    Token earliestForwardReference;
 
     FunDecl(Token startToken, Token name, JacsalType returnType, List<Stmt.VarDecl> parameters) {
       this.startToken = startToken;

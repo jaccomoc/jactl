@@ -44,6 +44,7 @@ public class ClassCompiler {
   private final String         className;
   private final Stmt.ClassDecl classDecl;
   private       ClassWriter    cw;
+  private       MethodVisitor  constructor;
 
   ClassCompiler(String source, CompileContext context, Stmt.ClassDecl classDecl) {
     this.context   = context;
@@ -66,13 +67,14 @@ public class ClassCompiler {
     globalVars.visitEnd();
 
     // Default constructor
-    MethodVisitor constructor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+    constructor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
     constructor.visitCode();
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
 
-    classDecl.methods.forEach(method -> compileMethod(method, constructor));
-    classDecl.closures.forEach(closure -> compileMethod(closure, constructor));
+//    classDecl.methods.forEach(method -> compileMethod(method));
+//    classDecl.closures.forEach(closure -> compileMethod(closure));
+    compileMethod(classDecl.scriptMain.declExpr);
 
     constructor.visitInsn(RETURN);
     constructor.visitMaxs(0, 0);
@@ -201,7 +203,7 @@ public class ClassCompiler {
     classInit.visitEnd();
   }
 
-  private void compileMethod(Expr.FunDecl method, MethodVisitor constructor) {
+  void compileMethod(Expr.FunDecl method) {
     String methodName =  method.methodName;
 
     boolean isScriptMain = methodName.equals(Utils.JACSAL_SCRIPT_MAIN);

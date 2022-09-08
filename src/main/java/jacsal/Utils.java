@@ -204,7 +204,7 @@ public class Utils {
     else
     if (obj instanceof Class || obj instanceof JacsalType) {
       String internalName = obj instanceof Class ? Type.getInternalName((Class)obj)
-                                                 : ((JacsalType)obj).getBoxedClass();
+                                                 : ((JacsalType)obj).getInternalName();
       boolean isPrimive = obj instanceof Class ? ((Class)obj).isPrimitive()
                                                : ((JacsalType)obj).isPrimitive();
       if (isPrimive) {

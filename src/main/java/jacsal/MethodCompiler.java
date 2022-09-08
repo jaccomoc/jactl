@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static jacsal.JacsalType.*;
@@ -61,7 +62,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private final ClassCompiler classCompiler;
   private final MethodVisitor mv;
-  private final Expr.FunDecl  funDecl;
+  private final Expr.FunDecl  methodFunDecl;
   private       int           currentLineNum = 0;
   private       int           minimumSlot = 0;
 
@@ -76,7 +77,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   MethodCompiler(ClassCompiler classCompiler, Expr.FunDecl funDecl, MethodVisitor mv) {
     this.classCompiler = classCompiler;
-    this.funDecl = funDecl;
+    this.methodFunDecl = funDecl;
     this.mv = mv;
   }
 
@@ -84,28 +85,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Allow room for object instance at idx 0 and optional heap vars array at idx 1.
     // We know we need heap vars array passed to us if our top level access level is
     // less than our current level (i.e. we access vars from one of our parents).
-    if (!funDecl.isStatic) {
+    if (!methodFunDecl.isStatic) {
       allocateSlot(ANY);     // Object reference
     }
 
     // Allocate slots for heap local vars passed to us as implicit parameters from
     // parent function
-    funDecl.heapLocalParams.forEach((name, varDecl) -> defineVar(varDecl, ANY));
+    methodFunDecl.heapLocalParams.forEach((name, varDecl) -> defineVar(varDecl, ANY));
 
     // Process parameters in order to allocate their slots in the right order
-    funDecl.parameters.forEach(this::compile);
+    methodFunDecl.parameters.forEach(this::compile);
 
     // Now allocate any additional slot that is needed for parameters that have been
     // converted into heap locals. The original slot will have the stack local value
     // and the second slot will have the HeapLocal with the original value then stored
     // in it.
-    funDecl.parameters.stream()
-                      .filter(p -> p.declExpr.isHeapLocal)
-                      .filter(p -> !p.declExpr.isPassedAsHeapLocal)
-                      .forEach(this::promoteToHeapLocal);
+    methodFunDecl.parameters.stream()
+                            .filter(p -> p.declExpr.isHeapLocal)
+                            .filter(p -> !p.declExpr.isPassedAsHeapLocal)
+                            .forEach(this::promoteToHeapLocal);
 
     // Compile statements.
-    compile(funDecl.block);
+    compile(methodFunDecl.block);
 
     Label endBlock = new Label();
     mv.visitLabel(endBlock);
@@ -116,7 +117,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     mv.visitMaxs(0, 0);
 
-    check(stack.isEmpty(), "non-empty stack at end of method " + funDecl.methodName + ". Type stack = " + stack);
+    check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.methodName + ". Type stack = " + stack);
   }
 
   /////////////////////////////////////////////
@@ -134,15 +135,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitBlock(Stmt.Block stmt) {
-    // Find all functions declared at this scope and if their variable is a HeapLocal
-    // then allocate the HeapLocal for them. This way forward references will be able
-    // to at least find the HeapLocal to bind to.
-    stmt.functions.stream()
-                  .filter(f -> f.varDecl.isHeapLocal)
-                  .forEach(f -> {
-                    defineVar(f.varDecl, ANY);
-                    allocateHeapLocal(f.varDecl.slot);
-                  });
+//    // Find all functions declared at this scope and if their variable is a HeapLocal
+//    // then allocate the HeapLocal for them. This way forward references will be able
+//    // to at least find the HeapLocal to bind to.
+//    stmt.functions.stream()
+//                  .filter(f -> f.varDecl.isHeapLocal)
+//                  .forEach(f -> {
+//                    defineVar(f.varDecl, ANY);
+//                    allocateHeapLocal(f.varDecl.slot);
+//                  });
 
     // Compile all statements except filter out any parameter statements
     // as they will have already been compiled
@@ -353,6 +354,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitFunDecl(Expr.FunDecl expr) {
     compile(expr.varDecl);
+    classCompiler.compileMethod(expr);
     return null;
   }
 
@@ -862,9 +864,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitListLiteral(Expr.ListLiteral expr) {
-    mv.visitTypeInsn(NEW, "java/util/ArrayList");
-    mv.visitInsn(DUP);
-    mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "()V", false);
+    _newInstance(ArrayList.class);
     push(LIST);
     expr.exprs.forEach(entry -> {
       dupVal();
@@ -877,9 +877,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitMapLiteral(Expr.MapLiteral expr) {
-    mv.visitTypeInsn(NEW, "java/util/HashMap");
-    mv.visitInsn(DUP);
-    mv.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+    _newInstance(HashMap.class);
     push(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
@@ -895,6 +893,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIdentifier(Expr.Identifier expr) {
+    if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1) {
+      throw new CompileError("Forward reference to uninitialised value", expr.location);
+    }
     loadVar(expr.varDecl);
     return null;
   }
@@ -930,32 +931,109 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClosure(Expr.Closure expr) {
+    classCompiler.compileMethod(expr.funDecl);
     // Find our MethodHandle and put that on the stack
     loadBoundMethodHandle(expr.funDecl);
     return null;
   }
 
   @Override public Void visitCall(Expr.Call expr) {
-    // If we have an explicit function name and exact number of args then we can invoke
-    // directly without needing to go through a method handle or via method wrapper that
-    // fills in missing args
+    // Helper lambda
+    Runnable loadArgsAsObjectArr = () -> {
+      _loadConst(expr.args.size());
+      mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+      push(ANY);
+      for (int i = 0; i < expr.args.size(); i++) {
+        mv.visitInsn(DUP);
+        _loadConst(i);
+        compile(expr.args.get(i));
+        convertToAny();
+        mv.visitInsn(AASTORE);
+        pop();
+      }
+    };
+
+
+    // If we have an explicit function name and exact number of args then we can invoke directly without
+    // needing to go through a method handle or via method wrapper that fills in missing args.
+    // The only exception is if there are closed over variables (HeapLocals) that need to be passed to it
+    // and those HeapLocals don't exist in our current scope. E.g. because we are invoking another function
+    // from within a separate nested function:  def x; def g(){x}; def f(){g()}
+    // At the time the body of f is invoking g() it doesn't have direct access to x so can't pass it in
+    // as a heap local parameter. In this case it will try to get the value of g (the MethodHandle) and
+    // invoke g that way. If g is uninitialised it means that it is a foward reference that we can't
+    // support.
+    // E.g.: def x; def f(){g()}; def g(){x}  --> gives error about forward ref to uninitialised value
     if (expr.callee.isFunctionCall()) {
       Expr.FunDecl funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
-      // If we have exact args and there are no implicit closed over heap vars to pass
-      if (expr.args.size() == funDecl.parameters.size() && funDecl.heapLocalParams.size() == 0 &&
-          !funDecl.parameters.stream().anyMatch(p -> p.declExpr.isHeapLocal)) {
-        if (!funDecl.isStatic) {
-          // Load this
-          loadLocal(0);
-        }
+
+      // We invoke wrapper if we don't have enough args since it will fill in missing
+      // values for optional parameters
+      boolean invokeWrapper = expr.args.size() != funDecl.parameters.size();
+
+      // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
+      var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocalParams : funDecl.heapLocalParams).values();
+
+      // Get varDecl for location of HeapLocal that we need for the function we are invoking
+      // If we don't have the variable then null will be used for the varDecl
+      Function<Expr.VarDecl,Pair<String,Expr.VarDecl>> getVarDecl = p -> {
+        String name = p.name.getStringValue();
+        if (p.owner == methodFunDecl) return Pair.create(name, p.originalVarDecl);
+        Expr.VarDecl varDecl = methodFunDecl.heapLocalParams.get(p.name.getStringValue());
+        // If not there or if is a different var (with same name)
+        varDecl = varDecl == null || varDecl.originalVarDecl != p.originalVarDecl ? null : varDecl;
+        return Pair.create(name, varDecl);
+      };
+
+      var varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
+
+      // Make sure either we have variable already in our heap local params or we are the function where
+      // the heap local param we need was declared. Look for params we cannot pass in:
+      var badVars = varDeclPairs.stream().filter(vp -> vp.y == null).map(vp -> vp.x).collect(Collectors.toList());
+      if (badVars.size() > 0) {
+        boolean plural = badVars.size() > 1;
+        throw new CompileError("Invocation of " + funDecl.name.getStringValue() +
+                               " requires passing closed over variable" + (plural?"s ":" ") +
+                               String.join(",", badVars.toArray(String[]::new)) +
+                               (plural ? " that have" : " that has") +
+                               " not been closed over by current " +
+                               (methodFunDecl.isClosure() ? "closure" : "function " + methodFunDecl.name.getStringValue()),
+                               expr.location);
+      }
+
+      if (!funDecl.isStatic) {
+        // Load this
+        loadLocal(0);
+      }
+
+      // Now load the HeapLocals onto the stack
+      varDeclPairs.forEach(p -> loadLocal(p.y.slot));
+
+      if (invokeWrapper) {
+        loadLocation(expr.location);
+        loadArgsAsObjectArr.run();
+      }
+      else {
         for (int i = 0; i < expr.args.size(); i++) {
           Expr arg = expr.args.get(i);
           compile(arg);
-          convertTo(funDecl.parameters.get(i).declExpr.type, !arg.type.isPrimitive(), arg.location);
+          Expr.VarDecl paramDecl = funDecl.parameters.get(i).declExpr;
+          convertTo(paramDecl.type, !arg.type.isPrimitive(), arg.location);
+          if (paramDecl.isPassedAsHeapLocal) {
+            box();
+            newInstance(HEAPLOCAL);
+            int temp = allocateSlot(HEAPLOCAL);
+            dup();
+            storeLocal(temp);
+            swap();
+            invokeVirtual(HeapLocal.class, "setValue", Object.class);
+            loadLocal(temp);
+            freeTemp(temp);
+          }
         }
-        invokeMethod(funDecl);
-        return null;
       }
+      invokeMethod(invokeWrapper ? funDecl.wrapper : funDecl);
+      return null;
     }
 
     // Need to get the method handle
@@ -970,17 +1048,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Any arguments will be stored in an Object[]
     // TODO: support named args
-    _loadConst(expr.args.size());
-    mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-    push(ANY);
-    for (int i = 0; i < expr.args.size(); i++) {
-      mv.visitInsn(DUP);
-      _loadConst(i);
-      compile(expr.args.get(i));
-      convertToAny();
-      mv.visitInsn(AASTORE);
-      pop();
-    }
+    loadArgsAsObjectArr.run();
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/Object;", false);
     pop(4);   // callee, source, offset, Object[]
     push(ANY);
@@ -1026,10 +1094,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void allocateHeapLocal(int slot) {
-    mv.visitTypeInsn(NEW, "jacsal/runtime/HeapLocal" );
-    mv.visitInsn(DUP);
-    mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/HeapLocal" , "<init>", "()V", false);
+    _newInstance(HeapLocal.class);
     _storeLocal(slot);
+  }
+
+  private void newInstance(JacsalType type) {
+    _newInstance(type.getInternalName());
+    push(type);
+  }
+
+  private void _newInstance(Class clss) {
+    _newInstance(Type.getInternalName(clss));
+  }
+
+  private void _newInstance(String className) {
+    mv.visitTypeInsn(NEW, className);
+    mv.visitInsn(DUP);
+    mv.visitMethodInsn(INVOKESPECIAL, className, "<init>", "()V", false);
   }
 
   private void promoteToHeapLocal(Stmt.VarDecl param) {
@@ -1056,6 +1137,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    wrapperFunDecl.isStatic);
     // If there are implicit closed over heap var params then bind them so we don't need to pass
     // them every time
+
+    // First check that we don't have forward references to variables that have not yet been initialised
+    var badVars = wrapperFunDecl.heapLocalParams.values()
+                                                .stream()
+                                                .filter(p -> p.parentVarDecl.slot == -1)
+                                                .map(p -> p.name.getStringValue())
+                                                .collect(Collectors.toList());
+
+    if (badVars.size() > 0) {
+      boolean plural = badVars.size() > 1;
+      throw new CompileError("Function " + funDecl.name.getStringValue() + " closes over variable" +
+                             (plural?"s ":" ") + String.join(",", badVars.toArray(String[]::new)) +
+                             " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
+    }
+
     wrapperFunDecl.heapLocalParams.values().forEach(p -> {
       // Load HeapLocal  (not the value contained in it) from _our_ copy of this
       // var (p.varDecl.slot not p.slot)
@@ -1339,15 +1435,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case STRING:   loadConst("");           break;
       case ANY:      loadConst(null);         break;
       case MAP:
-        mv.visitTypeInsn(NEW, "java/util/HashMap");
-        mv.visitInsn(DUP);
-        mv.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+        _newInstance(HashMap.class);
         push(MAP);
         break;
       case LIST:
-        mv.visitTypeInsn(NEW, "java/util/ArrayList");
-        mv.visitInsn(DUP);
-        mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "()V", false);
+        _newInstance(ArrayList.class);
         push(LIST);
         break;
       default:       throw new IllegalStateException("Internal error: unexpected type " + type);
@@ -1788,14 +1880,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void castToBoxedType(JacsalType type) {
-    String boxedClass = type.getBoxedClass();
+    String boxedClass = type.getInternalName();
     if (boxedClass != null) {
       mv.visitTypeInsn(CHECKCAST, boxedClass);
     }
   }
 
   private void emitInstanceof(JacsalType type) {
-    mv.visitTypeInsn(INSTANCEOF, type.getBoxedClass());
+    mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
   }
 
   private void throwIfNull(String msg, SourceLocation location) {
@@ -2221,7 +2313,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private Void loadLocal(int slot) {
     if (slot == -1) {
-      throw new IllegalStateException("Internal error: trying to load local from slot -1");
+      throw new IllegalStateException("Internal error: trying to load from unitilialised variable (slot is -1)");
     }
 
     _loadLocal(slot);

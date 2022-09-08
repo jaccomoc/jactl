@@ -357,7 +357,7 @@ public class JacsalType {
     }
   }
 
-  public String getBoxedClass() {
+  public String getInternalName() {
     switch (this.type) {
       case BOOLEAN:    return Type.getInternalName(Boolean.class);
       case INT:        return Type.getInternalName(Integer.class);

@@ -616,7 +616,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitIdentifier(Expr.Identifier expr) {
-    Expr.VarDecl varDecl = lookup(expr.identifier);
+    Expr.VarDecl varDecl = null;
+    if (expr.couldBeFunctionCall) {
+      varDecl = lookupFunction(expr.identifier);
+    }
+    if (varDecl == null) {
+      // Not a function lookup or couldn't find function
+      varDecl = lookup(expr.identifier);
+    }
     expr.varDecl = varDecl;
     return expr.type = varDecl.type;
   }
@@ -699,6 +706,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitCall(Expr.Call expr) {
+    // Special case if we are invoking the function directly (not via a MethodHandle value)
+    if (expr.callee instanceof Expr.Identifier) {
+      ((Expr.Identifier) expr.callee).couldBeFunctionCall = true;
+    }
     resolve(expr.callee);
     expr.args.forEach(this::resolve);
     if (!expr.callee.type.is(FUNCTION,ANY)) {
@@ -707,6 +718,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (expr.callee.isConst && expr.callee.constValue == null) {
       throw new CompileError("Null value for Function", expr.token);
     }
+
     expr.type = ANY;
     if (expr.callee.isFunctionCall()) {
       // Special case where we know the function directly and get its return type
@@ -795,6 +807,24 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     newVarDecl.isParam         = true;
     newVarDecl.originalVarDecl = varDecl.originalVarDecl;
 
+    // We need to check for scenarios where the current function has been used as a forward
+    // reference at some point in the code but between the point of the reference and the
+    // declaration of our function there is a variable declared that we know close over.
+    // Since that variable didn't exist when the original forward reference was made we
+    // have to disallow such forward references.
+    // E.g.:
+    //   def f(x){g(x)}; def v = ... ; def g(x) { v + x }
+    // Since g uses v and v does not exist when f invokes g we have to throw an error.
+    // To detect such references we remember the earlies reference and check that the
+    // variable we are now closing over was not declared after that reference.
+    if (funDecl.earliestForwardReference != null) {
+      if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
+        throw new CompileError("Forward reference to function " + funDecl.name.getStringValue() + " that closes over variable " +
+                               varDecl.name.getStringValue() + " not yet declared at time of reference",
+                               funDecl.earliestForwardReference);
+      }
+    }
+
     funDecl.heapLocalParams.put(name, newVarDecl);
     return newVarDecl;
   }
@@ -876,11 +906,19 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return functions.peek().blocks.peek().variables;
   }
 
+  private Expr.VarDecl lookupFunction(Token identifier) {
+    return lookup(identifier, true);
+  }
+
+  private Expr.VarDecl lookup(Token identifier) {
+    return lookup(identifier, false);
+  }
+
   // We look up variables in our local scope and parent scopes within the same function.
   // If we still can't find the variable we search in parent functions to see if the
   // variable exists there (at which point we close over it and it becomes a heap variable
   // rather than one that is a JVM local).
-  private Expr.VarDecl lookup(Token identifier) {
+  private Expr.VarDecl lookup(Token identifier, boolean functionLookup) {
     String name = identifier.getStringValue();
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
@@ -916,17 +954,26 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Variable initialisation cannot refer to itself", identifier);
     }
     if (varDecl != null) {
-      // Normal local or global variable (not a closed over var)
-      if (varDecl.isGlobal || varDecl.nestingLevel == functions.size()) {
+      if (varDecl.funDecl != null) {
+        // Track earliest reference to detect where forward referenced function closes over
+        // vars not yet declared at time of reference
+        Token reference = varDecl.funDecl.earliestForwardReference;
+        if (reference == null || isEarlier(identifier, reference)) {
+          varDecl.funDecl.earliestForwardReference = identifier;
+        }
+      }
+
+      // Normal local or global variable (not a closed over var) or a function
+      // which we can call directly (if we are being asked to do a function lookup)
+      if (varDecl.isGlobal || varDecl.nestingLevel == functions.size() ||
+          (functionLookup && varDecl.funDecl != null)) {
         return varDecl;
       }
 
-      // NOTE: Function calls also need to be turned into heap vars that are passed as parameters.
-      // This is because the function may have heap var params that need to be passed to it. Even
-      // if it doesn't currently have heap var params it could be that later code causes a heap
-      // var param to be added to it. With a bit of work we could probably optimise to allow
-      // direct calls (instead of via handle) to functions defined in a parent for cases where
-      // it is possible but for the moment we will not add that complication.
+      // If we are looking for a function then return null since we found something that wasn't a function
+      if (functionLookup) {
+        return null;
+      }
 
       // Nesting level is different and variable is a local variable so turn it into
       // a heap var
@@ -1223,5 +1270,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     param.initialiser = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
     varDecl.declExpr.isExplicitParam = true;
     return varDecl;
+  }
+
+  /**
+   * Return true if t1 is earlier (in the _same_ code) then t2.
+   * Return false if t1 is not earlier or if code is not the same.
+   */
+  boolean isEarlier(Token t1, Token t2) {
+    if (!t1.getSource().equals(t2.getSource())) { return false; }
+    return t1.getOffset() < t2.getOffset();
   }
 }

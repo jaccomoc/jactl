@@ -55,8 +55,12 @@ class CompilerTest {
   private void testError(String code, String expectedError) {
     doTestError(code, true, false, expectedError);
     doTestError(code, false, false, expectedError);
-    doTestError(code, true, true, expectedError);
-    doTestError(code, false, true, expectedError);
+
+    // Tests in repl mode may have different errors or no errors compared
+    // to normal mode when accessing global vars so we can't run tests that
+    // generate an error and expect the same results
+    //    doTestError(code, true, true, expectedError);
+    //    doTestError(code, false, true, expectedError);
   }
 
   private void doTestError(String code, boolean evalConsts, boolean replMode, String expectedError) {
@@ -2608,6 +2612,7 @@ class CompilerTest {
     testError("(3.0 + 2.0)()", "cannot be called");
 
     test("def f(x) { if (x == 1) 1 else x + f(x-1) }; f(4)", 10);
+    test("def f() { int i = 1; return {++i}}; def x=f(); def y=f(); [x()+x()+x(),y()]", List.of(9,2));
   }
 
   @Test public void functionsAsValues() {
@@ -2623,11 +2628,16 @@ class CompilerTest {
 
   @Test public void functionsForwardReference() {
     test("def x = f(2); def f(z){3*z}; x", 6);
+    test("def y=3; def x=f(2); def f(z){y*z}; x", 6);
+    test("{ def y=3; def x=f(2); def f(z){y*z}; x }", 6);
     test("def f(x) { 2 * g(x) }; def g(x) { x * x }; f(3)", 18);
+    testError("def y = 3; def f(x) { 2 * g(x) }; def z = f(3); def g(x) { x * y }; z", "closed over variable y");
     test("def f(x) { if (x==1) x else 2 * g(x) }; def g(x) { x + f(x-1) }; f(3)", 18);
     test("def f(x) { g(x) }; def g(x) { x }; f(3)", 3);
-//    testError("def x = f(2); def y = 3; def f(z){y*z}; x", "forward reference to function that closes over as yet undefined variable");
-//    testError("def f(x) { g(x) }; def y = 2; def g(x) { x + y}; f(3)", "forward reference to function that closes over var not yet declared");
+    testError("def x = f(2); def y = 3; def f(z){y*z}; x", "closes over variable y not yet declared");
+    testError("{ def x = f(2); def y = 3; def f(z){y*z}; x }", "closes over variable y not yet declared");
+    testError("def f(x) { g(x) }; def y = 2; def g(x) { x + y}; f(3)", "closes over variable y not yet declared");
+    testError("def f(x){def h=g; h(x)}; def g(x){x*x}; f(2)", "closes over variable g that has not yet been initialised");
   }
 
   @Test public void functionsWithOptionalArgs() {
@@ -2657,6 +2667,10 @@ class CompilerTest {
     testError("def f(x,y=z+1,z=2) { x + y }; f(2)", "reference to unknown variable");
     test("def f(int x = f(1)) { if (x == 1) 9 else x }; f(3)", 3);
     test("def f(int x = f(1)) { if (x == 1) 9 else x }; f()", 9);
+    test("def g(x){def y=g; f(x)}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
+    testError("def g(x){f(x)}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)", "requires passing closed over variable g");
+    test("def f(x,a=f){x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
+    testError("def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)", "requires passing closed over variable h");
   }
 
   @Test public void simpleClosures() {
@@ -2730,5 +2744,20 @@ class CompilerTest {
     test("def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }; f(4)", 19);
     test("def x=16; def f = { it = x -> it }; f()", 16);
     test("def f; f = { it = f(2) -> { it * it }(it) }; f()", 16);
+    testError("def x=1; def f(a){g(a)}; def g(a){x+a}; f(2)", "requires passing closed over variable x");
+    testError("def x=1; def f(x){def ff() {g(x)}; ff()}; def g(a){x+a}; f(2)", "requires passing closed over variable x");
+    test("def x=1; def f(a){x+g(a)}; def g(a){x+a}; f(2)", 4);
+    testError("def x=1; def y=2; def f(a){g(a)}; def g(a){x+y+a}; f(2)", "requires passing closed over variables x,y");
+    test("def x=1; def y=2; def f(a){x;y;g(a)}; def g(a){x+y+a}; f(2)", 5);
+    testError("def x=1; def f = { g(it) }; def g(a){x+a}; f(2)", "requires passing closed over variable x");
+    test("def x=1; def f = {x+g(it)}; def g(a){x+a}; f(2)", 4);
+    testError("def x=1; def y=2; def f = {g(it)}; def g(a){x+y+a}; f(2)", "requires passing closed over variables x,y");
+    test("def x=1; def y=2; def f = {x;y;g(it)}; def g(a){x+y+a}; f(2)", 5);
+    test("def g(x){x}; def f() { def a = g; a(3) }; f()", 3);
+    test("def g(x){x}; def f(x){def a = g; x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
+    test("def g(x){x}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
+    testError("def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)", "closed over variable h");
+    testError("def f() { def a = g; a() }; def g(){4}; f()", "closes over variable g that has not yet been initialised");
+    testError("def f() { def a = g; def b=y; a()+b() }; def y(){2}; def g(){4}; f()", "closes over variables g,y that have not yet been initialised");
   }
 }

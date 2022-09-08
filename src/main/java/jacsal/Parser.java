@@ -99,6 +99,7 @@ public class Parser {
     declExpr.isParam = true;
     Stmt.VarDecl globals  = new Stmt.VarDecl(new Token(MAP, start), declExpr);
     Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true);
+    classes.peek().scriptMain = funDecl;
     return funDecl;
   }
 
