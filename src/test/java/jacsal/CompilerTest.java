@@ -744,6 +744,8 @@ class CompilerTest {
     test("1 ? null : 1", null);
     test("1 ?: 2", 1);
     test("1 ?: 2", 1);
+    test("null ?: null ?: 1", 1);
+    test("1 + 2 ?: 3 + 4 ?: 5 * 6 ?: 7", 3);
     test("def x; x ?: 2", 2);
     test("def x; x ? 1 : 2", 2);
     testError("true ? 'abc':1", "not compatible");
@@ -755,6 +757,14 @@ class CompilerTest {
     testError("def x; x ? { 1 } : 2", "not compatible");
     test("def x; var y = true ? x : 1", null);
     test("def x; var y = true ? 1 : x", 1);
+    test("true ? 1 : 2L", 1);
+    test("false ? 1 : 2L", 2);
+    test("true ? true ? 1 : 2 : 3", 1);
+    test("true ? true ? 1 + 2 : 4 : 5", 3);
+    test("true ? false ? 1 + 2 : true ? 4 : 5 : 6", 4);
+    test("Map x = [a:1]; true ? false ? 1 + 2 + x.a : true ? 5 + x.a : 7 : 8", 6);
+    test("true ? null ?: 4 : 5", 4);
+    test("true ? null ?: false ? 4 : 5 : 6", 5);
   }
 
   @Test public void plusEquals(){
@@ -2720,8 +2730,5 @@ class CompilerTest {
     test("def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }; f(4)", 19);
     test("def x=16; def f = { it = x -> it }; f()", 16);
     test("def f; f = { it = f(2) -> { it * it }(it) }; f()", 16);
-  }
-
-  @Test public void testStuff() {
   }
 }

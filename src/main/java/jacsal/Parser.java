@@ -543,9 +543,9 @@ public class Parser {
       }
 
       if (operator.is(QUESTION)) {
-        Expr trueExpr = parseExpression(level + (isLeftAssociative ? 1 : 0));
+        Expr trueExpr = parseExpression(level);
         Token operator2 = expect(COLON);
-        Expr falseExpr = parseExpression(level + (isLeftAssociative ? 1 : 0));
+        Expr falseExpr = parseExpression(level);
         expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
         continue;
       }
