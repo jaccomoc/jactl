@@ -557,6 +557,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT };
+  private static Map<TokenType,String> methodNames = Map.of(PLUS,    "plus",
+                                                            MINUS,   "minus",
+                                                            STAR,    "multiply",
+                                                            SLASH,   "divide",
+                                                            PERCENT, "remainder");
 
   @Override public Void visitBinary(Expr.Binary expr) {
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
@@ -570,8 +575,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.context.maxScale);
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
-      invokeStatic(RuntimeUtils.class, "binaryOp", Object.class, Object.class, String.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
-      convertTo(expr.type, true, expr.operator);  // Convert to expected type
+      String methodName = methodNames.get(expr.operator.getType());
+      if (methodName == null) {
+        methodName = "binaryOp";
+      }
+      invokeStatic(RuntimeUtils.class, methodName, Object.class, Object.class, String.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
+      //convertTo(expr.type, true, expr.operator);  // Convert to expected type
       return null;
     }
 
@@ -1833,7 +1842,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.context.maxScale);
       loadConst(classCompiler.source);
       loadConst(operator.getOffset());
-      invokeStatic(RuntimeUtils.class, "binaryOp", Object.class, Object.class, String.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
+      invokeStatic(RuntimeUtils.class, isInc ? "plus" : "minus", Object.class, Object.class, String.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
       return;
     }
 

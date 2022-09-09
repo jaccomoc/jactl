@@ -269,7 +269,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (expr.isConst && expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
-      throw new CompileError("Left-hand side of '" + expr.operator.getChars() + "' cannot be null", expr.left.location);
+      throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.left.location);
     }
 
     // Field access operators

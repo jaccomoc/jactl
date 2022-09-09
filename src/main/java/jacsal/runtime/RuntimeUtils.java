@@ -158,7 +158,7 @@ public class RuntimeUtils {
       // will be turned into equivalent of x = x + 1 (for example) and it won't be until we
       // get here that we can check if x is a string or not.
       if (originalOperator == PLUS_PLUS || originalOperator == MINUS_MINUS) {
-        throw new RuntimeError("String cannot be " + (originalOperator == PLUS_PLUS ? "incremented" : "decremented"), source, offset);
+        throw new RuntimeError("Non-numeric operand for left-hand side of " + (originalOperator == PLUS_PLUS ? "++" : "--") + ": was String", source, offset);
       }
       if (operator == PLUS) {
         return ((String) left).concat(right == null ? "null" : toString(right));
@@ -169,6 +169,10 @@ public class RuntimeUtils {
         }
         throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
+    }
+
+    if (operator != PLUS) {
+      throw new IllegalStateException("Internal error: unexpected operation " + operator + " on types " + className(left) + " and " + className(right));
     }
 
     // All other operations expect numbers so check we have numbers
@@ -184,55 +188,183 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Double || right instanceof Double) {
-      double lhs = ((Number)left).doubleValue();
-      double rhs = ((Number)right).doubleValue();
-      switch (operator) {
-        case PLUS:    return lhs + rhs;
-        case MINUS:   return lhs - rhs;
-        case STAR:    return lhs * rhs;
-        case SLASH:   return lhs / rhs;
-        case PERCENT: return lhs % rhs;
-        default: throw new IllegalStateException("Internal error: unknown operator " + operator);
-      }
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return lhs + rhs;
     }
 
     if (left instanceof Long || right instanceof Long) {
       long lhs = ((Number)left).longValue();
       long rhs = ((Number)right).longValue();
-      switch (operator) {
-        case PLUS:    return lhs + rhs;
-        case MINUS:   return lhs - rhs;
-        case STAR:    return lhs * rhs;
+      return lhs + rhs;
+    }
 
-        case PERCENT:
-        case SLASH:
-          try {
-            return operator == PERCENT ? lhs % rhs : lhs / rhs;
-          }
-          catch (ArithmeticException e) {
-          throw new RuntimeError("Divide by zero", source, offset);
-          }
-        default: throw new IllegalStateException("Internal error: unknown operator " + operator);
+    // Must be integers
+    int lhs = (int)left;
+    int rhs = (int)right;
+    return lhs + rhs;
+  }
+
+  public static Object plus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (left == DEFAULT_VALUE || left instanceof String) {
+      return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
+    }
+
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return lhs + rhs;
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      return lhs + rhs;
+    }
+
+    // Must be integers
+    int lhs = (int)left;
+    int rhs = (int)right;
+    return lhs + rhs;
+  }
+
+  public static Object multiply(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (left instanceof String) {
+      return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
+    }
+
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return lhs * rhs;
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      return lhs * rhs;
+    }
+
+    // Must be integers
+    int lhs = (int)left;
+    int rhs = (int)right;
+    return lhs * rhs;
+  }
+
+  public static Object minus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + originalOperator + "': was " + className(left), source, offset); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + originalOperator + "': was " + className(right), source, offset); }
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return lhs - rhs;
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      return lhs - rhs;
+    }
+
+    // Must be integers
+    int lhs = (int)left;
+    int rhs = (int)right;
+    return lhs - rhs;
+  }
+
+  public static Object divide(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return lhs / rhs;
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      try {
+        return lhs / rhs;
+      }
+      catch (ArithmeticException e) {
+        throw new RuntimeError("Divide by zero", source, offset);
       }
     }
 
     // Must be integers
-    int lhs = ((Number)left).intValue();
-    int rhs = ((Number)right).intValue();
-    switch (operator) {
-      case PLUS:    return lhs + rhs;
-      case MINUS:   return lhs - rhs;
-      case STAR:    return lhs * rhs;
+    int lhs = (int)left;
+    int rhs = (int)right;
+    try {
+      return lhs / rhs;
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
+  }
 
-      case PERCENT:
-      case SLASH:
-        try {
-          return operator == PERCENT ?  lhs % rhs : lhs / rhs;
-        }
-        catch (ArithmeticException e) {
-          throw new RuntimeError("Divide by zero", source, offset);
-        }
-      default: throw new IllegalStateException("Internal error: unknown operator " + operator);
+  public static Object remainder(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
+    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return lhs % rhs;
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      try {
+        return lhs % rhs;
+      }
+      catch (ArithmeticException e) {
+        throw new RuntimeError("Divide by zero", source, offset);
+      }
+    }
+
+    // Must be integers
+    int lhs = (int)left;
+    int rhs = (int)right;
+    try {
+      return lhs % rhs;
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
     }
   }
 
@@ -311,7 +443,7 @@ public class RuntimeUtils {
     if (obj instanceof Double)     { return (double)obj + 1; }
     if (obj instanceof Long)       { return (long)obj + 1; }
     if (obj instanceof Integer)    { return (int)obj + 1; }
-    throw new RuntimeError("Type " + className(obj) + " cannot be incremented", source, offset);
+    throw new RuntimeError("Non-numeric operand for operator ++: was " + className(obj), source, offset);
   }
 
   public static Object decNumber(Object obj, String source, int offset) {
@@ -320,7 +452,7 @@ public class RuntimeUtils {
     if (obj instanceof Double)     { return (double)obj - 1; }
     if (obj instanceof Long)       { return (long)obj - 1; }
     if (obj instanceof Integer)    { return (int)obj - 1; }
-    throw new RuntimeError("Type " + className(obj) + " cannot be decremented", source, offset);
+    throw new RuntimeError("Non-numeric operand for operator --: was " + className(obj), source, offset);
   }
 
   public static String stringRepeat(String str, int count, String source, int offset) {

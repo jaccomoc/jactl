@@ -284,6 +284,13 @@ public class JacsalType {
       if (!type2.isConvertibleTo(type1)) {
         throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
+      if (operator.is(QUESTION)) {
+        JacsalType result = resultType(type1, type2);
+        if (result != null) {
+          return result;
+        }
+        throw new IllegalStateException("Internal error: no result type for (" + type1 +", " + type2 + ")");
+      }
       return type1;
     }
 
@@ -299,11 +306,18 @@ public class JacsalType {
     if (type1.isBoxedOrUnboxed(type2)) { return type1.unboxed(); }
     if (type2 == ANY)                  { return ANY; }
 
-    JacsalType result = resultMap.get(new TypePair(type1.unboxed(), type2.unboxed()));
+    JacsalType result = resultType(type1, type2);
     if (result == null) {
       throw new CompileError("Arguments of type " + type1 + " and " + type2 + " not supported by operator '" + operator.getChars() + "'", operator);
     }
     return result;
+  }
+
+  private static JacsalType resultType(JacsalType type1, JacsalType type2) {
+    if (type1.is(type2)) {
+      return type1;
+    }
+    return resultMap.get(new TypePair(type1.unboxed(), type2.unboxed()));
   }
 
   /**

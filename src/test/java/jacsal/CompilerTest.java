@@ -24,6 +24,7 @@ import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,6 +47,10 @@ class CompilerTest {
       fail(e);
       e.printStackTrace();
     }
+  }
+
+  private void test1(String code, Object expected) {
+    doTest(code, false, false, expected);
   }
 
   private void test(String code, Object expected) {
@@ -225,7 +230,7 @@ class CompilerTest {
     testError("'abc' - 1", "non-numeric operand for left-hand side");
     testError("false + true", "non-numeric operand for left-hand side");
     testError("1 + null", "non-numeric operand for right-hand side");
-    testError("null + 1", "left-hand side of '+' cannot be null");
+    testError("null + 1", "non-numeric operand for left-hand side");
     testError("1/0", "divide by zero");
     test("1.0D/0", Double.POSITIVE_INFINITY);
     test("-1.0D/0", Double.NEGATIVE_INFINITY);
@@ -322,8 +327,8 @@ class CompilerTest {
     testError("def b1 = false; def b2 = true; b1 + b2", "non-numeric operand for left-hand side");
     testError("int i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
     testError("def i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
-    testError("def x = null; int i = 1; x + i", "left-hand side of '+' cannot be null");
-    testError("def x = null; def i = 1; x + i", "left-hand side of '+' cannot be null");
+    testError("def x = null; int i = 1; x + i", "non-numeric operand for left-hand side");
+    testError("def x = null; def i = 1; x + i", "non-numeric operand for left-hand side");
     testError("int x = 1; int y = 0; x/y", "divide by zero");
     testError("def x = 1; def y = 0; x/y", "divide by zero");
     test("double x = 1.0D; int y = 0; x/y", Double.POSITIVE_INFINITY);
@@ -781,14 +786,16 @@ class CompilerTest {
     testError("def x; x ? { 1 } : 2", "not compatible");
     test("def x; var y = true ? x : 1", null);
     test("def x; var y = true ? 1 : x", 1);
-    test("true ? 1 : 2L", 1);
-    test("false ? 1 : 2L", 2);
+    test("true ? 1 : 2L", 1L);
+    test("false ? 1 : 2L", 2L);
     test("true ? true ? 1 : 2 : 3", 1);
     test("true ? true ? 1 + 2 : 4 : 5", 3);
     test("true ? false ? 1 + 2 : true ? 4 : 5 : 6", 4);
     test("Map x = [a:1]; true ? false ? 1 + 2 + x.a : true ? 5 + x.a : 7 : 8", 6);
     test("true ? null ?: 4 : 5", 4);
     test("true ? null ?: false ? 4 : 5 : 6", 5);
+    test("def x = 1; true ? 1 : 2L", 1L);
+    test("def x = 1; x ?: 2L", 1);
   }
 
   @Test public void plusEquals(){
@@ -898,7 +905,7 @@ class CompilerTest {
     test("double x = 2; int y = 3; x *= y", 6.0D);
     test("def x = 2.0D; int y = 3; y *= x", 6);
     test("def x = 2.0D; int y = 3; x *= y", 6.0D);
-    testError("def x; x *= 2", "cannot be null");
+    testError("def x; x *= 2", "non-numeric operand for left-hand side");
     test("def x = [:]; x.a *= 2", 0);
   }
 
@@ -992,9 +999,9 @@ class CompilerTest {
     testError("def x = 1; x + null", "non-numeric operand for right-hand side");
     testError("def x = null; 1 + x", "non-numeric operand for right-hand side");
     testError("def x = 1; def y =null; x + y", "non-numeric operand for right-hand side");
-    testError("def x = null; x + 1", "left-hand side of '+' cannot be null");
-    testError("def x = 1; null + x", "left-hand side of '+' cannot be null");
-    testError("def x = null; def y = 1; x + y", "left-hand side of '+' cannot be null");
+    testError("def x = null; x + 1", "non-numeric operand for left-hand side");
+    testError("def x = 1; null + x", "non-numeric operand for left-hand side");
+    testError("def x = null; def y = 1; x + y", "non-numeric operand for left-hand side");
 
     test("def x = false; !x", true);
     test("def x = true; !x", false);
@@ -1405,12 +1412,11 @@ class CompilerTest {
     test("13 + 12 % ++6 - 3", 15);
   }
 
-  @Test
-  public void constStringConcatenation() {
+  @Test public void constStringConcatenation() {
     testError("'abc' - '123'", "non-numeric operand");
     test("'abc' + '123'", "abc123");
     test("'abc' + null", "abcnull");
-    testError("null + 'abc'", "left-hand side of '+' cannot be null");
+    testError("null + 'abc'", "non-numeric operand");
     test("'abc' + 'def' + 'ghi'", "abcdefghi");
     test("'abc' + ('1' + '2' + '3') + 'def'", "abc123def");
     test("'' + 'abc'", "abc");
@@ -1496,8 +1502,8 @@ class CompilerTest {
     test("def x = 1; (x + x)++; x", 1);
     testError("def x = 1; (x + x)++ ++", "expecting end of statement");
 
-    testError("def x = 'a'; ++x", "cannot be incremented");
-    testError("def x = [a:'a']; ++x.a", "cannot be incremented");
+    testError("def x = 'a'; ++x", "non-numeric operand");
+    testError("def x = [a:'a']; ++x.a", "non-numeric operand");
   }
 
   @Test public void postfixIncOrDec() {
@@ -1606,14 +1612,14 @@ class CompilerTest {
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2", 7);
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2; y", 3);
 
-    testError("def x = 'a'; x++", "string cannot be incremented");
-    testError("def x = [a:'a']; x.a++", "string cannot be incremented");
-    testError("def x = 'a'; x--", "string cannot be decremented");
-    testError("def x = [a:'a']; x.a--", "string cannot be decremented");
-    testError("def x = 'a'; ++x", "string cannot be incremented");
-    testError("def x = [a:'a']; ++x.a", "string cannot be incremented");
-    testError("def x = 'a'; --x", "string cannot be decremented");
-    testError("def x = [a:'a']; --x.a", "string cannot be decremented");
+    testError("def x = 'a'; x++", "non-numeric operand");
+    testError("def x = [a:'a']; x.a++", "non-numeric operand");
+    testError("def x = 'a'; x--", "non-numeric operand");
+    testError("def x = [a:'a']; x.a--", "non-numeric operand");
+    testError("def x = 'a'; ++x", "non-numeric operand");
+    testError("def x = [a:'a']; ++x.a", "non-numeric operand");
+    testError("def x = 'a'; --x", "non-numeric operand");
+    testError("def x = [a:'a']; --x.a", "non-numeric operand");
   }
 
   @Test
@@ -1889,9 +1895,9 @@ class CompilerTest {
     test("def x = [a:3]; def y; y ?= x.a", 3);
     test("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.a)", 6);
     testError("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.xxx)", "non-numeric operand");
-    testError("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "cannot be null");
+    testError("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "non-numeric operand");
     test("def x = [a:3]; def y; (y ?= x.a) + (x.b.b[2].c ?= 3)", 6);
-    testError("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "cannot be null");
+    testError("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "non-numeric operand");
     test("Map m; def x = [a:3]; (m.a.b.c ?= x.a) + (m.a.b ?= 3)", 6);
 
     test("def x = [a:3]; def y; x.b += (y ?= x.a)", 3);
@@ -2819,5 +2825,40 @@ class CompilerTest {
 
   @Test public void eof() {
     testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected eof");
+  }
+
+  @Test public void defBinaryOps() {
+    test("def x = 1; def y = 2; x + y * y + x", 6);
+  }
+
+  @Test public void fib() {
+    final String fibDef = "def fib(def x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(40)";
+    final String fibInt = "int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(40)";
+
+//    debug=true;
+    test1(fibDef, 102334155);
+    test1(fibInt, 102334155);
+
+    final int ITERATIONS = 0;
+    Map<String,Object> globals  = new HashMap<>();
+    var scriptDef = compile(fibDef);
+    var scriptInt = compile(fibInt);
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < ITERATIONS; i++) {
+      scriptDef.apply(globals);
+      System.out.println("Duration=" + (System.currentTimeMillis() - start) + "ms");
+      start = System.currentTimeMillis();
+      scriptInt.apply(globals);
+      System.out.println("Duration=" + (System.currentTimeMillis() - start) + "ms");
+      start = System.currentTimeMillis();
+    }
+  }
+
+  private Function<Map<String,Object>,Object> compile(String code) {
+    CompileContext compileContext = new CompileContext().evaluateConstExprs(true)
+                                                        .replMode(true)
+                                                        .debug(false);
+    Map<String,Object> globals  = new HashMap<>();
+    return Compiler.compile(code, compileContext, globals);
   }
 }
