@@ -73,8 +73,9 @@ public class Tokeniser {
    * @param source  the source code to tokenise
    */
   public Tokeniser(String source) {
-    this.source = source;
-    this.length = source.length();
+    // Strip trailing new lines so that EOF errors point to somewhere useful
+    this.source = source.replaceAll("\\n*$", "");
+    this.length = this.source.length();
   }
 
   /**

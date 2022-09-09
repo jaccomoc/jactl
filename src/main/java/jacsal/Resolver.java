@@ -97,6 +97,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   Resolver(CompileContext compileContext, Map<String,Object> globals) {
     this.compileContext = compileContext;
     this.globals        = globals;
+    globals.keySet().forEach(global -> {
+      if (!compileContext.globalVars.containsKey(global)) {
+        Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(global),
+                                                null);
+        varDecl.type = JacsalType.typeOf(globals.get(global));
+        varDecl.isGlobal = true;
+        compileContext.globalVars.put(global, varDecl);
+      }
+    });
   }
 
   Void resolve(Stmt stmt) {
@@ -884,7 +893,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // In repl mode we don't have a top level block and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (isAtTopLevel() && decl.type != FUNCTION && compileContext.replMode) {
+    if (isAtTopLevel() && compileContext.replMode) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }
@@ -947,7 +956,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
 
-    if (varDecl == null && compileContext.replMode) {
+    if (varDecl == null /* && compileContext.replMode */) {
       varDecl = compileContext.globalVars.get(name);
     }
     if (varDecl == UNDEFINED) {

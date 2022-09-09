@@ -150,10 +150,18 @@ public class Parser {
         }
       }
       catch (CompileError e) {
-        errors.add(e);
-        // Consume until end of statement to try to allow further
-        // parsing and error checking to occur
-        consumeUntil(EOL, EOF, RIGHT_BRACE);
+        if (e instanceof EOFError) {
+          // Only add error once
+          if (errors.stream().noneMatch(err -> err instanceof EOFError)) {
+            errors.add(e);
+          }
+        }
+        else {
+          errors.add(e);
+          // Consume until end of statement to try to allow further
+          // parsing and error checking to occur
+          consumeUntil(EOL, EOF, RIGHT_BRACE);
+        }
       }
     }
   }

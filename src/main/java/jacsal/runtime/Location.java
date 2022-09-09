@@ -16,6 +16,8 @@
 
 package jacsal.runtime;
 
+import java.util.List;
+
 public class Location implements SourceLocation {
   protected String source;       // Source code of the script being compiled
   protected int    offset;       // The position/offset in source where token starts
@@ -61,21 +63,21 @@ public class Location implements SourceLocation {
     if (lineNum != -1) {
       return;
     }
-    String[] lines = source.split("\n");
-    int pos = 0;
+    List<String> lines = RuntimeUtils.lines(source);
+    int pos   = 0;
     int i;
-    for (i = 0; i < lines.length; i++) {
-      pos += lines[i].length() + 1;  // Include extra char for the newline
+    for (i = 0; i < lines.size(); i++) {
+      pos += lines.get(i).length() + 1;  // Include extra char for the newline
       if (offset < pos) {
         break;
       }
     }
-    if (i == lines.length) {
-      throw new IllegalStateException("Internal error: offset of " + offset + " too large for source of length " +  source.length());
+    if (i == lines.size()) {
+      throw new IllegalStateException("Internal error: offset of " + offset + " too large for source of length " + source.length());
     }
 
     // Remember the line and the line number/column number (which both start at 1, not 0)
-    line = lines[i];
+    line = lines.get(i);
     lineNum = i + 1;
     // Column is offset - start pos of line + 1
     column = offset - (pos - line.length() - 1) + 1;

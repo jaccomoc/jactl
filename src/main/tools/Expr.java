@@ -173,8 +173,9 @@ class Expr {
     List<Stmt.VarDecl> parameters;
     Stmt.Block         @block;
 
-    String             @methodName;  // Name of method that we compile into
-    Expr.VarDecl       @varDecl;     // For the variable that we will create to hold our MethodHandle
+    String             @methodName;        // Name of method that we compile into
+    String             @internalClassName; // Java class we are compiled into
+    Expr.VarDecl       @varDecl;           // For the variable that we will create to hold our MethodHandle
 
     boolean            @isWrapper;   // Whether this is the wrapper function or the real one
     Expr.FunDecl       @wrapper;     // The wrapper method that handles var arg and named arg invocations

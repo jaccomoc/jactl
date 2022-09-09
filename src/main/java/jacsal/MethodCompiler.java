@@ -135,16 +135,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitBlock(Stmt.Block stmt) {
-//    // Find all functions declared at this scope and if their variable is a HeapLocal
-//    // then allocate the HeapLocal for them. This way forward references will be able
-//    // to at least find the HeapLocal to bind to.
-//    stmt.functions.stream()
-//                  .filter(f -> f.varDecl.isHeapLocal)
-//                  .forEach(f -> {
-//                    defineVar(f.varDecl, ANY);
-//                    allocateHeapLocal(f.varDecl.slot);
-//                  });
-
     // Compile all statements except filter out any parameter statements
     // as they will have already been compiled
     stmt.stmts.stmts.stream()
@@ -240,7 +230,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitPrint(Stmt.Print stmt) {
     compile(stmt.expr);
-    convertTo(STRING, true, stmt.expr.location);
+    convertToString();
     invokeStatic(RuntimeUtils.class, stmt.printToken.getChars(), Object.class);
     return null;
   }
@@ -332,6 +322,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If actual function (not closure)
     if (expr.type.is(FUNCTION) && expr.funDecl != null) {
       loadBoundMethodHandle(expr.funDecl);
+      expr.funDecl.internalClassName = classCompiler.internalName;
+      expr.funDecl.wrapper.internalClassName = classCompiler.internalName;
     }
     else
     if (expr.initialiser != null) {
@@ -964,9 +956,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // invoke g that way. If g is uninitialised it means that it is a foward reference that we can't
     // support.
     // E.g.: def x; def f(){g()}; def g(){x}  --> gives error about forward ref to uninitialised value
+    boolean isFunctionCall = false;
+    Expr.FunDecl funDecl = null;
     if (expr.callee.isFunctionCall()) {
-      Expr.FunDecl funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
-
+      funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
+      // Can only call directly if in same class or is static method. Otherwise we need MethodHandle that
+      // was bound to its instance. This is to support global functions in repl mode where functions are
+      // compiled into separate classes every compile step and then stored in global map.
+      isFunctionCall = funDecl.isStatic || funDecl.internalClassName == null || funDecl.internalClassName.equals(classCompiler.internalName);
+    }
+    if (isFunctionCall) {
       // We invoke wrapper if we don't have enough args since it will fill in missing
       // values for optional parameters
       boolean invokeWrapper = expr.args.size() != funDecl.parameters.size();
@@ -1131,7 +1130,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Expr.FunDecl wrapperFunDecl = funDecl.wrapper;
 
     // Value of the variable will be the handle for the function
-    loadClassField(wrapperFunDecl.isStatic ? Utils.staticHandleName(funDecl.methodName)
+    loadClassField(classCompiler.internalName,
+                   wrapperFunDecl.isStatic ? Utils.staticHandleName(funDecl.methodName)
                                            : Utils.handleName(funDecl.methodName),
                    FUNCTION,
                    wrapperFunDecl.isStatic);
@@ -1183,7 +1183,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void invokeMethod(Expr.FunDecl funDecl) {
     mv.visitMethodInsn(funDecl.isStatic ? INVOKESTATIC : INVOKEVIRTUAL,
-                       classCompiler.internalName,
+                       funDecl.internalClassName == null ? classCompiler.internalName : funDecl.internalClassName,
                        funDecl.methodName,
                        getMethodDescriptor(funDecl),
                        false);
@@ -2155,10 +2155,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadGlobals() {
-    loadClassField(Utils.JACSAL_GLOBALS_NAME, JacsalType.MAP, false);
+    loadClassField(classCompiler.internalName, Utils.JACSAL_GLOBALS_NAME, JacsalType.MAP, false);
   }
 
-  private void loadClassField(String fieldName, JacsalType type, boolean isStatic) {
+  private void loadClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
     if (!isStatic) {
       mv.visitVarInsn(ALOAD, 0);
     }

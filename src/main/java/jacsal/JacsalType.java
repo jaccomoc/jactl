@@ -377,6 +377,21 @@ public class JacsalType {
     }
   }
 
+  public static JacsalType typeOf(Object obj) {
+    if (obj instanceof Boolean)      return BOOLEAN;
+    if (obj instanceof Integer)      return INT;
+    if (obj instanceof Long)         return LONG;
+    if (obj instanceof Double)       return DOUBLE;
+    if (obj instanceof BigDecimal)   return DECIMAL;
+    if (obj instanceof String)       return STRING;
+    if (obj instanceof Map)          return MAP;
+    if (obj instanceof List)         return LIST;
+    if (obj instanceof MethodHandle) return FUNCTION;
+    if (obj instanceof HeapLocal)    return HEAPLOCAL;
+    if (obj instanceof Object[])     return OBJECT_ARR;
+    return ANY;
+  }
+
   private static void checkIsNumeric(JacsalType type, String leftOrRight, Token operator) {
     if (!type.isNumeric() && !type.is(ANY)) {
       throw new CompileError("Non-numeric operand for " + leftOrRight + "-hand side of '" + operator.getChars() + "': was " + type, operator);

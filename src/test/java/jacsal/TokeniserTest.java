@@ -350,7 +350,8 @@ class TokeniserTest {
   }
 
   @Test public void lineColumnNumbers() {
-    var tokeniser = new Tokeniser("1a b\na\n\na 1.234D c");
+    String source = "1a b\na\n\na 1.234D c\n";
+    var tokeniser = new Tokeniser(source);
     var token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
@@ -397,7 +398,18 @@ class TokeniserTest {
     assertEquals(4, token.getLineNum());
     assertEquals(10, token.getColumn());
 
-    assertEquals(EOF, tokeniser.next().getType());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    assertEquals(4, token.getLineNum());
+    assertEquals(11, token.getColumn());
+
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+    assertEquals(5, token.getLineNum());
+    assertEquals(1, token.getColumn());
+    JacsalError error = new EOFError("EOF", token);
+    //System.out.println(error.getMessage());
+    assertTrue(error.getMessage().contains("line 5, column 1"));
     assertEquals(EOF, tokeniser.next().getType());
   }
 

@@ -18,6 +18,9 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -28,7 +31,7 @@ class CompilerTest {
 
   boolean debug = false;
 
-  private void doTest(String code, boolean evalConsts, boolean replMode, Object expected) {
+  private void doTest(String code, boolean evalConsts, boolean replMode, Object expected)  {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
@@ -36,10 +39,10 @@ class CompilerTest {
       CompileContext compileContext = new CompileContext().evaluateConstExprs(evalConsts)
                                                           .replMode(replMode)
                                                           .debug(debug);
-      Object         result         = Compiler.run(code, compileContext, new HashMap<>());
+      Object result = Compiler.run(code, compileContext, createGlobals());
       assertEquals(expected, result);
     }
-    catch (JacsalError e) {
+    catch (Exception e) {
       fail(e);
       e.printStackTrace();
     }
@@ -77,6 +80,23 @@ class CompilerTest {
         fail("Message did not contain expected string '" + expectedError + "'. Message=" + e.getMessage());
       }
     }
+  }
+
+  private Map<String,Object> createGlobals() {
+    try {
+      var globals = new HashMap<String,Object>();
+      MethodHandle handle  = MethodHandles.lookup().findStatic(CompilerTest.class, "timestamp", MethodType.methodType(Object.class, String.class, int.class, Object.class));
+      globals.put("timestamp", handle);
+      return globals;
+    }
+    catch (Exception e) {
+      fail(e);
+      return null;
+    }
+  }
+
+  public static Object timestamp(String source, int offset, Object args) {
+    return System.currentTimeMillis();
   }
 
   @Test
@@ -2777,5 +2797,27 @@ class CompilerTest {
     test("def f(x){ x() }; int sum=0; def g=f; g{sum=30}; sum", 30);
     test("def f(x,y){ x(); y() }; int sum=0; def g=f; g{sum+=20}{sum+=30}; sum", 50);
     testError("def f(x,y){ x(); y() }; int sum=0; def g=f; g{sum+=20}{sum+=30}{sum+=40}; sum", "too many arguments");
+    test("def f(x){x()}; f{return {it*it}}(2)", 4);
+  }
+
+  @Test public void globalFunctions() {
+    //test("timestamp() > 0", true);
+    CompileContext compileContext = new CompileContext().evaluateConstExprs(true)
+                                                        .replMode(true)
+                                                        .debug(debug);
+    Map<String,Object> globals = createGlobals();
+    BiConsumer<String,Object> runtest = (code,expected) -> {
+      Object result = Compiler.run(code, compileContext, globals);
+      assertEquals(expected, result);
+    };
+
+    runtest.accept("def x = 1", 1);
+    runtest.accept("x", 1);
+    runtest.accept("def f(x){x*x}; f(2)", 4);
+    runtest.accept("f(3)", 9);
+  }
+
+  @Test public void eof() {
+    testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected eof");
   }
 }

@@ -694,4 +694,16 @@ public class RuntimeUtils {
       throw new NullError("Null value encountered where null not allowed", source, offset);
     }
   }
+
+  public static List<String> lines(String str) {
+    List<String> lines = new ArrayList<>();
+    int offset = 0;
+    int lastOffset = 0;
+    while ((offset = str.indexOf('\n', lastOffset)) != -1) {
+      lines.add(str.substring(lastOffset, offset));
+      lastOffset = offset + 1;  // skip new line
+    }
+    lines.add(str.substring(lastOffset,str.length()));
+    return lines;
+  }
 }
