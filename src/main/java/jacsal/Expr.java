@@ -49,6 +49,8 @@ abstract class Expr {
                                // result of evaluating the expression during the
                                // resolve phase here.
 
+  boolean    isCallee = false; // Whether we are the callee in a call expression
+
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when
   // the expression is used as a condition for if/while/for or as assignment to a variable.
@@ -143,6 +145,28 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCall(this); }
     @Override public String toString() { return "Call[" + "token=" + token + ", " + "callee=" + callee + ", " + "args=" + args + "]"; }
+  }
+
+  static class MethodCall extends Expr {
+    Token      leftParen;
+    Expr       parent;
+    Token      accessOperator; // Either '.' or '?.'
+    String     methodName;     // Either the method name or field name that holds a MethodHandle
+    List<Expr> args;
+    String     implementingClass;   // The actual class that has the method implementation
+    String     implementingMethod;  // The name of the class method that implements the method
+
+    List<JacsalType> paramTypes;
+    MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, List<Expr> args) {
+      this.leftParen = leftParen;
+      this.parent = parent;
+      this.accessOperator = accessOperator;
+      this.methodName = methodName;
+      this.args = args;
+      this.location = leftParen;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitMethodCall(this); }
+    @Override public String toString() { return "MethodCall[" + "leftParen=" + leftParen + ", " + "parent=" + parent + ", " + "accessOperator=" + accessOperator + ", " + "methodName=" + methodName + ", " + "args=" + args + "]"; }
   }
 
   static class Literal extends Expr {
@@ -472,6 +496,7 @@ abstract class Expr {
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);
     T visitCall(Call expr);
+    T visitMethodCall(MethodCall expr);
     T visitLiteral(Literal expr);
     T visitListLiteral(ListLiteral expr);
     T visitMapLiteral(MapLiteral expr);

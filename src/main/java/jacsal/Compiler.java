@@ -16,11 +16,17 @@
 
 package jacsal;
 
+import jacsal.runtime.BuiltinFunctions;
+
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 public class Compiler {
+
+  static {
+    BuiltinFunctions.registerBuiltinFunctions();
+  }
 
   private static final AtomicInteger counter = new AtomicInteger();
 

@@ -540,6 +540,56 @@ public class RuntimeUtils {
     return value;
   }
 
+  public static Object invokeMethodOrField(Object parent, String field, boolean isOptional, Object args, String source, int offset) {
+    if (parent == null) {
+      if (isOptional) { return null; }
+      throw new NullError("Tried to invoke method on null value", source, offset);
+    }
+
+    MethodHandle handle = Functions.lookupWrapper(parent, field);
+    if (handle == null && parent instanceof Map) {
+      Object value = ((Map)parent).get(field);
+      if (!(value instanceof MethodHandle)) {
+        throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
+      }
+      handle = (MethodHandle)value;
+    }
+    if (handle == null) {
+      throw new NullError("No such method " + field, source, offset);
+    }
+    try {
+      return handle.invokeExact(source, offset, args);
+    }
+    catch (Throwable e) {
+      throw new RuntimeError("Error during method invocation: " + e.getMessage(), source, offset, e);
+    }
+  }
+
+  public static Object invokeField(Object parent, String field, boolean isOptional, Object args, String source, int offset) {
+    if (parent == null) {
+      if (isOptional) { return null; }
+      throw new NullError("Tried to invoke method on null valuet", source, offset);
+    }
+
+    if (!(parent instanceof Map)) {
+      throw new IllegalStateException("Object of type " + className(parent) +  " does not support field access");
+    }
+
+    Object value = ((Map)parent).get(field);
+    if (!(value instanceof MethodHandle)) {
+      throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
+    }
+    if (value == null) {
+      throw new NullError("Trying to call null value", source, offset);
+    }
+    try {
+      return ((MethodHandle)value).invokeExact(source, offset, args);
+    }
+    catch (Throwable e) {
+      throw new RuntimeError("Error during method invocation: " + e.getMessage(), source, offset, e);
+    }
+  }
+
   /**
    * Load field from map/list (return null if field or index does not exist)
    * @param parent        parent (map or list)
@@ -551,6 +601,37 @@ public class RuntimeUtils {
    * @return the field value or null
    */
   public static Object loadField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
+    return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, false, false);
+  }
+
+  /**
+   * Load method or field. Parent can be of any type in which case we first look for a method
+   * of given name (in BuiltinFunctions) and return a MethodHandle to that method. If that
+   * returns nothing we invoke the usual loadField method to get the field value.
+   * @param parent        parent
+   * @param field         field (field name or list index)
+   * @param isDot         always true
+   * @param isOptional    true if access type is '?.' or '?['
+   * @param source        source code
+   * @param offset        offset into source for operation
+   * @return the field value or null
+   */
+  public static Object loadMethodOrField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
+    if (parent == null) {
+      if (isOptional) {
+        return null;
+      }
+      throw new NullError("Null value for Map/List during field access", source, offset);
+    }
+
+    if (field == null) {
+      throw new NullError("Null value for field name", source, offset);
+    }
+
+    MethodHandle handle = Functions.lookupWrapper(parent, field.toString());
+    if (handle != null) {
+      return handle;
+    }
     return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, false, false);
   }
 
@@ -590,7 +671,21 @@ public class RuntimeUtils {
         value = isMap ? new HashMap<>() : new ArrayList<>();
         map.put(fieldName, value);
       }
+      if (value == null) {
+        // If we still can't find a field then if we have a method of the name return
+        // its MethodHandle
+        value = Functions.lookupWrapper(parent, fieldName);
+      }
+
       return value;
+    }
+
+    // Check for accessing method by name
+    if (isDot && !createIfMissing && field instanceof String) {
+      var method = Functions.lookupWrapper(parent, (String)field);
+      if (method != null) {
+        return method;
+      }
     }
 
     if (!(parent instanceof List) && !(parent instanceof String)) {
@@ -605,7 +700,7 @@ public class RuntimeUtils {
                              " object", source, offset);
     }
 
-    // Must be a List
+    // Must be a List or String so field should be an index
     if (!(field instanceof Number)) {
       throw new RuntimeError("Non-numeric value for indexed access", source, offset);
     }
@@ -835,7 +930,7 @@ public class RuntimeUtils {
       lines.add(str.substring(lastOffset, offset));
       lastOffset = offset + 1;  // skip new line
     }
-    lines.add(str.substring(lastOffset,str.length()));
+    lines.add(str.substring(lastOffset));
     return lines;
   }
 }

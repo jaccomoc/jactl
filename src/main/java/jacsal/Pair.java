@@ -17,12 +17,10 @@
 package jacsal;
 
 public class Pair<X,Y> {
-  X x; Y y;
-  public Pair(X x, Y y) {
-    this.x = x;
-    this.y = y;
-  }
-  public static <X,Y> Pair<X,Y> create(X x, Y y) {
-    return new Pair<>(x,y);
+  final X first;
+  final Y second;
+  public Pair(X first, Y second) {
+    this.first = first;
+    this.second = second;
   }
 }

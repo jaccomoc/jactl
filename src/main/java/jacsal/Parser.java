@@ -481,29 +481,29 @@ public class Parser {
   // right-associative (false).
   private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
     List.of(
-//      Pair.create(true, List.of(AND, OR)),
-//      Pair.create(true, List.of(NOT)),
-      Pair.create(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
+//      new Pair(true, List.of(AND, OR)),
+//      new Pair(true, List.of(NOT)),
+      new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
       /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
          PIPE_EQUAL, ACCENT_EQUAL), */
-      Pair.create(true, List.of(QUESTION, QUESTION_COLON)),
-      Pair.create(true, List.of(PIPE_PIPE)),
-      Pair.create(true, List.of(AMPERSAND_AMPERSAND)),
+      new Pair(true, List.of(QUESTION, QUESTION_COLON)),
+      new Pair(true, List.of(PIPE_PIPE)),
+      new Pair(true, List.of(AMPERSAND_AMPERSAND)),
       /*
       List.of(PIPE),
       List.of(ACCENT),
       List.of(AMPERSAND),
       */
-      Pair.create(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
-      Pair.create(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF /*, IN, BANG_IN, AS*/)),
+      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
+      new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF /*, IN, BANG_IN, AS*/)),
 /*
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
 */
-      Pair.create(true, List.of(MINUS, PLUS)),
-      Pair.create(true, List.of(STAR, SLASH, PERCENT)),
+      new Pair(true, List.of(MINUS, PLUS)),
+      new Pair(true, List.of(STAR, SLASH, PERCENT)),
       //      List.of(STAR_STAR)
-      Pair.create(true, unaryOps),
-      Pair.create(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
+      new Pair(true, unaryOps),
+      new Pair(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
     );
 
   /**
@@ -533,8 +533,8 @@ public class Parser {
     // Get list of operators at this level of precedence along with flag
     // indicating whether they are left-associative or not.
     var operatorsPair = operatorsByPrecedence.get(level);
-    boolean isLeftAssociative = operatorsPair.x;
-    List<TokenType> operators = operatorsPair.y;
+    boolean isLeftAssociative = operatorsPair.first;
+    List<TokenType> operators = operatorsPair.second;
 
     // If this level of precedence is for our unary operators (includes type cast)
     if (operators == unaryOps) {
@@ -563,7 +563,7 @@ public class Parser {
       // a closure arg
       if (operator.is(LEFT_PAREN,LEFT_BRACE)) {
         List<Expr> args = argList();
-        expr = new Expr.Call(operator, expr, args);
+        expr = createCallExpr(expr, operator, args);
         continue;
       }
 
@@ -766,7 +766,7 @@ public class Parser {
         Expr key = mapKey();
         expect(COLON);
         Expr value = expression();
-        expr.entries.add(Pair.create(key, value));
+        expr.entries.add(new Pair(key, value));
       }
     }
     return expr;
@@ -1128,6 +1128,56 @@ public class Parser {
     List<Stmt> originalStmts = block.stmts.stmts;
     block.stmts.stmts = new ArrayList<>(stmts);
     block.stmts.stmts.addAll(originalStmts);
+  }
+
+  /**
+   * Create a call expr. The result will be an Expr.Call for runtime lookup of
+   * method or an Expr.MethodCall if we have enough information that we might be
+   * able to do a compile time lookup during Resolver phase.
+   */
+  private Expr createCallExpr(Expr callee, Token leftParen, List<Expr> args) {
+    // When calling a method on an object where we don't know the type we must be
+    // able to dynamically lookup up the method. The problem is that the method
+    // name might also be the name of a field in a map but we still want to invoke
+    // the method rather than look for a method handle in the field.
+    // Consider this example:  Map m = [size:{it*it}]; m.size()
+    // We want to invoke the Map.size() method not get the value of the size field
+    // and invoke it.
+    // In order to know whether the field lookup is looking up a field or a method
+    // we mark the callee with a flag so we can tell at compile time what type of
+    // look up to do. (Note that if there is not method of that name we then fallback
+    // to looking for a field.)
+    callee.isCallee = true;
+
+    // Turn x.a.b(args) into Expr.Call(x.a, b, args) so that we can check at compile
+    // time if x.a.b is a method (if we know type of a.x) or not.
+    if (callee instanceof Expr.Binary) {
+      Expr.Binary binaryExpr = (Expr.Binary) callee;
+      // Make sure we have a '.' or '.?' which means we might have a method call
+      if (binaryExpr.operator.is(DOT, QUESTION_DOT)) {
+        // Get potential method name if right hand side of '.' is a string or identifier
+        String methodName = getStringValue(binaryExpr.right);
+        if (methodName != null) {
+          return new Expr.MethodCall(leftParen, binaryExpr.left, binaryExpr.operator, methodName, args);
+        }
+      }
+    }
+
+    Expr.Call expr = new Expr.Call(leftParen, callee, args);
+    return expr;
+  }
+
+  private String getStringValue(Expr expr) {
+    if (expr instanceof Expr.Identifier) {
+      return ((Expr.Identifier) expr).identifier.getStringValue();
+    }
+    if (expr instanceof Expr.Literal) {
+      Object value = ((Expr.Literal) expr).value.getValue();
+      if (value instanceof String) {
+        return (String)value;
+      }
+    }
+    return null;
   }
 
   /**

@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import jacsal.runtime.Functions;
 import jacsal.runtime.RuntimeUtils;
 
 import java.math.BigDecimal;
@@ -278,7 +279,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       if (!expr.left.type.is(ANY)) {
         // Do some level of validation
         if (expr.operator.is(DOT,QUESTION_DOT) && !expr.left.type.is(MAP)) {
-          throw new CompileError("Invalid object type (" + expr.left.type + ") for field access", expr.operator);
+          // If obect is not a map then field access might be for a method of the object.
+          // If we the field is a string literal we can validate at compile time by searching for a matching
+          // method. If field is some sort of expression then we have to wait for runtime to find out if
+          // access was legal or not.
+          if (expr.right instanceof Expr.Literal) {
+            Object field = ((Expr.Literal)expr.right).value.getValue();
+            if (field instanceof String) {
+              if (Functions.lookupMethod(expr.left.type, (String)field) == null) {
+                throw new CompileError("Invalid object type (" + expr.left.type + ") for field access", expr.operator);
+              }
+            }
+          }
         }
         // '[' and '?['
         if (!expr.left.type.is(MAP,LIST,STRING)) {
@@ -311,100 +323,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
-      if (expr.type.is(STRING)) {
-        if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings"); }
-        if (expr.operator.is(PLUS)) {
-          if (expr.left.constValue == null) {
-            throw new CompileError("Left-hand side of '+' cannot be null", expr.operator);
-          }
-          expr.constValue = Utils.toString(expr.left.constValue) + Utils.toString(expr.right.constValue);
-        }
-        else {
-          if (expr.right.constValue == null) {
-            throw new CompileError("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
-          }
-          String lhs    = Utils.toString(expr.left.constValue);
-          long   length = Utils.toLong(expr.right.constValue);
-          if (length < 0) {
-            throw new CompileError("String repeat count must be >= 0", expr.right.location);
-          }
-          expr.constValue = lhs.repeat((int)length);
-        }
-        return expr.type;
-      }
-
-      if (expr.operator.is(AMPERSAND_AMPERSAND)) {
-        expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) &&
-                          RuntimeUtils.isTruth(expr.right.constValue, false);
-        return expr.type;
-      }
-      if (expr.operator.is(PIPE_PIPE)) {
-        expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) ||
-                          RuntimeUtils.isTruth(expr.right.constValue, false);
-        return expr.type;
-      }
-
-      if (expr.operator.getType().isBooleanOperator()) {
-        expr.constValue = RuntimeUtils.booleanOp(expr.left.constValue, expr.right.constValue,
-                                                 RuntimeUtils.getOperatorType(expr.operator.getType()),
-                                                 expr.operator.getSource(), expr.operator.getOffset());
-        return expr.type = JacsalType.BOOLEAN;
-      }
-
-      if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
-      if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
-
-      switch (expr.type.getType()) {
-        case INT: {
-          int left  = Utils.toInt(expr.left.constValue);
-          int right = Utils.toInt(expr.right.constValue);
-          throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
-          switch (expr.operator.getType()) {
-            case PLUS:    expr.constValue = left + right; break;
-            case MINUS:   expr.constValue = left - right; break;
-            case STAR:    expr.constValue = left * right; break;
-            case SLASH:   expr.constValue = left / right; break;
-            case PERCENT: expr.constValue = left % right; break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
-          }
-          break;
-        }
-        case LONG: {
-          long left  = Utils.toLong(expr.left.constValue);
-          long right = Utils.toLong(expr.right.constValue);
-          throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
-          switch (expr.operator.getType()) {
-            case PLUS:    expr.constValue = left + right; break;
-            case MINUS:   expr.constValue = left - right; break;
-            case STAR:    expr.constValue = left * right; break;
-            case SLASH:   expr.constValue = left / right; break;
-            case PERCENT: expr.constValue = left % right; break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
-          }
-          break;
-        }
-        case DOUBLE: {
-          double left  = Utils.toDouble(expr.left.constValue);
-          double right = Utils.toDouble(expr.right.constValue);
-          switch (expr.operator.getType()) {
-            case PLUS:    expr.constValue = left + right; break;
-            case MINUS:   expr.constValue = left - right; break;
-            case STAR:    expr.constValue = left * right; break;
-            case SLASH:   expr.constValue = left / right; break;
-            case PERCENT: expr.constValue = left % right; break;
-            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
-          }
-          break;
-        }
-        case DECIMAL: {
-          BigDecimal left  = Utils.toDecimal(expr.left.constValue);
-          BigDecimal right = Utils.toDecimal(expr.right.constValue);
-          throwIf(expr.operator.is(SLASH,PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
-          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale,
-                                                                expr.operator.getSource(), expr.operator.getOffset());
-          break;
-        }
-      }
+      return evaluateConstExpr(expr);
     }
     return expr.type;
   }
@@ -516,8 +435,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitMapLiteral(Expr.MapLiteral expr) {
     expr.entries.forEach(entry -> {
-      resolve(entry.x);
-      resolve(entry.y);
+      resolve(entry.first);
+      resolve(entry.second);
     });
     return expr.type = MAP;
   }
@@ -738,13 +657,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
       int argCount       = expr.args.size();
       int paramCount     = funDecl.parameters.size();
-      if (argCount < mandatoryCount) {
-        String atLeast = mandatoryCount == paramCount ? "" : "at least ";
-        throw new CompileError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", expr.token);
-      }
-      if (argCount > paramCount) {
-        throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", expr.token);
-      }
+      validateArgCount(argCount, mandatoryCount, paramCount, expr.token);
       for (int i = 0; i < argCount; i++) {
         Expr       arg       = expr.args.get(i);
         JacsalType argType   = arg.type;
@@ -755,6 +668,42 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
     return null;
+  }
+
+  @Override public JacsalType visitMethodCall(Expr.MethodCall expr) {
+    resolve(expr.parent);
+    expr.args.forEach(this::resolve);
+
+    // See if we have a direct method invocation or not. We need to know the type of the parent
+    // (not ANY) and to be able to find the method in the list of registered methods.
+    // Then we need to have the exact number of arguments that match the expected parameter count.
+    // If we have less args we will do runtime lookup of MethodHandle that gets to wrapper method.
+    if (!expr.parent.type.is(ANY)) {
+      var descriptor = Functions.lookupMethod(expr.parent.type, expr.methodName);
+      if (descriptor != null) {
+        expr.implementingClass  = descriptor.implementingClass;
+        expr.implementingMethod = descriptor.implementingMethod;
+        expr.paramTypes         = descriptor.paramTypes;
+        validateArgCount(expr.args.size(), descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
+        for (int i = 0; i < expr.args.size(); i++) {
+          Expr arg = expr.args.get(i);
+          JacsalType paramType = descriptor.paramTypes.get(i);
+          if (!arg.type.isConvertibleTo(paramType)) {
+            throw new CompileError("Cannot convert " + nth(i + 1) + " argument of type " + arg.type +
+                                   " to parameter type of " + paramType, arg.location);
+          }
+        }
+        expr.type = descriptor.returnType;
+        return expr.type;
+      }
+      if (!expr.parent.type.is(MAP)) {
+        throw new CompileError("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.accessOperator);
+      }
+    }
+
+    // Don't know type of parent or couldn't find method
+    expr.type = ANY;
+    return expr.type;
   }
 
   @Override public JacsalType visitArrayLength(Expr.ArrayLength expr) {
@@ -774,6 +723,114 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   ////////////////////////////////////////////
+
+  private void validateArgCount(int argCount, int mandatoryCount, int paramCount, Token location) {
+    if (argCount < mandatoryCount) {
+      String atLeast = mandatoryCount == paramCount ? "" : "at least ";
+      throw new CompileError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", location);
+    }
+    if (argCount > paramCount) {
+      throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", location);
+    }
+  }
+
+  private JacsalType evaluateConstExpr(Expr.Binary expr) {
+    if (expr.type.is(STRING)) {
+      if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings"); }
+      if (expr.operator.is(PLUS)) {
+        if (expr.left.constValue == null) {
+          throw new CompileError("Left-hand side of '+' cannot be null", expr.operator);
+        }
+        expr.constValue = Utils.toString(expr.left.constValue) + Utils.toString(expr.right.constValue);
+      }
+      else {
+        if (expr.right.constValue == null) {
+          throw new CompileError("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
+        }
+        String lhs    = Utils.toString(expr.left.constValue);
+        long   length = Utils.toLong(expr.right.constValue);
+        if (length < 0) {
+          throw new CompileError("String repeat count must be >= 0", expr.right.location);
+        }
+        expr.constValue = lhs.repeat((int)length);
+      }
+      return expr.type;
+    }
+
+    if (expr.operator.is(AMPERSAND_AMPERSAND)) {
+      expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) &&
+                        RuntimeUtils.isTruth(expr.right.constValue, false);
+      return expr.type;
+    }
+    if (expr.operator.is(PIPE_PIPE)) {
+      expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) ||
+                        RuntimeUtils.isTruth(expr.right.constValue, false);
+      return expr.type;
+    }
+
+    if (expr.operator.getType().isBooleanOperator()) {
+      expr.constValue = RuntimeUtils.booleanOp(expr.left.constValue, expr.right.constValue,
+                                               RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                               expr.operator.getSource(), expr.operator.getOffset());
+      return expr.type = JacsalType.BOOLEAN;
+    }
+
+    if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
+    if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
+
+    switch (expr.type.getType()) {
+      case INT: {
+        int left  = Utils.toInt(expr.left.constValue);
+        int right = Utils.toInt(expr.right.constValue);
+        throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
+        switch (expr.operator.getType()) {
+          case PLUS:    expr.constValue = left + right; break;
+          case MINUS:   expr.constValue = left - right; break;
+          case STAR:    expr.constValue = left * right; break;
+          case SLASH:   expr.constValue = left / right; break;
+          case PERCENT: expr.constValue = left % right; break;
+          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
+        }
+        break;
+      }
+      case LONG: {
+        long left  = Utils.toLong(expr.left.constValue);
+        long right = Utils.toLong(expr.right.constValue);
+        throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
+        switch (expr.operator.getType()) {
+          case PLUS:    expr.constValue = left + right; break;
+          case MINUS:   expr.constValue = left - right; break;
+          case STAR:    expr.constValue = left * right; break;
+          case SLASH:   expr.constValue = left / right; break;
+          case PERCENT: expr.constValue = left % right; break;
+          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
+        }
+        break;
+      }
+      case DOUBLE: {
+        double left  = Utils.toDouble(expr.left.constValue);
+        double right = Utils.toDouble(expr.right.constValue);
+        switch (expr.operator.getType()) {
+          case PLUS:    expr.constValue = left + right; break;
+          case MINUS:   expr.constValue = left - right; break;
+          case STAR:    expr.constValue = left * right; break;
+          case SLASH:   expr.constValue = left / right; break;
+          case PERCENT: expr.constValue = left % right; break;
+          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
+        }
+        break;
+      }
+      case DECIMAL: {
+        BigDecimal left  = Utils.toDecimal(expr.left.constValue);
+        BigDecimal right = Utils.toDecimal(expr.right.constValue);
+        throwIf(expr.operator.is(SLASH,PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
+        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale,
+                                                              expr.operator.getSource(), expr.operator.getOffset());
+        break;
+      }
+    }
+    return expr.type;
+  }
 
   private void addHeapLocalToParents(String name, Expr.VarDecl varDecl) {
     Expr.VarDecl childVarDecl = varDecl;

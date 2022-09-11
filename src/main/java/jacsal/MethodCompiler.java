@@ -633,7 +633,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
       compile(expr.left);
       compile(expr.right);
-      loadField(expr.operator, expr.createIfMissing, expr.type, null);
+      if (expr.isCallee && expr.operator.is(DOT,QUESTION_DOT)) {
+        loadMethodOrField(expr.operator);
+      }
+      else {
+        loadField(expr.operator, expr.createIfMissing, expr.createIfMissing ? expr.type : null, null);
+      }
       return null;
     }
 
@@ -882,10 +887,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     push(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
-      Expr key = entry.x;
+      Expr key = entry.first;
       compile(key);
       convertTo(STRING, true, key.location);
-      compile(entry.y);
+      compile(entry.second);
       box();
       invokeInterface(Map.class, "put", Object.class, Object.class);
       popVal();    // Ignore return value from put
@@ -939,22 +944,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitCall(Expr.Call expr) {
-    // Helper lambda
-    Runnable loadArgsAsObjectArr = () -> {
-      _loadConst(expr.args.size());
-      mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-      push(ANY);
-      for (int i = 0; i < expr.args.size(); i++) {
-        mv.visitInsn(DUP);
-        _loadConst(i);
-        compile(expr.args.get(i));
-        convertToAny();
-        mv.visitInsn(AASTORE);
-        pop();
-      }
-    };
-
-
     // If we have an explicit function name and exact number of args then we can invoke directly without
     // needing to go through a method handle or via method wrapper that fills in missing args.
     // The only exception is if there are closed over variables (HeapLocals) that need to be passed to it
@@ -970,7 +959,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.callee.isFunctionCall()) {
       funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
       // Can only call directly if in same class or is static method. Otherwise we need MethodHandle that
-      // was bound to its instance. This is to support global functions in repl mode where functions are
+      // was bound to its instance. Functions can be in different classes in repl mode where functions are
       // compiled into separate classes every compile step and then stored in global map.
       isFunctionCall = funDecl.isStatic || funDecl.internalClassName == null || funDecl.internalClassName.equals(classCompiler.internalName);
     }
@@ -986,18 +975,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // If we don't have the variable then null will be used for the varDecl
       Function<Expr.VarDecl,Pair<String,Expr.VarDecl>> getVarDecl = p -> {
         String name = p.name.getStringValue();
-        if (p.owner == methodFunDecl) return Pair.create(name, p.originalVarDecl);
+        if (p.owner == methodFunDecl) return new Pair(name, p.originalVarDecl);
         Expr.VarDecl varDecl = methodFunDecl.heapLocalParams.get(p.name.getStringValue());
         // If not there or if is a different var (with same name)
         varDecl = varDecl == null || varDecl.originalVarDecl != p.originalVarDecl ? null : varDecl;
-        return Pair.create(name, varDecl);
+        return new Pair(name,varDecl);
       };
 
       var varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
 
       // Make sure either we have variable already in our heap local params or we are the function where
       // the heap local param we need was declared. Look for params we cannot pass in:
-      var badVars = varDeclPairs.stream().filter(vp -> vp.y == null).map(vp -> vp.x).collect(Collectors.toList());
+      var badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
       if (badVars.size() > 0) {
         boolean plural = badVars.size() > 1;
         throw new CompileError("Invocation of " + funDecl.name.getStringValue() +
@@ -1015,11 +1004,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       // Now load the HeapLocals onto the stack
-      varDeclPairs.forEach(p -> loadLocal(p.y.slot));
+      varDeclPairs.forEach(p -> loadLocal(p.second.slot));
 
       if (invokeWrapper) {
         loadLocation(expr.location);
-        loadArgsAsObjectArr.run();
+        loadArgsAsObjectArr(expr.args);
       }
       else {
         for (int i = 0; i < expr.args.size(); i++) {
@@ -1056,11 +1045,47 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Any arguments will be stored in an Object[]
     // TODO: support named args
-    loadArgsAsObjectArr.run();
-    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/Object;", false);
-    pop(4);   // callee, source, offset, Object[]
-    push(ANY);
+    loadArgsAsObjectArr(expr.args);
+    invokeMethodHandle();
 
+    return null;
+  }
+
+  @Override public Void visitMethodCall(Expr.MethodCall expr) {
+    // Get the instance
+    compile(expr.parent);
+
+    // If we know what method to invoke
+    if (expr.implementingClass != null) {
+      // Get the args
+      for (int i = 0; i < expr.args.size(); i++) {
+        Expr arg = expr.args.get(i);
+        compile(arg);
+        convertTo(expr.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
+      }
+      // Add object type to param list since we invoke static method whose first arg is the object
+      List<JacsalType> types = new ArrayList<>();
+      types.add(expr.parent.type);
+      types.addAll(expr.paramTypes);
+      invokeMethod(true, expr.implementingClass, expr.implementingMethod, expr.type, types);
+      return null;
+    }
+
+    // Since we couldn't call method directly it means that either we didn't know type of parent at
+    // compile time or we couldn't find a method of that name. If we didn't know type of parent we
+    // will attempt to get the method handle for the field by doing a method lookup and if no method
+    // exists we will assume that there is a field of that name that holds a MethodHandle.
+    loadConst(expr.methodName);
+    loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
+    loadArgsAsObjectArr(expr.args);
+    loadLocation(expr.leftParen);
+    if (expr.parent.type.is(ANY)) {
+      invokeStatic(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class, boolean.class, Object.class, String.class, int.class);
+    }
+    else {
+      // Did know type of parent but no such method so load value from field
+      invokeStatic(RuntimeUtils.class, "invokeField", Object.class, String.class, boolean.class, Object.class, String.class, int.class);
+    }
     return null;
   }
 
@@ -1095,6 +1120,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   ///////////////////////////////////////////////////////////////
+
+  private void invokeMethodHandle() {
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/Object;", false);
+    pop(4);   // callee, source, offset, Object[]
+    push(ANY);
+  }
+
+  private void loadArgsAsObjectArr(List<Expr> args) {
+    _loadConst(args.size());
+    mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+    push(ANY);
+    for (int i = 0; i < args.size(); i++) {
+      mv.visitInsn(DUP);
+      _loadConst(i);
+      compile(args.get(i));
+      box();
+      mv.visitInsn(AASTORE);
+      pop();
+    }
+  }
 
   private boolean isParam(Stmt st) {
     return st instanceof Stmt.VarDecl &&
@@ -1190,26 +1235,45 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private void invokeWrapper(boolean isStatic, String internalClassName, String methodName) {
+    invokeMethod(isStatic, internalClassName, methodName, ANY, List.of(STRING,INT,OBJECT_ARR));
+  }
+
   private void invokeMethod(Expr.FunDecl funDecl) {
-    mv.visitMethodInsn(funDecl.isStatic ? INVOKESTATIC : INVOKEVIRTUAL,
-                       funDecl.internalClassName == null ? classCompiler.internalName : funDecl.internalClassName,
-                       funDecl.methodName,
-                       getMethodDescriptor(funDecl),
+    invokeMethod(funDecl.isStatic,
+                 funDecl.internalClassName == null ? classCompiler.internalName : funDecl.internalClassName,
+                 funDecl.methodName,
+                 funDecl.returnType,
+                 methodParamTypes(funDecl));
+  }
+
+  private void invokeMethod(boolean isStatic, String internalClassName, String methodName, JacsalType returnType, List<JacsalType> paramTypes) {
+    mv.visitMethodInsn(isStatic ? INVOKESTATIC : INVOKEVIRTUAL,
+                       internalClassName,
+                       methodName,
+                       getMethodDescriptor(returnType, paramTypes),
                        false);
-    pop(funDecl.heapLocalParams.size() + funDecl.parameters.size() + (funDecl.isStatic ? 0 : 1));
-    push(funDecl.returnType);
+    pop(paramTypes.size() + (isStatic ? 0 : 1));
+    push(returnType);
   }
 
   public static String getMethodDescriptor(Expr.FunDecl funDecl) {
+    return getMethodDescriptor(funDecl.returnType, methodParamTypes(funDecl));
+  }
+
+  private static String getMethodDescriptor(JacsalType returnType, List<JacsalType> paramTypes) {
     // Method descriptor is return type followed by array of parameter types.
-    // We include a HeapLocal  object for each heap var param that the function needs
+    return Type.getMethodDescriptor(returnType.descriptorType(),
+                                    paramTypes.stream().map(p -> p.descriptorType()).toArray(Type[]::new));
+  }
+
+  private static List<JacsalType> methodParamTypes(Expr.FunDecl funDecl) {
+    // We include a HeapLocal object for each heap var param that the function needs
     // before adding a type for each actual parameter.
-    return Type.getMethodDescriptor(funDecl.returnType.descriptorType(),
-                                    Stream.concat(Collections.nCopies(funDecl.heapLocalParams.size(),
-                                                                      HEAPLOCAL.descriptorType()).stream(),
-                                                  funDecl.parameters.stream()
-                                                                    .map(p -> p.declExpr.descriptorType()))
-                                          .toArray(Type[]::new));
+    return Stream.concat(Collections.nCopies(funDecl.heapLocalParams.size(), HEAPLOCAL).stream(),
+                         funDecl.parameters.stream()
+                                           .map(p -> p.declExpr.isPassedAsHeapLocal ? HEAPLOCAL : p.declExpr.type))
+                 .collect(Collectors.toList());
   }
 
   // = Type stack
@@ -2260,37 +2324,31 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   /**
    * Load field value from a map or list.
    * Stack is expected to have: ..., parent, field
-   * Optionally the defaultType (if non-null) will determine the type of default value to return
-   * if the field does not exist.
-   * Alternatively the default value can be supplied directly. This is used for the special case of
-   * RuntimeUtils.DEFAULT_VALUE which is a value that means use whatever sensible default makes sense
-   * in the context. E.g. if doing integer arithmetic use 0 or if doing string concatenation use ''.
+   * A default value can be supplied which will be used if field does not exist. This is used for the
+   * special case of RuntimeUtils.DEFAULT_VALUE which is a value that means use whatever sensible
+   * default makes sense in the context.
+   * E.g. if doing integer arithmetic use 0 or if doing string concatenation use ''.
    * The createIfMissing flag will create the field if missing of the type specified by defaultType
    * (which must be MAP or LIST in this case).
    * @param accessOperator  the type of field access ('.', '?.', '[', '?[')
    * @param createIfMissing true if we should create the field if it is missing
-   * @param defaultType     if non-null create default value of this type if field does not exist
+   * @param defaultType     used if createIfMissing set and must be MAP or LIST
    * @param defaultValue    use this as the default value (only one of defaultType or defaultValue should
-   *                       be supplied since they are mutally exclusive)
+   *                        be supplied since they are mutally exclusive)
    */
   private void loadField(Token accessOperator, boolean createIfMissing, JacsalType defaultType, Object defaultValue) {
     check(defaultType == null || defaultValue == null, "Cannot have defaultType and defaultValue specified");
     box();                        // Field name/index passed as Object
     loadConst(accessOperator.is(DOT,QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT,QUESTION_SQUARE));
-    if ((defaultType != null || defaultValue != null) && !createIfMissing) {
-      if (defaultType != null) {
-        loadDefaultValue(defaultType);
+    if (!createIfMissing && defaultValue != null) {
+      // Special case for RuntimeUtils.DEFAULT_VALUE
+      if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
+        mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "DEFAULT_VALUE", "Ljava/lang/Object;");
+        push(ANY);
       }
       else {
-        // Special case for RuntimeUtils.DEFAULT_VALUE
-        if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
-          mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "DEFAULT_VALUE", "Ljava/lang/Object;");
-          push(ANY);
-        }
-        else {
-          loadConst(defaultValue);
-        }
+        loadConst(defaultValue);
       }
       box();
       loadConst(accessOperator.getSource());
@@ -2310,6 +2368,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(accessOperator.getOffset());
       invokeStatic(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
     }
+  }
+
+  private void loadMethodOrField(Token accessOperator) {
+    box();                        // Field name/index passed as Object
+    loadConst(accessOperator.is(DOT,QUESTION_DOT));
+    loadConst(accessOperator.is(QUESTION_DOT,QUESTION_SQUARE));
+    loadConst(accessOperator.getSource());
+    loadConst(accessOperator.getOffset());
+    invokeStatic(RuntimeUtils.class, "loadMethodOrField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
   }
 
   private void storeField(Token accessOperator) {

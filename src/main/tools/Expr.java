@@ -51,6 +51,8 @@ class Expr {
                                // result of evaluating the expression during the
                                // resolve phase here.
 
+  boolean    isCallee = false; // Whether we are the callee in a call expression
+
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when
   // the expression is used as a condition for if/while/for or as assignment to a variable.
@@ -105,6 +107,18 @@ class Expr {
     Token      token;
     Expr       callee;
     List<Expr> args;
+  }
+
+  class MethodCall extends Expr {
+    Token      leftParen;
+    Expr       parent;
+    Token      accessOperator; // Either '.' or '?.'
+    String     methodName;     // Either the method name or field name that holds a MethodHandle
+    List<Expr> args;
+    String     @implementingClass;   // The actual class that has the method implementation
+    String     @implementingMethod;  // The name of the class method that implements the method
+
+    List<JacsalType> @paramTypes;
   }
 
   class Literal extends Expr {

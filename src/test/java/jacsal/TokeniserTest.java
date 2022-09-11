@@ -179,8 +179,8 @@ class TokeniserTest {
       var     tokeniser = new Tokeniser(source);
       Token[] token     = { tokeniser.next() };
       typeAndValues.forEach(typeAndValue -> {
-        assertEquals(typeAndValue.x, token[0].getType());
-        assertEquals(typeAndValue.y, token[0].getValue());
+        assertEquals(typeAndValue.first, token[0].getType());
+        assertEquals(typeAndValue.second, token[0].getValue());
         token[0] = tokeniser.next();
       });
       assertEquals(EOF, tokeniser.next().getType());

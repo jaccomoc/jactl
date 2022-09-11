@@ -30,7 +30,11 @@ public class JacsalError extends RuntimeException {
    * @param captureStackTrace  whether to get stack trace or not
    */
   public JacsalError(String error, Location location, boolean captureStackTrace) {
-    super(null, null, false, captureStackTrace);
+    this(error, location, captureStackTrace, null);
+  }
+
+  public JacsalError(String error, Location location, boolean captureStackTrace, Throwable cause) {
+    super(null, cause, false, captureStackTrace);
     this.errorMessage = error;
     this.location = location;
   }

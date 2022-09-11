@@ -1939,6 +1939,7 @@ class CompilerTest {
     testError("String s = 'abc'; s[1] = s[2]", "invalid object type");
     testError("String s = 'abc'; s.a", "invalid object type");
     testError("def s = 'abc'; s.a", "field access not supported");
+    testError("def s = 'abc'; s.a()", "no such method");
   }
 
   @Test public void ifStatement() {
@@ -2806,6 +2807,37 @@ class CompilerTest {
     test("def f(x){x()}; f{return {it*it}}(2)", 4);
   }
 
+  @Test public void builtinMethods() {
+    test("List x; x.size()", 0);
+    test("List x = []; x.size()", 0);
+    test("List x = [1,2,3]; x.size()", 3);
+    test("def x = []; x.size()", 0);
+    test("def x = []; x?.size()", 0);
+    test("def x; x?.size()", null);
+    test("def x = [1,2,3]; x.size()", 3);
+    test("Map x; x.size()", 0);
+    test("Map x = [:]; x.size()", 0);
+    test("Map x = [a:1,b:2]; x.size()", 2);
+    test("Map x = [a:1,b:[c:3]]; x.b.size()", 1);
+    testError("Map x = [a:1,b:[c:3]]; x.a.size()", "no such method");
+    testError("def x; x.size()", "null value");
+    test("def x; def y; y ?= x.size(); y", null);
+    test("def x = [:]; x.size()", 0);
+    test("def x = [a:1,b:2]; x.size()", 2);
+    test("def x = [a:1,b:2]; x?.size()", 2);
+    test("def x = [a:1,b:[c:3]]; x.b.size()", 1);
+    test("def x = [a:1,b:[1,2,3]]; x.b.size()", 3);
+    testError("def x = [a:1,b:[c:3]]; x.a.size()", "no such method");
+    test("def x = [1,2,3]; def f = x.size; f()", 3);
+    test("List x = [1,2,3]; def f = x.size; f()", 3);
+    test("def x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
+    test("Map x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
+    test("List x = [1,2,3]; x.'size'()", 3);
+    testError("def x = 1; x.size()", "no such method");
+    testError("def x = [1]; x.sizeXXX()", "no such method");
+    testError("1.size()", "no such method");
+  }
+
   @Test public void globalFunctions() {
     //test("timestamp() > 0", true);
     CompileContext compileContext = new CompileContext().evaluateConstExprs(true)
@@ -2825,10 +2857,6 @@ class CompilerTest {
 
   @Test public void eof() {
     testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected eof");
-  }
-
-  @Test public void defBinaryOps() {
-    test("def x = 1; def y = 2; x + y * y + x", 6);
   }
 
   @Test public void fib() {

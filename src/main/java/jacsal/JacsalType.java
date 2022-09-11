@@ -406,6 +406,45 @@ public class JacsalType {
     return ANY;
   }
 
+  public static JacsalType typeFromClass(Class clss) {
+    if (clss == boolean.class)      { return BOOLEAN;       }
+    if (clss == Boolean.class)      { return BOXED_BOOLEAN; }
+    if (clss == int.class)          { return INT;           }
+    if (clss == Integer.class)      { return BOXED_INT;     }
+    if (clss == long.class)         { return LONG;          }
+    if (clss == Long.class)         { return BOXED_LONG;    }
+    if (clss == double.class)       { return DOUBLE;        }
+    if (clss == Double.class)       { return BOXED_DOUBLE;  }
+    if (clss == BigDecimal.class)   { return DECIMAL;       }
+    if (clss == String.class)       { return STRING;        }
+    if (clss == Map.class)          { return MAP;           }
+    if (clss == List.class)         { return LIST;          }
+    if (clss == MethodHandle.class) { return FUNCTION;      }
+    if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
+    if (clss == Object[].class)     { return OBJECT_ARR;    }
+    if (clss == Object.class)       { return ANY;           }
+    throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
+  }
+
+  public Class classFromType() {
+    switch (this.type) {
+      case BOOLEAN:       return isBoxed() ? Boolean.class : boolean.class;
+      case INT:           return isBoxed() ? Integer.class : int.class;
+      case LONG:          return isBoxed() ? Long.class    : long.class;
+      case DOUBLE:        return isBoxed() ? Double.class  : double.class;
+      case DECIMAL:       return BigDecimal.class;
+      case STRING:        return String.class;
+      case MAP:           return Map.class;
+      case LIST:          return List.class;
+      case INSTANCE:      throw new UnsupportedOperationException();
+      case ANY:           return Object.class;
+      case FUNCTION:      return MethodHandle.class;
+      case HEAPLOCAL:     return HeapLocal.class;
+      case OBJECT_ARR:    return Object[].class;
+      default: throw new IllegalStateException("Internal error: unexpected type " + type);
+    }
+  }
+
   private static void checkIsNumeric(JacsalType type, String leftOrRight, Token operator) {
     if (!type.isNumeric() && !type.is(ANY)) {
       throw new CompileError("Non-numeric operand for " + leftOrRight + "-hand side of '" + operator.getChars() + "': was " + type, operator);
