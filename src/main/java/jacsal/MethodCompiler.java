@@ -1057,6 +1057,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If we know what method to invoke
     if (expr.implementingClass != null) {
+      if (expr.needsLocation) {
+        loadLocation(expr.leftParen);
+      }
       // Get the args
       for (int i = 0; i < expr.args.size(); i++) {
         Expr arg = expr.args.get(i);
@@ -1066,6 +1069,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Add object type to param list since we invoke static method whose first arg is the object
       List<JacsalType> types = new ArrayList<>();
       types.add(expr.parent.type);
+      if (expr.needsLocation) {
+        types.add(STRING);
+        types.add(INT);
+      }
       types.addAll(expr.paramTypes);
       invokeMethod(true, expr.implementingClass, expr.implementingMethod, expr.type, types);
       return null;

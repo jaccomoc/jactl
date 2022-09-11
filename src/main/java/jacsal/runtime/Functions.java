@@ -40,9 +40,10 @@ public class Functions {
     public int              mandatoryArgCount;
     public String           implementingClass;
     public String           implementingMethod;
+    public boolean          needsLocation;
     public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(clss, String source, int offset, Object args)
 
-    public FunctionDescriptor(JacsalType type, String name, JacsalType returnType, List<JacsalType> paramTypes, int mandatoryArgCount, String implementingClass, String implementingMethod, MethodHandle wrapperHandle) {
+    public FunctionDescriptor(JacsalType type, String name, JacsalType returnType, List<JacsalType> paramTypes, int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
       this.type = type;
       this.name = name;
       this.returnType = returnType;
@@ -50,6 +51,7 @@ public class Functions {
       this.mandatoryArgCount = mandatoryArgCount;
       this.implementingClass = implementingClass;
       this.implementingMethod = implementingMethod;
+      this.needsLocation = needsLocation;
       this.wrapperHandle = wrapperHandle;
     }
 

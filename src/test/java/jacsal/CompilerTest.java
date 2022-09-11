@@ -2701,6 +2701,7 @@ class CompilerTest {
   }
 
   @Test public void simpleClosures() {
+    test("{;}()", null);
     test("int i = 1; { int i = 2; i++; }; i", 1);
     test("def f = { x -> x * x }; f(2)", 4);
     test("def f = { int x -> x * x }; f(2)", 4);
@@ -2836,6 +2837,63 @@ class CompilerTest {
     testError("def x = 1; x.size()", "no such method");
     testError("def x = [1]; x.sizeXXX()", "no such method");
     testError("1.size()", "no such method");
+  }
+
+  @Test public void listEach() {
+    test("[].each{}", null);
+    test("int sum = 0; [].each{sum++}; sum", 0);
+    test("int sum = 0; [10].each{ sum += it }; sum", 10);
+    test("int sum = 0; [10].each({ sum += it }); sum", 10);
+    test("int sum = 0; [10].each(){ sum += it }; sum", 10);
+    test("int sum = 0; [1,2,3,4].each{ x -> sum += x }; sum", 10);
+    test("int sum = 0; def x = [1,2,3,4]; x.each{ x -> sum += x }; sum", 10);
+    test("int sum = 0; List x = [1,2,3,4]; x.each{ x -> sum += x }; sum", 10);
+    test("int sum = 0; List x = [1,2,3,4]; def f = x.each; f{ x -> sum += x }; sum", 10);
+    test("int sum = 0; def x = [1,2,3,4]; def f = x.each; f{ x -> sum += x }; sum", 10);
+    test("int sum = 0; List x; x.each{ x -> sum += x }; sum", 0);
+    test("int sum = 0; [1,2,3].each{ x,y=2 -> sum += x+y }; sum", 12);
+    test("int sum = 0; [1,2,3].each{ x=7,y=2 -> sum += x+y }; sum", 12);
+    testError("int sum = 0; [1,2,3].each{ x,y -> sum += x+y }; sum", "missing mandatory argument");
+  }
+
+  @Test public void mapEach() {
+    test("[:].each{ x,y -> ; }", null);
+    test("[:].each{}", null);
+    test("[:].each{ x-> }", null);
+    test("def result = ''; [a:1,b:2].each{ x,y -> result += \"[$x,$y]\" }; result", "[a,1][b,2]");
+    test("def result = ''; [a:1,b:2].each{ result += \"[${it[0]},${it[1]}]\" }; result", "[a,1][b,2]");
+    test("def result = ''; [a:1,b:2].each{ x -> result += \"[${x[0]},${x[1]}]\" }; result", "[a,1][b,2]");
+    test("def result = 0; [a:1,b:2].each{ x -> result += x.size() }; result", 4);
+    test("def result = ''; [a:1,b:2].each{ x -> result += x }; result", "[a, 1][b, 2]");
+    test("def result = 0; [a:1,b:2].each{ x -> x.each{ result++ } }; result", 4);
+    test("def result = 0; [a:1,b:2].each{ List x -> x.each{ result++ } }; result", 4);
+    test("def result = ''; [a:1,b:2].each{ List x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+    test("def result = ''; [a:1,b:2].each{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+    test("def result = ''; Map x = [a:1,b:2]; x.each{ List x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+    test("def result = ''; def x = [a:1,b:2]; x.each{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+    test("def result = ''; Map x = [a:1,b:2]; def f = x.each; f{ List x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+    test("def result = ''; def x = [a:1,b:2]; def f = x.each; f{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+  }
+
+  @Test public void listCollect() {
+    test("[].collect{}", List.of());
+    test("def x = []; x.collect{}", List.of());
+    test("List x = []; x.collect{}", List.of());
+    testError("def x; x.collect{}", "null value");
+    test("List x = [1,2,3,4]; x.collect{it*it}", List.of(1,4,9,16));
+    test("List x = [1,2,3,4]; x.collect{it*it}.collect{ x -> x + x }", List.of(2,8,18,32));
+    test("def x = [1,2,3,4]; x.collect{it*it}.collect{ x -> x + x }", List.of(2,8,18,32));
+    test("def x = [1,2,3,4]; def f = x.collect{it*it}.collect; f{ x -> x + x }", List.of(2,8,18,32));
+    test("def x = [1,2,3,4]; x.collect{ x -> return {x*x}}.collect{it()}", List.of(1,4,9,16));
+  }
+
+  @Test public void mapCollect() {
+    test("[:].collect{}", List.of());
+    testError("def x = 1; x.collect{}", "no such method collect");
+    test("[a:1,b:2,c:3].collect{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
+    test("[a:1,b:2,c:3].collect{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
+    test("[a:1,b:2,c:3].collect{ it.collect{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
+    test("[a:1,b:2,c:3].collect{ x,y -> x + y }", List.of("a1","b2","c3"));
   }
 
   @Test public void globalFunctions() {

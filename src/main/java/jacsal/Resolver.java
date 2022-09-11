@@ -31,6 +31,7 @@ import static jacsal.JacsalType.LIST;
 import static jacsal.JacsalType.MAP;
 import static jacsal.JacsalType.STRING;
 import static jacsal.TokenType.*;
+import static jacsal.TokenType.OBJECT_ARR;
 
 /**
  * The Resolver visits all statements and all expressions and performs the following:
@@ -684,6 +685,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         expr.implementingClass  = descriptor.implementingClass;
         expr.implementingMethod = descriptor.implementingMethod;
         expr.paramTypes         = descriptor.paramTypes;
+        expr.needsLocation      = descriptor.needsLocation;
         validateArgCount(expr.args.size(), descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
         for (int i = 0; i < expr.args.size(); i++) {
           Expr arg = expr.args.get(i);
@@ -1151,9 +1153,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // and replace the assignment statement with a return wrapping the assignment expression.
     if (stmt instanceof Stmt.VarDecl) {
       Expr.VarDecl declExpr = ((Stmt.VarDecl) stmt).declExpr;
-      declExpr.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
-      return returnStmt;
+      // Don't use parameter declarations as value to return
+      if (!declExpr.isExplicitParam) {
+        declExpr.isResultUsed = true;
+        Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
+        return returnStmt;
+      }
     }
 
     // If last statement is a function declaration then we return the MethodHandle for the
@@ -1191,6 +1196,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Function<String,Token>           identToken = name -> token.apply(IDENTIFIER).setValue(name);
     Function<String,Expr.Identifier> ident      = name -> new Expr.Identifier(identToken.apply(name));
     Function<Object,Expr.Literal>    intLiteral = value -> new Expr.Literal(new Token(INTEGER_CONST, startToken).setValue(value));
+    Function<TokenType,Expr.Literal> typeLiteral= type  -> new Expr.Literal(token.apply(type));
+    BiFunction<Expr,TokenType,Expr>  instOfExpr = (name,type) -> new Expr.Binary(name,
+                                                                                 token.apply(INSTANCE_OF),
+                                                                                 typeLiteral.apply(type));
+
 
     BiFunction<String,JacsalType,Stmt.VarDecl> createParam =
       (name,type) -> {
@@ -1229,9 +1239,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     //  : if (_$args instanceof Object[]) {
     var ifStmts = new Stmt.Stmts();
     var ifStmt  = new Stmt.If(startToken,
-                              new Expr.Binary(ident.apply(argsName),
-                                              token.apply(INSTANCE_OF),
-                                              new Expr.Literal(token.apply(TokenType.OBJECT_ARR))),
+                              instOfExpr.apply(argsIdent, OBJECT_ARR),
                               new Stmt.Block(startToken, ifStmts),
                               new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Named arguments not yet supported"));
 
@@ -1245,6 +1253,36 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     ifStmts.stmts.add(varDecl(wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argArr), startToken));
     var argCountIdent = ident.apply(argCountName);
 
+    int paramCount = funDecl.parameters.size();
+
+    // Special case to handle situation where Object[] passed as only arg within the Object[]
+    // This is to handle iteration over maps where we pass Object[]{key,value} as our single arg
+    // value. If the closure has multiple args then the first arg gets the the key and the second
+    // one gets the value. If the closure only has a single arg then it is passed the Object[]
+    // (which then looks like a list to the code in the closure).
+    if (paramCount >= 2) {
+      //:   if (_$argCount == 1 && _$argArr[0] instanceof Object[]) {
+      //:     _$argArr = (Object[])_$argArr[0]
+      //:     _$argCount = _$argArr.length
+      //:   }
+      var argCountIs1      = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
+      var arg0IsObjArr     = instOfExpr.apply(new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0)), OBJECT_ARR);
+      var ifTrueStmts      = new Stmt.Stmts();
+      var getArg0          = new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0));
+      var assignToArgArr   = new Expr.VarAssign(argArr, token.apply(EQUAL), getArg0);
+      assignToArgArr.isResultUsed = false;
+      var assignToArgCount = new Expr.VarAssign(argCountIdent, token.apply(EQUAL), new Expr.ArrayLength(startToken, argArr));
+      assignToArgCount.isResultUsed = false;
+      ifTrueStmts.stmts.add(new Stmt.ExprStmt(startToken, assignToArgArr));
+      ifTrueStmts.stmts.add(new Stmt.ExprStmt(startToken, assignToArgCount));
+
+      var ifArg1isObjArr = new Stmt.If(startToken,
+                                       new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsObjArr),
+                                       ifTrueStmts,
+                                       null);
+      ifStmts.stmts.add(ifArg1isObjArr);
+    }
+
     int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
     if (mandatoryCount > 0) {
       //:   if (argCount < mandatoryCount) throw new RuntimeError("Missing mandatory arguments")
@@ -1255,7 +1293,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       ifStmts.stmts.add(throwIf);
     }
 
-    int paramCount = funDecl.parameters.size();
     //  :   if (argCount > paramCount) throw new RuntimeError("Too many arguments)
     var throwIf = new Stmt.If(startToken,
                               new Expr.Binary(argCountIdent, token.apply(GREATER_THAN), intLiteral.apply(paramCount)),

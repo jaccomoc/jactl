@@ -176,8 +176,8 @@ public class RuntimeUtils {
     }
 
     // All other operations expect numbers so check we have numbers
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
+    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Check for bitwise operations since we don't want to unnecessarily convert to double/BigDecimal...
     // TBD
@@ -210,8 +210,8 @@ public class RuntimeUtils {
       return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
     }
 
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
+    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -241,8 +241,8 @@ public class RuntimeUtils {
       return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
     }
 
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
+    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -268,8 +268,8 @@ public class RuntimeUtils {
   }
 
   public static Object minus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + originalOperator + "': was " + className(left), source, offset); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + originalOperator + "': was " + className(right), source, offset); }
+    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
+    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -295,8 +295,8 @@ public class RuntimeUtils {
   }
 
   public static Object divide(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
+    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -332,8 +332,8 @@ public class RuntimeUtils {
   }
 
   public static Object remainder(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (!(left instanceof Number))  { throw new RuntimeError("Non-numeric operand for left-hand side of '" + operator + "': was " + className(left), source, offset); }
-    if (!(right instanceof Number)) { throw new RuntimeError("Non-numeric operand for right-hand side of '" + operator + "': was " + className(right), source, offset); }
+    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
+    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -366,6 +366,13 @@ public class RuntimeUtils {
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
     }
+  }
+
+  private static void throwOperandError(Object obj, boolean isLeft, String operator, String source, int offset) {
+    if (obj == null) {
+      throw new NullError("Null operand for " + (isLeft?"left":"right") + "-hand side of '" + operator + "'", source, offset);
+    }
+    throw new RuntimeError("Non-numeric operand for " + (isLeft?"left":"right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
   }
 
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
@@ -486,6 +493,9 @@ public class RuntimeUtils {
     if (obj == null) {
       return null;
     }
+    if (obj instanceof Object[]) {
+      obj = Arrays.asList((Object[])obj);
+    }
     if (obj instanceof List) {
       StringBuilder sb = new StringBuilder();
       sb.append('[');
@@ -549,16 +559,19 @@ public class RuntimeUtils {
     MethodHandle handle = Functions.lookupWrapper(parent, field);
     if (handle == null && parent instanceof Map) {
       Object value = ((Map)parent).get(field);
-      if (!(value instanceof MethodHandle)) {
+      if (value != null && !(value instanceof MethodHandle)) {
         throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
       }
       handle = (MethodHandle)value;
     }
     if (handle == null) {
-      throw new NullError("No such method " + field, source, offset);
+      throw new NullError("No such method " + field + " for type " + className(parent), source, offset);
     }
     try {
       return handle.invokeExact(source, offset, args);
+    }
+    catch (RuntimeException e) {
+      throw e;
     }
     catch (Throwable e) {
       throw new RuntimeError("Error during method invocation: " + e.getMessage(), source, offset, e);
@@ -576,14 +589,17 @@ public class RuntimeUtils {
     }
 
     Object value = ((Map)parent).get(field);
+    if (value == null) {
+      throw new NullError("No such method " + field + " for type " + className(parent), source, offset);
+    }
     if (!(value instanceof MethodHandle)) {
       throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
     }
-    if (value == null) {
-      throw new NullError("Trying to call null value", source, offset);
-    }
     try {
       return ((MethodHandle)value).invokeExact(source, offset, args);
+    }
+    catch (RuntimeException e) {
+      throw e;
     }
     catch (Throwable e) {
       throw new RuntimeError("Error during method invocation: " + e.getMessage(), source, offset, e);
@@ -688,7 +704,7 @@ public class RuntimeUtils {
       }
     }
 
-    if (!(parent instanceof List) && !(parent instanceof String)) {
+    if (!(parent instanceof List) && !(parent instanceof String) && !(parent instanceof Object[])) {
       throw new RuntimeError("Invalid object type (" + className(parent) + "): expected Map/List" +
                              (isDot ? "" : " or String"), source, offset);
     }
@@ -696,7 +712,7 @@ public class RuntimeUtils {
     // Check that we are doing a list operation
     if (isDot) {
       throw new RuntimeError("Field access not supported for " +
-                             (parent instanceof List ? "List" : "String") +
+                             (parent instanceof String ? "String" : "List") +
                              " object", source, offset);
     }
 
@@ -716,6 +732,14 @@ public class RuntimeUtils {
         throw new RuntimeError("Index (" + index + ") too large for String (length=" + str.length() + ")", source, offset);
       }
       return Character.toString(str.charAt(index));
+    }
+
+    if (parent instanceof Object[]) {
+      Object[] arr = (Object[])parent;
+      if (index < arr.length) {
+        return arr[index];
+      }
+      return null;
     }
 
     List list = (List)parent;
@@ -820,6 +844,9 @@ public class RuntimeUtils {
 
     if (obj instanceof List) {
       return (List)obj;
+    }
+    if (obj instanceof Object[]) {
+      return Arrays.asList((Object[])obj);
     }
     if (obj == null) {
       throw new NullError("Null value for List", source, offset);

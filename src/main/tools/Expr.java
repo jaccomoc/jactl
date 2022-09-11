@@ -117,6 +117,7 @@ class Expr {
     List<Expr> args;
     String     @implementingClass;   // The actual class that has the method implementation
     String     @implementingMethod;  // The name of the class method that implements the method
+    boolean    @needsLocation;       // Whether source/offset need to be passed to method
 
     List<JacsalType> @paramTypes;
   }
