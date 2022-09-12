@@ -42,8 +42,10 @@ public class JacsalType {
     INSTANCE,
     ANY,
     FUNCTION,
+    // internal use only
     HEAPLOCAL,
-    OBJECT_ARR  // internal use only
+    OBJECT_ARR,
+    ITERATOR
   }
 
   public static JacsalType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
@@ -60,8 +62,10 @@ public class JacsalType {
   public static JacsalType LIST          = createRefType(TypeEnum.LIST);
   public static JacsalType ANY           = createRefType(TypeEnum.ANY);
   public static JacsalType FUNCTION      = createRefType(TypeEnum.FUNCTION);
+
   public static JacsalType HEAPLOCAL     = createRefType(TypeEnum.HEAPLOCAL);
-  public static JacsalType OBJECT_ARR    = createRefType(TypeEnum.OBJECT_ARR);  // internal use only
+  public static JacsalType OBJECT_ARR    = createRefType(TypeEnum.OBJECT_ARR);
+  public static JacsalType ITERATOR      = createRefType(TypeEnum.ITERATOR);
 
   private TypeEnum type;
   private boolean  boxed;
@@ -348,6 +352,7 @@ public class JacsalType {
       case FUNCTION:       return Type.getDescriptor(MethodHandle.class);
       case HEAPLOCAL:      return Type.getDescriptor(jacsal.runtime.HeapLocal.class);
       case OBJECT_ARR:     return Type.getDescriptor(Object[].class);
+      case ITERATOR:       return Type.getDescriptor(Iterator.class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -367,6 +372,7 @@ public class JacsalType {
       case FUNCTION:       return Type.getType(MethodHandle.class);
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
       case OBJECT_ARR:     return Type.getType(Object[].class);
+      case ITERATOR:       return Type.getType(Iterator.class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -386,6 +392,7 @@ public class JacsalType {
       case FUNCTION:   return Type.getInternalName(MethodHandle.class);
       case HEAPLOCAL:  return Type.getInternalName(HeapLocal.class);
       case OBJECT_ARR: return Type.getInternalName(Object[].class);
+      case ITERATOR:   return Type.getInternalName(Iterator.class);
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -403,6 +410,7 @@ public class JacsalType {
     if (obj instanceof MethodHandle) return FUNCTION;
     if (obj instanceof HeapLocal)    return HEAPLOCAL;
     if (obj instanceof Object[])     return OBJECT_ARR;
+    if (obj instanceof Iterator)     return ITERATOR;
     return ANY;
   }
 
@@ -422,6 +430,7 @@ public class JacsalType {
     if (clss == MethodHandle.class) { return FUNCTION;      }
     if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
     if (clss == Object[].class)     { return OBJECT_ARR;    }
+    if (clss == Iterator.class)     { return ITERATOR;      }
     if (clss == Object.class)       { return ANY;           }
     throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
   }
@@ -441,6 +450,7 @@ public class JacsalType {
       case FUNCTION:      return MethodHandle.class;
       case HEAPLOCAL:     return HeapLocal.class;
       case OBJECT_ARR:    return Object[].class;
+      case ITERATOR:      return Iterator.class;
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }
@@ -464,8 +474,9 @@ public class JacsalType {
       case INSTANCE:   return "Instance<>";
       case ANY:        return "def";
       case FUNCTION:   return "Function";
-      case HEAPLOCAL:  return "HeapLocal" ;
-      case OBJECT_ARR: return "Object[]" ;
+      case HEAPLOCAL:  return "HeapLocal";
+      case OBJECT_ARR: return "Object[]";
+      case ITERATOR:   return "Iterator";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }

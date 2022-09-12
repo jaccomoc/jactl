@@ -23,11 +23,10 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import static jacsal.JacsalType.ITERATOR;
 
 public class BuiltinFunctions {
 
@@ -35,38 +34,47 @@ public class BuiltinFunctions {
     register("size", "listSize", false);
     register("size", "objArrSize", false);
     register("size", "mapSize", false);
-    register("each", "listEach", true);
-    register("each", "objArrEach", true);
-    register("each", "mapEach", true);
-    register("collect", "listCollect", true);
-    register("collect", "objArrCollect", true);
-    register("collect", "mapCollect", true);
+    register("size", "iteratorSize", false);
+    register("each", "iteratorEach", ITERATOR, true, 0);
+    register("collect", "iteratorCollect", ITERATOR, true, 0);
+    register("map", "iteratorMap", ITERATOR, true, 0);
   }
 
   private static void register(String name, String methodName, boolean needsLocation) {
+    register(name, methodName, null, needsLocation, -1);
+  }
+
+  private static void register(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
     try {
       Method[] methods = BuiltinFunctions.class.getDeclaredMethods();
       Method   method  = Arrays.stream(methods).filter(m -> m.getName().equals(methodName)).findFirst().orElse(null);
       if (method == null) {
         throw new IllegalStateException("Couldn't find method " + methodName + " in BuiltinFunctions");
       }
-      JacsalType objType    = JacsalType.typeFromClass(method.getParameterTypes()[0]);
+      JacsalType firstArgType = JacsalType.typeFromClass(method.getParameterTypes()[0]);
+      if (objType == null) {
+        objType = firstArgType;
+      }
       JacsalType returnType = JacsalType.typeFromClass(method.getReturnType());
       List<JacsalType> paramTypes = Arrays.stream(method.getParameterTypes()).skip(needsLocation ? 3 : 1)
                                           .map(JacsalType::typeFromClass)
                                           .collect(Collectors.toList());
       MethodHandle wrapperHandle = MethodHandles.lookup().findStatic(BuiltinFunctions.class, methodName + "Wrapper",
                                                                      MethodType.methodType(Object.class,
-                                                                                           objType.classFromType(), String.class, int.class, Object.class));
-      Functions.registerMethod(new Functions.FunctionDescriptor(objType,
-                                                                name,
-                                                                returnType,
-                                                                paramTypes,
-                                                                0,
-                                                                Type.getInternalName(BuiltinFunctions.class),
-                                                                methodName,
-                                                                needsLocation,
-                                                                wrapperHandle));
+                                                                                           firstArgType.classFromType(), String.class, int.class, Object.class));
+      if (mandatoryArgCount < 0) {
+        mandatoryArgCount = paramTypes.size();
+      }
+      Functions.registerMethod(new Functions.Descriptor(objType,
+                                                        firstArgType,
+                                                        name,
+                                                        returnType,
+                                                        paramTypes,
+                                                        mandatoryArgCount,
+                                                        Type.getInternalName(BuiltinFunctions.class),
+                                                        methodName,
+                                                        needsLocation,
+                                                        wrapperHandle));
     }
     catch (NoSuchMethodException e) {
       throw new IllegalStateException("Couldn't find wrapper method for " + methodName, e);
@@ -78,6 +86,7 @@ public class BuiltinFunctions {
   }
 
   /////////////////////////////////////
+
 
   // = size
 
@@ -99,115 +108,104 @@ public class BuiltinFunctions {
     return list.length;
   }
 
+  public static int iteratorSize(Iterator iterator) { return RuntimeUtils.convertIteratorToList(iterator).size(); }
+  public static Object iteratorSizeWrapper(Iterator iterator, String source, int offset, Object args) {
+    validateArgCount(args, 0, 0, source, offset);
+    return RuntimeUtils.convertIteratorToList(iterator).size();
+  }
+
   ////////////////////////////////
+
+  // = map
+
+  public static Iterator iteratorMap(Object iterable, String source, int offset, MethodHandle closure) {
+    Iterator iter = createIterator(iterable);
+    return new Iterator() {
+      @Override public boolean hasNext() { return iter.hasNext(); }
+      @Override public Object next() {
+        try {
+          Object elem = iter.next();
+          if (elem instanceof Map.Entry) {
+            var entry = (Map.Entry)elem;
+            elem = new Object[] { entry.getKey(), entry.getValue() };
+          }
+          return closure == null ? elem : closure.invokeExact(source, offset, (Object)(new Object[]{ elem }));
+        }
+        catch (RuntimeException e) { throw e; }
+        catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
+      }
+    };
+  }
+  public static Object iteratorMapWrapper(Object iterable, String source, int offset, Object args) {
+    validateArgCount(args, 0, 1, source, offset);
+    Object[] arr = (Object[])args;
+    return iteratorMap(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
+  }
+
+  private static Iterator createIterator(Object obj) {
+    if (obj instanceof Iterator) { return (Iterator)obj;                    }
+    if (obj instanceof Iterable) { return ((Iterable)obj).iterator();       }
+    if (obj instanceof Map)      { return ((Map)obj).entrySet().iterator(); }
+    if (obj instanceof Object[]) {
+      Object[] arr = (Object[])obj;
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < arr.length; }
+        @Override public Object next()     { return arr[index++];       }
+      };
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
+  }
+
+  /////////////////////////////////////
 
   // = each
 
-  public static Object listEach(List list, String source, int offset, MethodHandle closure) {
-    list.forEach(elem -> {
+  public static Object iteratorEach(Object iterable, String source, int offset, MethodHandle closure) {
+    for (Iterator iter = createIterator(iterable); iter.hasNext(); ) {
       try {
-        Object ignored = closure.invokeExact(source, offset, (Object)(new Object[]{elem}));
-      }
-      catch (RuntimeException e) { throw e; }
-      catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
-    });
-    return null;
-  }
-  public static Object listEachWrapper(List list, String source, int offset, Object args) {
-    validateArgCount(args, 1, 1, source, offset);
-    return listEach(list, source, offset, (MethodHandle)((Object[])args)[0]);
-  }
-
-  public static Object objArrEach(Object[] arr, String source, int offset, MethodHandle closure) {
-    for (Object elem: arr) {
-      try {
-        Object ignored = closure.invokeExact(source, offset, (Object)(new Object[]{elem}));
+        Object elem = iter.next();
+        if (elem instanceof Map.Entry) {
+          var entry = (Map.Entry)elem;
+          elem = new Object[] { entry.getKey(), entry.getValue() };
+        }
+        Object ignored = closure == null ? elem : closure.invokeExact(source, offset, (Object)(new Object[]{elem}));
       }
       catch (RuntimeException e) { throw e; }
       catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
     }
     return null;
   }
-  public static Object objArrEachWrapper(Object[] arr, String source, int offset, Object args) {
+  public static Object iteratorEachWrapper(Object iterable, String source, int offset, Object args) {
     validateArgCount(args, 1, 1, source, offset);
-    return objArrEach(arr, source, offset, (MethodHandle)((Object[])args)[0]);
-  }
-
-  public static Object mapEach(Map map, String source, int offset, MethodHandle closure) {
-    map.forEach((key,value) -> {
-      try {
-        // We pass key/value as a single Object[] within our vargs Object[]. If the closure
-        // takes more than one arg then the wrapper function will assign our two values to
-        // the first two args. If the closure takes only one arg then it will be passed the
-        // Object[] and the two values can be acess as though it were a list: it[0] and it[1],
-        // for example.
-        Object ignored = closure.invokeExact(source, offset, (Object)(new Object[]{new Object[]{key,value}}));
-      }
-      catch (RuntimeException e) { throw e; }
-      catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
-    });
-    return null;
-  }
-  public static Object mapEachWrapper(Map map, String source, int offset, Object args) {
-    validateArgCount(args, 1, 1, source, offset);
-    return mapEach(map, source, offset, (MethodHandle)((Object[])args)[0]);
+    Object[] arr = (Object[])args;
+    return iteratorEach(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
   }
 
   ////////////////////////////////
 
   // = collect
 
-  public static List listCollect(List list, String source, int offset, MethodHandle closure) {
+  public static List iteratorCollect(Object iterable, String source, int offset, MethodHandle closure) {
     List result = new ArrayList();
-    list.forEach(elem -> {
+    for (Iterator iter = createIterator(iterable); iter.hasNext(); ) {
       try {
-        result.add(closure.invokeExact(source, offset, (Object)(new Object[]{elem})));
-      }
-      catch (RuntimeException e) { throw e; }
-      catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
-    });
-    return result;
-  }
-  public static Object listCollectWrapper(List list, String source, int offset, Object args) {
-    validateArgCount(args, 1, 1, source, offset);
-    return listCollect(list, source, offset, (MethodHandle)((Object[])args)[0]);
-  }
-
-  public static List objArrCollect(Object[] arr, String source, int offset, MethodHandle closure) {
-    List result = new ArrayList();
-    for (Object elem: arr) {
-      try {
-        result.add(closure.invokeExact(source, offset, (Object)(new Object[]{elem})));
+        Object elem = iter.next();
+        if (elem instanceof Map.Entry) {
+          var entry = (Map.Entry)elem;
+          elem = new Object[] { entry.getKey(), entry.getValue() };
+        }
+        result.add(closure == null ? elem : closure.invokeExact(source, offset, (Object)(new Object[]{elem})));
       }
       catch (RuntimeException e) { throw e; }
       catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
     }
     return result;
   }
-  public static Object objArrCollectWrapper(Object[] arr, String source, int offset, Object args) {
-    validateArgCount(args, 1, 1, source, offset);
-    return objArrCollect(arr, source, offset, (MethodHandle)((Object[])args)[0]);
-  }
-
-  public static Object mapCollect(Map map, String source, int offset, MethodHandle closure) {
-    List result = new ArrayList();
-    map.forEach((key,value) -> {
-      try {
-        // We pass key/value as a single Object[] within our vargs Object[]. If the closure
-        // takes more than one arg then the wrapper function will assign our two values to
-        // the first two args. If the closure takes only one arg then it will be passed the
-        // Object[] and the two values can be acess as though it were a list: it[0] and it[1],
-        // for example.
-        result.add(closure.invokeExact(source, offset, (Object)(new Object[]{new Object[]{key,value}})));
-      }
-      catch (RuntimeException e) { throw e; }
-      catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
-    });
-    return result;
-  }
-  public static Object mapCollectWrapper(Map map, String source, int offset, Object args) {
-    validateArgCount(args, 1, 1, source, offset);
-    return mapCollect(map, source, offset, (MethodHandle)((Object[])args)[0]);
+  public static Object iteratorCollectWrapper(Object iterable, String source, int offset, Object args) {
+    validateArgCount(args, 0, 1, source, offset);
+    Object[] arr = (Object[])args;
+    return iteratorCollect(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
   }
 
   /////////////////////////////

@@ -837,21 +837,37 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
   }
 
+  /**
+   * Detect if we have an Iterator and convert to List otherwise just return the object.
+   */
+  public static Object convertToAny(Object obj) {
+    if (obj instanceof Iterator) {
+      return convertIteratorToList((Iterator)obj);
+    }
+    return obj;
+  }
+
   public static List castToList(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
+    if (obj instanceof HeapLocal) { obj = ((HeapLocal)obj).getValue();   }
+    if (obj instanceof List)      { return (List)obj;                    }
+    if (obj instanceof Object[])  { return Arrays.asList((Object[])obj); }
+    if (obj instanceof Iterator) {
+      Iterator iter = (Iterator)obj;
+      return convertIteratorToList(iter);
     }
 
-    if (obj instanceof List) {
-      return (List)obj;
-    }
-    if (obj instanceof Object[]) {
-      return Arrays.asList((Object[])obj);
-    }
     if (obj == null) {
       throw new NullError("Null value for List", source, offset);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
+  }
+
+  public static List convertIteratorToList(Iterator iter) {
+    List result = new ArrayList();
+    while (iter.hasNext()) {
+      result.add(iter.next());
+    }
+    return result;
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {
@@ -940,6 +956,7 @@ public class RuntimeUtils {
     if (obj instanceof Boolean)    { return "boolean"; }
     if (obj instanceof Map)        { return "Map"; }
     if (obj instanceof List)       { return "List"; }
+    if (obj instanceof Iterator)   { return "Iterator"; }
     return obj.getClass().getName();
   }
 

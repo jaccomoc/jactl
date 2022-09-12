@@ -22,18 +22,21 @@ import java.lang.invoke.MethodHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static jacsal.JacsalType.*;
+
 public class Functions {
 
-  private static final Map<Class, ClassLookup>              classes = new ConcurrentHashMap<>();
-  private static final Map<String,List<FunctionDescriptor>> methods = new ConcurrentHashMap<>();
-  private static final FunctionDescriptor NO_SUCH_METHOD = new FunctionDescriptor();
+  private static final Map<Class, ClassLookup>      classes        = new ConcurrentHashMap<>();
+  private static final Map<String,List<Descriptor>> methods        = new ConcurrentHashMap<>();
+  private static final Descriptor                   NO_SUCH_METHOD = new Descriptor();
 
   private static class ClassLookup {
-    Map<String,FunctionDescriptor> methods = new ConcurrentHashMap<>();
+    Map<String, Descriptor> methods = new ConcurrentHashMap<>();
   }
 
-  public static class FunctionDescriptor {
+  public static class Descriptor {
     public JacsalType       type;            // Type method is for
+    public JacsalType       firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
     public String           name;            // Jacsal method/function name
     public JacsalType       returnType;
     public List<JacsalType> paramTypes;
@@ -43,8 +46,9 @@ public class Functions {
     public boolean          needsLocation;
     public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(clss, String source, int offset, Object args)
 
-    public FunctionDescriptor(JacsalType type, String name, JacsalType returnType, List<JacsalType> paramTypes, int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
+    public Descriptor(JacsalType type, JacsalType firstArgType, String name, JacsalType returnType, List<JacsalType> paramTypes, int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
       this.type = type;
+      this.firstArgtype = firstArgType;
       this.name = name;
       this.returnType = returnType;
       this.paramTypes = paramTypes;
@@ -55,14 +59,14 @@ public class Functions {
       this.wrapperHandle = wrapperHandle;
     }
 
-    private FunctionDescriptor() {}
+    private Descriptor() {}
   }
 
   /**
    * Register a method of a class. This can be used to register methods on
    * classes that don't normally have methods (e.g. numbers).
    */
-  static void registerMethod(FunctionDescriptor descriptor) {
+  static void registerMethod(Descriptor descriptor) {
     var functions = methods.computeIfAbsent(descriptor.name, k -> new ArrayList<>());
     functions.add(descriptor);
   }
@@ -76,7 +80,7 @@ public class Functions {
   /**
    * Lookup method at compile time and return FunctionDescriptor if method exists
    */
-  public static FunctionDescriptor lookupMethod(JacsalType type, String methodName) {
+  public static Descriptor lookupMethod(JacsalType type, String methodName) {
     var function = findMatching(type, methodName);
     if (function == NO_SUCH_METHOD) {
       return null;
@@ -94,13 +98,13 @@ public class Functions {
    * @return MethodHandle bound to parent
    */
   static MethodHandle lookupWrapper(Object parent, String methodName) {
-    Class parentClass = parent.getClass();
+    Class parentClass = parent instanceof Iterator ? Iterator.class : parent.getClass();
     var classLookup = classes.get(parentClass);
     if (classLookup == null) {
       classLookup = new ClassLookup();
       classes.put(parentClass, classLookup);
     }
-    FunctionDescriptor function = classLookup.methods.get(methodName);
+    Descriptor function = classLookup.methods.get(methodName);
     if (function == null) {
       JacsalType parentType = JacsalType.typeOf(parent);
       function = findMatching(parentType, methodName);
@@ -114,13 +118,25 @@ public class Functions {
     return function.wrapperHandle.bindTo(parent);
   }
 
-  private static FunctionDescriptor findMatching(JacsalType type, String methodName) {
+  private static Descriptor findMatching(JacsalType type, String methodName) {
     var functions = methods.get(methodName);
-    if (functions != null) {
-      // Look for exact match. TODO: handle subclasses/interfaces (e.g. Number)?
-      var match = functions.stream().filter(f -> f.type == type).findFirst();
-      return match.orElse(NO_SUCH_METHOD);
+    if (functions == null) {
+      return NO_SUCH_METHOD;
     }
-    return NO_SUCH_METHOD;
+
+    // Look for exact match and then generic match.
+    // Number classes (int, long, doune, Decimal) can match on Number and
+    // List/Map/Object[] can match on Iterable.
+    var match = functions.stream().filter(f -> f.type == type).findFirst();
+    if (match.isEmpty()) {
+      if (type.isNumeric()) {
+        // TODO
+      }
+      else
+      if (type.is(LIST,MAP,OBJECT_ARR)) {
+        match = functions.stream().filter(f -> f.type == ITERATOR).findFirst();
+      }
+    }
+    return match.orElse(NO_SUCH_METHOD);
   }
 }

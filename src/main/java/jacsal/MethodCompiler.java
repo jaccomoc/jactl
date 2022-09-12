@@ -1048,6 +1048,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadArgsAsObjectArr(expr.args);
     invokeMethodHandle();
 
+    // Since we might be invoking a function that returns an Iterator (def f = x.map; f()), then
+    // we need to check that if not immediately invoking another method call (f().each()) we must
+    // convert Iterator to List since Iterator is not a standard type.
+    if (!expr.isMethodCallTarget) {
+      invokeStatic(RuntimeUtils.class, "convertToAny", Object.class);
+    }
+
     return null;
   }
 
@@ -1056,25 +1063,35 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.parent);
 
     // If we know what method to invoke
-    if (expr.implementingClass != null) {
-      if (expr.needsLocation) {
+    if (expr.methodDescriptor != null) {
+      var method = expr.methodDescriptor;
+      if (method.needsLocation) {
         loadLocation(expr.leftParen);
       }
       // Get the args
-      for (int i = 0; i < expr.args.size(); i++) {
+      int i = 0;
+      for (; i < expr.args.size(); i++) {
         Expr arg = expr.args.get(i);
         compile(arg);
-        convertTo(expr.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
+        convertTo(method.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
+      }
+      for (; i < method.paramTypes.size(); i++) {
+        loadDefaultValue(method.paramTypes.get(i));
       }
       // Add object type to param list since we invoke static method whose first arg is the object
       List<JacsalType> types = new ArrayList<>();
-      types.add(expr.parent.type);
-      if (expr.needsLocation) {
+      types.add(method.firstArgtype);
+      if (method.needsLocation) {
         types.add(STRING);
         types.add(INT);
       }
-      types.addAll(expr.paramTypes);
-      invokeMethod(true, expr.implementingClass, expr.implementingMethod, expr.type, types);
+      types.addAll(method.paramTypes);
+      invokeMethod(true, method.implementingClass, method.implementingMethod, expr.type, types);
+      if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
+        // If Iterator is not going to have another method invoked on it then we need to convert
+        // to List since Iterators are not standard Jacsal types.
+        invokeStatic(RuntimeUtils.class, "convertIteratorToList", Iterator.class);
+      }
       return null;
     }
 
@@ -1092,6 +1109,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       // Did know type of parent but no such method so load value from field
       invokeStatic(RuntimeUtils.class, "invokeField", Object.class, String.class, boolean.class, Object.class, String.class, int.class);
+    }
+    if (!expr.isMethodCallTarget) {
+      // If we are not chaining method calls then it is possible that the method we just invoked returned
+      // an Iterator and since Iterators are not standard types we need to convert into a List to make the
+      // result usable by other code. So we incoke castToAny which will check for Iterator and convert
+      // otherwise it returns the current value.
+      invokeStatic(RuntimeUtils.class, "convertToAny", Object.class);
     }
     return null;
   }
@@ -1514,6 +1538,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DECIMAL:  loadConst(BigDecimal.ZERO);   break;
       case STRING:   loadConst("");           break;
       case ANY:      loadConst(null);         break;
+      case FUNCTION: loadConst(null);         break;   // use null for the moment to indicate identity function
       case MAP:
         _newInstance(HashMap.class);
         push(MAP);
@@ -1559,7 +1584,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case STRING:   return castToString(location);
       case MAP:      return castToMap(location);
       case LIST:     return castToList(location);
-      case ANY:      return convertToAny();
+      case ANY:      return convertToAny(location);
       case FUNCTION: return castToFunction(location);
       case OBJECT_ARR: return castToObjectArr(location);
       default:      throw new IllegalStateException("Unknown type " + type);
@@ -1731,7 +1756,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private Void castToList(SourceLocation location) {
     if (peek().is(LIST)) { return null; }
-    if (peek().is(ANY)) {
+    if (peek().is(ITERATOR,ANY)) {
       loadLocation(location);
       invokeStatic(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
       return null;
@@ -1759,7 +1784,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private Void convertToAny() {
+  private Void convertToAny(SourceLocation location) {
     box();
     return null;
   }

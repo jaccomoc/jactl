@@ -37,6 +37,8 @@ import java.util.LinkedHashMap;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
+import jacsal.runtime.Functions;
+
 import static jacsal.JacsalType.HEAPLOCAL;
 
 /**
@@ -107,6 +109,13 @@ class Expr {
     Token      token;
     Expr       callee;
     List<Expr> args;
+
+    // If we are a call to an arbitrary function/closure then it is possible that the
+    // function we are calling returns an Iterator:  def f = x.map; f()
+    // In this case we need to check that if the result is not immediately used as the
+    // target of a chained method call (f().each()) and the result was an Iterator then
+    // the result must be converted to a List.
+    boolean @isMethodCallTarget;
   }
 
   class MethodCall extends Expr {
@@ -115,11 +124,22 @@ class Expr {
     Token      accessOperator; // Either '.' or '?.'
     String     methodName;     // Either the method name or field name that holds a MethodHandle
     List<Expr> args;
-    String     @implementingClass;   // The actual class that has the method implementation
-    String     @implementingMethod;  // The name of the class method that implements the method
-    boolean    @needsLocation;       // Whether source/offset need to be passed to method
 
-    List<JacsalType> @paramTypes;
+    Functions.Descriptor @methodDescriptor;
+
+    // True if result of method call becomes the target of the next method call. This is used so
+    // that we can allow Iterators to be the result of a list.map() call which is then itself used
+    // as the target of another map() call (or call that can operator on an Iterator). Otherwise
+    // we need to convert the Iterator into a List since Iterators don't really exist at the Jacsal
+    // language level and are only used as an implementation detail for some iteration methods.
+    // E.g.: x.map().map().each()
+    // This means that the x.map() can return an iterator that is then used in the next .map() which
+    // returns another iterator that is used in the .each() call.
+    // If the result is not to be used by another method then we convert the Iterator into a List.
+    // That way x.map{} which in theory does nothing but might have side effects if the closure has
+    // a side effect will still run and cause the side effects to happen even though the end result
+    // is not actually used.
+    boolean isMethodCallTarget = false;
   }
 
   class Literal extends Expr {

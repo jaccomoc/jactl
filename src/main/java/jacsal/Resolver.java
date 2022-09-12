@@ -271,7 +271,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (expr.isConst && expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
-      throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.left.location);
+      throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.left.location);
     }
 
     // Field access operators
@@ -673,6 +673,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitMethodCall(Expr.MethodCall expr) {
     resolve(expr.parent);
+    // Flag as chained method call so that if parent call has a result of Iterator
+    // it can remain as an Iterator. Otherwise calls that result in Iterators have
+    // the result converted to a List. It is only if we are chaining method calls
+    // that Iterator is allowed to be used this way. E.g; x.map().map().each()
+    if (expr.parent instanceof Expr.MethodCall) {
+      ((Expr.MethodCall) expr.parent).isMethodCallTarget = true;
+    }
+    if (expr.parent instanceof Expr.Call) {
+      ((Expr.Call) expr.parent).isMethodCallTarget = true;
+    }
+
     expr.args.forEach(this::resolve);
 
     // See if we have a direct method invocation or not. We need to know the type of the parent
@@ -682,10 +693,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (!expr.parent.type.is(ANY)) {
       var descriptor = Functions.lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
-        expr.implementingClass  = descriptor.implementingClass;
-        expr.implementingMethod = descriptor.implementingMethod;
-        expr.paramTypes         = descriptor.paramTypes;
-        expr.needsLocation      = descriptor.needsLocation;
+        expr.methodDescriptor = descriptor;
         validateArgCount(expr.args.size(), descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
         for (int i = 0; i < expr.args.size(); i++) {
           Expr arg = expr.args.get(i);
@@ -777,8 +785,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = JacsalType.BOOLEAN;
     }
 
-    if (expr.left.constValue == null)  { throw new CompileError("Non-numeric operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
-    if (expr.right.constValue == null) { throw new CompileError("Non-numeric operand for right-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.operator); }
+    if (expr.left.constValue == null)  { throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
+    if (expr.right.constValue == null) { throw new CompileError("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
 
     switch (expr.type.getType()) {
       case INT: {

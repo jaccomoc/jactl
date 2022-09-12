@@ -229,8 +229,8 @@ class CompilerTest {
     testError("1 - 'abc'", "non-numeric operand for right-hand side");
     testError("'abc' - 1", "non-numeric operand for left-hand side");
     testError("false + true", "non-numeric operand for left-hand side");
-    testError("1 + null", "non-numeric operand for right-hand side");
-    testError("null + 1", "non-numeric operand for left-hand side");
+    testError("1 + null", "null operand for right-hand side");
+    testError("null + 1", "null operand for left-hand side");
     testError("1/0", "divide by zero");
     test("1.0D/0", Double.POSITIVE_INFINITY);
     test("-1.0D/0", Double.NEGATIVE_INFINITY);
@@ -325,10 +325,10 @@ class CompilerTest {
     testError("def s = 'abc'; def x = 1; s - x", "non-numeric operand for left-hand side");
     testError("boolean b1 = false; boolean b2 = true; b1 + b2", "non-numeric operand for left-hand side");
     testError("def b1 = false; def b2 = true; b1 + b2", "non-numeric operand for left-hand side");
-    testError("int i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
-    testError("def i = 1; def x = null; i + x", "non-numeric operand for right-hand side");
-    testError("def x = null; int i = 1; x + i", "non-numeric operand for left-hand side");
-    testError("def x = null; def i = 1; x + i", "non-numeric operand for left-hand side");
+    testError("int i = 1; def x = null; i + x", "null operand for right-hand side");
+    testError("def i = 1; def x = null; i + x", "null operand for right-hand side");
+    testError("def x = null; int i = 1; x + i", "null operand for left-hand side");
+    testError("def x = null; def i = 1; x + i", "null operand for left-hand side");
     testError("int x = 1; int y = 0; x/y", "divide by zero");
     testError("def x = 1; def y = 0; x/y", "divide by zero");
     test("double x = 1.0D; int y = 0; x/y", Double.POSITIVE_INFINITY);
@@ -905,7 +905,7 @@ class CompilerTest {
     test("double x = 2; int y = 3; x *= y", 6.0D);
     test("def x = 2.0D; int y = 3; y *= x", 6);
     test("def x = 2.0D; int y = 3; x *= y", 6.0D);
-    testError("def x; x *= 2", "non-numeric operand for left-hand side");
+    testError("def x; x *= 2", "null operand for left-hand side");
     test("def x = [:]; x.a *= 2", 0);
   }
 
@@ -996,12 +996,12 @@ class CompilerTest {
     testError("def x = false; x + true", "non-numeric operand for left-hand side");
     testError("def x = true; false + x", "non-numeric operand for left-hand side");
     testError("def x = false; def y = true; x + y", "non-numeric operand for left-hand side");
-    testError("def x = 1; x + null", "non-numeric operand for right-hand side");
-    testError("def x = null; 1 + x", "non-numeric operand for right-hand side");
-    testError("def x = 1; def y =null; x + y", "non-numeric operand for right-hand side");
-    testError("def x = null; x + 1", "non-numeric operand for left-hand side");
-    testError("def x = 1; null + x", "non-numeric operand for left-hand side");
-    testError("def x = null; def y = 1; x + y", "non-numeric operand for left-hand side");
+    testError("def x = 1; x + null", "null operand for right-hand side");
+    testError("def x = null; 1 + x", "null operand for right-hand side");
+    testError("def x = 1; def y =null; x + y", "null operand for right-hand side");
+    testError("def x = null; x + 1", "null operand for left-hand side");
+    testError("def x = 1; null + x", "null operand for left-hand side");
+    testError("def x = null; def y = 1; x + y", "null operand for left-hand side");
 
     test("def x = false; !x", true);
     test("def x = true; !x", false);
@@ -1416,7 +1416,7 @@ class CompilerTest {
     testError("'abc' - '123'", "non-numeric operand");
     test("'abc' + '123'", "abc123");
     test("'abc' + null", "abcnull");
-    testError("null + 'abc'", "non-numeric operand");
+    testError("null + 'abc'", "null operand");
     test("'abc' + 'def' + 'ghi'", "abcdefghi");
     test("'abc' + ('1' + '2' + '3') + 'def'", "abc123def");
     test("'' + 'abc'", "abc");
@@ -1889,19 +1889,19 @@ class CompilerTest {
     test("def y; String x = '1'; x ?= y; x", "1");
 
     test("Map m; def x = [a:3]; 1 + (m.a.b ?= 2) + (m.a.c ?= 3)", 6);
-    testError("Map m; def x = [a:3]; 1 + (m.a.b ?= m.xxx) + (m.a.c ?= 3)", "non-numeric operand");
+    testError("Map m; def x = [a:3]; 1 + (m.a.b ?= m.xxx) + (m.a.c ?= 3)", "null operand");
     test("def x = [:]; def y; 1 + (x.a.b ?= 2) + (x.a.c ?= 3)", 6);
     test("def x = [a:3]; def y; y ?= x.z", null);
     test("def x = [a:3]; def y; y ?= x.a", 3);
     test("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.a)", 6);
-    testError("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.xxx)", "non-numeric operand");
-    testError("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "non-numeric operand");
+    testError("def x = [a:3]; def y; (y ?= x.a) + (y ?= x.xxx)", "null operand");
+    testError("def x = [a:3]; def y; (y ?= x.xxx) + (y ?= x.xxx)", "null operand");
     test("def x = [a:3]; def y; (y ?= x.a) + (x.b.b[2].c ?= 3)", 6);
-    testError("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "non-numeric operand");
+    testError("def x = [a:3]; def y; (y ?= x.x) + (x.a.b[2].c ?= x.x)", "null operand");
     test("Map m; def x = [a:3]; (m.a.b.c ?= x.a) + (m.a.b ?= 3)", 6);
 
     test("def x = [a:3]; def y; x.b += (y ?= x.a)", 3);
-    testError("def x = [a:3]; def y; x.b += (y ?= x.xxx)", "non-numeric operand");
+    testError("def x = [a:3]; def y; x.b += (y ?= x.xxx)", "null operand");
 
     test("def x; 1 + (x ?= 2)", 3);
     test("def x; 1 + (x ?= 2L)", 3L);
@@ -1922,7 +1922,7 @@ class CompilerTest {
   @Test public void nullValues() {
     testError("String s = null", "null value");
     testError("int i = null", "cannot convert null");
-    testError("1.0 + null", "non-numeric operand");
+    testError("1.0 + null", "null operand");
     testError("def x; int i = x", "cannot convert null");
   }
 
@@ -2876,8 +2876,16 @@ class CompilerTest {
   }
 
   @Test public void listCollect() {
+    testError("[].collect{}{}", "too many arguments");
+    testError("def x = []; x.collect{}{}", "too many arguments");
+    test("[].collect()", List.of());
     test("[].collect{}", List.of());
+    test("[1,2,3].collect{}", Arrays.asList(null, null, null));
+    test("[1,2,3].collect()", List.of(1,2,3));
+    test("def x = [1,2,3]; x.collect{}", Arrays.asList(null, null, null));
+    test("def x = [1,2,3]; x.collect()", List.of(1,2,3));
     test("def x = []; x.collect{}", List.of());
+    test("def x = []; x.collect()", List.of());
     test("List x = []; x.collect{}", List.of());
     testError("def x; x.collect{}", "null value");
     test("List x = [1,2,3,4]; x.collect{it*it}", List.of(1,4,9,16));
@@ -2889,11 +2897,59 @@ class CompilerTest {
 
   @Test public void mapCollect() {
     test("[:].collect{}", List.of());
+    test("[:].collect()", List.of());
     testError("def x = 1; x.collect{}", "no such method collect");
     test("[a:1,b:2,c:3].collect{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
     test("[a:1,b:2,c:3].collect{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
     test("[a:1,b:2,c:3].collect{ it.collect{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
     test("[a:1,b:2,c:3].collect{ x,y -> x + y }", List.of("a1","b2","c3"));
+  }
+
+  @Test public void collectionMap() {
+    testError("[].map{}{}", "too many arguments");
+    testError("def x = []; x.map{}{}", "too many arguments");
+    test("[].map()", List.of());
+    test("[].map{}", List.of());
+    test("[1,2,3].map{}", Arrays.asList(null, null, null));
+    test("[1,2,3].map()", List.of(1,2,3));
+    test("def x = [1,2,3]; x.map{}", Arrays.asList(null, null, null));
+    test("def x = [1,2,3]; x.map()", List.of(1,2,3));
+    test("def x = []; x.map{}", List.of());
+    test("def x = []; x.map()", List.of());
+    test("List x = []; x.map{}", List.of());
+    testError("def x; x.map{}", "null value");
+    test("List x = [1,2,3,4]; x.map{it*it}", List.of(1,4,9,16));
+    test("List x = [1,2,3,4]; x.map{it*it}.map{ x -> x + x }", List.of(2,8,18,32));
+    test("def x = [1,2,3,4]; x.map{it*it}.map{ x -> x + x }", List.of(2,8,18,32));
+    test("def x = [1,2,3,4]; def f = x.map{it*it}.map; f{ x -> x + x }", List.of(2,8,18,32));
+    test("def x = [1,2,3,4]; x.map{ x -> return {x*x}}.map{it()}", List.of(1,4,9,16));
+    test("[:].map{}", List.of());
+    test("[:].map()", List.of());
+    testError("def x = 1; x.map{}", "no such method map");
+    test("[a:1,b:2,c:3].map{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
+    test("[a:1,b:2,c:3].map{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
+    test("[a:1,b:2,c:3].map{ it.map{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
+    test("[a:1,b:2,c:3].map{ x,y -> x + y }", List.of("a1","b2","c3"));
+    test("def x = [1,2,3]; def y = x.map{}; y.size()", 3);
+    test("var x = [1,2,3]; def y = x.map{}; y.size()", 3);
+    test("var x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", List.of(2, 2));
+    test("def x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", List.of(2, 2));
+    test("def x = [1,2,3]; x.map{}.size()", 3);
+    test("def x = [1,2,3]; x.map().size()", 3);
+    test("var x = [1,2,3]; x.map().size()", 3);
+    test("def x = [1,2,3]; x.map{it+it}.size()", 3);
+    test("var x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
+    test("def x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
+    test("def x = [1,2,3]; def i = 0; def y = x.\"${'map'}\"{it+it+i++}; i", 3);
+    test("var x = [1,2,3]; def i = 0; x.map{it+it+i++}; i", 3);
+    test("def x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
+    test("def x = [1,2,3]; def i = 0; x.map{it+it+i++}; i", 3);
+    test("def x = [1,2,3]; def i = 0; def f(x){i}; f(x.map{i++}); i", 3);
+    test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", List.of(1, 7, 17));
+  }
+
+  @Test public void testStuff() {
+    test("def x = [1,2,3,4]; def f = x.map{it*it}.map; f{ x -> x + x }", List.of(2,8,18,32));
   }
 
   @Test public void globalFunctions() {
