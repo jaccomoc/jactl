@@ -145,7 +145,7 @@ public class RuntimeUtils {
    */
   public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
     if (left == null) {
-      throw new NullError("Left-hand side of '" + operator + "' cannot be null", source, offset);
+      throwOperandError(left, true, operator, source, offset);
     }
     if (left == DEFAULT_VALUE && right instanceof String && operator == PLUS) {
       // Special case to support: x.a += 'some string'
@@ -169,6 +169,14 @@ public class RuntimeUtils {
         }
         throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
+    }
+
+    if (left instanceof List) {
+      return listAdd((List)left, right);
+    }
+
+    if (left instanceof Map && right instanceof Map) {
+      return mapAdd((Map)left, (Map)right);
     }
 
     if (operator != PLUS) {
@@ -206,11 +214,10 @@ public class RuntimeUtils {
   }
 
   public static Object plus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (left == DEFAULT_VALUE || left instanceof String) {
+    if (left == DEFAULT_VALUE || !(left instanceof Number)) {
       return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
     }
 
-    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
     if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -467,6 +474,36 @@ public class RuntimeUtils {
       throw new RuntimeError("String repeat count must be >= 0", source, offset);
     }
     return str.repeat(count);
+  }
+
+
+  /**
+   * Add to a list. If second object is a list then we concatenat the lists.
+   * Otherwise object is added to and of the list.
+   * @return new list which is result of adding second object to first list
+   */
+  public static List listAdd(List list, Object obj) {
+    List result = new ArrayList(list);
+    if (obj instanceof List) {
+      result.addAll((List)obj);
+    }
+    else {
+      result.add(obj);
+    }
+    return result;
+  }
+
+  /**
+   * Add twp maps together. The result is a new map with a merge of the
+   * keys and values from the two maps. If the same key appears in both
+   * maps the value from the second map "overwrites" the other value and
+   * becomes the value of the key in the resulting map.
+   * @return a new map which is the combination of the two maps
+   */
+  public static Map mapAdd(Map map1, Map map2) {
+    Map result = new HashMap(map1);
+    result.putAll(map2);
+    return result;
   }
 
   /**

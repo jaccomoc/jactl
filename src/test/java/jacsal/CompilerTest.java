@@ -2948,8 +2948,30 @@ class CompilerTest {
     test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", List.of(1, 7, 17));
   }
 
-  @Test public void testStuff() {
-    test("def x = [1,2,3,4]; def f = x.map{it*it}.map; f{ x -> x + x }", List.of(2,8,18,32));
+  @Test public void listAdd() {
+    test("[]+[]", List.of());
+    test("def x = []; x + x", List.of());
+    test("[] + 1", List.of(1));
+    test("[] + [a:1]", List.of(Map.of("a",1)));
+    test("[1] + 2", List.of(1,2));
+    test("[1,2] + [3,4]", List.of(1,2,3,4));
+    test("def x = [1,2]; x + [3,4]", List.of(1,2,3,4));
+    test("def x = [1,2]; def y = [3,4]; x + y", List.of(1,2,3,4));
+    test("['a','b'] + 'c'", List.of("a","b","c"));
+    test("['a','b'] + 1", List.of("a","b",1));
+    test("def x = ['a','b']; def y = 'c'; x + y", List.of("a","b","c"));
+  }
+
+  @Test public void mapAdd() {
+    test("[:] + [:]", Map.of());
+    test("def x = [:]; x + x", Map.of());
+    test("[:] + [a:1]", Map.of("a",1));
+    test("def x = [a:1]; [:] + x", Map.of("a",1));
+    test("def x = [a:1]; x + x", Map.of("a",1));
+    test("[a:1] + [b:2]", Map.of("a",1,"b",2));
+    test("def x = [a:1]; def y = [b:2]; x + y", Map.of("a",1,"b",2));
+    test("def x = [a:1]; def y = [a:2]; x + y", Map.of("a",2));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x + y", Map.of("a",2,"b",2,"c",3));
   }
 
   @Test public void globalFunctions() {

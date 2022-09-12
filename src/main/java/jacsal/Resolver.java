@@ -767,6 +767,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type;
     }
 
+    if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
+      expr.constValue = RuntimeUtils.mapAdd((Map)expr.left.constValue, (Map)expr.right.constValue);
+      return expr.type;
+    }
+
+    if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
+      expr.constValue = RuntimeUtils.listAdd((List)expr.left.constValue, expr.right.constValue);
+    }
+
     if (expr.operator.is(AMPERSAND_AMPERSAND)) {
       expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) &&
                         RuntimeUtils.isTruth(expr.right.constValue, false);

@@ -577,7 +577,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(expr.operator.getOffset());
       String methodName = methodNames.get(expr.operator.getType());
       if (methodName == null) {
-        methodName = "binaryOp";
+        //methodName = "binaryOp";
+        throw new IllegalStateException("Internal error: unsupported operator type " + expr.operator.getChars());
       }
       invokeStatic(RuntimeUtils.class, methodName, Object.class, Object.class, String.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
       //convertTo(expr.type, true, expr.operator);  // Convert to expected type
@@ -614,6 +615,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.right);
       convertToString();
       invokeVirtual(String.class, "concat", String.class);
+      return null;
+    }
+
+    if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
+      compile(expr.left);
+      compile(expr.right);
+      box();
+      invokeStatic(RuntimeUtils.class, "listAdd", List.class, Object.class);
+      return null;
+    }
+
+    if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
+      compile(expr.left);
+      compile(expr.right);
+      invokeStatic(RuntimeUtils.class, "mapAdd", Map.class, Map.class);
       return null;
     }
 

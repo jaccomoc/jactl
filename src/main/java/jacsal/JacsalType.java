@@ -269,20 +269,22 @@ public class JacsalType {
     // Boolean comparisons
     if (operator.is(EQUAL_EQUAL,BANG_EQUAL,AMPERSAND_AMPERSAND,PIPE_PIPE)) { return BOOLEAN; }
     if (operator.getType().isBooleanOperator()) {
-      if (type1.is(ANY) || type2.is(ANY))                  { return BOOLEAN; }
-      if (type1.isNumeric() && type2.isNumeric())          { return BOOLEAN; }
-      if (type1.is(BOOLEAN,STRING) && type1.equals(type2)) { return BOOLEAN; }
+      if (type1.is(ANY) || type2.is(ANY))                       { return BOOLEAN; }
+      if (type1.isNumeric() && type2.isNumeric())               { return BOOLEAN; }
+      if (type1.is(BOOLEAN,STRING) && type1.equals(type2))      { return BOOLEAN; }
       throw new CompileError("Type " + type1 + " cannot be compared to " + type2, operator);
     }
 
-    if (type1.is(ANY))                               { return ANY;       }
-    if (operator.is(PLUS) && type1.is(STRING))       { return STRING;    }
+    if (type1.is(ANY))                                           { return ANY;       }
+    if (operator.is(PLUS) && type1.is(STRING))                   { return STRING;    }
+    if (operator.is(PLUS) && type1.is(LIST))                     { return LIST;      }
+    if (operator.is(PLUS) && type1.is(MAP) && type2.is(MAP,ANY)) { return MAP;       }
 
     if (operator.is(STAR) && type1.is(STRING) &&
-        type2.is(INT,BOXED_INT,LONG,BOXED_LONG,ANY)) { return STRING;    }
+        type2.is(INT,BOXED_INT,LONG,BOXED_LONG,ANY))             { return STRING;    }
 
     if (operator.is(LEFT_SQUARE,QUESTION_SQUARE) &&
-        type1.is(STRING))                            { return STRING;    }
+        type1.is(STRING))                                        { return STRING;    }
 
     if (operator.is(EQUAL,QUESTION_COLON,QUESTION)) {
       if (!type2.isConvertibleTo(type1)) {
