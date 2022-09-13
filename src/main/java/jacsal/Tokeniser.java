@@ -43,6 +43,21 @@ import static jacsal.TokenType.*;
  * token each time. Keeping this state in the Parser also makes it harder for the Parser to
  * implement lookahead. While it does add complexity to the Tokeniser, it simplifies the job
  * of the Parser.
+ *
+ * Another quirk is how to handle regex strings which are expression strings delimited by
+ * / rather than by """. The other difference is that a regex expression string does not
+ * support escaped characters except for escaping / itself so all other backslashes appear
+ * as is in the resulting string. The problem is that when we first see a / we don't know
+ * if it will be a regex string or just a normal / token. The Tokeniser returns / as a
+ * SLASH token and then, if the Parser thinks that it is more likely to be a regex string
+ * it can tell the Tokeniser to continue tokenising as a regex string.
+ *
+ * From a lookahead point of view we don't support the / being a SLASH for a lookahead and
+ * then being a regex start (or vice-versa). Once the Tokeniser has moved past the SLASH
+ * the mode is set and subsequent tokens are normal tokens or part of the regex expression
+ * string. If there is a rewind and then the tokens are replayed back the tokens don't
+ * changed. This means that lookahead in the Parser can only work if all lookaheads treat
+ * the SLASH the same way.
  */
 public class Tokeniser {
   private       Token  currentToken;      // The current token
@@ -59,13 +74,10 @@ public class Tokeniser {
   // and whether newlines are allowed.
   private final Deque<StringState> stringState = new ArrayDeque<>();
   private static class StringState {
-    boolean isTripleQuoted;     // Whether current expression string is triple quoted or not
-    boolean newlinesAllowed;    // Whether we currently allow newlines within our expression string
+    String  endChars;           // Char sequence which terminates string
+    boolean allowNewLines;      // Whether we currently allow newlines within our expression string
+    boolean escapeChars;        // Whether escape chars are supported
     int     braceLevel;         // At what level of brace nesting does the expression string exist
-    StringState(boolean isTripleQuoted, boolean newlinesAllowed) {
-      this.isTripleQuoted  = isTripleQuoted;
-      this.newlinesAllowed = newlinesAllowed;
-    }
   }
 
   /**
@@ -128,7 +140,34 @@ public class Tokeniser {
     currentToken = token;
   }
 
+  /**
+   * If previous token was a SLASH then this allows Parser to tell Tokeniser to
+   * move into expression string mode since Parser is expecting a /..../ style
+   * multi-line regex expression string. If we have previously parsed past the
+   * SLASH then we ignore this call and will return the previously parsed tokens.
+   */
+  public void startRegex() {
+    if (!previousToken.is(SLASH)) {
+      throw new IllegalStateException("Internal error: startRegex on Tokeniser invoked when previous token was " + previousToken + " and not SLASH");
+    }
+    // Only change our state if this is the first time we have parsed the SLASH token. After
+    // any rewind we will ignore since our string state should already be in the right state.
+    if (previousToken.getNext() == null) {
+      pushStringState("/");
+    }
+  }
+
   //////////////////////////////////////////////////////////////////
+
+  private void pushStringState(String endChars) {
+    StringState state = new StringState();
+    state.endChars = endChars;
+    state.allowNewLines = newLinesAllowed() && !endChars.equals("'") && !endChars.equals("\"");
+    state.escapeChars = !endChars.equals("/");
+    inString = true;
+    stringState.push(state);
+  }
+
 
   /**
    * If currentToken already has a value then do nothing. If we don't have a current
@@ -202,7 +241,7 @@ public class Tokeniser {
         // Work out whether we are a multi line string literal or not
         boolean tripleQuoted = available(2) && charAt(0) == '\'' && charAt(1) == '\'';
         advance(tripleQuoted ? 2 : 0);
-        Token stringToken = parseString(false, tripleQuoted, newLinesAllowed() && tripleQuoted);
+        Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true);
         advance(tripleQuoted ? 3 : 1);
         return stringToken;
       }
@@ -212,11 +251,10 @@ public class Tokeniser {
         // or are nested within one we can no longer have newlines even if the nested string starts with a triple
         // double quote.
         boolean tripleQuote = available(2) && charAt(0) == '"' && charAt(1) == '"';
-        inString = true;
-        boolean allowNewLines = newLinesAllowed() && tripleQuote;
-        stringState.push(new StringState(tripleQuote, allowNewLines));
+        String  endChars      = tripleQuote ? "\"\"\"" : "\"";
+        pushStringState(endChars);
         advance(tripleQuote ? 2 : 0);
-        token = parseString(true, tripleQuote, allowNewLines);
+        token = parseString(true, endChars, newLinesAllowed(), true);
         return token.setType(EXPR_STRING_START);
       }
       case LEFT_BRACE: {
@@ -277,7 +315,8 @@ public class Tokeniser {
    */
   private Token parseNextStringPart(Token token, int remaining, int c) {
     StringState currentStringState = stringState.peek();
-    boolean     isTripleQuoted     = currentStringState.isTripleQuoted;
+    String      endChars           = currentStringState.endChars;
+    boolean     escapeChars        = currentStringState.escapeChars;
     switch (c) {
       case '$': {
         // We either have an identifer following or as '{'
@@ -302,9 +341,11 @@ public class Tokeniser {
         }
         return token;
       }
+
+      case '/':
       case '"': {
-        if (!isTripleQuoted || available(3) && charAt(1) == '"' && charAt(2) == '"') {
-          advance(isTripleQuoted ? 3 : 1);
+        if (charAt(0) == c && charsAtEquals(0, endChars.length(), endChars)) {
+          advance(endChars.length());
           stringState.pop();
           inString = false;
           return token.setType(EXPR_STRING_END)
@@ -312,6 +353,7 @@ public class Tokeniser {
         }
         break;
       }
+
       case '\n': {
         if (!newLinesAllowed()) {
           throw new CompileError("Unexpected new line within single line string", createToken());
@@ -320,7 +362,7 @@ public class Tokeniser {
       }
     }
     // No embedded expression or end of string found so parse as STRING_CONST
-    return parseString(true, isTripleQuoted, newLinesAllowed());
+    return parseString(true, endChars, newLinesAllowed(), escapeChars);
   }
 
   private Token parseIdentifier(Token token, int remaining) {
@@ -346,7 +388,7 @@ public class Tokeniser {
   }
 
   private boolean newLinesAllowed() {
-     return stringState.size() == 0 || stringState.peek().newlinesAllowed;
+     return stringState.size() == 0 || stringState.peek().allowNewLines;
   }
 
   private Token parseNumber(Token token, int remaining) {
@@ -425,6 +467,10 @@ public class Tokeniser {
     return source.charAt(offset + lookahead);
   }
 
+  private boolean charsAtEquals(int lookahead, int length, String value) {
+    return available(length) && source.substring(offset+lookahead, offset+lookahead+length).equals(value);
+  }
+
   private boolean available(int avail) {
     return offset + avail <= length;
   }
@@ -446,6 +492,9 @@ public class Tokeniser {
   private enum Mode { CODE, LINE_COMMENT, MULTI_LINE_COMMENT }
 
   private void skipSpacesAndComments() {
+    if (inString) {
+      return;  // can't have comments in a string
+    }
     Token startMultiLineOffset = null;
     Mode mode                  = Mode.CODE;
     for (; available(1); advance(1)) {
@@ -486,19 +535,20 @@ public class Tokeniser {
     }
   }
 
-  private Token parseString(boolean stringExpr, boolean tripleQuoted, boolean newlinesAllowed) {
-    char quoteChar = stringExpr ? '"' : '\'';
+  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars) {
+    char endChar = endChars.charAt(0);
     Token token = createToken();
     StringBuilder sb = new StringBuilder();
     boolean finished = false;
     for (; !finished && available(1); advance(1)) {
       int c = charAt(0);
       switch (c) {
+        case '/':
         case '\'':
         case '"': {
-          if (c == quoteChar) {
+          if (c == endChar) {
             // If close quote/quotes
-            if (!tripleQuoted || available(3) && charAt(1) == quoteChar && charAt(2) == quoteChar) {
+            if (charsAtEquals(0, endChars.length(), endChars)) {
               finished = true;
               continue;
             }
@@ -510,9 +560,19 @@ public class Tokeniser {
           break;
         }
         case '\\': {
-          if (!available(1)) { throw new CompileError("Unexpected end of file after '\\' in string", createToken()); }
-          advance(1);
-          c = escapedChar(charAt(0));
+          if (escapeChars) {
+            if (!available(1)) { throw new CompileError("Unexpected end of file after '\\' in string", createToken()); }
+            advance(1);
+            c = escapedChar(charAt(0));
+          }
+          else {
+            // Only thing we can escape is the end of string and $. Otherwise \ is just a \
+            int nextChar = charAt(1);
+            if (available(1) && (nextChar == endChar || nextChar == '$')) {
+              advance(1);
+              c = nextChar;
+            }
+          }
           break;
         }
         case '$': {
@@ -621,7 +681,6 @@ public class Tokeniser {
     new Symbol("&=", AMPERSAND_EQUAL),
     new Symbol("|=", PIPE_EQUAL),
     new Symbol("^=", ACCENT_EQUAL),
-    new Symbol("~=", GRAVE_EQUAL),
     new Symbol("?=", QUESTION_EQUAL),
     new Symbol("<<", DOUBLE_LESS_THAN),
     new Symbol(">>", DOUBLE_GREATER_THAN),

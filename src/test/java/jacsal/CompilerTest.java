@@ -1642,23 +1642,82 @@ class CompilerTest {
 
   @Test public void exprStrings() {
     test("def x = 1; \"$x\"", "1");
+    test("def x = 1; \"\\$x\"", "$x");
+    test("def x = 1; \"$x\\\"\"", "1\"");
     test("\"${1}\"", "1");
     test("def x = 1; \"${x}\"", "1");
     test("\"${}\"", "null");
     test("\"${\"${1}\"}\"", "1");
     test("\"'a'\"", "'a'");
+    test("\"'a'\\n\"", "'a'\n");
     test("\"${1 + 2}\"", "3");
     test("\"x${1 + 2}y\"", "x3y");
-    test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
     test("\"x${\"1\" + 2}y\"", "x12y");
     test("\"x${\"${2*4}\" + 2}y\"", "x82y");
+    test("boolean x; \"$x\"*2", "falsefalse");
     test("boolean x; \"$x${\"${2*4}\" + 2}y\"", "false82y");
     test("boolean x; boolean y = true; \"$x${\"${\"$x\"*4}\" + 2}$y\"", "falsefalsefalsefalsefalse2true");
     test("def x = 3;\"x = ${x}\"", "x = 3");
     test("def x = 3;\"x = $x\"", "x = 3");
+    test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
+    test("def x = 3; \"x=$x=${\"\"\"${1+2}\"\"\"}\"", "x=3=3");
+    testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "expecting right_brace");
+    testError("def x = 3; \"$x=${\"\"\"${1\n+2}\"\"\"}\"", "new line not allowed");
+    testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "unexpected new line");
+
+    test("def x = 1; /$x/", "1");
+    test("def x = 1; /\\$x/", "$x");
+    test("def x = 1; /$x\\//", "1/");
+    test("/${1}/", "1");
+    test("def x = 1; /${x}/", "1");
+    test("/${}/", "null");
+    test("/${/${1}/}/", "1");
+    test("/'a'/", "'a'");
+    test("/'a'\\n/", "'a'\\n");
+    test("/${1 + 2}/", "3");
+    test("/x${1 + 2}y/", "x3y");
+    test("/x${/1/ + 2}y/", "x12y");
+    test("/x${/${2*4}/ + 2}y/", "x82y");
+    test("boolean x; /$x/*2", "falsefalse");
+    test("boolean x; /$x${/${2*4}/ + 2}y/", "false82y");
+    test("boolean x; boolean y = true; /$x${/${/$x/*4}/ + 2}$y/", "falsefalsefalsefalsefalse2true");
+    test("def x = 3;/x = ${x+//comment\nx}/", "x = 6");
+    test("def x = 3;/x = $x/", "x = 3");
+    test("def x = 3;/x = $x/", "x = 3");
+    test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
+    test("def x = 3; /x=$x=${\"\"\"${1/*comment\nwith\nnewline*/+2}\"\"\"}/", "x=3=3");
+    testError("def x = 3; \"$x=${/${1+2}${/}\"", "expecting right_brace");
+    testError("def x = 3; \"$x=${/${1+2\n}/}\"", "new line not allowed");
+    testError("def x = 3; \"$x=${/\n${1\n+2}\n/}\"", "unexpected new line");
 
     // TODO: test with multiple statements within block once supported
     //test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
+  }
+
+  @Test public void regexMatch() {
+    test("'abc' =~ 'a'", true);
+    test("'abc' =~ /a/", true);
+    test("'abc' =~ /^a/", true);
+    test("'abc' =~ /^b/", false);
+    test("'abc' =~ ''", true);
+    test("'abc' =~ /^abc$/", true);
+    test("'abc' =~ /c$/", true);
+    testError("'abc' =~ /(c$/", "unclosed group");
+    test("'ab\\nc' =~ /\nc$/", true);
+    test("'ab\\nc\\n' =~ /\nc$/", false);
+    test("'ab\\nc\\n' =~ /\nc$.*/", false);
+
+    test("def x = 'abc'; def y = 'a'; x =~ y", true);
+    test("def x = 'abc'; def y = /a/; x =~ y", true);
+    test("def x = 'abc'; def y = /^a/; x =~ y", true);
+    test("def x = 'abc'; def y = /^b/; x =~ y", false);
+    test("def x = 'abc'; def y = ''; x =~ y", true);
+    test("def x = 'abc'; def y = /^abc$/; x =~ y", true);
+    test("def x = 'abc'; def y = /c$/; x =~ y", true);
+    testError("def x = 'abc'; def y = /(c$/; x =~ y", "unclosed group");
+    test("def x = 'ab\\nc'; def y = /\nc$/; x =~ y", true);
+    test("def x = 'ab\\nc\\n'; def y = /\nc$/; x =~ y", false);
+    test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", false);
   }
 
   @Test public void listLiterals() {

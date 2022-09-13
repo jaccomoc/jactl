@@ -275,6 +275,11 @@ public class JacsalType {
       throw new CompileError("Type " + type1 + " cannot be compared to " + type2, operator);
     }
 
+    if (operator.is(EQUAL_GRAVE)) {
+      if (type1.is(ANY,STRING) && type2.is(ANY,STRING))          { return BOOLEAN;   }
+      throw new CompileError("Cannot do regex match on types " + type1 + " and " + type2, operator);
+    }
+
     if (type1.is(ANY))                                           { return ANY;       }
     if (operator.is(PLUS) && type1.is(STRING))                   { return STRING;    }
     if (operator.is(PLUS) && type1.is(LIST))                     { return LIST;      }

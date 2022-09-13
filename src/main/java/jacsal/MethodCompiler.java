@@ -671,6 +671,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    // Regex match
+    if (expr.operator.is(EQUAL_GRAVE)) {
+      compile(expr.left);
+      castToString(expr.left.location);
+      compile(expr.right);
+      castToString(expr.right.location);
+      loadLocation(expr.operator);
+      invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, int.class);
+      return null;
+    }
+
     // Boolean && or ||
     if (expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
       compile(expr.left);

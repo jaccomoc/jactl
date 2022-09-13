@@ -22,6 +22,8 @@ import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public class RuntimeUtils {
 
@@ -48,6 +50,18 @@ public class RuntimeUtils {
   public static final String BANG_IN            = "!in";
   public static final String INSTANCE_OF        = "instanceof";
   public static final String BANG_INSTANCE_OF   = "!instanceof";
+
+  private static final ThreadLocal<LinkedHashMap<String, Pattern>> patternCache = new ThreadLocal<>() {
+    @Override protected LinkedHashMap<String, Pattern> initialValue() {
+      return new LinkedHashMap<>(16, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<String, Pattern> eldest) {
+          return size() > patternCacheSize;
+        }
+      };
+    }
+  };
+
+  public  static int patternCacheSize = 100;   // Per thread cache size
 
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
@@ -476,6 +490,34 @@ public class RuntimeUtils {
     return str.repeat(count);
   }
 
+  /**
+   * Regex match. Return true if string matches the given regex.
+   * We compile the patterns and store them in a cache for efficiency.
+   */
+  public static boolean regexMatch(String str, String regex, String source, int line) {
+    var cache = patternCache.get();
+    Pattern pattern = cache.get(regex);
+    if (pattern == null) {
+      String alteredRegex = regex;
+      if (regex.length() == 0 || regex.charAt(0) != '^') {
+        alteredRegex = ".*" + alteredRegex;
+      }
+      if (regex.length() != 0 && regex.charAt(regex.length() - 1) != '$') {
+        alteredRegex = alteredRegex + ".*";
+      }
+      try {
+        pattern = Pattern.compile(alteredRegex);
+      }
+      catch (PatternSyntaxException e) {
+        throw new RuntimeError("Pattern error: " + e.getMessage(), source, line);
+      }
+      cache.put(regex, pattern);
+      if (cache.size() > patternCacheSize) {
+        cache.remove(cache.keySet().iterator().next());
+      }
+    }
+    return pattern.matcher(str).matches();
+  }
 
   /**
    * Add to a list. If second object is a list then we concatenat the lists.

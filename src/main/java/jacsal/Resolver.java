@@ -265,8 +265,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
-    if (expr.operator.is(QUESTION_COLON)) {
-      // No support for const evaluation of ?: yet
+    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE)) {
       expr.isConst = false;
     }
 

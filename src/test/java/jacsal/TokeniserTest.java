@@ -77,7 +77,6 @@ class TokeniserTest {
     doTest.accept("&=", AMPERSAND_EQUAL);
     doTest.accept("|=", PIPE_EQUAL);
     doTest.accept("^=", ACCENT_EQUAL);
-    doTest.accept("~=", GRAVE_EQUAL);
     doTest.accept("?=", QUESTION_EQUAL);
     doTest.accept("%=", PERCENT_EQUAL);
     doTest.accept("**=", STAR_STAR_EQUAL);
@@ -328,7 +327,7 @@ class TokeniserTest {
     doTest.accept("<<<<", List.of(DOUBLE_LESS_THAN, DOUBLE_LESS_THAN));
     doTest.accept("<<<<=", List.of(DOUBLE_LESS_THAN, DOUBLE_LESS_THAN_EQUAL));
     doTest.accept(">>>>", List.of(TRIPLE_GREATER_THAN, GREATER_THAN));
-    doTest.accept("\n>>>\n>\n\n", List.of(EOL, TRIPLE_GREATER_THAN, EOL, GREATER_THAN, EOL));
+    doTest.accept("\n>>>\n>\n\n", List.of(EOL, TRIPLE_GREATER_THAN, EOL, GREATER_THAN, EOF));
   }
 
   @Test public void lineNumbers() {
@@ -350,7 +349,7 @@ class TokeniserTest {
   }
 
   @Test public void lineColumnNumbers() {
-    String source = "1a b\na\n\na 1.234D c\n";
+    String source = "1a b\na\n\na 1.234D c\n{";
     var tokeniser = new Tokeniser(source);
     var token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
@@ -404,12 +403,15 @@ class TokeniserTest {
     assertEquals(11, token.getColumn());
 
     token = tokeniser.next();
+    assertEquals(LEFT_BRACE, token.getType());
+
+    token = tokeniser.next();
     assertEquals(EOF, token.getType());
     assertEquals(5, token.getLineNum());
-    assertEquals(1, token.getColumn());
+    assertEquals(2, token.getColumn());
     JacsalError error = new EOFError("EOF", token);
     //System.out.println(error.getMessage());
-    assertTrue(error.getMessage().contains("line 5, column 1"));
+    assertTrue(error.getMessage().contains("line 5, column 2"));
     assertEquals(EOF, tokeniser.next().getType());
   }
 
@@ -601,7 +603,7 @@ class TokeniserTest {
   }
 
   @Test public void exprStringUnexpectedEndOfLine() {
-    var tokeniser = new Tokeniser("a = \"a'$b//\\n/*\\t*/\\b\\r\\fc\"\na = 2");
+    var tokeniser = new Tokeniser("a = \"a'$b//\n/*\\t*/\\b\\r\\fc\"\na = 2");
     Token     token     = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
@@ -620,7 +622,7 @@ class TokeniserTest {
       fail("Expected CompileError");
     }
     catch (CompileError e) {
-      assertTrue(e.getMessage().toLowerCase().contains("unexpected new line"));
+      assertTrue(e.getMessage().toLowerCase().contains("new line not allowed"));
     }
   }
 
@@ -769,7 +771,7 @@ class TokeniserTest {
   }
 
   @Test public void dollarKeywordInStringExpr() {
-    var tokeniser = new Tokeniser("\"for $whilex $while\"");
+    var tokeniser = new Tokeniser("\"for $whilex$while\"");
     var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     token = tokeniser.next();
@@ -826,7 +828,7 @@ class TokeniserTest {
   }
 
   @Test public void nestedExprStrings() {
-    var tokeniser = new Tokeniser("\"$x${\"${2*4}\" + 2}\"");
+    var tokeniser = new Tokeniser("\"$x${\"${2*4}\" + 2}/*\"");
     var token = tokeniser.next();
     assertEquals(EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
@@ -859,6 +861,9 @@ class TokeniserTest {
     assertEquals(2, token.getValue());
     token = tokeniser.next();
     assertEquals(RIGHT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("/*", token.getValue());
     token = tokeniser.next();
     assertEquals(EXPR_STRING_END, token.getType());
     assertEquals(EOF, tokeniser.next().getType());
@@ -933,8 +938,61 @@ class TokeniserTest {
     token = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+  }
+
+  @Test public void regexStrings() {
+    var tokeniser = new Tokeniser("a = /a\\/$a${x\n+y}\\n/*2");
+    var token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(SLASH, token.getType());
+    Token slashToken = token;
+    tokeniser.startRegex();
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("a/", token.getValue());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("a", token.getValue());
+    token = tokeniser.next();
+    assertEquals(LEFT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    token = tokeniser.next();
     assertEquals(EOL, token.getType());
     token = tokeniser.next();
+    assertEquals(PLUS, token.getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(RIGHT_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("\\n", token.getValue());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_END, token.getType());
+    token = tokeniser.next();
+    assertEquals(STAR, token.getType());
+    token = tokeniser.next();
+    assertEquals(INTEGER_CONST, token.getType());
+    token = tokeniser.next();
     assertEquals(EOF, token.getType());
+
+    tokeniser.rewind(slashToken);
+    token = tokeniser.next();
+    assertEquals(SLASH, token.getType());
+    tokeniser.startRegex();
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("a/", token.getValue());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("a", token.getValue());
+    token = tokeniser.next();
+    assertEquals(LEFT_BRACE, token.getType());
+
   }
 }

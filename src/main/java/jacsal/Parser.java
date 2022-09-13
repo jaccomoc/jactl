@@ -494,7 +494,7 @@ public class Parser {
       List.of(ACCENT),
       List.of(AMPERSAND),
       */
-      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
+      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
       new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF /*, IN, BANG_IN, AS*/)),
 /*
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
@@ -575,6 +575,7 @@ public class Parser {
       else {
         rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
       }
+
       // Check for lvalue for assignment operators
       if (operator.getType().isAssignmentLike()) {
         expr = convertToLValue(expr, operator, rhs, false);
@@ -716,7 +717,7 @@ public class Parser {
     if (matchAny(INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
                  STRING_CONST, TRUE, FALSE, NULL)) { return new Expr.Literal(previous());         }
-    if (peek().is(EXPR_STRING_START))              { return exprString();                         }
+    if (peek().is(SLASH, EXPR_STRING_START))       { return exprString();                         }
     if (matchAny(IDENTIFIER))                      { return new Expr.Identifier(previous());      }
     if (peek().is(LEFT_SQUARE,LEFT_BRACE))         { if (isMapLiteral()) { return mapLiteral(); } }
     if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
@@ -796,12 +797,22 @@ public class Parser {
   }
 
   /**
-   *# exprString -> EXPR_STRING_START ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END;
+   *# exprString -> EXPR_STRING_START ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END
+   *#             | "/" ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * "/";
+   * We parse an expression string delimited by " or """ or /
+   * For the / version we treat as a multi-line regular expression and don't support escape chars.
    */
   private Expr exprString() {
-    Expr.ExprString exprString = new Expr.ExprString(expect(EXPR_STRING_START));
-    // Turn the EXPR_STRING_START into a string literal and make it the first in our expr list
-    exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, previous())));
+    Token startToken = expect(EXPR_STRING_START,SLASH);
+    Expr.ExprString exprString = new Expr.ExprString(startToken);
+    if (startToken.is(EXPR_STRING_START)) {
+      // Turn the EXPR_STRING_START into a string literal and make it the first in our expr list
+      exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, previous())));
+    }
+    else {
+      // Tell tokeniser that the SLASH was actually the start of a regex expression string
+      tokeniser.startRegex();
+    }
     while (!matchAny(EXPR_STRING_END)) {
       if (matchAny(STRING_CONST)) {
         exprString.exprList.add(new Expr.Literal(previous()));
