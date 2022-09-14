@@ -366,7 +366,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.type = expr.expr.type.unboxed();
     if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
-      throw new CompileError("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
+      throw new CompileError("Prefix operator " + expr.operator.getChars() + " cannot be applied to type " + expr.expr.type, expr.operator);
     }
     if (expr.isConst) {
       expr.constValue = expr.expr.constValue;
@@ -403,7 +403,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       return expr.type;
     }
-    throw new CompileError("Unary operator " + expr.operator + " cannot be applied to type " + expr.expr.type, expr.operator);
+    throw new CompileError("Unary operator " + expr.operator.getChars() + " cannot be applied to type " + expr.expr.type, expr.operator);
   }
 
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
@@ -786,12 +786,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
-      expr.constValue = RuntimeUtils.mapAdd((Map)expr.left.constValue, (Map)expr.right.constValue);
+      expr.constValue = RuntimeUtils.mapAdd((Map)expr.left.constValue, (Map)expr.right.constValue, false);
       return expr.type;
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
-      expr.constValue = RuntimeUtils.listAdd((List)expr.left.constValue, expr.right.constValue);
+      expr.constValue = RuntimeUtils.listAdd((List)expr.left.constValue, expr.right.constValue, false);
     }
 
     if (expr.operator.is(AMPERSAND_AMPERSAND)) {

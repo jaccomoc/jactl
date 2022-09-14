@@ -411,7 +411,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we have += or -= with a const value then there are optimisations that are possible
     // (especially if local variable of type int).
     if (expr.operator.is(PLUS_EQUAL,MINUS_EQUAL,PLUS_PLUS,MINUS_MINUS) &&
-        !expr.identifierExpr.varDecl.isGlobal    &&
+        !expr.identifierExpr.varDecl.isGlobal &&
         expr.expr.right.isConst) {
       incOrDecVar(true, expr.operator.is(PLUS_EQUAL,PLUS_PLUS), expr.identifierExpr, expr.expr.right.constValue, expr.isResultUsed, expr.operator);
       return null;
@@ -569,8 +569,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
       loadConst(expr.originalOperator == null ? null : RuntimeUtils.getOperatorType(expr.originalOperator.getType()));
       loadConst(classCompiler.context.maxScale);
-      loadConst(classCompiler.source);
-      loadConst(expr.operator.getOffset());
+      loadLocation(expr.operator);
       String methodName = methodNames.get(expr.operator.getType());
       if (methodName == null) {
         //methodName = "binaryOp";
@@ -618,14 +617,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.left);
       compile(expr.right);
       box();
-      invokeStatic(RuntimeUtils.class, "listAdd", List.class, Object.class);
+      loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
+      invokeStatic(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
       return null;
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
       compile(expr.left);
       compile(expr.right);
-      invokeStatic(RuntimeUtils.class, "mapAdd", Map.class, Map.class);
+      loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
+      invokeStatic(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
       return null;
     }
 
@@ -853,7 +854,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitPrefixUnary(Expr.PrefixUnary expr) {
     if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
       boolean isInc = expr.operator.is(PLUS_PLUS);
-      incOrDec(true, isInc, expr.expr, expr.isResultUsed, expr.expr.location);
+      incOrDec(true, isInc, expr.expr, expr.isResultUsed, expr.operator);
       return null;
     }
 
@@ -884,7 +885,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitPostfixUnary(Expr.PostfixUnary expr) {
     boolean isInc = expr.operator.is(PLUS_PLUS);
-    incOrDec(false, isInc, expr.expr, expr.isResultUsed, expr.expr.location);
+    incOrDec(false, isInc, expr.expr, expr.isResultUsed, expr.operator);
     return null;
   }
 
@@ -1932,6 +1933,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         incOrDec.accept(() -> invokeVirtual(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class));
         break;
       case ANY:
+      case STRING:
+      case LIST:
         // When we don't know the type
         loadVar(varDecl);
         if (amount == null) {
@@ -1957,13 +1960,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void incOrDecValue(boolean isInc, Object amount, Token operator) {
     unbox();
-    if (peek().is(ANY)) {
+    if (peek().is(ANY,STRING,LIST)) {
       if (amount != null) {
         // Special case if amount is 1
         if (amount instanceof Integer && (int)amount == 1) {
-          loadConst(classCompiler.source);
-          loadConst(operator.getOffset());
-          invokeStatic(RuntimeUtils.class, isInc ? "incNumber" : "decNumber", Object.class, String.class, Integer.TYPE);
+          // Note we could actually have a String or List when doing x = x + 1 or x++ or x+= 1
+          // so we pass in the operator so we can work out whether we have an error or not
+          // since a String or List with ++ should be an error
+          loadConst(RuntimeUtils.getOperatorType(operator.getType()));
+          loadLocation(operator);
+          invokeStatic(RuntimeUtils.class, isInc ? "incNumber" : "decNumber", Object.class, String.class, String.class, Integer.TYPE);
           return;
         }
 

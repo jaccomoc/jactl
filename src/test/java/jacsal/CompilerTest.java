@@ -3027,6 +3027,68 @@ class CompilerTest {
     test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", List.of(1, 7, 17));
   }
 
+  @Test public void stringAddRepeat() {
+    test("'a' + 'b'", "ab");
+    test("'' + ''", "");
+    test("'' + null", "null");
+    test("def x = 'a'; def y = 'b'; x+y", "ab");
+    test("var x = 'a'; var y = 'b'; x+y", "ab");
+    test("def x = 'a'; def y = 'b'; x += y", "ab");
+    test("var x = 'a'; var y = 'b'; x += y", "ab");
+    test("def x = 'a'; def y = 'b'; x += y; x", "ab");
+    test("var x = 'a'; var y = 'b'; x += y; x", "ab");
+    test("var x = 'x'; x += 'y'", "xy");
+    test("var x = 'x'; x += 'y'; x", "xy");
+    test("String x = 'x'; x += 'y'", "xy");
+    test("String x = 'x'; x += 'y'; x", "xy");
+    test("String x = 'x'; x += 1", "x1");
+    test("String x = 'x'; x += 1; x", "x1");
+    testError("String x = 'xx'; x++", "operator ++ cannot be applied to type string");
+    testError("def x = 'xx'; x++", "non-numeric operand");
+    testError("String x = 'xx'; ++x", "operator ++ cannot be applied to type string");
+    testError("def x = 'xx'; ++x", "non-numeric operand");
+    testError("String x = 'xx'; x--", "operator -- cannot be applied to type string");
+    testError("def x = 'xx'; x--", "non-numeric operand");
+    testError("String x = 'xx'; --x", "operator -- cannot be applied to type string");
+    testError("def x = 'xx'; --x", "non-numeric operand");
+
+    test("'a' * 1", "a");
+    test("'a' * 0", "");
+    test("'' * 0", "");
+    test("'' * 1", "");
+    test("'' * 2", "");
+    test("'a' * 2", "aa");
+    test("'ab' * 2", "abab");
+    test("def x = 'a'; x * 1", "a");
+    test("def x = 'a'; x * 1.5", "a");
+    test("def x = 'a'; x * 1L", "a");
+    test("def x = 'a'; x * 1.234D", "a");
+    test("def x = 'a'; x * 0", "");
+    test("def x = ''; x * 0", "");
+    test("var x = ''; x * 1", "");
+    test("def x = ''; x * 2", "");
+    test("def x = ''; x * 2.678", "");
+    test("def x = 'a'; def y = 2.678; x * y", "aa");
+    test("def x = 'a'; def y = 2; x * y", "aa");
+    test("def x = 'ab'; def y = 2; x * y", "abab");
+    test("def x = 'a'; x *= 1", "a");
+    test("def x = 'a'; x *= 1; x", "a");
+    test("def x = 'a'; x *= 0", "");
+    test("def x = 'a'; x *= 0; x", "");
+    test("def x = ''; x *= 0", "");
+    test("def x = ''; x *= 0; x", "");
+    test("var x = ''; x *= 1", "");
+    test("var x = ''; x *= 1; x", "");
+    test("def x = ''; x *= 2", "");
+    test("def x = ''; x *= 2; x", "");
+    test("def x = 'a'; def y = 2; x *= y", "aa");
+    test("def x = 'a'; def y = 2; x *= y; x", "aa");
+    test("def x = 'ab'; def y = 2; x *= y", "abab");
+    test("def x = 'ab'; def y = 2; x *= y; x", "abab");
+    testError("'ab' * -1", "repeat count must be >= 0");
+    testError("'ab' * -1.234", "repeat count must be >= 0");
+  }
+
   @Test public void listAdd() {
     test("[]+[]", List.of());
     test("def x = []; x + x", List.of());
@@ -3039,6 +3101,36 @@ class CompilerTest {
     test("['a','b'] + 'c'", List.of("a","b","c"));
     test("['a','b'] + 1", List.of("a","b",1));
     test("def x = ['a','b']; def y = 'c'; x + y", List.of("a","b","c"));
+    test("var x = ['a','b']; x += 'c'", List.of("a","b","c"));
+    test("def x = ['a','b']; x += 'c'", List.of("a","b","c"));
+    test("var x = ['a','b']; x += ['c','d']", List.of("a","b","c","d"));
+    test("def x = ['a','b']; x += ['c','d']", List.of("a","b","c","d"));
+    test("var x = ['a','b']; x += x", List.of("a","b","a","b"));
+    test("def x = ['a','b']; x += x", List.of("a","b","a","b"));
+    test("var x = ['a','b']; def y = 'c'; x += y", List.of("a","b","c"));
+    test("var x = ['a','b']; var y = 'c'; x += y", List.of("a","b","c"));
+    test("var x = ['a','b']; def y = 'c'; x += y; x", List.of("a","b","c"));
+    test("def x = ['a','b']; def y = 'c'; x += y", List.of("a","b","c"));
+    test("def x = ['a','b']; var y = 'c'; x += y", List.of("a","b","c"));
+    test("var x = ['a','b']; def y = ['c','d']; x += y", List.of("a","b","c","d"));
+    test("var x = ['a','b']; var y = ['c','d']; x += y", List.of("a","b","c","d"));
+    test("def x = ['a','b']; var y = ['c','d']; x += y", List.of("a","b","c","d"));
+    test("var x = ['a','b']; x += x", List.of("a","b","a","b"));
+    test("def x = ['a','b']; x += x", List.of("a","b","a","b"));
+    test("var x = ['a','b']; x += x; x", List.of("a","b","a","b"));
+    test("def x = ['a','b']; x += x; x", List.of("a","b","a","b"));
+    test("var x = ['a','b']; x += 1; x", List.of("a","b",1));
+    test("def x = ['a','b']; x += 1; x", List.of("a","b",1));
+    testError("var x = ['a','b']; x -= 1; x", "non-numeric operand");
+    testError("def x = ['a','b']; x -= 1; x", "non-numeric operand");
+    testError("var x = ['a','b']; x++", "unary operator ++ cannot be applied to type list");
+    testError("def x = ['a','b']; x++", "non-numeric operand");
+    testError("var x = ['a','b']; ++x", "operator ++ cannot be applied to type list");
+    testError("def x = ['a','b']; ++x", "non-numeric operand");
+    testError("var x = ['a','b']; x--", "operator -- cannot be applied to type list");
+    testError("def x = ['a','b']; x--", "non-numeric operand");
+    testError("var x = ['a','b']; --x", "operator -- cannot be applied to type list");
+    testError("def x = ['a','b']; --x", "non-numeric operand");
   }
 
   @Test public void mapAdd() {
@@ -3051,6 +3143,24 @@ class CompilerTest {
     test("def x = [a:1]; def y = [b:2]; x + y", Map.of("a",1,"b",2));
     test("def x = [a:1]; def y = [a:2]; x + y", Map.of("a",2));
     test("def x = [a:1,b:2]; def y = [a:2,c:3]; x + y", Map.of("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y", Map.of("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y", Map.of("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x", Map.of("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x", Map.of("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x", Map.of("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x", Map.of("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x; x", Map.of("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x; x", Map.of("a",2,"b",2,"c",3));
+    testError("var x = [a:1,b:2]; x -= 1; x", "non-numeric operand");
+    testError("def x = [a:1,b:2]; x -= 1; x", "non-numeric operand");
+    testError("var x = [a:1,b:2]; x++", "unary operator ++ cannot be applied to type map");
+    testError("def x = [a:1,b:2]; x++", "non-numeric operand");
+    testError("var x = [a:1,b:2]; ++x", "operator ++ cannot be applied to type map");
+    testError("def x = [a:1,b:2]; ++x", "non-numeric operand");
+    testError("var x = [a:1,b:2]; x--", "operator -- cannot be applied to type map");
+    testError("def x = [a:1,b:2]; x--", "non-numeric operand");
+    testError("var x = [a:1,b:2]; --x", "operator -- cannot be applied to type map");
+    testError("def x = [a:1,b:2]; --x", "non-numeric operand");
   }
 
 

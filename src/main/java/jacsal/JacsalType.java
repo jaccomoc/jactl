@@ -286,7 +286,7 @@ public class JacsalType {
     if (operator.is(PLUS) && type1.is(MAP) && type2.is(MAP,ANY)) { return MAP;       }
 
     if (operator.is(STAR) && type1.is(STRING) &&
-        type2.is(INT,BOXED_INT,LONG,BOXED_LONG,ANY))             { return STRING;    }
+        (type2.isNumeric() || type2.is(ANY)))                    { return STRING;    }
 
     if (operator.is(LEFT_SQUARE,QUESTION_SQUARE) &&
         type1.is(STRING))                                        { return STRING;    }

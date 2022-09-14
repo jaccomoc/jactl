@@ -167,13 +167,14 @@ public class RuntimeUtils {
       left = "";
     }
 
+    if (!(left instanceof Number) && (originalOperator == PLUS_PLUS || originalOperator == MINUS_MINUS)) {
+      throw new RuntimeError("Non-numeric operand for left-hand side of " + (originalOperator == PLUS_PLUS ? "++" : "--") + ": was String", source, offset);
+    }
+
     if (left instanceof String) {
       // Make sure we are not trying to inc/dec a string since -- or ++ on an unknown type
       // will be turned into equivalent of x = x + 1 (for example) and it won't be until we
       // get here that we can check if x is a string or not.
-      if (originalOperator == PLUS_PLUS || originalOperator == MINUS_MINUS) {
-        throw new RuntimeError("Non-numeric operand for left-hand side of " + (originalOperator == PLUS_PLUS ? "++" : "--") + ": was String", source, offset);
-      }
       if (operator == PLUS) {
         return ((String) left).concat(right == null ? "null" : toString(right));
       }
@@ -186,20 +187,26 @@ public class RuntimeUtils {
     }
 
     if (left instanceof List) {
-      return listAdd((List)left, right);
+      if (operator != PLUS) {
+        throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
+      }
+      return listAdd((List)left, right, originalOperator == PLUS_EQUAL);
     }
 
     if (left instanceof Map && right instanceof Map) {
-      return mapAdd((Map)left, (Map)right);
-    }
-
-    if (operator != PLUS) {
-      throw new IllegalStateException("Internal error: unexpected operation " + operator + " on types " + className(left) + " and " + className(right));
+      if (operator != PLUS) {
+        throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
+      }
+      return mapAdd((Map)left, (Map)right, originalOperator == PLUS_EQUAL);
     }
 
     // All other operations expect numbers so check we have numbers
     if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
     if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+
+    if (operator != PLUS && operator != MINUS) {
+      throw new IllegalStateException("Internal error: unexpected operation '" + operator + "' on types " + className(left) + " and " + className(right));
+    }
 
     // Check for bitwise operations since we don't want to unnecessarily convert to double/BigDecimal...
     // TBD
@@ -465,22 +472,22 @@ public class RuntimeUtils {
     throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset);
   }
 
-  public static Object incNumber(Object obj, String source, int offset) {
+  public static Object incNumber(Object obj, String operator, String source, int offset) {
     ensureNonNull(obj, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal)obj).add(BigDecimal.ONE); }
     if (obj instanceof Double)     { return (double)obj + 1; }
     if (obj instanceof Long)       { return (long)obj + 1; }
     if (obj instanceof Integer)    { return (int)obj + 1; }
-    throw new RuntimeError("Non-numeric operand for operator ++: was " + className(obj), source, offset);
+    return binaryOp(obj, 1, PLUS, operator, -1, source, offset);
   }
 
-  public static Object decNumber(Object obj, String source, int offset) {
+  public static Object decNumber(Object obj, String operator, String source, int offset) {
     ensureNonNull(obj, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal)obj).subtract(BigDecimal.ONE); }
     if (obj instanceof Double)     { return (double)obj - 1; }
     if (obj instanceof Long)       { return (long)obj - 1; }
     if (obj instanceof Integer)    { return (int)obj - 1; }
-    throw new RuntimeError("Non-numeric operand for operator --: was " + className(obj), source, offset);
+    return binaryOp(obj, 1, MINUS, operator, -1, source, offset);
   }
 
   public static String stringRepeat(String str, int count, String source, int offset) {
@@ -522,10 +529,14 @@ public class RuntimeUtils {
   /**
    * Add to a list. If second object is a list then we concatenat the lists.
    * Otherwise object is added to and of the list.
+   * @param list         the list
+   * @param obj          object to add or merge with list
+   * @param isPlusEqual  whether we are doing += or just +
    * @return new list which is result of adding second object to first list
    */
-  public static List listAdd(List list, Object obj) {
-    List result = new ArrayList(list);
+  public static List listAdd(List list, Object obj, boolean isPlusEqual) {
+    // If ++= then add to existing list rather than creating a new one
+    List result = isPlusEqual ? list : new ArrayList<>(list);
     if (obj instanceof List) {
       result.addAll((List)obj);
     }
@@ -542,8 +553,9 @@ public class RuntimeUtils {
    * becomes the value of the key in the resulting map.
    * @return a new map which is the combination of the two maps
    */
-  public static Map mapAdd(Map map1, Map map2) {
-    Map result = new HashMap(map1);
+  public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual) {
+    // If plusEqual then just merge map2 into map1
+    Map result = isPlusEqual ? map1 : new HashMap(map1);
     result.putAll(map2);
     return result;
   }
