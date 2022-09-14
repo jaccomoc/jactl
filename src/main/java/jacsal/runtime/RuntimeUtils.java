@@ -1005,14 +1005,16 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Object[]", source, offset);
   }
 
-  public static void print(Object obj) {
+  public static boolean print(Object obj) {
     if (obj == null) { obj = "null"; }
     System.out.print(obj);
+    return true;
   }
 
-  public static void println(Object obj) {
+  public static boolean println(Object obj) {
     if (obj == null) { obj = "null"; }
     System.out.println(obj);
+    return true;
   }
 
   //////////////////////////////////////

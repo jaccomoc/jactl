@@ -176,17 +176,15 @@ abstract class Stmt {
    * Return statement
    */
   static class Return extends Stmt {
-    Token      returnToken;
-    Expr       expr;
-    JacsalType returnType;      // Return type of the function we are embedded in
-    Return(Token returnToken, Expr expr, JacsalType returnType) {
+    Token       returnToken;
+    Expr.Return expr;
+    Return(Token returnToken, Expr.Return expr) {
       this.returnToken = returnToken;
       this.expr = expr;
-      this.returnType = returnType;
       this.location = returnToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
-    @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + ", " + "returnType=" + returnType + "]"; }
+    @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + "]"; }
   }
 
   /**
@@ -237,23 +235,6 @@ abstract class Stmt {
   }
 
   /**
-   * Print statement
-   */
-  static class Print extends Stmt {
-    Token   printToken;
-    Expr    expr;
-    boolean newLine;    // Whether to print newline
-    Print(Token printToken, Expr expr, boolean newLine) {
-      this.printToken = printToken;
-      this.expr = expr;
-      this.newLine = newLine;
-      this.location = printToken;
-    }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitPrint(this); }
-    @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
-  }
-
-  /**
    * Internal use only - throw RuntimeError
    */
   static class ThrowError extends Stmt {
@@ -284,7 +265,6 @@ abstract class Stmt {
     T visitBreak(Break stmt);
     T visitContinue(Continue stmt);
     T visitExprStmt(ExprStmt stmt);
-    T visitPrint(Print stmt);
     T visitThrowError(ThrowError stmt);
   }
 }

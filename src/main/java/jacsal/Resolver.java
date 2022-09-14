@@ -26,6 +26,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
+import static jacsal.JacsalType.BOOLEAN;
 import static jacsal.JacsalType.INT;
 import static jacsal.JacsalType.LIST;
 import static jacsal.JacsalType.MAP;
@@ -205,10 +206,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     resolve(stmt.expr);
-    stmt.returnType = functions.peek().returnType;
-    if (!stmt.expr.type.isConvertibleTo(stmt.returnType)) {
-      throw new CompileError("Expression type not compatible with return type of function", stmt.expr.location);
-    }
     return null;
   }
 
@@ -244,11 +241,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitPrint(Stmt.Print stmt) {
-    resolve(stmt.expr);
-    return null;
-  }
-
   @Override public Void visitThrowError(Stmt.ThrowError stmt) {
     resolve(stmt.source);
     resolve(stmt.offset);
@@ -260,8 +252,20 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   // = Expr
 
   @Override public JacsalType visitBinary(Expr.Binary expr) {
+    // Special case for /regex/ where we need to match against "it" if in a context where variable
+    // "it" exists. If it doesn't exist then we set left to null and in compile phase we will ignore it.
+    if (Utils.isImplicitItCompare(expr)) {
+      if (!variableExists(((Expr.Identifier)expr.left).identifier)) {
+        expr.left = null;
+      }
+    }
+
     resolve(expr.left);
     resolve(expr.right);
+
+    if (expr.left == null) {
+      return expr.type = expr.right.type;
+    }
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
@@ -318,7 +322,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         throw new CompileError("Right-hand side of " + expr.operator.getChars() + " must be a valid type", expr.right.location);
       }
       expr.isConst = false;
-      return expr.type = JacsalType.BOOLEAN;
+      return expr.type = BOOLEAN;
     }
 
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
@@ -353,7 +357,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.expr.isConst;
     if (expr.operator.is(BANG)) {
-      expr.type = JacsalType.BOOLEAN;
+      expr.type = BOOLEAN;
       if (expr.isConst) {
         expr.constValue = !Utils.toBoolean(expr.expr.constValue);
       }
@@ -414,8 +418,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case DOUBLE_CONST:  return expr.type = JacsalType.DOUBLE;
       case DECIMAL_CONST: return expr.type = JacsalType.DECIMAL;
       case STRING_CONST:  return expr.type = STRING;
-      case TRUE:          return expr.type = JacsalType.BOOLEAN;
-      case FALSE:         return expr.type = JacsalType.BOOLEAN;
+      case TRUE:          return expr.type = BOOLEAN;
+      case FALSE:         return expr.type = BOOLEAN;
       case NULL:          return expr.type = ANY;
       case IDENTIFIER:    return expr.type = STRING;
       case OBJECT_ARR:    return expr.type = STRING;
@@ -628,6 +632,21 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type = STRING;
   }
 
+  @Override
+  public JacsalType visitReturn(Expr.Return returnExpr) {
+    resolve(returnExpr.expr);
+    returnExpr.returnType = functions.peek().returnType;
+    if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
+      throw new CompileError("Expression type not compatible with return type of function", returnExpr.expr.location);
+    }
+    return returnExpr.type = ANY;
+  }
+
+  @Override public JacsalType visitPrint(Expr.Print printExpr) {
+    resolve(printExpr.expr);
+    return printExpr.type = BOOLEAN;
+  }
+
   @Override public JacsalType visitClosure(Expr.Closure expr) {
     resolve(expr.funDecl);
     return expr.type = FUNCTION;
@@ -790,7 +809,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.constValue = RuntimeUtils.booleanOp(expr.left.constValue, expr.right.constValue,
                                                RuntimeUtils.getOperatorType(expr.operator.getType()),
                                                expr.operator.getSource(), expr.operator.getOffset());
-      return expr.type = JacsalType.BOOLEAN;
+      return expr.type = BOOLEAN;
     }
 
     if (expr.left.constValue == null)  { throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
@@ -991,18 +1010,22 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private Expr.VarDecl lookupFunction(Token identifier) {
-    return lookup(identifier, true);
+    return lookup(identifier, true, false);
   }
 
   private Expr.VarDecl lookup(Token identifier) {
-    return lookup(identifier, false);
+    return lookup(identifier, false, false);
+  }
+
+  private boolean variableExists(Token identifier) {
+    return lookup(identifier, false, true) != null;
   }
 
   // We look up variables in our local scope and parent scopes within the same function.
   // If we still can't find the variable we search in parent functions to see if the
   // variable exists there (at which point we close over it and it becomes a heap variable
   // rather than one that is a JVM local).
-  private Expr.VarDecl lookup(Token identifier, boolean functionLookup) {
+  private Expr.VarDecl lookup(Token identifier, boolean functionLookup, boolean existenceCheckOnly) {
     String name = identifier.getStringValue();
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
@@ -1034,6 +1057,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (varDecl == null /* && compileContext.replMode */) {
       varDecl = compileContext.globalVars.get(name);
     }
+
+    if (existenceCheckOnly) {
+      return varDecl;
+    }
+
     if (varDecl == UNDEFINED) {
       throw new CompileError("Variable initialisation cannot refer to itself", identifier);
     }
@@ -1144,10 +1172,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                  (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
         }
         if (ifStmt.trueStmt == null) {
-          ifStmt.trueStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+          ifStmt.trueStmt = returnStmt(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
         }
         if (ifStmt.falseStmt == null) {
-          ifStmt.falseStmt = new Stmt.Return(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+          ifStmt.falseStmt = returnStmt(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
         }
       }
       ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
@@ -1160,7 +1188,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Stmt.ExprStmt exprStmt = (Stmt.ExprStmt) stmt;
       Expr          expr     = exprStmt.expr;
       expr.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(exprStmt.location, expr, returnType);
+      Stmt.Return returnStmt = returnStmt(exprStmt.location, expr, returnType);
       return returnStmt;
     }
 
@@ -1172,7 +1200,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Don't use parameter declarations as value to return
       if (!declExpr.isExplicitParam) {
         declExpr.isResultUsed = true;
-        Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
+        Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
         return returnStmt;
       }
     }
@@ -1185,7 +1213,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Expr.FunDecl declExpr = ((Stmt.FunDecl)stmt).declExpr;
       declExpr.isResultUsed = true;
       declExpr.varDecl.isResultUsed = true;
-      Stmt.Return returnStmt = new Stmt.Return(stmt.location, declExpr, returnType);
+      Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
       return returnStmt;
     }
 
@@ -1196,7 +1224,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Stmt.Stmts stmts = new Stmt.Stmts();
       stmts.stmts.add(stmt);
       stmts.location = stmt.location;
-      Stmt.Return returnStmt = new Stmt.Return(stmt.location, new Expr.Literal(new Token(NULL, stmt.location)), returnType);
+      Stmt.Return returnStmt = returnStmt(stmt.location, new Expr.Literal(new Token(NULL, stmt.location)), returnType);
       stmts.stmts.add(returnStmt);
       return stmts;
     }
@@ -1349,7 +1377,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     List<Expr> args = funDecl.parameters.stream()
                                         .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
                                         .collect(Collectors.toList());
-    ifStmts.stmts.add(new Stmt.Return(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
+    ifStmts.stmts.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
 
     // : }
     stmtList.add(ifStmt);
@@ -1398,5 +1426,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   boolean isEarlier(Token t1, Token t2) {
     if (!t1.getSource().equals(t2.getSource())) { return false; }
     return t1.getOffset() < t2.getOffset();
+  }
+
+  private Stmt.Return returnStmt(Token token, Expr expr, JacsalType type) {
+    return new Stmt.Return(token, new Expr.Return(token, expr, type));
   }
 }

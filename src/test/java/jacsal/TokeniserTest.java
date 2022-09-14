@@ -114,6 +114,7 @@ class TokeniserTest {
     doTest.accept("if", IF);
     doTest.accept("else", ELSE);
     doTest.accept("while", WHILE);
+    doTest.accept("unless", UNLESS);
     doTest.accept("class", CLASS);
     doTest.accept("interface", INTERFACE);
     doTest.accept("extends", EXTENDS);
@@ -126,6 +127,7 @@ class TokeniserTest {
     doTest.accept("in", IN);
     doTest.accept("!in", BANG_IN);
     doTest.accept("and", AND);
+    doTest.accept("not", NOT);
     doTest.accept("or", OR);
     doTest.accept("true", TRUE);
     doTest.accept("false", FALSE);

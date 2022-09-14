@@ -1392,6 +1392,9 @@ class CompilerTest {
     test("def v = '2'; { v = v + 1; { return v }}", "21");
     testError("double v = 2; return v; v = v + 1", "unreachable statement");
     testError("double v = 2; return v; { v = v + 1 }", "unreachable statement");
+    test("return true and false", true);
+    test("false or return true and false", true);
+    test("false and return true and false", false);
   }
 
   @Test
@@ -1666,29 +1669,28 @@ class CompilerTest {
     testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "unexpected new line");
 
     test("def x = 1; /$x/", "1");
-    test("def x = 1; /\\$x/", "$x");
-    test("def x = 1; /$x\\//", "1/");
-    test("/${1}/", "1");
-    test("def x = 1; /${x}/", "1");
-    test("/${}/", "null");
+    test("def x = 1; def y = /$x/; y", "1");
+    test("def x = 1; def y = /\\$x/; y", "$x");
+    test("def x = 1; def y = /$x\\//; y", "1/");
+    test("def x = /${1}/; x", "1");
+    test("def x = 1; def y = /${x}/; y", "1");
+    test("def x = /${}/; x", "null");
     test("/${/${1}/}/", "1");
-    test("/'a'/", "'a'");
-    test("/'a'\\n/", "'a'\\n");
-    test("/${1 + 2}/", "3");
-    test("/x${1 + 2}y/", "x3y");
-    test("/x${/1/ + 2}y/", "x12y");
-    test("/x${/${2*4}/ + 2}y/", "x82y");
-    test("boolean x; /$x/*2", "falsefalse");
-    test("boolean x; /$x${/${2*4}/ + 2}y/", "false82y");
-    test("boolean x; boolean y = true; /$x${/${/$x/*4}/ + 2}$y/", "falsefalsefalsefalsefalse2true");
-    test("def x = 3;/x = ${x+//comment\nx}/", "x = 6");
-    test("def x = 3;/x = $x/", "x = 3");
-    test("def x = 3;/x = $x/", "x = 3");
-    test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
-    test("def x = 3; /x=$x=${\"\"\"${1/*comment\nwith\nnewline*/+2}\"\"\"}/", "x=3=3");
-    testError("def x = 3; \"$x=${/${1+2}${/}\"", "expecting right_brace");
-    testError("def x = 3; \"$x=${/${1+2\n}/}\"", "new line not allowed");
-    testError("def x = 3; \"$x=${/\n${1\n+2}\n/}\"", "unexpected new line");
+    test("def x = /'a'/; x", "'a'");
+    test("def x = /'a'\\n/; x", "'a'\\n");
+    test("def x = /${1 + 2}/; x", "3");
+    test("def x = /x${1 + 2}y/; x", "x3y");
+    test("def x = /x${/1/ + 2}y/; x", "x12y");
+    test("def x = /x${\"${2*4}\" + 2}y/; x", "x82y");
+    test("boolean x; def y = /$x/*2; y", "falsefalse");
+    test("boolean x; def z = /$x${\"${2*4}\" + 2}y/; z", "false82y");
+    test("boolean x; boolean y = true; def z = /$x${\"${\"$x\"*4}/\"+ 2}$y/; z", "falsefalsefalsefalsefalse/2true");
+    test("def x = 3;def z = /x = ${x+//comment\nx}/; z", "x = 6");
+    test("def x = 3; def z = /x = $x/; z", "x = 3");
+    test("def x = 3; def z = /x = $x/; z", "x = 3");
+    testError("def x = 3; def z = /$x=${\"${1+2}${\"}/", "expecting right_brace");
+    testError("def x = 3; def z = \"$x=${/${1+2\n}/}\"", "new line not allowed");
+    testError("def x = 3; def z = \"$x=${/\n${1\n+2}\n/}\"", "unexpected new line");
 
     // TODO: test with multiple statements within block once supported
     //test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
@@ -1718,6 +1720,10 @@ class CompilerTest {
     test("def x = 'ab\\nc'; def y = /\nc$/; x =~ y", true);
     test("def x = 'ab\\nc\\n'; def y = /\nc$/; x =~ y", false);
     test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", false);
+    test("['abc','xzt','sas',''].map{/a/ ? true : false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ if (/a/) true else false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ /a/ and return true; false}", List.of(true,false,true,false));
+    test("def it = 'xyyz'; /yy/ and it = 'baa'; /aa$/ and return 'xxx'", "xxx");
   }
 
   @Test public void listLiterals() {
@@ -2019,6 +2025,20 @@ class CompilerTest {
     test("def x = 2; if (x * 2 < -5) ++x else { --x }", 1);
     test("def x = 2; if (x == 2) { def x = 5; x++ }; x", 2);
     test("def x = 2; if (x == 2) { def x = 5; x++; if (true) { def x = 1; x-- } }; x", 2);
+  }
+
+  @Test public void ifUnless() {
+    test("true if true", true);
+    test("true unless true", null);
+    test("def x = 3; x = 4 unless x == 3; x", 3);
+    test("def x = 3; x = 4 unless x != 3; x", 4);
+    test("def x = 3; x = 4 if x != 3; x", 3);
+    test("def x = 3; x = 4 and return x/2 if x == 3; x", 2);
+    testError("def x = 3; x = 4 and return x/2 if x == 3 unless true; x", "unexpected token unless");
+    testError("unless true", "unexpected token unless");
+    testError("if true", "unexpected token true");
+    test("def x; x ?= x if true", null);
+    test("def x; x ?= 1 if true", 1);
   }
 
   @Test public void booleanNonBooleanComparisons() {
@@ -3032,6 +3052,43 @@ class CompilerTest {
     test("def x = [a:1]; def y = [a:2]; x + y", Map.of("a",2));
     test("def x = [a:1,b:2]; def y = [a:2,c:3]; x + y", Map.of("a",2,"b",2,"c",3));
   }
+
+
+  @Test public void andOrNot() {
+    test("not true", false);
+    test("not false", true);
+    test("not not true", true);
+    test("not not false", false);
+    test("not (not not true)", false);
+    test("not not (not false)", true);
+    test("true and true", true);
+    test("false and true", false);
+    test("true and false", false);
+    test("false and false", false);
+    test("true or true", true);
+    test("false or true", true);
+    test("true or false", true);
+    test("false or false", false);
+    test("not false or false", true);
+    test("false or true and false", false);
+    test("true or true and false", true);
+    test("true or true and true", true);
+    test("false or not false and true", true);
+    test("null and true", false);
+    test("true and null", false);
+    test("null and null", false);
+    test("null or true", true);
+    test("true or null", true);
+    test("false or null", false);
+    test("null or false", false);
+    test("true and (true or false and true) or not (true and false)", true);
+    test("def x = 1; true and x = 2; x", 2);
+    test("def x = 1; x = 2 and true", true);
+    test("def x = 1; x = 2 and true; x", 2);
+    test("def it = 'abc'; /a/ ? true : false", true);
+    test("def it = 'abc'; def x; /a/ and x = 'xxx'; x", "xxx");
+  }
+
 
   @Test public void globalFunctions() {
     //test("timestamp() > 0", true);

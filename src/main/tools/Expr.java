@@ -160,6 +160,9 @@ class Expr {
     Token        identifier;
     Expr.VarDecl @varDecl;
     boolean      @couldBeFunctionCall = false;
+    boolean      @optional = false;       // True if variable not existing is not fatal (used for
+                                          // "it" =~ /regex/ where we are not sure if "it" exists at
+                                          // time we build the expression).
   }
 
   class ExprString extends Expr {
@@ -295,6 +298,18 @@ class Expr {
     Token        startToken;
     Expr.FunDecl funDecl;
     boolean      noParamsDefined;
+  }
+
+  class Return extends Expr {
+    Token      returnToken;
+    Expr       expr;
+    JacsalType returnType;      // Return type of the function we are embedded in
+  }
+
+  class Print extends Expr {
+    Token printToken;
+    Expr  expr;
+    boolean newLine;    // Whether to print newline
   }
 
   ////////////////////////////////////////////////////////////////////

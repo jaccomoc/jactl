@@ -226,6 +226,9 @@ abstract class Expr {
     Token        identifier;
     Expr.VarDecl varDecl;
     boolean      couldBeFunctionCall = false;
+    boolean      optional = false;       // True if variable not existing is not fatal (used for
+                                          // "it" =~ /regex/ where we are not sure if "it" exists at
+                                          // time we build the expression).
     Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
@@ -441,6 +444,34 @@ abstract class Expr {
     @Override public String toString() { return "Closure[" + "startToken=" + startToken + ", " + "funDecl=" + funDecl + ", " + "noParamsDefined=" + noParamsDefined + "]"; }
   }
 
+  static class Return extends Expr implements ManagesResult {
+    Token returnToken;
+    Expr       expr;
+    JacsalType returnType;      // Return type of the function we are embedded in
+    Return(Token returnToken, Expr expr, JacsalType returnType) {
+      this.returnToken = returnToken;
+      this.expr = expr;
+      this.returnType = returnType;
+      this.location = returnToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
+    @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + ", " + "returnType=" + returnType + "]"; }
+  }
+
+  static class Print extends Expr {
+    Token printToken;
+    Expr  expr;
+    boolean newLine;    // Whether to print newline
+    Print(Token printToken, Expr expr, boolean newLine) {
+      this.printToken = printToken;
+      this.expr = expr;
+      this.newLine = newLine;
+      this.location = printToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitPrint(this); }
+    @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
+  }
+
   ////////////////////////////////////////////////////////////////////
 
   // = Used when generating wrapper method
@@ -531,6 +562,8 @@ abstract class Expr {
     T visitOpAssign(OpAssign expr);
     T visitNoop(Noop expr);
     T visitClosure(Closure expr);
+    T visitReturn(Return expr);
+    T visitPrint(Print expr);
     T visitArrayLength(ArrayLength expr);
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);

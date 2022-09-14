@@ -724,6 +724,7 @@ public class Tokeniser {
     new Symbol("void", VOID),
     new Symbol("for", FOR),
     new Symbol("if", IF),
+    new Symbol("unless", UNLESS),
     new Symbol("else", ELSE),
     new Symbol("while", WHILE),
     new Symbol("continue", CONTINUE),
@@ -740,6 +741,7 @@ public class Tokeniser {
     new Symbol("in", IN),
     new Symbol("!in", BANG_IN),
     new Symbol("and", AND),
+    new Symbol("not", NOT),
     new Symbol("or", OR),
     new Symbol("print", PRINT),
     new Symbol("println", PRINTLN)

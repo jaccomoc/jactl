@@ -131,9 +131,8 @@ class Stmt {
    * Return statement
    */
   class Return extends Stmt {
-    Token      returnToken;
-    Expr       expr;
-    JacsalType returnType;      // Return type of the function we are embedded in
+    Token       returnToken;
+    Expr.Return expr;
   }
 
   /**
@@ -162,15 +161,6 @@ class Stmt {
   class ExprStmt extends Stmt {
     Token exprLocation;
     Expr expr;
-  }
-
-  /**
-   * Print statement
-   */
-  class Print extends Stmt {
-    Token   printToken;
-    Expr    expr;
-    boolean newLine;    // Whether to print newline
   }
 
   /**

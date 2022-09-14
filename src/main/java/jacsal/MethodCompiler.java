@@ -171,9 +171,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     compile(stmt.expr);
-    convertTo(stmt.returnType, true, stmt.expr.location);
     pop();
-    emitReturn(stmt.returnType);
     return null;
   }
 
@@ -225,13 +223,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitContinue(Stmt.Continue stmt) {
     mv.visitJumpInsn(GOTO, stmt.whileLoop.continueLabel);
-    return null;
-  }
-
-  @Override public Void visitPrint(Stmt.Print stmt) {
-    compile(stmt.expr);
-    convertToString();
-    invokeStatic(RuntimeUtils.class, stmt.printToken.getChars(), Object.class);
     return null;
   }
 
@@ -564,6 +555,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                             PERCENT, "remainder");
 
   @Override public Void visitBinary(Expr.Binary expr) {
+    if (expr.left == null) {
+      compile(expr.right);
+      return null;
+    }
+
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
     if (expr.operator.is(numericOperator) && (expr.left.type.is(ANY) || expr.right.type.is(ANY))) {
       compile(expr.left);
@@ -1174,6 +1170,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expr.args.forEach(this::compile);
 
     invokeMethod(expr.funDecl);
+    return null;
+  }
+
+  @Override public Void visitReturn(Expr.Return returnExpr) {
+    compile(returnExpr.expr);
+    convertTo(returnExpr.returnType, true, returnExpr.expr.location);
+    pop();
+    emitReturn(returnExpr.returnType);
+    push(ANY);
+    return null;
+  }
+
+  @Override public Void visitPrint(Expr.Print expr) {
+    compile(expr.expr);
+    convertToString();
+    invokeStatic(RuntimeUtils.class, expr.printToken.getChars(), Object.class);
     return null;
   }
 

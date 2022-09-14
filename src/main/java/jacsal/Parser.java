@@ -38,7 +38,7 @@ import static jacsal.TokenType.*;
  * Finally the Compiler then should be invoked to compile the AST into JVM byte code.
  */
 public class Parser {
-  Tokeniser             tokeniser;
+  Tokeniser tokeniser;
   Token                 firstToken = null;
   List<CompileError>    errors     = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes    = new ArrayDeque<>();
@@ -193,7 +193,6 @@ public class Parser {
    *#            | ifStmt
    *#            | forStmt
    *#            | whileStmt
-   *#            | returnStmt
    *#            | exprStatement;
    */
   private Stmt statement() {
@@ -204,11 +203,9 @@ public class Parser {
         return exprStmt();
       }
     }
-    if (matchAny(RETURN))        { return returnStmt();       }
     if (matchAny(IF))            { return ifStmt();           }
     if (matchAny(WHILE))         { return whileStmt();        }
     if (matchAny(FOR))           { return forStmt();          }
-    if (matchAny(PRINT,PRINTLN)) { return printStmt();        }
     if (matchAny(BREAK))         { return new Stmt.Break(previous()); }
     if (matchAny(CONTINUE))      { return new Stmt.Continue(previous()); }
     if (peek().is(SEMICOLON))    { return null;               }
@@ -227,11 +224,30 @@ public class Parser {
         // Remove the default parameter declaration for "it" from the statements in the block
         Stmt itParameter = closure.funDecl.block.stmts.stmts.remove(0);
         if (!(itParameter instanceof Stmt.VarDecl &&
-              ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals("it"))) {
+              ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals(Utils.IT_VAR))) {
           throw new IllegalStateException("Internal error: expecting parameter declaration for 'it' but got " + itParameter);
         }
         return closure.funDecl.block;   // Treat closure as code block since no parameters
       }
+    }
+    else
+    if (matchAny(IF,UNLESS)) {
+      // For all other expressions we allow a following "if" or "unless" so if we have one
+      // of those we will convert into an if statement
+      Token ifToken = previous();
+      Expr  condition = expression();
+      if (ifToken.is(IF)) {
+        return new Stmt.If(ifToken, condition, stmt, null);
+      }
+      else {
+        return new Stmt.If(ifToken, condition, null, stmt);
+      }
+    }
+
+    // If we have a solitary return expression then convert to return statement
+    if (stmt.expr instanceof Expr.Return) {
+      final var returnExpr = (Expr.Return) stmt.expr;
+      return new Stmt.Return(returnExpr.returnToken, returnExpr);
     }
     return stmt;
   }
@@ -316,7 +332,7 @@ public class Parser {
     Expr  initialiser = null;
     if (matchAny(EQUAL)) {
       matchAny(EOL);
-      initialiser = expression();
+      initialiser = parseExpression(0);
     }
 
     JacsalType type;
@@ -346,7 +362,7 @@ public class Parser {
   private Stmt.If ifStmt() {
     Token ifToken = previous();
     expect(LEFT_PAREN);
-    Expr cond      = expression();
+    Expr cond      = condition();
     matchAny(EOL);
     expect(RIGHT_PAREN);
     Stmt trueStmt  = statement();
@@ -364,7 +380,7 @@ public class Parser {
   private Stmt.While whileStmt() {
     Token whileToken = previous();
     expect(LEFT_PAREN);
-    Expr cond      = expression();
+    Expr cond      = condition();
     matchAny(EOL);
     expect(RIGHT_PAREN);
     Stmt.While whileStmt = new Stmt.While(whileToken, cond);
@@ -389,7 +405,7 @@ public class Parser {
       matchAny(EOL);
       expect(SEMICOLON);
     }
-    Expr cond           = expression();
+    Expr cond           = condition();
     matchAny(EOL);
     expect(SEMICOLON);
     Stmt update         = commaSeparatedStatements();
@@ -445,19 +461,19 @@ public class Parser {
   }
 
   /**
-   *# returnStmt -> "return" expression;
+   # returnExpr -> "return" expression;
    */
-  private Stmt returnStmt() {
-    Token       location   = previous();
-    return new Stmt.Return(location, expression(), null);  // returnType will be set by Resolver
+  private Expr.Return returnExpr() {
+    Token location = previous();
+    return new Expr.Return(location, parseExpression(0), null);   // returnType will be set by Resolver
   }
 
   /**
-   *# printStmt -> ("print" | "println") expr ?;
+   *# printExpr -> ("print" | "println") expr ?;
    */
-  private Stmt.Print printStmt() {
+  private Expr.Print printExpr() {
     Token printToken = previous();
-    return new Stmt.Print(printToken, expression(), printToken.is(PRINTLN));
+    return new Expr.Print(printToken, parseExpression(0), printToken.is(PRINTLN));
   }
 
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
@@ -481,7 +497,8 @@ public class Parser {
   // right-associative (false).
   private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
     List.of(
-//      new Pair(true, List.of(AND, OR)),
+//      new Pair(true, List.of(OR)),
+//      new Pair(true, List.of(AND)),
 //      new Pair(true, List.of(NOT)),
       new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
       /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
@@ -507,24 +524,80 @@ public class Parser {
     );
 
   /**
-   *# expression -> expression operator expression
-   *#             | unary
-   *#             | primary;
-   *
-   * Recursively parse expressions base on operator precedence.
-   * @return the parsed expression
+   *# condition -> expression ;
+   * Used for situations where we need a boolean condition.
    */
-  private Expr expression() {
-    matchAny(EOL);
-    return parseExpression(0);
+  private Expr condition() {
+    return expression();
   }
 
-  // Parse expressions (mostly binary operations).
-  // We parse based on operator precedence. If we reach highest level of precedence
-  // then we return a primaru().
-  // We check whether current level of precedence corresponds to the unary ops and
-  // return unary() if that is the case.
+  /**
+   *# expression -> orExpression ;
+   * Note that we handle special case of regex on its own here.
+   * A regex as a single statement or single expr where we expect some kind of condition
+   * (such as in an if/while) is turned into "it =~ /regex/" to make it a bit like perl syntax
+   * where "/pattern/" means "$_ =~ /pattern/".
+   */
+  private Expr expression() {
+    return orExpression();
+  }
+
+  /**
+   *# orExpression -> andExpression ( "or" andExpression) * ;
+   */
+  private Expr orExpression() {
+    Expr expr = andExpression();
+    while (matchAny(OR)) {
+      expr = new Expr.Binary(expr, new Token(PIPE_PIPE, previous()), andExpression());
+    }
+    return expr;
+  }
+
+  /**
+   *# andExpression -> notExpression ( AND notExpression ) * ;
+   */
+  private Expr andExpression() {
+    Expr expr = notExpression();
+    while (matchAny(AND)) {
+      expr = new Expr.Binary(expr, new Token(AMPERSAND_AMPERSAND, previous()), notExpression());
+    }
+    return expr;
+  }
+
+  /**
+   *# notExpresssion -> NOT * (expr | returnExpr | printExpr) ;
+   */
+  private Expr notExpression() {
+    Expr expr;
+    if (matchAny(NOT)) {
+      Token notToken = previous();
+      expr = new Expr.PrefixUnary(new Token(BANG, notToken), notExpression());
+    }
+    else {
+      if (matchAny(RETURN))        { expr = returnExpr(); }
+      else
+      if (matchAny(PRINT,PRINTLN)) { expr = printExpr();  }
+      else {
+        expr = parseExpression(0);
+      }
+    }
+    return expr;
+  }
+
+  /**
+   *# expr -> expr operator expr
+   *#       | expr "?" expr ":"" expr
+   *#       | unary
+   *#       | primary;
+   * Parse expressions (mostly binary operations).
+   * We parse based on operator precedence. If we reach highest level of precedence
+   * then we return a primaru().
+   * We check whether current level of precedence corresponds to the unary ops and
+   * return unary() if that is the case.
+   */
   private Expr parseExpression(int level) {
+    matchAny(EOL);
+
     // If we have reached highest precedence
     if (level == operatorsByPrecedence.size()) {
       return primary();
@@ -570,7 +643,7 @@ public class Parser {
       Expr rhs;
       if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
         // '[' and '?[' can be followed by any expression and then a ']'
-        rhs = expression();
+        rhs = parseExpression(0);
       }
       else {
         rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
@@ -586,6 +659,14 @@ public class Parser {
         if (operator.is(DOT,QUESTION_DOT) && rhs instanceof Expr.Identifier) {
           rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
         }
+
+        // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
+        // by default we need to strip off the "it =~" and replace with current one
+        if (operator.is(EQUAL_GRAVE) && Utils.isImplicitItCompare(rhs)) {
+          Expr.Binary binary = (Expr.Binary)rhs;
+          rhs = binary.right;
+        }
+
         expr = new Expr.Binary(expr, operator, rhs);
       }
       // Check for closing ']' if required
@@ -664,7 +745,7 @@ public class Parser {
       if (exprs.size() > 0) {
         expect(COMMA);
       }
-      exprs.add(expression());
+      exprs.add(parseExpression(0));
     }
     return exprs;
   }
@@ -707,7 +788,7 @@ public class Parser {
    */
   private Expr primary() {
     Supplier<Expr> nestedExpression = () -> {
-      Expr nested = expression();
+      Expr nested = expression(); // parseExpression(0);
       matchAny(EOL);
       expect(RIGHT_PAREN);
       return nested;
@@ -736,7 +817,7 @@ public class Parser {
       if (expr.exprs.size() > 0) {
         expect(COMMA);
       }
-      expr.exprs.add(expression());
+      expr.exprs.add(parseExpression(0));
     }
     return expr;
   }
@@ -766,7 +847,7 @@ public class Parser {
         }
         Expr key = mapKey();
         expect(COLON);
-        Expr value = expression();
+        Expr value = parseExpression(0);
         expr.entries.add(new Pair(key, value));
       }
     }
@@ -781,7 +862,7 @@ public class Parser {
     if (peek().is(EXPR_STRING_START))      { return exprString(); }
     if (peek().isKeyword())                { advance(); return new Expr.Literal(previous()); }
     if (matchAny(LEFT_PAREN)) {
-      Expr expr = expression();
+      Expr expr = parseExpression(0);
       expect(RIGHT_PAREN);
       return expr;
     }
@@ -828,6 +909,16 @@ public class Parser {
       else {
         unexpected("Error in expression string");
       }
+    }
+    // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
+    // on our own somewhere.
+    // We will assume that we are standalone for the moment and build "it =~ /regex/" since if "it"
+    // exists and we are standalone we want to match against the it var. If we later discover that we
+    // are in a "x =~ /regex/" our parent expression will convert us back to a normal regex. If we
+    // stil have a match against "it" but discover during Resolver that "it" does not exist we will
+    // remove the "it" part then.
+    if (startToken.is(SLASH)) {
+      return createItMatch(exprString);
     }
     return exprString;
   }
@@ -884,7 +975,7 @@ public class Parser {
   /////////////////////////////////////////////////
 
   private Stmt.VarDecl createItParam(Token token) {
-    Token        itToken = new Token(IDENTIFIER, token).setValue("it");
+    Token        itToken = new Token(IDENTIFIER, token).setValue(Utils.IT_VAR);
     Expr.VarDecl itDecl  = new Expr.VarDecl(itToken, new Expr.Literal(new Token(NULL, token)));
     itDecl.isParam = true;
     itDecl.isResultUsed = false;
@@ -1285,6 +1376,16 @@ public class Parser {
       }
       setCreateIfMissing(binary.left);
     }
+  }
+
+  private Expr.Binary createItMatch(Expr expr) {
+    Token start = ((Expr.ExprString) expr).exprStringStart;
+    Expr.Identifier itIdent = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
+    itIdent.optional = true;   // Optional since if "it" does not exist we will use regex as a string
+                               // rather than try to match
+    return new Expr.Binary(itIdent,
+                           new Token(EQUAL_GRAVE, start),
+                           expr);
   }
 
   private static final Map<TokenType,TokenType> arithmeticOperator =
