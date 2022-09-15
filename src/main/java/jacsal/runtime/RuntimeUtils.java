@@ -22,6 +22,7 @@ import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -500,20 +501,26 @@ public class RuntimeUtils {
   /**
    * Regex match. Return true if string matches the given regex.
    * We compile the patterns and store them in a cache for efficiency.
+   * NOTE: we use perl style matching where x =~ /abc/ just needs abc
+   * to appear within the string. Standard Java matching matches as
+   * though the pattern is /^abc$/ so we alter the pattern to add .*
+   * at beginning and end (if pattern doesn't already have ^ or $).
    */
-  public static boolean regexMatch(String str, String regex, String source, int line) {
+  public static Matcher regexMatch(String str, String regex, String source, int line) {
     var cache = patternCache.get();
     Pattern pattern = cache.get(regex);
     if (pattern == null) {
-      String alteredRegex = regex;
+      String patternStart = "";
       if (regex.length() == 0 || regex.charAt(0) != '^') {
-        alteredRegex = ".*" + alteredRegex;
+        patternStart = ".*?";
       }
+      String patternEnd = "";
       if (regex.length() != 0 && regex.charAt(regex.length() - 1) != '$') {
-        alteredRegex = alteredRegex + ".*";
+        patternEnd = ".*?";
       }
       try {
-        pattern = Pattern.compile(alteredRegex);
+        final var alteredPattern = patternStart + "(" + regex + ")" + patternEnd;
+        pattern = Pattern.compile(alteredPattern);
       }
       catch (PatternSyntaxException e) {
         throw new RuntimeError("Pattern error: " + e.getMessage(), source, line);
@@ -523,7 +530,15 @@ public class RuntimeUtils {
         cache.remove(cache.keySet().iterator().next());
       }
     }
-    return pattern.matcher(str).matches();
+    return pattern.matcher(str);
+  }
+
+  public static String regexGroup(Matcher matcher, int group) {
+    group++;   // Since we add our own group wrapping the regex
+    if (group > matcher.groupCount()) {
+      return null;
+    }
+    return matcher.group(group);
   }
 
   /**

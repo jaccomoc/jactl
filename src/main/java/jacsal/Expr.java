@@ -89,6 +89,23 @@ abstract class Expr {
     @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + "]"; }
   }
 
+  static class RegexMatch extends Expr {
+    Expr    left;
+    Token   operator;
+    Expr    right;
+    boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
+    VarDecl captureArrVarDecl;
+    RegexMatch(Expr left, Token operator, Expr right, boolean implicitItMatch) {
+      this.left = left;
+      this.operator = operator;
+      this.right = right;
+      this.implicitItMatch = implicitItMatch;
+      this.location = operator;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexMatch(this); }
+    @Override public String toString() { return "RegexMatch[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
+  }
+
   /**
    * Ternary expression - only used for:
    *     cond ? trueExpr : falseExpr
@@ -444,8 +461,8 @@ abstract class Expr {
     @Override public String toString() { return "Closure[" + "startToken=" + startToken + ", " + "funDecl=" + funDecl + ", " + "noParamsDefined=" + noParamsDefined + "]"; }
   }
 
-  static class Return extends Expr implements ManagesResult {
-    Token returnToken;
+  static class Return extends Expr {
+    Token      returnToken;
     Expr       expr;
     JacsalType returnType;      // Return type of the function we are embedded in
     Return(Token returnToken, Expr expr, JacsalType returnType) {
@@ -544,6 +561,7 @@ abstract class Expr {
 
   interface Visitor<T> {
     T visitBinary(Binary expr);
+    T visitRegexMatch(RegexMatch expr);
     T visitTernary(Ternary expr);
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);

@@ -83,6 +83,14 @@ class Expr {
     Token @originalOperator;           // When -- or ++ is turned into x = x + 1 this is the actual --/++ op
   }
 
+  class RegexMatch extends Expr {
+    Expr    left;
+    Token   operator;
+    Expr    right;
+    boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
+    VarDecl @captureArrVarDecl;
+  }
+
   /**
    * Ternary expression - only used for:
    *     cond ? trueExpr : falseExpr

@@ -36,7 +36,8 @@ public class Utils {
   public static final String JACSAL_SCRIPT_MAIN = JACSAL_PREFIX + "main";
 
   public static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
-  public static final String IT_VAR = "it";
+  public static final String IT_VAR      = "it";       // Name of implicit arg for closures
+  public static final String CAPTURE_VAR = "$@";       // Name of internal array for capture values of a regex
 
   /**
    * Get the name of the static field that will contain the handle for a given method
@@ -249,18 +250,5 @@ public class Utils {
       }
     }
     return result;
-  }
-
-  public static boolean isImplicitItCompare(Expr expr) {
-    if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(TokenType.EQUAL_GRAVE)) {
-      Expr left = ((Expr.Binary) expr).left;
-      if (left instanceof Expr.Identifier) {
-        Expr.Identifier ident = (Expr.Identifier)left;
-        if (ident.identifier.getValue().equals(IT_VAR) && ident.optional) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 }

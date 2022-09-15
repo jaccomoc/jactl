@@ -41,7 +41,6 @@ class TokeniserTest {
     doTest.accept("]", RIGHT_SQUARE);
     doTest.accept("{", LEFT_BRACE);
     doTest.accept("!", BANG);
-    doTest.accept("$", DOLLAR);
     doTest.accept("%", PERCENT);
     doTest.accept("^", ACCENT);
     doTest.accept("&", AMPERSAND);
@@ -173,6 +172,8 @@ class TokeniserTest {
     doTest.accept("Dxw12uioi_");
     doTest.accept("__");
     doTest.accept("a1");
+    doTest.accept("$1");
+    doTest.accept("$1234");
   }
 
   @Test public void numericLiterals() {

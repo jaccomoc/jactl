@@ -251,21 +251,41 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   // = Expr
 
-  @Override public JacsalType visitBinary(Expr.Binary expr) {
+
+  @Override public JacsalType visitRegexMatch(Expr.RegexMatch expr) {
+    expr.isConst = false;
+
     // Special case for /regex/ where we need to match against "it" if in a context where variable
     // "it" exists. If it doesn't exist then we set left to null and in compile phase we will ignore it.
-    if (Utils.isImplicitItCompare(expr)) {
+    if (expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional) {
       if (!variableExists(((Expr.Identifier)expr.left).identifier)) {
         expr.left = null;
+        return expr.type = expr.right.type;
       }
     }
 
     resolve(expr.left);
     resolve(expr.right);
 
-    if (expr.left == null) {
-      return expr.type = expr.right.type;
+    final var captureArrName = new Token(IDENTIFIER, expr.operator).setValue(Utils.CAPTURE_VAR);
+    if (!variableExists(captureArrName)) {
+      // Allocate our capture array var if we don't already have one in scope
+      Expr.VarDecl captureArrVar = new Expr.VarDecl(captureArrName, null);
+      captureArrVar.type = STRING;  // So that $1, $2 lookups etc get back a string type
+      declare(captureArrName);
+      define(captureArrName, captureArrVar);
+      expr.captureArrVarDecl = captureArrVar;
     }
+    else {
+      expr.captureArrVarDecl = lookup(captureArrName);
+    }
+
+    return expr.type = BOOLEAN;
+  }
+
+  @Override public JacsalType visitBinary(Expr.Binary expr) {
+    resolve(expr.left);
+    resolve(expr.right);
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
@@ -1027,6 +1047,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   // rather than one that is a JVM local).
   private Expr.VarDecl lookup(Token identifier, boolean functionLookup, boolean existenceCheckOnly) {
     String name = identifier.getStringValue();
+
+    // Special case for capture vars which are of form $n where n > 0
+    // For these vars we actually look for the $@ capture array var since $n means $@[n]
+    if (name.charAt(0) == '$') {
+      name = Utils.CAPTURE_VAR;
+    }
+
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
     // Search blocks in each function until we find the variable
@@ -1123,7 +1150,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return newVarDecl;
     }
 
-    error("Reference to unknown variable " + name, identifier);
+    if (name.equals(Utils.CAPTURE_VAR)) {
+      error("Reference to regex capture variable " + identifier.getStringValue() + " in scope where no regex match has occurred", identifier);
+    }
+    else {
+      error("Reference to unknown variable " + name, identifier);
+    }
     return null;
   }
 

@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -554,6 +555,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                             SLASH,   "divide",
                                                             PERCENT, "remainder");
 
+  @Override public Void visitRegexMatch(Expr.RegexMatch expr) {
+    if (expr.left == null) {
+      compile(expr.right);
+      return null;
+    }
+
+    if (expr.captureArrVarDecl != null) {
+      defineVar(expr.captureArrVarDecl, ANY);
+    }
+
+    compile(expr.left);
+    castToString(expr.left.location);
+    compile(expr.right);
+    castToString(expr.right.location);
+    loadLocation(expr.operator);
+    invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, int.class);
+    dupVal();
+    storeVar(expr.captureArrVarDecl);
+    invokeVirtual(Matcher.class, "matches");
+    return null;
+  }
+
   @Override public Void visitBinary(Expr.Binary expr) {
     if (expr.left == null) {
       compile(expr.right);
@@ -665,17 +688,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       pop();
       push(BOOLEAN);
-      return null;
-    }
-
-    // Regex match
-    if (expr.operator.is(EQUAL_GRAVE)) {
-      compile(expr.left);
-      castToString(expr.left.location);
-      compile(expr.right);
-      castToString(expr.right.location);
-      loadLocation(expr.operator);
-      invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, int.class);
       return null;
     }
 
@@ -927,6 +939,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throw new CompileError("Forward reference to uninitialised value", expr.location);
     }
     loadVar(expr.varDecl);
+    final var name = expr.identifier.getStringValue();
+    if (name.charAt(0) == '$') {
+      // We have a capture var so we need to extract the matching group from the $@ matcher
+      loadConst(Integer.parseInt(name.substring(1)));
+      invokeStatic(RuntimeUtils.class, "regexGroup", Matcher.class, int.class);
+    }
     return null;
   }
 
@@ -942,21 +960,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitExprString(Expr.ExprString expr) {
-    _loadConst(expr.exprList.size());
-    mv.visitTypeInsn(ANEWARRAY, "java/lang/String");
-    for (int i = 0; i < expr.exprList.size(); i++) {
-      mv.visitInsn(DUP);
-      _loadConst(i);
-      Expr subExpr = expr.exprList.get(i);
-      compile(subExpr);
-      convertToString();
-      mv.visitInsn(AASTORE);
-      pop();
+    if (expr.exprList.size() == 0) {
+      loadConst("");
     }
-    push(ANY);          // For the String[]
-    loadConst(""); // Join string
-    swap();
-    invokeStatic(String.class, "join", CharSequence.class, CharSequence[].class);
+    if (expr.exprList.size() > 1) {
+      _loadConst(expr.exprList.size());
+      mv.visitTypeInsn(ANEWARRAY, "java/lang/String");
+      for (int i = 0; i < expr.exprList.size(); i++) {
+        mv.visitInsn(DUP);
+        _loadConst(i);
+        Expr subExpr = expr.exprList.get(i);
+        compile(subExpr);
+        convertToString();
+        mv.visitInsn(AASTORE);
+        pop();
+      }
+      push(ANY);          // For the String[]
+      loadConst(""); // Join string
+      swap();
+      invokeStatic(String.class, "join", CharSequence.class, CharSequence[].class);
+    }
+    else {
+      compile(expr.exprList.get(0));
+      convertToString();
+    }
     return null;
   }
 

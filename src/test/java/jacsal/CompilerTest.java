@@ -32,6 +32,10 @@ class CompilerTest {
 
   boolean debug = false;
 
+  private void doTest(String code, Object expected)  {
+    doTest(code, true, false, expected);
+  }
+
   private void doTest(String code, boolean evalConsts, boolean replMode, Object expected)  {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
@@ -1726,6 +1730,23 @@ class CompilerTest {
     test("def it = 'xyyz'; /yy/ and it = 'baa'; /aa$/ and return 'xxx'", "xxx");
   }
 
+  @Test public void regexCaptureVars() {
+    // Use doTest rather than test because capture vars aren't ever stored in globals
+    doTest("'abcaaxy' =~ /(a+)/", true);
+    doTest("'bcaaxy' =~ /(a+)/ and return $1", "aa");
+    doTest("def x = 'abcaaxy'; x =~ /(a+)/", true);
+    doTest("def x = 'bcaaxy'; x =~ /(a+)/ and return $1", "aa");
+    doTest("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/ and x += $2; x", "aac");
+    doTest("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/; \"$1$2\"", "ac");
+    testError("{ 'bcaaxy' =~ /(a+)/ }; \"$1$2\"", "no regex match");
+    doTest("'abc' =~ /a/; $0", "a");
+    doTest("'abc' =~ /a(bc)/; $0 + $1", "abcbc");
+    doTest("'abc' =~ /a(bc)/; $2", null);
+    doTest("def it = 'abc'; /a/; $0", "a");
+    doTest("def it = 'abc'; /a(bc)/; $0 + $1", "abcbc");
+    doTest("def it = 'abc'; /a(bc)/; $2", null);
+  }
+
   @Test public void listLiterals() {
     test("[]", List.of());
     test("[1]", List.of(1));
@@ -3198,7 +3219,6 @@ class CompilerTest {
     test("def it = 'abc'; /a/ ? true : false", true);
     test("def it = 'abc'; def x; /a/ and x = 'xxx'; x", "xxx");
   }
-
 
   @Test public void globalFunctions() {
     //test("timestamp() > 0", true);

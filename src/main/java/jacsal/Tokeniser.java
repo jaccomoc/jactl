@@ -332,8 +332,11 @@ public class Tokeniser {
         else {
           // We know that we have an identifier following the '$' in this case because
           // we would have already swollowed the '$' in previous parseString() call if there
-          // was no identifier following the '$'.
-          advance(1);
+          // was no identifier following the '$'. For capture vars the '$' is part of the name
+          // so we don't advance past the '$'.
+          if (!Character.isDigit(charAt(1))) {
+            advance(1);
+          }
           token = parseIdentifier(createToken(), remaining);
           if (keyWords.contains(token.getChars())) {
             throw new CompileError("Keyword found where identifier expected", token);
@@ -365,14 +368,37 @@ public class Tokeniser {
     return parseString(true, endChars, newLinesAllowed(), escapeChars);
   }
 
+  /**
+   * Parse an identifier. Identifier is either:
+   *    - a normal identifier:      [_a-zA-Z][_a-zA-Z0-9]*
+   *    - a capture var identifier: $[0-9]+
+   */
   private Token parseIdentifier(Token token, int remaining) {
     // Make sure that first character is legal for an identitifer
-    int c = charAt(0);
-    if (!isIdentifierStart(c)) throw new CompileError("Unexpected character '" + (char)c + "'", token);
+    int startChar = charAt(0);
+    if (!isIdentifierStart(startChar) && startChar != '$') {
+      throw new CompileError("Unexpected character '" + (char)startChar + "'", token);
+    }
 
     // Search for first char the is not a valid identifier char
     int i = 1;
-    while (i < remaining && isIdentifierPart(charAt(i))) { i++; }
+    for (; i < remaining; i++) {
+      final var c = charAt(i);
+      if (startChar == '$' && !Character.isDigit(c)) {
+          break;
+      }
+      else
+      if (startChar != '$' && !isIdentifierPart(c)) {
+        break;
+      }
+    }
+
+    if (startChar == '$') {
+      if (i == 1) { throw new CompileError("Unexpected character '$'", token); }
+      if (i > 6) {
+        throw new CompileError("Capture variable name too large", token);
+      }
+    }
 
     advance(i);
     return token.setType(IDENTIFIER)
@@ -578,7 +604,7 @@ public class Tokeniser {
         case '$': {
           if (stringExpr) {
             int nextChar = available(2) ? charAt(1) : -1;
-            if (nextChar == '{' || isIdentifierStart(nextChar)) {
+            if (nextChar == '{' || isIdentifierStart(nextChar) || Character.isDigit(nextChar)) {
               finished = true;
               continue;
             }
@@ -644,7 +670,6 @@ public class Tokeniser {
     new Symbol("{", LEFT_BRACE),
     new Symbol("}", RIGHT_BRACE),
     new Symbol("!", BANG),
-    new Symbol("$", DOLLAR),
     new Symbol("%", PERCENT),
     new Symbol("^", ACCENT),
     new Symbol("&", AMPERSAND),

@@ -662,12 +662,21 @@ public class Parser {
 
         // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
         // by default we need to strip off the "it =~" and replace with current one
-        if (operator.is(EQUAL_GRAVE) && Utils.isImplicitItCompare(rhs)) {
-          Expr.Binary binary = (Expr.Binary)rhs;
-          rhs = binary.right;
+        if (operator.is(EQUAL_GRAVE)) {
+          if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
+            Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
+            regex.left = expr;
+            regex.operator = operator;
+            regex.implicitItMatch = false;
+            expr = regex;
+          }
+          else {
+            expr = new Expr.RegexMatch(expr, operator, rhs, false);
+          }
         }
-
-        expr = new Expr.Binary(expr, operator, rhs);
+        else {
+          expr = new Expr.Binary(expr, operator, rhs);
+        }
       }
       // Check for closing ']' if required
       if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
@@ -887,15 +896,17 @@ public class Parser {
     Token startToken = expect(EXPR_STRING_START,SLASH);
     Expr.ExprString exprString = new Expr.ExprString(startToken);
     if (startToken.is(EXPR_STRING_START)) {
-      // Turn the EXPR_STRING_START into a string literal and make it the first in our expr list
-      exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, previous())));
+      if (!startToken.getStringValue().isEmpty()) {
+        // <></>urn the EXPR_STRING_START into a string literal and make it the first in our expr list
+        exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, startToken)));
+      }
     }
     else {
       // Tell tokeniser that the SLASH was actually the start of a regex expression string
       tokeniser.startRegex();
     }
     while (!matchAny(EXPR_STRING_END)) {
-      if (matchAny(STRING_CONST)) {
+      if (matchAny(STRING_CONST) && !previous().getStringValue().isEmpty()) {
         exprString.exprList.add(new Expr.Literal(previous()));
       }
       else
@@ -1378,14 +1389,15 @@ public class Parser {
     }
   }
 
-  private Expr.Binary createItMatch(Expr expr) {
+  private Expr.RegexMatch createItMatch(Expr expr) {
     Token start = ((Expr.ExprString) expr).exprStringStart;
     Expr.Identifier itIdent = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
     itIdent.optional = true;   // Optional since if "it" does not exist we will use regex as a string
                                // rather than try to match
-    return new Expr.Binary(itIdent,
-                           new Token(EQUAL_GRAVE, start),
-                           expr);
+    return new Expr.RegexMatch(itIdent,
+                               new Token(EQUAL_GRAVE, start),
+                               expr,
+                               true);
   }
 
   private static final Map<TokenType,TokenType> arithmeticOperator =
