@@ -38,6 +38,9 @@ public class BuiltinFunctions {
     register("each", "iteratorEach", ITERATOR, true, 0);
     register("collect", "iteratorCollect", ITERATOR, true, 0);
     register("map", "iteratorMap", ITERATOR, true, 0);
+    register("filter", "iteratorFilter", ITERATOR, true, 0);
+    //register("replaceAll", "stringReplaceAll", false);
+    register("lines", "stringLines", false);
   }
 
   private static void register(String name, String methodName, boolean needsLocation) {
@@ -112,6 +115,59 @@ public class BuiltinFunctions {
   public static Object iteratorSizeWrapper(Iterator iterator, String source, int offset, Object args) {
     validateArgCount(args, 0, 0, source, offset);
     return RuntimeUtils.convertIteratorToList(iterator).size();
+  }
+
+  ////////////////////////////////
+
+  // = filter
+
+  public static Iterator iteratorFilter(Object iterable, String source, int offset, MethodHandle closure) {
+    Iterator iter = createIterator(iterable);
+    return new Iterator() {
+      Object next = null;
+      @Override public boolean hasNext() {
+        if (next != null) {
+          return true;
+        }
+        findNext();
+        return next != null;
+      }
+      private void findNext() {
+        while (iter.hasNext()) {
+          try {
+            Object elem = iter.next();
+            if (elem instanceof Map.Entry) {
+              var entry = (Map.Entry)elem;
+              elem = new Object[] { entry.getKey(), entry.getValue() };
+            }
+            boolean cond = true;
+            if (closure != null) {
+              Object result = closure.invokeExact(source, offset, (Object)(new Object[]{ elem }));
+              cond = RuntimeUtils.isTruth(result, false);
+            }
+            if (cond) {
+              next = elem;
+              break;
+            }
+          }
+          catch (RuntimeException e) { throw e; }
+          catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
+        }
+      }
+      @Override public Object next() {
+        if (next == null) {
+          findNext();
+        }
+        Object result = next;
+        next = null;
+        return result;
+      }
+    };
+  }
+  public static Object iteratorFilterWrapper(Object iterable, String source, int offset, Object args) {
+    validateArgCount(args, 0, 1, source, offset);
+    Object[] arr = (Object[])args;
+    return iteratorFilter(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
   }
 
   ////////////////////////////////
@@ -206,6 +262,37 @@ public class BuiltinFunctions {
     validateArgCount(args, 0, 1, source, offset);
     Object[] arr = (Object[])args;
     return iteratorCollect(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
+  }
+
+  /////////////////////////////
+
+  // = replaceAll
+
+  public static String stringReplaceAll(String str, String regex, String replacement) {
+    return str.replaceAll(regex, replacement);
+  }
+  public static Object stringReplaceAllWrapper(String str, String source, int offset, Object args) {
+    validateArgCount(args, 2, 2, source, offset);
+    Object[] arr = (Object[])args;
+    if (!(arr[0] instanceof String)) {
+      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[0]), source, offset);
+    }
+    if (!(arr[1] instanceof String)) {
+      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[1]), source, offset);
+    }
+    return str.replaceAll((String)arr[0], (String)arr[1]);
+  }
+
+  /////////////////////////////
+
+  // = lines
+
+  public static Iterator stringLines(String str) {
+    return RuntimeUtils.lines(str).iterator();
+  }
+  public static Object stringLinesWrapper(String str, String source, int offset, Object args) {
+    validateArgCount(args, 0, 0, source, offset);
+    return RuntimeUtils.lines(str).iterator();
   }
 
   /////////////////////////////

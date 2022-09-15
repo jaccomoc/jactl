@@ -260,12 +260,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional) {
       if (!variableExists(((Expr.Identifier)expr.left).identifier)) {
         expr.left = null;
-        return expr.type = expr.right.type;
       }
     }
 
     resolve(expr.left);
     resolve(expr.right);
+
+    if (expr.left == null) {
+      return expr.type = expr.right.type;
+    }
 
     final var captureArrName = new Token(IDENTIFIER, expr.operator).setValue(Utils.CAPTURE_VAR);
     if (!variableExists(captureArrName)) {

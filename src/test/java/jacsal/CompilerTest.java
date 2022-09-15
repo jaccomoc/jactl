@@ -1747,6 +1747,47 @@ class CompilerTest {
     doTest("def it = 'abc'; /a(bc)/; $2", null);
   }
 
+  @Test public void replaceAll() {
+    //test("def it = 'xxx'; 'abcaaababbdaz'.replaceAll(/a/,'x')", "xbcxxxbxbbdxz");
+    //test("'abcaaababbdaz'.replaceAll(/a/,'x')", "xbcxxxbxbbdxz");
+  }
+
+  @Test public void filter() {
+    test("[].filter{it>1}", List.of());
+    test("[].filter()", List.of());
+    test("[:].filter()", List.of());
+    test("def x = []; x.filter{it>1}", List.of());
+    test("def x = []; x.filter()", List.of());
+    test("def x = [:]; x.filter()", List.of());
+    testError("null.filter()", "null value");
+    testError("''.filter()", "no such method");
+    testError("def x = 'abc'; x.filter()", "no such method");
+    testError("def x = null; x.filter()", "null value");
+    test("[1,2,3].filter()", List.of(1,2,3));
+    test("[1,2,3].filter{it>1}", List.of(2,3));
+    test("[a:true,b:false,c:true].filter{it[1]}.map{it[0]}", List.of("a","c"));
+    test("def f = [a:true,b:false,c:true].filter; f{it[1]}.map{it[0]}", List.of("a","c"));
+    test("def x = [a:true,b:false,c:true]; x.filter{it[1]}.map{it[0]}", List.of("a","c"));
+  }
+
+  @Test public void lines() {
+    test("''.lines()", List.of());
+    testError("[].lines()", "no such method");
+    testError("def x = []; x.lines()", "no such method");
+    test("' '.lines()", List.of(" "));
+    test("'\\n'.lines()", List.of("",""));
+    test("'abc\\nxyz'.lines()", List.of("abc","xyz"));
+    test("def x = ''; x.lines()", List.of());
+    test("def x = ' '; x.lines()", List.of(" "));
+    test("def x = '\\n'; x.lines()", List.of("",""));
+    test("def x = 'abc\\nxyz'; x.lines()", List.of("abc","xyz"));
+    test("'abc\\n\\nxyz'.lines()", List.of("abc","","xyz"));
+    test("'abc\\n\\nxyz\\n'.lines()", List.of("abc","","xyz",""));
+    test("'abc\\n\\nxyz\\n\\n'.lines()", List.of("abc","","xyz","",""));
+    test("'\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","abc","","xyz","",""));
+    test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","","abc","","xyz","",""));
+  }
+
   @Test public void listLiterals() {
     test("[]", List.of());
     test("[1]", List.of(1));

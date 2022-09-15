@@ -597,7 +597,7 @@ public class RuntimeUtils {
 
   public static String toString(Object obj) {
     if (obj == null) {
-      return null;
+      return "null";
     }
     if (obj instanceof Object[]) {
       obj = Arrays.asList((Object[])obj);
@@ -1054,7 +1054,7 @@ public class RuntimeUtils {
     return null;
   }
 
-  private static String className(Object obj) {
+  public static String className(Object obj) {
     if (obj == null)               { return "null"; }
     if (obj instanceof String)     { return "String"; }
     if (obj instanceof BigDecimal) { return "Decimal"; }
@@ -1075,6 +1075,9 @@ public class RuntimeUtils {
   }
 
   public static List<String> lines(String str) {
+    if (str.isEmpty()) {
+      return Collections.EMPTY_LIST;
+    }
     List<String> lines = new ArrayList<>();
     int offset = 0;
     int lastOffset = 0;
