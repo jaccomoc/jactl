@@ -261,6 +261,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional) {
       if (!variableExists(((Expr.Identifier)expr.left).identifier)) {
         expr.left = null;
+        if (!expr.modifiers.isEmpty()) {
+          throw new CompileError("No 'it' variable in this scope to match against", expr.location);
+        }
       }
     }
 
@@ -295,7 +298,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // If we have an implicit "it" match then we don't know whether we actually return a boolean or
     // whether the regex might just be used as a string: /xyz/ + 'abc'
-    boolean implicitItMatch = expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional;
+    // If there are any modifiers then we know that a match is being done.
+    boolean implicitItMatch = expr.left instanceof Expr.Identifier &&
+                              ((Expr.Identifier) expr.left).optional &&
+                              expr.modifiers.isEmpty();
     return expr.type = implicitItMatch ? ANY : BOOLEAN;
   }
 
@@ -305,7 +311,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
-    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE)) {
+    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE)) {
       expr.isConst = false;
     }
 

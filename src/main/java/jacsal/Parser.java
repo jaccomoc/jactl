@@ -510,7 +510,7 @@ public class Parser {
       List.of(ACCENT),
       List.of(AMPERSAND),
       */
-      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
+      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
       new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF /*, IN, BANG_IN, AS*/)),
 /*
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
@@ -666,7 +666,7 @@ public class Parser {
 
         // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
         // by default we need to strip off the "it =~" and replace with current one
-        if (operator.is(EQUAL_GRAVE)) {
+        if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
           if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
             Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
             regex.left = expr;
@@ -675,7 +675,7 @@ public class Parser {
             expr = regex;
           }
           else {
-            expr = new Expr.RegexMatch(expr, operator, rhs, false);
+            expr = new Expr.RegexMatch(expr, operator, rhs, "", false);
           }
         }
         else {
@@ -933,7 +933,7 @@ public class Parser {
     // stil have a match against "it" but discover during Resolver that "it" does not exist we will
     // remove the "it" part then.
     if (startToken.is(SLASH)) {
-      return createItMatch(exprString);
+      return createItMatch(exprString, previous());
     }
     return exprString;
   }
@@ -1390,7 +1390,7 @@ public class Parser {
     }
   }
 
-  private Expr.RegexMatch createItMatch(Expr expr) {
+  private Expr.RegexMatch createItMatch(Expr expr, Token regexEnd) {
     Token start = ((Expr.ExprString) expr).exprStringStart;
     Expr.Identifier itIdent = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
     itIdent.optional = true;   // Optional since if "it" does not exist we will use regex as a string
@@ -1398,6 +1398,7 @@ public class Parser {
     return new Expr.RegexMatch(itIdent,
                                new Token(EQUAL_GRAVE, start),
                                expr,
+                               regexEnd.getStringValue(),
                                true);
   }
 

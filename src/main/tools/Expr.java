@@ -87,6 +87,7 @@ class Expr {
     Expr    left;
     Token   operator;
     Expr    right;
+    String  modifiers;
     boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
     VarDecl @captureArrVarDecl;
   }

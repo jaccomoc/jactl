@@ -80,6 +80,9 @@ public class Tokeniser {
     int     braceLevel;         // At what level of brace nesting does the expression string exist
   }
 
+  // Valid modifiers that can come immediately after trailing '/' of a regex
+  private static final String REGEX_MODIFIERS = "gims";
+
   /**
    * Constructor
    * @param source  the source code to tokenise
@@ -347,12 +350,21 @@ public class Tokeniser {
 
       case '/':
       case '"': {
-        if (charAt(0) == c && charsAtEquals(0, endChars.length(), endChars)) {
+        if (charsAtEquals(0, endChars.length(), endChars)) {
           advance(endChars.length());
+          StringBuilder modifiers = new StringBuilder();
+          if (c == '/') {
+            // Check for modifiers after '/'
+            while (available(1) && REGEX_MODIFIERS.indexOf(charAt(0)) != -1) {
+              modifiers.append((char)charAt(0));
+              advance(1);
+            }
+          }
           stringState.pop();
           inString = false;
           return token.setType(EXPR_STRING_END)
-                      .setLength(3);
+                      .setValue(modifiers.toString())
+                      .setLength(endChars.length() + modifiers.length());
         }
         break;
       }
@@ -717,6 +729,7 @@ public class Tokeniser {
     new Symbol("===", TRIPLE_EQUAL),
     new Symbol("!==", BANG_EQUAL_EQUAL),
     new Symbol("=~", EQUAL_GRAVE),
+    new Symbol("!~", BANG_GRAVE),
     new Symbol("**", STAR_STAR),
     new Symbol("%=", PERCENT_EQUAL),
     new Symbol("**=", STAR_STAR_EQUAL),

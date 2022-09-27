@@ -511,17 +511,27 @@ public class RuntimeUtils {
    * though the pattern is /^abc$/ so we alter the pattern to add .*
    * at beginning and end (if pattern doesn't already have ^ or $).
    */
-  public static Matcher regexMatch(String str, String regex, String source, int line) {
+  public static Matcher regexMatch(String str, String regex, String modifiers, String source, int line) {
     var cache = patternCache.get();
-    Pattern pattern = cache.get(regex);
+    String key = regex + "/" + modifiers;
+    Pattern pattern = cache.get(key);
     if (pattern == null) {
       try {
-        pattern = Pattern.compile(regex);
+        int flags = 0;
+        for (int i = 0; i < modifiers.length(); i++) {
+          switch (modifiers.charAt(i)) {
+            case 'i': flags += Pattern.CASE_INSENSITIVE; break;
+            case 'm': flags += Pattern.MULTILINE;        break;
+            case 's': flags += Pattern.DOTALL;           break;
+            default: throw new IllegalStateException("Internal error: unexpected regex modifier '" + modifiers.charAt(i) + "'");
+          }
+        }
+        pattern = Pattern.compile(regex, flags);
       }
       catch (PatternSyntaxException e) {
         throw new RuntimeError("Pattern error: " + e.getMessage(), source, line);
       }
-      cache.put(regex, pattern);
+      cache.put(key, pattern);
       if (cache.size() > patternCacheSize) {
         cache.remove(cache.keySet().iterator().next());
       }

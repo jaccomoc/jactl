@@ -1716,6 +1716,9 @@ class CompilerTest {
   @Test public void regexMatch() {
     test("'abc' =~ 'a'", true);
     test("'abc' =~ /a/", true);
+    test("'abc' =~ /a/i", true);
+    test("'abc' =~ /A/i", true);
+    test("'Abc' =~ /a/i", true);
     test("'abc' =~ /^a/", true);
     test("'abc' =~ /^b/", false);
     test("'abc' =~ ''", true);
@@ -1728,10 +1731,39 @@ class CompilerTest {
     test("'ab\\nc\\n' =~ /\\nc\\n\\z/", true);
     test("'ab\\nc\\n' =~ /\\nc$.*/", true);
 
+    test("'abc' !~ 'a'", false);
+    test("'abc' !~ /a/", false);
+    test("'abc' !~ /a/i", false);
+    test("'abc' !~ /A/i", false);
+    test("'Abc' !~ /a/i", false);
+    test("'abc' !~ /^a/", false);
+    test("'abc' !~ /^b/", true);
+    test("'abc' !~ ''", false);
+    test("'abc' !~ /^abc$/", false);
+    test("'abc' !~ /c$/", false);
+    testError("'abc' !~ /(c$/", "unclosed group");
+    test("'ab\\nc' !~ /\\nc$/", false);
+    test("'ab\\nc\\n' !~ /\\nc$/", false);   // Weird but $ is supposed to match the trailing \n
+    test("'ab\\nc\\n' !~ /\\nc\\z/", true);
+    test("'ab\\nc\\n' !~ /\\nc\\n\\z/", false);
+    test("'ab\\nc\\n' !~ /\\nc$.*/", false);
+
+    test("'a\\nbc' =~ /a$/", false);
+    test("'a\\nbc' =~ /a$/m", true);
+    test("'a\\nbc' =~ /a./", false);
+    test("'a\\nbc' =~ /a./s", true);
+    test("'a\\nbc' =~ /a.bc$/s", true);
+    test("'a\\n\\nbc' =~ /a.$/s", false);
+    test("'a\\n\\nbc' =~ /a.$/ms", true);
+
     test("def x = 'abc'; def y = 'a'; x =~ y", true);
     test("def x = 'abc'; def y = /a/; x =~ y", true);
     test("def x = 'abc'; def y = /^a/; x =~ y", true);
     test("def x = 'abc'; def y = /^b/; x =~ y", false);
+    test("def x = 'abc'; def y = 'a'; x !~ y", false);
+    test("def x = 'abc'; def y = /a/; x !~ y", false);
+    test("def x = 'abc'; def y = /^a/; x !~ y", false);
+    test("def x = 'abc'; def y = /^b/; x !~ y", true);
     test("def x = 'abc'; def y = ''; x =~ y", true);
     test("def x = 'abc'; def y = /^abc$/; x =~ y", true);
     test("def x = 'abc'; def y = /c$/; x =~ y", true);
@@ -1754,6 +1786,8 @@ class CompilerTest {
     test("def it = 'xyz'; def x; !/(x)(y)(z)/ or x = \"$3$2$1\"; x", "zyx");
     test("def it = 'xyz'; def x = /x/; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /x/; { x == 'x' ? 'match' : 'nomatch' }()", "match");
+    test("def it = 'xyz'; def x = /X/i; { x ? 'match' : 'nomatch' }()", "match");
+    test("def it = 'xyz'; def x = /X/i; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
   }
 
   @Test public void regexCaptureVars() {

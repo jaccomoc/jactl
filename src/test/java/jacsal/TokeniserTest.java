@@ -85,6 +85,7 @@ class TokeniserTest {
     doTest.accept("++", PLUS_PLUS);
     doTest.accept("**", STAR_STAR);
     doTest.accept("=~", EQUAL_GRAVE);
+    doTest.accept("!~", BANG_GRAVE);
     doTest.accept("<=>", COMPARE);
     doTest.accept("===", TRIPLE_EQUAL);
     doTest.accept("!==", BANG_EQUAL_EQUAL);

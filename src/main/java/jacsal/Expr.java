@@ -93,17 +93,19 @@ abstract class Expr {
     Expr    left;
     Token   operator;
     Expr    right;
+    String  modifiers;
     boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
     VarDecl captureArrVarDecl;
-    RegexMatch(Expr left, Token operator, Expr right, boolean implicitItMatch) {
+    RegexMatch(Expr left, Token operator, Expr right, String modifiers, boolean implicitItMatch) {
       this.left = left;
       this.operator = operator;
       this.right = right;
+      this.modifiers = modifiers;
       this.implicitItMatch = implicitItMatch;
       this.location = operator;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexMatch(this); }
-    @Override public String toString() { return "RegexMatch[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
+    @Override public String toString() { return "RegexMatch[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
   }
 
   /**

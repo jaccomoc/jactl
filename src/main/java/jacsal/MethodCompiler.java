@@ -571,7 +571,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // then we don't know whether we want a boolean match result or we should just return the /regex/ as
     // a string. We will return a RegexMatch type that contains both the match result and the regex pattern
     // and then from the context of how it is used we can extract the boolean result or the string as needed.
-    boolean implicitItMatch = expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional;
+    // However, if there are any modifiers then we know that we need to do a match rather than return a string.
+    boolean implicitItMatch = expr.left instanceof Expr.Identifier &&
+                              ((Expr.Identifier) expr.left).optional &&
+                              expr.modifiers.isEmpty();
+
+    boolean globalModifier = expr.modifiers.indexOf('g') != -1;
+    String modifiers = globalModifier ? expr.modifiers.replaceAll("g","") : expr.modifiers;
+
     int patternVar = -1;
 
     compile(expr.left);
@@ -583,14 +590,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       dupVal();
       storeLocal(patternVar);
     }
+    loadConst(expr.modifiers);
     loadLocation(expr.operator);
-    invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, int.class);
+    invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, String.class, int.class);
     storeVar(expr.captureArrVarDecl);
     if (implicitItMatch) {
       mv.visitTypeInsn(NEW, "jacsal/runtime/RegexMatch");
       mv.visitInsn(DUP);
       loadVar(expr.captureArrVarDecl);
       invokeVirtual(Matcher.class, "find");
+      if (expr.operator.is(BANG_GRAVE)) {
+        _booleanNot();
+      }
       loadLocal(patternVar);
       mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RegexMatch", "<init>", "(ZLjava/lang/String;)V", false);
       pop(2);
@@ -600,6 +611,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       loadVar(expr.captureArrVarDecl);
       invokeVirtual(Matcher.class, "find");
+      if (expr.operator.is(BANG_GRAVE)) {
+        _booleanNot();
+      }
     }
     return null;
   }
