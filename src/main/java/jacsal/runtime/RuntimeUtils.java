@@ -162,7 +162,8 @@ public class RuntimeUtils {
     if (left == null) {
       throwOperandError(left, true, operator, source, offset);
     }
-    if (left == DEFAULT_VALUE && right instanceof String && operator == PLUS) {
+    String rightString = castToString(right);
+    if (left == DEFAULT_VALUE && rightString != null && operator == PLUS) {
       // Special case to support: x.a += 'some string'
       // If x.a doesn't yet exist we create with default of empty string in this context.
       left = "";
@@ -172,16 +173,17 @@ public class RuntimeUtils {
       throw new RuntimeError("Non-numeric operand for left-hand side of " + (originalOperator == PLUS_PLUS ? "++" : "--") + ": was String", source, offset);
     }
 
-    if (left instanceof String) {
+    String leftString = castToString(left);
+    if (leftString != null) {
       // Make sure we are not trying to inc/dec a string since -- or ++ on an unknown type
       // will be turned into equivalent of x = x + 1 (for example) and it won't be until we
       // get here that we can check if x is a string or not.
       if (operator == PLUS) {
-        return ((String) left).concat(right == null ? "null" : toString(right));
+        return leftString.concat(right == null ? "null" : toString(right));
       }
       if (operator == STAR) {
         if (right instanceof Number) {
-          return ((String)left).repeat(((Number)right).intValue());
+          return leftString.repeat(((Number)right).intValue());
         }
         throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
@@ -266,7 +268,7 @@ public class RuntimeUtils {
   }
 
   public static Object multiply(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (left instanceof String) {
+    if (isString(left)) {
       return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
     }
 
@@ -421,6 +423,9 @@ public class RuntimeUtils {
       throw new UnsupportedOperationException();
     }
 
+    String leftString;
+    String rightString;
+
     // We are left with the comparison operators
     int comparison;
     if (left == null && right == null)  { comparison = 0;  }
@@ -445,8 +450,8 @@ public class RuntimeUtils {
         comparison = Integer.compare((int)left, (int)right);
       }
     }
-    else if (left instanceof String && right instanceof String) {
-      comparison = ((String)left).compareTo((String)right);
+    else if ((leftString = castToString(left)) != null && (rightString = castToString(right)) != null) {
+      comparison = leftString.compareTo(rightString);
     }
     else if (operator == EQUAL_EQUAL || operator == BANG_EQUAL) {
       return (operator == EQUAL_EQUAL) == (left == right);
@@ -587,6 +592,7 @@ public class RuntimeUtils {
   public static boolean isTruth(Object value, boolean negated) {
     if (value == null)               { return negated; }
     if (value instanceof Boolean)    { return negated != (boolean) value; }
+    if (value instanceof RegexMatch) { return negated != ((RegexMatch)value).matched; }
     if (value instanceof String)     { return negated == ((String) value).isEmpty(); }
     if (value instanceof Integer)    { return negated == ((int) value == 0); }
     if (value instanceof Long)       { return negated == ((long)value == 0); }
@@ -803,14 +809,16 @@ public class RuntimeUtils {
     }
 
     // Check for accessing method by name
-    if (isDot && !createIfMissing && field instanceof String) {
-      var method = Functions.lookupWrapper(parent, (String)field);
+    String fieldString = castToString(field);
+    if (isDot && !createIfMissing && fieldString != null) {
+      var method = Functions.lookupWrapper(parent, fieldString);
       if (method != null) {
         return method;
       }
     }
 
-    if (!(parent instanceof List) && !(parent instanceof String) && !(parent instanceof Object[])) {
+    String parentString = null;
+    if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
       throw new RuntimeError("Invalid object type (" + className(parent) + "): expected Map/List" +
                              (isDot ? "" : " or String"), source, offset);
     }
@@ -818,7 +826,7 @@ public class RuntimeUtils {
     // Check that we are doing a list operation
     if (isDot) {
       throw new RuntimeError("Field access not supported for " +
-                             (parent instanceof String ? "String" : "List") +
+                             (parentString != null ? "String" : "List") +
                              " object", source, offset);
     }
 
@@ -832,12 +840,11 @@ public class RuntimeUtils {
       throw new RuntimeError("Index must be >= 0 (was " + index + ")", source, offset);
     }
 
-    if (parent instanceof String) {
-      String str = (String)parent;
-      if (index >= str.length()) {
-        throw new RuntimeError("Index (" + index + ") too large for String (length=" + str.length() + ")", source, offset);
+    if (parentString != null) {
+      if (index >= parentString.length()) {
+        throw new RuntimeError("Index (" + index + ") too large for String (length=" + parentString.length() + ")", source, offset);
       }
-      return Character.toString(str.charAt(index));
+      return Character.toString(parentString.charAt(index));
     }
 
     if (parent instanceof Object[]) {
@@ -916,12 +923,11 @@ public class RuntimeUtils {
   }
 
   public static String castToString(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
-    }
-
     if (obj instanceof String) {
       return (String)obj;
+    }
+    if (obj instanceof RegexMatch) {
+      return ((RegexMatch)obj).pattern;
     }
     if (obj == null) {
       throw new NullError("Null value for String", source, offset);
@@ -930,10 +936,6 @@ public class RuntimeUtils {
   }
 
   public static Map castToMap(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
-    }
-
     if (obj instanceof Map) {
       return (Map)obj;
     }
@@ -953,8 +955,17 @@ public class RuntimeUtils {
     return obj;
   }
 
+  /**
+   * Convert Iterator and RegexMatch types back to List or Boolean which are suitable for returning
+   * from a script.
+   */
+  public static Object convertToScriptResult(Object obj) {
+    if (obj instanceof Iterator)   { return convertIteratorToList((Iterator) obj); }
+    if (obj instanceof RegexMatch) { return ((RegexMatch)obj).matched; }
+    return obj;
+  }
+
   public static List castToList(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) { obj = ((HeapLocal)obj).getValue();   }
     if (obj instanceof List)      { return (List)obj;                    }
     if (obj instanceof Object[])  { return Arrays.asList((Object[])obj); }
     if (obj instanceof Iterator) {
@@ -977,10 +988,6 @@ public class RuntimeUtils {
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
-    }
-
     if (obj instanceof Number) {
       return (Number)obj;
     }
@@ -991,10 +998,6 @@ public class RuntimeUtils {
   }
 
   public static BigDecimal castToDecimal(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
-    }
-
     if (obj instanceof Number) {
       return toBigDecimal(obj);
     }
@@ -1005,10 +1008,6 @@ public class RuntimeUtils {
   }
 
   public static MethodHandle castToFunction(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
-    }
-
     if (obj instanceof MethodHandle) {
       return (MethodHandle)obj;
     }
@@ -1019,10 +1018,6 @@ public class RuntimeUtils {
   }
 
   public static Object[] castToObjectArr(Object obj, String source, int offset) {
-    if (obj instanceof HeapLocal) {
-      obj = ((HeapLocal)obj).getValue();
-    }
-
     if (obj instanceof Object[]) {
       return (Object[])obj;
     }
@@ -1088,4 +1083,15 @@ public class RuntimeUtils {
     lines.add(str.substring(lastOffset));
     return lines;
   }
+
+  /**
+   * Get the string value of an object. Object could be a string or a RegexMatch.
+   * If object is not a "string" then return null.
+   */
+  private static String castToString(Object value) {
+    if (value instanceof String)     { return (String)value; }
+    if (value instanceof RegexMatch) { return ((RegexMatch) value).pattern; }
+    return null;
+  }
+  private static boolean isString(Object value) { return castToString(value) != null; }
 }

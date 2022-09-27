@@ -17,6 +17,7 @@
 package jacsal.runtime;
 
 import java.math.BigDecimal;
+import java.util.regex.Matcher;
 
 /**
  * Object that wraps an actual value.
@@ -47,6 +48,11 @@ public class HeapLocal extends Number {
     if (value instanceof String) {
       return (String)value;
     }
+    if (value instanceof RegexMatch) {
+      return ((RegexMatch)value).pattern;
+    }
     return RuntimeUtils.toString(value);
   }
+
+  public Matcher matcherValue() { return (Matcher)value; }
 }

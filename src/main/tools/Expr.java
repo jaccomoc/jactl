@@ -186,6 +186,7 @@ class Expr {
   class VarDecl extends Expr implements ManagesResult {
     Token        name;
     Expr         initialiser;
+    Expr.FunDecl @owner;                // Which function variable belongs to (for local vars)
     boolean      @isGlobal;            // Whether global (bindings var) or local
     boolean      @isHeapLocal;         // Is this a heap local var
     boolean      @isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
@@ -194,7 +195,6 @@ class Expr {
     int          @slot = -1;           // Which local variable slot
     int          @nestingLevel;        // What level of nested function owns this variable (1 is top level)
     Label        @declLabel;           // Where variable comes into scope (for debugger)
-    Expr.FunDecl @owner;               // Which function variable belongs to (for local vars)
     Expr.FunDecl @funDecl;             // If type is FUNCTION then this is the function declaration
     VarDecl      @parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
     VarDecl      @originalVarDecl;     // VarDecl for actual original variable declaration
@@ -226,6 +226,7 @@ class Expr {
     boolean            @isWrapper;   // Whether this is the wrapper function or the real one
     Expr.FunDecl       @wrapper;     // The wrapper method that handles var arg and named arg invocations
 
+    boolean    @isScriptMain = false; // Whether this is the funDecl for the script main function
     boolean    @isStatic = false;
     int        @closureCount = 0;
     Stmt.While @currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
@@ -312,6 +313,7 @@ class Expr {
     Token      returnToken;
     Expr       expr;
     JacsalType returnType;      // Return type of the function we are embedded in
+    FunDecl    @funDecl;
   }
 
   class Print extends Expr {

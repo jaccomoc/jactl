@@ -1696,6 +1696,19 @@ class CompilerTest {
     testError("def x = 3; def z = \"$x=${/${1+2\n}/}\"", "new line not allowed");
     testError("def x = 3; def z = \"$x=${/\n${1\n+2}\n/}\"", "unexpected new line");
 
+    test("Map x = [a:[b:1]]; x.a.\"${'b'}\"", 1);
+    test("Map x = [a:[b:1]]; x.a./${'b'}/", 1);
+    test("Map m = [a:[b:1]]; def x = \"${'b'}\"; m.a[x]", 1);
+    test("def m = [a:[b:1]]; String x = 'b'; m.a.(x)", 1);
+    test("Map m = [a:[b:1]]; String x = 'b'; m.a.(x)", 1);
+    test("Map m = [a:[b:1]]; def x = 'b'; m.a.(x)", 1);
+    test("Map m = [a:[b:1]]; def x = \"${'b'}\"; m.a.(x)", 1);
+    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = \"${'size'}\"; m.(x)()", 2);
+    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = /${'size'}/; m.(x)()", 2);
+    test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a.(x)", 1);
+    test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a[x]", 1);
+    test("def it = 'itx'; def x = /${'abcde'}/; x[2]", "c");
+
     // TODO: test with multiple statements within block once supported
     //test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
   }
@@ -1728,23 +1741,41 @@ class CompilerTest {
     test("['abc','xzt','sas',''].map{ if (/a/) true else false}", List.of(true,false,true,false));
     test("['abc','xzt','sas',''].map{ /a/ and return true; false}", List.of(true,false,true,false));
     test("def it = 'xyyz'; /yy/ and it = 'baa'; /aa$/ and return 'xxx'", "xxx");
+    test("def it = 'xyz'; String x = /x/; x", "x");
+    test("def it = 'xyz'; def x = /x/; x == 'x'", true);
+    test("def it = 'xyz'; def x = /x/; x", true);
+    test("def it = 'xyz'; boolean x = /x/; x", true);
+    test("def it = 'xyz'; boolean x = /a/; x", false);
+    test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and !(str =~ /abc/) and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/ and !/abc/ and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; !/(x)(y)(z)/ or x = \"$3$2$1\"; x", "zyx");
+    test("def it = 'xyz'; def x = /x/; { x ? 'match' : 'nomatch' }()", "match");
+    test("def it = 'xyz'; def x = /x/; { x == 'x' ? 'match' : 'nomatch' }()", "match");
   }
 
   @Test public void regexCaptureVars() {
-    // Use doTest rather than test because capture vars aren't ever stored in globals
-    doTest("'abcaaxy' =~ /(a+)/", true);
-    doTest("'bcaaxy' =~ /(a+)/ and return $1", "aa");
-    doTest("def x = 'abcaaxy'; x =~ /(a+)/", true);
-    doTest("def x = 'bcaaxy'; x =~ /(a+)/ and return $1", "aa");
-    doTest("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/ and x += $2; x", "aac");
-    doTest("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/; \"$1$2\"", "ac");
+    test("'abcaaxy' =~ /(a+)/", true);
+    test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
+    test("def it = 'bcaaxy'; /(a+)/ and return $1", "aa");
+    test("def x = 'abcaaxy'; x =~ /(a+)/", true);
+    test("def x = 'bcaaxy'; x =~ /(a+)/ and return $1", "aa");
+    test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/ and x += $2; x", "aac");
+    test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; { 'abc' =~ /(a).(c)/ and x += $2 }; x", "aac");
+    test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; { 'abc' =~ /(a).(c)/ and x += $2 }; x += $1", "aacaa");
+    test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/; \"$1$2\"", "ac");
     testError("{ 'bcaaxy' =~ /(a+)/ }; \"$1$2\"", "no regex match");
-    doTest("'abc' =~ /a/; $0", "a");
-    doTest("'abc' =~ /a(bc)/; $0 + $1", "abcbc");
-    doTest("'abc' =~ /a(bc)/; $2", null);
-    doTest("def it = 'abc'; /a/; $0", "a");
-    doTest("def it = 'abc'; /a(bc)/; $0 + $1", "abcbc");
-    doTest("def it = 'abc'; /a(bc)/; $2", null);
+    test("'abc' =~ /a/; $0", "a");
+    test("'abc' =~ /a(bc)/; $0 + $1", "abcbc");
+    test("'abc' =~ /a(bc)/; $2", null);
+    test("'abc' =~ /a(bc)/ and 'xyz' =~ /(y)/; $1", "y");
+    test("def it = 'abc'; /a/; $0", "a");
+    test("def it = 'abc'; /a(bc)/; $0 + $1", "abcbc");
+    test("def it = 'abc'; /a(bc)/; $2", null);
+    test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and str =~ /x/ and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/ and /x/ and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\" }(); x", "zyx");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x", "zyxb");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x += $3; x", "zyxbz");
   }
 
   @Test public void replaceAll() {
@@ -1935,6 +1966,8 @@ class CompilerTest {
     test("var m = [:]; m.a.b.c = 1; m.a.b", Map.of("c",1));
     test("def m = [:]; m.a.b.c = 1; m.a.b", Map.of("c",1));
     test("Map m = [:]; m.('a' + 'b').c = 1; m.ab.c", 1);
+    test("Map m = [:]; def x = 'ab'; m.(x).c = 1; m.ab.c", 1);
+    test("Map m = [:]; def x = 'ab'; m.('a'+'b').c = 1; m.(x).c", 1);
 
     test("Map m = [:]; m.a += 4", 4);
     test("Map m = [:]; m.a.b += 4", 4);
@@ -2928,6 +2961,18 @@ class CompilerTest {
     testError("def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)", "closed over variable h");
     testError("def f() { def a = g; a() }; def g(){4}; f()", "closes over variable g that has not yet been initialised");
     testError("def f() { def a = g; def b=y; a()+b() }; def y(){2}; def g(){4}; f()", "closes over variables g,y that have not yet been initialised");
+    test("def x = 'x'; def f() { x += 'abc' }; f(); x", "xabc");
+    test("def x = 'x'; def f() { x = x + 'abc' }; f(); x", "xabc");
+    test("def x = 'x'; def f() { x *= 3 }; f(); x", "xxx");
+    test("def x = 'x'; def f() { x = x * 3 }; f(); x", "xxx");
+    test("def x = /x/; def f() { x += 'abc' }; f(); x", "xabc");
+    test("def x = /x/; def f() { x = x + 'abc' }; f(); x", "xabc");
+    test("def x = /x/; def f() { x *= 3 }; f(); x", "xxx");
+    test("def x = /x/; def f() { x = x * 3 }; f(); x", "xxx");
+    test("def it = 'x'; def x = /x/; def f() { x += 'abc' }; f(); x", "xabc");
+    test("def it = 'x'; def x = /x/; def f() { x = x + 'abc' }; f(); x", "xabc");
+    test("def it = 'x'; def x = /x/; def f() { x *= 3 }; f(); x", "xxx");
+    test("def it = 'x'; def x = /x/; def f() { x = x * 3 }; f(); x", "xxx");
   }
 
   @Test public void closurePassingSyntax() {
@@ -3087,6 +3132,8 @@ class CompilerTest {
     test("def x = [1,2,3]; def i = 0; x.map{it+it+i++}; i", 3);
     test("def x = [1,2,3]; def i = 0; def f(x){i}; f(x.map{i++}); i", 3);
     test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", List.of(1, 7, 17));
+    test("[1,2,3].map{it} instanceof List", true);
+    test("def x = [1,2,3]; x.map{it} instanceof List", true);
   }
 
   @Test public void stringAddRepeat() {

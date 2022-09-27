@@ -17,6 +17,7 @@
 package jacsal;
 
 import jacsal.runtime.Functions;
+import jacsal.runtime.RegexMatch;
 import jacsal.runtime.RuntimeUtils;
 
 import java.math.BigDecimal;
@@ -270,20 +271,32 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = expr.right.type;
     }
 
-    final var captureArrName = new Token(IDENTIFIER, expr.operator).setValue(Utils.CAPTURE_VAR);
-    if (!variableExists(captureArrName)) {
+    // Check to see if we already have a capture array variable in the current scope. If we already
+    // have one then we will reuse it. Otherwise we will create a new one. Note that we don't want
+    // to use one that we have closed over for our own capture vars since this will break code in
+    // the parent scope that the closed over capture var belongs to if it relies on the capture vars
+    // still being as they were when the nested function/closure was invoked.
+    Stmt.Block block = functions.peek().blocks.peek();
+    Expr.VarDecl captureArrVar = block.variables.get(Utils.CAPTURE_VAR);
+    if (captureArrVar == null) {
+      final var captureArrName = new Token(IDENTIFIER, expr.operator).setValue(Utils.CAPTURE_VAR);
       // Allocate our capture array var if we don't already have one in scope
-      Expr.VarDecl captureArrVar = new Expr.VarDecl(captureArrName, null);
-      captureArrVar.type = STRING;  // So that $1, $2 lookups etc get back a string type
+      captureArrVar = new Expr.VarDecl(captureArrName, null);
+      captureArrVar.type = MATCHER;
+      captureArrVar.owner = functions.peek();
+      captureArrVar.isResultUsed = false;
       declare(captureArrName);
       define(captureArrName, captureArrVar);
       expr.captureArrVarDecl = captureArrVar;
     }
     else {
-      expr.captureArrVarDecl = lookup(captureArrName);
+      expr.captureArrVarDecl = captureArrVar;
     }
 
-    return expr.type = BOOLEAN;
+    // If we have an implicit "it" match then we don't know whether we actually return a boolean or
+    // whether the regex might just be used as a string: /xyz/ + 'abc'
+    boolean implicitItMatch = expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional;
+    return expr.type = implicitItMatch ? ANY : BOOLEAN;
   }
 
   @Override public JacsalType visitBinary(Expr.Binary expr) {
@@ -580,6 +593,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       varDecl = lookup(expr.identifier);
     }
     expr.varDecl = varDecl;
+
+    // For capture vars type is always STRING
+    if (expr.identifier.getStringValue().charAt(0) == '$') {
+      return expr.type = STRING;
+    }
+
     return expr.type = varDecl.type;
   }
 
@@ -659,6 +678,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   public JacsalType visitReturn(Expr.Return returnExpr) {
     resolve(returnExpr.expr);
     returnExpr.returnType = functions.peek().returnType;
+    returnExpr.funDecl = functions.peek();
     if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
       throw new CompileError("Expression type not compatible with return type of function", returnExpr.expr.location);
     }
@@ -1268,6 +1288,21 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     throw new CompileError("Unsupported statement type " + stmt.getClass().getName()  + " for implicit return", stmt.location);
   }
 
+  /**
+   * Create a wrapper function for invoking the real function/method.
+   * The job of the wrapper function is to support invocation from places where we don't know
+   * how many arguments are required and what their types are.
+   * E.g.:
+   *   def f(int x, String y) {...}; def g = f; g(1,'xyz')
+   * When we call via the variable 'g' we don't anything about which function it points to and
+   * so we pass in an Object[] and invoke the wrapper function which extracts the arguments to then
+   * call the real function.
+   * The wrapper function also takes care of filling in the default values for any missing paremeters
+   * and validates that the number of arguments passed is legal for the function.
+   * TODO: the wrapper function will also take care of named argument passing once implemented.
+   * @param funDecl
+   * @return
+   */
   private Expr.FunDecl createWrapperFunction(Expr.FunDecl funDecl) {
     Token startToken = funDecl.startToken;
 
@@ -1325,6 +1360,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     //  :   Object[] _$argArr = (Object[])_$args
     String argArrName = "_$argArr";
     ifStmts.stmts.add(varDecl(wrapperFunDecl, argArrName, JacsalType.OBJECT_ARR, argsIdent, startToken));
+    // TODO: optimise to do a direct cast to Object[] rather than invoke castToObjectArr since we know it is safe
 
     //  :   int _$argCount = argArr.length
     var argArr = ident.apply(argArrName);

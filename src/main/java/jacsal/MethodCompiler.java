@@ -561,28 +561,50 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    if (expr.captureArrVarDecl != null) {
-      defineVar(expr.captureArrVarDecl, ANY);
+    // If this is first time in this scope where we have a regex then we allocate
+    // the slot where we will store the Matcher
+    if (expr.captureArrVarDecl.slot == -1) {
+      compile(expr.captureArrVarDecl);
     }
+
+    // If implicit match against "it" (i.e. /regex/ on its own rather than something like "x =~ /regex/")
+    // then we don't know whether we want a boolean match result or we should just return the /regex/ as
+    // a string. We will return a RegexMatch type that contains both the match result and the regex pattern
+    // and then from the context of how it is used we can extract the boolean result or the string as needed.
+    boolean implicitItMatch = expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional;
+    int patternVar = -1;
 
     compile(expr.left);
     castToString(expr.left.location);
     compile(expr.right);
     castToString(expr.right.location);
+    if (implicitItMatch) {
+      patternVar = allocateSlot(STRING);
+      dupVal();
+      storeLocal(patternVar);
+    }
     loadLocation(expr.operator);
     invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, int.class);
-    dupVal();
     storeVar(expr.captureArrVarDecl);
-    invokeVirtual(Matcher.class, "matches");
+    if (implicitItMatch) {
+      mv.visitTypeInsn(NEW, "jacsal/runtime/RegexMatch");
+      mv.visitInsn(DUP);
+      loadVar(expr.captureArrVarDecl);
+      invokeVirtual(Matcher.class, "matches");
+      loadLocal(patternVar);
+      mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RegexMatch", "<init>", "(ZLjava/lang/String;)V", false);
+      pop(2);
+      push(ANY);
+      freeTemp(patternVar);
+    }
+    else {
+      loadVar(expr.captureArrVarDecl);
+      invokeVirtual(Matcher.class, "matches");
+    }
     return null;
   }
 
   @Override public Void visitBinary(Expr.Binary expr) {
-    if (expr.left == null) {
-      compile(expr.right);
-      return null;
-    }
-
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
     if (expr.operator.is(numericOperator) && (expr.left.type.is(ANY) || expr.right.type.is(ANY))) {
       compile(expr.left);
@@ -938,12 +960,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1) {
       throw new CompileError("Forward reference to uninitialised value", expr.location);
     }
-    loadVar(expr.varDecl);
     final var name = expr.identifier.getStringValue();
     if (name.charAt(0) == '$') {
+      loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
       loadConst(Integer.parseInt(name.substring(1)));
       invokeStatic(RuntimeUtils.class, "regexGroup", Matcher.class, int.class);
+    }
+    else {
+      loadVar(expr.varDecl);
     }
     return null;
   }
@@ -1203,7 +1228,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Expr.Return returnExpr) {
     compile(returnExpr.expr);
-    convertTo(returnExpr.returnType, true, returnExpr.expr.location);
+    if (returnExpr.funDecl.isScriptMain) {
+      // Special case for RegexMatch value where we need to turn back into something that
+      // caller can understand. In this case we return the match result.
+      box();
+      invokeStatic(RuntimeUtils.class, "convertToScriptResult", Object.class);
+    }
+    else {
+      convertTo(returnExpr.returnType, true, returnExpr.expr.location);
+    }
     pop();
     emitReturn(returnExpr.returnType);
     push(ANY);
@@ -1598,14 +1631,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void loadDefaultValue(JacsalType type) {
     switch (type.getType()) {
-      case BOOLEAN:  loadConst(Boolean.FALSE);     break;
-      case INT:      loadConst(0);            break;
-      case LONG:     loadConst(0L);           break;
-      case DOUBLE:   loadConst( 0D);          break;
-      case DECIMAL:  loadConst(BigDecimal.ZERO);   break;
-      case STRING:   loadConst("");           break;
-      case ANY:      loadConst(null);         break;
-      case FUNCTION: loadConst(null);         break;   // use null for the moment to indicate identity function
+      case BOOLEAN:     loadConst(Boolean.FALSE);     break;
+      case INT:         loadConst(0);            break;
+      case LONG:        loadConst(0L);           break;
+      case DOUBLE:      loadConst( 0D);          break;
+      case DECIMAL:     loadConst(BigDecimal.ZERO);   break;
+      case STRING:      loadConst("");           break;
+      case ANY:         loadConst(null);         break;
+      case FUNCTION:    loadConst(null);         break;   // use null for the moment to indicate identity function
+      case MATCHER:     loadConst(null);         break;
       case MAP:
         _newInstance(HashMap.class);
         push(MAP);
@@ -2343,12 +2377,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     push(type);
   }
 
+  /**
+   * Load variable from slot or globals or HeapLocal as required.
+   */
   private void loadVar(Expr.VarDecl varDecl) {
     if (varDecl.isGlobal) {
       loadGlobals();
       loadConst(varDecl.name.getValue());
       invokeInterface(Map.class, "get", Object.class);
-      castToBoxedType(varDecl.type);
+      final var internalName = varDecl.type.getInternalName();
+      if (internalName != null) {
+        mv.visitTypeInsn(CHECKCAST, internalName);
+      }
       pop();
       push(varDecl.type);
       return;
@@ -2365,12 +2405,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadLocal(varDecl.slot);
       String methodName;
       switch (varDecl.type.getType()) {
-        case INT:     methodName = "intValue";      break;
-        case LONG:    methodName = "longValue";     break;
-        case DOUBLE:  methodName = "doubleValue";   break;
-        case DECIMAL: methodName = "decimalValue";  break;
-        case STRING:  methodName = "stringValue";   break;
-        default:      methodName = "getValue";      break;
+        case INT:          methodName = "intValue";          break;
+        case LONG:         methodName = "longValue";         break;
+        case DOUBLE:       methodName = "doubleValue";       break;
+        case DECIMAL:      methodName = "decimalValue";      break;
+        case STRING:       methodName = "stringValue";       break;
+        case MATCHER:      methodName = "matcherValue";      break;
+        default:           methodName = "getValue";          break;
       }
       invokeVirtual(jacsal.runtime.HeapLocal.class, methodName);
       return;

@@ -57,10 +57,9 @@ public class Parser {
     Token start = peek();
     Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(new Token(IDENTIFIER, start).setValue(Utils.JACSAL_PREFIX));
     classes.push(scriptClass);
-    Expr.VarDecl globalsField = new Expr.VarDecl(new Token(IDENTIFIER, start).setValue(Utils.JACSAL_GLOBALS_NAME), null);
-    globalsField.type = JacsalType.MAP;
     try {
       scriptClass.scriptMain = script();
+      scriptClass.scriptMain.declExpr.isScriptMain = true;
       if (errors.size() > 1) {
         throw new CompileError(errors);
       }
@@ -640,6 +639,9 @@ public class Parser {
         continue;
       }
 
+      // Set flag if next token is '(' so that we can check for x.(y).z below
+      boolean bracketedExpression = peek().is(LEFT_PAREN);
+
       Expr rhs;
       if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
         // '[' and '?[' can be followed by any expression and then a ']'
@@ -656,7 +658,9 @@ public class Parser {
       else {
         // Check for '.' and '?.' where we treat identifiers as literals for field access.
         // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
-        if (operator.is(DOT,QUESTION_DOT) && rhs instanceof Expr.Identifier) {
+        // Note: we checked for '(' immediately after the '.' so we can use value of y if
+        // expression is something like x.(y)
+        if (operator.is(DOT,QUESTION_DOT) && rhs instanceof Expr.Identifier && !bracketedExpression) {
           rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
         }
 
@@ -1281,9 +1285,6 @@ public class Parser {
   }
 
   private String getStringValue(Expr expr) {
-    if (expr instanceof Expr.Identifier) {
-      return ((Expr.Identifier) expr).identifier.getStringValue();
-    }
     if (expr instanceof Expr.Literal) {
       Object value = ((Expr.Literal) expr).value.getValue();
       if (value instanceof String) {

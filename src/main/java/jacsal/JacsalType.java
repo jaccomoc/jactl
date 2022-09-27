@@ -17,6 +17,7 @@
 package jacsal;
 
 import jacsal.runtime.HeapLocal;
+import jacsal.runtime.RegexMatch;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -25,6 +26,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 
 import static jacsal.TokenType.*;
 
@@ -45,7 +47,9 @@ public class JacsalType {
     // internal use only
     HEAPLOCAL,
     OBJECT_ARR,
-    ITERATOR
+    ITERATOR,
+    REGEX_MATCH,
+    MATCHER
   }
 
   public static JacsalType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
@@ -66,6 +70,8 @@ public class JacsalType {
   public static JacsalType HEAPLOCAL     = createRefType(TypeEnum.HEAPLOCAL);
   public static JacsalType OBJECT_ARR    = createRefType(TypeEnum.OBJECT_ARR);
   public static JacsalType ITERATOR      = createRefType(TypeEnum.ITERATOR);
+  public static JacsalType REGEX_MATCH   = createRefType(TypeEnum.REGEX_MATCH);
+  public static JacsalType MATCHER       = createRefType(TypeEnum.MATCHER);
 
   private TypeEnum type;
   private boolean  boxed;
@@ -346,10 +352,10 @@ public class JacsalType {
 
   public String descriptor() {
     switch (this.type) {
-      case BOOLEAN:        return Type.getDescriptor(isBoxed() ? Boolean.class : Boolean.TYPE);
-      case INT:            return Type.getDescriptor(isBoxed() ? Integer.class : Integer.TYPE);
-      case LONG:           return Type.getDescriptor(isBoxed() ? Long.class    : Long.TYPE);
-      case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class  : Double.TYPE);
+      case BOOLEAN:        return Type.getDescriptor(isBoxed() ? Boolean.class : boolean.class);
+      case INT:            return Type.getDescriptor(isBoxed() ? Integer.class : int.class);
+      case LONG:           return Type.getDescriptor(isBoxed() ? Long.class    : long.class);
+      case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class  : double.class);
       case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
       case STRING:         return Type.getDescriptor(String.class);
       case MAP:            return Type.getDescriptor(Map.class);
@@ -360,6 +366,8 @@ public class JacsalType {
       case HEAPLOCAL:      return Type.getDescriptor(jacsal.runtime.HeapLocal.class);
       case OBJECT_ARR:     return Type.getDescriptor(Object[].class);
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
+      case REGEX_MATCH:    return Type.getDescriptor(RegexMatch.class);
+      case MATCHER:        return Type.getDescriptor(Matcher.class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -380,26 +388,30 @@ public class JacsalType {
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
       case OBJECT_ARR:     return Type.getType(Object[].class);
       case ITERATOR:       return Type.getType(Iterator.class);
+      case REGEX_MATCH:    return Type.getType(RegexMatch.class);
+      case MATCHER:        return Type.getType(Matcher.class);
       default:             throw new UnsupportedOperationException();
     }
   }
 
   public String getInternalName() {
     switch (this.type) {
-      case BOOLEAN:    return Type.getInternalName(Boolean.class);
-      case INT:        return Type.getInternalName(Integer.class);
-      case LONG:       return Type.getInternalName(Long.class);
-      case DOUBLE:     return Type.getInternalName(Double.class);
-      case DECIMAL:    return Type.getInternalName(BigDecimal.class);
-      case STRING:     return Type.getInternalName(String.class);
-      case MAP:        return Type.getInternalName(Map.class);
-      case LIST:       return Type.getInternalName(List.class);
-      case INSTANCE:   throw new UnsupportedOperationException();
-      case ANY:        return Type.getInternalName(Object.class);
-      case FUNCTION:   return Type.getInternalName(MethodHandle.class);
-      case HEAPLOCAL:  return Type.getInternalName(HeapLocal.class);
-      case OBJECT_ARR: return Type.getInternalName(Object[].class);
-      case ITERATOR:   return Type.getInternalName(Iterator.class);
+      case BOOLEAN:     return Type.getInternalName(Boolean.class);
+      case INT:         return Type.getInternalName(Integer.class);
+      case LONG:        return Type.getInternalName(Long.class);
+      case DOUBLE:      return Type.getInternalName(Double.class);
+      case DECIMAL:     return Type.getInternalName(BigDecimal.class);
+      case STRING:      return Type.getInternalName(String.class);
+      case MAP:         return Type.getInternalName(Map.class);
+      case LIST:        return Type.getInternalName(List.class);
+      case INSTANCE:    throw new UnsupportedOperationException();
+      case ANY:         return Type.getInternalName(Object.class);
+      case FUNCTION:    return Type.getInternalName(MethodHandle.class);
+      case HEAPLOCAL:   return Type.getInternalName(HeapLocal.class);
+      case OBJECT_ARR:  return Type.getInternalName(Object[].class);
+      case ITERATOR:    return Type.getInternalName(Iterator.class);
+      case REGEX_MATCH: return Type.getInternalName(RegexMatch.class);
+      case MATCHER:     return Type.getInternalName(Matcher.class);
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -438,6 +450,8 @@ public class JacsalType {
     if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
     if (clss == Object[].class)     { return OBJECT_ARR;    }
     if (clss == Iterator.class)     { return ITERATOR;      }
+    if (clss == RegexMatch.class)   { return REGEX_MATCH;   }
+    if (clss == Matcher.class)      { return MATCHER;       }
     if (clss == Object.class)       { return ANY;           }
     throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
   }
@@ -458,6 +472,8 @@ public class JacsalType {
       case HEAPLOCAL:     return HeapLocal.class;
       case OBJECT_ARR:    return Object[].class;
       case ITERATOR:      return Iterator.class;
+      case REGEX_MATCH:   return RegexMatch.class;
+      case MATCHER:       return Matcher.class;
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }
@@ -470,20 +486,21 @@ public class JacsalType {
 
   public String typeName() {
     switch (type) {
-      case BOOLEAN:    return isBoxed() ? "Boolean" : "boolean";
-      case INT:        return isBoxed() ? "Integer" : "int";
-      case LONG:       return isBoxed() ? "Long" : "long";
-      case DOUBLE:     return isBoxed() ? "Double" : "double";
-      case DECIMAL:    return "Decimal";
-      case STRING:     return "String";
-      case MAP:        return "Map";
-      case LIST:       return "List";
-      case INSTANCE:   return "Instance<>";
-      case ANY:        return "def";
-      case FUNCTION:   return "Function";
-      case HEAPLOCAL:  return "HeapLocal";
-      case OBJECT_ARR: return "Object[]";
-      case ITERATOR:   return "Iterator";
+      case BOOLEAN:     return isBoxed() ? "Boolean" : "boolean";
+      case INT:         return isBoxed() ? "Integer" : "int";
+      case LONG:        return isBoxed() ? "Long" : "long";
+      case DOUBLE:      return isBoxed() ? "Double" : "double";
+      case DECIMAL:     return "Decimal";
+      case STRING:      return "String";
+      case MAP:         return "Map";
+      case LIST:        return "List";
+      case INSTANCE:    return "Instance<>";
+      case ANY:         return "def";
+      case FUNCTION:    return "Function";
+      case HEAPLOCAL:   return "HeapLocal";
+      case OBJECT_ARR:  return "Object[]";
+      case REGEX_MATCH: return "RegexMatch";
+      case MATCHER:     return "Matcher";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }

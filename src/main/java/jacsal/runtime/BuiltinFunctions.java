@@ -268,20 +268,20 @@ public class BuiltinFunctions {
 
   // = replaceAll
 
-  public static String stringReplaceAll(String str, String regex, String replacement) {
-    return str.replaceAll(regex, replacement);
-  }
-  public static Object stringReplaceAllWrapper(String str, String source, int offset, Object args) {
-    validateArgCount(args, 2, 2, source, offset);
-    Object[] arr = (Object[])args;
-    if (!(arr[0] instanceof String)) {
-      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[0]), source, offset);
-    }
-    if (!(arr[1] instanceof String)) {
-      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[1]), source, offset);
-    }
-    return str.replaceAll((String)arr[0], (String)arr[1]);
-  }
+//  public static String stringReplaceAll(String str, String regex, String replacement) {
+//    return str.replaceAll(regex, replacement);
+//  }
+//  public static Object stringReplaceAllWrapper(String str, String source, int offset, Object args) {
+//    validateArgCount(args, 2, 2, source, offset);
+//    Object[] arr = (Object[])args;
+//    if (!(arr[0] instanceof String)) {
+//      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[0]), source, offset);
+//    }
+//    if (!(arr[1] instanceof String)) {
+//      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[1]), source, offset);
+//    }
+//    return str.replaceAll((String)arr[0], (String)arr[1]);
+//  }
 
   /////////////////////////////
 
