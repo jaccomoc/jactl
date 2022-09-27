@@ -1722,9 +1722,11 @@ class CompilerTest {
     test("'abc' =~ /^abc$/", true);
     test("'abc' =~ /c$/", true);
     testError("'abc' =~ /(c$/", "unclosed group");
-    test("'ab\\nc' =~ /\nc$/", true);
-    test("'ab\\nc\\n' =~ /\nc$/", false);
-    test("'ab\\nc\\n' =~ /\nc$.*/", false);
+    test("'ab\\nc' =~ /\\nc$/", true);
+    test("'ab\\nc\\n' =~ /\\nc$/", true);   // Weird but $ matches the trailing \n
+    test("'ab\\nc\\n' =~ /\\nc\\z/", false);
+    test("'ab\\nc\\n' =~ /\\nc\\n\\z/", true);
+    test("'ab\\nc\\n' =~ /\\nc$.*/", true);
 
     test("def x = 'abc'; def y = 'a'; x =~ y", true);
     test("def x = 'abc'; def y = /a/; x =~ y", true);
@@ -1735,8 +1737,8 @@ class CompilerTest {
     test("def x = 'abc'; def y = /c$/; x =~ y", true);
     testError("def x = 'abc'; def y = /(c$/; x =~ y", "unclosed group");
     test("def x = 'ab\\nc'; def y = /\nc$/; x =~ y", true);
-    test("def x = 'ab\\nc\\n'; def y = /\nc$/; x =~ y", false);
-    test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", false);
+    test("def x = 'ab\\nc\\n'; def y = /\nc\\z/; x =~ y", false);
+    test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", true);
     test("['abc','xzt','sas',''].map{/a/ ? true : false}", List.of(true,false,true,false));
     test("['abc','xzt','sas',''].map{ if (/a/) true else false}", List.of(true,false,true,false));
     test("['abc','xzt','sas',''].map{ /a/ and return true; false}", List.of(true,false,true,false));
@@ -1748,6 +1750,7 @@ class CompilerTest {
     test("def it = 'xyz'; boolean x = /a/; x", false);
     test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and !(str =~ /abc/) and x = \"$3$2$1\"; x", "nullnullnull");
     test("def it = 'xyz'; def x; /(x)(y)(z)/ and !/abc/ and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/ and x = \"$3$2$1\"; x", "zyx");
     test("def it = 'xyz'; def x; !/(x)(y)(z)/ or x = \"$3$2$1\"; x", "zyx");
     test("def it = 'xyz'; def x = /x/; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /x/; { x == 'x' ? 'match' : 'nomatch' }()", "match");

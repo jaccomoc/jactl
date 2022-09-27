@@ -515,17 +515,8 @@ public class RuntimeUtils {
     var cache = patternCache.get();
     Pattern pattern = cache.get(regex);
     if (pattern == null) {
-      String patternStart = "";
-      if (regex.length() == 0 || regex.charAt(0) != '^') {
-        patternStart = ".*?";
-      }
-      String patternEnd = "";
-      if (regex.length() != 0 && regex.charAt(regex.length() - 1) != '$') {
-        patternEnd = ".*?";
-      }
       try {
-        final var alteredPattern = patternStart + "(" + regex + ")" + patternEnd;
-        pattern = Pattern.compile(alteredPattern);
+        pattern = Pattern.compile(regex);
       }
       catch (PatternSyntaxException e) {
         throw new RuntimeError("Pattern error: " + e.getMessage(), source, line);
@@ -539,7 +530,6 @@ public class RuntimeUtils {
   }
 
   public static String regexGroup(Matcher matcher, int group) {
-    group++;   // Since we add our own group wrapping the regex
     if (group > matcher.groupCount()) {
       return null;
     }

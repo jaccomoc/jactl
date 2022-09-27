@@ -590,7 +590,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitTypeInsn(NEW, "jacsal/runtime/RegexMatch");
       mv.visitInsn(DUP);
       loadVar(expr.captureArrVarDecl);
-      invokeVirtual(Matcher.class, "matches");
+      invokeVirtual(Matcher.class, "find");
       loadLocal(patternVar);
       mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RegexMatch", "<init>", "(ZLjava/lang/String;)V", false);
       pop(2);
@@ -599,7 +599,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       loadVar(expr.captureArrVarDecl);
-      invokeVirtual(Matcher.class, "matches");
+      invokeVirtual(Matcher.class, "find");
     }
     return null;
   }
