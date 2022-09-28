@@ -24,7 +24,7 @@ import java.util.regex.Matcher;
  * off or not.
  */
 public class RegexMatcher {
-  Matcher matcher;
-  String  str;        // String to match against
-  boolean matched;    // Result of last match
+  Matcher    matcher;
+  String     str;          // String to match against
+  boolean    matched;      // Result of last match
 }

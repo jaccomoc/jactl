@@ -17,7 +17,6 @@
 package jacsal;
 
 import jacsal.runtime.Functions;
-import jacsal.runtime.RegexMatch;
 import jacsal.runtime.RuntimeUtils;
 
 import java.math.BigDecimal;
@@ -264,14 +263,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitRegexMatch(Expr.RegexMatch expr) {
     expr.isConst = false;
 
-    // Special case for /regex/ where we need to match against "it" if in a context where variable
-    // "it" exists. If it doesn't exist then we set left to null and in compile phase we will ignore it.
+    // Special case for standalone regex where we need to match against "it" if in a context where variable
+    // "it" exists but only if the regex has modifiers after it. Otherwise we will treat it as a regular
+    // expression string. If there are modifiers but not "it" then we generate an error.
     if (expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional) {
-      if (!variableExists(((Expr.Identifier)expr.left).identifier)) {
+      if (!expr.modifiers.isEmpty() && !variableExists(((Expr.Identifier)expr.left).identifier)) {
+        throw new CompileError("No 'it' variable in this scope to match against", expr.location);
+      }
+      if (expr.modifiers.isEmpty()) {
+        // Just a normal expr string
         expr.left = null;
-        if (!expr.modifiers.isEmpty()) {
-          throw new CompileError("No 'it' variable in this scope to match against", expr.location);
-        }
       }
     }
 
@@ -279,6 +280,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.right);
 
     if (expr.left == null) {
+      // Just an expression string
       return expr.type = expr.right.type;
     }
 
@@ -306,13 +308,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.captureArrVarDecl = captureArrVar;
     }
 
-    // If we have an implicit "it" match then we don't know whether we actually return a boolean or
-    // whether the regex might just be used as a string: /xyz/ + 'abc'
-    // If there are any modifiers then we know that a match is being done.
-    boolean implicitItMatch = expr.left instanceof Expr.Identifier &&
-                              ((Expr.Identifier) expr.left).optional &&
-                              expr.modifiers.isEmpty();
-    return expr.type = implicitItMatch ? ANY : BOOLEAN;
+    return expr.type = BOOLEAN;
   }
 
   private void insertStmt(Stmt.VarDecl declStmt) {

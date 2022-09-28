@@ -17,7 +17,6 @@
 package jacsal;
 
 import jacsal.runtime.HeapLocal;
-import jacsal.runtime.RegexMatch;
 import jacsal.runtime.RegexMatcher;
 import org.objectweb.asm.Type;
 
@@ -48,7 +47,6 @@ public class JacsalType {
     HEAPLOCAL,
     OBJECT_ARR,
     ITERATOR,
-    REGEX_MATCH,
     MATCHER
   }
 
@@ -70,7 +68,6 @@ public class JacsalType {
   public static JacsalType HEAPLOCAL     = createRefType(TypeEnum.HEAPLOCAL);
   public static JacsalType OBJECT_ARR    = createRefType(TypeEnum.OBJECT_ARR);
   public static JacsalType ITERATOR      = createRefType(TypeEnum.ITERATOR);
-  public static JacsalType REGEX_MATCH   = createRefType(TypeEnum.REGEX_MATCH);
   public static JacsalType MATCHER       = createRefType(TypeEnum.MATCHER);
 
   private TypeEnum type;
@@ -366,7 +363,6 @@ public class JacsalType {
       case HEAPLOCAL:      return Type.getDescriptor(jacsal.runtime.HeapLocal.class);
       case OBJECT_ARR:     return Type.getDescriptor(Object[].class);
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
-      case REGEX_MATCH:    return Type.getDescriptor(RegexMatch.class);
       case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
       default:             throw new UnsupportedOperationException();
     }
@@ -388,7 +384,6 @@ public class JacsalType {
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
       case OBJECT_ARR:     return Type.getType(Object[].class);
       case ITERATOR:       return Type.getType(Iterator.class);
-      case REGEX_MATCH:    return Type.getType(RegexMatch.class);
       case MATCHER:        return Type.getType(RegexMatcher.class);
       default:             throw new UnsupportedOperationException();
     }
@@ -410,7 +405,6 @@ public class JacsalType {
       case HEAPLOCAL:   return Type.getInternalName(HeapLocal.class);
       case OBJECT_ARR:  return Type.getInternalName(Object[].class);
       case ITERATOR:    return Type.getInternalName(Iterator.class);
-      case REGEX_MATCH: return Type.getInternalName(RegexMatch.class);
       case MATCHER:     return Type.getInternalName(RegexMatcher.class);
       default:
         throw new IllegalStateException("Unexpected value: " + this);
@@ -450,7 +444,6 @@ public class JacsalType {
     if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
     if (clss == Object[].class)     { return OBJECT_ARR;    }
     if (clss == Iterator.class)     { return ITERATOR;      }
-    if (clss == RegexMatch.class)   { return REGEX_MATCH;   }
     if (clss == RegexMatcher.class) { return MATCHER;       }
     if (clss == Object.class)       { return ANY;           }
     throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
@@ -472,7 +465,6 @@ public class JacsalType {
       case HEAPLOCAL:     return HeapLocal.class;
       case OBJECT_ARR:    return Object[].class;
       case ITERATOR:      return Iterator.class;
-      case REGEX_MATCH:   return RegexMatch.class;
       case MATCHER:       return RegexMatcher.class;
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
@@ -499,7 +491,6 @@ public class JacsalType {
       case FUNCTION:    return "Function";
       case HEAPLOCAL:   return "HeapLocal";
       case OBJECT_ARR:  return "Object[]";
-      case REGEX_MATCH: return "RegexMatch";
       case MATCHER:     return "Matcher";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);

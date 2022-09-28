@@ -81,7 +81,7 @@ public class Tokeniser {
   }
 
   // Valid modifiers that can come immediately after trailing '/' of a regex
-  private static final String REGEX_MODIFIERS = "gims";
+  private static final String REGEX_MODIFIERS = "fgims";
 
   /**
    * Constructor
@@ -352,19 +352,26 @@ public class Tokeniser {
       case '"': {
         if (charsAtEquals(0, endChars.length(), endChars)) {
           advance(endChars.length());
-          StringBuilder modifiers = new StringBuilder();
+          StringBuilder modifierSb = new StringBuilder();
           if (c == '/') {
             // Check for modifiers after '/'
-            while (available(1) && REGEX_MODIFIERS.indexOf(charAt(0)) != -1) {
-              modifiers.append((char)charAt(0));
+            while (available(1) && Character.isAlphabetic(charAt(0))) {
+              final var modifier = (char) charAt(0);
+              modifierSb.append(modifier);
               advance(1);
             }
           }
           stringState.pop();
           inString = false;
+          final var modifiers = modifierSb.toString();
+          for (int i = 0; i < modifiers.length(); i++) {
+            if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
+              throw new CompileError("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
+            }
+          }
           return token.setType(EXPR_STRING_END)
-                      .setValue(modifiers.toString())
-                      .setLength(endChars.length() + modifiers.length());
+                      .setValue(modifiers)
+                      .setLength(endChars.length() + modifierSb.length());
         }
         break;
       }

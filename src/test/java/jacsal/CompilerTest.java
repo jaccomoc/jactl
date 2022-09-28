@@ -1731,6 +1731,9 @@ class CompilerTest {
     test("'ab\\nc\\n' =~ /\\nc\\n\\z/", true);
     test("'ab\\nc\\n' =~ /\\nc$.*/", true);
 
+    testError("'abc' =~ /a/x", "unrecognised regex modifier 'x'");
+    testError("'abc' =~ /a/figsmx", "unrecognised regex modifier");
+
     test("'abc' !~ 'a'", false);
     test("'abc' !~ /a/", false);
     test("'abc' !~ /a/i", false);
@@ -1771,23 +1774,26 @@ class CompilerTest {
     test("def x = 'ab\\nc'; def y = /\nc$/; x =~ y", true);
     test("def x = 'ab\\nc\\n'; def y = /\nc\\z/; x =~ y", false);
     test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", true);
-    test("['abc','xzt','sas',''].map{/a/ ? true : false}", List.of(true,false,true,false));
-    test("['abc','xzt','sas',''].map{ if (/a/) true else false}", List.of(true,false,true,false));
-    test("['abc','xzt','sas',''].map{ /a/ and return true; false}", List.of(true,false,true,false));
     test("def it = 'xyyz'; /yy/ and it = 'baa'; /aa$/ and return 'xxx'", "xxx");
     test("def it = 'xyz'; String x = /x/; x", "x");
     test("def it = 'xyz'; def x = /x/; x == 'x'", true);
-    test("def it = 'xyz'; def x = /x/; x", true);
-    test("def it = 'xyz'; boolean x = /x/; x", true);
-    test("def it = 'xyz'; boolean x = /a/; x", false);
+    test("def it = 'xyz'; def x = /x/f; x", true);
+    testError("def x = /x/f; x", "no 'it' variable");
+    testError("def it = 'xyz'; boolean x = /x/; x", "cannot convert");
+    test("def it = 'xyz'; boolean x = /x/f; x", true);
+    test("def it = 'xyz'; boolean x = /a/f; x", false);
     test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and !(str =~ /abc/) and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/ and !/abc/ and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/ and x = \"$3$2$1\"; x", "zyx");
-    test("def it = 'xyz'; def x; !/(x)(y)(z)/ or x = \"$3$2$1\"; x", "zyx");
-    test("def it = 'xyz'; def x = /x/; { x ? 'match' : 'nomatch' }()", "match");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and !/abc/f and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and x = \"$3$2$1\"; x", "zyx");
+    test("def it = 'xyz'; def x; !/(x)(y)(z)/f or x = \"$3$2$1\"; x", "zyx");
+    test("def it = 'xyz'; def x = /x/f; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /x/; { x == 'x' ? 'match' : 'nomatch' }()", "match");
+    test("def it = 'xyz'; def x = /x/f; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
     test("def it = 'xyz'; def x = /X/i; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /X/i; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
+    test("['abc','xzt','sas',''].map{/a/f ? true : false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ if (/a/f) true else false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ /a/f and return true; false}", List.of(true,false,true,false));
   }
 
   @Test public void regexCaptureVars() {
@@ -1796,7 +1802,7 @@ class CompilerTest {
     testError("def x; 'abc' =~ x", "null value for string");
     test("'abcaaxy' =~ /(a+)/", true);
     test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
-    test("def it = 'bcaaxy'; /(a+)/ and return $1", "aa");
+    test("def it = 'bcaaxy'; /(a+)/f and return $1", "aa");
     test("def x = 'abcaaxy'; x =~ /(a+)/", true);
     test("def x = 'bcaaxy'; x =~ /(a+)/ and return $1", "aa");
     test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/ and x += $2; x", "aac");
@@ -1808,14 +1814,15 @@ class CompilerTest {
     test("'abc' =~ /a(bc)/; $0 + $1", "abcbc");
     test("'abc' =~ /a(bc)/; $2", null);
     test("'abc' =~ /a(bc)/ and 'xyz' =~ /(y)/; $1", "y");
-    test("def it = 'abc'; /a/; $0", "a");
-    test("def it = 'abc'; /a(bc)/; $0 + $1", "abcbc");
-    test("def it = 'abc'; /a(bc)/; $2", null);
+    test("def it = 'abc'; /a/f; $0", "a");
+    test("def it = 'abc'; /a(bc)/f; $0 + $1", "abcbc");
+    test("def it = 'abc'; /a(bc)/f; $2", null);
     test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and str =~ /x/ and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/ and /x/ and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\" }(); x", "zyx");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x", "zyxb");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x += $3; x", "zyxbz");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and /x/f and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\" }(); x", "zyx");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x", "zyxx");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x", "zyxb");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x += $3; x", "zyxbz");
   }
 
   @Test public void regexGlobalMatch() {
@@ -1828,6 +1835,7 @@ class CompilerTest {
     test("def it = 'abc'; def y = ''; for (int i = 0; /${''}/g && i < 3; i++) { y += $1 }; y", "nullnullnull");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([a-z])./g && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
+    test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
   }
 
   @Test public void testStuff() {

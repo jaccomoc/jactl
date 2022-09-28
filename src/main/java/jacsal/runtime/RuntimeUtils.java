@@ -516,6 +516,8 @@ public class RuntimeUtils {
             case 'i': flags += Pattern.CASE_INSENSITIVE; break;
             case 'm': flags += Pattern.MULTILINE;        break;
             case 's': flags += Pattern.DOTALL;           break;
+            case 'g': /* no-op */                        break;
+            case 'f': /* no-op */                        break;
             default: throw new IllegalStateException("Internal error: unexpected regex modifier '" + modifiers.charAt(i) + "'");
           }
         }
@@ -617,7 +619,6 @@ public class RuntimeUtils {
   public static boolean isTruth(Object value, boolean negated) {
     if (value == null)               { return negated; }
     if (value instanceof Boolean)    { return negated != (boolean) value; }
-    if (value instanceof RegexMatch) { return negated != ((RegexMatch)value).matched; }
     if (value instanceof String)     { return negated == ((String) value).isEmpty(); }
     if (value instanceof Integer)    { return negated == ((int) value == 0); }
     if (value instanceof Long)       { return negated == ((long)value == 0); }
@@ -951,9 +952,6 @@ public class RuntimeUtils {
     if (obj instanceof String) {
       return (String)obj;
     }
-    if (obj instanceof RegexMatch) {
-      return ((RegexMatch)obj).pattern;
-    }
     if (obj == null) {
       throw new NullError("Null value for String", source, offset);
     }
@@ -981,12 +979,11 @@ public class RuntimeUtils {
   }
 
   /**
-   * Convert Iterator and RegexMatch types back to List or Boolean which are suitable for returning
+   * Convert Iterator types back to List which is suitable for returning
    * from a script.
    */
   public static Object convertToScriptResult(Object obj) {
     if (obj instanceof Iterator)   { return convertIteratorToList((Iterator) obj); }
-    if (obj instanceof RegexMatch) { return ((RegexMatch)obj).matched; }
     return obj;
   }
 
@@ -1110,13 +1107,11 @@ public class RuntimeUtils {
   }
 
   /**
-   * Get the string value of an object. Object could be a string or a RegexMatch.
-   * If object is not a "string" then return null.
+   * Get the string value of an object.
    */
   private static String castToString(Object value) {
     if (value instanceof String)     { return (String)value; }
-    if (value instanceof RegexMatch) { return ((RegexMatch) value).pattern; }
     return null;
   }
-  private static boolean isString(Object value) { return castToString(value) != null; }
+  private static boolean isString(Object value) { return value instanceof String; }
 }

@@ -566,18 +566,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // If implicit match against "it" (i.e. /regex/ on its own rather than something like "x =~ /regex/")
-    // then we don't know whether we want a boolean match result or we should just return the /regex/ as
-    // a string. We will return a RegexMatch type that contains both the match result and the regex pattern
-    // and then from the context of how it is used we can extract the boolean result or the string as needed.
-    // If, however, there are any modifiers then we know that we need to do a match rather than return a string.
-    boolean implicitItMatch = expr.left instanceof Expr.Identifier &&
-                              ((Expr.Identifier) expr.left).optional &&
-                              expr.modifiers.isEmpty();
-
     boolean globalModifier = expr.modifiers.indexOf('g') != -1;
-    String  modifiers      = globalModifier ? expr.modifiers.replaceAll("g", "") : expr.modifiers;
-
     int patternVar = -1;
 
     loadVar(expr.captureArrVarDecl);
@@ -585,31 +574,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     castToString(expr.left.location);
     compile(expr.right);
     castToString(expr.right.location);
-    if (implicitItMatch) {
-      patternVar = allocateSlot(STRING);
-      dupVal();
-      storeLocal(patternVar);
-    }
-    loadConst(modifiers);
+    loadConst(expr.modifiers);
     loadLocation(expr.operator);
     invokeStatic(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, String.class, String.class, int.class);
     if (expr.operator.is(BANG_GRAVE)) {
       _booleanNot();
-    }
-
-    // If we need to keep match result and pattern string until we know from our context which is needed
-    if (implicitItMatch) {
-      int resultVar = allocateSlot(BOOLEAN);
-      storeLocal(resultVar);
-      mv.visitTypeInsn(NEW, "jacsal/runtime/RegexMatch");
-      mv.visitInsn(DUP);
-      loadLocal(resultVar);
-      loadLocal(patternVar);
-      mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RegexMatch", "<init>", "(ZLjava/lang/String;)V", false);
-      pop(2);
-      push(ANY);
-      freeTemp(patternVar);
-      freeTemp(resultVar);
     }
 
     return null;

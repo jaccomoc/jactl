@@ -811,7 +811,7 @@ public class Parser {
     if (matchAny(INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
                  STRING_CONST, TRUE, FALSE, NULL)) { return new Expr.Literal(previous());         }
-    if (peek().is(SLASH, EXPR_STRING_START))       { return exprString();                         }
+    if (peek().is(SLASH, EXPR_STRING_START))       { return  exprString();                         }
     if (matchAny(IDENTIFIER))                      { return new Expr.Identifier(previous());      }
     if (peek().is(LEFT_SQUARE,LEFT_BRACE))         { if (isMapLiteral()) { return mapLiteral(); } }
     if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
@@ -926,12 +926,10 @@ public class Parser {
       }
     }
     // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
-    // on our own somewhere.
-    // We will assume that we are standalone for the moment and build "it =~ /regex/" since if "it"
-    // exists and we are standalone we want to match against the it var. If we later discover that we
-    // are in a "x =~ /regex/" our parent expression will convert us back to a normal regex. If we
-    // stil have a match against "it" but discover during Resolver that "it" does not exist we will
-    // remove the "it" part then.
+    // on our own somewhere. We build "it =~ /regex" and if we are actually part of "x =~ /regex/"
+    // our parent (parseExpression()) will convert back to "x =~ /regex/".
+    // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
+    // be a regular expression string then we will fix the problem then.
     if (startToken.is(SLASH)) {
       return createItMatch(exprString, previous());
     }
@@ -1395,10 +1393,11 @@ public class Parser {
     Expr.Identifier itIdent = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
     itIdent.optional = true;   // Optional since if "it" does not exist we will use regex as a string
                                // rather than try to match
+    final var modifiers = regexEnd.getStringValue();
     return new Expr.RegexMatch(itIdent,
                                new Token(EQUAL_GRAVE, start),
                                expr,
-                               regexEnd.getStringValue(),
+                               modifiers,
                                true);
   }
 

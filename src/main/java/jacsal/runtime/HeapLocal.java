@@ -48,9 +48,6 @@ public class HeapLocal extends Number {
     if (value instanceof String) {
       return (String)value;
     }
-    if (value instanceof RegexMatch) {
-      return ((RegexMatch)value).pattern;
-    }
     return RuntimeUtils.toString(value);
   }
 
