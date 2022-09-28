@@ -18,6 +18,7 @@ package jacsal;
 
 import jacsal.runtime.HeapLocal;
 import jacsal.runtime.RegexMatch;
+import jacsal.runtime.RegexMatcher;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -26,7 +27,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
 
 import static jacsal.TokenType.*;
 
@@ -367,7 +367,7 @@ public class JacsalType {
       case OBJECT_ARR:     return Type.getDescriptor(Object[].class);
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
       case REGEX_MATCH:    return Type.getDescriptor(RegexMatch.class);
-      case MATCHER:        return Type.getDescriptor(Matcher.class);
+      case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -389,7 +389,7 @@ public class JacsalType {
       case OBJECT_ARR:     return Type.getType(Object[].class);
       case ITERATOR:       return Type.getType(Iterator.class);
       case REGEX_MATCH:    return Type.getType(RegexMatch.class);
-      case MATCHER:        return Type.getType(Matcher.class);
+      case MATCHER:        return Type.getType(RegexMatcher.class);
       default:             throw new UnsupportedOperationException();
     }
   }
@@ -411,7 +411,7 @@ public class JacsalType {
       case OBJECT_ARR:  return Type.getInternalName(Object[].class);
       case ITERATOR:    return Type.getInternalName(Iterator.class);
       case REGEX_MATCH: return Type.getInternalName(RegexMatch.class);
-      case MATCHER:     return Type.getInternalName(Matcher.class);
+      case MATCHER:     return Type.getInternalName(RegexMatcher.class);
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -451,7 +451,7 @@ public class JacsalType {
     if (clss == Object[].class)     { return OBJECT_ARR;    }
     if (clss == Iterator.class)     { return ITERATOR;      }
     if (clss == RegexMatch.class)   { return REGEX_MATCH;   }
-    if (clss == Matcher.class)      { return MATCHER;       }
+    if (clss == RegexMatcher.class) { return MATCHER;       }
     if (clss == Object.class)       { return ANY;           }
     throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
   }
@@ -473,7 +473,7 @@ public class JacsalType {
       case OBJECT_ARR:    return Object[].class;
       case ITERATOR:      return Iterator.class;
       case REGEX_MATCH:   return RegexMatch.class;
-      case MATCHER:       return Matcher.class;
+      case MATCHER:       return RegexMatcher.class;
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }

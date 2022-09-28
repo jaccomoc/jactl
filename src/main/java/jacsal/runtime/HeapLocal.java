@@ -54,5 +54,5 @@ public class HeapLocal extends Number {
     return RuntimeUtils.toString(value);
   }
 
-  public Matcher matcherValue() { return (Matcher)value; }
+  public RegexMatcher matcherValue() { return (RegexMatcher)value; }
 }

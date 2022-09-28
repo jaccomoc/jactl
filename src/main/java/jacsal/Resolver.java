@@ -162,7 +162,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitStmts(Stmt.Stmts stmt) {
-    stmt.stmts.forEach(this::resolve);
+    final var  block         = getBlock();
+    Stmt.Stmts previousStmts = block.currentResolvingStmts;
+    block.currentResolvingStmts = stmt;
+
+    for (stmt.currentIdx = 0; stmt.currentIdx < stmt.stmts.size(); stmt.currentIdx++) {
+      resolve(stmt.stmts.get(stmt.currentIdx));
+    }
+
+    block.currentResolvingStmts = previousStmts;
     return null;
   }
 
@@ -193,10 +201,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // into one that is passed as a HeapLocal (and this also means that all invocations will
       // then need to be done via the method wrapper that knows which parameters to convert
       // into HeapLocals before invoking the actual function).
-      functions.peek().blocks.peek().isResolvingParams = true;
+      getBlock().isResolvingParams = true;
     }
     resolve(stmt.declExpr);
-    functions.peek().blocks.peek().isResolvingParams = false;
+    getBlock().isResolvingParams = false;
     return null;
   }
 
@@ -279,8 +287,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // to use one that we have closed over for our own capture vars since this will break code in
     // the parent scope that the closed over capture var belongs to if it relies on the capture vars
     // still being as they were when the nested function/closure was invoked.
-    Stmt.Block block = functions.peek().blocks.peek();
-    Expr.VarDecl captureArrVar = block.variables.get(Utils.CAPTURE_VAR);
+    Expr.VarDecl captureArrVar = getVars().get(Utils.CAPTURE_VAR);
     if (captureArrVar == null) {
       final var captureArrName = new Token(IDENTIFIER, expr.operator).setValue(Utils.CAPTURE_VAR);
       // Allocate our capture array var if we don't already have one in scope
@@ -291,6 +298,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       declare(captureArrName);
       define(captureArrName, captureArrVar);
       expr.captureArrVarDecl = captureArrVar;
+      // Insert a VarDecl statement before current statement so that if we are in a loop our CAPTURE_VAR
+      // is created before the loop starts
+      insertStmt(new Stmt.VarDecl(captureArrName, captureArrVar));
     }
     else {
       expr.captureArrVarDecl = captureArrVar;
@@ -303,6 +313,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                               ((Expr.Identifier) expr.left).optional &&
                               expr.modifiers.isEmpty();
     return expr.type = implicitItMatch ? ANY : BOOLEAN;
+  }
+
+  private void insertStmt(Stmt.VarDecl declStmt) {
+    var currentStmts = getBlock().currentResolvingStmts;
+    currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
+    currentStmts.currentIdx++;
   }
 
   @Override public JacsalType visitBinary(Expr.Binary expr) {
@@ -1055,7 +1071,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (compileContext.replMode && isAtTopLevel()) {
       return compileContext.globalVars;
     }
-    return functions.peek().blocks.peek().variables;
+    return getBlock().variables;
+  }
+
+  private Stmt.Block getBlock() {
+    return functions.peek().blocks.peek();
   }
 
   private Expr.VarDecl lookupFunction(Token identifier) {

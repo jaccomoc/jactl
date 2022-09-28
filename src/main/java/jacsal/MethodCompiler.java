@@ -311,6 +311,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
 
+    if (expr.isGlobal) {
+      // Flag it as initialised so we can use slot == -1 as a test for uninitialised vars
+      expr.slot = -2;
+    }
+
     // If actual function (not closure)
     if (expr.type.is(FUNCTION) && expr.funDecl != null) {
       loadBoundMethodHandle(expr.funDecl);
@@ -561,26 +566,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // If this is first time in this scope where we have a regex then we allocate
-    // the slot where we will store the Matcher
-    if (expr.captureArrVarDecl.slot == -1) {
-      compile(expr.captureArrVarDecl);
-    }
-
     // If implicit match against "it" (i.e. /regex/ on its own rather than something like "x =~ /regex/")
     // then we don't know whether we want a boolean match result or we should just return the /regex/ as
     // a string. We will return a RegexMatch type that contains both the match result and the regex pattern
     // and then from the context of how it is used we can extract the boolean result or the string as needed.
-    // However, if there are any modifiers then we know that we need to do a match rather than return a string.
+    // If, however, there are any modifiers then we know that we need to do a match rather than return a string.
     boolean implicitItMatch = expr.left instanceof Expr.Identifier &&
                               ((Expr.Identifier) expr.left).optional &&
                               expr.modifiers.isEmpty();
 
     boolean globalModifier = expr.modifiers.indexOf('g') != -1;
-    String modifiers = globalModifier ? expr.modifiers.replaceAll("g","") : expr.modifiers;
+    String  modifiers      = globalModifier ? expr.modifiers.replaceAll("g", "") : expr.modifiers;
 
     int patternVar = -1;
 
+    loadVar(expr.captureArrVarDecl);
     compile(expr.left);
     castToString(expr.left.location);
     compile(expr.right);
@@ -590,31 +590,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       dupVal();
       storeLocal(patternVar);
     }
-    loadConst(expr.modifiers);
+    loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeStatic(RuntimeUtils.class, "regexMatch", String.class, String.class, String.class, String.class, int.class);
-    storeVar(expr.captureArrVarDecl);
+    invokeStatic(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, String.class, String.class, int.class);
+    if (expr.operator.is(BANG_GRAVE)) {
+      _booleanNot();
+    }
+
+    // If we need to keep match result and pattern string until we know from our context which is needed
     if (implicitItMatch) {
+      int resultVar = allocateSlot(BOOLEAN);
+      storeLocal(resultVar);
       mv.visitTypeInsn(NEW, "jacsal/runtime/RegexMatch");
       mv.visitInsn(DUP);
-      loadVar(expr.captureArrVarDecl);
-      invokeVirtual(Matcher.class, "find");
-      if (expr.operator.is(BANG_GRAVE)) {
-        _booleanNot();
-      }
+      loadLocal(resultVar);
       loadLocal(patternVar);
       mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RegexMatch", "<init>", "(ZLjava/lang/String;)V", false);
       pop(2);
       push(ANY);
       freeTemp(patternVar);
+      freeTemp(resultVar);
     }
-    else {
-      loadVar(expr.captureArrVarDecl);
-      invokeVirtual(Matcher.class, "find");
-      if (expr.operator.is(BANG_GRAVE)) {
-        _booleanNot();
-      }
-    }
+
     return null;
   }
 
@@ -979,7 +976,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
       loadConst(Integer.parseInt(name.substring(1)));
-      invokeStatic(RuntimeUtils.class, "regexGroup", Matcher.class, int.class);
+      invokeStatic(RuntimeUtils.class, "regexGroup", RegexMatcher.class, int.class);
     }
     else {
       loadVar(expr.varDecl);
@@ -1653,7 +1650,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case STRING:      loadConst("");           break;
       case ANY:         loadConst(null);         break;
       case FUNCTION:    loadConst(null);         break;   // use null for the moment to indicate identity function
-      case MATCHER:     loadConst(null);         break;
+      case MATCHER:
+        _newInstance(RegexMatcher.class);
+        push(MATCHER);
+        break;
       case MAP:
         _newInstance(HashMap.class);
         push(MAP);

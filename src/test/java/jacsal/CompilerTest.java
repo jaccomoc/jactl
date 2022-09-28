@@ -1791,6 +1791,9 @@ class CompilerTest {
   }
 
   @Test public void regexCaptureVars() {
+    test("def x = ''; 'abc' =~ /$x/", true);
+    test ("def x = 'abc'; x =~ /${''}/", true);
+    testError("def x; 'abc' =~ x", "null value for string");
     test("'abcaaxy' =~ /(a+)/", true);
     test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
     test("def it = 'bcaaxy'; /(a+)/ and return $1", "aa");
@@ -1813,6 +1816,22 @@ class CompilerTest {
     test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\" }(); x", "zyx");
     test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x", "zyxb");
     test("def it = 'xyz'; def x; /(x)(y)(z)/ and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x += $3; x", "zyxbz");
+  }
+
+  @Test public void regexGlobalMatch() {
+    test("String x = 'abc'; def y = ''; x =~ /([a-z])/g and y += $1; x =~ /([a-z])/g and y += $1; y", "ab");
+    test("def x = 'abc'; def y = ''; x =~ /([a-z])/g and y += $1; x =~ /([a-z])/g and y += $1; y", "ab");
+    test("def it = 'abc'; def y = ''; /([a-z])/g and y += $1; /([a-z])/g and y += $1; y", "ab");
+    test("def it = 'ab'; def y = ''; /([a-z])/g and y += $1; /([a-z])/g and y += $1; /([a-z])/g and y = 'fail'; y", "ab");
+    test("def it = 'abc'; def y = ''; while (/([a-z])/g) { y += $1 }; y += $1", "abcnull");
+    testError("def it = 'abc'; def y = ''; for (int i = 0; /${''}/g && i < 10; i++) { y += $1 }; y += $1", "no regex match");
+    test("def it = 'abc'; def y = ''; for (int i = 0; /${''}/g && i < 3; i++) { y += $1 }; y", "nullnullnull");
+    test("def it = 'abcd'; def y = ''; for (int i = 0; /([a-z])./g && i < 10; i++) { y += $1 }; y", "ac");
+    test("def it = 'abcd'; def y = ''; for (int i = 0; /([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
+  }
+
+  @Test public void testStuff() {
+    //debug = true;
   }
 
   @Test public void replaceAll() {

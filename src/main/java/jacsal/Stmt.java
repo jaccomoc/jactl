@@ -47,6 +47,8 @@ abstract class Stmt {
    */
   static class Stmts extends Stmt {
     List<Stmt> stmts = new ArrayList<>();
+
+    int currentIdx;     // Which statement we are currently resolving
     Stmts() {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitStmts(this); }
@@ -62,6 +64,10 @@ abstract class Stmt {
     Stmts                    stmts;
     Map<String,Expr.VarDecl> variables  = new HashMap<>();
     List<Expr.FunDecl>       functions  = new ArrayList<>();
+
+    // Used to track which Stmt.Stmts we are currently resolving in case we need to insert a new statement
+    // at Resolve time
+    Stmt.Stmts               currentResolvingStmts;
 
     boolean isResolvingParams = false;   // Used during resolution to tell if we are resolving function/closure
                                           // parameters so we can tell when we need to convert a decalred parameter

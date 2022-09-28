@@ -179,7 +179,8 @@ public class RuntimeUtils {
       // will be turned into equivalent of x = x + 1 (for example) and it won't be until we
       // get here that we can check if x is a string or not.
       if (operator == PLUS) {
-        return leftString.concat(right == null ? "null" : toString(right));
+        return leftString.concat(right == null ? "null"
+                                               : rightString == null ? toString(right) : rightString);
       }
       if (operator == STAR) {
         if (right instanceof Number) {
@@ -503,15 +504,7 @@ public class RuntimeUtils {
     return str.repeat(count);
   }
 
-  /**
-   * Regex match. Return true if string matches the given regex.
-   * We compile the patterns and store them in a cache for efficiency.
-   * NOTE: we use perl style matching where x =~ /abc/ just needs abc
-   * to appear within the string. Standard Java matching matches as
-   * though the pattern is /^abc$/ so we alter the pattern to add .*
-   * at beginning and end (if pattern doesn't already have ^ or $).
-   */
-  public static Matcher regexMatch(String str, String regex, String modifiers, String source, int line) {
+  private static Matcher getMatcher(String str, String regex, String modifiers, String source, int offset) {
     var cache = patternCache.get();
     String key = regex + "/" + modifiers;
     Pattern pattern = cache.get(key);
@@ -529,7 +522,7 @@ public class RuntimeUtils {
         pattern = Pattern.compile(regex, flags);
       }
       catch (PatternSyntaxException e) {
-        throw new RuntimeError("Pattern error: " + e.getMessage(), source, line);
+        throw new RuntimeError("Pattern error: " + e.getMessage(), source, offset);
       }
       cache.put(key, pattern);
       if (cache.size() > patternCacheSize) {
@@ -539,7 +532,39 @@ public class RuntimeUtils {
     return pattern.matcher(str);
   }
 
-  public static String regexGroup(Matcher matcher, int group) {
+  /**
+   * We are doing a "find" rather than a "match" if the global modifier is set and the
+   * source string is unnchanged. In this case we continue the searching from the last
+   * unmatched char in the source string.
+   * If the source string has changed then we revert to a "match".
+   * We update the Matcher in the RegexMatcher object if the Matcher changes.
+   * @return true if regex find/match succeeds
+   */
+  public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, String modifiers, String source, int offset) {
+    // Check to see if the Matcher has the same source string (note we use == not .equals())
+    if (regexMatcher.str == str) {
+      Matcher matcher = regexMatcher.matcher;
+      if (regex.equals(matcher.pattern().pattern())) {
+        return regexMatcher.matched = matcher.find();
+      }
+      // Same string but regex has changed
+      int pos = matcher.end();
+      regexMatcher.matcher = matcher = getMatcher(str, regex, modifiers, source, offset);
+      return regexMatcher.matched = matcher.find();
+    }
+
+    // Different string so start again from scratch
+    Matcher matcher = getMatcher(str, regex, modifiers, source, offset);
+    regexMatcher.matcher = matcher;
+    regexMatcher.str = str;
+    return regexMatcher.matched = matcher.find();
+  }
+
+  public static String regexGroup(RegexMatcher regexMatcher, int group) {
+    if (!regexMatcher.matched) {
+      return null;
+    }
+    final var matcher = regexMatcher.matcher;
     if (group > matcher.groupCount()) {
       return null;
     }
