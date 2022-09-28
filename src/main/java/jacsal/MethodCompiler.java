@@ -417,10 +417,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we have += or -= with a const value then there are optimisations that are possible
     // (especially if local variable of type int).
     if (expr.operator.is(PLUS_EQUAL,MINUS_EQUAL,PLUS_PLUS,MINUS_MINUS) &&
-        !expr.identifierExpr.varDecl.isGlobal &&
-        expr.expr.right.isConst) {
-      incOrDecVar(true, expr.operator.is(PLUS_EQUAL,PLUS_PLUS), expr.identifierExpr, expr.expr.right.constValue, expr.isResultUsed, expr.operator);
-      return null;
+        !expr.identifierExpr.varDecl.isGlobal) {
+      var binary = (Expr.Binary)expr.expr;
+      if (binary.right.isConst) {
+        incOrDecVar(true,
+                    expr.operator.is(PLUS_EQUAL, PLUS_PLUS),
+                    expr.identifierExpr,
+                    binary.right.constValue,
+                    expr.isResultUsed,
+                    expr.operator);
+        return null;
+      }
     }
 
     loadVar(expr.identifierExpr.varDecl);
@@ -516,8 +523,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // ... parent, field, parent, field
     dupVal2();
 
-    Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-
     // Load the field value onto stack (or suitable default value).
     // Default value will be based on the type of the rhs of the += or -= etc.
     loadField(expr.accessType, false, null, RuntimeUtils.DEFAULT_VALUE);
@@ -531,7 +536,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     // Evaluate expression
-    compile(valueExpr);
+    compile(expr.expr);
     convertTo(expr.type, true, expr.location);
 
     // If we need the after result then stash in a temp
@@ -567,20 +572,37 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     boolean globalModifier = expr.modifiers.indexOf('g') != -1;
-    int patternVar = -1;
-
+    String modifiers = expr.modifiers.replaceAll("[fg]", "");
     loadVar(expr.captureArrVarDecl);
     compile(expr.left);
     castToString(expr.left.location);
     compile(expr.right);
     castToString(expr.right.location);
-    loadConst(expr.modifiers);
+    loadConst(globalModifier);
+    loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeStatic(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, String.class, String.class, int.class);
+    invokeStatic(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
     if (expr.operator.is(BANG_GRAVE)) {
       _booleanNot();
     }
 
+    return null;
+  }
+
+  @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
+    boolean globalModifier = expr.modifiers.indexOf('g') != -1;
+    String modifiers = expr.modifiers.replaceAll("[fg]", "");
+    compile(expr.left);
+    castToString(expr.left.location);
+    loadVar(expr.captureArrVarDecl);
+    swap();
+    compile(expr.right);
+    castToString(expr.right.location);
+    compile(expr.replace);
+    loadConst(globalModifier);
+    loadConst(modifiers);
+    loadLocation(expr.operator);
+    invokeStatic(RuntimeUtils.class, "regexSubstitute", RegexMatcher.class, String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
     return null;
   }
 
@@ -968,6 +990,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.exprList.size() == 0) {
       loadConst("");
     }
+    else
     if (expr.exprList.size() > 1) {
       _loadConst(expr.exprList.size());
       mv.visitTypeInsn(ANEWARRAY, "java/lang/String");

@@ -997,6 +997,22 @@ class TokeniserTest {
     assertEquals("a", token.getValue());
     token = tokeniser.next();
     assertEquals(LEFT_BRACE, token.getType());
+  }
 
+  @Test public void regexSubstitute() {
+    Tokeniser tokeniser = new Tokeniser("s/ab/de/g");
+    Token token = tokeniser.next();
+    assertEquals(REGEX_SUBST_START, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("ab", token.getStringValue());
+    token = tokeniser.next();
+    assertEquals(REGEX_REPLACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("de", token.getStringValue());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_END, token.getType());
+    assertEquals("g", token.getStringValue());
   }
 }

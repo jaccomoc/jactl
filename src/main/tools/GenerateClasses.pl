@@ -53,7 +53,7 @@ while (<FH>) {
     print;
   } and next;
 
-  / +}/ and $inClass and do {
+  /^ +}/ and $inClass and do {
     my @constructorFields;
     my @superFields;
     if ($extends ne $rootClass) {

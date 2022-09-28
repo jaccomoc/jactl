@@ -266,11 +266,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Special case for standalone regex where we need to match against "it" if in a context where variable
     // "it" exists but only if the regex has modifiers after it. Otherwise we will treat it as a regular
     // expression string. If there are modifiers but not "it" then we generate an error.
-    if (expr.left instanceof Expr.Identifier && ((Expr.Identifier) expr.left).optional) {
-      if (!expr.modifiers.isEmpty() && !variableExists(((Expr.Identifier)expr.left).identifier)) {
+    if (expr.implicitItMatch) {
+      if ((!expr.modifiers.isEmpty() || expr.isSubstitute) && !variableExists(Utils.IT_VAR)) {
         throw new CompileError("No 'it' variable in this scope to match against", expr.location);
       }
-      if (expr.modifiers.isEmpty()) {
+      if (expr.modifiers.isEmpty() && !expr.isSubstitute) {
         // Just a normal expr string
         expr.left = null;
       }
@@ -311,10 +311,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type = BOOLEAN;
   }
 
-  private void insertStmt(Stmt.VarDecl declStmt) {
-    var currentStmts = getBlock().currentResolvingStmts;
-    currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
-    currentStmts.currentIdx++;
+  @Override public JacsalType visitRegexSubst(Expr.RegexSubst expr) {
+    visitRegexMatch(expr);
+    resolve(expr.replace);
+    return expr.type = STRING;
   }
 
   @Override public JacsalType visitBinary(Expr.Binary expr) {
@@ -641,12 +641,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitVarOpAssign(Expr.VarOpAssign expr) {
     expr.type = resolve(expr.identifierExpr);
-    Expr.Binary valueExpr = (Expr.Binary) expr.expr;
+    if (expr.expr instanceof Expr.Binary) {
+      Expr.Binary valueExpr = (Expr.Binary) expr.expr;
 
-    // Set the type of the Noop in our binary expression to the variable type and then
-    // resolve the binary expression
-    valueExpr.left.type = expr.identifierExpr.varDecl.type;
-    resolve(valueExpr);
+      // Set the type of the Noop in our binary expression to the variable type and then
+      // resolve the binary expression
+      valueExpr.left.type = expr.identifierExpr.varDecl.type;
+    }
+    resolve(expr.expr);
 
     if (!expr.expr.type.isConvertibleTo(expr.type)) {
       throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
@@ -665,9 +667,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitOpAssign(Expr.OpAssign expr) {
-    Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-    valueExpr.left.type = ANY;     // for fields use ANY for the moment
-    resolveFieldAssignment(expr, expr.parent, expr.field, valueExpr, expr.accessType);
+    if (expr.expr instanceof Expr.Binary) {
+      Expr.Binary valueExpr = (Expr.Binary) expr.expr;
+      valueExpr.left.type = ANY;     // for fields use ANY for the moment
+    }
+    resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
 
     return expr.type;
   }
@@ -812,6 +816,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   ////////////////////////////////////////////
+
+  private void insertStmt(Stmt.VarDecl declStmt) {
+    var currentStmts = getBlock().currentResolvingStmts;
+    currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
+    currentStmts.currentIdx++;
+  }
 
   private void validateArgCount(int argCount, int mandatoryCount, int paramCount, Token location) {
     if (argCount < mandatoryCount) {
@@ -1075,24 +1085,22 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private Expr.VarDecl lookupFunction(Token identifier) {
-    return lookup(identifier, true, false);
+    return lookup(identifier.getStringValue(), identifier, true, false);
   }
 
   private Expr.VarDecl lookup(Token identifier) {
-    return lookup(identifier, false, false);
+    return lookup(identifier.getStringValue(), identifier, false, false);
   }
 
-  private boolean variableExists(Token identifier) {
-    return lookup(identifier, false, true) != null;
+  private boolean variableExists(String name) {
+    return lookup(name, null, false, true) != null;
   }
 
   // We look up variables in our local scope and parent scopes within the same function.
   // If we still can't find the variable we search in parent functions to see if the
   // variable exists there (at which point we close over it and it becomes a heap variable
   // rather than one that is a JVM local).
-  private Expr.VarDecl lookup(Token identifier, boolean functionLookup, boolean existenceCheckOnly) {
-    String name = identifier.getStringValue();
-
+  private Expr.VarDecl lookup(String name, Token location, boolean functionLookup, boolean existenceCheckOnly) {
     // Special case for capture vars which are of form $n where n > 0
     // For these vars we actually look for the $@ capture array var since $n means $@[n]
     if (name.charAt(0) == '$') {
@@ -1135,15 +1143,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl == UNDEFINED) {
-      throw new CompileError("Variable initialisation cannot refer to itself", identifier);
+      throw new CompileError("Variable initialisation cannot refer to itself", location);
     }
     if (varDecl != null) {
       if (varDecl.funDecl != null) {
         // Track earliest reference to detect where forward referenced function closes over
         // vars not yet declared at time of reference
         Token reference = varDecl.funDecl.earliestForwardReference;
-        if (reference == null || isEarlier(identifier, reference)) {
-          varDecl.funDecl.earliestForwardReference = identifier;
+        if (reference == null || isEarlier(location, reference)) {
+          varDecl.funDecl.earliestForwardReference = location;
         }
       }
 
@@ -1196,10 +1204,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (name.equals(Utils.CAPTURE_VAR)) {
-      error("Reference to regex capture variable " + identifier.getStringValue() + " in scope where no regex match has occurred", identifier);
+      error("Reference to regex capture variable " + location.getStringValue() + " in scope where no regex match has occurred", location);
     }
     else {
-      error("Reference to unknown variable " + name, identifier);
+      error("Reference to unknown variable " + name, location);
     }
     return null;
   }

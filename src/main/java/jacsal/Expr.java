@@ -94,6 +94,7 @@ abstract class Expr {
     Token   operator;
     Expr    right;
     String  modifiers;
+    boolean isSubstitute = false;
     boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
     VarDecl captureArrVarDecl;
     RegexMatch(Expr left, Token operator, Expr right, String modifiers, boolean implicitItMatch) {
@@ -106,6 +107,17 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexMatch(this); }
     @Override public String toString() { return "RegexMatch[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
+  }
+
+  static class RegexSubst extends RegexMatch {
+    Expr  replace;
+    { isSubstitute = true; }
+    RegexSubst(Expr left, Token operator, Expr right, String modifiers, boolean implicitItMatch, Expr replace) {
+      super(left, operator, right, modifiers, implicitItMatch);
+      this.replace = replace;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexSubst(this); }
+    @Override public String toString() { return "RegexSubst[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + ", " + "replace=" + replace + "]"; }
   }
 
   /**
@@ -245,9 +257,6 @@ abstract class Expr {
     Token        identifier;
     Expr.VarDecl varDecl;
     boolean      couldBeFunctionCall = false;
-    boolean      optional = false;       // True if variable not existing is not fatal (used for
-                                          // "it" =~ /regex/ where we are not sure if "it" exists at
-                                          // time we build the expression).
     Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
@@ -293,6 +302,7 @@ abstract class Expr {
     // to set its type (if it was declared as "var") once we know the type of the initialiser.
     VarDecl      paramVarDecl;
 
+    Type descriptorType() { return isPassedAsHeapLocal ? HEAPLOCAL.descriptorType() : type.descriptorType(); }
     VarDecl(Token name, Expr initialiser) {
       this.name = name;
       this.initialiser = initialiser;
@@ -300,7 +310,6 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
     @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + "]"; }
-    Type descriptorType() { return isPassedAsHeapLocal ? HEAPLOCAL.descriptorType() : type.descriptorType(); }
   }
 
   /**
@@ -339,6 +348,7 @@ abstract class Expr {
     // no variables we close over are declared after that reference
     Token earliestForwardReference;
 
+    public boolean isClosure() { return name == null; }
     FunDecl(Token startToken, Token name, JacsalType returnType, List<Stmt.VarDecl> parameters) {
       this.startToken = startToken;
       this.name = name;
@@ -348,7 +358,6 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
     @Override public String toString() { return "FunDecl[" + "startToken=" + startToken + ", " + "name=" + name + ", " + "returnType=" + returnType + ", " + "parameters=" + parameters + "]"; }
-    public boolean isClosure() { return name == null; }
   }
 
   /**
@@ -374,8 +383,8 @@ abstract class Expr {
   static class VarOpAssign extends Expr implements ManagesResult {
     Identifier identifierExpr;
     Token      operator;
-    Binary     expr;
-    VarOpAssign(Identifier identifierExpr, Token operator, Binary expr) {
+    Expr       expr;
+    VarOpAssign(Identifier identifierExpr, Token operator, Expr expr) {
       this.identifierExpr = identifierExpr;
       this.operator = operator;
       this.expr = expr;
@@ -566,6 +575,7 @@ abstract class Expr {
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
+    T visitRegexSubst(RegexSubst expr);
     T visitTernary(Ternary expr);
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);

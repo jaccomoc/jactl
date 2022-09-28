@@ -88,8 +88,14 @@ class Expr {
     Token   operator;
     Expr    right;
     String  modifiers;
+    boolean @isSubstitute = false;
     boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
     VarDecl @captureArrVarDecl;
+  }
+
+  class RegexSubst extends RegexMatch {
+    Expr  replace;
+    { isSubstitute = true; }
   }
 
   /**
@@ -169,9 +175,6 @@ class Expr {
     Token        identifier;
     Expr.VarDecl @varDecl;
     boolean      @couldBeFunctionCall = false;
-    boolean      @optional = false;       // True if variable not existing is not fatal (used for
-                                          // "it" =~ /regex/ where we are not sure if "it" exists at
-                                          // time we build the expression).
   }
 
   class ExprString extends Expr {
@@ -262,7 +265,7 @@ class Expr {
   class VarOpAssign extends Expr implements ManagesResult {
     Identifier identifierExpr;
     Token      operator;
-    Binary     expr;
+    Expr       expr;
   }
 
   /**

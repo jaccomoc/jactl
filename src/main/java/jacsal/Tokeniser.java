@@ -77,6 +77,7 @@ public class Tokeniser {
     String  endChars;           // Char sequence which terminates string
     boolean allowNewLines;      // Whether we currently allow newlines within our expression string
     boolean escapeChars;        // Whether escape chars are supported
+    boolean isSubstString;      // True if in s/.../.../imsg substituion string
     int     braceLevel;         // At what level of brace nesting does the expression string exist
   }
 
@@ -163,10 +164,15 @@ public class Tokeniser {
   //////////////////////////////////////////////////////////////////
 
   private void pushStringState(String endChars) {
+    pushStringState(endChars, false);
+  }
+
+  private void pushStringState(String endChars, boolean isSubstString) {
     StringState state = new StringState();
     state.endChars = endChars;
     state.allowNewLines = newLinesAllowed() && !endChars.equals("'") && !endChars.equals("\"");
     state.escapeChars = !endChars.equals("/");
+    state.isSubstString = isSubstString;
     inString = true;
     stringState.push(state);
   }
@@ -254,11 +260,15 @@ public class Tokeniser {
         // or are nested within one we can no longer have newlines even if the nested string starts with a triple
         // double quote.
         boolean tripleQuote = available(2) && charAt(0) == '"' && charAt(1) == '"';
-        String  endChars      = tripleQuote ? "\"\"\"" : "\"";
+        String  endChars    = tripleQuote ? "\"\"\"" : "\"";
         pushStringState(endChars);
         advance(tripleQuote ? 2 : 0);
         token = parseString(true, endChars, newLinesAllowed(), true);
         return token.setType(EXPR_STRING_START);
+      }
+      case REGEX_SUBST_START: {
+        pushStringState("/", true);
+        return token.setType(REGEX_SUBST_START);
       }
       case LEFT_BRACE: {
         nestedBraces++;
@@ -320,6 +330,7 @@ public class Tokeniser {
     StringState currentStringState = stringState.peek();
     String      endChars           = currentStringState.endChars;
     boolean     escapeChars        = currentStringState.escapeChars;
+    boolean     isSubstString      = currentStringState.isSubstString;
     switch (c) {
       case '$': {
         // We either have an identifer following or as '{'
@@ -348,34 +359,46 @@ public class Tokeniser {
         return token;
       }
 
-      case '/':
-      case '"': {
+      case '/': {
         if (charsAtEquals(0, endChars.length(), endChars)) {
-          advance(endChars.length());
-          StringBuilder modifierSb = new StringBuilder();
-          if (c == '/') {
+          advance(1);
+          if (isSubstString) {
+            // Return token to indicate we have reached end of pattern part of s/pattern/replacement/
+            currentStringState.isSubstString = false;   // So next '/' will be treated as end
+            return token.setType(REGEX_REPLACE).setLength(1);
+          }
+          else {
+            StringBuilder modifierSb = new StringBuilder();
             // Check for modifiers after '/'
             while (available(1) && Character.isAlphabetic(charAt(0))) {
               final var modifier = (char) charAt(0);
               modifierSb.append(modifier);
               advance(1);
             }
-          }
-          stringState.pop();
-          inString = false;
-          final var modifiers = modifierSb.toString();
-          for (int i = 0; i < modifiers.length(); i++) {
-            if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
-              throw new CompileError("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
+            stringState.pop();
+            inString = false;
+            final var modifiers = modifierSb.toString();
+            for (int i = 0; i < modifiers.length(); i++) {
+              if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
+                throw new CompileError("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
+              }
             }
+            return token.setType(EXPR_STRING_END)
+                        .setValue(modifiers)
+                        .setLength(endChars.length() + modifierSb.length());
           }
-          return token.setType(EXPR_STRING_END)
-                      .setValue(modifiers)
-                      .setLength(endChars.length() + modifierSb.length());
         }
         break;
       }
-
+      case '"': {
+        if (charsAtEquals(0, endChars.length(), endChars)) {
+          advance(endChars.length());
+          stringState.pop();
+          inString = false;
+          return token.setType(EXPR_STRING_END).setLength(endChars.length());
+        }
+        break;
+      }
       case '\n': {
         if (!newLinesAllowed()) {
           throw new CompileError("Unexpected new line within single line string", createToken());
@@ -750,6 +773,7 @@ public class Tokeniser {
 
     new Symbol("'", SINGLE_QUOTE),
     new Symbol("\"", DOUBLE_QUOTE),
+    new Symbol("s/", REGEX_SUBST_START),
     new Symbol("\n", EOL),
 
     // Keywords

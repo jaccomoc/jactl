@@ -1836,10 +1836,34 @@ class CompilerTest {
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([a-z])./g && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
     test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
+
+    test("def it = 'abcd'; def x = ''; /([a-z])/f and x += $1; /([a-z])/f and x += $1; x", "aa");
   }
 
-  @Test public void testStuff() {
-    //debug = true;
+  @Test public void regexSubstitute() {
+    test("def it = 'abc'; s/a/x/", "xbc");
+    test("def it = 'abc'; s/a/x/; it", "xbc");
+    test("String x = 'abc'; x =~ s/a/x/", "xbc");
+    test("String x = 'abc'; x =~ s/a/x/; x", "xbc");
+    test("def x = [a:'abc']; x.a =~ s/a/x/", "xbc");
+    test("def x = [a:'abc']; x.a =~ s/a/x/; x.a", "xbc");
+    test("def it = 'abaac'; s/a/x/g", "xbxxc");
+    test("def it = 'abaac'; s/a/x/g; it", "xbxxc");
+    test("String x = 'abaac'; x =~ s/a/x/g", "xbxxc");
+    test("String x = 'abaac'; x =~ s/a/x/g; x", "xbxxc");
+    test("def x = [a:'abaac']; x.a =~ s/a/x/g", "xbxxc");
+    test("def x = [a:'abaac']; x.a =~ s/a/x/fg", "xbxxc");
+    test("def x = [a:'abaac']; x.a =~ s/a/x/fg; x.a", "abaac");
+    test("def x = [a:'abaac']; x.a =~ s/a/x/g; x.a", "xbxxc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/ig; x.a", "xabxaxAc");
+    testError("def x = [a:'abaAc']; x.a =~ s/(A)/x$1$2/ig; x.a", "no group");
+    testError("def x = [a:'abc']; (x.a + 'xyz') =~ s/a/x/; x.a", "invalid lvalue");
+    test("def it = 'abaac'; s/a//g", "bc");
+    test("def it = 'abaac'; s/a//g; it", "bc");
+    test("def it = 'abaac'; s///g", "abaac");
+    test("def it = 'abaac'; s///g; it", "abaac");
+    test("def it = 'abaac'; s//a/g", "aaabaaaaaca");
+    test("def it = 'abaac'; s//a/g; it", "aaabaaaaaca");
   }
 
   @Test public void replaceAll() {

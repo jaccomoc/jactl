@@ -653,7 +653,7 @@ public class Parser {
 
       // Check for lvalue for assignment operators
       if (operator.getType().isAssignmentLike()) {
-        expr = convertToLValue(expr, operator, rhs, false);
+        expr = convertToLValue(expr, operator, rhs, false, true);
       }
       else {
         // Check for '.' and '?.' where we treat identifiers as literals for field access.
@@ -668,11 +668,23 @@ public class Parser {
         // by default we need to strip off the "it =~" and replace with current one
         if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
           if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
-            Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
+            if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
+              throw new CompileError("Operator '!~' cannot be used with regex substitution", operator);
+            }
+            var regex = (Expr.RegexMatch) rhs;
             regex.left = expr;
             regex.operator = operator;
             regex.implicitItMatch = false;
             expr = regex;
+          }
+          else
+          if (isImplicitRegexSubstitute(rhs)) {
+            if (operator.is(BANG_GRAVE)) {
+              throw new CompileError("Operator '!~' cannot be used with regex substitution", operator);
+            }
+            var regexSubst = (Expr.RegexSubst)((Expr.VarOpAssign)rhs).expr;
+            regexSubst.implicitItMatch = false;
+            expr = convertToLValue(expr, operator, regexSubst, false, false);
           }
           else {
             expr = new Expr.RegexMatch(expr, operator, rhs, "", false);
@@ -689,6 +701,14 @@ public class Parser {
     }
 
     return expr;
+  }
+
+  private boolean isImplicitRegexSubstitute(Expr rhs) {
+    if (rhs instanceof Expr.VarOpAssign) {
+      Expr expr = ((Expr.VarOpAssign) rhs).expr;
+      return expr instanceof Expr.RegexSubst && ((Expr.RegexSubst) expr).implicitItMatch;
+    }
+    return false;
   }
 
   /**
@@ -720,7 +740,7 @@ public class Parser {
         //   --a.b.c ==> a.b.c -= 1
         // That way we can use the lvalue mechanism of creating missing fields if
         // necessary.
-        expr = convertToLValue(unary, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),false);
+        expr = convertToLValue(unary, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)), false, true);
       }
       else {
         expr = new Expr.PrefixUnary(operator, unary);
@@ -740,7 +760,7 @@ public class Parser {
         // That way we can use the lvalue mechanism of creating missing fields if
         // necessary.
         // NOTE: for postfix we need the beforeValue if result is being used.
-        expr = convertToLValue(expr, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)),true);
+        expr = convertToLValue(expr, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)), true, true);
       }
       else {
         expr = new Expr.PostfixUnary(expr, previous());
@@ -811,7 +831,8 @@ public class Parser {
     if (matchAny(INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
                  STRING_CONST, TRUE, FALSE, NULL)) { return new Expr.Literal(previous());         }
-    if (peek().is(SLASH, EXPR_STRING_START))       { return  exprString();                         }
+    if (peek().is(SLASH, EXPR_STRING_START))       { return exprString();                         }
+    if (matchAny(REGEX_SUBST_START))               { return regexSubstitute();                    }
     if (matchAny(IDENTIFIER))                      { return new Expr.Identifier(previous());      }
     if (peek().is(LEFT_SQUARE,LEFT_BRACE))         { if (isMapLiteral()) { return mapLiteral(); } }
     if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
@@ -891,7 +912,7 @@ public class Parser {
   }
 
   /**
-   *# exprString -> EXPR_STRING_START ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END
+   *# exprString -> EXPR_STRING_START ( "$" IDENTIFIER | "${" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END
    *#             | "/" ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * "/";
    * We parse an expression string delimited by " or """ or /
    * For the / version we treat as a multi-line regular expression and don't support escape chars.
@@ -901,7 +922,7 @@ public class Parser {
     Expr.ExprString exprString = new Expr.ExprString(startToken);
     if (startToken.is(EXPR_STRING_START)) {
       if (!startToken.getStringValue().isEmpty()) {
-        // <></>urn the EXPR_STRING_START into a string literal and make it the first in our expr list
+        // Turn the EXPR_STRING_START into a string literal and make it the first in our expr list
         exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, startToken)));
       }
     }
@@ -909,13 +930,37 @@ public class Parser {
       // Tell tokeniser that the SLASH was actually the start of a regex expression string
       tokeniser.startRegex();
     }
-    while (!matchAny(EXPR_STRING_END)) {
+    parseExprString(exprString, EXPR_STRING_END, true);
+    // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
+    // on our own somewhere. We build "it =~ /regex" and if we are actually part of "x =~ /regex/"
+    // our parent (parseExpression()) will convert back to "x =~ /regex/".
+    // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
+    // be a regular expression string then we will fix the problem then.
+    if (startToken.is(SLASH)) {
+      return new Expr.RegexMatch(new Expr.Identifier(new Token(IDENTIFIER, startToken).setValue(Utils.IT_VAR)),
+                                 new Token(EQUAL_GRAVE, startToken),
+                                 exprString,
+                                 previous().getStringValue(),   // modifiers
+                                 true);
+    }
+    return exprString;
+  }
+
+  private void parseExprString(Expr.ExprString exprString, TokenType endToken, boolean expandCaptureVars) {
+    while (!matchAny(endToken)) {
       if (matchAny(STRING_CONST) && !previous().getStringValue().isEmpty()) {
         exprString.exprList.add(new Expr.Literal(previous()));
       }
       else
       if (matchAny(IDENTIFIER)) {
-        exprString.exprList.add(new Expr.Identifier(previous()));
+        Token identifier = previous();
+        if (identifier.getStringValue().charAt(0) == '$' && !expandCaptureVars) {
+          exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, identifier)
+                                                     .setValue(identifier.getStringValue())));
+        }
+        else {
+          exprString.exprList.add(new Expr.Identifier(identifier));
+        }
       }
       else
       if (matchAny(LEFT_BRACE)) {
@@ -925,15 +970,34 @@ public class Parser {
         unexpected("Error in expression string");
       }
     }
-    // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
-    // on our own somewhere. We build "it =~ /regex" and if we are actually part of "x =~ /regex/"
-    // our parent (parseExpression()) will convert back to "x =~ /regex/".
-    // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
-    // be a regular expression string then we will fix the problem then.
-    if (startToken.is(SLASH)) {
-      return createItMatch(exprString, previous());
+  }
+
+  /**
+   *# regexSubstitute -> REGEX_SUBST_START ( "$" IDENTIFIER | "${" blockExpr "}" | STRING_CONST ) *
+   *                        REGEX_REPLACE ( "$" IDENTIFIER | "${" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END;
+   */
+  private Expr regexSubstitute() {
+    Token start = previous();
+    Expr.ExprString pattern = new Expr.ExprString(previous());
+    parseExprString(pattern, REGEX_REPLACE, true);
+    Expr.ExprString replace = new Expr.ExprString(previous());
+    parseExprString(replace, EXPR_STRING_END, false);
+    final var itVar       = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
+    final var operator    = new Token(EQUAL_GRAVE, start);
+    final var modifiers   = previous().getStringValue();
+    final var regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace);
+    // Modifier 'f' forces the substitute to be a value and not override the original variable
+    if (modifiers.indexOf('f') != -1) {
+      return regexSubst;
     }
-    return exprString;
+    else {
+      // Otherwise assign the result back to the original variable/field
+      return convertToLValue(itVar,
+                             operator,
+                             regexSubst,
+                             false,
+                             false);
+    }
   }
 
   /**
@@ -1300,27 +1364,38 @@ public class Parser {
    * is not there we automatically create the entry.
    * The other thing to note is that operators such as '+=', '-=', etc need the value of the
    * left hand side in order to compute the final value. The rules are that something like
-   *    x += 5
+   * <pre>  x += 5</pre>
    * is equivalent to
-   *    x = x + 5
+   * <pre>   x = x + 5</pre>
    * and similarly for all other such operators.
+   * <p>
    * We could, therefore, just mutate our AST to replace the 'x += 5' with the equivalent of
    * 'x = x + 5' but for situations like 'a.b.c.d += 5' we have a couple of issues:
-   *  1. We would duplicate the work to lookup all of the intermediate fields that result in
-   *     a.b.c.d, and
-   *  2. If a.b.c.d did no yet exist and we want to create it as part of the assigment we need
-   *     to create it with a suitable default value before it can be used on the rhs.
+   * </p>
+   * <ol>
+   *  <li>We would duplicate the work to lookup all of the intermediate fields that result in
+   *      a.b.c.d, and</li>
+   *  <li>If a.b.c.d did no yet exist and we want to create it as part of the assigment we need
+   *      to create it with a suitable default value before it can be used on the rhs.</li>
+   * </ol>
    * A better solution is to replace our binary expression with something like this:
-   *   new OpAssign(parent = new Binary('a.b.c'),
-   *                accessOperator = '.',
-   *                field = new Expr('d'),
-   *                expr = new Binary(Noop, '+', '5'))
+   * <pre>  new OpAssign(parent = new Binary('a.b.c'),
+   *           accessOperator = '.',
+   *           field = new Expr('d'),
+   *           expr = new Binary(Noop, '+', '5'))</pre>
    * This way we now have a component in our AST that can do all the work of finding the parent
    * and creating any missing subfields just once and load the original value (or create a default
    * value) before evaluating the rest of the expression. Finally it can store the result back
    * into the right field (or element) of the Map/List.
+   * @param errorIfNotLValue    true if we should throw an error if value is not a valid LValue
+   *                            false if we should just return null
+   * @param variable            the lhs of the assignment
+   * @param assignmentOperator  the operator
+   * @param rhs                 the rhs of the operator
+   * @param beforeValue         true if result should be the before value (for postfix ++,--)
+   * @param createIfMissing     true if missing fields in field path should be created
    */
-  private Expr convertToLValue(Expr variable, Token assignmentOperator, Expr rhs, boolean beforeValue) {
+  private Expr convertToLValue(Expr variable, Token assignmentOperator, Expr rhs, boolean beforeValue, boolean createIfMissing) {
     // Get the arithmetic operator type for assignments such as +=, -=
     // If assignment is just = or ?= then arithmeticOp will be null.
     TokenType arithmeticOp   = arithmeticOperator.get(assignmentOperator.getType());
@@ -1329,12 +1404,19 @@ public class Parser {
     // (map or list lookup), or fieldPath is just an identifier for a simple variable.
     if (variable instanceof Expr.Identifier) {
       if (arithmeticOp == null) {
+        // Just a standard = or ?=
         return new Expr.VarAssign((Expr.Identifier) variable, assignmentOperator, rhs);
       }
-      Expr.Binary expr = new Expr.Binary(new Expr.Noop(assignmentOperator), new Token(arithmeticOp, assignmentOperator), rhs);
-      expr.originalOperator = assignmentOperator;
-      return new Expr.VarOpAssign((Expr.Identifier) variable, assignmentOperator,
-                                  expr);
+      final var leftNoop = new Expr.Noop(assignmentOperator);
+      if (assignmentOperator.is(EQUAL_GRAVE)) {
+        ((Expr.RegexSubst)rhs).left = leftNoop;
+      }
+      else {
+        var expr = new Expr.Binary(leftNoop, new Token(arithmeticOp, assignmentOperator), rhs);
+        expr.originalOperator = assignmentOperator;
+        rhs = expr;
+      }
+      return new Expr.VarOpAssign((Expr.Identifier) variable, assignmentOperator, rhs);
     }
 
     if (!(variable instanceof Expr.Binary)) {
@@ -1352,7 +1434,9 @@ public class Parser {
 
     // Now set createIfMissing flag on all field access operations (but only those at the "top" level)
     // and only up to the last field. So a.b.c only has the a.b lookup changed to set "createIfMissing".
-    setCreateIfMissing(parent);
+    if (createIfMissing) {
+      setCreateIfMissing(parent);
+    }
 
     Token     accessOperator = fieldPath.operator;
     Expr      field          = fieldPath.right;
@@ -1367,10 +1451,16 @@ public class Parser {
     // will come from the field value) and with the arithmetic op as the operation and
     // the original rhs as the new rhs of the binary operation
     Token operator = new Token(arithmeticOp, assignmentOperator);
-    Expr.Binary binaryExpr = new Expr.Binary(new Expr.Noop(operator), operator, rhs);
-    binaryExpr.originalOperator = assignmentOperator;
-    Expr.OpAssign expr = new Expr.OpAssign(parent, accessOperator, field, assignmentOperator,
-                                           binaryExpr);
+    final var   leftNoop       = new Expr.Noop(operator);
+    if (operator.is(EQUAL_GRAVE)) {
+      ((Expr.RegexSubst)rhs).left = leftNoop;
+    }
+    else {
+      Expr.Binary binaryExpr = new Expr.Binary(leftNoop, operator, rhs);
+      binaryExpr.originalOperator = assignmentOperator;
+      rhs = binaryExpr;
+    }
+    Expr.OpAssign expr = new Expr.OpAssign(parent, accessOperator, field, assignmentOperator, rhs);
 
     // For postfix ++ and -- of fields where we convert to a.b.c += 1 etc we need the pre value
     // (before the inc/dec) as the result
@@ -1388,19 +1478,6 @@ public class Parser {
     }
   }
 
-  private Expr.RegexMatch createItMatch(Expr expr, Token regexEnd) {
-    Token start = ((Expr.ExprString) expr).exprStringStart;
-    Expr.Identifier itIdent = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
-    itIdent.optional = true;   // Optional since if "it" does not exist we will use regex as a string
-                               // rather than try to match
-    final var modifiers = regexEnd.getStringValue();
-    return new Expr.RegexMatch(itIdent,
-                               new Token(EQUAL_GRAVE, start),
-                               expr,
-                               modifiers,
-                               true);
-  }
-
   private static final Map<TokenType,TokenType> arithmeticOperator =
     Map.of(PLUS_PLUS,     PLUS,
            MINUS_MINUS,   MINUS,
@@ -1408,5 +1485,6 @@ public class Parser {
            MINUS_EQUAL,   MINUS,
            STAR_EQUAL,    STAR,
            SLASH_EQUAL,   SLASH,
-           PERCENT_EQUAL, PERCENT);
+           PERCENT_EQUAL, PERCENT,
+           EQUAL_GRAVE,   EQUAL_GRAVE);
 }

@@ -52,6 +52,7 @@ public enum TokenType {
 
   //= String expressions
   EXPR_STRING_START, EXPR_STRING_END,
+  REGEX_SUBST_START, REGEX_REPLACE,
 
   //= Keywords
   DEF, VAR, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, VOID, MAP, LIST,

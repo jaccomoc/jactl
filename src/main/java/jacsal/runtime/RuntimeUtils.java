@@ -516,8 +516,6 @@ public class RuntimeUtils {
             case 'i': flags += Pattern.CASE_INSENSITIVE; break;
             case 'm': flags += Pattern.MULTILINE;        break;
             case 's': flags += Pattern.DOTALL;           break;
-            case 'g': /* no-op */                        break;
-            case 'f': /* no-op */                        break;
             default: throw new IllegalStateException("Internal error: unexpected regex modifier '" + modifiers.charAt(i) + "'");
           }
         }
@@ -542,24 +540,42 @@ public class RuntimeUtils {
    * We update the Matcher in the RegexMatcher object if the Matcher changes.
    * @return true if regex find/match succeeds
    */
-  public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, String modifiers, String source, int offset) {
-    // Check to see if the Matcher has the same source string (note we use == not .equals())
-    if (regexMatcher.str == str) {
-      Matcher matcher = regexMatcher.matcher;
-      if (regex.equals(matcher.pattern().pattern())) {
+  public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, boolean globalModifier, String modifiers, String source, int offset) {
+    if (globalModifier) {
+      // Check to see if the Matcher has the same source string (note we use == not .equals())
+      if (regexMatcher.str == str) {
+        Matcher matcher = regexMatcher.matcher;
+        if (regex.equals(matcher.pattern().pattern())) {
+          return regexMatcher.matched = matcher.find();
+        }
+        // Same string but regex has changed
+        int pos = matcher.end();
+        regexMatcher.matcher = matcher = getMatcher(str, regex, modifiers, source, offset);
         return regexMatcher.matched = matcher.find();
       }
-      // Same string but regex has changed
-      int pos = matcher.end();
-      regexMatcher.matcher = matcher = getMatcher(str, regex, modifiers, source, offset);
-      return regexMatcher.matched = matcher.find();
     }
 
-    // Different string so start again from scratch
+    // Different string or no global modifier so start again from scratch
     Matcher matcher = getMatcher(str, regex, modifiers, source, offset);
     regexMatcher.matcher = matcher;
     regexMatcher.str = str;
     return regexMatcher.matched = matcher.find();
+  }
+
+  public static String regexSubstitute(RegexMatcher regexMatcher, String str, String regex, String replace, boolean globalModifier, String modifiers, String source, int offset) {
+    Matcher matcher = regexMatcher.matcher = getMatcher(str, regex, modifiers, source, offset);
+    regexMatcher.str = null;   // We never want to continue regex search after a substitute
+    try {
+      if (globalModifier) {
+        return matcher.replaceAll(replace);
+      }
+      else {
+        return matcher.replaceFirst(replace);
+      }
+    }
+    catch (Exception e) {
+      throw new RuntimeError("Error during regex substitution: " + e.getMessage(), source, offset, e);
+    }
   }
 
   public static String regexGroup(RegexMatcher regexMatcher, int group) {
