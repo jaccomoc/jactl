@@ -1308,6 +1308,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitBlock(Expr.Block expr) {
+    compile(expr.block);
+    loadConst(true);
+    return null;
+  }
+
   ///////////////////////////////////////////////////////////////
 
   private void invokeMethodHandle() {

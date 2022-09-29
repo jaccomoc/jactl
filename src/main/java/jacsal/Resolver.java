@@ -815,6 +815,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type = expr.funDecl.returnType;
   }
 
+  @Override public JacsalType visitBlock(Expr.Block expr) {
+    resolve(expr.block);
+    return expr.type = BOOLEAN;
+  }
+
   ////////////////////////////////////////////
 
   private void insertStmt(Stmt.VarDecl declStmt) {

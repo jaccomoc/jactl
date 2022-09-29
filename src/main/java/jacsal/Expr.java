@@ -346,7 +346,7 @@ abstract class Expr {
     // Which heap locals from our parent we need passed in to us
     LinkedHashMap<String,Expr.VarDecl> heapLocalParams = new LinkedHashMap<>();
 
-    // Remember earlies (in the code) forward reference to us so we can make sure that
+    // Remember earliest (in the code) forward reference to us so we can make sure that
     // no variables we close over are declared after that reference
     Token earliestForwardReference;
 
@@ -504,6 +504,22 @@ abstract class Expr {
     @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
   }
 
+  /**
+   * Used to turn a list of statements into an expression so that we can support "do {...}":
+   *   x < max or do { x++; y-- } and return x + y;
+   */
+  static class Block extends Expr {
+    Token      token;
+    Stmt.Block block;
+    Block(Token token, Stmt.Block block) {
+      this.token = token;
+      this.block = block;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
+    @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + "]"; }
+  }
+
   ////////////////////////////////////////////////////////////////////
 
   // = Used when generating wrapper method
@@ -598,6 +614,7 @@ abstract class Expr {
     T visitClosure(Closure expr);
     T visitReturn(Return expr);
     T visitPrint(Print expr);
+    T visitBlock(Block expr);
     T visitArrayLength(ArrayLength expr);
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);

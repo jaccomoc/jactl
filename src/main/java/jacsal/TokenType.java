@@ -61,7 +61,7 @@ public enum TokenType {
   IMPORT, AS, TRUE, FALSE, NULL, IN, BANG_IN,
   INSTANCE_OF, BANG_INSTANCE_OF,
   RETURN,
-  AND, OR, NOT,
+  AND, OR, NOT, DO,
   PRINT, PRINTLN,
 
   //= Special

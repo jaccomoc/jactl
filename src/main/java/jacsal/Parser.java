@@ -816,6 +816,7 @@ public class Parser {
    *#          | IDENTIFIER
    *#          | listOrMapLiteral
    *#          | "(" expression ")"
+   *#          | "do" "{" block "}"
    *#          | "{" closure "}"
    *#          ;
    */
@@ -838,7 +839,11 @@ public class Parser {
     if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
     if (matchAny(LEFT_PAREN))                      { return nestedExpression.get();               }
     if (matchAny(LEFT_BRACE))                      { return closure();                            }
-
+    if (matchAny(DO)) {
+      matchAny(EOL);
+      Token leftBrace = expect(LEFT_BRACE);
+      return new Expr.Block(leftBrace, block(RIGHT_BRACE));
+    }
     return unexpected("Expecting literal or identifier or bracketed expression");
   }
 

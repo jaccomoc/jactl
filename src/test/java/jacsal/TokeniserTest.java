@@ -133,6 +133,7 @@ class TokeniserTest {
     doTest.accept("false", FALSE);
     doTest.accept("null", NULL);
     doTest.accept("print", PRINT);
+    doTest.accept("do", DO);
     doTest.accept("println", PRINTLN);
     doTest.accept("continue", CONTINUE);
     doTest.accept("break", BREAK);

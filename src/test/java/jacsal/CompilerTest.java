@@ -1897,9 +1897,12 @@ class CompilerTest {
     test("def it = 'abc'; s/([a-z])/\\$1\\$1${$1 + $1}/g", "$1$1aa$1$1bb$1$1cc");
   }
 
-  @Test public void testStuff() {
-    //debug = true;
-    test("def a = 'a'; def it = 'abc'; s/([a-z])/$$a$$1/g", "$a$1$a$1$a$1");
+  @Test public void doBlock() {
+    test("true and do { true } and return true", true);
+    test("true and do { for(int i=0;i<10;i++); false } and return true", true);
+    test("true and do { for(int i=0;i<10;i++); return false } and return true", false);
+    test("def it = 'abc'; /ab/f and do { /c/f and return false } and return true", false);
+    test("def x; def it = 'abc'; /ab/f and do { it = 'xyz'; x = 'x' } and return \"$it$x\"", "xyzx");
   }
 
   @Test public void filter() {

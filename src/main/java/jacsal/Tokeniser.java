@@ -821,6 +821,7 @@ public class Tokeniser {
     new Symbol("and", AND),
     new Symbol("not", NOT),
     new Symbol("or", OR),
+    new Symbol("do", DO),
     new Symbol("print", PRINT),
     new Symbol("println", PRINTLN)
     //    new Symbol("'", SINGLE_QUOTE),
