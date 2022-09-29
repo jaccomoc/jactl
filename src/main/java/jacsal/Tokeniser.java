@@ -77,7 +77,8 @@ public class Tokeniser {
     String  endChars;           // Char sequence which terminates string
     boolean allowNewLines;      // Whether we currently allow newlines within our expression string
     boolean escapeChars;        // Whether escape chars are supported
-    boolean isSubstString;      // True if in s/.../.../imsg substituion string
+    boolean isSubstitute;       // True if in pattern part of s/.../.../
+    boolean isReplace;          // True if in s/.../.../imsg replacement string
     int     braceLevel;         // At what level of brace nesting does the expression string exist
   }
 
@@ -167,12 +168,13 @@ public class Tokeniser {
     pushStringState(endChars, false);
   }
 
-  private void pushStringState(String endChars, boolean isSubstString) {
+  private void pushStringState(String endChars, boolean isSubstitute) {
     StringState state = new StringState();
     state.endChars = endChars;
     state.allowNewLines = newLinesAllowed() && !endChars.equals("'") && !endChars.equals("\"");
     state.escapeChars = !endChars.equals("/");
-    state.isSubstString = isSubstString;
+    state.isSubstitute = isSubstitute;
+    state.isReplace = false;
     inString = true;
     stringState.push(state);
   }
@@ -250,7 +252,7 @@ public class Tokeniser {
         // Work out whether we are a multi line string literal or not
         boolean tripleQuoted = available(2) && charAt(0) == '\'' && charAt(1) == '\'';
         advance(tripleQuoted ? 2 : 0);
-        Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true);
+        Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true, false);
         advance(tripleQuoted ? 3 : 1);
         return stringToken;
       }
@@ -263,7 +265,7 @@ public class Tokeniser {
         String  endChars    = tripleQuote ? "\"\"\"" : "\"";
         pushStringState(endChars);
         advance(tripleQuote ? 2 : 0);
-        token = parseString(true, endChars, newLinesAllowed(), true);
+        token = parseString(true, endChars, newLinesAllowed(), true, false);
         return token.setType(EXPR_STRING_START);
       }
       case REGEX_SUBST_START: {
@@ -330,7 +332,7 @@ public class Tokeniser {
     StringState currentStringState = stringState.peek();
     String      endChars           = currentStringState.endChars;
     boolean     escapeChars        = currentStringState.escapeChars;
-    boolean     isSubstString      = currentStringState.isSubstString;
+    boolean     isSubstitute       = currentStringState.isSubstitute;
     switch (c) {
       case '$': {
         // We either have an identifer following or as '{'
@@ -362,9 +364,10 @@ public class Tokeniser {
       case '/': {
         if (charsAtEquals(0, endChars.length(), endChars)) {
           advance(1);
-          if (isSubstString) {
+          if (isSubstitute) {
             // Return token to indicate we have reached end of pattern part of s/pattern/replacement/
-            currentStringState.isSubstString = false;   // So next '/' will be treated as end
+            currentStringState.isSubstitute = false;   // So next '/' will be treated as end
+            currentStringState.isReplace = true;
             return token.setType(REGEX_REPLACE).setLength(1);
           }
           else {
@@ -407,7 +410,7 @@ public class Tokeniser {
       }
     }
     // No embedded expression or end of string found so parse as STRING_CONST
-    return parseString(true, endChars, newLinesAllowed(), escapeChars);
+    return parseString(true, endChars, newLinesAllowed(), escapeChars, currentStringState.isReplace);
   }
 
   /**
@@ -603,7 +606,7 @@ public class Tokeniser {
     }
   }
 
-  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars) {
+  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace) {
     char endChar = endChars.charAt(0);
     Token token = createToken();
     StringBuilder sb = new StringBuilder();
@@ -628,15 +631,21 @@ public class Tokeniser {
           break;
         }
         case '\\': {
+          if (!available(1)) { throw new CompileError("Unexpected end of file after '\\' in string", createToken()); }
           if (escapeChars) {
-            if (!available(1)) { throw new CompileError("Unexpected end of file after '\\' in string", createToken()); }
             advance(1);
             c = escapedChar(charAt(0));
           }
           else {
             // Only thing we can escape is the end of string and $. Otherwise \ is just a \
             int nextChar = charAt(1);
-            if (available(1) && (nextChar == endChar || nextChar == '$')) {
+            // For replacement strings, if the $ is escaped we leave as \$ to tell regex substitution
+            // not to interpret \$1 as $1, for example
+            if (isReplace && nextChar == '$') {
+              sb.append('\\');
+            }
+
+            if (nextChar == endChar || nextChar == '$') {
               advance(1);
               c = nextChar;
             }

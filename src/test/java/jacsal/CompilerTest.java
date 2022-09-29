@@ -1862,6 +1862,12 @@ class CompilerTest {
     test("def it = 'abaac'; s///g; it", "abaac");
     test("def it = 'abaac'; s//a/g", "aaabaaaaaca");
     test("def it = 'abaac'; s//a/g; it", "aaabaaaaaca");
+    test("def it = 'ab\\ncd'; /b$/mf", true);
+    test("def it = 'ab\\n#d'; /b$\\n#/mf", true);
+    test("def it = 'ab\\ncd'; /b\\$\\nc/mf", true);
+    test("def it = 'ab\\ncd'; /b\\$.c/smf", true);
+    test("def it = 'ab\\ncd'; /b$.c/smf", true);
+    test("def it = 'ab\\ncd'; /b.c/smf", true);
   }
 
   @Test public void regexSubstituteExprString() {
@@ -1886,6 +1892,14 @@ class CompilerTest {
     test("def x = 'abcdefghijk123456789xy11'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/X$10$11/ig; x", "XjkXxy11");
     testError("def x = [a:'abaAc']; x.a =~ s/(A)/x$1$2/ig; x.a", "no group");
     test("def a = 'a'; def it = 'abcd'; s/(.)(.)/${a}${$1}${$2*2 + $1*2}/g", "aabbaaacddcc");
+    test("def a = 'a'; def it = 'abc'; s/([a-z])/\\$a\\$1/g", "$a$1$a$1$a$1");
+    test("def it = 'abc'; s/([a-z])/\\$1\\$1/g", "$1$1$1$1$1$1");
+    test("def it = 'abc'; s/([a-z])/\\$1\\$1${$1 + $1}/g", "$1$1aa$1$1bb$1$1cc");
+  }
+
+  @Test public void testStuff() {
+    //debug = true;
+    test("def a = 'a'; def it = 'abc'; s/([a-z])/$$a$$1/g", "$a$1$a$1$a$1");
   }
 
   @Test public void filter() {
