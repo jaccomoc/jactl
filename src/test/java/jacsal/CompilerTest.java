@@ -2053,10 +2053,24 @@ class CompilerTest {
     test("def x = [0,1,2,3,4]; def y = [a:7.5D]; x[--y.a - y.a-- + --y.a - 3]", 1);
     test("def x = [0,1,2,3,4]; def y = [a:7L]; x[--y.a - y.a-- + --y.a - 3]", 1);
     test("def x = [0,[1,2,3],4]; def y = 2; x[1 + y + 3 - y - 3][y/2]", 2);
-  }
 
-  /*@Test*/ public void listMapAddition() {
-    test("List list = []; list += [1,2,3]", List.of(1,2,3));
+    test("def x = [1,2,3]; def y = [2,3]; x == y", false);
+    test("def x = [1,2,3]; def y = [1,2,3]; x == y", true);
+    test("def x = [a:1,b:2,c:3]; def y = [b:2,c:3]; x == y", false);
+    test("def x = [a:1,b:2,c:3]; def y = [b:2,a:1,c:3]; x == y", true);
+    test("[1,2,3] == [2,3]", false);
+    test("[1,2,3] == [1,2,3]", true);
+    test("[a:1,b:2,c:3] == [b:2,c:3]", false);
+    test("[a:1,b:2,c:3] == [b:2,a:1,c:3]", true);
+
+    test("def x = [1,2,3]; def y = [2,3]; x != y", true);
+    test("def x = [1,2,3]; def y = [1,2,3]; x != y", false);
+    test("def x = [a:1,b:2,c:3]; def y = [b:2,c:3]; x != y", true);
+    test("def x = [a:1,b:2,c:3]; def y = [b:2,a:1,c:3]; x != y", false);
+    test("[1,2,3] != [2,3]", true);
+    test("[1,2,3] != [1,2,3]", false);
+    test("[a:1,b:2,c:3] != [b:2,c:3]", true);
+    test("[a:1,b:2,c:3] != [b:2,a:1,c:3]", false);
   }
 
   @Test public void fieldAssignments() {
@@ -2398,59 +2412,66 @@ class CompilerTest {
   BiConsumer<String,String> comparisonTests = (smaller, bigger) -> {
     String init = "int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
                   "def di3=3; def dl5=5L; def dd7=7.0D; def ddec13=13.0; def dsabc = 'abc';";
-    test(init + "null == " + bigger, false);
-    test(init + bigger + " == null", false);
-    test(init + "null == " + smaller, false);
-    test(init + smaller + " == null", false);
-    test(init + smaller + " == " + bigger, false);
-    test(init + smaller + " == " + smaller, true);
-    test(init + bigger + " == " + smaller, false);
-    test(init + bigger + " == " + bigger, true);
+    BiConsumer<String,Object> _test = (code,expected) -> test(init + code, expected);
 
-    test(init + "null != " + bigger, true);
-    test(init + bigger + " != null", true);
-    test(init + "null != " + smaller, true);
-    test(init + smaller + " != null", true);
-    test(init + smaller + " != " + bigger, true);
-    test(init + smaller + " != " + smaller, false);
-    test(init + bigger + " != " + smaller, true);
-    test(init + bigger + " != " + bigger, false);
+    _test.accept("null == " + bigger, false);
+    _test.accept(bigger + " == null", false);
+    _test.accept("null == " + smaller, false);
+    _test.accept(smaller + " == null", false);
+    _test.accept(smaller + " == " + bigger, false);
+    _test.accept(smaller + " == " + smaller, true);
+    _test.accept(bigger + " == " + smaller, false);
+    _test.accept(bigger + " == " + bigger, true);
 
-    test(init + "null < " + bigger, true);
-    test(init + bigger + " < null", false);
-    test(init + "null < " + smaller, true);
-    test(init + smaller + " < null", false);
-    test(init + smaller + " < " + bigger, true);
-    test(init + smaller + " < " + smaller, false);
-    test(init + bigger + " < " + smaller, false);
-    test(init + bigger + " < " + bigger, false);
+    _test.accept("null != " + bigger, true);
+    _test.accept(bigger + " != null", true);
+    _test.accept("null != " + smaller, true);
+    _test.accept(smaller + " != null", true);
+    _test.accept(smaller + " != " + bigger, true);
+    _test.accept(smaller + " != " + smaller, false);
+    _test.accept(bigger + " != " + smaller, true);
+    _test.accept(bigger + " != " + bigger, false);
 
-    test(init + "null <= " + bigger, true);
-    test(init + bigger + " <= null", false);
-    test(init + "null <= " + smaller, true);
-    test(init + smaller + " <= null", false);
-    test(init + smaller + " <= " + bigger, true);
-    test(init + smaller + " <= " + smaller, true);
-    test(init + bigger + " <= " + smaller, false);
-    test(init + bigger + " <= " + bigger, true);
+    _test.accept("null < " + bigger, true);
+    _test.accept(bigger + " < null", false);
+    _test.accept("null < " + smaller, true);
+    _test.accept(smaller + " < null", false);
+    _test.accept(smaller + " < " + bigger, true);
+    _test.accept(smaller + " < " + smaller, false);
+    _test.accept(bigger + " < " + smaller, false);
+    _test.accept(bigger + " < " + bigger, false);
 
-    test(init + "null > " + bigger, false);
-    test(init + bigger + " > null", true);
-    test(init + "null > " + smaller, false);
-    test(init + smaller + " > null", true);
-    test(init + smaller + " > " + bigger, false);
-    test(init + smaller + " > " + smaller, false);
-    test(init + bigger + " > " + smaller, true);
-    test(init + bigger + " > " + bigger, false);
+    _test.accept("null <= " + bigger, true);
+    _test.accept(bigger + " <= null", false);
+    _test.accept("null <= " + smaller, true);
+    _test.accept(smaller + " <= null", false);
+    _test.accept(smaller + " <= " + bigger, true);
+    _test.accept(smaller + " <= " + smaller, true);
+    _test.accept(bigger + " <= " + smaller, false);
+    _test.accept(bigger + " <= " + bigger, true);
 
-    test(init + "null >= " + bigger, false);
-    test(init + bigger + " >= null", true);
-    test(init + "null >= " + smaller, false);
-    test(init + smaller + " >= null", true);
-    test(init + smaller + " >= " + bigger, false);
-    test(init + smaller + " >= " + smaller, true);
-    test(init + bigger + " >= " + smaller, true);
-    test(init + bigger + " >= " + bigger, true);
+    _test.accept("null > " + bigger, false);
+    _test.accept(bigger + " > null", true);
+    _test.accept("null > " + smaller, false);
+    _test.accept(smaller + " > null", true);
+    _test.accept(smaller + " > " + bigger, false);
+    _test.accept(smaller + " > " + smaller, false);
+    _test.accept(bigger + " > " + smaller, true);
+    _test.accept(bigger + " > " + bigger, false);
+
+    _test.accept("null >= " + bigger, false);
+    _test.accept(bigger + " >= null", true);
+    _test.accept("null >= " + smaller, false);
+    _test.accept(smaller + " >= null", true);
+    _test.accept(smaller + " >= " + bigger, false);
+    _test.accept(smaller + " >= " + smaller, true);
+    _test.accept(bigger + " >= " + smaller, true);
+    _test.accept(bigger + " >= " + bigger, true);
+
+    _test.accept(bigger + "<=>" + smaller, 1);
+    _test.accept(smaller + "<=>" + bigger, -1);
+    _test.accept(smaller + "<=>" + smaller, 0);
+    _test.accept(bigger + "<=>" + bigger, 0);
   };
 
   @Test public void constComparisons() {
@@ -2477,6 +2498,45 @@ class CompilerTest {
     comparisonTests.accept("'axcde'", "'axcdef'");
 
     comparisonTests.accept("4*2", "-3*-7");
+  }
+
+  @Test public void compareOperator() {
+    test("1 <=> null", 1);
+    test("null <=> null", 0);
+    test("null <=> 1", -1);
+    test("'' <=> null", 1);
+    test("null <=> ''", -1);
+    test("0 <=> null", 1);
+    test("null <=> 0", -1);
+    test("1L <=> null", 1);
+    test("null <=> 1L", -1);
+    test("1D <=> null", 1);
+    test("null <=> 1D", -1);
+    test("1.0 <=> null", 1);
+    test("null <=> 1.0", -1);
+
+    test("def x = 1; def y = null; x <=> y", 1);
+    test("def x = null; def y = null; x <=> y", 0);
+    test("def x = null; def y = 1; x <=> y", -1);
+    test("def x = ''; def y = null; x <=> y", 1);
+    test("def x = null; def y = ''; x <=> y", -1);
+    test("def x = 0; def y = null; x <=> y", 1);
+    test("def x = null; def y = 0; x <=> y", -1);
+    test("def x = 1L; def y = null; x <=> y", 1);
+    test("def x = null; def y = 1L; x <=> y", -1);
+    test("def x = 1D; def y = null; x <=> y", 1);
+    test("def x = null; def y = 1D; x <=> y", -1);
+    test("def x = 1.0; def y = null; x <=> y", 1);
+    test("def x = null; def y = 1.0; x <=> y", -1);
+
+    testError("[1,2,3] <=> [2,3,4]", "cannot compare");
+    testError("[a:1] <=> [:]", "cannot compare");
+    testError("[1,2,3] <=> 'xxx'", "cannot compare");
+    testError("[1,2,3] <=> 'xxx'", "cannot compare");
+  }
+
+  @Test public void  testStuff() {
+    test("1L <=> null", 1);
   }
 
   @Test public void expressionComparisons() {

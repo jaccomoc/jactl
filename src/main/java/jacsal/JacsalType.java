@@ -278,6 +278,17 @@ public class JacsalType {
       throw new CompileError("Type " + type1 + " cannot be compared to " + type2, operator);
     }
 
+    if (operator.is(COMPARE)) {
+      if (type1.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING,ANY) &&
+          type2.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING,ANY) &&
+          type1.equals(type2))                                 { return INT;     }
+      if (type1.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING) &&
+          type2.is(ANY))                                       { return INT;     }
+      if (type2.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING) &&
+          type1.is(ANY))                                       { return INT;     }
+      throw new CompileError("Cannot compare objects of type " + type1 + " and " + type2, operator);
+    }
+
     if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
       if (type1.is(ANY,STRING) && type2.is(ANY,STRING))          { return BOOLEAN;   }
       throw new CompileError("Cannot do regex match on types " + type1 + " and " + type2, operator);

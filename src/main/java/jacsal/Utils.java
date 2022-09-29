@@ -58,6 +58,19 @@ public class Utils {
     return methodName + "$$w";
   }
 
+  /**
+   * Return the numeric type which is the "greater" of the two based on this ordering:
+   *   int, long, double, BigDecimal
+   */
+  static JacsalType maxNumericType(JacsalType type1, JacsalType type2) {
+    if (!type1.isNumeric() || !type2.isNumeric()) { return null;    }
+    if (type1.is(DECIMAL)  || type2.is(DECIMAL))  { return DECIMAL; }
+    if (type1.is(DOUBLE)   || type2.is(DOUBLE))   { return DOUBLE;  }
+    if (type1.is(LONG)     || type2.is(LONG))     { return LONG;    }
+    if (type1.is(INT)      && type2.is(INT))      { return INT;     }
+    return null;
+  }
+
   static Object convertNumberTo(JacsalType type, Object number) {
     switch (type.getType()) {
       case INT:     return toInt(number);

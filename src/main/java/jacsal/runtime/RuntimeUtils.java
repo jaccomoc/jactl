@@ -33,6 +33,7 @@ public class RuntimeUtils {
   public static final String PLUS          = "+";
   public static final String MINUS         = "-";
   public static final String STAR          = "*";
+  public static final String COMPARE       = "<=>";
   public static final String SLASH         = "/";
   public static final String PERCENT       = "%";
   public static final String PLUS_EQUAL    = "+=";
@@ -84,6 +85,7 @@ public class RuntimeUtils {
       case STAR:               return STAR;
       case SLASH:              return SLASH;
       case PERCENT:            return PERCENT;
+      case COMPARE:            return COMPARE;
       case PLUS_EQUAL:         return PLUS_EQUAL;
       case MINUS_EQUAL:        return MINUS_EQUAL;
       case STAR_EQUAL:         return STAR_EQUAL;
@@ -142,6 +144,38 @@ public class RuntimeUtils {
       result = result.setScale(maxScale, RoundingMode.HALF_EVEN);
     }
     return result;
+  }
+
+  public static int compareTo(Object obj1, Object obj2, String source, int offset) {
+    if (obj1 == null && obj2 == null) { return 0;  }
+    if (obj1 == null)                 { return -1; }
+    if (obj2 == null)                 { return 1;  }
+    if (obj1 instanceof Number && obj2 instanceof Number) {
+      if (obj1 instanceof BigDecimal || obj2 instanceof BigDecimal) {
+        return toBigDecimal(obj1).compareTo(toBigDecimal(obj2));
+      }
+      Number n1 = (Number)obj1;
+      Number n2 = (Number)obj2;
+      if (obj1 instanceof Double || obj2 instanceof Double) {
+        return Double.compare(n1.doubleValue(), n2.doubleValue());
+      }
+      if (obj1 instanceof Long || obj2 instanceof Long) {
+        return Long.compare(n1.longValue(), n2.longValue());
+      }
+      return Integer.compare(n1.intValue(), n2.intValue());
+    }
+    else
+    if (obj1 instanceof Boolean && obj2 instanceof Boolean) {
+      return Boolean.compare((boolean)obj1, (boolean)obj2);
+    }
+    else
+    if (obj1 instanceof String && obj2 instanceof String) {
+      int result = ((String)obj1).compareTo((String)obj2);
+      return result < 0 ? -1 : result == 0 ? 0 : 1;
+    }
+    else {
+      throw new RuntimeError("Cannot compare objects of type " + className(obj1) + " and " + className(obj2), source, offset);
+    }
   }
 
   /**
@@ -412,15 +446,14 @@ public class RuntimeUtils {
     if (operator == EQUAL_EQUAL) {
       if (left == right)                 { return true;  }
       if (left == null || right == null) { return false; }
+      return left.equals(right);
     }
     if (operator == BANG_EQUAL) {
       if (left == right)                 { return false; }
       if (left == null || right == null) { return true;  }
+      return !left.equals(right);
     }
     if (operator == IN || operator == BANG_IN) {
-      throw new UnsupportedOperationException();
-    }
-    if (operator == INSTANCE_OF || operator == BANG_INSTANCE_OF) {
       throw new UnsupportedOperationException();
     }
 

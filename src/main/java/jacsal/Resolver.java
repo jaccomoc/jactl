@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.BOOLEAN;
+import static jacsal.JacsalType.DECIMAL;
 import static jacsal.JacsalType.INT;
 import static jacsal.JacsalType.LIST;
 import static jacsal.JacsalType.MAP;
@@ -323,7 +324,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
-    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE)) {
+    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE)) {
       expr.isConst = false;
     }
 
@@ -470,7 +471,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case INTEGER_CONST: return expr.type = INT;
       case LONG_CONST:    return expr.type = JacsalType.LONG;
       case DOUBLE_CONST:  return expr.type = JacsalType.DOUBLE;
-      case DECIMAL_CONST: return expr.type = JacsalType.DECIMAL;
+      case DECIMAL_CONST: return expr.type = DECIMAL;
       case STRING_CONST:  return expr.type = STRING;
       case TRUE:          return expr.type = BOOLEAN;
       case FALSE:         return expr.type = BOOLEAN;
@@ -839,20 +840,22 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private JacsalType evaluateConstExpr(Expr.Binary expr) {
+    final var leftValue  = expr.left.constValue;
+    final var rightValue = expr.right.constValue;
     if (expr.type.is(STRING)) {
       if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings"); }
       if (expr.operator.is(PLUS)) {
-        if (expr.left.constValue == null) {
+        if (leftValue == null) {
           throw new CompileError("Left-hand side of '+' cannot be null", expr.operator);
         }
-        expr.constValue = Utils.toString(expr.left.constValue) + Utils.toString(expr.right.constValue);
+        expr.constValue = Utils.toString(leftValue) + Utils.toString(rightValue);
       }
       else {
-        if (expr.right.constValue == null) {
+        if (rightValue == null) {
           throw new CompileError("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
         }
-        String lhs    = Utils.toString(expr.left.constValue);
-        long   length = Utils.toLong(expr.right.constValue);
+        String lhs    = Utils.toString(leftValue);
+        long   length = Utils.toLong(rightValue);
         if (length < 0) {
           throw new CompileError("String repeat count must be >= 0", expr.right.location);
         }
@@ -862,39 +865,39 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
-      expr.constValue = RuntimeUtils.mapAdd((Map)expr.left.constValue, (Map)expr.right.constValue, false);
+      expr.constValue = RuntimeUtils.mapAdd((Map) leftValue, (Map) rightValue, false);
       return expr.type;
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
-      expr.constValue = RuntimeUtils.listAdd((List)expr.left.constValue, expr.right.constValue, false);
+      expr.constValue = RuntimeUtils.listAdd((List) leftValue, rightValue, false);
     }
 
     if (expr.operator.is(AMPERSAND_AMPERSAND)) {
-      expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) &&
-                        RuntimeUtils.isTruth(expr.right.constValue, false);
+      expr.constValue = RuntimeUtils.isTruth(leftValue, false) &&
+                        RuntimeUtils.isTruth(rightValue, false);
       return expr.type;
     }
     if (expr.operator.is(PIPE_PIPE)) {
-      expr.constValue = RuntimeUtils.isTruth(expr.left.constValue, false) ||
-                        RuntimeUtils.isTruth(expr.right.constValue, false);
+      expr.constValue = RuntimeUtils.isTruth(leftValue, false) ||
+                        RuntimeUtils.isTruth(rightValue, false);
       return expr.type;
     }
 
     if (expr.operator.getType().isBooleanOperator()) {
-      expr.constValue = RuntimeUtils.booleanOp(expr.left.constValue, expr.right.constValue,
+      expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
                                                RuntimeUtils.getOperatorType(expr.operator.getType()),
                                                expr.operator.getSource(), expr.operator.getOffset());
       return expr.type = BOOLEAN;
     }
 
-    if (expr.left.constValue == null)  { throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
-    if (expr.right.constValue == null) { throw new CompileError("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
+    if (leftValue == null)  { throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
+    if (rightValue == null) { throw new CompileError("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
 
     switch (expr.type.getType()) {
       case INT: {
-        int left  = Utils.toInt(expr.left.constValue);
-        int right = Utils.toInt(expr.right.constValue);
+        int left  = Utils.toInt(leftValue);
+        int right = Utils.toInt(rightValue);
         throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
           case PLUS:    expr.constValue = left + right; break;
@@ -907,8 +910,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         break;
       }
       case LONG: {
-        long left  = Utils.toLong(expr.left.constValue);
-        long right = Utils.toLong(expr.right.constValue);
+        long left  = Utils.toLong(leftValue);
+        long right = Utils.toLong(rightValue);
         throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
           case PLUS:    expr.constValue = left + right; break;
@@ -921,8 +924,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         break;
       }
       case DOUBLE: {
-        double left  = Utils.toDouble(expr.left.constValue);
-        double right = Utils.toDouble(expr.right.constValue);
+        double left  = Utils.toDouble(leftValue);
+        double right = Utils.toDouble(rightValue);
         switch (expr.operator.getType()) {
           case PLUS:    expr.constValue = left + right; break;
           case MINUS:   expr.constValue = left - right; break;
@@ -934,8 +937,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         break;
       }
       case DECIMAL: {
-        BigDecimal left  = Utils.toDecimal(expr.left.constValue);
-        BigDecimal right = Utils.toDecimal(expr.right.constValue);
+        BigDecimal left  = Utils.toDecimal(leftValue);
+        BigDecimal right = Utils.toDecimal(rightValue);
         throwIf(expr.operator.is(SLASH,PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
         expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale,
                                                               expr.operator.getSource(), expr.operator.getOffset());

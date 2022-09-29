@@ -715,6 +715,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    // List + list
     if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
       compile(expr.left);
       compile(expr.right);
@@ -724,6 +725,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    // Map + map
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
       compile(expr.left);
       compile(expr.right);
@@ -813,6 +815,36 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.type.isBoxed()) {
         box();
       }
+      return null;
+    }
+
+    // Compare operator <=>
+    if (expr.operator.is(COMPARE)) {
+      var maxType = Utils.maxNumericType(expr.left.type, expr.right.type);
+      if (maxType != null || expr.left.type.is(BOOLEAN) && expr.right.type.is(BOOLEAN)) {
+        // If we have numeric types or boolean
+        if (maxType == null || maxType.is(INT)) {
+          // There is no ICMP instruction so we turn int and boolean into longs so we can use LCMP
+          maxType = LONG;
+        }
+        compile(expr.left);
+        convertTo(maxType, false, expr.left.location);
+        compile(expr.right);
+        convertTo(maxType, false, expr.right.location);
+        switch (maxType.getType()) {
+          case DECIMAL: invokeVirtual(BigDecimal.class, "compareTo", BigDecimal.class);  break;
+          case DOUBLE:  mv.visitInsn(DCMPL);    pop(2);   push(INT);                           break;
+          case LONG:    mv.visitInsn(LCMP);     pop(2);   push(INT);                           break;
+          default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
+        }
+        return null;
+      }
+      compile(expr.left);
+      box();
+      compile(expr.right);
+      box();
+      loadLocation(expr.operator);
+      invokeStatic(RuntimeUtils.class, "compareTo", Object.class, Object.class, String.class, int.class);
       return null;
     }
 
