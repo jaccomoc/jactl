@@ -39,7 +39,6 @@ public class BuiltinFunctions {
     register("collect", "iteratorCollect", ITERATOR, true, 0);
     register("map", "iteratorMap", ITERATOR, true, 0);
     register("filter", "iteratorFilter", ITERATOR, true, 0);
-    //register("replaceAll", "stringReplaceAll", false);
     register("lines", "stringLines", false);
   }
 
@@ -263,25 +262,6 @@ public class BuiltinFunctions {
     Object[] arr = (Object[])args;
     return iteratorCollect(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
   }
-
-  /////////////////////////////
-
-  // = replaceAll
-
-//  public static String stringReplaceAll(String str, String regex, String replacement) {
-//    return str.replaceAll(regex, replacement);
-//  }
-//  public static Object stringReplaceAllWrapper(String str, String source, int offset, Object args) {
-//    validateArgCount(args, 2, 2, source, offset);
-//    Object[] arr = (Object[])args;
-//    if (!(arr[0] instanceof String)) {
-//      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[0]), source, offset);
-//    }
-//    if (!(arr[1] instanceof String)) {
-//      throw new RuntimeError("Regex value must be a String (not " + RuntimeUtils.className(arr[1]), source, offset);
-//    }
-//    return str.replaceAll((String)arr[0], (String)arr[1]);
-//  }
 
   /////////////////////////////
 

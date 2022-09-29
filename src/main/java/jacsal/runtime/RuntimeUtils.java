@@ -501,6 +501,7 @@ public class RuntimeUtils {
     if (count < 0) {
       throw new RuntimeError("String repeat count must be >= 0", source, offset);
     }
+    ensureNonNull(str, source, offset);
     return str.repeat(count);
   }
 

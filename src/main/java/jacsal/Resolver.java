@@ -272,16 +272,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       if (expr.modifiers.isEmpty() && !expr.isSubstitute) {
         // Just a normal expr string
-        expr.left = null;
+        expr.string = null;
       }
     }
 
-    resolve(expr.left);
-    resolve(expr.right);
+    resolve(expr.string);
+    resolve(expr.pattern);
 
-    if (expr.left == null) {
+    if (expr.string == null) {
       // Just an expression string
-      return expr.type = expr.right.type;
+      return expr.type = expr.pattern.type;
     }
 
     // Check to see if we already have a capture array variable in the current scope. If we already

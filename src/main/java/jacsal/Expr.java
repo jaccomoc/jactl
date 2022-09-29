@@ -90,34 +90,36 @@ abstract class Expr {
   }
 
   static class RegexMatch extends Expr {
-    Expr    left;
+    Expr    string;
     Token   operator;
-    Expr    right;
+    Expr    pattern;
     String  modifiers;
     boolean isSubstitute = false;
     boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
     VarDecl captureArrVarDecl;
-    RegexMatch(Expr left, Token operator, Expr right, String modifiers, boolean implicitItMatch) {
-      this.left = left;
+    RegexMatch(Expr string, Token operator, Expr pattern, String modifiers, boolean implicitItMatch) {
+      this.string = string;
       this.operator = operator;
-      this.right = right;
+      this.pattern = pattern;
       this.modifiers = modifiers;
       this.implicitItMatch = implicitItMatch;
       this.location = operator;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexMatch(this); }
-    @Override public String toString() { return "RegexMatch[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
+    @Override public String toString() { return "RegexMatch[" + "string=" + string + ", " + "operator=" + operator + ", " + "pattern=" + pattern + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
   }
 
   static class RegexSubst extends RegexMatch {
-    Expr  replace;
+    Expr    replace;
+    boolean isComplexReplacement;   // True if replacement string has embedded expressions
     { isSubstitute = true; }
-    RegexSubst(Expr left, Token operator, Expr right, String modifiers, boolean implicitItMatch, Expr replace) {
-      super(left, operator, right, modifiers, implicitItMatch);
+    RegexSubst(Expr string, Token operator, Expr pattern, String modifiers, boolean implicitItMatch, Expr replace, boolean isComplexReplacement) {
+      super(string, operator, pattern, modifiers, implicitItMatch);
       this.replace = replace;
+      this.isComplexReplacement = isComplexReplacement;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexSubst(this); }
-    @Override public String toString() { return "RegexSubst[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + ", " + "replace=" + replace + "]"; }
+    @Override public String toString() { return "RegexSubst[" + "string=" + string + ", " + "operator=" + operator + ", " + "pattern=" + pattern + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + ", " + "replace=" + replace + ", " + "isComplexReplacement=" + isComplexReplacement + "]"; }
   }
 
   /**

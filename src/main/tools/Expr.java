@@ -84,9 +84,9 @@ class Expr {
   }
 
   class RegexMatch extends Expr {
-    Expr    left;
+    Expr    string;
     Token   operator;
-    Expr    right;
+    Expr    pattern;
     String  modifiers;
     boolean @isSubstitute = false;
     boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
@@ -94,7 +94,8 @@ class Expr {
   }
 
   class RegexSubst extends RegexMatch {
-    Expr  replace;
+    Expr    replace;
+    boolean isComplexReplacement;   // True if replacement string has embedded expressions
     { isSubstitute = true; }
   }
 

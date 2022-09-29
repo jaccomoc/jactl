@@ -672,7 +672,7 @@ public class Parser {
               throw new CompileError("Operator '!~' cannot be used with regex substitution", operator);
             }
             var regex = (Expr.RegexMatch) rhs;
-            regex.left = expr;
+            regex.string = expr;
             regex.operator = operator;
             regex.implicitItMatch = false;
             expr = regex;
@@ -930,7 +930,7 @@ public class Parser {
       // Tell tokeniser that the SLASH was actually the start of a regex expression string
       tokeniser.startRegex();
     }
-    parseExprString(exprString, EXPR_STRING_END, true);
+    parseExprString(exprString, EXPR_STRING_END);
     // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
     // on our own somewhere. We build "it =~ /regex" and if we are actually part of "x =~ /regex/"
     // our parent (parseExpression()) will convert back to "x =~ /regex/".
@@ -946,21 +946,14 @@ public class Parser {
     return exprString;
   }
 
-  private void parseExprString(Expr.ExprString exprString, TokenType endToken, boolean expandCaptureVars) {
+  private void parseExprString(Expr.ExprString exprString, TokenType endToken) {
     while (!matchAny(endToken)) {
       if (matchAny(STRING_CONST) && !previous().getStringValue().isEmpty()) {
         exprString.exprList.add(new Expr.Literal(previous()));
       }
       else
       if (matchAny(IDENTIFIER)) {
-        Token identifier = previous();
-        if (identifier.getStringValue().charAt(0) == '$' && !expandCaptureVars) {
-          exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, identifier)
-                                                     .setValue(identifier.getStringValue())));
-        }
-        else {
-          exprString.exprList.add(new Expr.Identifier(identifier));
-        }
+        exprString.exprList.add(new Expr.Identifier(previous()));
       }
       else
       if (matchAny(LEFT_BRACE)) {
@@ -979,13 +972,41 @@ public class Parser {
   private Expr regexSubstitute() {
     Token start = previous();
     Expr.ExprString pattern = new Expr.ExprString(previous());
-    parseExprString(pattern, REGEX_REPLACE, true);
+    parseExprString(pattern, REGEX_REPLACE);
     Expr.ExprString replace = new Expr.ExprString(previous());
-    parseExprString(replace, EXPR_STRING_END, false);
+    parseExprString(replace, EXPR_STRING_END);
+
+    boolean isComplexReplacement = false;
+
+    // If the replacement string has embedded expressions that need evaluating every time then we
+    // can't use the standard Java replaceAll mechanism. We check for any embedded expression that
+    // is not just a reference to an identifier. We also check for any references to capture vars
+    // greater than $9 in the replacement string since Java does not support them natively.
+    // Check that we have a simple replacement string:
+    if (replace.exprList.stream().allMatch(this::isSimpleIdentOrLiteral)) {
+      // Replace all capture vars with a String literal so that we leave them unexpanded and let
+      // the Java replaceAll deal with them
+      for (int i = 0; i < replace.exprList.size(); i++) {
+        Expr expr = replace.exprList.get(i);
+        if (expr instanceof Expr.Identifier) {
+          Token identifier = ((Expr.Identifier)expr).identifier;
+          if (identifier.getStringValue().charAt(0) == '$') {
+            // Replace with a Literal
+            replace.exprList.set(i, new Expr.Literal(new Token(STRING_CONST, identifier)
+                                                       .setValue(identifier.getStringValue())));
+          }
+        }
+      }
+    }
+    else {
+      // We have a more complex replacement string
+      isComplexReplacement = true;
+    }
+
     final var itVar       = new Expr.Identifier(new Token(IDENTIFIER, start).setValue(Utils.IT_VAR));
     final var operator    = new Token(EQUAL_GRAVE, start);
     final var modifiers   = previous().getStringValue();
-    final var regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace);
+    final var regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace, isComplexReplacement);
     // Modifier 'f' forces the substitute to be a value and not override the original variable
     if (modifiers.indexOf('f') != -1) {
       return regexSubst;
@@ -1050,6 +1071,24 @@ public class Parser {
   }
 
   /////////////////////////////////////////////////
+
+  /**
+   * Check that expression is a simple literal or an identifier.
+   * If identifier is a capture var then return true only if <= $9
+   */
+  private boolean isSimpleIdentOrLiteral(Expr expr) {
+    if (expr instanceof Expr.Literal)    { return true; }
+    if (expr instanceof Expr.Identifier) {
+      var       ident = (Expr.Identifier)expr;
+      final var name  = ident.identifier.getStringValue();
+      if (name.charAt(0) == '$') {
+        // Check if capture arg is greater than $9
+        return name.length() <= 2;
+      }
+      return true;
+    }
+    return false;
+  }
 
   private Stmt.VarDecl createItParam(Token token) {
     Token        itToken = new Token(IDENTIFIER, token).setValue(Utils.IT_VAR);
@@ -1409,7 +1448,7 @@ public class Parser {
       }
       final var leftNoop = new Expr.Noop(assignmentOperator);
       if (assignmentOperator.is(EQUAL_GRAVE)) {
-        ((Expr.RegexSubst)rhs).left = leftNoop;
+        ((Expr.RegexSubst)rhs).string = leftNoop;
       }
       else {
         var expr = new Expr.Binary(leftNoop, new Token(arithmeticOp, assignmentOperator), rhs);
@@ -1453,7 +1492,7 @@ public class Parser {
     Token operator = new Token(arithmeticOp, assignmentOperator);
     final var   leftNoop       = new Expr.Noop(operator);
     if (operator.is(EQUAL_GRAVE)) {
-      ((Expr.RegexSubst)rhs).left = leftNoop;
+      ((Expr.RegexSubst)rhs).string = leftNoop;
     }
     else {
       Expr.Binary binaryExpr = new Expr.Binary(leftNoop, operator, rhs);

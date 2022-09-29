@@ -566,18 +566,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                             PERCENT, "remainder");
 
   @Override public Void visitRegexMatch(Expr.RegexMatch expr) {
-    if (expr.left == null) {
-      compile(expr.right);
+    if (expr.string == null) {
+      compile(expr.pattern);
       return null;
     }
 
     boolean globalModifier = expr.modifiers.indexOf('g') != -1;
     String modifiers = expr.modifiers.replaceAll("[fg]", "");
     loadVar(expr.captureArrVarDecl);
-    compile(expr.left);
-    castToString(expr.left.location);
-    compile(expr.right);
-    castToString(expr.right.location);
+    compile(expr.string);
+    castToString(expr.string.location);
+    compile(expr.pattern);
+    castToString(expr.pattern.location);
     loadConst(globalModifier);
     loadConst(modifiers);
     loadLocation(expr.operator);
@@ -592,17 +592,72 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
     boolean globalModifier = expr.modifiers.indexOf('g') != -1;
     String modifiers = expr.modifiers.replaceAll("[fg]", "");
-    compile(expr.left);
-    castToString(expr.left.location);
+
+    compile(expr.string);
+    castToString(expr.string.location);
     loadVar(expr.captureArrVarDecl);
     swap();
-    compile(expr.right);
-    castToString(expr.right.location);
-    compile(expr.replace);
+    compile(expr.pattern);
+    castToString(expr.pattern.location);
+
+    if (!expr.isComplexReplacement) {
+      compile(expr.replace);
+      loadConst(globalModifier);
+      loadConst(modifiers);
+      loadLocation(expr.operator);
+      invokeStatic(RuntimeUtils.class, "regexSubstitute", RegexMatcher.class, String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+      return null;
+    }
+
+    // Complex replacement string so we need to iterate ourselves and re-evaluate the replacement
+    // string each time (with the new capture vars)
+
+    // Create a StringBuilder to store result into
+    _newInstance(StringBuilder.class);
+    int sbVar = allocateSlot(ANY);
+    _storeLocal(sbVar);
+
+    // Setup our Matcher and get first result
     loadConst(globalModifier);
     loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeStatic(RuntimeUtils.class, "regexSubstitute", RegexMatcher.class, String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+    invokeStatic(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+    int matcherVar = allocateSlot(ANY);
+    loadVar(expr.captureArrVarDecl);
+    mv.visitFieldInsn(GETFIELD, "jacsal/runtime/RegexMatcher", "matcher", "Ljava/util/regex/Matcher;");
+    storeLocal(matcherVar);
+
+    Label done = new Label();
+    Label loop = new Label();
+    mv.visitLabel(loop);         // :loop
+    mv.visitJumpInsn(IFEQ, done);
+    pop();
+    loadLocal(matcherVar);
+    loadLocal(sbVar);
+    compile(expr.replace);
+    castToString(expr.replace.location);
+    invokeVirtual(Matcher.class, "appendReplacement", StringBuilder.class, String.class);
+    popVal();    // Returns the Matcher which we already have
+
+    // If in loop
+    if (globalModifier) {
+      loadLocal(matcherVar);
+      invokeVirtual(Matcher.class, "find");
+      pop();
+      mv.visitJumpInsn(GOTO, loop);
+    }
+
+    mv.visitLabel(done);      // :done
+    loadLocal(matcherVar);
+    loadLocal(sbVar);
+    invokeVirtual(Matcher.class, "appendTail", StringBuilder.class);
+    popVal();   // Returns the StringBuilder
+
+    loadLocal(sbVar);
+    invokeVirtual(StringBuilder.class, "toString");
+
+    freeTemp(matcherVar);
+    freeTemp(sbVar);
     return null;
   }
 

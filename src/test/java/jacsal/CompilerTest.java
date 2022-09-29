@@ -1855,8 +1855,6 @@ class CompilerTest {
     test("def x = [a:'abaac']; x.a =~ s/a/x/fg", "xbxxc");
     test("def x = [a:'abaac']; x.a =~ s/a/x/fg; x.a", "abaac");
     test("def x = [a:'abaac']; x.a =~ s/a/x/g; x.a", "xbxxc");
-    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/ig; x.a", "xabxaxAc");
-    testError("def x = [a:'abaAc']; x.a =~ s/(A)/x$1$2/ig; x.a", "no group");
     testError("def x = [a:'abc']; (x.a + 'xyz') =~ s/a/x/; x.a", "invalid lvalue");
     test("def it = 'abaac'; s/a//g", "bc");
     test("def it = 'abaac'; s/a//g; it", "bc");
@@ -1866,9 +1864,28 @@ class CompilerTest {
     test("def it = 'abaac'; s//a/g; it", "aaabaaaaaca");
   }
 
-  @Test public void replaceAll() {
-    //test("def it = 'xxx'; 'abcaaababbdaz'.replaceAll(/a/,'x')", "xbcxxxbxbbdxz");
-    //test("'abcaaababbdaz'.replaceAll(/a/,'x')", "xbcxxxbxbbdxz");
+  @Test public void regexSubstituteExprString() {
+    test("def it = 'abaAc'; s/(A)/x$1/i; ", "xabaAc");
+    test("def it = 'abaAc'; s/(A)/x$1/i; it", "xabaAc");
+    test("def x = 'abaAc'; x =~ s/(A)/x$1/i; ", "xabaAc");
+    test("def x = 'abaAc'; x =~ s/(A)/x$1/i; x", "xabaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/i; ", "xabaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/i; x.a", "xabaAc");
+    test("def it = 'abaAc'; s/(A)/x$1/fi; ", "xabaAc");
+    test("def it = 'abaAc'; s/(A)/x$1/fi; it", "abaAc");
+    test("def x = 'abaAc'; x =~ s/(A)/x$1/fi; ", "xabaAc");
+    test("def x = 'abaAc'; x =~ s/(A)/x$1/fi; x", "abaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/fi; ", "xabaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/fi; x.a", "abaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/ig; x.a", "xabxaxAc");
+    test("def y = 'y'; def x = [a:'abaAc']; x.a =~ s/(A)/x$1$y/ig; x.a", "xaybxayxAyc");
+    test("def x = 'abcdefghijklmn'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/x$10$11/ig", "xjkmn");
+    test("def x = 'abcdefghijklmn'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/x$10$11/ig; x", "xjkmn");
+    test("def x = 'abcdefghijklmn'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/x$10$11/i", "xjkmn");
+    test("def x = 'abcdefghijk123456789xy11'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/X$10$11/ig", "XjkXxy11");
+    test("def x = 'abcdefghijk123456789xy11'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/X$10$11/ig; x", "XjkXxy11");
+    testError("def x = [a:'abaAc']; x.a =~ s/(A)/x$1$2/ig; x.a", "no group");
+    test("def a = 'a'; def it = 'abcd'; s/(.)(.)/${a}${$1}${$2*2 + $1*2}/g", "aabbaaacddcc");
   }
 
   @Test public void filter() {
