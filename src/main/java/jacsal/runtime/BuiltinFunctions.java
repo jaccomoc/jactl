@@ -37,6 +37,7 @@ public class BuiltinFunctions {
     register("size", "iteratorSize", false);
     register("each", "iteratorEach", ITERATOR, true, 0);
     register("collect", "iteratorCollect", ITERATOR, true, 0);
+    register("sort", "iteratorSort", ITERATOR, true, 0);
     register("map", "iteratorMap", ITERATOR, true, 0);
     register("filter", "iteratorFilter", ITERATOR, true, 0);
     register("lines", "stringLines", false);
@@ -261,6 +262,41 @@ public class BuiltinFunctions {
     validateArgCount(args, 0, 1, source, offset);
     Object[] arr = (Object[])args;
     return iteratorCollect(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
+  }
+
+  /////////////////////////////
+
+  // = sort
+
+  public static List iteratorSort(Object iterable, String source, int offset, MethodHandle closure) {
+    List result = iterable instanceof List ? new ArrayList((List)iterable)
+                                           : RuntimeUtils.convertIteratorToList(createIterator(iterable));
+    if (closure == null) {
+      try {
+        result.sort(null);
+      }
+      catch (Throwable t) { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
+    }
+    else {
+      result.sort((a,b) -> {
+        Object comparison;
+        try {
+          comparison = closure.invokeExact(source, offset, (Object)(new Object[]{new Object[]{a,b}}));
+        }
+        catch (RuntimeException e) { throw e; }
+        catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
+        if (!(comparison instanceof Integer)) {
+          throw new RuntimeError("Comparator for sort must return integer value not " + RuntimeUtils.className(comparison), source, offset);
+        }
+        return (int)comparison;
+      });
+    }
+    return result;
+  }
+  public static Object iteratorSortWrapper(Object iterable, String source, int offset, Object args) {
+    validateArgCount(args, 0, 1, source, offset);
+    Object[] arr = (Object[])args;
+    return iteratorSort(iterable, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
   }
 
   /////////////////////////////

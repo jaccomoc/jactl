@@ -2535,10 +2535,6 @@ class CompilerTest {
     testError("[1,2,3] <=> 'xxx'", "cannot compare");
   }
 
-  @Test public void  testStuff() {
-    test("1L <=> null", 1);
-  }
-
   @Test public void expressionComparisons() {
     //String init = "int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
     //              "def di3=3; def dl5=5L; def dd7=7.0D; def ddec13=13.0; def dsabc = 'abc';";
@@ -3316,6 +3312,26 @@ class CompilerTest {
     test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", List.of(1, 7, 17));
     test("[1,2,3].map{it} instanceof List", true);
     test("def x = [1,2,3]; x.map{it} instanceof List", true);
+  }
+
+  @Test public void collectionSort() {
+    test("[].sort()", List.of());
+    test("[].sort{it[1] <=> it[0]}", List.of());
+    test("[1].sort{it[1] <=> it[0]}", List.of(1));
+    test("[1,2].sort{it[1] <=> it[0]}", List.of(2,1));
+    test("[3,2,1].sort()", List.of(1,2,3));
+    test("[1,2,3].sort()", List.of(1,2,3));
+    test("[3,2,1,4,5].sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
+    test("[3,2,1,4,5].sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
+    test("def x = [3,2,1,4,5]; x.sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
+    test("def x = [3,2,1,4,5]; x.sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
+    test("def x = [3,2,1,4,5]; def f = x.sort; f{a,b -> b <=> a}", List.of(5,4,3,2,1));
+    test("def x = [3,2,1,4,5]; def f = x.sort; f{it[1] <=> it[0]}", List.of(5,4,3,2,1));
+    testError("def x = [3,2,'a',4,5]; def f = x.sort{it[1] <=> it[0]}", "cannot compare");
+    test("def x = [a:1,x:4,e:3,g:7]; x.sort{a,b -> a[0] <=> b[0]}",
+         List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
+    test("def x = [a:1,x:4,e:3,g:7]; x.sort{it[0][0] <=> it[1][0]}",
+         List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
   }
 
   @Test public void stringAddRepeat() {

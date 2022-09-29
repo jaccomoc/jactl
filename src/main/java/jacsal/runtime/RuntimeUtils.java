@@ -446,12 +446,10 @@ public class RuntimeUtils {
     if (operator == EQUAL_EQUAL) {
       if (left == right)                 { return true;  }
       if (left == null || right == null) { return false; }
-      return left.equals(right);
     }
     if (operator == BANG_EQUAL) {
       if (left == right)                 { return false; }
       if (left == null || right == null) { return true;  }
-      return !left.equals(right);
     }
     if (operator == IN || operator == BANG_IN) {
       throw new UnsupportedOperationException();
@@ -488,7 +486,7 @@ public class RuntimeUtils {
       comparison = leftString.compareTo(rightString);
     }
     else if (operator == EQUAL_EQUAL || operator == BANG_EQUAL) {
-      return (operator == EQUAL_EQUAL) == (left == right);
+      return (operator == EQUAL_EQUAL) == left.equals(right);
     }
     else {
       throw new RuntimeError("Object of type " + className(left) + " not comparable with object of type " + className(right), source, offset);
@@ -1054,7 +1052,12 @@ public class RuntimeUtils {
   public static List convertIteratorToList(Iterator iter) {
     List result = new ArrayList();
     while (iter.hasNext()) {
-      result.add(iter.next());
+      Object elem = iter.next();
+      if (elem instanceof Map.Entry) {
+        var entry = (Map.Entry)elem;
+        elem = List.of(entry.getKey(), entry.getValue());
+      }
+      result.add(elem);
     }
     return result;
   }

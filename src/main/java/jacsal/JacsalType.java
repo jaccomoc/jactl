@@ -279,13 +279,14 @@ public class JacsalType {
     }
 
     if (operator.is(COMPARE)) {
-      if (type1.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING,ANY) &&
-          type2.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING,ANY) &&
+      if (type1.is(BOOLEAN,STRING,ANY) &&
+          type2.is(BOOLEAN,STRING,ANY) &&
           type1.equals(type2))                                 { return INT;     }
-      if (type1.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING) &&
-          type2.is(ANY))                                       { return INT;     }
-      if (type2.is(INT,LONG,DOUBLE,DECIMAL,BOOLEAN,STRING) &&
-          type1.is(ANY))                                       { return INT;     }
+      if (type1.isNumeric() && type2.isNumeric())              { return INT;     }
+      if (type1.isNumeric() && type2.is(ANY))                  { return INT;     }
+      if (type2.isNumeric() && type1.is(ANY))                  { return INT;     }
+      if (type1.is(BOOLEAN,STRING) && type2.is(ANY))           { return INT;     }
+      if (type2.is(BOOLEAN,STRING) && type1.is(ANY))           { return INT;     }
       throw new CompileError("Cannot compare objects of type " + type1 + " and " + type2, operator);
     }
 
