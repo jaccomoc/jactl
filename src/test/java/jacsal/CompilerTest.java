@@ -94,8 +94,8 @@ class CompilerTest {
   private Map<String,Object> createGlobals() {
     try {
       var globals = new HashMap<String,Object>();
-      MethodHandle handle  = MethodHandles.lookup().findStatic(CompilerTest.class, "timestamp", MethodType.methodType(Object.class, String.class, int.class, Object.class));
-      globals.put("timestamp", handle);
+//      MethodHandle handle  = MethodHandles.lookup().findStatic(CompilerTest.class, "timestamp", MethodType.methodType(Object.class, String.class, int.class, Object.class));
+//      globals.put("timestamp", handle);
       return globals;
     }
     catch (Exception e) {
@@ -3476,7 +3476,6 @@ class CompilerTest {
     testError("def x = [a:1,b:2]; --x", "non-numeric operand");
   }
 
-
   @Test public void andOrNot() {
     test("not true", false);
     test("not false", true);
@@ -3512,7 +3511,12 @@ class CompilerTest {
     test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
   }
 
-  @Test public void globalFunctions() {
+  @Test public void timeStamp() {
+    test("timeStamp() > 50*356*86400*1000", true);
+    test("def f = timeStamp; f() > 0", true);
+  }
+
+  @Test public void globals() {
     //test("timestamp() > 0", true);
     CompileContext compileContext = new CompileContext().evaluateConstExprs(true)
                                                         .replMode(true)

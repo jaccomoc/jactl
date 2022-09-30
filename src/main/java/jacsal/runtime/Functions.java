@@ -26,47 +26,19 @@ import static jacsal.JacsalType.*;
 
 public class Functions {
 
-  private static final Map<Class, ClassLookup>      classes        = new ConcurrentHashMap<>();
-  private static final Map<String,List<Descriptor>> methods        = new ConcurrentHashMap<>();
-  private static final Descriptor                   NO_SUCH_METHOD = new Descriptor();
+  private static final Map<Class, ClassLookup>              classes        = new ConcurrentHashMap<>();
+  private static final Map<String,List<FunctionDescriptor>> methods        = new ConcurrentHashMap<>();
+  private static final FunctionDescriptor                   NO_SUCH_METHOD = new FunctionDescriptor();
 
   private static class ClassLookup {
-    Map<String, Descriptor> methods = new ConcurrentHashMap<>();
-  }
-
-  public static class Descriptor {
-    public JacsalType       type;            // Type method is for
-    public JacsalType       firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
-    public String           name;            // Jacsal method/function name
-    public JacsalType       returnType;
-    public List<JacsalType> paramTypes;
-    public int              mandatoryArgCount;
-    public String           implementingClass;
-    public String           implementingMethod;
-    public boolean          needsLocation;
-    public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(clss, String source, int offset, Object args)
-
-    public Descriptor(JacsalType type, JacsalType firstArgType, String name, JacsalType returnType, List<JacsalType> paramTypes, int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
-      this.type = type;
-      this.firstArgtype = firstArgType;
-      this.name = name;
-      this.returnType = returnType;
-      this.paramTypes = paramTypes;
-      this.mandatoryArgCount = mandatoryArgCount;
-      this.implementingClass = implementingClass;
-      this.implementingMethod = implementingMethod;
-      this.needsLocation = needsLocation;
-      this.wrapperHandle = wrapperHandle;
-    }
-
-    private Descriptor() {}
+    Map<String, FunctionDescriptor> methods = new ConcurrentHashMap<>();
   }
 
   /**
    * Register a method of a class. This can be used to register methods on
    * classes that don't normally have methods (e.g. numbers).
    */
-  static void registerMethod(Descriptor descriptor) {
+  static void registerMethod(FunctionDescriptor descriptor) {
     var functions = methods.computeIfAbsent(descriptor.name, k -> new ArrayList<>());
     functions.add(descriptor);
   }
@@ -80,7 +52,7 @@ public class Functions {
   /**
    * Lookup method at compile time and return FunctionDescriptor if method exists
    */
-  public static Descriptor lookupMethod(JacsalType type, String methodName) {
+  public static FunctionDescriptor lookupMethod(JacsalType type, String methodName) {
     var function = findMatching(type, methodName);
     if (function == NO_SUCH_METHOD) {
       return null;
@@ -104,7 +76,7 @@ public class Functions {
       classLookup = new ClassLookup();
       classes.put(parentClass, classLookup);
     }
-    Descriptor function = classLookup.methods.get(methodName);
+    FunctionDescriptor function = classLookup.methods.get(methodName);
     if (function == null) {
       JacsalType parentType = JacsalType.typeOf(parent);
       function = findMatching(parentType, methodName);
@@ -118,7 +90,7 @@ public class Functions {
     return function.wrapperHandle.bindTo(parent);
   }
 
-  private static Descriptor findMatching(JacsalType type, String methodName) {
+  private static FunctionDescriptor findMatching(JacsalType type, String methodName) {
     var functions = methods.get(methodName);
     if (functions == null) {
       return NO_SUCH_METHOD;

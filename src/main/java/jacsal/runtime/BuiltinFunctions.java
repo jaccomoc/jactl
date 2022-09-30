@@ -30,31 +30,68 @@ import static jacsal.JacsalType.ITERATOR;
 
 public class BuiltinFunctions {
 
+  private static Map<String,FunctionDescriptor> globalFunctions = new HashMap<>();
+
   public static void registerBuiltinFunctions() {
-    register("size", "listSize", false);
-    register("size", "objArrSize", false);
-    register("size", "mapSize", false);
-    register("size", "iteratorSize", false);
-    register("each", "iteratorEach", ITERATOR, true, 0);
-    register("collect", "iteratorCollect", ITERATOR, true, 0);
-    register("sort", "iteratorSort", ITERATOR, true, 0);
-    register("map", "iteratorMap", ITERATOR, true, 0);
-    register("filter", "iteratorFilter", ITERATOR, true, 0);
-    register("lines", "stringLines", false);
+    registerMethod("size", "listSize", false);
+    registerMethod("size", "objArrSize", false);
+    registerMethod("size", "mapSize", false);
+    registerMethod("size", "iteratorSize", false);
+    registerMethod("each", "iteratorEach", ITERATOR, true, 0);
+    registerMethod("collect", "iteratorCollect", ITERATOR, true, 0);
+    registerMethod("sort", "iteratorSort", ITERATOR, true, 0);
+    registerMethod("map", "iteratorMap", ITERATOR, true, 0);
+    registerMethod("filter", "iteratorFilter", ITERATOR, true, 0);
+    registerMethod("lines", "stringLines", false);
+
+    registerGlobalFunction("timeStamp", "timeStamp", false, 0);
   }
 
-  private static void register(String name, String methodName, boolean needsLocation) {
-    register(name, methodName, null, needsLocation, -1);
+  public static FunctionDescriptor lookupGlobalFunction(String name) {
+    return globalFunctions.get(name);
   }
 
-  private static void register(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
+  public static MethodHandle lookupMethodHandle(String name) {
+    FunctionDescriptor descriptor = globalFunctions.get(name);
+    if (descriptor == null) {
+      throw new IllegalStateException("Internal error: attept to get MethodHandle to unknown builtin function " + name);
+    }
+    return descriptor.wrapperHandle;
+  }
+
+  public static Collection<FunctionDescriptor> getBuiltinFunctions() {
+    return globalFunctions.values();
+  }
+
+  ///////////////////////////////////////////////////
+
+  private static void registerGlobalFunction(String name, String methodName, boolean needsLocation, int mandatoryArgCount) {
+    var descriptor = getFunctionDescriptor(name, methodName, true, null, needsLocation, mandatoryArgCount);
+    descriptor.isStatic = true;
+    globalFunctions.put(name, descriptor);
+  }
+
+  private static void registerMethod(String name, String methodName, boolean needsLocation) {
+    registerMethod(name, methodName, null, needsLocation, -1);
+  }
+
+  private static void registerMethod(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
+    registerFunction(name, methodName, false, objType, needsLocation, mandatoryArgCount);
+  }
+
+  private static void registerFunction(String name, String methodName, boolean isGlobal, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
+    var descriptor = getFunctionDescriptor(name, methodName, isGlobal, objType, needsLocation, mandatoryArgCount);
+    Functions.registerMethod(descriptor);
+  }
+
+  private static FunctionDescriptor getFunctionDescriptor(String name, String methodName, boolean isGlobal, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
     try {
       Method[] methods = BuiltinFunctions.class.getDeclaredMethods();
       Method   method  = Arrays.stream(methods).filter(m -> m.getName().equals(methodName)).findFirst().orElse(null);
       if (method == null) {
         throw new IllegalStateException("Couldn't find method " + methodName + " in BuiltinFunctions");
       }
-      JacsalType firstArgType = JacsalType.typeFromClass(method.getParameterTypes()[0]);
+      JacsalType firstArgType = isGlobal ? null : JacsalType.typeFromClass(method.getParameterTypes()[0]);
       if (objType == null) {
         objType = firstArgType;
       }
@@ -62,22 +99,34 @@ public class BuiltinFunctions {
       List<JacsalType> paramTypes = Arrays.stream(method.getParameterTypes()).skip(needsLocation ? 3 : 1)
                                           .map(JacsalType::typeFromClass)
                                           .collect(Collectors.toList());
-      MethodHandle wrapperHandle = MethodHandles.lookup().findStatic(BuiltinFunctions.class, methodName + "Wrapper",
-                                                                     MethodType.methodType(Object.class,
-                                                                                           firstArgType.classFromType(), String.class, int.class, Object.class));
+      var wrapperMethod = methodName + "Wrapper";
+      var methodType    = isGlobal ? MethodType.methodType(Object.class,
+                                                           String.class,
+                                                           int.class,
+                                                           Object.class)
+                                   : MethodType.methodType(Object.class,
+                                                           firstArgType.classFromType(),
+                                                           String.class,
+                                                           int.class,
+                                                           Object.class);
+      MethodHandle wrapperHandle = MethodHandles.lookup().findStatic(BuiltinFunctions.class, wrapperMethod,
+                                                                     methodType);
       if (mandatoryArgCount < 0) {
         mandatoryArgCount = paramTypes.size();
       }
-      Functions.registerMethod(new Functions.Descriptor(objType,
-                                                        firstArgType,
-                                                        name,
-                                                        returnType,
-                                                        paramTypes,
-                                                        mandatoryArgCount,
-                                                        Type.getInternalName(BuiltinFunctions.class),
-                                                        methodName,
-                                                        needsLocation,
-                                                        wrapperHandle));
+      var descriptor = new FunctionDescriptor(objType,
+                                              firstArgType,
+                                              name,
+                                              returnType,
+                                              paramTypes,
+                                              mandatoryArgCount,
+                                              Type.getInternalName(BuiltinFunctions.class),
+                                              methodName,
+                                              needsLocation,
+                                              wrapperHandle);
+      descriptor.wrapperMethod = wrapperMethod;
+      descriptor.isBuiltin = true;
+      return descriptor;
     }
     catch (NoSuchMethodException e) {
       throw new IllegalStateException("Couldn't find wrapper method for " + methodName, e);
@@ -85,11 +134,21 @@ public class BuiltinFunctions {
     catch (IllegalAccessException e) {
       throw new IllegalStateException("Error looking up wrapper method for " + methodName, e);
     }
-
   }
 
   /////////////////////////////////////
+  // Global Functions
+  /////////////////////////////////////
 
+  public static long timeStamp() { return System.currentTimeMillis(); }
+  public static Object timeStampWrapper(String source, int offset, Object args) {
+    validateArgCount(args, 0, 0, source, offset);
+    return System.currentTimeMillis();
+  }
+
+  /////////////////////////////////////
+  // Methods
+  /////////////////////////////////////
 
   // = size
 

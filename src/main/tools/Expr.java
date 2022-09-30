@@ -37,7 +37,7 @@ import java.util.LinkedHashMap;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
-import jacsal.runtime.Functions;
+import jacsal.runtime.FunctionDescriptor;
 
 import static jacsal.JacsalType.HEAPLOCAL;
 
@@ -70,9 +70,9 @@ class Expr {
 
   // Whether expression is a direct function call (and not a closure)
   public boolean isFunctionCall() {
-    return this instanceof Expr.Identifier &&
-           ((Expr.Identifier) this).varDecl.type.is(JacsalType.FUNCTION) &&
-           ((Expr.Identifier) this).varDecl.funDecl != null;
+    if (!(this instanceof Expr.Identifier)) { return false; }
+    var ident = (Expr.Identifier)this;
+    return ident.varDecl.type.is(JacsalType.FUNCTION) && ident.varDecl.funDecl != null;
   }
 
   class Binary extends Expr {
@@ -141,7 +141,7 @@ class Expr {
     String     methodName;     // Either the method name or field name that holds a MethodHandle
     List<Expr> args;
 
-    Functions.Descriptor @methodDescriptor;
+    FunctionDescriptor @methodDescriptor;
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used
@@ -173,9 +173,10 @@ class Expr {
   }
 
   class Identifier extends Expr {
-    Token        identifier;
-    Expr.VarDecl @varDecl;
-    boolean      @couldBeFunctionCall = false;
+    Token              identifier;
+    Expr.VarDecl       @varDecl;               // for variable references
+    boolean            @couldBeFunctionCall = false;
+    FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
   }
 
   class ExprString extends Expr {
@@ -191,7 +192,7 @@ class Expr {
   class VarDecl extends Expr implements ManagesResult {
     Token        name;
     Expr         initialiser;
-    Expr.FunDecl @owner;                // Which function variable belongs to (for local vars)
+    Expr.FunDecl @owner;               // Which function variable belongs to (for local vars)
     boolean      @isGlobal;            // Whether global (bindings var) or local
     boolean      @isHeapLocal;         // Is this a heap local var
     boolean      @isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
@@ -219,14 +220,13 @@ class Expr {
    */
   class FunDecl extends Expr implements ManagesResult {
     Token              startToken;   // Either identifier for function decl or start brace for closure
-    Token              name;         // Null for closures and script main
+    Token              nameToken;    // Null for closures and script main
     JacsalType         returnType;
     List<Stmt.VarDecl> parameters;
     Stmt.Block         @block;
 
-    String             @methodName;        // Name of method that we compile into
-    String             @internalClassName; // Java class we are compiled into
-    Expr.VarDecl       @varDecl;           // For the variable that we will create to hold our MethodHandle
+    FunctionDescriptor @functionDescriptor;
+    Expr.VarDecl       @varDecl;            // For the variable that we will create to hold our MethodHandle
 
     boolean            @isWrapper;   // Whether this is the wrapper function or the real one
     Expr.FunDecl       @wrapper;     // The wrapper method that handles var arg and named arg invocations
@@ -248,7 +248,7 @@ class Expr {
     // no variables we close over are declared after that reference
     Token @earliestForwardReference;
 
-    public boolean isClosure() { return name == null; }
+    public boolean isClosure() { return nameToken == null; }
   }
 
   /**

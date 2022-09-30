@@ -120,7 +120,7 @@ public class ClassCompiler {
 
     // For every method except the script main method
     Stream<Expr.FunDecl> methodsAndClosures = Stream.concat(classDecl.methods.stream()
-                                                                             .filter(m -> !m.methodName.equals(Utils.JACSAL_SCRIPT_MAIN)),
+                                                                             .filter(m -> !m.isScriptMain),
                                                             classDecl.closures.stream());
     // Iterate over the wrapper methods
     methodsAndClosures.map(m -> m.wrapper).forEach(method -> {
@@ -130,7 +130,7 @@ public class ClassCompiler {
       // will be the Object[] or Map form of the args.
       classInit.visitVarInsn(ALOAD, 0);
       classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
-      String methodName = method.methodName;
+      String methodName = method.functionDescriptor.implementingMethod;
       String staticHandleName = Utils.staticHandleName(methodName);
       classInit.visitLdcInsn(methodName);
       // Wrapper methods return Object since caller won't know what type they would normally return
@@ -204,14 +204,14 @@ public class ClassCompiler {
   }
 
   void compileMethod(Expr.FunDecl method) {
-    String methodName =  method.methodName;
+    String methodName =  method.functionDescriptor.implementingMethod;
 
     boolean isScriptMain = methodName.equals(Utils.JACSAL_SCRIPT_MAIN);
     // Create handles for all methods except the script main (since it is not callable)
     if (!isScriptMain) {
       // We compile the method and create a static method handle field that points to the method
       // so that we can pass the method by value (by passing the method handle).
-      String       handleName = Utils.staticHandleName(method.wrapper.methodName);
+      String       handleName = Utils.staticHandleName(method.wrapper.functionDescriptor.implementingMethod);
       FieldVisitor handleVar = cv.visitField(ACC_PRIVATE + ACC_STATIC, handleName, Type.getDescriptor(MethodHandle.class), null, null);
       handleVar.visitEnd();
       if (!method.isStatic) {
@@ -233,7 +233,7 @@ public class ClassCompiler {
     // method to handle filling in of optional parameter values and to support named parameter
     // invocation
     if (!isScriptMain) {
-      doCompileMethod(method.wrapper, method.wrapper.methodName, false);
+      doCompileMethod(method.wrapper, method.wrapper.functionDescriptor.implementingMethod, false);
 
 
 //      MethodVisitor  mv;

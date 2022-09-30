@@ -118,7 +118,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     mv.visitMaxs(0, 0);
 
-    check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.methodName + ". Type stack = " + stack);
+    check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
   }
 
   /////////////////////////////////////////////
@@ -319,8 +319,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If actual function (not closure)
     if (expr.type.is(FUNCTION) && expr.funDecl != null) {
       loadBoundMethodHandle(expr.funDecl);
-      expr.funDecl.internalClassName = classCompiler.internalName;
-      expr.funDecl.wrapper.internalClassName = classCompiler.internalName;
+      expr.funDecl.functionDescriptor.implementingClass = classCompiler.internalName;
+      expr.funDecl.wrapper.functionDescriptor.implementingClass = classCompiler.internalName;
     }
     else
     if (expr.initialiser != null) {
@@ -1046,10 +1046,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIdentifier(Expr.Identifier expr) {
-    if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1) {
+    final var name = expr.identifier.getStringValue();
+    final var isBuiltinFunction = expr.varDecl.funDecl != null && expr.varDecl.funDecl.functionDescriptor.isBuiltin;
+    if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1 && !isBuiltinFunction) {
       throw new CompileError("Forward reference to uninitialised value", expr.location);
     }
-    final var name = expr.identifier.getStringValue();
+
+    if (isBuiltinFunction) {
+      // If we have the name of a builtin function then lookup its MethodHandle
+      loadConst(name);
+      invokeStatic(BuiltinFunctions.class, "lookupMethodHandle", String.class);
+    }
+    else
     if (name.charAt(0) == '$') {
       loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
@@ -1121,81 +1129,35 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // support.
     // E.g.: def x; def f(){g()}; def g(){x}  --> gives error about forward ref to uninitialised value
     boolean isFunctionCall = false;
-    Expr.FunDecl funDecl = null;
+    FunctionDescriptor functionDescriptor = null;
     if (expr.callee.isFunctionCall()) {
-      funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
+      functionDescriptor = ((Expr.Identifier) expr.callee).getFuncDescriptor();
       // Can only call directly if in same class or is static method. Otherwise we need MethodHandle that
       // was bound to its instance. Functions can be in different classes in repl mode where functions are
       // compiled into separate classes every compile step and then stored in global map.
-      isFunctionCall = funDecl.isStatic || funDecl.internalClassName == null || funDecl.internalClassName.equals(classCompiler.internalName);
+      isFunctionCall = functionDescriptor.isStatic || functionDescriptor.implementingClass == null || functionDescriptor.implementingClass.equals(classCompiler.internalName);
     }
     if (isFunctionCall) {
-      // We invoke wrapper if we don't have enough args since it will fill in missing
-      // values for optional parameters
-      boolean invokeWrapper = expr.args.size() != funDecl.parameters.size();
+      var callee = (Expr.Identifier)expr.callee;
+      Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
-      // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
-      var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocalParams : funDecl.heapLocalParams).values();
-
-      // Get varDecl for location of HeapLocal that we need for the function we are invoking
-      // If we don't have the variable then null will be used for the varDecl
-      Function<Expr.VarDecl,Pair<String,Expr.VarDecl>> getVarDecl = p -> {
-        String name = p.name.getStringValue();
-        if (p.owner == methodFunDecl) return new Pair(name, p.originalVarDecl);
-        Expr.VarDecl varDecl = methodFunDecl.heapLocalParams.get(p.name.getStringValue());
-        // If not there or if is a different var (with same name)
-        varDecl = varDecl == null || varDecl.originalVarDecl != p.originalVarDecl ? null : varDecl;
-        return new Pair(name,varDecl);
-      };
-
-      var varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
-
-      // Make sure either we have variable already in our heap local params or we are the function where
-      // the heap local param we need was declared. Look for params we cannot pass in:
-      var badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
-      if (badVars.size() > 0) {
-        boolean plural = badVars.size() > 1;
-        throw new CompileError("Invocation of " + funDecl.name.getStringValue() +
-                               " requires passing closed over variable" + (plural?"s ":" ") +
-                               String.join(",", badVars.toArray(String[]::new)) +
-                               (plural ? " that have" : " that has") +
-                               " not been closed over by current " +
-                               (methodFunDecl.isClosure() ? "closure" : "function " + methodFunDecl.name.getStringValue()),
-                               expr.location);
-      }
-
-      if (!funDecl.isStatic) {
-        // Load this
-        loadLocal(0);
-      }
-
-      // Now load the HeapLocals onto the stack
-      varDeclPairs.forEach(p -> loadLocal(p.second.slot));
-
-      if (invokeWrapper) {
-        loadLocation(expr.location);
-        loadArgsAsObjectArr(expr.args);
-      }
-      else {
-        for (int i = 0; i < expr.args.size(); i++) {
-          Expr arg = expr.args.get(i);
-          compile(arg);
-          Expr.VarDecl paramDecl = funDecl.parameters.get(i).declExpr;
-          convertTo(paramDecl.type, !arg.type.isPrimitive(), arg.location);
-          if (paramDecl.isPassedAsHeapLocal) {
-            box();
-            newInstance(HEAPLOCAL);
-            int temp = allocateSlot(HEAPLOCAL);
-            dup();
-            storeLocal(temp);
-            swap();
-            invokeVirtual(HeapLocal.class, "setValue", Object.class);
-            loadLocal(temp);
-            freeTemp(temp);
-          }
+      int argCount = expr.args.size();
+      for (int i = 0; i < argCount; i++) {
+        Expr       arg       = expr.args.get(i);
+        JacsalType argType   = arg.type;
+        JacsalType paramType = functionDescriptor.paramTypes.get(i);
+        if (!argType.isConvertibleTo(paramType)) {
+          throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
         }
       }
-      invokeMethod(invokeWrapper ? funDecl.wrapper : funDecl);
+
+      // If user defined function we need to take care of HeapLocals
+      if (funDecl != null) {
+        invokeUserFunction(expr, funDecl, functionDescriptor);
+      }
+      else {
+        invokeBuiltinFunction(expr, functionDescriptor);
+      }
       return null;
     }
 
@@ -1223,6 +1185,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     return null;
   }
+
 
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
     // Get the instance
@@ -1348,6 +1311,104 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   ///////////////////////////////////////////////////////////////
 
+  private void invokeUserFunction(Expr.Call expr, Expr.FunDecl funDecl, FunctionDescriptor functionDescriptor) {
+    // We invoke wrapper if we don't have enough args since it will fill in missing
+    // values for optional parameters
+    boolean invokeWrapper = expr.args.size() != functionDescriptor.paramTypes.size();
+
+    // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
+    var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocalParams : funDecl.heapLocalParams).values();
+
+    // Get varDecl for location of HeapLocal that we need for the function we are invoking
+    // If we don't have the variable then null will be used for the varDecl
+    Function<Expr.VarDecl,Pair<String,Expr.VarDecl>> getVarDecl = p -> {
+      String name = p.name.getStringValue();
+      if (p.owner == methodFunDecl) return new Pair(name, p.originalVarDecl);
+      Expr.VarDecl varDecl = methodFunDecl.heapLocalParams.get(p.name.getStringValue());
+      // If not there or if is a different var (with same name)
+      varDecl = varDecl == null || varDecl.originalVarDecl != p.originalVarDecl ? null : varDecl;
+      return new Pair(name,varDecl);
+    };
+
+    var varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
+
+    // Make sure either we have variable already in our heap local params or we are the function where
+    // the heap local param we need was declared. Look for params we cannot pass in:
+    var badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
+    if (badVars.size() > 0) {
+      boolean plural = badVars.size() > 1;
+      throw new CompileError("Invocation of " + funDecl.nameToken.getStringValue() +
+                             " requires passing closed over variable" + (plural?"s ":" ") +
+                             String.join(",", badVars.toArray(String[]::new)) +
+                             (plural ? " that have" : " that has") +
+                             " not been closed over by current " +
+                             (methodFunDecl.isClosure() ? "closure" : "function " + methodFunDecl.nameToken.getStringValue()),
+                             expr.location);
+    }
+
+    if (!functionDescriptor.isStatic) {
+      // Load this
+      loadLocal(0);
+    }
+
+    // Now load the HeapLocals onto the stack
+    varDeclPairs.forEach(p -> loadLocal(p.second.slot));
+
+    if (invokeWrapper) {
+      loadLocation(expr.location);
+      loadArgsAsObjectArr(expr.args);
+    }
+    else {
+      for (int i = 0; i < expr.args.size(); i++) {
+        Expr arg = expr.args.get(i);
+        compile(arg);
+        Expr.VarDecl paramDecl = funDecl.parameters.get(i).declExpr;
+        convertTo(paramDecl.type, !arg.type.isPrimitive(), arg.location);
+        if (paramDecl.isPassedAsHeapLocal) {
+          box();
+          newInstance(HEAPLOCAL);
+          int temp = allocateSlot(HEAPLOCAL);
+          dup();
+          storeLocal(temp);
+          swap();
+          invokeVirtual(HeapLocal.class, "setValue", Object.class);
+          loadLocal(temp);
+          freeTemp(temp);
+        }
+      }
+    }
+    invokeMethod(invokeWrapper ? funDecl.wrapper : funDecl);
+  }
+
+  private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor functionDescriptor) {
+    // We invoke wrapper if we don't have enough args since it will fill in missing
+    // values for optional parameters
+    boolean invokeWrapper = expr.args.size() != functionDescriptor.paramTypes.size();
+
+    if (!functionDescriptor.isStatic) {
+      // Load this
+      loadLocal(0);
+    }
+
+    if (invokeWrapper) {
+      loadLocation(expr.location);
+      loadArgsAsObjectArr(expr.args);
+    }
+    else {
+      for (int i = 0; i < expr.args.size(); i++) {
+        Expr arg = expr.args.get(i);
+        compile(arg);
+        JacsalType paramtype = functionDescriptor.paramTypes.get(i);
+        convertTo(paramtype, !arg.type.isPrimitive(), arg.location);
+      }
+    }
+    invokeMethod(functionDescriptor.isStatic,
+                 functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
+                 invokeWrapper ? functionDescriptor.wrapperMethod : functionDescriptor.implementingMethod,
+                 functionDescriptor.returnType,
+                 functionDescriptor.paramTypes);
+  }
+
   private void invokeMethodHandle() {
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/Object;", false);
     pop(4);   // callee, source, offset, Object[]
@@ -1412,8 +1473,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Value of the variable will be the handle for the function
     loadClassField(classCompiler.internalName,
-                   wrapperFunDecl.isStatic ? Utils.staticHandleName(funDecl.methodName)
-                                           : Utils.handleName(funDecl.methodName),
+                   wrapperFunDecl.isStatic ? Utils.staticHandleName(funDecl.functionDescriptor.implementingMethod)
+                                           : Utils.handleName(funDecl.functionDescriptor.implementingMethod),
                    FUNCTION,
                    wrapperFunDecl.isStatic);
     // If there are implicit closed over heap var params then bind them so we don't need to pass
@@ -1428,7 +1489,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
-      throw new CompileError("Function " + funDecl.name.getStringValue() + " closes over variable" +
+      throw new CompileError("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
                              (plural?"s ":" ") + String.join(",", badVars.toArray(String[]::new)) +
                              " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
     }
@@ -1467,10 +1528,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void invokeMethod(Expr.FunDecl funDecl) {
-    invokeMethod(funDecl.isStatic,
-                 funDecl.internalClassName == null ? classCompiler.internalName : funDecl.internalClassName,
-                 funDecl.methodName,
-                 funDecl.returnType,
+    var functionDescriptor = funDecl.functionDescriptor;
+    invokeMethod(functionDescriptor.isStatic,
+                 functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
+                 functionDescriptor.implementingMethod,
+                 functionDescriptor.returnType,
                  methodParamTypes(funDecl));
   }
 

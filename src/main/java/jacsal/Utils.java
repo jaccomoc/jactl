@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import jacsal.runtime.FunctionDescriptor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -23,6 +24,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.DOUBLE;
@@ -263,5 +265,26 @@ public class Utils {
       }
     }
     return result;
+  }
+
+  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params) {
+    Expr.FunDecl funDecl = new Expr.FunDecl(start, nameToken, returnType, params);
+
+    // Build a FunctionDescriptor to unify Jacsal functions with builtin functions
+    int mandatoryArgCount = mandatoryParamCount(params);
+    FunctionDescriptor descriptor = new FunctionDescriptor(nameToken == null ? null : nameToken.getStringValue(),
+                                                           returnType,
+                                                           params.size(),
+                                                           mandatoryArgCount,
+                                                           true);
+    funDecl.functionDescriptor = descriptor;
+    return funDecl;
+  }
+
+  public static String nth(int i) {
+    if (i % 10 == 1 && i % 100 != 11) { return i + "st"; }
+    if (i % 10 == 2 && i % 100 != 12) { return i + "nd"; }
+    if (i % 10 == 3 && i % 100 != 13) { return i + "rd"; }
+    return i + "th";
   }
 }

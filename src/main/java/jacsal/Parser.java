@@ -269,7 +269,7 @@ public class Parser {
 
     // Create a "variable" for the function that will have the MethodHandle as its value
     // so we can get the function by value
-    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.name, null);
+    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.nameToken, null);
     varDecl.type = FUNCTION;
     varDecl.funDecl = funDecl.declExpr;
     varDecl.isResultUsed = false;
@@ -1101,7 +1101,7 @@ public class Parser {
     itDecl.isParam = true;
     itDecl.isResultUsed = false;
     itDecl.type = ANY;
-    return new Stmt.VarDecl(new Token(IDENTIFIER, token).setValue("def"), itDecl);
+    return new Stmt.VarDecl(new Token(DEF, token), itDecl);
   }
 
   private Deque<Expr.FunDecl> functionStack() {
@@ -1155,7 +1155,7 @@ public class Parser {
                                     TokenType endToken,
                                     boolean isScriptMain) {
     params.forEach(p -> p.declExpr.isExplicitParam = true);
-    Expr.FunDecl funDecl = new Expr.FunDecl(start, name, returnType, params);
+    Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params);
     params.forEach(p -> p.declExpr.owner = funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
       // Add to functions in block so we can support forward references during Resolver phase

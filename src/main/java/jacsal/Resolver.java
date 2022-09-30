@@ -16,6 +16,8 @@
 
 package jacsal;
 
+import jacsal.runtime.BuiltinFunctions;
+import jacsal.runtime.FunctionDescriptor;
 import jacsal.runtime.Functions;
 import jacsal.runtime.RuntimeUtils;
 
@@ -89,10 +91,11 @@ import static jacsal.TokenType.OBJECT_ARR;
  */
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
-  private final CompileContext        compileContext;
-  private final Map<String,Object>    globals;
-  private final Deque<Expr.FunDecl>   functions = new ArrayDeque<>();
-  private final Deque<Stmt.ClassDecl> classes   = new ArrayDeque<>();
+  private final CompileContext           compileContext;
+  private final Map<String,Object>       globals;
+  private final Deque<Expr.FunDecl>      functions = new ArrayDeque<>();
+  private final Deque<Stmt.ClassDecl>    classes   = new ArrayDeque<>();
+  private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
 
   /**
    * Resolve variables, references, etc
@@ -110,6 +113,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         compileContext.globalVars.put(global, varDecl);
       }
     });
+    // Build map of builtin functions, making them look like internal functions for consistency
+    BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, builtinVarDecl(f)));
   }
 
   Void resolve(Stmt stmt) {
@@ -181,7 +186,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // forward references to functions declared at same level as us
       stmt.functions.forEach(nested -> {
         nested.varDecl.owner = functions.peek();
-        define(nested.name, nested.varDecl);
+        define(nested.nameToken, nested.varDecl);
       });
 
       return resolve(stmt.stmts);
@@ -535,7 +540,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitFunDecl(Expr.FunDecl expr) {
     // If the script main function
     if (functions.size() == 0) {
-      expr.methodName = expr.name.getStringValue();
+      expr.functionDescriptor.implementingMethod = expr.nameToken.getStringValue();
       return doVisitFunDecl(expr, false);
     }
 
@@ -543,16 +548,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (!expr.isWrapper && expr.wrapper == null) {
       // Create a name if we are a closure
       Expr.FunDecl parent = functions.peek();
-      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.name.getStringValue();
+      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.nameToken.getStringValue();
 
       // Method name is parent + $ + functionName unless at top level in which case
       // there is no parent so we use just functionName
-      expr.methodName = functions.size() == 1 ? methodName
-                                              : parent.methodName + "$" + methodName;
+      expr.functionDescriptor.implementingMethod = functions.size() == 1 ? methodName
+                                                                         : parent.functionDescriptor.implementingMethod + "$" + methodName;
 
       // Create a wrapper function that takes var of var arg and named argument handling
       expr.wrapper = createWrapperFunction(expr);
-      expr.wrapper.methodName = Utils.wrapperName(expr.methodName);
+      expr.wrapper.functionDescriptor.implementingMethod = Utils.wrapperName(expr.functionDescriptor.implementingMethod);
 
       // Resolve the wrapper. The wrapper has us as an embeeded statement so we will
       // get resolved as a nested function of the wrapper and the next time through here
@@ -581,6 +586,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Add explicit return in places where we would implicity return the result
       explicitReturn(expr.block, expr.returnType);
       resolve(expr.block);
+      // Fix parameter types in FunctionDescriptor
+      List<JacsalType> paramTypes = expr.parameters.stream()
+                                                   .map(p -> p.declExpr.type)
+                                                   .collect(Collectors.toList());
+      expr.functionDescriptor.paramTypes = paramTypes;
       return expr.type = FUNCTION;
     }
     finally {
@@ -606,12 +616,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Expr.VarDecl varDecl = null;
     if (expr.couldBeFunctionCall) {
       varDecl = lookupFunction(expr.identifier);
+      if (varDecl != null) {
+        expr.varDecl = varDecl;
+      }
     }
     if (varDecl == null) {
       // Not a function lookup or couldn't find function
-      varDecl = lookup(expr.identifier);
+      varDecl = lookup(expr.identifier);   // will throw if not found
+      expr.varDecl = varDecl;
     }
-    expr.varDecl = varDecl;
 
     // For capture vars type is always STRING
     if (expr.identifier.getStringValue().charAt(0) == '$') {
@@ -735,22 +748,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     expr.type = ANY;
     if (expr.callee.isFunctionCall()) {
       // Special case where we know the function directly and get its return type
-      Expr.FunDecl funDecl = ((Expr.Identifier) expr.callee).varDecl.funDecl;
-      expr.type = funDecl.returnType;
+      FunctionDescriptor functionDescriptor = ((Expr.Identifier)expr.callee).getFuncDescriptor();
+      expr.type = functionDescriptor.returnType;
 
       // Validate argument count and types against parameter types
-      int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
-      int argCount       = expr.args.size();
-      int paramCount     = funDecl.parameters.size();
-      validateArgCount(argCount, mandatoryCount, paramCount, expr.token);
-      for (int i = 0; i < argCount; i++) {
-        Expr       arg       = expr.args.get(i);
-        JacsalType argType   = arg.type;
-        JacsalType paramType = funDecl.parameters.get(i).declExpr.type;
-        if (!argType.isConvertibleTo(paramType)) {
-          throw new CompileError("Cannot convert " + nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
-        }
-      }
+      validateArgCount(expr.args.size(), functionDescriptor.mandatoryArgCount, functionDescriptor.paramCount, expr.token);
     }
     return null;
   }
@@ -783,7 +785,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           Expr arg = expr.args.get(i);
           JacsalType paramType = descriptor.paramTypes.get(i);
           if (!arg.type.isConvertibleTo(paramType)) {
-            throw new CompileError("Cannot convert " + nth(i + 1) + " argument of type " + arg.type +
+            throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + arg.type +
                                    " to parameter type of " + paramType, arg.location);
           }
         }
@@ -1001,7 +1003,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // variable we are now closing over was not declared after that reference.
     if (funDecl.earliestForwardReference != null) {
       if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
-        throw new CompileError("Forward reference to function " + funDecl.name.getStringValue() + " that closes over variable " +
+        throw new CompileError("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +
                                varDecl.name.getStringValue() + " not yet declared at time of reference",
                                funDecl.earliestForwardReference);
       }
@@ -1009,13 +1011,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     funDecl.heapLocalParams.put(name, newVarDecl);
     return newVarDecl;
-  }
-
-  private static String nth(int i) {
-    if (i % 10 == 1 && i % 100 != 11) { return i + "st"; }
-    if (i % 10 == 2 && i % 100 != 12) { return i + "nd"; }
-    if (i % 10 == 3 && i % 100 != 13) { return i + "rd"; }
-    return i + "th";
   }
 
   private static Object incOrDec(boolean isInc, JacsalType type, Object val) {
@@ -1142,8 +1137,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
 
-    if (varDecl == null /* && compileContext.replMode */) {
+    if (varDecl == null) {
       varDecl = compileContext.globalVars.get(name);
+    }
+
+    if (varDecl == null) {
+      // Last chance is if reference is to a global builtin function
+      varDecl = builtinFunctions.get(name);
     }
 
     if (existenceCheckOnly) {
@@ -1161,6 +1161,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         if (reference == null || isEarlier(location, reference)) {
           varDecl.funDecl.earliestForwardReference = location;
         }
+      }
+
+      if (varDecl.funDecl != null && varDecl.funDecl.functionDescriptor.isBuiltin) {
+        return varDecl;
       }
 
       // Normal local or global variable (not a closed over var) or a function
@@ -1215,7 +1219,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       error("Reference to regex capture variable " + location.getStringValue() + " in scope where no regex match has occurred", location);
     }
     else {
-      error("Reference to unknown variable " + name, location);
+      if (!functionLookup) {
+        error("Reference to unknown variable " + name, location);
+      }
     }
     return null;
   }
@@ -1367,10 +1373,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
 
-    Expr.FunDecl wrapperFunDecl = new Expr.FunDecl(startToken,
-                                                   identToken.apply(Utils.wrapperName(funDecl.methodName)),
-                                                   funDecl.returnType,
-                                                   wrapperParams);
+    Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(startToken,
+                                                      identToken.apply(Utils.wrapperName(funDecl.functionDescriptor.implementingMethod)),
+                                                      ANY,    // wrapper always returns Object
+                                                      wrapperParams);
 
     String sourceName = "_$source";
     wrapperParams.add(createParam.apply(sourceName, STRING));
@@ -1539,5 +1545,21 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private Stmt.Return returnStmt(Token token, Expr expr, JacsalType type) {
     return new Stmt.Return(token, new Expr.Return(token, expr, type));
+  }
+
+  private Expr.VarDecl builtinVarDecl(FunctionDescriptor func) {
+    Function<TokenType,Token> token = t -> new Token(null, 0).setType(t);
+    List<Stmt.VarDecl> params = new ArrayList<>();
+    for (int i = 0; i < func.paramCount; i++) {
+      final var p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null);
+      p.type = func.paramTypes.get(i);
+      params.add(new Stmt.VarDecl(token.apply(p.type.tokenType()), p));
+    }
+    var funDecl = new Expr.FunDecl(null, null, func.returnType, params);
+    funDecl.functionDescriptor = func;
+    var varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), funDecl);
+    varDecl.funDecl = funDecl;
+    varDecl.type = FUNCTION;
+    return varDecl;
   }
 }
