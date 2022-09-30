@@ -1827,7 +1827,6 @@ class CompilerTest {
     test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and str =~ /x/ and x = \"$3$2$1\"; x", "nullnullnull");
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and /x/f and x = \"$3$2$1\"; x", "nullnullnull");
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\" }(); x", "zyx");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/ and x += $1 }('abc'); x", "zyxx");
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x", "zyxb");
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x += $3; x", "zyxbz");
   }
@@ -3509,8 +3508,8 @@ class CompilerTest {
     test("def x = 1; true and x = 2; x", 2);
     test("def x = 1; x = 2 and true", true);
     test("def x = 1; x = 2 and true; x", 2);
-    test("def it = 'abc'; /a/ ? true : false", true);
-    test("def it = 'abc'; def x; /a/ and x = 'xxx'; x", "xxx");
+    test("def it = 'abc'; /a/f ? true : false", true);
+    test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
   }
 
   @Test public void globalFunctions() {
