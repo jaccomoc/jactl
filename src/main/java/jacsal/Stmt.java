@@ -88,18 +88,18 @@ abstract class Stmt {
    */
   static class If extends Stmt {
     Token ifToken;
-    Expr  condtion;
+    Expr  condition;
     Stmt  trueStmt;
     Stmt  falseStmt;
-    If(Token ifToken, Expr condtion, Stmt trueStmt, Stmt falseStmt) {
+    If(Token ifToken, Expr condition, Stmt trueStmt, Stmt falseStmt) {
       this.ifToken = ifToken;
-      this.condtion = condtion;
+      this.condition = condition;
       this.trueStmt = trueStmt;
       this.falseStmt = falseStmt;
       this.location = ifToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitIf(this); }
-    @Override public String toString() { return "If[" + "ifToken=" + ifToken + ", " + "condtion=" + condtion + ", " + "trueStmt=" + trueStmt + ", " + "falseStmt=" + falseStmt + "]"; }
+    @Override public String toString() { return "If[" + "ifToken=" + ifToken + ", " + "condition=" + condition + ", " + "trueStmt=" + trueStmt + ", " + "falseStmt=" + falseStmt + "]"; }
   }
 
   /**

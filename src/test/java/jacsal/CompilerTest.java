@@ -1774,7 +1774,7 @@ class CompilerTest {
     test("def x = 'ab\\nc'; def y = /\nc$/; x =~ y", true);
     test("def x = 'ab\\nc\\n'; def y = /\nc\\z/; x =~ y", false);
     test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", true);
-    test("def it = 'xyyz'; /yy/ and it = 'baa'; /aa$/ and return 'xxx'", "xxx");
+    test("def it = 'xyyz'; /yy/f and it = 'baa'; /aa$/f and return 'xxx'", "xxx");
     test("def it = 'xyz'; String x = /x/; x", "x");
     test("def it = 'xyz'; def x = /x/; x == 'x'", true);
     test("def it = 'xyz'; def x = /x/f; x", true);
@@ -1794,6 +1794,13 @@ class CompilerTest {
     test("['abc','xzt','sas',''].map{/a/f ? true : false}", List.of(true,false,true,false));
     test("['abc','xzt','sas',''].map{ if (/a/f) true else false}", List.of(true,false,true,false));
     test("['abc','xzt','sas',''].map{ /a/f and return true; false}", List.of(true,false,true,false));
+
+    testError("def it = 'abc'; def x; /a/ and x = 'x'; x", "regex string used in boolean context");
+    testError("def it = 'abc'; def x; /a/ ? true : false", "regex string used in boolean context");
+    testError("def it = 'abc'; def x; if (/a/) true else false", "regex string used in boolean context");
+    testError("def it = 'abc'; def x; while (/a/) ;", "regex string used in boolean context");
+    testError("def it = 'abc'; def x; for (; /a/;) ;", "regex string used in boolean context");
+    test("def x = 'abc'; def y; x =~ /a/ and y = 'y'; y", "y");
   }
 
   @Test public void regexCaptureVars() {

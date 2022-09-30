@@ -177,8 +177,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
-    compile(stmt.condtion);
-    convertTo(BOOLEAN, true, stmt.condtion.location);
+    compile(stmt.condition);
+    convertToBoolean(false, stmt.condition);
     pop();
     Label ifFalse = new Label();
     mv.visitJumpInsn(IFEQ, ifFalse);
@@ -204,7 +204,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     mv.visitLabel(loop);
     compile(stmt.condition);
-    convertTo(BOOLEAN, true, stmt.condition.location);
+    convertToBoolean(false, stmt.condition);
     pop();
     mv.visitJumpInsn(IFEQ, stmt.endLoopLabel);
     compile(stmt.body);
@@ -775,7 +775,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Boolean && or ||
     if (expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
       compile(expr.left);
-      convertTo(BOOLEAN, true, expr.left.location);
+      convertToBoolean(false, expr.left);
 
       // Look for short-cutting && or || (i.e. if we already know the result
       // we don't need to evaluate right hand side)
@@ -786,7 +786,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
         pop();
         compile(expr.right);
-        convertTo(BOOLEAN, true, expr.right.location);
+        convertToBoolean(false, expr.right);
         mv.visitJumpInsn(IFEQ, isFalse);
         pop();
         _loadConst(true);
@@ -802,7 +802,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitJumpInsn(IFNE, isTrue);
         pop();
         compile(expr.right);
-        convertTo(BOOLEAN, true, expr.right.location);
+        convertToBoolean(false, expr.right);
         pop();
         mv.visitJumpInsn(IFNE, isTrue);
         _loadConst(false);
@@ -958,7 +958,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitTernary(Expr.Ternary expr) {
     compile(expr.first);
-    convertToBoolean();
+    convertToBoolean(false, expr.first);
     pop();
     Label isFalse = new Label();
     mv.visitJumpInsn(IFEQ, isFalse);
@@ -991,9 +991,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
 
     switch (expr.operator.getType()) {
-      case BANG:    convertToBoolean(true);        break;
-      case MINUS:   arithmeticNegate(expr.expr.location);  break;
-      case PLUS:    /* Nothing to do for unary plus */     break;
+      case BANG:    convertToBoolean(true, expr.expr);  break;
+      case MINUS:   arithmeticNegate(expr.expr.location);       break;
+      case PLUS:    /* Nothing to do for unary plus */          break;
       default:
         throw new UnsupportedOperationException("Internal error: unknown prefix operator " + expr.operator.getType());
     }
@@ -1789,6 +1789,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case OBJECT_ARR: return castToObjectArr(location);
       default:      throw new IllegalStateException("Unknown type " + type);
     }
+  }
+
+  /**
+   * Convert to boolean but first check if source expression is valid to be converted.
+   * We don't allow regex strings to be used in a boolean context to avoid confusion
+   * between a regex string and a regex match.
+   */
+  private void convertToBoolean(boolean negated, Expr expr) {
+    if (expr instanceof Expr.RegexMatch && ((Expr.RegexMatch) expr).string == null) {
+      throw new CompileError("Regex string used in boolean context - add modifier if regex match required", expr.location);
+    }
+    convertToBoolean(negated);
   }
 
   private Void convertToBoolean() {

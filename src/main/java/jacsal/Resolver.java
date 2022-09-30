@@ -219,7 +219,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
-    resolve(stmt.condtion);
+    resolve(stmt.condition);
     resolve(stmt.trueStmt);
     resolve(stmt.falseStmt);
     return null;

@@ -79,7 +79,7 @@ class Stmt {
    */
   class If extends Stmt {
     Token ifToken;
-    Expr  condtion;
+    Expr  condition;
     Stmt  trueStmt;
     Stmt  falseStmt;
   }
