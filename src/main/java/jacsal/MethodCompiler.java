@@ -1121,13 +1121,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we have an explicit function name and exact number of args then we can invoke directly without
     // needing to go through a method handle or via method wrapper that fills in missing args.
     // The only exception is if there are closed over variables (HeapLocals) that need to be passed to it
-    // and those HeapLocals don't exist in our current scope. E.g. because we are invoking another function
+    // and those HeapLocals don't exist in our current scope. E.g. when we are invoking another function
     // from within a separate nested function:  def x; def g(){x}; def f(){g()}
-    // At the time the body of f is invoking g() it doesn't have direct access to x so can't pass it in
-    // as a heap local parameter. In this case it will try to get the value of g (the MethodHandle) and
-    // invoke g that way. If g is uninitialised it means that it is a foward reference that we can't
-    // support.
-    // E.g.: def x; def f(){g()}; def g(){x}  --> gives error about forward ref to uninitialised value
+    // At the time the body of f is invoking g() it doesn't have direct access to x since it is not itself
+    // closing over x and so can't pass it in as a heap local parameter. In this case it will try to get
+    // the value of g (the MethodHandle) and invoke g that way.
     boolean isFunctionCall = false;
     FunctionDescriptor functionDescriptor = null;
     if (expr.callee.isFunctionCall()) {
@@ -1141,22 +1139,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var callee = (Expr.Identifier)expr.callee;
       Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
+      // Validate arguments are of the right type
       int argCount = expr.args.size();
+      JacsalType paramType = null;
       for (int i = 0; i < argCount; i++) {
         Expr       arg       = expr.args.get(i);
         JacsalType argType   = arg.type;
-        JacsalType paramType = functionDescriptor.paramTypes.get(i);
+        paramType = functionDescriptor.paramTypes.get(i);
+        // Check for varArgs (must be last param)
+        if (paramType.is(OBJECT_ARR)) {
+          break;
+        }
         if (!argType.isConvertibleTo(paramType)) {
           throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
         }
       }
 
       // If user defined function we need to take care of HeapLocals
-      if (funDecl != null) {
-        invokeUserFunction(expr, funDecl, functionDescriptor);
+      if (functionDescriptor.isBuiltin) {
+        invokeBuiltinFunction(expr, functionDescriptor);
       }
       else {
-        invokeBuiltinFunction(expr, functionDescriptor);
+        invokeUserFunction(expr, funDecl, functionDescriptor);
       }
       return null;
     }
@@ -1194,28 +1198,40 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we know what method to invoke
     if (expr.methodDescriptor != null) {
       var method = expr.methodDescriptor;
-      if (method.needsLocation) {
+
+      // Need to decide whether to invoke the method or the wrapper. If we have exact number
+      // of arguments we can invoke the method directly. If we don't have all the arguments
+      // (and method allows optional args) then invoke wrapper which will worry about filling
+      // missing values.
+      if (expr.args.size() == method.paramCount) {
+        // Can invoke method directly
+        if (method.needsLocation) {
+          loadLocation(expr.leftParen);
+        }
+        // Get the args
+        int i = 0;
+        // TODO: handle var args when we get a builtin method that needs it
+        for (; i < expr.args.size(); i++) {
+          Expr arg = expr.args.get(i);
+          compile(arg);
+          convertTo(method.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
+        }
+        // Add object type to param list since we invoke static method whose first arg is the object
+        List<JacsalType> types = new ArrayList<>();
+        types.add(method.firstArgtype);
+        if (method.needsLocation) {
+          types.addAll(List.of(STRING,INT));
+        }
+        types.addAll(method.paramTypes);
+        invokeMethod(true, method.implementingClass, method.implementingMethod, expr.type, types);
+      }
+      else {
+        // Need to invoke the wrapper
         loadLocation(expr.leftParen);
+        loadArgsAsObjectArr(expr.args);
+        invokeMethod(true, method.implementingClass, method.wrapperMethod, ANY,
+                     List.of(method.firstArgtype, STRING,INT,ANY));
       }
-      // Get the args
-      int i = 0;
-      for (; i < expr.args.size(); i++) {
-        Expr arg = expr.args.get(i);
-        compile(arg);
-        convertTo(method.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
-      }
-      for (; i < method.paramTypes.size(); i++) {
-        loadDefaultValue(method.paramTypes.get(i));
-      }
-      // Add object type to param list since we invoke static method whose first arg is the object
-      List<JacsalType> types = new ArrayList<>();
-      types.add(method.firstArgtype);
-      if (method.needsLocation) {
-        types.add(STRING);
-        types.add(INT);
-      }
-      types.addAll(method.paramTypes);
-      invokeMethod(true, method.implementingClass, method.implementingMethod, expr.type, types);
       if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
         // If Iterator is not going to have another method invoked on it then we need to convert
         // to List since Iterators are not standard Jacsal types.
@@ -1380,33 +1396,51 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeMethod(invokeWrapper ? funDecl.wrapper : funDecl);
   }
 
-  private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor functionDescriptor) {
+  private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
     // We invoke wrapper if we don't have enough args since it will fill in missing
-    // values for optional parameters
-    boolean invokeWrapper = expr.args.size() != functionDescriptor.paramTypes.size();
+    // values for optional parameters. We need last param if of type Object[] since
+    // this means varArgs.
+    var     paramTypes = func.paramTypes;
+    boolean varArgs    = paramTypes.size() > 0 && paramTypes.get(paramTypes.size() - 1).is(OBJECT_ARR);
+    var nonVarArgCount = varArgs ? paramTypes.size() - 1
+                                 : paramTypes.size();
+    boolean invokeWrapper = expr.args.size() < nonVarArgCount;
 
-    if (!functionDescriptor.isStatic) {
+    if (func.needsLocation || invokeWrapper) {
+      loadLocation(expr.location);
+    }
+
+    if (!func.isStatic) {
       // Load this
       loadLocal(0);
     }
 
     if (invokeWrapper) {
-      loadLocation(expr.location);
       loadArgsAsObjectArr(expr.args);
     }
     else {
-      for (int i = 0; i < expr.args.size(); i++) {
+      int i = 0;
+      for (; i < nonVarArgCount; i++) {
         Expr arg = expr.args.get(i);
+        JacsalType paramType = paramTypes.get(i);
         compile(arg);
-        JacsalType paramtype = functionDescriptor.paramTypes.get(i);
-        convertTo(paramtype, !arg.type.isPrimitive(), arg.location);
+        convertTo(paramType, !arg.type.isPrimitive(), arg.location);
+      }
+
+      // Load the rest of the args (could be none) as var args into Object[]
+      if (varArgs) {
+        loadArgsAsObjectArr(expr.args.subList(i,expr.args.size()));
       }
     }
-    invokeMethod(functionDescriptor.isStatic,
-                 functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
-                 invokeWrapper ? functionDescriptor.wrapperMethod : functionDescriptor.implementingMethod,
-                 functionDescriptor.returnType,
-                 functionDescriptor.paramTypes);
+    if (func.needsLocation) {
+      // Add location types to the front
+      paramTypes = Stream.concat(Stream.of(STRING,INT), paramTypes.stream()).collect(Collectors.toList());
+    }
+    invokeMethod(func.isStatic,
+                 func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                 invokeWrapper ? func.wrapperMethod : func.implementingMethod,
+                 func.returnType,
+                 paramTypes);
   }
 
   private void invokeMethodHandle() {

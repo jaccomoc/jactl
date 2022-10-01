@@ -45,8 +45,9 @@ public class FunctionDescriptor {
     this.needsLocation = needsLocation;
   }
 
-  public FunctionDescriptor(JacsalType type, JacsalType firstArgType, String name, JacsalType returnType, List<JacsalType> paramTypes, int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
-    this(name, returnType, paramTypes.size(), mandatoryArgCount, needsLocation);
+  public FunctionDescriptor(JacsalType type, JacsalType firstArgType, String name, JacsalType returnType, List<JacsalType> paramTypes, boolean varargs,
+                            int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
+    this(name, returnType, varargs ? -1 : paramTypes.size(), mandatoryArgCount, needsLocation);
     this.type = type;
     this.firstArgtype = firstArgType;
     this.paramTypes = paramTypes;

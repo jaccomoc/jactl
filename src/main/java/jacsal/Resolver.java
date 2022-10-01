@@ -836,7 +836,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       String atLeast = mandatoryCount == paramCount ? "" : "at least ";
       throw new CompileError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", location);
     }
-    if (argCount > paramCount) {
+    if (paramCount >= 0 && argCount > paramCount) {
       throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", location);
     }
   }
@@ -1550,7 +1550,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private Expr.VarDecl builtinVarDecl(FunctionDescriptor func) {
     Function<TokenType,Token> token = t -> new Token(null, 0).setType(t);
     List<Stmt.VarDecl> params = new ArrayList<>();
-    for (int i = 0; i < func.paramCount; i++) {
+    for (int i = 0; i < func.paramTypes.size(); i++) {
       final var p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null);
       p.type = func.paramTypes.get(i);
       params.add(new Stmt.VarDecl(token.apply(p.type.tokenType()), p));

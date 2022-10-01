@@ -18,9 +18,6 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -1927,6 +1924,8 @@ class CompilerTest {
     test("[a:true,b:false,c:true].filter{it[1]}.map{it[0]}", List.of("a","c"));
     test("def f = [a:true,b:false,c:true].filter; f{it[1]}.map{it[0]}", List.of("a","c"));
     test("def x = [a:true,b:false,c:true]; x.filter{it[1]}.map{it[0]}", List.of("a","c"));
+    testError("[1,2,3].filter('abc')", "cannot convert");
+    testError("def f = [1,2,3].filter; f('abc')", "cannot convert");
   }
 
   @Test public void lines() {
@@ -3009,6 +3008,8 @@ class CompilerTest {
     test("def f() { def g(){ def h(x){x*x} }; [a:g] }; f().a()(3)", 9);
     test("def x = [:]; int f(x){x*x}; x.a = f; (x.a)(2)", 4);
     test("def x = [:]; int f(x){x*x}; x.a = f; x.a(2)", 4);
+    testError("def f(int x) { x*x }; def g = f; g('abc')", "cannot be cast");
+    testError("def f(String x) { x + x }; def g = f; g(1)", "cannot convert");
   }
 
   @Test public void functionsForwardReference() {
@@ -3276,9 +3277,10 @@ class CompilerTest {
   }
 
   @Test public void collectionMap() {
+    test("[].map()", List.of());
+    test("def f = [].map; f()", List.of());
     testError("[].map{}{}", "too many arguments");
     testError("def x = []; x.map{}{}", "too many arguments");
-    test("[].map()", List.of());
     test("[].map{}", List.of());
     test("[1,2,3].map{}", Arrays.asList(null, null, null));
     test("[1,2,3].map()", List.of(1,2,3));
@@ -3318,6 +3320,9 @@ class CompilerTest {
     test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", List.of(1, 7, 17));
     test("[1,2,3].map{it} instanceof List", true);
     test("def x = [1,2,3]; x.map{it} instanceof List", true);
+    test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
+    test("def f = [1,2,3].map; f()", List.of(1,2,3));
+    testError("def f = [1,2,3].map; f('x')", "cannot convert");
   }
 
   @Test public void collectionSort() {
@@ -3326,6 +3331,9 @@ class CompilerTest {
     test("[1].sort{it[1] <=> it[0]}", List.of(1));
     test("[1,2].sort{it[1] <=> it[0]}", List.of(2,1));
     test("[3,2,1].sort()", List.of(1,2,3));
+    test("def f = [3,2,1].sort; f()", List.of(1,2,3));
+    test("def f = [3,2,1].sort; f{a,b -> b <=> a}", List.of(3,2,1));
+    testError("def f = [3,2,1].sort; f('z')", "cannot convert");
     test("[1,2,3].sort()", List.of(1,2,3));
     test("[3,2,1,4,5].sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
     test("[3,2,1,4,5].sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
@@ -3511,9 +3519,22 @@ class CompilerTest {
     test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
   }
 
-  @Test public void timeStamp() {
+  @Test public void builtinFunctions() {
     test("timeStamp() > 50*356*86400*1000", true);
     test("def f = timeStamp; f() > 0", true);
+    test("sprintf('x')", "x");
+    test("sprintf('x')", "x");
+    test("sprintf('%s','x')", "x");
+    test("sprintf('%s%d','x',1)", "x1");
+    test("def f = sprintf; f('x')", "x");
+    test("def f = sprintf; f('x')", "x");
+    test("def f = sprintf; f('%s','x')", "x");
+    test("def f = sprintf; f('%s%d','x',1)", "x1");
+    testError("sprintf('%s%d','x','y')", "bad format string");
+    testError("def f = sprintf; f('%s%d','x','y')", "bad format string");
+    testError("sprintf('%zs%d','x','y')", "bad format string");
+    testError("sprintf()", "missing mandatory arguments");
+    testError("def f = sprintf; f()", "missing mandatory arguments");
   }
 
   @Test public void globals() {
