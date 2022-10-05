@@ -91,26 +91,28 @@ import static jacsal.TokenType.OBJECT_ARR;
  */
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
-  private final CompileContext           compileContext;
-  private final Map<String,Object>       globals;
+  private final JacsalContext      jacsalContext;
+  private final Map<String,Object> globals;
   private final Deque<Expr.FunDecl>      functions = new ArrayDeque<>();
   private final Deque<Stmt.ClassDecl>    classes   = new ArrayDeque<>();
   private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
+
+  boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
 
   /**
    * Resolve variables, references, etc
    * @param globals  map of global variables (which themselves can be Maps or Lists or simple values)
    */
-  Resolver(CompileContext compileContext, Map<String,Object> globals) {
-    this.compileContext = compileContext;
+  Resolver(JacsalContext jacsalContext, Map<String,Object> globals) {
+    this.jacsalContext = jacsalContext;
     this.globals        = globals;
     globals.keySet().forEach(global -> {
-      if (!compileContext.globalVars.containsKey(global)) {
+      if (!jacsalContext.globalVars.containsKey(global)) {
         Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(global),
                                                 null);
         varDecl.type = JacsalType.typeOf(globals.get(global));
         varDecl.isGlobal = true;
-        compileContext.globalVars.put(global, varDecl);
+        jacsalContext.globalVars.put(global, varDecl);
       }
     });
     // Build map of builtin functions, making them look like internal functions for consistency
@@ -469,7 +471,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
     // Whether we optimise const expressions by evaluating at compile time
     // is controlled by CompileContext (defaults to true).
-    expr.isConst    = compileContext.evaluateConstExprs;
+    expr.isConst    = jacsalContext.evaluateConstExprs;
     expr.constValue = expr.value.getValue();
 
     switch (expr.value.getType()) {
@@ -745,14 +747,28 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Null value for Function", expr.token);
     }
 
+    final var currentFunction = functions.peek();
     expr.type = ANY;
     if (expr.callee.isFunctionCall()) {
       // Special case where we know the function directly and get its return type
-      FunctionDescriptor functionDescriptor = ((Expr.Identifier)expr.callee).getFuncDescriptor();
-      expr.type = functionDescriptor.returnType;
+      var func = ((Expr.Identifier)expr.callee).getFuncDescriptor();
+      expr.type = func.returnType;
 
       // Validate argument count and types against parameter types
-      validateArgCount(expr.args.size(), functionDescriptor.mandatoryArgCount, functionDescriptor.paramCount, expr.token);
+      validateArgCount(expr.args.size(), func.mandatoryArgCount, func.paramCount, expr.token);
+
+      // If function we are invoking is async then we are async
+      if ((func.isAsync || testAsync) && !currentFunction.isScriptMain) {
+        currentFunction.functionDescriptor.isAsync = true;
+      }
+    }
+    else {
+      // If we don't know whether we are invoking an async function or not (since we are invoking
+      // via a function value (the MethodHandle) rather than directly) then we have to assume the
+      // worst and assume it is async.
+      if (!currentFunction.isScriptMain) {
+        currentFunction.functionDescriptor.isAsync = true;
+      }
     }
     return null;
   }
@@ -790,6 +806,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           }
         }
         expr.type = descriptor.returnType;
+
+        // If we are invoking a method that is marked as async then we need to mark ourselves as async
+        // so that callers to us (the current function) can know to add code for handling suspend/resume
+        // with Continuations.
+        if ((descriptor.isAsync || testAsync) && !functions.peek().isScriptMain) {
+          functions.peek().functionDescriptor.isAsync = true;
+        }
+
         return expr.type;
       }
       if (!expr.parent.type.is(MAP)) {
@@ -799,6 +823,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // Don't know type of parent or couldn't find method
     expr.type = ANY;
+
+    // Assume that what we are invoking is async since we have know way of knowing at compile time when
+    // invoking through a function value or when doing run-time lookup of the method name
+    if (!functions.peek().isScriptMain) {
+      functions.peek().functionDescriptor.isAsync = true;
+    }
     return expr.type;
   }
 
@@ -942,7 +972,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         BigDecimal left  = Utils.toDecimal(leftValue);
         BigDecimal right = Utils.toDecimal(rightValue);
         throwIf(expr.operator.is(SLASH,PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
-        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), compileContext.maxScale,
+        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jacsalContext.maxScale,
                                                               expr.operator.getSource(), expr.operator.getOffset());
         break;
       }
@@ -1043,7 +1073,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private void declare(Token name) {
     String varName = name.getStringValue();
     Map<String,Expr.VarDecl> vars = getVars();
-    if (!compileContext.replMode || !isAtTopLevel()) {
+    if (!jacsalContext.replMode || !isAtTopLevel()) {
       Expr.VarDecl decl = vars.get(varName);
       if (decl != null) {
         error("Variable with name " + varName + " already declared in this scope", name);
@@ -1061,7 +1091,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // In repl mode we don't have a top level block and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (isAtTopLevel() && compileContext.replMode) {
+    if (isAtTopLevel() && jacsalContext.replMode) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }
@@ -1077,8 +1107,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private Map<String,Expr.VarDecl> getVars() {
     // Special case for repl mode where we ignore top level block
-    if (compileContext.replMode && isAtTopLevel()) {
-      return compileContext.globalVars;
+    if (jacsalContext.replMode && isAtTopLevel()) {
+      return jacsalContext.globalVars;
     }
     return getBlock().variables;
   }
@@ -1138,7 +1168,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl == null) {
-      varDecl = compileContext.globalVars.get(name);
+      varDecl = jacsalContext.globalVars.get(name);
     }
 
     if (varDecl == null) {

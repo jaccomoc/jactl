@@ -754,7 +754,7 @@ public class RuntimeUtils {
       throw new NullError("No such method " + field + " for type " + className(parent), source, offset);
     }
     try {
-      return handle.invokeExact(source, offset, args);
+      return handle.invokeExact((Continuation)null, source, offset, args);
     }
     catch (RuntimeException e) {
       throw e;
@@ -782,7 +782,7 @@ public class RuntimeUtils {
       throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
     }
     try {
-      return ((MethodHandle)value).invokeExact(source, offset, args);
+      return ((MethodHandle)value).invokeExact((Continuation)null, source, offset, args);
     }
     catch (RuntimeException e) {
       throw e;

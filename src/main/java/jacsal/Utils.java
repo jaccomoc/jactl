@@ -60,6 +60,9 @@ public class Utils {
     return methodName + "$$w";
   }
 
+  static String continuationMethod(String methodName) { return methodName + "$$c"; }
+  static String continuationHandle(String methodName) { return methodName + "$ch"; }
+
   /**
    * Return the numeric type which is the "greater" of the two based on this ordering:
    *   int, long, double, BigDecimal
@@ -225,6 +228,9 @@ public class Utils {
       boolean isPrimive = obj instanceof Class ? ((Class)obj).isPrimitive()
                                                : ((JacsalType)obj).isPrimitive();
       if (isPrimive) {
+        if (obj instanceof Class) {
+          internalName = JacsalType.typeFromClass((Class)obj).getInternalName();
+        }
         mv.visitFieldInsn(GETSTATIC, internalName, "TYPE", "Ljava/lang/Class;");
       }
       else {
@@ -235,6 +241,58 @@ public class Utils {
     else {
       throw new IllegalStateException("Constant of type " + obj.getClass().getName() + " not supported");
     }
+  }
+
+  public static void checkedCast(MethodVisitor mv, JacsalType type) {
+    final var internalName = type.getInternalName();
+    if (internalName != null) {
+      mv.visitTypeInsn(CHECKCAST, internalName);
+    }
+  }
+
+  public static void box(MethodVisitor mv, JacsalType type) {
+    if (type.isBoxed()) {
+      // Nothing to do if not a primitive
+      return;
+    }
+    switch (type.getType()) {
+      case BOOLEAN:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+        break;
+      case INT:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+        break;
+      case LONG:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+        break;
+      case DOUBLE:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+        break;
+    }
+  }
+
+  public static void restoreValue(MethodVisitor mv, int idx, JacsalType type, Runnable loadArray) {
+    loadArray.run();            // Get long array or object array onto stack
+    Utils.loadConst(mv, idx);
+    mv.visitInsn(type.isPrimitive() ? LALOAD : AALOAD);
+    if (!type.isPrimitive()) {
+      Utils.checkedCast(mv, type);
+    }
+    else {
+      if (type.is(JacsalType.BOOLEAN,JacsalType.INT)) {
+        mv.visitInsn(L2I);
+      }
+      if (type.is(JacsalType.DOUBLE)) {
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "longBitsToDouble", "(J)D", false);
+      }
+    }
+  }
+
+  public static void loadContinuationArray(MethodVisitor mv, int contSlot, JacsalType type) {
+    mv.visitVarInsn(ALOAD, contSlot);
+    mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation",
+                      type.isPrimitive() ? "localPrimitives" : "localObjects",
+                      type.isPrimitive() ? "[J" : "[Ljava/lang/Object;");
   }
 
   /**

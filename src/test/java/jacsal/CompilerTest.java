@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -30,18 +31,20 @@ class CompilerTest {
   boolean debug = false;
 
   private void doTest(String code, Object expected)  {
-    doTest(code, true, false, expected);
+    doTest(code, true, false, false, expected);
   }
 
-  private void doTest(String code, boolean evalConsts, boolean replMode, Object expected)  {
+  private void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected)  {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
     try {
-      CompileContext compileContext = new CompileContext().evaluateConstExprs(evalConsts)
-                                                          .replMode(replMode)
-                                                          .debug(debug);
-      Object result = Compiler.run(code, compileContext, createGlobals());
+      JacsalContext jacsalContext = JacsalContext.create()
+                                                 .evaluateConstExprs(evalConsts)
+                                                 .replMode(replMode)
+                                                 .debug(debug)
+                                                 .build();
+      Object result = Compiler.run(code, jacsalContext, testAsync, createGlobals());
       assertEquals(expected, result);
     }
     catch (Exception e) {
@@ -50,15 +53,13 @@ class CompilerTest {
     }
   }
 
-  private void test1(String code, Object expected) {
-    doTest(code, false, false, expected);
-  }
-
   private void test(String code, Object expected) {
-    doTest(code, true, false, expected);
-    doTest(code, false, false, expected);
-    doTest(code, true, true, expected);
-    doTest(code, false, true, expected);
+    doTest(code, true, false, false, expected);
+    doTest(code, false, false, false, expected);
+    doTest(code, true, true, false, expected);
+    doTest(code, false, true, false, expected);
+    doTest(code, true, true, true, expected);
+    doTest(code, true, false, true, expected);
   }
 
   private void testError(String code, String expectedError) {
@@ -74,10 +75,12 @@ class CompilerTest {
 
   private void doTestError(String code, boolean evalConsts, boolean replMode, String expectedError) {
     try {
-      CompileContext compileContext = new CompileContext().evaluateConstExprs(evalConsts)
-                                                          .replMode(replMode)
-                                                          .debug(debug);
-      Compiler.run(code, compileContext, new HashMap<>());
+      JacsalContext jacsalContext = JacsalContext.create()
+                                                 .evaluateConstExprs(evalConsts)
+                                                 .replMode(replMode)
+                                                 .debug(debug)
+                                                 .build();
+      Compiler.run(code, jacsalContext, new HashMap<>());
       fail("Expected JacsalError");
     }
     catch (JacsalError e) {
@@ -2865,7 +2868,7 @@ class CompilerTest {
     testError("def x = { it }; (double)x", "cannot be cast");
     testError("def x = { it }; (Decimal)x", "cannot be cast");
     testError("def x = { it }; (String)x", "cannot convert");
-    test("def x = { it }; '' + x", "MethodHandle(String,int,Object)Object");
+    test("def x = { it }; '' + x", "MethodHandle(Continuation,String,int,Object)Object");
     testError("def x(){ 1 }; (int)x", "cannot cast from");
     testError("def x(){ 1 }; (long)x", "cannot cast from");
     testError("def x(){ 1 }; (double)x", "cannot cast from");
@@ -2951,6 +2954,7 @@ class CompilerTest {
   }
 
   @Test public void simpleFunctions() {
+    testError("def f; f()", "null value for function");
     test("int f(int x) { x * x }; f(2)", 4);
     test("def f(def x) { x * x }; f(2)", 4);
     test("def f(x) { x * x }; f(2)", 4);
@@ -3539,12 +3543,14 @@ class CompilerTest {
 
   @Test public void globals() {
     //test("timestamp() > 0", true);
-    CompileContext compileContext = new CompileContext().evaluateConstExprs(true)
-                                                        .replMode(true)
-                                                        .debug(debug);
+    JacsalContext jacsalContext = JacsalContext.create()
+                                               .evaluateConstExprs(true)
+                                               .replMode(true)
+                                               .debug(debug)
+                                               .build();
     Map<String,Object> globals = createGlobals();
     BiConsumer<String,Object> runtest = (code,expected) -> {
-      Object result = Compiler.run(code, compileContext, globals);
+      Object result = Compiler.run(code, jacsalContext, globals);
       assertEquals(expected, result);
     };
 
@@ -3563,8 +3569,8 @@ class CompilerTest {
     final String fibInt = "int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(40)";
 
 //    debug=true;
-    test1(fibDef, 102334155);
-    test1(fibInt, 102334155);
+    doTest(fibDef, 102334155);
+    doTest(fibInt, 102334155);
 
     final int ITERATIONS = 0;
     Map<String,Object> globals  = new HashMap<>();
@@ -3572,20 +3578,22 @@ class CompilerTest {
     var scriptInt = compile(fibInt);
     long start = System.currentTimeMillis();
     for (int i = 0; i < ITERATIONS; i++) {
-      scriptDef.apply(globals);
+      Compiler.runSync(scriptDef, globals);
       System.out.println("Duration=" + (System.currentTimeMillis() - start) + "ms");
       start = System.currentTimeMillis();
-      scriptInt.apply(globals);
+      Compiler.runSync(scriptInt, globals);
       System.out.println("Duration=" + (System.currentTimeMillis() - start) + "ms");
       start = System.currentTimeMillis();
     }
   }
 
-  private Function<Map<String,Object>,Object> compile(String code) {
-    CompileContext compileContext = new CompileContext().evaluateConstExprs(true)
-                                                        .replMode(true)
-                                                        .debug(false);
+  private Function<Map<String,Object>,Future<Object>> compile(String code) {
+    JacsalContext jacsalContext = JacsalContext.create()
+                                               .evaluateConstExprs(true)
+                                               .replMode(true)
+                                               .debug(false)
+                                               .build();
     Map<String,Object> globals  = new HashMap<>();
-    return Compiler.compile(code, compileContext, globals);
+    return Compiler.compile(code, jacsalContext, globals);
   }
 }

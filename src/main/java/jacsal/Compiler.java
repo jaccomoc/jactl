@@ -19,6 +19,8 @@ package jacsal;
 import jacsal.runtime.BuiltinFunctions;
 
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -31,25 +33,50 @@ public class Compiler {
   private static final AtomicInteger counter = new AtomicInteger();
 
   public static Object run(String source, Map<String,Object> bindings) {
-    return run(source, new CompileContext(), bindings);
+    return run(source, JacsalContext.create().build(), bindings);
   }
 
-  public static Object run(String source, CompileContext compileContext, Map<String,Object> bindings) {
-    Function<Map<String, Object>, Object> compiled = compile(source, compileContext, bindings);
-    return compiled.apply(bindings);
+  static Object run(String source, JacsalContext jacsalContext, boolean testAsync, Map<String,Object> bindings) {
+    Function<Map<String,Object>,Future<Object>> compiled = compile(source, jacsalContext, testAsync, bindings);
+    return runSync(compiled, bindings);
   }
 
-  public static Function<Map<String, Object>, Object> compile(String source, CompileContext compileContext, Map<String, Object> bindings) {
+  public static Object run(String source, JacsalContext jacsalContext, Map<String,Object> bindings) {
+    Function<Map<String,Object>,Future<Object>> compiled = compile(source, jacsalContext, false, bindings);
+    return runSync(compiled, bindings);
+  }
+
+  public static Function<Map<String, Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
+    return compile(source, jacsalContext, false, bindings);
+  }
+
+  private static Function<Map<String, Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, boolean testAsync, Map<String, Object> bindings) {
     var parser   = new Parser(new Tokeniser(source));
     var script   = parser.parse();
-    var resolver = new Resolver(compileContext, bindings);
+    var resolver = new Resolver(jacsalContext, bindings);
+    resolver.testAsync = testAsync;
     resolver.resolve(script);
     script.name = new Token(TokenType.IDENTIFIER, script.name).setValue("JacsalScript_" + counter.incrementAndGet());
-    return compile(source, compileContext, script);
+    return compile(source, jacsalContext, script);
   }
 
-  private static Function<Map<String,Object>,Object> compile(String source, CompileContext compileContext, Stmt.ClassDecl script) {
-    var compiler = new ClassCompiler(source, compileContext, script);
+  private static Function<Map<String,Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
+    var compiler = new ClassCompiler(source, jacsalContext, script);
     return compiler.compile();
+  }
+
+  public static Object runSync(Function<Map<String,Object>,Future<Object>> script, Map<String,Object> globals) {
+    Future<Object> future = script.apply(globals);
+    Object result = null;
+    try {
+      result = future.get();
+    }
+    catch (InterruptedException|ExecutionException e) {
+      throw new IllegalStateException("Internal error: " + e.getMessage(), e);
+    }
+    if (result instanceof RuntimeException) {
+      throw (RuntimeException)result;
+    }
+    return result;
   }
 }

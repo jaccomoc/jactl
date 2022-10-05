@@ -36,6 +36,7 @@ public class FunctionDescriptor {
   public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(clss, String source, int offset, Object args)
   public boolean          isStatic = false;
   public boolean          isBuiltin;
+  public boolean          isAsync;
 
   public FunctionDescriptor(String name, JacsalType returnType, int paramCount, int mandatoryArgCount, boolean needsLocation) {
     this.name = name;
