@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -2221,6 +2222,12 @@ class CompilerTest {
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += 2", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2)", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2); m.a.b.c", 3);
+    test("def x; def y; y ?= (y ?= x.a); y", null);
+    test("def x; def y; y ?= (y ?= x.size()); y", null);
+    test("def x; def y; y ?= (y ?= x.a) ?: 4; y", 4);
+    test("def x; def y; y ?= (y ?= x.a) ?: (y ?= x.b) ?: 4; y", 4);
+    test("def x; def y; y ?= (y ?= x.size()) ?: 4; y", 4);
+    test("def x; def y; y ?= (y ?= 3) + ((y ?= x.size()) ?: 4); y", 7);
   }
 
   @Test public void nullValues() {
@@ -3212,6 +3219,7 @@ class CompilerTest {
     testError("def x = 1; x.size()", "no such method");
     testError("def x = [1]; x.sizeXXX()", "no such method");
     testError("1.size()", "no such method");
+    test("def x; def y; y = x?.size()?.size(); y", null);
   }
 
   @Test public void listEach() {
@@ -3340,6 +3348,7 @@ class CompilerTest {
     testError("def f = [3,2,1].sort; f('z')", "cannot convert");
     test("[1,2,3].sort()", List.of(1,2,3));
     test("[3,2,1,4,5].sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
+    test("def x = [3,2,1,4,5].sort{a,b -> b <=> a}; x", List.of(5,4,3,2,1));
     test("[3,2,1,4,5].sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
     test("def x = [3,2,1,4,5]; x.sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
     test("def x = [3,2,1,4,5]; x.sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
@@ -3524,7 +3533,7 @@ class CompilerTest {
   }
 
   @Test public void builtinFunctions() {
-    test("timeStamp() > 50*356*86400*1000", true);
+    test("timeStamp() > 50*356*86400*1000", true); // more than 50 yrs since epoch started in 1970
     test("def f = timeStamp; f() > 0", true);
     test("sprintf('x')", "x");
     test("sprintf('x')", "x");
@@ -3539,6 +3548,38 @@ class CompilerTest {
     testError("sprintf('%zs%d','x','y')", "bad format string");
     testError("sprintf()", "missing mandatory arguments");
     testError("def f = sprintf; f()", "missing mandatory arguments");
+  }
+
+  @Test public void asyncFunctions() {
+    test("sleeper(1,2)", 2);
+    test("sleeper(1,2L)", 2L);
+    test("sleeper(1,2D)", 2D);
+    test("sleeper(1,2.0)", "#2.0");
+    test("sleeper(1,[])", List.of());
+    test("sleeper(1,[:])", Map.of());
+    test("sleeper(1,{it*it})(2)", 4);
+    test("var x=1L; var y=1D; sleeper(1,2)", 2);
+    test("sleeper(1,2) + sleeper(1,3)", 5);
+    test("var l=[1,2]; var m=[a:1]; var s='asd'; var i=1; var L=1L; var d=1.0; var D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("def l=[1,2]; def m=[a:1]; def s='asd'; def i=1; def L=1L; def d=1.0; def D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("sleeper(1,sleeper(1,2))", 2);
+    test("sleeper(sleeper(1,1),2)", 2);
+    test("sleeper(sleeper(1,1),sleeper(1,2))", 2);
+    test("sleeper(1,sleeper(sleeper(1,1),2)) + sleeper(1,3)", 5);
+    test("def y; y ?= sleeper(1,2); y", 2);
+    test("def y; y ?= sleeper(1,null); y", null);
+    test("def x; def y; y ?= sleeper(1,x)?.size(); y", null);
+    test("def x; def y; y ?= x?.(sleeper(1,'si') + sleeper(1,'ze'))()?.size(); y", null);
+    test("def x = [1,2,3]; def y; y ?= x?.(sleeper(1,'si') + sleeper(1,'ze'))(); y", 3);
+    test("def x = [1,2,3]; def y; y ?= x?.(sleeper(sleeper(1,1),'si') + sleeper(sleeper(1,1),'ze'))(); y", 3);
+    test("def f(int x) { sleeper(1,x) + sleeper(1,x) }; f(1 )", 2);
+    test("def f(int x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
+    test("def f(int x = sleeper(1,1) + sleeper(1,2)) { sleeper(1,x) + sleeper(1,x) }; f()", 6);
+    test("def f(int x = sleeper(sleeper(1,1),sleeper(1,1))) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
+    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { x * y }; f()", 8);
+    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { sleeper(1,x) * sleeper(1,y) }; f()", 8);
+    test("def f(x=8) { def g = {sleeper(1,it)}; g(x) }; f()", 8);
+    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { def g = { sleeper(1,it) + sleeper(1,it) }; g(x)*g(y) }; f()", 32);
   }
 
   @Test public void globals() {
@@ -3565,24 +3606,43 @@ class CompilerTest {
   }
 
   @Test public void fib() {
-    final String fibDef = "def fib(def x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(40)";
-    final String fibInt = "int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(40)";
+    final String fibDef = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
+    final String fibInt = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
+    final String fibDefSleep = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : sleeper(0, fib(x-1)) + sleeper(0, fib(x-2)) }";
+    final String fibIntSleep = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : sleeper(0, fib(x-1)) + sleeper(0, fib(x-2)) }";
+
+    BiConsumer<Integer,Object> runFibDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected);
+    BiConsumer<Integer,Object> runFibInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected);
+    BiConsumer<Integer,Object> runFibSleepDef = (num, expected) -> doTest(fibDefSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
+    BiConsumer<Integer,Object> runFibSleepInt = (num, expected) -> doTest(fibIntSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
 
 //    debug=true;
-    doTest(fibDef, 102334155);
-    doTest(fibInt, 102334155);
+    runFibDef.accept(40, 102334155);
+    runFibInt.accept(40, 102334155);
+    runFibDef.accept(20, 6765);
+    runFibInt.accept(20, 6765);
+    runFibSleepDef.accept(20, 6765);
+    runFibSleepInt.accept(20, 6765);
 
     final int ITERATIONS = 0;
     Map<String,Object> globals  = new HashMap<>();
-    var scriptDef = compile(fibDef);
-    var scriptInt = compile(fibInt);
+    var scriptDef = compile(fibDef + "; fib(40)");
+    var scriptInt = compile(fibInt + "; fib(40)");
+    var scriptSleepDef = compile(fibDefSleep + "; fib(20)");
+    var scriptSleepInt = compile(fibIntSleep + "; fib(20)");
     long start = System.currentTimeMillis();
     for (int i = 0; i < ITERATIONS; i++) {
       Compiler.runSync(scriptDef, globals);
-      System.out.println("Duration=" + (System.currentTimeMillis() - start) + "ms");
+      System.out.println("Def Duration=" + (System.currentTimeMillis() - start) + "ms");
       start = System.currentTimeMillis();
       Compiler.runSync(scriptInt, globals);
-      System.out.println("Duration=" + (System.currentTimeMillis() - start) + "ms");
+      System.out.println("Int Duration=" + (System.currentTimeMillis() - start) + "ms");
+      start = System.currentTimeMillis();
+      Compiler.runSync(scriptSleepDef, globals);
+      System.out.println("Sleeper Def Duration=" + (System.currentTimeMillis() - start) + "ms");
+      start = System.currentTimeMillis();
+      Compiler.runSync(scriptSleepInt, globals);
+      System.out.println("Sleeper Int Duration=" + (System.currentTimeMillis() - start) + "ms");
       start = System.currentTimeMillis();
     }
   }

@@ -24,6 +24,7 @@ public class Continuation extends RuntimeException {
   private AsyncTask    asyncTask;          // The blocking task that needs to be done asynchronously
   private Continuation parentContinuation; // Continuation for our parent stack frame
   private MethodHandle methodHandle;       // Handle pointing to continuation wrapper function
+  public  int          methodLocation;     // Location within method where resuumption should continue
   public  long[]       localPrimitives;
   public  Object[]     localObjects;
   public  Object       result;             // Result of the async call when continuing after suspend
@@ -65,6 +66,7 @@ public class Continuation extends RuntimeException {
     this.asyncTask = continuation.asyncTask;
     continuation.asyncTask = null;
     continuation.parentContinuation = this;    // chain ourselves to our child
+    this.methodLocation = codeLocation;
     this.methodHandle = methodHandle;
     this.localPrimitives = localPrimitives;
     this.localObjects = localObjects;
@@ -80,7 +82,7 @@ public class Continuation extends RuntimeException {
     for (Continuation c = this; c != null; c = c.parentContinuation) {
       try {
         c.result = result;
-        result = c.methodHandle.invokeExact(this);
+        result = c.methodHandle.invokeExact(c);
       }
       catch (Continuation cont) {
         // Make new continuation point back to existing chain at point we are up to so that when it

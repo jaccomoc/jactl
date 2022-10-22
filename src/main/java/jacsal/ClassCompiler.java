@@ -92,12 +92,12 @@ public class ClassCompiler {
 
     Class<?> clss = context.loadClass(internalName.replaceAll("/", "."), cw.toByteArray());
     try {
-      MethodHandle mh = MethodHandles.publicLookup().findVirtual(clss, Utils.JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Map.class));
+      MethodHandle mh = MethodHandles.publicLookup().findVirtual(clss, Utils.JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Continuation.class, Map.class));
       return map -> {
         var future = new CompletableFuture<>();
         try {
           Object instance = clss.getDeclaredConstructor().newInstance();
-          Object result = mh.invoke(instance, map);
+          Object result = mh.invoke(instance, (Continuation)null, map);
           future.complete(result);
         }
         catch (Continuation c) {
@@ -138,6 +138,9 @@ public class ClassCompiler {
     catch (Continuation c) {
       blockingWork(future, c);
     }
+    catch (Throwable t) {
+      future.complete(t);
+    }
   }
 
   /**
@@ -146,6 +149,34 @@ public class ClassCompiler {
   private void compileClassInit() {
     MethodVisitor classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
     classInit.visitCode();
+
+    // Create a continuation method for every async method and every wrapper. The continuation method takes a single
+    // Continuation argument and extracts the parameter values before invoking the underlying function or function
+    // wrapper as needed when continuing from an async suspend.
+    Consumer<Expr.FunDecl> createContinuationHandle = (decl) -> {
+      String       continuationMethod = Utils.continuationMethod(decl.functionDescriptor.implementingMethod);
+      String       handleName         = Utils.continuationHandle(decl.functionDescriptor.implementingMethod);
+      FieldVisitor handleVar          = cv.visitField(ACC_PRIVATE + ACC_STATIC, handleName, Type.getDescriptor(MethodHandle.class), null, null);
+      handleVar.visitEnd();
+
+      classInit.visitVarInsn(ALOAD, 0);
+      classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
+      classInit.visitLdcInsn(continuationMethod);
+      Utils.loadConst(classInit, Object.class);    // return type
+      Utils.loadConst(classInit, Continuation.class);
+      classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
+
+      // Do the lookup
+      classInit.visitMethodInsn(INVOKEVIRTUAL,
+                                "java/lang/invoke/MethodHandles$Lookup",
+                                decl.isStatic ? "findStatic" : "findVirtual",
+                                "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
+                                false);
+
+      // Store handle in static field
+      classInit.visitFieldInsn(PUTSTATIC, internalName, handleName, "Ljava/lang/invoke/MethodHandle;");
+    };
+
     Label tryStart   = new Label();
     Label tryEnd     = new Label();
     Label catchBlock = new Label();
@@ -155,90 +186,65 @@ public class ClassCompiler {
     classInit.visitVarInsn(ASTORE, 0);
 
     // For every method except the script main method
-    Stream<Expr.FunDecl> methodsAndClosures = Stream.concat(classDecl.methods.stream()
-                                                                             .filter(m -> !m.isScriptMain),
+    Stream<Expr.FunDecl> methodsAndClosures = Stream.concat(classDecl.methods.stream(),
                                                             classDecl.closures.stream());
     // Iterate over the wrapper methods
     methodsAndClosures.forEach(funDecl -> {
-      var wrapper = funDecl.wrapper;
-      // Create the method descriptor for the method to be looked up.
-      // Since we create a handle to the wrapper method the signature will be based on
-      // the closed over vars it needs plus the source, offset, and then an Object that
-      // will be the Object[] or Map form of the args.
-      classInit.visitVarInsn(ALOAD, 0);
-      classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
-      String methodName = wrapper.functionDescriptor.implementingMethod;
-      String staticHandleName = Utils.staticHandleName(methodName);
-      classInit.visitLdcInsn(methodName);
-      // Wrapper methods return Object since caller won't know what type they would normally return
-      Utils.loadConst(classInit, ANY);
-
-      // Get all parameter types
-      List<Class> paramTypes = new ArrayList<>();
-      if (wrapper.heapLocalParams.size() > 0) {
-       paramTypes.addAll(Collections.nCopies(wrapper.heapLocalParams.size(), jacsal.runtime.HeapLocal.class));
-      }
-      // Wrapper method always has a Continuation argument even if it doesn't need it since when invoking through
-      // a MethodHandle we have no way of knowing whether it needs a Continuation or not
-      paramTypes.add(Continuation.class);
-      paramTypes.add(String.class);    // source
-      paramTypes.add(int.class);       // offset
-      paramTypes.add(Object.class);    // args
-
-      // Load first parameter type and then load the rest in an array
-      Utils.loadConst(classInit, paramTypes.remove(0));
-
-      // We need an array for the rest of the type args
-      Utils.loadConst(classInit, paramTypes.size());
-      classInit.visitTypeInsn(ANEWARRAY, "java/lang/Class");
-      int i;
-      for (i = 0; i < paramTypes.size(); i++) {
-        classInit.visitInsn(DUP);
-        Utils.loadConst(classInit, i);
-        Utils.loadConst(classInit, paramTypes.get(i));
-        classInit.visitInsn(AASTORE);
-      }
-      classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
-
-      // Do the lookup
-      classInit.visitMethodInsn(INVOKEVIRTUAL,
-                                "java/lang/invoke/MethodHandles$Lookup",
-                                wrapper.isStatic ? "findStatic" : "findVirtual",
-                                "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
-                                false);
-
-      // Store handle in static field
-      classInit.visitFieldInsn(PUTSTATIC, internalName, staticHandleName, "Ljava/lang/invoke/MethodHandle;");
-
-      // Create a continuation method for every async method and every wrapper. The continuation method takes a single
-      // Continuation argument and extracts the parameter values before invoking the underlying function or function
-      // wrapper as needed when continuing from an async suspend.
-      Consumer<Expr.FunDecl> createContinuationHandle = (decl) -> {
-        String continuationMethod = Utils.continuationMethod(decl.functionDescriptor.implementingMethod);
-        String handleName = Utils.continuationHandle(continuationMethod);
-        FieldVisitor handleVar = cv.visitField(ACC_PRIVATE + ACC_STATIC, handleName, Type.getDescriptor(MethodHandle.class), null, null);
-        handleVar.visitEnd();
-
+      if (!funDecl.isScriptMain) {
+        var wrapper = funDecl.wrapper;
+        // Create the method descriptor for the method to be looked up.
+        // Since we create a handle to the wrapper method the signature will be based on
+        // the closed over vars it needs plus the source, offset, and then an Object that
+        // will be the Object[] or Map form of the args.
         classInit.visitVarInsn(ALOAD, 0);
         classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
-        classInit.visitLdcInsn(continuationMethod);
-        Utils.loadConst(classInit, Object.class);    // return type
-        Utils.loadConst(classInit, Continuation.class);
-        classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
+        String methodName       = wrapper.functionDescriptor.implementingMethod;
+        String staticHandleName = Utils.staticHandleName(methodName);
+        classInit.visitLdcInsn(methodName);
+        // Wrapper methods return Object since caller won't know what type they would normally return
+        Utils.loadConst(classInit, ANY);
+
+        // Get all parameter types
+        List<Class> paramTypes = new ArrayList<>();
+        if (wrapper.heapLocalParams.size() > 0) {
+          paramTypes.addAll(Collections.nCopies(wrapper.heapLocalParams.size(), jacsal.runtime.HeapLocal.class));
+        }
+        // Wrapper method always has a Continuation argument even if it doesn't need it since when invoking through
+        // a MethodHandle we have no way of knowing whether it needs a Continuation or not
+        paramTypes.add(Continuation.class);
+        paramTypes.add(String.class);    // source
+        paramTypes.add(int.class);       // offset
+        paramTypes.add(Object.class);    // args
+
+        // Load first parameter type and then load the rest in an array
+        Utils.loadConst(classInit, paramTypes.remove(0));
+
+        // We need an array for the rest of the type args
+        Utils.loadConst(classInit, paramTypes.size());
+        classInit.visitTypeInsn(ANEWARRAY, "java/lang/Class");
+        int i;
+        for (i = 0; i < paramTypes.size(); i++) {
+          classInit.visitInsn(DUP);
+          Utils.loadConst(classInit, i);
+          Utils.loadConst(classInit, paramTypes.get(i));
+          classInit.visitInsn(AASTORE);
+        }
+        classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
 
         // Do the lookup
         classInit.visitMethodInsn(INVOKEVIRTUAL,
                                   "java/lang/invoke/MethodHandles$Lookup",
-                                  decl.isStatic ? "findStatic" : "findVirtual",
+                                  wrapper.isStatic ? "findStatic" : "findVirtual",
                                   "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
                                   false);
 
         // Store handle in static field
-        classInit.visitFieldInsn(PUTSTATIC, internalName, handleName, "Ljava/lang/invoke/MethodHandle;");
-      };
+        classInit.visitFieldInsn(PUTSTATIC, internalName, staticHandleName, "Ljava/lang/invoke/MethodHandle;");
 
-      createContinuationHandle.accept(wrapper);
-      if (funDecl.functionDescriptor.isAsync) {
+        createContinuationHandle.accept(wrapper);
+      }
+
+      if (funDecl.isScriptMain || funDecl.functionDescriptor.isAsync) {
         createContinuationHandle.accept(funDecl);
       }
     });
@@ -300,9 +306,9 @@ public class ClassCompiler {
     if (!isScriptMain) {
       doCompileMethod(method.wrapper, method.wrapper.functionDescriptor.implementingMethod, false);
       emitContinuationWrapper(method.wrapper);
-      if (method.functionDescriptor.isAsync) {
-        emitContinuationWrapper(method);
-      }
+    }
+    if (isScriptMain || method.functionDescriptor.isAsync) {
+      emitContinuationWrapper(method);
     }
   }
 
@@ -317,7 +323,7 @@ public class ClassCompiler {
     if (isScriptMain) {
       // Assign globals map to field so we can access it from anywhere
       mv.visitVarInsn(ALOAD, 0);
-      mv.visitVarInsn(ALOAD, 1);
+      mv.visitVarInsn(ALOAD, 2);
       mv.visitFieldInsn(PUTFIELD, internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
     }
 
@@ -347,6 +353,7 @@ public class ClassCompiler {
     }
 
     mv.visitVarInsn(ALOAD, 1);   // Continuation
+    slot++;
 
     for (int i = 0; i < funDecl.parameters.size(); i++) {
       final var  declExpr = funDecl.parameters.get(i).declExpr;

@@ -48,6 +48,7 @@ public class BuiltinFunctions {
 
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
+      registerGlobalFunction("sleeper", "sleeper", false, 2);
       initialised = true;
     }
   }
@@ -154,10 +155,10 @@ public class BuiltinFunctions {
   /////////////////////////////////////
 
   // = sleeper
-  public static void sleeper(Continuation c, long timeMs, Object result) {
+  public static Object sleeper(Continuation c, long timeMs, Object result) {
     throw Continuation.create(() -> { doSleep(timeMs); return result; });
   }
-  public static void sleeperWrapper(Continuation c, String source, int offset, Object args) {
+  public static Object sleeperWrapper(Continuation c, String source, int offset, Object args) {
     validateArgCount(args, 2, 2, source, offset);
     final var argArr = (Object[]) args;
     try {
@@ -166,9 +167,10 @@ public class BuiltinFunctions {
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(argArr[0]) + " to long", source, offset);
     }
+    return null;
   }
   private static void doSleep(long ms) {
-    try { Thread.sleep(ms); } catch (InterruptedException e) {}
+    try { if (ms > 0) Thread.sleep(ms); } catch (InterruptedException e) {}
   }
 
   // = timestamp

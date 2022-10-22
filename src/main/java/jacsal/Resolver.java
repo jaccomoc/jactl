@@ -1018,6 +1018,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     newVarDecl.type            = varDecl.type.boxed();
     newVarDecl.owner           = varDecl.owner;
     newVarDecl.isHeapLocal     = true;
+//    newVarDecl.isPassedAsHeapLocal = true;
     newVarDecl.isParam         = true;
     newVarDecl.originalVarDecl = varDecl.originalVarDecl;
 
@@ -1091,7 +1092,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // In repl mode we don't have a top level block and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (isAtTopLevel() && jacsalContext.replMode) {
+    if (!decl.isParam && isAtTopLevel() && jacsalContext.replMode) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }

@@ -276,7 +276,9 @@ public class Utils {
     Utils.loadConst(mv, idx);
     mv.visitInsn(type.isPrimitive() ? LALOAD : AALOAD);
     if (!type.isPrimitive()) {
-      Utils.checkedCast(mv, type);
+      if (!type.is(ANY)) {
+        Utils.checkedCast(mv, type);
+      }
     }
     else {
       if (type.is(JacsalType.BOOLEAN,JacsalType.INT)) {
