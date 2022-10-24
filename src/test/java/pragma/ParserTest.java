@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 
-plugins {
-    id 'java-library'
-    id 'maven-publish'
-}
+package pragma;
 
-group 'pragma'
-version '1.0-SNAPSHOT'
+import org.junit.jupiter.api.Test;
 
-repositories {
-    mavenCentral()
-}
+import java.util.function.Function;
 
-dependencies {
-    implementation 'org.ow2.asm:asm:9.3'
-    implementation 'org.ow2.asm:asm-util:9.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
+class ParserTest {
 
-test {
-    useJUnitPlatform()
+  @Test public void simpleExpressions() {
+    Function<String,Expr> parseExpr = code -> new Parser(new Tokeniser(code)).parseExpression();
+    var expr = parseExpr.apply("1 + 2 * 3 + 4");
+    System.out.println(expr);
+  }
 }

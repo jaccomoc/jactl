@@ -14,25 +14,11 @@
  * limitations under the License.
  */
 
-plugins {
-    id 'java-library'
-    id 'maven-publish'
-}
+package pragma;
 
-group 'pragma'
-version '1.0-SNAPSHOT'
+public class EOFError extends CompileError {
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation 'org.ow2.asm:asm:9.3'
-    implementation 'org.ow2.asm:asm-util:9.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
-
-test {
-    useJUnitPlatform()
+  public EOFError(String error, Token token) {
+    super(error, token);
+  }
 }

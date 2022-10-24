@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 
-plugins {
-    id 'java-library'
-    id 'maven-publish'
-}
+package pragma.runtime;
 
-group 'pragma'
-version '1.0-SNAPSHOT'
+import java.util.regex.Matcher;
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation 'org.ow2.asm:asm:9.3'
-    implementation 'org.ow2.asm:asm-util:9.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
-
-test {
-    useJUnitPlatform()
+/**
+ * Container to hold the Matcher and the source string so that we can tell
+ * when doing "global" matching whether we continue matching from where we left
+ * off or not.
+ */
+public class RegexMatcher {
+  public  Matcher    matcher;
+  public  String     str;          // String to match against
+  public  boolean    matched;      // Result of last match
 }

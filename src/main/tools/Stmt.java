@@ -23,10 +23,10 @@
 # remain as is.
 #
 # To generate the code run the GenerateClasses.pl perl script from this directory:
-#  ./GenerateClasses.pl Stmt.java > ../java/jacsal/Stmt.java
+#  ./GenerateClasses.pl Stmt.java > ../java/pragma/Stmt.java
 #
 
-package jacsal;
+package pragma;
 
 import java.util.List;
 import java.util.ArrayList;
