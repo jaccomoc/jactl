@@ -48,6 +48,7 @@ public class JacsalType {
     HEAPLOCAL,
     OBJECT_ARR,
     LONG_ARR,
+    STRING_ARR,
     ITERATOR,
     MATCHER,
     CONTINUATION
@@ -71,6 +72,7 @@ public class JacsalType {
   public static JacsalType HEAPLOCAL     = createRefType(TypeEnum.HEAPLOCAL);
   public static JacsalType OBJECT_ARR    = createRefType(TypeEnum.OBJECT_ARR);
   public static JacsalType LONG_ARR      = createRefType(TypeEnum.LONG_ARR);
+  public static JacsalType STRING_ARR    = createRefType(TypeEnum.STRING_ARR);
   public static JacsalType ITERATOR      = createRefType(TypeEnum.ITERATOR);
   public static JacsalType MATCHER       = createRefType(TypeEnum.MATCHER);
   public static JacsalType CONTINUATION  = createRefType(TypeEnum.CONTINUATION);
@@ -131,6 +133,7 @@ public class JacsalType {
       case DEF:        return ANY;
       case OBJECT_ARR: return OBJECT_ARR;
       case LONG_ARR:   return LONG_ARR;
+      case STRING_ARR: return STRING_ARR;
       default:  throw new IllegalStateException("Internal error: unexpected token " + tokenType);
     }
   }
@@ -152,6 +155,7 @@ public class JacsalType {
       case FUNCTION:   return TokenType.DEF;
       case OBJECT_ARR: return TokenType.OBJECT_ARR;
       case LONG_ARR:   return TokenType.LONG_ARR;
+      case STRING_ARR: return TokenType.STRING_ARR;
       default: throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
   }
@@ -388,6 +392,7 @@ public class JacsalType {
       case HEAPLOCAL:      return Type.getDescriptor(jacsal.runtime.HeapLocal.class);
       case OBJECT_ARR:     return Type.getDescriptor(Object[].class);
       case LONG_ARR:       return Type.getDescriptor(long[].class);
+      case STRING_ARR:     return Type.getDescriptor(String[].class);
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
       case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
       case CONTINUATION:   return Type.getDescriptor(Continuation.class);
@@ -411,6 +416,7 @@ public class JacsalType {
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
       case OBJECT_ARR:     return Type.getType(Object[].class);
       case LONG_ARR:       return Type.getType(long[].class);
+      case STRING_ARR:     return Type.getType(String[].class);
       case ITERATOR:       return Type.getType(Iterator.class);
       case MATCHER:        return Type.getType(RegexMatcher.class);
       case CONTINUATION:   return Type.getType(Continuation.class);
@@ -433,6 +439,7 @@ public class JacsalType {
       case HEAPLOCAL:    return Type.getInternalName(HeapLocal.class);
       case OBJECT_ARR:   return Type.getInternalName(Object[].class);
       case LONG_ARR:     return Type.getInternalName(long[].class);
+      case STRING_ARR:   return Type.getInternalName(String[].class);
       case ITERATOR:     return Type.getInternalName(Iterator.class);
       case MATCHER:      return Type.getInternalName(RegexMatcher.class);
       case CONTINUATION: return Type.getInternalName(Continuation.class);
@@ -454,6 +461,7 @@ public class JacsalType {
     if (obj instanceof MethodHandle) return FUNCTION;
     if (obj instanceof HeapLocal)    return HEAPLOCAL;
     if (obj instanceof long[])       return LONG_ARR;
+    if (obj instanceof String[])     return STRING_ARR;
     if (obj instanceof Object[])     return OBJECT_ARR;
     if (obj instanceof Iterator)     return ITERATOR;
     return ANY;
@@ -475,6 +483,7 @@ public class JacsalType {
     if (clss == MethodHandle.class) { return FUNCTION;      }
     if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
     if (clss == long[].class)       { return LONG_ARR;      }
+    if (clss == String[].class)     { return STRING_ARR;    }
     if (clss == Object[].class)     { return OBJECT_ARR;    }
     if (clss == Iterator.class)     { return ITERATOR;      }
     if (clss == RegexMatcher.class) { return MATCHER;       }
@@ -498,6 +507,7 @@ public class JacsalType {
       case FUNCTION:      return MethodHandle.class;
       case HEAPLOCAL:     return HeapLocal.class;
       case LONG_ARR:      return long[].class;
+      case STRING_ARR:    return String[].class;
       case OBJECT_ARR:    return Object[].class;
       case ITERATOR:      return Iterator.class;
       case MATCHER:       return RegexMatcher.class;
@@ -528,6 +538,7 @@ public class JacsalType {
       case HEAPLOCAL:    return "HeapLocal";
       case OBJECT_ARR:   return "Object[]";
       case LONG_ARR:     return "long[]";
+      case STRING_ARR:   return "String[]";
       case MATCHER:      return "Matcher";
       case CONTINUATION: return "Continuation";
     }

@@ -30,6 +30,7 @@ public class Continuation extends RuntimeException {
   public  Object       result;             // Result of the async call when continuing after suspend
 
   Continuation(AsyncTask asyncTask) {
+    super(null, null, false, false);
     this.asyncTask = asyncTask;
   }
 
@@ -63,6 +64,7 @@ public class Continuation extends RuntimeException {
    * @param localObjects    array of object values for our local non-primitive vars
    */
   public Continuation(Continuation continuation, MethodHandle methodHandle, int codeLocation, long[] localPrimitives, Object[] localObjects) {
+    super(null, null, false, false);
     this.asyncTask = continuation.asyncTask;
     continuation.asyncTask = null;
     continuation.parentContinuation = this;    // chain ourselves to our child

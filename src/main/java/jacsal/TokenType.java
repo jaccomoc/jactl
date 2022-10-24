@@ -69,7 +69,7 @@ public enum TokenType {
   EOF,            // End of file
 
   // Internal use only
-  OBJECT_ARR, LONG_ARR;
+  OBJECT_ARR, LONG_ARR, STRING_ARR;
 
   boolean is(TokenType... types) {
     for (TokenType type: types) {

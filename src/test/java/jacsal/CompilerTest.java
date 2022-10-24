@@ -21,9 +21,13 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,7 +50,13 @@ class CompilerTest {
                                                  .debug(debug)
                                                  .build();
       Object result = Compiler.run(code, jacsalContext, testAsync, createGlobals());
-      assertEquals(expected, result);
+      if (expected instanceof Object[]) {
+        assertTrue(result instanceof Object[]);
+        assertTrue(Arrays.equals((Object[])expected, (Object[])result));
+      }
+      else {
+        assertEquals(expected, result);
+      }
     }
     catch (Exception e) {
       fail(e);
@@ -1950,6 +1960,33 @@ class CompilerTest {
     test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","","abc","","xyz","",""));
   }
 
+  @Test public void join() {
+    test("[].join()", "");
+    test("[].join('')", "");
+    test("[].join('x')", "");
+    test("[:].join()", "");
+    test("[:].join('')", "");
+    test("['x'].join()", "x");
+    test("['x'].join(',')", "x");
+    test("['x','y'].join(',')", "x,y");
+    test("['x','y',1].join(', ')", "x, y, 1");
+    test("[x:1,y:2].join(',')", "x=1,y=2");
+    test("[[x:1],[y:2]].join(', ')", "[x:1], [y:2]");
+    test("def x = []; x.join()", "");
+    test("def x = []; x.join('')", "");
+    test("def x = []; x.join('x')", "");
+    test("def x = [:]; x.join()", "");
+    test("def x = [:]; x.join('')", "");
+    test("def x = ['x']; x.join()", "x");
+    test("def x = ['x']; x.join(',')", "x");
+    test("def x = ['x','y']; x.join(',')", "x,y");
+    test("def x = ['x','y',1]; x.join(', ')", "x, y, 1");
+    test("def x = [x:1,y:2]; x.join(',')", "x=1,y=2");
+    test("def x = [[x:1],[y:2]]; x.join(', ')", "[x:1], [y:2]");
+    test("['x','y','1','2','a'].filter{ /[a-z]/f }.join(',')", "x,y,a");
+    test("def x = ['x','y','1','2','a']; x.filter{ /[a-z]/f }.join(',')", "x,y,a");
+  }
+
   @Test public void listLiterals() {
     test("[]", List.of());
     test("[1]", List.of(1));
@@ -3337,12 +3374,20 @@ class CompilerTest {
     testError("def f = [1,2,3].map; f('x')", "cannot convert");
   }
 
+  @Test public void objectArrResult() {
+    // Test to remind me that exposing Object[] as result from a script call in this one rare case is ok
+    test("def x; [a:1].each{ x = it }; x", new Object[]{"a",1});
+    test("def x; [a:1].each{ x = it }; x; x.size()", 2);
+  }
+
   @Test public void collectionSort() {
     test("[].sort()", List.of());
     test("[].sort{it[1] <=> it[0]}", List.of());
     test("[1].sort{it[1] <=> it[0]}", List.of(1));
     test("[1,2].sort{it[1] <=> it[0]}", List.of(2,1));
     test("[3,2,1].sort()", List.of(1,2,3));
+    test("[3,3,4,1,2,2,5].sort()", List.of(1,2,2,3,3,4,5));
+    test("[3,3,4,1,2,2,5].sort{ a,b -> a <=> b }", List.of(1,2,2,3,3,4,5));
     test("def f = [3,2,1].sort; f()", List.of(1,2,3));
     test("def f = [3,2,1].sort; f{a,b -> b <=> a}", List.of(3,2,1));
     testError("def f = [3,2,1].sort; f('z')", "cannot convert");
@@ -3359,6 +3404,15 @@ class CompilerTest {
          List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
     test("def x = [a:1,x:4,e:3,g:7]; x.sort{it[0][0] <=> it[1][0]}",
          List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
+    final int SORT_SIZE = ThreadLocalRandom.current().nextInt(1000);
+    List<Integer> randomNums = IntStream.range(0, SORT_SIZE)
+                                        .mapToObj(i -> ThreadLocalRandom.current().nextInt(100000))
+                                        .collect(Collectors.toList());
+    ArrayList<Integer> sorted = new ArrayList(randomNums);
+    sorted.sort(null);
+    test("" + randomNums + ".sort{ a,b -> a <=> b }", sorted);
+    test("" + randomNums + ".sort()", sorted);
+    test("" + randomNums + ".sort{ a,b -> sleeper(0,a) <=> sleeper(0,b) }", sorted);
   }
 
   @Test public void stringAddRepeat() {
@@ -3577,9 +3631,45 @@ class CompilerTest {
     test("def f(int x = sleeper(1,1) + sleeper(1,2)) { sleeper(1,x) + sleeper(1,x) }; f()", 6);
     test("def f(int x = sleeper(sleeper(1,1),sleeper(1,1))) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
     test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { x * y }; f()", 8);
+    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { x * y }; f(sleeper(1,3),sleeper(1,5))", 15);
     test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { sleeper(1,x) * sleeper(1,y) }; f()", 8);
     test("def f(x=8) { def g = {sleeper(1,it)}; g(x) }; f()", 8);
     test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { def g = { sleeper(1,it) + sleeper(1,it) }; g(x)*g(y) }; f()", 32);
+    test("\"${sleeper(1,2) + sleeper(1,3)}\"", "5");
+    test("\"${sleeper(1,'a')}:2\"", "a:2");
+    test("\"${sleeper(1,'a')}:${sleeper(1,2)}\"", "a:2");
+    test("\"${sleeper(1,'a')}:${sleeper(1,2) + sleeper(1,3)}\"", "a:5");
+    test("def x = 0; for (int i=sleeper(1,1),j=sleeper(1,2*i),k=0; k<sleeper(1,5) && i < sleeper(1,100); k=sleeper(1,k)+1,i=i+sleeper(1,1),j=sleeper(1,j+1)) { x += sleeper(1,k+i+j); }; x", 45);
+  }
+
+  @Test public void asyncCollectionClosures() {
+    test("def x = [1,2,3].map{ sleeper(1,it) * sleeper(1,it) }; x.size()", 3);
+    test("[1,2,3].map{ sleeper(1,it) * sleeper(1,it) }.size()", 3);
+    test("def f = [1,2,3].map; f{ sleeper(1,it) * sleeper(1,it) }.size()", 3);
+    test("[1,2,3].map{ sleeper(1,it) * sleeper(1,it) }", List.of(1,4,9));
+    test("[1,2,3].map{ sleeper(1,it) }.map{ sleeper(1,it) * sleeper(1,it) }", List.of(1,4,9));
+    test("[a:1,b:2,c:3].map{ sleeper(1,it) }.map{ sleeper(sleeper(1,1),it[1]) }.map{ sleeper(1,it) * sleeper(1,it) }", List.of(1,4,9));
+    test("[a:1,b:2,c:3].map{ sleeper(1,it) }.map{ \"${sleeper(1,it[0])}:${sleeper(1,it[1])*sleeper(1,it[1])}\" }", List.of("a:1","b:4","c:9"));
+    test("[1,2,3,4].filter{ sleeper(1,true) }", List.of(1,2,3,4));
+    test("[1,2,3,4].filter{ sleeper(1,it) % 2 }", List.of(1,3));
+    test("[1,2,3,4].filter{ sleeper(1,it) % sleeper(1,2) }", List.of(1,3));
+    test("[1,2,3,4].filter{ sleeper(1,true) }.filter{ sleeper(1,it) % sleeper(1,2) }", List.of(1,3));
+    test("def x = 0; [1,2,3,4].each{ x += sleeper(1,it) + sleeper(1,it) }; x", 20);
+    test("def x = 0; [1,2,3,4].map{ sleeper(1,it) + sleeper(1,it) }.each{ x += sleeper(1,it) + sleeper(1,it) }; x", 40);
+    test("[1,2,3,4].collect{ sleeper(1,it) }", List.of(1,2,3,4));
+    test("[1,2,3,4].collect{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }", List.of(2,4,6,8));
+    test("[1,2,3,4].collect{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }.size()", 4);
+    test("def x = 0; def c = [1,2,3,4].collect{ sleeper(1,it) }; c.each{ x += sleeper(1,it) }; x", 10);
+    test("def x = 0; [1,2,3,4].collect{ sleeper(1,it) }.each{ x += sleeper(1,it) }; x", 10);
+    test("[1,2,3,4].map{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }", List.of(2,4,6,8));
+    test("def x = 0; [1,2,3,4].map{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }.each{ x += sleeper(1,it) }; x", 20);
+    test("[1,2,3].map{ sleeper(1,it) * sleeper(1,it) }.filter{ sleeper(1,it) > 3 }.collect{ sleeper(1,it) + sleeper(1,it) }", List.of(8,18));
+    test("[5,4,1,3,2].sort{ a,b -> sleeper(1,a) <=> b }", List.of(1,2,3,4,5));
+    test("[5,4,1,3,2].sort{ a,b -> sleeper(1,a) <=> sleeper(1,b) }", List.of(1,2,3,4,5));
+    test("[5,4,1,3,2].sort{ sleeper(1,it[0]) <=> sleeper(1,it[1]) }", List.of(1,2,3,4,5));
+    test("[5,4,1,3,2].sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(5,4,3,2,1));
+    test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.collect{ it+it }", List.of(32,8,2,50,18));
+    test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(25,16,9,4,1));
   }
 
   @Test public void globals() {
@@ -3624,27 +3714,34 @@ class CompilerTest {
     runFibSleepDef.accept(20, 6765);
     runFibSleepInt.accept(20, 6765);
 
+    BiConsumer<Integer,Runnable> ntimes = (n,runnable) -> IntStream.range(0,n).forEach(i -> runnable.run());
+
     final int ITERATIONS = 0;
     Map<String,Object> globals  = new HashMap<>();
     var scriptDef = compile(fibDef + "; fib(40)");
     var scriptInt = compile(fibInt + "; fib(40)");
     var scriptSleepDef = compile(fibDefSleep + "; fib(20)");
     var scriptSleepInt = compile(fibIntSleep + "; fib(20)");
-    long start = System.currentTimeMillis();
-    for (int i = 0; i < ITERATIONS; i++) {
+    ntimes.accept(ITERATIONS, () -> {
+      long start = System.currentTimeMillis();
       Compiler.runSync(scriptDef, globals);
       System.out.println("Def Duration=" + (System.currentTimeMillis() - start) + "ms");
-      start = System.currentTimeMillis();
+    });
+    ntimes.accept(ITERATIONS, () -> {
+      long start = System.currentTimeMillis();
       Compiler.runSync(scriptInt, globals);
       System.out.println("Int Duration=" + (System.currentTimeMillis() - start) + "ms");
-      start = System.currentTimeMillis();
+    });
+    ntimes.accept(ITERATIONS, () -> {
+      long start = System.currentTimeMillis();
       Compiler.runSync(scriptSleepDef, globals);
       System.out.println("Sleeper Def Duration=" + (System.currentTimeMillis() - start) + "ms");
-      start = System.currentTimeMillis();
+    });
+    ntimes.accept(ITERATIONS, () -> {
+      long start = System.currentTimeMillis();
       Compiler.runSync(scriptSleepInt, globals);
       System.out.println("Sleeper Int Duration=" + (System.currentTimeMillis() - start) + "ms");
-      start = System.currentTimeMillis();
-    }
+    });
   }
 
   private Function<Map<String,Object>,Future<Object>> compile(String code) {

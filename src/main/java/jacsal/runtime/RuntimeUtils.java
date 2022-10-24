@@ -19,6 +19,8 @@ package jacsal.runtime;
 import jacsal.TokenType;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -1016,50 +1018,74 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
   }
 
-  /**
-   * Detect if we have an Iterator and convert to List otherwise just return the object.
-   */
-  public static Object convertToAny(Object obj) {
-    if (obj instanceof Iterator) {
-      return convertIteratorToList((Iterator)obj);
-    }
-    return obj;
-  }
-
-  /**
-   * Convert Iterator types back to List which is suitable for returning
-   * from a script.
-   */
-  public static Object convertToScriptResult(Object obj) {
-    if (obj instanceof Iterator)   { return convertIteratorToList((Iterator) obj); }
-    return obj;
-  }
-
   public static List castToList(Object obj, String source, int offset) {
     if (obj instanceof List)      { return (List)obj;                    }
     if (obj instanceof Object[])  { return Arrays.asList((Object[])obj); }
-    if (obj instanceof Iterator) {
-      Iterator iter = (Iterator)obj;
-      return convertIteratorToList(iter);
-    }
-
     if (obj == null) {
       throw new NullError("Null value for List", source, offset);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
   }
 
-  public static List convertIteratorToList(Iterator iter) {
-    List result = new ArrayList();
-    while (iter.hasNext()) {
-      Object elem = iter.next();
-      if (elem instanceof Map.Entry) {
-        var entry = (Map.Entry)elem;
-        elem = List.of(entry.getKey(), entry.getValue());
+  private static MethodHandle convertIteratorToListHandle = lookupMethod("convertIteratorToList$c", Object.class, Object.class, Continuation.class);
+  public static Object convertIteratorToList$c(Object iterAsObj, Continuation c) {
+    return convertIteratorToList(iterAsObj, c);
+  }
+
+  public static List convertIteratorToList(Object iterAsObj, Continuation c) {
+    Iterator iter = (Iterator)iterAsObj;
+
+    // If we are continuing (c != null) then get objects we have stored previously.
+    // Object arr will have: result
+    Object[] objects = c == null ? null : c.localObjects;
+
+    List result = objects == null ? new ArrayList() : (List)objects[0];
+
+    int methodLocation = c == null ? 0 : c.methodLocation;
+    try {
+      boolean hasNext = true;
+      Object  elem    = null;
+      // Implement as a simple state machine since iter.hasNext() and iter.next() can both throw a Continuation.
+      // iter.hasNext() can throw if we have chained iterators and hasNext() needs to get the next value of the
+      // previous iterator in the chain to see if it has a value.
+      // We track our state using the methodLocation that we pass to our own Continuation when/if we throw.
+      // Even states are the synchronous behavior and the odd states are for handling the async case if the
+      // synchronouse state throws and is later continued.
+      while (true) {
+        switch (methodLocation) {
+          case 0:                       // Initial state
+            hasNext = iter.hasNext();
+            methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
+            break;
+          case 1:                       // Continuing after hasNext() threw Continuation last time
+            hasNext = (boolean)c.result;
+            methodLocation = 2;
+            break;
+          case 2:                      // Have a value for "hasNext"
+            if (!hasNext) {
+              return result;
+            }
+            elem = iter.next();
+            methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
+            break;
+          case 3:                      // Continuing after iter.next() threw Continuation previous time
+            elem = c.result;
+            methodLocation = 4;
+            break;
+          case 4:                      // Have result of iter.next()
+            if (elem instanceof Map.Entry) {
+              var entry = (Map.Entry) elem;
+              elem = List.of(entry.getKey(), entry.getValue());
+            }
+            result.add(elem);
+            methodLocation = 0;       // Back to initial state
+            break;
+        }
       }
-      result.add(elem);
     }
-    return result;
+    catch (Continuation cont) {
+      throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterAsObj), methodLocation + 1, null, new Object[] { result });
+    }
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {
@@ -1167,4 +1193,17 @@ public class RuntimeUtils {
     return null;
   }
   private static boolean isString(Object value) { return value instanceof String; }
+
+  private static MethodHandle lookupMethod(String method, Class returnType, Class... argTypes) {
+    return lookupMethod(RuntimeUtils.class, method, returnType, argTypes);
+  }
+
+  public static MethodHandle lookupMethod(Class clss, String method, Class returnType, Class... argTypes) {
+    try {
+      return MethodHandles.lookup().findStatic(clss, method, MethodType.methodType(returnType, argTypes));
+    }
+    catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new IllegalStateException("Error finding method " + method, e);
+    }
+  }
 }

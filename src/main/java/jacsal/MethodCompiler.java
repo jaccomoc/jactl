@@ -26,7 +26,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -45,6 +44,7 @@ import static jacsal.JacsalType.LONG_ARR;
 import static jacsal.JacsalType.MAP;
 import static jacsal.JacsalType.OBJECT_ARR;
 import static jacsal.JacsalType.STRING;
+import static jacsal.JacsalType.STRING_ARR;
 import static jacsal.TokenType.*;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -145,7 +145,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitJumpInsn(GOTO, asyncLocations.get(i));
       }
       mv.visitLabel(defaultLabel);
-      throwError("Invalid location in continuation", methodFunDecl.location);
+      throwError("Internal error: Invalid location in continuation", methodFunDecl.location);
     }
 
     if (classCompiler.debug()) {
@@ -213,19 +213,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
-    compile(stmt.condition);
-    convertToBoolean(false, stmt.condition);
-    pop();
-    Label ifFalse = new Label();
-    mv.visitJumpInsn(IFEQ, ifFalse);
-    compile(stmt.trueStmt);
-    Label end = new Label();
-    if (stmt.falseStmt != null) {
-      mv.visitJumpInsn(GOTO, end);
-    }
-    mv.visitLabel(ifFalse);
-    compile(stmt.falseStmt);
-    mv.visitLabel(end);
+    emitIf(() -> {
+             compile(stmt.condition);
+             convertToBoolean(false, stmt.condition);
+             pop();
+           },
+           stmt.trueStmt  == null ? null : () -> compile(stmt.trueStmt),
+           stmt.falseStmt == null ? null : () -> compile(stmt.falseStmt));
     return null;
   }
 
@@ -1120,16 +1114,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.exprList.size() > 1) {
       _loadConst(expr.exprList.size());
       mv.visitTypeInsn(ANEWARRAY, "java/lang/String");
+      push(STRING_ARR);
       for (int i = 0; i < expr.exprList.size(); i++) {
-        mv.visitInsn(DUP);
-        _loadConst(i);
+        dupVal();
+        loadConst(i);
         Expr subExpr = expr.exprList.get(i);
         compile(subExpr);
         convertToString();
         mv.visitInsn(AASTORE);
-        pop();
+        pop(3);     // pop types for the String[], index, and the value
       }
-      push(ANY);          // For the String[]
       loadConst(""); // Join string
       swap();
       invokeStatic(String.class, "join", CharSequence.class, CharSequence[].class);
@@ -1198,7 +1192,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Invoking via a method handle so we don't know if we have an async function or not and
     // therefore take the conservative approach of assuming it is async
-    invokeMaybeAsync(true, ANY, expr.location,
+    invokeMaybeAsync(true, ANY, 0, expr.location,
                      () -> {
                        // Need to get the method handle
                        compile(expr.callee);
@@ -1219,7 +1213,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // we need to check that if not immediately invoking another method call (f().each()) we must
     // convert Iterator to List since Iterator is not a standard type.
     if (!expr.isMethodCallTarget) {
-      invokeStatic(RuntimeUtils.class, "convertToAny", Object.class);
+      emitIf(() -> ifInstanceof(ITERATOR),
+             () -> invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
+                                    () -> {
+                                      loadNullContinuation();
+                                      invokeStatic(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                                      pop();
+                                      push(ANY);   // Don't know if call occurs so we still have to assume ANY
+                                    }),
+             null);
     }
 
     return null;
@@ -1236,7 +1238,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.args.size() == method.paramCount) {
         // We can invoke the method directly as we have exact number of args required
         // TODO: handle var args when we get a builtin method that needs it
-        invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, expr.location,
+        invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            // Get the instance
                            compile(expr.parent);
@@ -1258,7 +1260,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         // Need to invoke the wrapper
-        invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, expr.location,
+        invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            compile(expr.parent);                    // Get the instance
                            loadNullContinuation();                  // Continuation
@@ -1271,7 +1273,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
         // If Iterator is not going to have another method invoked on it then we need to convert
         // to List since Iterators are not standard Jacsal types.
-        invokeStatic(RuntimeUtils.class, "convertIteratorToList", Iterator.class);
+        invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
+                         () -> {
+                           loadNullContinuation();
+                           invokeStatic(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                         });
       }
       return null;
     }
@@ -1282,7 +1288,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // exists we will assume that there is a field of that name that holds a MethodHandle.
     // Since we invoke through a MethodHandle we don't know whether we are async or not so we assume
     // the worst.
-    invokeMaybeAsync(true, ANY, expr.location,
+    invokeMaybeAsync(true, ANY, 0, expr.location,
                      () -> {
                        compile(expr.parent);           // The instance to invoke method on
                        loadConst(expr.methodName);
@@ -1304,7 +1310,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // an Iterator and since Iterators are not standard types we need to convert into a List to make the
       // result usable by other code. So we incoke castToAny which will check for Iterator and convert
       // otherwise it returns the current value.
-      invokeStatic(RuntimeUtils.class, "convertToAny", Object.class);
+      emitIf(() -> ifInstanceof(ITERATOR),
+             () -> invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
+                                    () -> {
+                                      loadNullContinuation();
+                                      invokeStatic(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                                      pop();
+                                      push(ANY);   // Don't know if call occurs so we still have to assume ANY
+                                    }),
+             null);
     }
     return null;
   }
@@ -1345,15 +1359,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Expr.Return returnExpr) {
     compile(returnExpr.expr);
-    if (returnExpr.funDecl.isScriptMain) {
-      // Special case for RegexMatch value where we need to turn back into something that
-      // caller can understand. In this case we return the match result.
-      box();
-      invokeStatic(RuntimeUtils.class, "convertToScriptResult", Object.class);
-    }
-    else {
-      convertTo(returnExpr.returnType, true, returnExpr.expr.location);
-    }
+    convertTo(returnExpr.returnType, true, returnExpr.expr.location);
     pop();
     emitReturn(returnExpr.returnType);
     push(ANY);
@@ -1374,6 +1380,24 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   ///////////////////////////////////////////////////////////////
+
+  private void emitIf(Runnable condition, Runnable trueStmts, Runnable falseStmts) {
+    condition.run();
+    Label ifFalse = new Label();
+    mv.visitJumpInsn(IFEQ, ifFalse);
+    if (trueStmts != null) {
+      trueStmts.run();
+    }
+    Label end = new Label();
+    if (falseStmts != null) {
+      mv.visitJumpInsn(GOTO, end);
+    }
+    mv.visitLabel(ifFalse);
+    if (falseStmts != null) {
+      falseStmts.run();
+    }
+    mv.visitLabel(end);
+  }
 
   private List<JacsalType> methodParamTypes(FunctionDescriptor method) {
     List<JacsalType> types = new ArrayList<>();
@@ -1419,7 +1443,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              expr.location);
     }
 
-    invokeMaybeAsync(func.isAsync, invokeWrapper ? ANY : func.returnType, expr.location,
+    invokeMaybeAsync(func.isAsync, invokeWrapper ? ANY : func.returnType, 0, expr.location,
                      () -> {
                        if (!func.isStatic) {
                          // Load this
@@ -1476,7 +1500,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       paramTypes = Stream.concat(Stream.of(CONTINUATION,STRING,INT), paramTypes.stream()).collect(Collectors.toList());
       List<JacsalType> finalParamTypes = paramTypes;
 
-      invokeMaybeAsync(true, func.returnType, expr.location,
+      invokeMaybeAsync(true, func.returnType, 0, expr.location,
                        () -> {
                          if (func.needsLocation) {
                            loadLocation(expr.location);
@@ -1502,7 +1526,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       List<JacsalType> finalParamTypes = paramTypes;
 
-      invokeMaybeAsync(func.isAsync, func.returnType, expr.location,
+      invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
                        () -> {
                          int param = 0;
                          if (func.isAsync) {
@@ -2389,6 +2413,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private void ifInstanceof(JacsalType type) {
+    mv.visitInsn(DUP);
+    mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
+  }
+
   private void emitInstanceof(JacsalType type) {
     mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
   }
@@ -2408,7 +2437,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void throwError(String msg, SourceLocation location) {
-    mv.visitTypeInsn(NEW, "jacsal/runtime/RuntimeError");
+    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
     mv.visitInsn(DUP);
     _loadConst(msg);
     _loadLocation(location);
@@ -2520,13 +2549,29 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Emit code for an async call. We need to capture our state (stack and locals) before
    * invoking the potentially async code so that if it throws a Continuation exception
    * we can then store our state in a Continuation for later resumption.
-   * @param isAsync      true if async invocation required
-   * @param returnType   the type that the invoked function returns
-   * @param location     caller location
-   * @param compileArgs  Runnable that emits code for compiling expressions for the args
-   * @param invoker      Runnable that emits code for the method/function invocation
+   * <p>There are two runnables passed to this function:</p>
+   * <ul>
+   * <li>compileArgs: a runnable that emits code that compiles the arguments for the function</li>
+   * <li>invoker:     a runnable that emits the code for the actual invocation</li>
+   * </ul>
+   * <p>The reason for needing two runnables is that the code for the arguments does not need to be wrapped in the
+   * try/catch that we need for the async function invocation. If an argument expression has its own async invocation
+   * then that will be dealt with during the argument expression compilation separately. By splitting into two runnables
+   * we can insert the try/catch in the right place.</p>
+   * <p>Note that the stack values for the arguments are not restored on resumption since the arguments are consumed by
+   * the function invocation itself.</p>
+   * <p>We also allow a number to be passed that indicate how many of the existing stack values form part of the arugments
+   * for the function invocation. Usually this is 0 but there are occasions where the result of a previous call is used
+   * as an argument to a subsequent async call. We need to be aware of this so that we don't restore those argument
+   * stack values after a continue.</p>
+   * @param isAsync                true if async invocation required
+   * @param returnType             the type that the invoked function returns
+   * @param numArgsAlreadyOnStack  how many arguments for call are already on the stack
+   * @param location               caller location
+   * @param compileArgs            Runnable that emits code for compiling expressions for the args
+   * @param invoker                Runnable that emits code for the method/function invocation
    */
-  private void invokeMaybeAsync(boolean isAsync, JacsalType returnType, Location location, Runnable compileArgs, Runnable invoker) {
+  private void invokeMaybeAsync(boolean isAsync, JacsalType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
     if (!isAsync) {
       compileArgs.run();
       invoker.run();
@@ -2619,9 +2664,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _storeLocal(type, slot2);
         slot2 += slotsNeeded(type);
       }
-      // Restore stack in reverse order
+      // Restore stack in reverse order. Don't restore any args that were already on the stack.
       Iterator<JacsalType> iter = savedStack.descendingIterator();
-      for (int i = size - 1; i >= numLocals; i--) {
+      for (int i = size - 1; i >= numLocals + numArgsAlreadyOnStack; i--) {
         JacsalType type = iter.next();
         Utils.restoreValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
       }
