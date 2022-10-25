@@ -1317,7 +1317,8 @@ public class Parser {
     if (peek().getType().is(EOF)) {
       throw new EOFError("Unexpected EOF: " + msg, peek());
     }
-    error("Unexpected token " + peek().getType() + ": " + msg);
+    final var chars = peek().is(EOL) ? "EOL" : peek().getChars();
+    error("Unexpected token '" + chars + "': " + msg);
     return null;
   }
 
