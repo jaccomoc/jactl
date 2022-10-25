@@ -674,6 +674,9 @@ public class RuntimeUtils {
     if (value instanceof Long)       { return negated == ((long)value == 0); }
     if (value instanceof Double)     { return negated == ((double)value == 0); }
     if (value instanceof BigDecimal) { return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO); }
+    if (value instanceof List)       { return negated == ((List)value).isEmpty(); }
+    if (value instanceof Map)        { return negated == ((Map)value).isEmpty(); }
+    if (value instanceof Object[])   { return negated == (((Object[])value).length == 0); }
     return !negated;
   }
 

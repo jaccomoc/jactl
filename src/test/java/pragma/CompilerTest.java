@@ -176,6 +176,11 @@ class CompilerTest {
     test("!2.0D", false);
     test("!'x'", false);
     test("!''", true);
+    test("[] && true", false);
+    test("[1] && true", true);
+    test("[:] && true", false);
+    test("[a:1] && true", true);
+    test("def x; [a:1].each{ x = it && true }; x", true);
   }
 
   @Test
@@ -2304,7 +2309,7 @@ class CompilerTest {
     test("if (true) true else false", true);
     test("if (false) true", null);
     test("if (false) true else false", false);
-    testError("if (true) int i = 2", "unexpected token int");
+    testError("if (true) int i = 2", "unexpected token 'int'");
     test("int x; if (x) { x += 1 } else { x += 2 }", 2);
     test("int x; if (x) { x += 1 }", null);
     test("int x; if (x) { x += 1; x+= 2\n}", null);
@@ -2326,9 +2331,9 @@ class CompilerTest {
     test("def x = 3; x = 4 unless x != 3; x", 4);
     test("def x = 3; x = 4 if x != 3; x", 3);
     test("def x = 3; x = 4 and return x/2 if x == 3; x", 2);
-    testError("def x = 3; x = 4 and return x/2 if x == 3 unless true; x", "unexpected token unless");
-    testError("unless true", "unexpected token unless");
-    testError("if true", "unexpected token true");
+    testError("def x = 3; x = 4 and return x/2 if x == 3 unless true; x", "unexpected token 'unless'");
+    testError("unless true", "unexpected token 'unless'");
+    testError("if true", "unexpected token 'true'");
     test("def x; x ?= x if true", null);
     test("def x; x ?= 1 if true", 1);
   }
@@ -2844,8 +2849,8 @@ class CompilerTest {
     test("def x = [:] ; x !instanceof double", true);
     test("def x = [:] ; x !instanceof Decimal", true);
 
-    testError("def x = 'int'; x instanceof x", "unexpected token identifier");
-    testError("def x = 'int'; x !instanceof x", "unexpected token identifier");
+    testError("def x = 'int'; x instanceof x", "unexpected token 'x'");
+    testError("def x = 'int'; x !instanceof x", "unexpected token 'x'");
 
     test("def x = [a:[1,2]]; x.a instanceof List", true);
     test("def x = [a:[1,2]]; x.a !instanceof Map", true);
