@@ -1677,7 +1677,15 @@ class CompilerTest {
     test("def x = 3;\"x = $x\"", "x = 3");
     test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
     test("def x = 3; \"x=$x=${\"\"\"${1+2}\"\"\"}\"", "x=3=3");
-    testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "expecting right_brace");
+
+    testError("def x = 3; \"\"\"${1+2}$\"\"\" + 'abc'", "unexpected character '\"'");
+    testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
+    testError("def x = 3; \"\"\"${1+2}${\"\"\" + 'abc'", "unexpected end of file");
+    testError("def x = 3; \"\"\"${1+2}${x\"\"\" + 'abc'", "unexpected end of file");
+    testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
+    testError("def x = 3; \"$x=${\"\"\"${1+2}$\"\"\"}\"", "expecting start of identifier");
+    testError("def x = 3; \"\"\"${1+2}$\"\"\" + 'abc'", "expecting start of identifier");
+
     testError("def x = 3; \"$x=${\"\"\"${1\n+2}\"\"\"}\"", "new line not allowed");
     testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "unexpected new line");
 
@@ -1701,7 +1709,7 @@ class CompilerTest {
     test("def x = 3;def z = /x = ${x+//comment\nx}/; z", "x = 6");
     test("def x = 3; def z = /x = $x/; z", "x = 3");
     test("def x = 3; def z = /x = $x/; z", "x = 3");
-    testError("def x = 3; def z = /$x=${\"${1+2}${\"}/", "expecting right_brace");
+    testError("def x = 3; def z = /$x=${\"${1+2}${\"}/", "unexpected end of file");
     testError("def x = 3; def z = \"$x=${/${1+2\n}/}\"", "new line not allowed");
     testError("def x = 3; def z = \"$x=${/\n${1\n+2}\n/}\"", "unexpected new line");
 
@@ -1717,6 +1725,8 @@ class CompilerTest {
     test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a.(x)", 1);
     test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a[x]", 1);
     test("def it = 'itx'; def x = /${'abcde'}/; x[2]", "c");
+
+    testError("def x = 1; \"\"\"$x\"\"", "unexpected end of file");
 
     // TODO: test with multiple statements within block once supported
     //test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
@@ -1810,6 +1820,7 @@ class CompilerTest {
     testError("def it = 'abc'; def x; while (/a/) ;", "regex string used in boolean context");
     testError("def it = 'abc'; def x; for (; /a/;) ;", "regex string used in boolean context");
     test("def x = 'abc'; def y; x =~ /a/ and y = 'y'; y", "y");
+    test("def x = 'a=b'; x =~ /=b/", true);
   }
 
   @Test public void regexCaptureVars() {

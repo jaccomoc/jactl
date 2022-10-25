@@ -80,6 +80,7 @@ public class Tokeniser {
     boolean isSubstitute;       // True if in pattern part of s/.../.../
     boolean isReplace;          // True if in s/.../.../imsg replacement string
     int     braceLevel;         // At what level of brace nesting does the expression string exist
+    int     stringOffset;       // Offset where string starts
   }
 
   // Valid modifiers that can come immediately after trailing '/' of a regex
@@ -152,29 +153,30 @@ public class Tokeniser {
    * SLASH then we ignore this call and will return the previously parsed tokens.
    */
   public void startRegex() {
-    if (!previousToken.is(SLASH)) {
+    if (!previousToken.is(SLASH,SLASH_EQUAL)) {
       throw new IllegalStateException("Internal error: startRegex on Tokeniser invoked when previous token was " + previousToken + " and not SLASH");
     }
     // Only change our state if this is the first time we have parsed the SLASH token. After
     // any rewind we will ignore since our string state should already be in the right state.
     if (previousToken.getNext() == null) {
-      pushStringState("/");
+      pushStringState("/", previousToken.getOffset());
     }
   }
 
   //////////////////////////////////////////////////////////////////
 
-  private void pushStringState(String endChars) {
-    pushStringState(endChars, false);
+  private void pushStringState(String endChars, int offset) {
+    pushStringState(endChars, offset, false);
   }
 
-  private void pushStringState(String endChars, boolean isSubstitute) {
+  private void pushStringState(String endChars, int offset, boolean isSubstitute) {
     StringState state = new StringState();
     state.endChars = endChars;
     state.allowNewLines = newLinesAllowed() && !endChars.equals("'") && !endChars.equals("\"");
     state.escapeChars = !endChars.equals("/");
     state.isSubstitute = isSubstitute;
     state.isReplace = false;
+    state.stringOffset = offset;
     inString = true;
     stringState.push(state);
   }
@@ -263,13 +265,13 @@ public class Tokeniser {
         // double quote.
         boolean tripleQuote = available(2) && charAt(0) == '"' && charAt(1) == '"';
         String  endChars    = tripleQuote ? "\"\"\"" : "\"";
-        pushStringState(endChars);
+        pushStringState(endChars, offset-1);
         advance(tripleQuote ? 2 : 0);
         token = parseString(true, endChars, newLinesAllowed(), true, false);
         return token.setType(EXPR_STRING_START);
       }
       case REGEX_SUBST_START: {
-        pushStringState("/", true);
+        pushStringState("/", offset-1, true);
         return token.setType(REGEX_SUBST_START);
       }
       case LEFT_BRACE: {
@@ -422,7 +424,7 @@ public class Tokeniser {
     // Make sure that first character is legal for an identitifer
     int startChar = charAt(0);
     if (!isIdentifierStart(startChar) && startChar != '$') {
-      throw new CompileError("Unexpected character '" + (char)startChar + "'", token);
+      throw new CompileError("Unexpected character '" + (char)startChar + "': expecting start of identifier", token);
     }
 
     // Search for first char the is not a valid identifier char
@@ -666,7 +668,7 @@ public class Tokeniser {
       }
       sb.append((char)c);
     }
-    if (!finished) { throw new CompileError("Unexpected end of file in string", token); }
+    if (!finished) { throw new EOFError("Unexpected end of file in string that started", new Token(source, stringState.peek().stringOffset)); }
 
     advance(-1);     // Don't swallow '$' or ending quote
     return token.setType(STRING_CONST)

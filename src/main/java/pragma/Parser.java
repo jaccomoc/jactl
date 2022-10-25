@@ -831,14 +831,14 @@ public class Parser {
     matchAny(EOL);
     if (matchAny(INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
-                 STRING_CONST, TRUE, FALSE, NULL)) { return new Expr.Literal(previous());         }
-    if (peek().is(SLASH, EXPR_STRING_START))       { return exprString();                         }
-    if (matchAny(REGEX_SUBST_START))               { return regexSubstitute();                    }
-    if (matchAny(IDENTIFIER))                      { return new Expr.Identifier(previous());      }
-    if (peek().is(LEFT_SQUARE,LEFT_BRACE))         { if (isMapLiteral()) { return mapLiteral(); } }
-    if (matchAny(LEFT_SQUARE))                     { return listLiteral();                        }
-    if (matchAny(LEFT_PAREN))                      { return nestedExpression.get();               }
-    if (matchAny(LEFT_BRACE))                      { return closure();                            }
+                 STRING_CONST, TRUE, FALSE, NULL))         { return new Expr.Literal(previous());         }
+    if (peek().is(SLASH, SLASH_EQUAL, EXPR_STRING_START))  { return exprString();                         }
+    if (matchAny(REGEX_SUBST_START))                       { return regexSubstitute();                    }
+    if (matchAny(IDENTIFIER))                              { return new Expr.Identifier(previous());      }
+    if (peek().is(LEFT_SQUARE,LEFT_BRACE))                 { if (isMapLiteral()) { return mapLiteral(); } }
+    if (matchAny(LEFT_SQUARE))                             { return listLiteral();                        }
+    if (matchAny(LEFT_PAREN))                              { return nestedExpression.get();               }
+    if (matchAny(LEFT_BRACE))                              { return closure();                            }
     if (matchAny(DO)) {
       matchAny(EOL);
       Token leftBrace = expect(LEFT_BRACE);
@@ -923,7 +923,7 @@ public class Parser {
    * For the / version we treat as a multi-line regular expression and don't support escape chars.
    */
   private Expr exprString() {
-    Token startToken = expect(EXPR_STRING_START,SLASH);
+    Token startToken = expect(EXPR_STRING_START,SLASH,SLASH_EQUAL);
     Expr.ExprString exprString = new Expr.ExprString(startToken);
     if (startToken.is(EXPR_STRING_START)) {
       if (!startToken.getStringValue().isEmpty()) {
@@ -932,6 +932,10 @@ public class Parser {
       }
     }
     else {
+      // We either have / or /= so if /= then add a STRING_CONST of '=' to start of our expression string
+      if (startToken.is(SLASH_EQUAL)) {
+        exprString.exprList.add(new Expr.Literal(new Token(STRING_CONST, startToken).setValue("=")));
+      }
       // Tell tokeniser that the SLASH was actually the start of a regex expression string
       tokeniser.startRegex();
     }
