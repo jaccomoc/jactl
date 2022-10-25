@@ -693,7 +693,7 @@ public class RuntimeUtils {
       List list = (List)obj;
       for (int i = 0; i < list.size(); i++) {
         if (i > 0) { sb.append(", "); }
-        sb.append(toString(list.get(i)));
+        sb.append(toQuotedString(list.get(i)));
       }
       sb.append(']');
       return sb.toString();
@@ -710,7 +710,7 @@ public class RuntimeUtils {
           first = false;
         }
         Map.Entry entry = iter.next();
-        sb.append(toString(entry.getKey())).append(':').append(toString(entry.getValue()));
+        sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(entry.getValue()));
       }
       if (first) {
         // Empty map
@@ -720,6 +720,41 @@ public class RuntimeUtils {
       return sb.toString();
     }
     return obj.toString();
+  }
+
+  /**
+   * Quote if actual string, otherwise delegate back to toString(obj).
+   * This is to make the output of toString() for Map and List objects
+   * is valid Pragma code so we can cut-and-paste output into actual
+   * scripts for testing and use in REPL.
+   */
+  private static String toQuotedString(Object obj) {
+    if (obj instanceof String) {
+      return "'" + obj + "'";
+    }
+    return toString(obj);
+  }
+
+  private static String keyAsString(Object obj) {
+    if (obj == null) {
+      return "null";
+    }
+    String str = obj.toString();   // Should already be a string but just in case...
+    // If string is a valid identifier then no need to quote
+    if (str.isEmpty()) {
+      return "''";
+    }
+    final var start = str.charAt(0);
+    if (Character.isJavaIdentifierStart(start) && start != '$') {
+      for (int i = 1; i < str.length(); i++) {
+        final var ch = str.charAt(i);
+        if (!Character.isJavaIdentifierPart(ch) || ch == '$') {
+          return "'" + str + "'";
+        }
+      }
+      return str;
+    }
+    return "'" + str + "'";
   }
 
   /**
