@@ -45,6 +45,8 @@ public class BuiltinFunctions {
       registerMethod("join", "iteratorJoin", ITERATOR, false, 0);
       registerMethod("lines", "stringLines", false);
 
+      registerMethod("toString", "objectToString", ANY, false, 0);
+
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
       registerGlobalFunction("sleeper", "sleeper", false, 2);
@@ -196,6 +198,14 @@ public class BuiltinFunctions {
   /////////////////////////////////////
   // Methods
   /////////////////////////////////////
+
+  // = toString
+
+  public static String objectToString(Object obj) { return RuntimeUtils.toString(obj); }
+  public static Object objectToStringWrapper(Object obj, Continuation c, String source, int offset, Object args) {
+    validateArgCount(args, 0, 0, source, offset);
+    return RuntimeUtils.toString(obj);
+  }
 
   // = size
 

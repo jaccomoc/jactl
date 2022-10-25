@@ -791,7 +791,7 @@ public class RuntimeUtils {
       handle = (MethodHandle)value;
     }
     if (handle == null) {
-      throw new NullError("No such method " + field + " for type " + className(parent), source, offset);
+      throw new RuntimeError("No such method " + field + " for type " + className(parent), source, offset);
     }
     try {
       return handle.invokeExact((Continuation)null, source, offset, args);
@@ -816,7 +816,7 @@ public class RuntimeUtils {
 
     Object value = ((Map)parent).get(field);
     if (value == null) {
-      throw new NullError("No such method " + field + " for type " + className(parent), source, offset);
+      throw new RuntimeError("No such method " + field + " for type " + className(parent), source, offset);
     }
     if (!(value instanceof MethodHandle)) {
       throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);

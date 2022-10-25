@@ -817,6 +817,8 @@ public class Resolver implements Expr.Visitor<PragmaType>, Stmt.Visitor<Void> {
         return expr.type;
       }
       if (!expr.parent.type.is(MAP)) {
+        // If we are not a Map then we know at compile time that method does not exist. (If we are a Map then at
+        // runtime someone could create a field in the Map with this name so we have to wait until runtime.)
         throw new CompileError("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.accessOperator);
       }
     }

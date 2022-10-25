@@ -3298,7 +3298,7 @@ class CompilerTest {
     test("def result = ''; [a:1,b:2].each{ result += \"[${it[0]},${it[1]}]\" }; result", "[a,1][b,2]");
     test("def result = ''; [a:1,b:2].each{ x -> result += \"[${x[0]},${x[1]}]\" }; result", "[a,1][b,2]");
     test("def result = 0; [a:1,b:2].each{ x -> result += x.size() }; result", 4);
-    test("def result = ''; [a:1,b:2].each{ x -> result += x }; result", "[a, 1][b, 2]");
+    test("def result = ''; [a:1,b:2].each{ x -> result += x }; result", "['a', 1]['b', 2]");
     test("def result = 0; [a:1,b:2].each{ x -> x.each{ result++ } }; result", 4);
     test("def result = 0; [a:1,b:2].each{ List x -> x.each{ result++ } }; result", 4);
     test("def result = ''; [a:1,b:2].each{ List x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
@@ -3684,6 +3684,39 @@ class CompilerTest {
     test("[5,4,1,3,2].sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(5,4,3,2,1));
     test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.collect{ it+it }", List.of(32,8,2,50,18));
     test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(25,16,9,4,1));
+  }
+
+  @Test public void toStringTest() {
+    testError("null.toString()", "tried to invoke method on null");
+    test("1.toString()", "1");
+    test("def x = 1; x.toString()", "1");
+    test("[].toString()", "[]");
+    test("[1,2,3].toString()", "[1, 2, 3]");
+    test("[:].toString()", "[:]");
+    test("[a:1].toString()", "[a:1]");
+    test("[a:1,b:2].toString()", "[a:1, b:2]");
+    test("['123':1,b:2].toString()", "['123':1, b:2]");
+    test("['a b c':1,b:2].toString()", "['a b c':1, b:2]");
+    test("[a:1,b:['x','y',[c:3]]].toString()", "[a:1, b:['x', 'y', [c:3]]]");
+    test("1D.toString()", "1.0");
+    test("1.0D.toString()", "1.0");
+    test("1.0.toString()", "1.0");
+    test("12345678901234L.toString()", "12345678901234");
+    test("def x = []; x.toString()", "[]");
+    test("def x = [1,2,3]; x.toString()", "[1, 2, 3]");
+    test("def x = [:]; x.toString()", "[:]");
+    test("def x = [a:1]; x.toString()", "[a:1]");
+    test("def x = [a:1,b:2]; x.toString()", "[a:1, b:2]");
+    test("def x = ['123':1,b:2]; x.toString()", "['123':1, b:2]");
+    test("def x = ['a b c':1,b:2]; x.toString()", "['a b c':1, b:2]");
+    test("def x = [a:1,b:['x','y',[c:3]]]; x.toString()", "[a:1, b:['x', 'y', [c:3]]]");
+    test("def x = 1D; x.toString()", "1.0");
+    test("def x = 1.0D; x.toString()", "1.0");
+    test("def x = 1.0; x.toString()", "1.0");
+    test("def x = 12345678901234L; x.toString()", "12345678901234");
+    test("def x = ''; [a:1].each{ x += it.toString() }; x", "['a', 1]");
+    test("def f(x) {x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object)Object");
+    test("def f = { x -> x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object)Object");
   }
 
   @Test public void globals() {

@@ -109,6 +109,10 @@ public class Functions {
         match = functions.stream().filter(f -> f.type == ITERATOR).findFirst();
       }
     }
+    // Final check is for ANY
+    if (match.isEmpty()) {
+      match = functions.stream().filter(f -> f.type == ANY).findFirst();
+    }
     return match.orElse(NO_SUCH_METHOD);
   }
 }

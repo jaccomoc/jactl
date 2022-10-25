@@ -1242,6 +1242,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            // Get the instance
                            compile(expr.parent);
+                           // If we are calling a "method" that is ANY but we have a primitive then we need to box it
+                           if (method.firstArgtype.is(ANY)) {
+                             box();
+                           }
                            if (method.isAsync) {
                              loadNullContinuation();
                            } // Continuation
@@ -1263,6 +1267,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            compile(expr.parent);                    // Get the instance
+                           // If we are calling a "method" that is ANY but we have a primitive then we need to box it
+                           if (method.firstArgtype.is(ANY)) {
+                             box();
+                           }
                            loadNullContinuation();                  // Continuation
                            loadLocation(expr.leftParen);
                            loadArgsAsObjectArr(expr.args);
