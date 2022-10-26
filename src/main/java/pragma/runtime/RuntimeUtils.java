@@ -1244,4 +1244,20 @@ public class RuntimeUtils {
       throw new IllegalStateException("Error finding method " + method, e);
     }
   }
+
+  /**
+   * If we have a Map.Entry then convert to List so that when passed to a closure
+   * the closure will see a list of [key,value]
+   */
+  public static Object mapEntryToList(Object elem) {
+    if (elem instanceof Map.Entry) {
+      var entry = (Map.Entry) elem;
+      elem = Arrays.asList(entry.getKey(), entry.getValue());
+    }
+    return elem;
+  }
+
+  public static Object[] listToObjectArray(Object obj) {
+    return ((List)obj).toArray();
+  }
 }

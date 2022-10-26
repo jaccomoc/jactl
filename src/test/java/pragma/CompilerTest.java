@@ -3339,6 +3339,46 @@ class CompilerTest {
     test("[a:1,b:2,c:3].collect{ x,y -> x + y }", List.of("a1","b2","c3"));
   }
 
+  @Test public void collectEntries() {
+    test("[].collectEntries()", Map.of());
+    test("[].collectEntries{}", Map.of());
+    test("[:].collectEntries()", Map.of());
+    test("[:].collectEntries{}", Map.of());
+    test("[a:1].collectEntries()", Map.of("a", 1));
+    test("[a:1].collectEntries{ it }", Map.of("a", 1));
+    test("[a:1].collectEntries{ a,b -> [a,b] }", Map.of("a", 1));
+    test("[a:1,b:2].collectEntries{ it }", Map.of("a", 1,"b",2));
+    test("[a:1,b:2].collectEntries{ a,b -> [a,b] }", Map.of("a", 1,"b",2));
+    testError("[a:1].collectEntries{}", "got null");
+    test("[['a',1]].collectEntries()", Map.of("a",1));
+    test("[['a',1],['a',2]].collectEntries()", Map.of("a",2));
+    test("[a:1,b:2].collectEntries()", Map.of("a",1,"b",2));
+    test("[1,2,3,4].collectEntries{ [it.toString()*it,it*it] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("[1,2,3,4].map{ [it,it*it] }.map{ a,b -> [a,b] }.collectEntries{ a,b -> [a.toString()*a,b] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("[1,2,3,4].map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("[1,2,3,4].map{ [it.toString()*it,it*it] }.collectEntries()", Map.of("1",1,"22",4,"333",9,"4444",16));
+    testError("[1,2,3,4].map{ [it,it*it] }.collectEntries()", "expected string type for key");
+    test("def x = []; x.collectEntries()", Map.of());
+    test("def x = []; x.collectEntries{}", Map.of());
+    test("def x = [:]; x.collectEntries()", Map.of());
+    test("def x = [:]; x.collectEntries{}", Map.of());
+    test("def x = [a:1]; x.collectEntries()", Map.of("a", 1));
+    test("def x = [a:1]; x.collectEntries{ it }", Map.of("a", 1));
+    test("def x = [a:1]; x.collectEntries{ a,b -> [a,b] }", Map.of("a", 1));
+    test("def x = [a:1,b:2]; x.collectEntries{ it }", Map.of("a", 1,"b",2));
+    test("def x = [a:1,b:2]; x.collectEntries{ a,b -> [a,b] }", Map.of("a", 1,"b",2));
+    testError("def x = [a:1]; x.collectEntries{}", "got null");
+    test("def x = [['a',1]]; x.collectEntries()", Map.of("a",1));
+    test("def x = [['a',1],['a',2]]; x.collectEntries()", Map.of("a",2));
+    test("def x = [a:1,b:2]; x.collectEntries()", Map.of("a",1,"b",2));
+    test("def x = [1,2,3,4]; x.collectEntries{ [it.toString()*it,it*it] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [1,2,3,4]; x.map{ [it.toString()*it,it*it] }.collectEntries()", Map.of("1",1,"22",4,"333",9,"4444",16));
+    testError("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries()", "expected string type for key");
+    test("def x = [1,2,3,4]; x.collectEntries{ [sleeper(0,it.toString())*sleeper(0,it),sleeper(0,it)*it] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [1,2,3,4]; x.map{ [sleeper(0,it),sleeper(0,it)*sleeper(0,it)] }.collectEntries{ a,b -> [sleeper(0,a.toString())*sleeper(0,a),sleeper(0,b)] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+  }
+
   @Test public void collectionMap() {
     test("[].map()", List.of());
     test("def f = [].map; f()", List.of());
@@ -3386,11 +3426,11 @@ class CompilerTest {
     test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
     test("def f = [1,2,3].map; f()", List.of(1,2,3));
     testError("def f = [1,2,3].map; f('x')", "cannot convert");
+    test("[1].map{ [it,it] }.map{ a,b -> a + b }", List.of(2));
   }
 
-  @Test public void objectArrResult() {
-    // Test to remind me that exposing Object[] as result from a script call in this one rare case is ok
-    test("def x; [a:1].each{ x = it }; x", new Object[]{"a",1});
+  @Test public void mapEntryAsList() {
+    test("def x; [a:1].each{ x = it }; x", List.of("a",1));
     test("def x; [a:1].each{ x = it }; x; x.size()", 2);
   }
 

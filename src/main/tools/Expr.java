@@ -368,11 +368,22 @@ class Expr {
   }
 
   /**
-   * Invoke a function - internal use only
+   * Invoke a user function - internal use only
    */
   class InvokeFunction extends Expr implements ManagesResult {
     Token        token;
     Expr.FunDecl funDecl;
     List<Expr>   args;
+  }
+
+  /**
+   * Invoke a internal utility function
+   */
+  class InvokeUtility extends Expr implements ManagesResult {
+    Token       token;
+    Class       clss;
+    String      methodName;
+    List<Class> paramTypes;
+    List<Expr>  args;
   }
 }

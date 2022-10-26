@@ -574,7 +574,7 @@ abstract class Expr {
   }
 
   /**
-   * Invoke a function - internal use only
+   * Invoke a user function - internal use only
    */
   static class InvokeFunction extends Expr implements ManagesResult {
     Token        token;
@@ -588,6 +588,27 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunction(this); }
     @Override public String toString() { return "InvokeFunction[" + "token=" + token + ", " + "funDecl=" + funDecl + ", " + "args=" + args + "]"; }
+  }
+
+  /**
+   * Invoke a internal utility function
+   */
+  static class InvokeUtility extends Expr implements ManagesResult {
+    Token       token;
+    Class       clss;
+    String      methodName;
+    List<Class> paramTypes;
+    List<Expr>  args;
+    InvokeUtility(Token token, Class clss, String methodName, List<Class> paramTypes, List<Expr> args) {
+      this.token = token;
+      this.clss = clss;
+      this.methodName = methodName;
+      this.paramTypes = paramTypes;
+      this.args = args;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeUtility(this); }
+    @Override public String toString() { return "InvokeUtility[" + "token=" + token + ", " + "clss=" + clss + ", " + "methodName=" + methodName + ", " + "paramTypes=" + paramTypes + ", " + "args=" + args + "]"; }
   }
 
   interface Visitor<T> {
@@ -619,5 +640,6 @@ abstract class Expr {
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);
     T visitInvokeFunction(InvokeFunction expr);
+    T visitInvokeUtility(InvokeUtility expr);
   }
 }

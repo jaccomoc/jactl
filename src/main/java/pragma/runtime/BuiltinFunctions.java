@@ -22,6 +22,7 @@ import org.objectweb.asm.Type;
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static pragma.PragmaType.*;
@@ -39,6 +40,7 @@ public class BuiltinFunctions {
       registerMethod("size", "iteratorSize", false);
       registerMethod("each", "iteratorEach", ITERATOR, true, 0);
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0);
+      registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0);
       registerMethod("sort", "iteratorSort", ITERATOR, true, 0);
       registerMethod("map", "iteratorMap", ITERATOR, true, 0);
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0);
@@ -305,9 +307,9 @@ public class BuiltinFunctions {
   // = each
 
   public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return doIteratorEach(createIterator(iterable), c, source, offset, closure);
+    return iteratorEach$c(createIterator(iterable), source, offset, closure, null);
   }
-  public static Object doIteratorEach(Iterator iter, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Object iteratorEach$c(Iterator iter, String source, Integer offset, MethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext = true;
@@ -340,11 +342,8 @@ public class BuiltinFunctions {
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
-            if (elem instanceof Map.Entry) {
-              var entry = (Map.Entry) elem;
-              elem = new Object[] { entry.getKey(), entry.getValue() };
-            }
-            Object ignored = closure == null ? null : closure.invokeExact((Continuation)null, source, offset, (Object)(new Object[]{ elem }));
+            elem = RuntimeUtils.mapEntryToList(elem);
+            Object ignored = closure == null ? null : closure.invokeExact((Continuation)null, source, (int)offset, (Object)(new Object[]{ elem }));
             methodLocation = 0;       // Back to initial state to get next element
             break;
           case 5:
@@ -356,7 +355,8 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorEachHandle.bindTo(iter), methodLocation + 1, null, new Object[] { source, offset, closure });
+      throw new Continuation(cont, iteratorEachHandle.bindTo(iter).bindTo(source).bindTo(offset).bindTo(closure),
+                             methodLocation + 1, null, null);
     }
     catch (RuntimeError e) {
       throw e;
@@ -365,10 +365,9 @@ public class BuiltinFunctions {
       throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t);
     }
   }
-  private static MethodHandle iteratorEachHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c", Object.class, Iterator.class, Continuation.class);
-  public static Object iteratorEach$c(Iterator iterator, Continuation c) {
-    return doIteratorEach(iterator, c, (String)c.localObjects[0], (int)c.localObjects[1], (MethodHandle)c.localObjects[2]);
-  }
+  private static MethodHandle iteratorEachHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
+                                                                             Object.class, Iterator.class, String.class,
+                                                                             Integer.class, MethodHandle.class, Continuation.class);
   public static Object iteratorEachWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
     validateArgCount(args, 1, 1, source, offset);
     Object[] arr = (Object[])args;
@@ -385,10 +384,9 @@ public class BuiltinFunctions {
   // = collect
 
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return doIteratorCollect(createIterator(iterable), c, source, offset, closure);
+    return iteratorCollect$c(createIterator(iterable), new ArrayList(), (list,elem) -> ((List)list).add(elem), source, offset, closure, null);
   }
-  public static Object doIteratorCollect(Iterator iter, Continuation c, String source, int offset, MethodHandle closure) {
-    List collected = c == null ? new ArrayList() : (List)c.localObjects[3];
+  public static Object iteratorCollect$c(Iterator iter, Object result, BiConsumer<Object,Object> collector, String source, Integer offset, MethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext         = true;
@@ -412,7 +410,7 @@ public class BuiltinFunctions {
             break;
           case 2:                      // Have a value for "hasNext"
             if (!hasNext) {
-              return collected;        // EXIT: exit loop when underlying iterator has no more elements
+              return result;        // EXIT: exit loop when underlying iterator has no more elements
             }
             elem = iter.next();
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
@@ -422,11 +420,8 @@ public class BuiltinFunctions {
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
-            if (elem instanceof Map.Entry) {
-              var entry = (Map.Entry) elem;
-              elem = new Object[] { entry.getKey(), entry.getValue() };
-            }
-            transformedElem = closure == null ? elem : closure.invokeExact((Continuation)null, source, offset, (Object)(new Object[]{ elem }));
+            elem = RuntimeUtils.mapEntryToList(elem);
+            transformedElem = closure == null ? elem : closure.invokeExact((Continuation)null, source, (int)offset, (Object)(new Object[]{ elem }));
             methodLocation = 6;
             break;
           case 5:
@@ -434,7 +429,7 @@ public class BuiltinFunctions {
             methodLocation = 6;
             break;
           case 6:
-            collected.add(transformedElem);
+            collector.accept(result, transformedElem);
             methodLocation = 0;
             break;
           default:
@@ -443,7 +438,8 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorCollectHandle.bindTo(iter), methodLocation + 1, null, new Object[] { source, offset, closure, collected });
+      throw new Continuation(cont, iteratorCollectHandle.bindTo(iter).bindTo(result).bindTo(collector).bindTo(source).bindTo(offset).bindTo(closure),
+                             methodLocation + 1, null, new Object[] { result });
     }
     catch (RuntimeError e) {
       throw e;
@@ -452,10 +448,11 @@ public class BuiltinFunctions {
       throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t);
     }
   }
-  private static MethodHandle iteratorCollectHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorCollect$c", Object.class, Iterator.class, Continuation.class);
-  public static Object iteratorCollect$c(Iterator iterator, Continuation c) {
-    return doIteratorCollect(iterator, c, (String)c.localObjects[0], (int)c.localObjects[1], (MethodHandle)c.localObjects[2]);
-  }
+
+  private static MethodHandle iteratorCollectHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorCollect$c",
+                                                                                Object.class, Iterator.class, Object.class,
+                                                                                BiConsumer.class, String.class, Integer.class,
+                                                                                MethodHandle.class, Continuation.class);
   public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
     validateArgCount(args, 0, 1, source, offset);
     Object[] arr = (Object[])args;
@@ -466,6 +463,54 @@ public class BuiltinFunctions {
       throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
     }
   }
+
+  //////////////////////////////////////
+
+  // = collectEntries
+
+  public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+    BiConsumer<Object,Object> collector = (mapObj,elem) -> {
+      Map map = (Map)mapObj;
+      Object key;
+      Object value;
+      int length = 0;
+      if (elem instanceof Object[]) {
+        Object[] keyVal = (Object[])elem;
+        length = keyVal.length;
+        key    = length == 2 ? keyVal[0] : null;
+        value  = length == 2 ? keyVal[1] : null;
+      }
+      else
+      if (elem instanceof List) {
+        List list = (List)elem;
+        length = list.size();
+        key    = length == 2 ? list.get(0) : null;
+        value  = length == 2 ? list.get(1) : null;
+      }
+      else {
+        throw new RuntimeError("Expected Map entry [key,value] but got " + RuntimeUtils.className(elem), source, offset);
+      }
+      if (length != 2) {
+        throw new RuntimeError("Expected list with [key,value] but got list of " + length + (length == 1 ? " entry" : " entries"), source, offset);
+      }
+      if (!(key instanceof String)) {
+        throw new RuntimeError("Expected String type for key of Map but got " + RuntimeUtils.className(key), source, offset);
+      }
+      map.put(key, value);
+    };
+    return iteratorCollect$c(createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
+  }
+  public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
+    validateArgCount(args, 0, 1, source, offset);
+    Object[] arr = (Object[])args;
+    try {
+      return iteratorCollectEntries(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+    }
+  }
+
 
   /////////////////////////////
 
@@ -606,7 +651,7 @@ public class BuiltinFunctions {
         Object elem2 = src.get(i2);
         if (comparison == null) {
           try {
-            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, (Object) (new Object[]{new Object[]{elem1, elem2}}));
+            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, (Object) (new Object[]{ Arrays.asList(elem1, elem2) }));
           }
           catch (Continuation cont) {
             throw new Continuation(cont, mergeHandle.bindTo(src).bindTo(dst).bindTo(start1).bindTo(end1).bindTo(start2).bindTo(end2).bindTo(comparator).bindTo(source).bindTo(offset),

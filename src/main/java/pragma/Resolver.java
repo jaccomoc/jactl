@@ -21,6 +21,7 @@ import pragma.runtime.FunctionDescriptor;
 import pragma.runtime.Functions;
 import pragma.runtime.RuntimeUtils;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiFunction;
@@ -485,6 +486,7 @@ public class Resolver implements Expr.Visitor<PragmaType>, Stmt.Visitor<Void> {
       case NULL:          return expr.type = ANY;
       case IDENTIFIER:    return expr.type = STRING;
       case OBJECT_ARR:    return expr.type = STRING;
+      case LIST:          return expr.type = STRING;
       default:
         // In some circumstances (e.g. map keys) we support literals that are keywords
         if (!expr.value.isKeyword()) {
@@ -848,6 +850,18 @@ public class Resolver implements Expr.Visitor<PragmaType>, Stmt.Visitor<Void> {
   @Override public PragmaType visitInvokeFunction(Expr.InvokeFunction expr) {
     expr.args.forEach(this::resolve);
     return expr.type = expr.funDecl.returnType;
+  }
+
+  @Override
+  public PragmaType visitInvokeUtility(Expr.InvokeUtility expr) {
+    try {
+      expr.args.forEach(this::resolve);
+      Method method = expr.clss.getDeclaredMethod(expr.methodName, expr.paramTypes.toArray(Class[]::new));
+      return expr.type = PragmaType.typeFromClass(method.getReturnType());
+    }
+    catch (NoSuchMethodException e) {
+      throw new CompileError("Could not find method " + expr.methodName + " in class " + expr.clss.getName(), expr.token);
+    }
   }
 
   @Override public PragmaType visitBlock(Expr.Block expr) {
@@ -1447,21 +1461,21 @@ public class Resolver implements Expr.Visitor<PragmaType>, Stmt.Visitor<Void> {
 
     int paramCount = funDecl.parameters.size();
 
-    // Special case to handle situation where Object[] passed as only arg within the Object[]
-    // This is to handle iteration over maps where we pass Object[]{key,value} as our single arg
-    // value. If the closure has multiple args then the first arg gets the the key and the second
-    // one gets the value. If the closure only has a single arg then it is passed the Object[]
-    // (which then looks like a list to the code in the closure).
+    // Special case to handle situation where we have List passed as only arg within the Object[].
+    // As per Groovy conventions, if the function expects more than one argument then the List
+    // contents become the parameter values.
+    // If the closure/function only has a single arg then it is passed the List.
     if (paramCount >= 2) {
-      //:   if (_$argCount == 1 && _$argArr[0] instanceof Object[]) {
-      //:     _$argArr = (Object[])_$argArr[0]
+      //:   if (_$argCount == 1 && _$argArr[0] instanceof List) {
+      //:     _$argArr = ((List)_$argArr[0]).toArray()
       //:     _$argCount = _$argArr.length
       //:   }
       var argCountIs1      = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
-      var arg0IsObjArr     = instOfExpr.apply(new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0)), OBJECT_ARR);
+      var arg0IsObjArr     = instOfExpr.apply(new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0)), TokenType.LIST);
       var ifTrueStmts      = new Stmt.Stmts();
       var getArg0          = new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0));
-      var assignToArgArr   = new Expr.VarAssign(argArr, token.apply(EQUAL), getArg0);
+      var toObjectArr      = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", List.of(Object.class), List.of(getArg0));
+      var assignToArgArr   = new Expr.VarAssign(argArr, token.apply(EQUAL), toObjectArr);
       assignToArgArr.isResultUsed = false;
       var assignToArgCount = new Expr.VarAssign(argCountIdent, token.apply(EQUAL), new Expr.ArrayLength(startToken, argArr));
       assignToArgCount.isResultUsed = false;

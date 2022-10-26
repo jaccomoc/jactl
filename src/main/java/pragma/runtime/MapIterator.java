@@ -18,7 +18,6 @@ package pragma.runtime;
 
 import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
-import java.util.Map;
 
 /**
  * Iterator that wraps another iterator and transforms the elements returned by the wrapped iterator based on
@@ -80,10 +79,7 @@ class MapIterator implements Iterator {
         location = 2;
       }
       if (location == 2) {
-        if (elem instanceof Map.Entry) {
-          var entry = (Map.Entry) elem;
-          elem = new Object[]{entry.getKey(), entry.getValue()};
-        }
+        elem = RuntimeUtils.mapEntryToList(elem);
         return closure == null ? elem : closure.invokeExact((Continuation) null, source, offset, (Object) (new Object[]{elem}));
       }
       else {

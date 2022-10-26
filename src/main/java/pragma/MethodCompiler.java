@@ -1365,6 +1365,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override
+  public Void visitInvokeUtility(Expr.InvokeUtility expr) {
+    expr.args.forEach(this::compile);
+    invokeStatic(expr.clss, expr.methodName, expr.paramTypes.toArray(Class[]::new));
+    return null;
+  }
+
   @Override public Void visitReturn(Expr.Return returnExpr) {
     compile(returnExpr.expr);
     convertTo(returnExpr.returnType, true, returnExpr.expr.location);

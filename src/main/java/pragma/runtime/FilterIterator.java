@@ -18,7 +18,6 @@ package pragma.runtime;
 
 import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
-import java.util.Map;
 
 /**
  * Iterator for the filter method. It takes the supplied iterator and wraps it in an iterator that only returns
@@ -103,10 +102,7 @@ class FilterIterator implements Iterator {
             location = 4;
             break;
           case 4:
-            if (elem instanceof Map.Entry) {
-              var entry = (Map.Entry) elem;
-              elem = new Object[]{entry.getKey(), entry.getValue()};
-            }
+            elem = RuntimeUtils.mapEntryToList(elem);
             filterCond = closure == null ? true : closure.invokeExact((Continuation) null, source, offset, (Object) (new Object[]{elem}));
             location = 6;
             break;
