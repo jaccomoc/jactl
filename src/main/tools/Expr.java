@@ -23,10 +23,10 @@
 # remain as is.
 #
 # To generate the code run the GenerateClasses.pl perl script from this directory:
-#  ./GenerateClasses.pl Expr.java > ../java/pragma/Expr.java
+#  ./GenerateClasses.pl Expr.java > ../java/jacsal/Expr.java
 #
 
-package pragma;
+package jacsal;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -37,9 +37,9 @@ import java.util.LinkedHashMap;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
-import pragma.runtime.FunctionDescriptor;
+import jacsal.runtime.FunctionDescriptor;
 
-import static pragma.PragmaType.HEAPLOCAL;
+import static jacsal.JacsalType.HEAPLOCAL;
 
 /**
  * Expr classes for our AST.
@@ -47,7 +47,7 @@ import static pragma.PragmaType.HEAPLOCAL;
 class Expr {
 
   Token      location;
-  PragmaType type;
+  JacsalType type;
   boolean    isConst = false;  // Whether expression consists only of constants
   Object     constValue;       // If expression is only consts then we keep the
                                // result of evaluating the expression during the
@@ -72,7 +72,7 @@ class Expr {
   public boolean isFunctionCall() {
     if (!(this instanceof Expr.Identifier)) { return false; }
     var ident = (Expr.Identifier)this;
-    return ident.varDecl.type.is(PragmaType.FUNCTION) && ident.varDecl.funDecl != null;
+    return ident.varDecl.type.is(JacsalType.FUNCTION) && ident.varDecl.funDecl != null;
   }
 
   class Binary extends Expr {
@@ -146,7 +146,7 @@ class Expr {
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used
     // as the target of another map() call (or call that can operator on an Iterator). Otherwise
-    // we need to convert the Iterator into a List since Iterators don't really exist at the Pragma
+    // we need to convert the Iterator into a List since Iterators don't really exist at the Jacsal
     // language level and are only used as an implementation detail for some iteration methods.
     // E.g.: x.map().map().each()
     // This means that the x.map() can return an iterator that is then used in the next .map() which
@@ -221,7 +221,7 @@ class Expr {
   class FunDecl extends Expr implements ManagesResult {
     Token              startToken;   // Either identifier for function decl or start brace for closure
     Token              nameToken;    // Null for closures and script main
-    PragmaType         returnType;
+    JacsalType         returnType;
     List<Stmt.VarDecl> parameters;
     Stmt.Block         @block;
 
@@ -317,7 +317,7 @@ class Expr {
   class Return extends Expr implements ManagesResult {
     Token      returnToken;
     Expr       expr;
-    PragmaType returnType;      // Return type of the function we are embedded in
+    JacsalType returnType;      // Return type of the function we are embedded in
     FunDecl    @funDecl;
   }
 

@@ -14,5 +14,7 @@
  * limitations under the License.
  */
 
-rootProject.name = 'jacsal'
+package jacsal.runtime;
 
+public interface SourceLocation {
+}

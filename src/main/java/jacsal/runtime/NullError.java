@@ -14,5 +14,11 @@
  * limitations under the License.
  */
 
-rootProject.name = 'jacsal'
+package jacsal.runtime;
 
+public class NullError extends RuntimeError {
+
+  public NullError(String error, String source, int offset) {
+    super(error, new Location(source,offset), false);
+  }
+}

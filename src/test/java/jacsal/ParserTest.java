@@ -14,5 +14,17 @@
  * limitations under the License.
  */
 
-rootProject.name = 'jacsal'
+package jacsal;
 
+import org.junit.jupiter.api.Test;
+
+import java.util.function.Function;
+
+class ParserTest {
+
+  @Test public void simpleExpressions() {
+    Function<String,Expr> parseExpr = code -> new Parser(new Tokeniser(code)).parseExpression();
+    var expr = parseExpr.apply("1 + 2 * 3 + 4");
+    System.out.println(expr);
+  }
+}

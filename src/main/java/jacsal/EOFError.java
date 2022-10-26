@@ -14,5 +14,11 @@
  * limitations under the License.
  */
 
-rootProject.name = 'jacsal'
+package jacsal;
 
+public class EOFError extends CompileError {
+
+  public EOFError(String error, Token token) {
+    super(error, token);
+  }
+}

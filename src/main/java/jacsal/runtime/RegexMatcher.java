@@ -14,5 +14,17 @@
  * limitations under the License.
  */
 
-rootProject.name = 'jacsal'
+package jacsal.runtime;
 
+import java.util.regex.Matcher;
+
+/**
+ * Container to hold the Matcher and the source string so that we can tell
+ * when doing "global" matching whether we continue matching from where we left
+ * off or not.
+ */
+public class RegexMatcher {
+  public  Matcher    matcher;
+  public  String     str;          // String to match against
+  public  boolean    matched;      // Result of last match
+}

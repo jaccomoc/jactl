@@ -19,7 +19,7 @@ plugins {
     id 'maven-publish'
 }
 
-group 'pragma'
+group 'jacsal'
 version '1.0-SNAPSHOT'
 
 repositories {
