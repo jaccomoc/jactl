@@ -797,6 +797,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    // as
+    if (expr.operator.is(AS)) {
+      compile(expr.left);
+      if (expr.type.is(BOOLEAN)) {
+        convertToBoolean(false);
+        return null;
+      }
+      if (expr.type.is(STRING)) {
+        convertToStringOrNull();
+        return null;
+      }
+      if (peek().unboxed().is(BOOLEAN,INT,LONG,DOUBLE,DECIMAL) && expr.type.is(BOOLEAN,INT,LONG,DOUBLE,DECIMAL)) {
+        convertTo(expr.type, !peek().isPrimitive(), expr.location);
+        return null;
+      }
+      box();
+      loadLocation(expr.location);
+      invokeStatic(RuntimeUtils.class, "as" + Utils.capitalise(expr.type.typeName()), Object.class, String.class, int.class);
+      return null;
+    }
+
     // Boolean && or ||
     if (expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
       compile(expr.left);
@@ -2400,6 +2421,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();
     }
     invokeStatic(RuntimeUtils.class, "toString", Object.class);
+    if (end != null) {
+      mv.visitLabel(end);
+    }
+  }
+
+  private void convertToStringOrNull() {
+    if (peek().is(STRING)) {
+      return;
+    }
+    Label end = null;
+    if (peek().isPrimitive()) {
+      box();
+    }
+    invokeStatic(RuntimeUtils.class, "toStringOrNull", Object.class);
     if (end != null) {
       mv.visitLabel(end);
     }

@@ -27,6 +27,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
 
 public class RuntimeUtils {
 
@@ -680,6 +681,13 @@ public class RuntimeUtils {
     return !negated;
   }
 
+  public static String toStringOrNull(Object obj) {
+    if (obj == null) {
+      return null;
+    }
+    return toString(obj);
+  }
+
   public static String toString(Object obj) {
     if (obj == null) {
       return "null";
@@ -1252,12 +1260,121 @@ public class RuntimeUtils {
   public static Object mapEntryToList(Object elem) {
     if (elem instanceof Map.Entry) {
       var entry = (Map.Entry) elem;
-      elem = Arrays.asList(entry.getKey(), entry.getValue());
+      elem = List.of(entry.getKey(), entry.getValue());
     }
     return elem;
   }
 
   public static Object[] listToObjectArray(Object obj) {
     return ((List)obj).toArray();
+  }
+
+  /////////////////////////////////////
+
+  // Methods for converting object to given type where possible. Conversion may include parsing a
+  // String to get a number or converting a List into a Map using the collectEntries funcionality.
+  // This conversion is used by the "as" operator which is much more forgiving than a straight cast. The
+  // "as" operator tries to convert anything where it makes sense to do so whereas with cast the object
+  // must already be the right type (or very close to it - e.g for numbers).
+
+  public static int asInt(Object obj, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to int", source, offset); }
+    if (obj instanceof Number)    { return ((Number)obj).intValue(); }
+    if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to int", source, offset); }
+    try {
+      return Integer.parseInt((String)obj);
+    }
+    catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid int", source, offset, e); }
+  }
+
+  public static long asLong(Object obj, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to long", source, offset); }
+    if (obj instanceof Number)    { return ((Number)obj).longValue(); }
+    if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to long", source, offset); }
+    try {
+      return Long.parseLong((String)obj);
+    }
+    catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid long", source, offset, e); }
+  }
+
+  public static double asDouble(Object obj, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to double", source, offset); }
+    if (obj instanceof Number)    { return ((Number)obj).doubleValue(); }
+    if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to double", source, offset); }
+    try {
+      return Double.parseDouble((String)obj);
+    }
+    catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid double", source, offset, e); }
+  }
+
+  public static BigDecimal asDecimal(Object obj, String source, int offset) {
+    if (obj == null)               { throw new NullError("Null value cannot be coerced to Decimal", source, offset); }
+    if (obj instanceof BigDecimal) { return (BigDecimal)obj; }
+    if (obj instanceof Number) {
+      if (obj instanceof Double) {
+        return BigDecimal.valueOf(((Number) obj).doubleValue());
+      }
+      return BigDecimal.valueOf(((Number)obj).longValue());
+    }
+    if (!(obj instanceof String)) {
+      throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to Decimal", source, offset);
+    }
+    try {
+      return new BigDecimal((String)obj);
+    }
+    catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid Decimal", source, offset); }
+  }
+
+  public static List asList(Object obj, String source, int offset) {
+    if (obj == null)           { return null; }
+    if (obj instanceof List)   { return (List)obj; }
+    if (obj instanceof String) { return ((String)obj).chars().mapToObj(c -> String.valueOf((char)c)).collect(Collectors.toList()); }
+    if (obj instanceof Map) {
+      Map<Object,Object> map = (Map)obj;
+      return map.entrySet().stream().map(e -> List.of(e.getKey(), e.getValue())).collect(Collectors.toList());
+    }
+    throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to List", source, offset);
+  }
+
+  public static Map asMap(Object obj, String source, int offset) {
+    if (obj == null)           { return null; }
+    if (obj instanceof Map)    { return (Map)obj; }
+    if (obj instanceof List) {
+      List list = (List)obj;
+      Map result = new HashMap();
+      list.forEach(elem -> addMapEntry(result, elem, source, offset));
+      return result;
+    }
+    throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to Map", source, offset);
+  }
+
+  public static void addMapEntry(Map mapObj, Object elem, String source, int offset) {
+    Map map = mapObj;
+    Object key;
+    Object value;
+    int length = 0;
+    if (elem instanceof Object[]) {
+      Object[] keyVal = (Object[]) elem;
+      length = keyVal.length;
+      key    = length == 2 ? keyVal[0] : null;
+      value  = length == 2 ? keyVal[1] : null;
+    }
+    else
+    if (elem instanceof List) {
+      List list = (List) elem;
+      length = list.size();
+      key    = length == 2 ? list.get(0) : null;
+      value  = length == 2 ? list.get(1) : null;
+    }
+    else {
+      throw new RuntimeError("Expected Map entry [key,value] but got " + className(elem), source, offset);
+    }
+    if (length != 2) {
+      throw new RuntimeError("Expected list with [key,value] but got list of " + length + (length == 1 ? " entry" : " entries"), source, offset);
+    }
+    if (!(key instanceof String)) {
+      throw new RuntimeError("Expected String type for key of Map but got " + className(key), source, offset);
+    }
+    map.put(key, value);
   }
 }

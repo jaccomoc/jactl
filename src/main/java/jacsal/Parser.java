@@ -511,7 +511,7 @@ public class Parser {
       List.of(AMPERSAND),
       */
       new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
-      new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF /*, IN, BANG_IN, AS*/)),
+      new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
 /*
       List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
 */
@@ -617,7 +617,7 @@ public class Parser {
 
     while (matchAny(operators)) {
       Token operator = previous();
-      if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF)) {
+      if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF,AS)) {
         Token type = expect(types);
         expr = new Expr.Binary(expr, operator, new Expr.Literal(type));
         continue;

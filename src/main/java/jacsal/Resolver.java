@@ -332,7 +332,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
-    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE)) {
+    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS)) {
       expr.isConst = false;
     }
 
@@ -380,12 +380,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type;
     }
 
-    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
-      if (!(expr.right instanceof Expr.Literal && ((Expr.Literal)expr.right).value.getType().isType())) {
+    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF, AS)) {
+      TokenType tokenType = null;
+      if (expr.right instanceof Expr.Literal) {
+        tokenType = ((Expr.Literal) expr.right).value.getType();
+      }
+      if (tokenType == null || !tokenType.isType()) {
         throw new CompileError("Right-hand side of " + expr.operator.getChars() + " must be a valid type", expr.right.location);
       }
       expr.isConst = false;
-      return expr.type = BOOLEAN;
+      return expr.type = expr.operator.is(AS) ? JacsalType.valueOf(tokenType) : BOOLEAN;
     }
 
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);

@@ -346,4 +346,11 @@ public class Utils {
     if (i % 10 == 3 && i % 100 != 13) { return i + "rd"; }
     return i + "th";
   }
+
+  public static String capitalise(String s) {
+    if (s == null || s.isEmpty()) {
+      return s;
+    }
+    return s.substring(0,1).toUpperCase() + s.substring(1);
+  }
 }

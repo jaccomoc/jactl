@@ -470,36 +470,11 @@ public class BuiltinFunctions {
 
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     BiConsumer<Object,Object> collector = (mapObj,elem) -> {
-      Map map = (Map)mapObj;
-      Object key;
-      Object value;
-      int length = 0;
-      if (elem instanceof Object[]) {
-        Object[] keyVal = (Object[])elem;
-        length = keyVal.length;
-        key    = length == 2 ? keyVal[0] : null;
-        value  = length == 2 ? keyVal[1] : null;
-      }
-      else
-      if (elem instanceof List) {
-        List list = (List)elem;
-        length = list.size();
-        key    = length == 2 ? list.get(0) : null;
-        value  = length == 2 ? list.get(1) : null;
-      }
-      else {
-        throw new RuntimeError("Expected Map entry [key,value] but got " + RuntimeUtils.className(elem), source, offset);
-      }
-      if (length != 2) {
-        throw new RuntimeError("Expected list with [key,value] but got list of " + length + (length == 1 ? " entry" : " entries"), source, offset);
-      }
-      if (!(key instanceof String)) {
-        throw new RuntimeError("Expected String type for key of Map but got " + RuntimeUtils.className(key), source, offset);
-      }
-      map.put(key, value);
+      RuntimeUtils.addMapEntry((Map) mapObj, elem, source, offset);
     };
     return iteratorCollect$c(createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
   }
+
   public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
     validateArgCount(args, 0, 1, source, offset);
     Object[] arr = (Object[])args;
@@ -651,7 +626,7 @@ public class BuiltinFunctions {
         Object elem2 = src.get(i2);
         if (comparison == null) {
           try {
-            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, (Object) (new Object[]{ Arrays.asList(elem1, elem2) }));
+            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, (Object) (new Object[]{ List.of(elem1, elem2) }));
           }
           catch (Continuation cont) {
             throw new Continuation(cont, mergeHandle.bindTo(src).bindTo(dst).bindTo(start1).bindTo(end1).bindTo(start2).bindTo(end2).bindTo(comparator).bindTo(source).bindTo(offset),

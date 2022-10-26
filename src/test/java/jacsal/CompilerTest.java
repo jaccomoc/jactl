@@ -2971,6 +2971,145 @@ class CompilerTest {
     test("Decimal x = 1.0; (Decimal)x", "#1.0");
   }
 
+  @Test public void asType() {
+    test("1L as int", 1);
+    test("(1L as int) instanceof int", true);
+    test("1 as String", "1");
+    test("def x = 1; x as String", "1");
+    testError("null as int", "null value");
+    testError("null as long", "null value");
+    testError("null as double", "null value");
+    testError("null as Decimal", "null value");
+    test("null as String", null);
+    test("null as Map", null);
+    test("null as List", null);
+    testError("def x = null; x as int", "null value");
+    testError("def x = null; x as long", "null value");
+    testError("def x = null; x as double", "null value");
+    testError("def x = null; x as Decimal", "null value");
+    test("def x = null; x as String", null);
+    test("def x = null; x as Map", null);
+    test("def x = null; x as List", null);
+    testError("def x; x as int", "null value");
+    testError("def x; x as long", "null value");
+    testError("def x; x as double", "null value");
+    testError("def x; x as Decimal", "null value");
+
+    testError("1 as Map", "cannot coerce");
+    testError("1 as List", "cannot coerce");
+    testError("int x = 1; x as Map", "cannot coerce");
+    testError("int x = 1; x as List", "cannot coerce");
+    testError("def x = 1; x as Map", "cannot coerce");
+    testError("def x = 1; x as List", "cannot coerce");
+    testError("def x = { it }; x as Map", "cannot coerce");
+    testError("def x = { it }; x as List", "cannot coerce");
+    testError("def x(){ 1 }; x as Map", "cannot coerce");
+    testError("def x(){ 1 }; x as List", "cannot coerce");
+    testError("def x = { it }; x as int", "cannot coerce");
+    testError("def x = { it }; x as long", "cannot coerce");
+    testError("def x = { it }; x as double", "cannot coerce");
+    testError("def x = { it }; x as Decimal", "cannot coerce");
+    test("def x = { it }; x as String", "MethodHandle(Continuation,String,int,Object)Object");
+    testError("def x(){ 1 }; x as int", "cannot coerce");
+    testError("def x(){ 1 }; x as long", "cannot coerce");
+    testError("def x(){ 1 }; x as double", "cannot coerce");
+    testError("def x(){ 1 }; x as Decimal", "cannot coerce");
+
+    test("def x(){ 1 }; x as String", "MethodHandle(Continuation,String,int,Object)Object");
+
+    test("1 as int", 1);
+    test("int x = 1; x as int", 1);
+    test("1 as long", 1L);
+    test("int x = 1; x as long", 1L);
+    test("1 as double", 1D);
+    test("int x = 1; x as double", 1D);
+    test("1 as Decimal", "#1");
+    test("int x = 1; x as Decimal", "#1");
+
+    test("1L as int", 1);
+    test("long x = 1L; x as int", 1);
+    test("1L as long", 1L);
+    test("long x = 1L; x as long", 1L);
+    test("1L as double", 1D);
+    test("long x = 1L; x as double", 1D);
+    test("1L as Decimal", "#1");
+    test("long x = 1L; x as Decimal", "#1");
+
+    test("1D as int", 1);
+    test("double x = 1D; x as int", 1);
+    test("1D as long", 1L);
+    test("double x = 1D; x as long", 1L);
+    test("1D as double", 1D);
+    test("double x = 1D; x as double", 1D);
+    test("1D as Decimal", "#1.0");
+    test("double x = 1D; x as Decimal", "#1.0");
+
+    test("1.0 as int", 1);
+    test("Decimal x = 1.0; x as int", 1);
+    test("1.0 as long", 1L);
+    test("Decimal x = 1.0; x as long", 1L);
+    test("1.0 as double", 1D);
+    test("Decimal x = 1.0; x as double", 1D);
+    test("1.0 as Decimal", "#1.0");
+    test("Decimal x = 1.0; x as Decimal", "#1.0");
+
+    test("def x = 1; x as int", 1);
+    test("def x = 1; x as long", 1L);
+    test("def x = 1; x as double", 1D);
+    test("def x = 1; x as Decimal", "#1");
+
+    test("def x = 1L; x as int", 1);
+    test("def x = 1L; x as long", 1L);
+    test("def x = 1L; x as double", 1D);
+    test("def x = 1L; x as Decimal", "#1");
+
+    test("def x = 1D; x as int", 1);
+    test("def x = 1D; x as long", 1L);
+    test("def x = 1D; x as double", 1D);
+    test("def x = 1D; x as Decimal", "#1.0");
+
+    test("def x = 1.0; x as int", 1);
+    test("def x = 1.0; x as long", 1L);
+    test("def x = 1.0; x as double", 1D);
+    test("def x = 1.0; x as Decimal", "#1.0");
+
+    test("1 as String", "1");
+    test("1.0 as String", "1.0");
+    test("1D as String", "1.0");
+    test("1L as String", "1");
+    test("[] as String", "[]");
+    test("[1,2,3] as String", "[1, 2, 3]");
+    test("[:] as String", "[:]");
+    test("[a:1,b:2] as String", "[a:1, b:2]");
+    test("def x = 1; x as String", "1");
+    test("def x = 1.0; x as String", "1.0");
+    test("def x = 1D; x as String", "1.0");
+    test("def x = 1L; x as String", "1");
+    test("def x = []; x as String", "[]");
+    test("def x = [1,2,3]; x as String", "[1, 2, 3]");
+    test("def x = [:]; x as String", "[:]");
+    test("def x = [a:1,b:2]; x as String", "[a:1, b:2]");
+    test("def x = 1; x as String as int", 1);
+    test("def x = 1; (x as String as int) + 2", 3);
+    testError("def x = 1; x as String as int + 2", "unexpected token '+'");
+    testError("def x = 1.0; x as String as int", "not a valid int");
+    test("def x = 1.0; x as String as double", 1.0D);
+    test("def x = 1.0; x as String as Decimal", "#1.0");
+    test("def x = 1D; x as String as double", 1.0D);
+    test("def x = 1L; x as String as long", 1L);
+
+    test("[:] as List", List.of());
+    test("[a:1] as List", List.of(List.of("a",1)));
+    test("[a:1,b:2] as List", List.of(List.of("a",1), List.of("b",2)));
+    test("[a:1,b:2] as List as Map", Map.of("a",1,"b",2));
+    testError("'abc' as Map", "cannot coerce");
+    test("'abc' as List", List.of("a","b","c"));
+    test("'' as List", List.of());
+    test("('abc' as List).join()", "abc");
+    testError("'123456789123456789123456789' as long", "not a valid long");
+    testError("'89.123.123' as double", "not a valid double");
+  }
+
   @Test public void whileLoops() {
     test("int i = 0; while (i < 10) i++; i", 10);
     test("int i = 0; int sum = 0; while (i < 10) sum += i++; sum", 45);
