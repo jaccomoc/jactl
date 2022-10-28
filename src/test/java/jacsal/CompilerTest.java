@@ -3110,6 +3110,70 @@ class CompilerTest {
     testError("'89.123.123' as double", "not a valid double");
   }
 
+  @Test public void inOperator() {
+    test("'b' in 'abc'", true);
+    test("'x' in 'abc'", false);
+    test("'b' !in 'abc'", false);
+    test("'x' !in 'abc'", true);
+    test("def x = 'b'; def y = 'abc'; x in y", true);
+    test("def x = 'x'; def y = 'abc'; x in y", false);
+    test("def x = 'b'; def y = 'abc'; x !in y", false);
+    test("def x = 'x'; def y = 'abc'; x !in y", true);
+    testError("1 in 'abc'", "expecting string for left-hand side");
+    testError("'1' in 1", "int is not a valid type for right-hand side of 'in'");
+    testError("'1' !in 1", "int is not a valid type for right-hand side of '!in'");
+    testError("def x = 1; def y = 'abc'; x in y", "expecting string for left-hand side");
+    testError("def x = '1'; def y = 1; x in y", "expecting String/List/Map for right-hand side");
+    testError("def x = '1'; def y = 1; x !in y", "expecting String/List/Map for right-hand side");
+    testError("null in 'abc'", "expecting string for left-hand side");
+    test("2 in [1,2,3]", true);
+    test("2 !in [1,2,3]", false);
+    test("1 in []", false);
+    test("1 !in []", true);
+    test("[] in [[]]", true);
+    test("2 in [1,2,3,2,4]", true);
+    test("def f = { it*it}; f in ['a',f]", true);
+    test("[a:1,b:[1,2,3]] in [1,2,[a:1,b:[1,2,3]],3]", true);
+    test("[] !in [[]]", false);
+    test("2 !in [1,2,3,2,4]", false);
+    test("def f = { it*it}; f !in ['a',f]", false);
+    test("[a:1,b:[1,2,3]] !in [1,2,[a:1,b:[1,2,3]],3]", false);
+    test("def x = 2 ; def y = [1,2,3]; x in y", true);
+    test("def x = 2 ; def y = [1,2,3]; x !in y", false);
+    test("def x = 1 ; def y = []; x in y", false);
+    test("def x = 1 ; def y = []; x !in y", true);
+    test("def x = [] ; def y = [[]]; x in y", true);
+    test("def x = 2 ; def y = [1,2,3,2,4]; x in y", true);
+    test("def f = { it*it}; f ; def y = ['a',f]; f in y", true);
+    test("def x = [a:1,b:[1,2,3]] ; def y = [1,2,[a:1,b:[1,2,3]],3]; x in y", true);
+    test("def x = [] ; def y = [[]]; x !in y", false);
+    test("def x = 2 ; def y = [1,2,3,2,4]; x !in y", false);
+    test("def f = { it*it}; f ; def y = ['a',f]; f !in y", false);
+    test("def x = [a:1,b:[1,2,3]] ; def y = [1,2,[a:1,b:[1,2,3]],3]; x !in y", false);
+    test("'a' in [a:1]", true);
+    test("def x = 'a'; def y = [a:1]; x in y", true);
+    test("'a' !in [a:1]", false);
+    test("def x = 'a'; def y = [a:1]; x !in y", false);
+    test("'a' in [:]", false);
+    test("'a' !in [:]", true);
+    test("'b' in [a:1]", false);
+    test("'b' !in [a:1]", true);
+    test("'b' in [a:1,b:[1,2,3]]", true);
+    test("'b' !in [a:1,b:[1,2,3]]", false);
+    test("[] in [:]", false);
+    test("def x = 'a'; def y = [:]; x in y", false);
+    test("def x = 'a' ; def y = [:]; x !in y", true);
+    test("def x = 'b' ; def y = [a:1]; x in y", false);
+    test("def x = 'b' ; def y = [a:1]; x !in y", true);
+    test("def x = 'b' ; def y = [a:1,b:[1,2,3]]; x in y", true);
+    test("def x = 'b' ; def y = [a:1,b:[1,2,3]]; x !in y", false);
+    test("def x = [] ; def y = [:]; x in y", false);
+    test("'a' in [a:1,b:2].map{ a,b -> a }", true);
+    test("'a' !in [a:1,b:2].map{ a,b -> a }", false);
+    test("def x = 'a'; x in [a:1,b:2].map{ a,b -> a }", true);
+    test("def x = 'a'; x !in [a:1,b:2].map{ a,b -> a }", false);
+  }
+
   @Test public void whileLoops() {
     test("int i = 0; while (i < 10) i++; i", 10);
     test("int i = 0; int sum = 0; while (i < 10) sum += i++; sum", 45);
@@ -3258,6 +3322,29 @@ class CompilerTest {
     testError("def g(x){f(x)}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)", "requires passing closed over variable g");
     test("def f(x,a=f){x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
     testError("def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)", "requires passing closed over variable h");
+  }
+
+  @Test public void passingArgsAsList() {
+    test("sleeper([1,2])", 2);
+    testError("sleeper(['1',2])", "cannot convert argument of type string to long");
+    test("def a = [1,2]; sleeper(a)", 2);
+    testError("def a = ['1',2]; sleeper(a)", "cannot convert argument of type string to long");
+    test("[[1,2],[3,4]].map{ a,b -> sleeper(a,b) }", List.of(2,4));
+    test("[a:2,b:4].map{ a,b -> sleeper(b,a) }", List.of("a","b"));
+    test("def x = [[1,2],[3,4]]; x.map{ a,b -> sleeper(a,b) }", List.of(2,4));
+    test("def x = [a:2,b:4]; x.map{ a,b -> sleeper(b,a) }", List.of("a","b"));
+    test("def f = [[1,2],[3,4]].map; f{ a,b -> sleeper(a,b) }", List.of(2,4));
+    test("def f = [a:2,b:4].map; f{ a,b -> sleeper(b,a) }", List.of("a","b"));
+    test("def x = [[1,2],[3,4]]; def f = x.map; f{ a,b -> sleeper(a,b) }", List.of(2,4));
+    test("def x = [a:2,b:4]; def f = x.map; f{ a,b -> sleeper(b,a) }", List.of("a","b"));
+    test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(1,2,3) + f(a)", 12);
+    test("def f(String x, int y) { x + y }; def a = ['x',2]; f(a)", "x2");
+    test("def f = {String x, int y -> x + y }; def a = ['x',2]; f(a)", "x2");
+    testError("def f = {String x, int y -> x + y }; def a = [2,'x']; f(a)", "cannot convert object of type int to string");
+    test("def f(x,y,z) { x + y + z }; f(1,2,3) + f([1,2,3])", 12);
+    test("def f = { x,y,z -> x + y + z }; f(1,2,3) + f([1,2,3])", 12);
+    test("def f = { x,y,z -> x + y + z }; def a = [1,2,3]; f(1,2,3) + f(a)", 12);
+    test("def f = { x,y,z=3 -> x + y + z }; def a = [1,2]; f(1,2,3) + f(a)", 12);
   }
 
   @Test public void simpleClosures() {

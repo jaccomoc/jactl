@@ -797,6 +797,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    // in and !in
+    if (expr.operator.is(IN,BANG_IN)) {
+      compile(expr.left);
+      box();
+      compile(expr.right);
+      loadConst(expr.operator.is(IN));   // true for in, false for !in
+      loadLocation(expr.operator);
+      invokeStatic(RuntimeUtils.class, "inOperator", Object.class, Object.class, boolean.class, String.class, int.class);
+      return null;
+    }
+
     // as
     if (expr.operator.is(AS)) {
       compile(expr.left);
@@ -1185,19 +1196,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var callee = (Expr.Identifier)expr.callee;
       Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
-      // Validate arguments are of the right type
-      int        argCount  = expr.args.size();
-      JacsalType paramType = null;
-      for (int i = 0; i < argCount; i++) {
-        Expr       arg     = expr.args.get(i);
-        JacsalType argType = arg.type;
-        paramType = functionDescriptor.paramTypes.get(i);
-        // Check for varArgs (must be last param)
-        if (paramType.is(OBJECT_ARR)) {
-          break;
-        }
-        if (!argType.isConvertibleTo(paramType)) {
-          throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
+      int        argCount   = expr.args.size();
+      final var  paramTypes = functionDescriptor.paramTypes;
+      // If the function takes more than one argument and we have a single arg of type List/ANY then
+      // we assume that the arg is a list that contains the actual argument values and defer further
+      // validation until runtime.
+      if (paramTypes.size() > 1 && argCount == 1 && expr.args.get(0).type.is(ANY,LIST)) {
+        // Nothing to do
+      }
+      else {
+        // Validate arguments are of the right type
+        JacsalType paramType = null;
+        for (int i = 0; i < argCount; i++) {
+          Expr       arg     = expr.args.get(i);
+          JacsalType argType = arg.type;
+          paramType = paramTypes.get(i);
+          // Check for varArgs (must be last param)
+          if (paramType.is(OBJECT_ARR)) {
+            break;
+          }
+          if (!argType.isConvertibleTo(paramType)) {
+            throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
+          }
         }
       }
 
@@ -1523,7 +1543,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
     // We invoke wrapper if we don't have enough args since it will fill in missing
-    // values for optional parameters. We need last param if of type Object[] since
+    // values for optional parameters. We need last param to be of type Object[] since
     // this means varArgs.
     var     paramTypes = func.paramTypes;
     boolean varArgs    = paramTypes.size() > 0 && paramTypes.get(paramTypes.size() - 1).is(OBJECT_ARR);
@@ -1533,7 +1553,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (invokeWrapper) {
       // Add location types to the front
-      paramTypes = Stream.concat(Stream.of(CONTINUATION,STRING,INT), paramTypes.stream()).collect(Collectors.toList());
+      paramTypes = List.of(CONTINUATION,STRING,INT,ANY);
       List<JacsalType> finalParamTypes = paramTypes;
 
       invokeMaybeAsync(true, func.returnType, 0, expr.location,

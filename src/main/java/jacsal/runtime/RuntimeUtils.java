@@ -1269,6 +1269,23 @@ public class RuntimeUtils {
     return ((List)obj).toArray();
   }
 
+  public static boolean inOperator(Object elem, Object collection, boolean isIn, String source, int offset) {
+    // Handle List, Map, and String
+    if (collection instanceof String) {
+      if (!(elem instanceof String)) {
+        throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting String for left-hand side not " + className(elem), source, offset);
+      }
+      return ((String)collection).contains((String)elem) == isIn;
+    }
+    if (collection instanceof List) {
+      return ((List)collection).contains(elem) == isIn;
+    }
+    if (collection instanceof Map) {
+      return ((Map)collection).containsKey(elem) == isIn;
+    }
+    throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting String/List/Map for right-hand side not " + className(collection), source, offset);
+  }
+
   /////////////////////////////////////
 
   // Methods for converting object to given type where possible. Conversion may include parsing a

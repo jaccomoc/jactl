@@ -156,10 +156,9 @@ public class BuiltinFunctions {
     throw Continuation.create(() -> { doSleep(timeMs); return result; });
   }
   public static Object sleeperWrapper(Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 2, 2, source, offset);
-    final var argArr = (Object[]) args;
+    var argArr = validateArgCount(args, 2, 2, source, offset);
     try {
-      sleeper(c, (long)argArr[0], argArr[1]);
+      sleeper(c, ((Number)argArr[0]).longValue(), argArr[1]);
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(argArr[0]) + " to long", source, offset);
@@ -187,8 +186,7 @@ public class BuiltinFunctions {
     }
   }
   public static Object sprintfWrapper(Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 1, -1, source, offset);
-    Object[] argArr = (Object[])args;
+    var argArr = validateArgCount(args, 1, -1, source, offset);
     try {
       return sprintf(source, offset, (String)argArr[0], Arrays.copyOfRange(argArr, 1, argArr.length));
     }
@@ -257,8 +255,7 @@ public class BuiltinFunctions {
     return new FilterIterator(iter, source, offset, closure);
   }
   public static Object iteratorFilterWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 0, 1, source, offset);
     try {
       return iteratorFilter(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
     }
@@ -277,8 +274,7 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorMapWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 0, 1, source, offset);
     try {
       return iteratorMap(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
     }
@@ -369,8 +365,7 @@ public class BuiltinFunctions {
                                                                              Object.class, Iterator.class, String.class,
                                                                              Integer.class, MethodHandle.class, Continuation.class);
   public static Object iteratorEachWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 1, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 1, 1, source, offset);
     try {
       return iteratorEach(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
     }
@@ -454,8 +449,7 @@ public class BuiltinFunctions {
                                                                                 BiConsumer.class, String.class, Integer.class,
                                                                                 MethodHandle.class, Continuation.class);
   public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 0, 1, source, offset);
     try {
       return iteratorCollect(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
     }
@@ -476,8 +470,7 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 0, 1, source, offset);
     try {
       return iteratorCollectEntries(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
     }
@@ -536,8 +529,7 @@ public class BuiltinFunctions {
     }
   }
   public static Object iteratorSortWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 0, 1, source, offset);
     try {
       return iteratorSort(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
     }
@@ -677,8 +669,7 @@ public class BuiltinFunctions {
     return sb.toString();
   }
   public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 1, source, offset);
-    Object[] arr = (Object[])args;
+    var arr = validateArgCount(args, 0, 1, source, offset);
     try {
       return iteratorJoin(iterable, arr.length == 0 ? null : (String)arr[0]);
     }
@@ -701,11 +692,20 @@ public class BuiltinFunctions {
 
   /////////////////////////////
 
-  private static void validateArgCount(Object args, int mandatoryCount, int paramCount, String source, int offset) {
+  private static Object[] validateArgCount(Object args, int mandatoryCount, int paramCount, String source, int offset) {
     if (!(args instanceof Object[])) {
       throw new IllegalStateException("Internal error: expecting Object[] for args not " + args.getClass().getName());
     }
-    int argCount = ((Object[])args).length;
+    Object[] argArr = (Object[])args;
+    int argCount = argArr.length;
+
+    // Special case for functions with 2 or more params where we have single argument of type List.
+    // We treat the list as the arguments in this case.
+    if (paramCount >= 2 && argCount == 1 && argArr[0] instanceof List) {
+      argArr = ((List)argArr[0]).toArray();
+      argCount = argArr.length;
+    }
+
     if (argCount < mandatoryCount) {
       String atLeast = mandatoryCount == paramCount ? "" : "at least ";
       throw new RuntimeError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", source, offset);
@@ -713,5 +713,6 @@ public class BuiltinFunctions {
     if (paramCount >= 0 && argCount > paramCount) {
       throw new RuntimeError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", source, offset);
     }
+    return argArr;
   }
 }

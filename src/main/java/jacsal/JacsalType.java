@@ -286,6 +286,13 @@ public class JacsalType {
    * @return resulting type
    */
   public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
+    if (operator.is(IN,BANG_IN)) {
+      if (!type2.is(ANY,STRING,LIST,MAP,ITERATOR)) {
+        throw new CompileError("Type " + type2 + " is not a valid type for right-hand side of '" + operator.getChars() + "'", operator);
+      }
+      return BOOLEAN;
+    }
+
     // Boolean comparisons
     if (operator.is(EQUAL_EQUAL,BANG_EQUAL,AMPERSAND_AMPERSAND,PIPE_PIPE)) { return BOOLEAN; }
     if (operator.getType().isBooleanOperator()) {
@@ -540,6 +547,7 @@ public class JacsalType {
       case LONG_ARR:     return "long[]";
       case STRING_ARR:   return "String[]";
       case MATCHER:      return "Matcher";
+      case ITERATOR:     return "Iterator";
       case CONTINUATION: return "Continuation";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);

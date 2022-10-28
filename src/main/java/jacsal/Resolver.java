@@ -332,7 +332,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
 
-    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS)) {
+    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS, IN, BANG_IN)) {
       expr.isConst = false;
     }
 
@@ -364,9 +364,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
 
-        // TODO: if we have a concrete type on left-hand side we can work out type of field here
-        //       for the moment all field access returns ANY since we don't know what has been
-        //       stored in a Map or List
+        // TODO: if we have a concrete type on left-hand side we can work out type of field here.
+        //       For the moment all field access returns ANY since we don't know what has been
+        //       stored in a Map or List.
       }
 
       expr.type = ANY;
@@ -760,8 +760,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       var func = ((Expr.Identifier)expr.callee).getFuncDescriptor();
       expr.type = func.returnType;
 
-      // Validate argument count and types against parameter types
-      validateArgCount(expr.args.size(), func.mandatoryArgCount, func.paramCount, expr.token);
+      // Validate argument count. Type validation will be done by MethodCompiler.
+      validateArgCount(expr.args, func.mandatoryArgCount, func.paramCount, expr.token);
 
       // If function we are invoking is async then we are async
       if ((func.isAsync || testAsync) && !currentFunction.isScriptMain) {
@@ -802,7 +802,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       var descriptor = Functions.lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
         expr.methodDescriptor = descriptor;
-        validateArgCount(expr.args.size(), descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
+        validateArgCount(expr.args, descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
         for (int i = 0; i < expr.args.size(); i++) {
           Expr       arg       = expr.args.get(i);
           JacsalType paramType = descriptor.paramTypes.get(i);
@@ -881,7 +881,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     currentStmts.currentIdx++;
   }
 
-  private void validateArgCount(int argCount, int mandatoryCount, int paramCount, Token location) {
+  private void validateArgCount(List<Expr> args, int mandatoryCount, int paramCount, Token location) {
+    // If the function takes more than one argument and we have a single arg of type List/ANY then
+    // we assume that the arg is a list that contains the actual argument values and defer further
+    // validation until runtime.
+    int argCount = args.size();
+    if (paramCount > 1 && argCount == 1 && args.get(0).type.is(ANY,LIST)) {
+      return;
+    }
     if (argCount < mandatoryCount) {
       String atLeast = mandatoryCount == paramCount ? "" : "at least ";
       throw new CompileError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", location);
