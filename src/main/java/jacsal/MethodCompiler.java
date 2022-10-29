@@ -1198,10 +1198,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       int        argCount   = expr.args.size();
       final var  paramTypes = functionDescriptor.paramTypes;
-      // If the function takes more than one argument and we have a single arg of type List/ANY then
-      // we assume that the arg is a list that contains the actual argument values and defer further
-      // validation until runtime.
-      if (paramTypes.size() > 1 && argCount == 1 && expr.args.get(0).type.is(ANY,LIST)) {
+      // If the function takes more than one mandatory argument and we have a single arg of type List/ANY then
+      // we assume that the arg is a list that contains the actual argument values and defer further validation
+      // until runtime.
+      if (functionDescriptor.mandatoryArgCount > 1 && argCount == 1 && expr.args.get(0).type.is(ANY,LIST)) {
         // Nothing to do
       }
       else {

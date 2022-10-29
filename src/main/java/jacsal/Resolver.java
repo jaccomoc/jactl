@@ -882,11 +882,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private void validateArgCount(List<Expr> args, int mandatoryCount, int paramCount, Token location) {
-    // If the function takes more than one argument and we have a single arg of type List/ANY then
+    // If the function takes more than one mandatory argument and we have a single arg of type List/ANY then
     // we assume that the arg is a list that contains the actual argument values and defer further
     // validation until runtime.
     int argCount = args.size();
-    if (paramCount > 1 && argCount == 1 && args.get(0).type.is(ANY,LIST)) {
+    if (mandatoryCount > 1 && argCount == 1 && args.get(0).type.is(ANY,LIST)) {
       return;
     }
     if (argCount < mandatoryCount) {
@@ -1453,30 +1453,33 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     stmtList.addAll(wrapperParams);
 
     //  : if (_$args instanceof Object[]) {
-    var ifStmts = new Stmt.Stmts();
+    var objArrStmts = new Stmt.Stmts();
+    var mapStmts = new Stmt.Stmts();
     var ifStmt  = new Stmt.If(startToken,
                               instOfExpr.apply(argsIdent, OBJECT_ARR),
-                              new Stmt.Block(startToken, ifStmts),
+                              new Stmt.Block(startToken, objArrStmts),
+                              //new Stmt.Block(startToken, mapStmts));
                               new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Named arguments not yet supported"));
 
     //  :   Object[] _$argArr = (Object[])_$args
     String argArrName = "_$argArr";
-    ifStmts.stmts.add(varDecl(wrapperFunDecl, argArrName, JacsalType.OBJECT_ARR, argsIdent, startToken));
+    objArrStmts.stmts.add(varDecl(wrapperFunDecl, argArrName, JacsalType.OBJECT_ARR, argsIdent, startToken));
     // TODO: optimise to do a direct cast to Object[] rather than invoke castToObjectArr since we know it is safe
 
     //  :   int _$argCount = argArr.length
     var argArr = ident.apply(argArrName);
     String argCountName = "_$argCount";
-    ifStmts.stmts.add(varDecl(wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argArr), startToken));
+    objArrStmts.stmts.add(varDecl(wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argArr), startToken));
     var argCountIdent = ident.apply(argCountName);
 
     int paramCount = funDecl.parameters.size();
+    int mandatoryCount = funDecl.functionDescriptor.mandatoryArgCount;
 
     // Special case to handle situation where we have List passed as only arg within the Object[].
-    // As per Groovy conventions, if the function expects more than one argument then the List
-    // contents become the parameter values.
+    // As per Groovy conventions, if the function expects more than one mandatory argument then the
+    // List contents become the parameter values.
     // If the closure/function only has a single arg then it is passed the List.
-    if (paramCount >= 2) {
+    if (mandatoryCount >= 2) {
       //:   if (_$argCount == 1 && _$argArr[0] instanceof List) {
       //:     _$argArr = ((List)_$argArr[0]).toArray()
       //:     _$argCount = _$argArr.length
@@ -1497,17 +1500,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                        new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsObjArr),
                                        ifTrueStmts,
                                        null);
-      ifStmts.stmts.add(ifArg1isObjArr);
+      objArrStmts.stmts.add(ifArg1isObjArr);
     }
 
-    int mandatoryCount = Utils.mandatoryParamCount(funDecl.parameters);
     if (mandatoryCount > 0) {
       //:   if (argCount < mandatoryCount) throw new RuntimeError("Missing mandatory arguments")
       var throwIf = new Stmt.If(startToken,
                                 new Expr.Binary(argCountIdent, token.apply(LESS_THAN), intLiteral.apply(mandatoryCount)),
                                 new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Missing mandatory arguments"),
                                 null);
-      ifStmts.stmts.add(throwIf);
+      objArrStmts.stmts.add(throwIf);
     }
 
     //  :   if (argCount > paramCount) throw new RuntimeError("Too many arguments)
@@ -1515,7 +1517,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                               new Expr.Binary(argCountIdent, token.apply(GREATER_THAN), intLiteral.apply(paramCount)),
                               new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Too many arguments"),
                               null);
-    ifStmts.stmts.add(throwIf);
+    objArrStmts.stmts.add(throwIf);
 
     // For each parameter we now either load argument from Object[] or run the initialiser
     // and store value into a local variable.
@@ -1525,7 +1527,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // from the value in our Object[]
       if (i < mandatoryCount) {
         // :   def <param_i> = _$argArr[i]
-        ifStmts.stmts.add(paramVarDecl(wrapperFunDecl, param, new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i))));
+        objArrStmts.stmts.add(paramVarDecl(wrapperFunDecl, param, new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i))));
       }
       else {
         // We have a parameter with an initialiser so load value from Object[] if present otherwise
@@ -1537,20 +1539,26 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                            new Token(COLON, startToken),
                                            param.initialiser);
         var varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
-        ifStmts.stmts.add(varDecl);
+        objArrStmts.stmts.add(varDecl);
       }
     }
 
     // Add original function as a statement so that it gets resolved as a nested function of wrapper
     Stmt.FunDecl realFunction = new Stmt.FunDecl(startToken, funDecl);
     realFunction.createVar = false;   // When in wrapper don't create a variable for the MethodHandle
-    ifStmts.stmts.add(realFunction);
+    objArrStmts.stmts.add(realFunction);
 
     // Now invoke the real function
     List<Expr> args = funDecl.parameters.stream()
                                         .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
                                         .collect(Collectors.toList());
-    ifStmts.stmts.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
+    objArrStmts.stmts.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
+
+    // : }
+    // : else {
+    // :   // Stmts for handling named args
+
+
 
     // : }
     stmtList.add(ifStmt);

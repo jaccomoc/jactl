@@ -3337,7 +3337,8 @@ class CompilerTest {
     test("def f = [a:2,b:4].map; f{ a,b -> sleeper(b,a) }", List.of("a","b"));
     test("def x = [[1,2],[3,4]]; def f = x.map; f{ a,b -> sleeper(a,b) }", List.of(2,4));
     test("def x = [a:2,b:4]; def f = x.map; f{ a,b -> sleeper(b,a) }", List.of("a","b"));
-    test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(1,2,3) + f(a)", 12);
+    test("def a = [1,2,3]; def f(x,y=7,z) { x + y + z }; f(1,2,3) + f(a)", 12);
+    test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(a)", List.of(1,2,3,7,8));
     test("def f(String x, int y) { x + y }; def a = ['x',2]; f(a)", "x2");
     test("def f = {String x, int y -> x + y }; def a = ['x',2]; f(a)", "x2");
     testError("def f = {String x, int y -> x + y }; def a = [2,'x']; f(a)", "cannot convert object of type int to string");
@@ -3345,6 +3346,9 @@ class CompilerTest {
     test("def f = { x,y,z -> x + y + z }; f(1,2,3) + f([1,2,3])", 12);
     test("def f = { x,y,z -> x + y + z }; def a = [1,2,3]; f(1,2,3) + f(a)", 12);
     test("def f = { x,y,z=3 -> x + y + z }; def a = [1,2]; f(1,2,3) + f(a)", 12);
+    test("def f(x, y=3) { x + y }; f([1,2])", List.of(1,2,3));
+    test("def f(List x, y=3) { x + y }; f([1,2])", List.of(1,2,3));
+    testError("def f(List x, y=4, z) { x + y + z }; f([1, 2, 3])", "int cannot be cast to List");
   }
 
   @Test public void simpleClosures() {
