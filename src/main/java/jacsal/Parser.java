@@ -212,20 +212,16 @@ public class Parser {
     Stmt.ExprStmt stmt = exprStmt();
     // We need to check if exprStmt was a parameterless closure and if so convert back into
     // statement block. The problem is that we can't tell the difference between a closure with
-    // no parameters and a code block until after we have parsed them. If the parameterless
-    // closure is called immediately then we know it was a closure and expression type won't be
-    // a closure. Otherwise, if the type is a closure and it has no parameters we know it wasn't
-    // immediately invoked and we will treat it is a code block.
+    // no parameters and a code block until after we have parsed them. (If the parameterless
+    // closure is called immediately then we know it was a closure and we can tell that it was
+    // invoked because expression type won't be a closure.) Otherwise, if the type is a closure
+    // and it has no parameters we know it wasn't immediately invoked and we will treat it is a
+    // code block.
     if (stmt.expr instanceof Expr.Closure) {
       Expr.Closure closure = (Expr.Closure)stmt.expr;
       if (closure.noParamsDefined) {
         removeClosure(closure.funDecl);
-        // Remove the default parameter declaration for "it" from the statements in the block
-        Stmt itParameter = closure.funDecl.block.stmts.stmts.remove(0);
-        if (!(itParameter instanceof Stmt.VarDecl &&
-              ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals(Utils.IT_VAR))) {
-          throw new IllegalStateException("Internal error: expecting parameter declaration for 'it' but got " + itParameter);
-        }
+        removeItParameter(closure.funDecl.block);
         return closure.funDecl.block;   // Treat closure as code block since no parameters
       }
     }
@@ -1048,23 +1044,32 @@ public class Parser {
    * Used inside expression strings. If no return statement there is an implicit
    * return on last statement in block that gives the value to then interpolate
    * into surrounding expression string.
+   * If the block contains multiple statements we turn it into the equivalent of
+   * an anonymous closure invocation. E.g.:
+   *   "${stmt1; stmt2; return val}" --> "${ {stmt1;stmt2;return val}() }"
    */
   private Expr blockExpression() {
     Token leftBrace = previous();
     Stmt.Block block = block(RIGHT_BRACE);
-    if (block.stmts.stmts.size() > 1) {
-      throw new CompileError("Only single expression allowed", leftBrace);
-    }
     if (block.stmts.stmts.size() == 0) {
       return new Expr.Literal(new Token(NULL, leftBrace));
     }
-    Stmt stmt = block.stmts.stmts.get(0);
-    if (!(stmt instanceof Stmt.ExprStmt)) {
-      throw new CompileError("Not an expression", leftBrace);
+    // If we have a single ExprStmt then our expression is just the expression inside the statement
+    if (block.stmts.stmts.size() == 1) {
+      Stmt stmt = block.stmts.stmts.get(0);
+      if (stmt instanceof Stmt.ExprStmt) {
+        Expr expr = ((Stmt.ExprStmt) stmt).expr;
+        expr.isResultUsed = true;
+        return expr;
+      }
     }
-    Expr expr = ((Stmt.ExprStmt)stmt).expr;
-    expr.isResultUsed = true;
-    return expr;
+
+    // We have more than one statement or statement is more than just an expression so convert
+    // block into a parameter-less closure and then invoke it.
+    Stmt.FunDecl closureFunDecl = convertBlockToClosure(leftBrace, block);
+    closureFunDecl.declExpr.isResultUsed = true;
+    Expr closure = new Expr.Closure(leftBrace, closureFunDecl.declExpr, true);
+    return createCallExpr(closure, leftBrace, List.of());
   }
 
   /**
@@ -1092,6 +1097,21 @@ public class Parser {
   }
 
   /////////////////////////////////////////////////
+
+  /**
+   * Remove the it parameter declaration from a code block.
+   * This is used when converting a closure back into a simple block once we determine that the
+   * block is really just a block and not a potential closure declaration.
+   * @param block  the code block
+   */
+  private void removeItParameter(Stmt.Block block) {
+    // Remove the default parameter declaration for "it" from the statements in the block
+    Stmt itParameter = block.stmts.stmts.remove(0);
+    if (!(itParameter instanceof Stmt.VarDecl &&
+          ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals(Utils.IT_VAR))) {
+      throw new IllegalStateException("Internal error: expecting parameter declaration for 'it' but got " + itParameter);
+    }
+  }
 
   /**
    * Check that expression is a simple literal or an identifier.
@@ -1199,6 +1219,19 @@ public class Parser {
     finally {
       popFunDecl();
     }
+  }
+
+  /**
+   * Convert a stmt block into an anonymous closure with no parameters.
+   * This is used in expression strings when the embedded expression is more than a simple expression.
+   */
+  private Stmt.FunDecl convertBlockToClosure(Token start, Stmt.Block block) {
+    Expr.FunDecl funDecl = Utils.createFunDecl(start, null, ANY, List.of());
+    funDecl.block = block;
+    addClosure(funDecl);
+    funDecl.isResultUsed = false;
+    funDecl.type = FUNCTION;
+    return new Stmt.FunDecl(start, funDecl);
   }
 
   private boolean isMapLiteral() {

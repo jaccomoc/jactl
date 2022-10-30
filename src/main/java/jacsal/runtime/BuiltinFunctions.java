@@ -182,7 +182,7 @@ public class BuiltinFunctions {
       return String.format(format, args);
     }
     catch (IllegalFormatException e) {
-      throw new RuntimeError("Bad format string: " + e.getMessage(), source, offset, e);
+      throw new RuntimeError("Bad format string", source, offset, e);
     }
   }
   public static Object sprintfWrapper(Continuation c, String source, int offset, Object[] args) {
@@ -358,7 +358,7 @@ public class BuiltinFunctions {
       throw e;
     }
     catch (Throwable t) {
-      throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t);
+      throw new RuntimeError("Unexpected error", source, offset, t);
     }
   }
   private static MethodHandle iteratorEachHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
@@ -440,7 +440,7 @@ public class BuiltinFunctions {
       throw e;
     }
     catch (Throwable t) {
-      throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t);
+      throw new RuntimeError("Unexpected error", source, offset, t);
     }
   }
 
@@ -512,7 +512,7 @@ public class BuiltinFunctions {
             return result;
           }
           catch (Throwable t) {
-            throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t);
+            throw new RuntimeError("Unexpected error", source, offset, t);
           }
         }
         else {
@@ -625,7 +625,7 @@ public class BuiltinFunctions {
                                    0, new long[] { i1, i2, dstPos }, null);
           }
           catch (RuntimeException e) { throw e; }
-          catch (Throwable t)        { throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t); }
+          catch (Throwable t)        { throw new RuntimeError("Unexpected error", source, offset, t); }
         }
         if (!(comparison instanceof Integer)) {
           throw new RuntimeError("Comparator for sort must return integer value not " + RuntimeUtils.className(comparison), source, offset);

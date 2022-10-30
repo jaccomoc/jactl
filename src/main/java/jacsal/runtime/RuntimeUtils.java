@@ -609,7 +609,7 @@ public class RuntimeUtils {
       }
     }
     catch (Exception e) {
-      throw new RuntimeError("Error during regex substitution: " + e.getMessage(), source, offset, e);
+      throw new RuntimeError("Error during regex substitution", source, offset, e);
     }
   }
 
@@ -808,7 +808,7 @@ public class RuntimeUtils {
       throw e;
     }
     catch (Throwable e) {
-      throw new RuntimeError("Error during method invocation: " + e.getMessage(), source, offset, e);
+      throw new RuntimeError("Error during method invocation", source, offset, e);
     }
   }
 
@@ -836,7 +836,7 @@ public class RuntimeUtils {
       throw e;
     }
     catch (Throwable e) {
-      throw new RuntimeError("Error during method invocation: " + e.getMessage(), source, offset, e);
+      throw new RuntimeError("Error during method invocation", source, offset, e);
     }
   }
 

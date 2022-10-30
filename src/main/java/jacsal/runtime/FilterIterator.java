@@ -131,7 +131,7 @@ class FilterIterator implements Iterator {
       throw e;
     }
     catch (Throwable t) {
-      throw new RuntimeError("Unexpected error: " + t.getMessage(), source, offset, t);
+      throw new RuntimeError("Unexpected error", source, offset, t);
     }
   }
 

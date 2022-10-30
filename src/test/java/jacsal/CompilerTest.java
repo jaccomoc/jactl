@@ -1733,8 +1733,15 @@ class CompilerTest {
 
     testError("def x = 1; \"\"\"$x\"\"", "unexpected end of file");
 
-    // TODO: test with multiple statements within block once supported
-    //test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
+    test("\"${return 'abc'}\"", "abc");
+    test("def x = 'xx'; \"${return x}\"", "xx");
+    test("def x = 'xx'; x = \"${return x}\" + 'yy'", "xxyy");
+    test("def x = 'xx'; x = \"${return x}\" + 'yy'; x", "xxyy");
+    test("def x = 'xx'; \"${x += 'yy'; return x}\"", "xxyy");
+    test("def x = 'xx'; \"${x += 'yy'; return x}\"; x", "xxyy");
+    test("def it = 'xx'; \"${it += 'yy'; return it}\"; it", "xxyy");
+    test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
+    test("\"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }\"", "5 pyramid numbers: 1, 5, 14, 30, 55");
   }
 
   @Test public void regexMatch() {
@@ -3717,7 +3724,7 @@ class CompilerTest {
          List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
     test("def x = [a:1,x:4,e:3,g:7]; x.sort{it[0][0] <=> it[1][0]}",
          List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
-    final int SORT_SIZE = ThreadLocalRandom.current().nextInt(1000);
+    final int SORT_SIZE = ThreadLocalRandom.current().nextInt(260);
     List<Integer> randomNums = IntStream.range(0, SORT_SIZE)
                                         .mapToObj(i -> ThreadLocalRandom.current().nextInt(100000))
                                         .collect(Collectors.toList());
@@ -3725,7 +3732,7 @@ class CompilerTest {
     sorted.sort(null);
     test("" + randomNums + ".sort{ a,b -> a <=> b }", sorted);
     test("" + randomNums + ".sort()", sorted);
-    test("" + randomNums + ".sort{ a,b -> sleeper(0,a) <=> sleeper(0,b) }", sorted);
+    test("" + randomNums + ".sort{ a,b -> sleeper(sleeper(0,0),a) <=> sleeper(0,sleeper(0,b)) }", sorted);
   }
 
   @Test public void stringAddRepeat() {

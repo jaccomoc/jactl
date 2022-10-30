@@ -35,6 +35,16 @@ public class JacsalError extends RuntimeException {
 
   public JacsalError(String error, Location location, boolean captureStackTrace, Throwable cause) {
     super(null, cause, false, captureStackTrace);
+    if (cause != null) {
+      String causeMsg = cause.getMessage();
+      if (causeMsg == null) {
+        causeMsg = cause.getClass().getSimpleName();
+      }
+      else {
+        causeMsg += " (" + cause.getClass().getSimpleName() + ")";
+      }
+      error += ": " + causeMsg;
+    }
     this.errorMessage = error;
     this.location = location;
   }
