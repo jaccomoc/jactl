@@ -360,7 +360,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           }
         }
         // '[' and '?['
-        if (!expr.left.type.is(MAP,LIST,STRING)) {
+        if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,STRING)) {
           throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
 

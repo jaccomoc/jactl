@@ -3683,6 +3683,9 @@ class CompilerTest {
     test("def f = [1,2,3].map; f()", List.of(1,2,3));
     testError("def f = [1,2,3].map; f('x')", "cannot convert");
     test("[1].map{ [it,it] }.map{ a,b -> a + b }", List.of(2));
+    test("def x = [1,2,3]; def f = x.map{it*it}.map; f{it+it}", List.of(2,8,18));
+    test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
+    test("def f = [1,2,3].map{it*it}.map; f{it+it}", List.of(2,8,18));
   }
 
   @Test public void mapEntryAsList() {
