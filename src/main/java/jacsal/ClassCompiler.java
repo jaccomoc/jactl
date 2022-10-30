@@ -213,7 +213,7 @@ public class ClassCompiler {
         paramTypes.add(Continuation.class);
         paramTypes.add(String.class);    // source
         paramTypes.add(int.class);       // offset
-        paramTypes.add(Object.class);    // args
+        paramTypes.add(Object[].class);  // args
 
         // Load first parameter type and then load the rest in an array
         Utils.loadConst(classInit, paramTypes.remove(0));

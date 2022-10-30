@@ -80,7 +80,7 @@ class MapIterator implements Iterator {
       }
       if (location == 2) {
         elem = RuntimeUtils.mapEntryToList(elem);
-        return closure == null ? elem : closure.invokeExact((Continuation) null, source, offset, (Object) (new Object[]{elem}));
+        return closure == null ? elem : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
       }
       else {
         // location == 3

@@ -116,7 +116,7 @@ public class BuiltinFunctions {
                                                                       Continuation.class,
                                                                       String.class,
                                                                       int.class,
-                                                                      Object.class)
+                                                                      Object[].class)
                                           : RuntimeUtils.lookupMethod(BuiltinFunctions.class,
                                                                       wrapperMethod,
                                                                       Object.class,
@@ -124,7 +124,7 @@ public class BuiltinFunctions {
                                                                       Continuation.class,
                                                                       String.class,
                                                                       int.class,
-                                                                      Object.class);
+                                                                      Object[].class);
     if (mandatoryArgCount < 0) {
       mandatoryArgCount = paramTypes.size();
     }
@@ -155,13 +155,13 @@ public class BuiltinFunctions {
   public static Object sleeper(Continuation c, long timeMs, Object result) {
     throw Continuation.create(() -> { doSleep(timeMs); return result; });
   }
-  public static Object sleeperWrapper(Continuation c, String source, int offset, Object args) {
-    var argArr = validateArgCount(args, 2, 2, source, offset);
+  public static Object sleeperWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 2, 2, source, offset);
     try {
-      sleeper(c, ((Number)argArr[0]).longValue(), argArr[1]);
+      sleeper(c, ((Number)args[0]).longValue(), args[1]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(argArr[0]) + " to long", source, offset);
+      throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(args[0]) + " to long", source, offset);
     }
     return null;
   }
@@ -171,8 +171,8 @@ public class BuiltinFunctions {
 
   // = timestamp
   public static long timeStamp() { return System.currentTimeMillis(); }
-  public static Object timeStampWrapper(Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object timeStampWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return System.currentTimeMillis();
   }
 
@@ -185,13 +185,13 @@ public class BuiltinFunctions {
       throw new RuntimeError("Bad format string: " + e.getMessage(), source, offset, e);
     }
   }
-  public static Object sprintfWrapper(Continuation c, String source, int offset, Object args) {
-    var argArr = validateArgCount(args, 1, -1, source, offset);
+  public static Object sprintfWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, -1, source, offset);
     try {
-      return sprintf(source, offset, (String)argArr[0], Arrays.copyOfRange(argArr, 1, argArr.length));
+      return sprintf(source, offset, (String)args[0], Arrays.copyOfRange(args, 1, args.length));
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(argArr[0]) + " to String", source, offset);
+      throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
     }
   }
 
@@ -202,28 +202,28 @@ public class BuiltinFunctions {
   // = toString
 
   public static String objectToString(Object obj) { return RuntimeUtils.toString(obj); }
-  public static Object objectToStringWrapper(Object obj, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object objectToStringWrapper(Object obj, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return RuntimeUtils.toString(obj);
   }
 
   // = size
 
   public static int mapSize(Map map) { return map.size(); }
-  public static Object mapSizeWrapper(Map map, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object mapSizeWrapper(Map map, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return map.size();
   }
 
   public static int listSize(List list) { return list.size(); }
-  public static Object listSizeWrapper(List list, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object listSizeWrapper(List list, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return list.size();
   }
 
   public static int objArrSize(Object[] list) { return list.length; }
-  public static Object objArrSizeWrapper(Object[] list, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object objArrSizeWrapper(Object[] list, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return list.length;
   }
 
@@ -241,8 +241,8 @@ public class BuiltinFunctions {
   public static Object iteratorSize$c(Iterator iterator, Continuation c) {
     return iteratorSize(iterator, c);
   }
-  public static Object iteratorSizeWrapper(Iterator iterator, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object iteratorSizeWrapper(Iterator iterator, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return iteratorSize(iterator, c);
   }
 
@@ -254,13 +254,13 @@ public class BuiltinFunctions {
     Iterator iter = createIterator(iterable);
     return new FilterIterator(iter, source, offset, closure);
   }
-  public static Object iteratorFilterWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 0, 1, source, offset);
+  public static Object iteratorFilterWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
     try {
-      return iteratorFilter(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle)arr[0]);
+      return iteratorFilter(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
     }
   }
 
@@ -273,13 +273,13 @@ public class BuiltinFunctions {
     return new MapIterator(iter, source, offset, closure);
   }
 
-  public static Object iteratorMapWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 0, 1, source, offset);
+  public static Object iteratorMapWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
     try {
-      return iteratorMap(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
+      return iteratorMap(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
     }
   }
 
@@ -339,7 +339,7 @@ public class BuiltinFunctions {
             break;
           case 4:                      // Have result of iter.next()
             elem = RuntimeUtils.mapEntryToList(elem);
-            Object ignored = closure == null ? null : closure.invokeExact((Continuation)null, source, (int)offset, (Object)(new Object[]{ elem }));
+            Object ignored = closure == null ? null : closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
             methodLocation = 0;       // Back to initial state to get next element
             break;
           case 5:
@@ -364,13 +364,13 @@ public class BuiltinFunctions {
   private static MethodHandle iteratorEachHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
                                                                              Object.class, Iterator.class, String.class,
                                                                              Integer.class, MethodHandle.class, Continuation.class);
-  public static Object iteratorEachWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 1, 1, source, offset);
+  public static Object iteratorEachWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, 1, source, offset);
     try {
-      return iteratorEach(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
+      return iteratorEach(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
     }
   }
 
@@ -416,7 +416,7 @@ public class BuiltinFunctions {
             break;
           case 4:                      // Have result of iter.next()
             elem = RuntimeUtils.mapEntryToList(elem);
-            transformedElem = closure == null ? elem : closure.invokeExact((Continuation)null, source, (int)offset, (Object)(new Object[]{ elem }));
+            transformedElem = closure == null ? elem : closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
             methodLocation = 6;
             break;
           case 5:
@@ -448,13 +448,13 @@ public class BuiltinFunctions {
                                                                                 Object.class, Iterator.class, Object.class,
                                                                                 BiConsumer.class, String.class, Integer.class,
                                                                                 MethodHandle.class, Continuation.class);
-  public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 0, 1, source, offset);
+  public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
     try {
-      return iteratorCollect(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
+      return iteratorCollect(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
     }
   }
 
@@ -469,13 +469,13 @@ public class BuiltinFunctions {
     return iteratorCollect$c(createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
   }
 
-  public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 0, 1, source, offset);
+  public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
     try {
-      return iteratorCollectEntries(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
+      return iteratorCollectEntries(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
     }
   }
 
@@ -528,13 +528,13 @@ public class BuiltinFunctions {
                              location + 1, null, null);
     }
   }
-  public static Object iteratorSortWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 0, 1, source, offset);
+  public static Object iteratorSortWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
     try {
-      return iteratorSort(iterable, c, source, offset, arr.length == 0 ? null : (MethodHandle) arr[0]);
+      return iteratorSort(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
     }
   }
 
@@ -618,7 +618,7 @@ public class BuiltinFunctions {
         Object elem2 = src.get(i2);
         if (comparison == null) {
           try {
-            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, (Object) (new Object[]{ List.of(elem1, elem2) }));
+            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, new Object[]{ List.of(elem1, elem2) });
           }
           catch (Continuation cont) {
             throw new Continuation(cont, mergeHandle.bindTo(src).bindTo(dst).bindTo(start1).bindTo(end1).bindTo(start2).bindTo(end2).bindTo(comparator).bindTo(source).bindTo(offset),
@@ -668,13 +668,13 @@ public class BuiltinFunctions {
     }
     return sb.toString();
   }
-  public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object args) {
-    var arr = validateArgCount(args, 0, 1, source, offset);
+  public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
     try {
-      return iteratorJoin(iterable, arr.length == 0 ? null : (String)arr[0]);
+      return iteratorJoin(iterable, args.length == 0 ? null : (String)args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(arr[0]) + " to String", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
     }
   }
 
@@ -685,28 +685,26 @@ public class BuiltinFunctions {
   public static Iterator stringLines(String str) {
     return RuntimeUtils.lines(str).iterator();
   }
-  public static Object stringLinesWrapper(String str, Continuation c, String source, int offset, Object args) {
-    validateArgCount(args, 0, 0, source, offset);
+  public static Object stringLinesWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
     return RuntimeUtils.lines(str).iterator();
   }
 
   /////////////////////////////
 
-  private static Object[] validateArgCount(Object args, int mandatoryCount, int paramCount, String source, int offset) {
-    if (args instanceof Map) {
-      throw new RuntimeError("Named arguments not supported for built-in functions", source, offset);
-    }
-    if (!(args instanceof Object[])) {
-      throw new IllegalStateException("Internal error: expecting Object[] for args not " + args.getClass().getName());
-    }
-    Object[] argArr = (Object[])args;
-    int argCount = argArr.length;
+  private static Object[] validateArgCount(Object[] args, int mandatoryCount, int paramCount, String source, int offset) {
+    int argCount = args.length;
 
     // Special case for functions with 2 or more params where we have single argument of type List.
     // We treat the list as the arguments in this case.
-    if (paramCount >= 2 && argCount == 1 && argArr[0] instanceof List) {
-      argArr = ((List)argArr[0]).toArray();
-      argCount = argArr.length;
+    if (mandatoryCount >= 2 && argCount == 1) {
+      if (args[0] instanceof List) {
+        args = ((List) args[0]).toArray();
+        argCount = args.length;
+      }
+      else if (args[0] instanceof Map) {
+        throw new RuntimeError("Named args not supported for built-in functions", source, offset);
+      }
     }
 
     if (argCount < mandatoryCount) {
@@ -716,6 +714,6 @@ public class BuiltinFunctions {
     if (paramCount >= 0 && argCount > paramCount) {
       throw new RuntimeError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", source, offset);
     }
-    return argArr;
+    return args;
   }
 }

@@ -784,7 +784,7 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static Object invokeMethodOrField(Object parent, String field, boolean isOptional, Object args, String source, int offset) {
+  public static Object invokeMethodOrField(Object parent, String field, boolean isOptional, Object[] args, String source, int offset) {
     if (parent == null) {
       if (isOptional) { return null; }
       throw new NullError("Tried to invoke method on null value", source, offset);
@@ -812,7 +812,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object invokeField(Object parent, String field, boolean isOptional, Object args, String source, int offset) {
+  public static Object invokeField(Object parent, String field, boolean isOptional, Object[] args, String source, int offset) {
     if (parent == null) {
       if (isOptional) { return null; }
       throw new NullError("Tried to invoke method on null valuet", source, offset);
@@ -1395,8 +1395,8 @@ public class RuntimeUtils {
     map.put(key, value);
   }
 
-  public static Map copyMap(Map map) {
-    return new HashMap(map);
+  public static Map copyArg0AsMap(Object[] args) {
+    return new HashMap((Map)args[0]);
   }
 
   public static Object removeOrThrow(Map map, String key, String source, int offset) {

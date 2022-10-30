@@ -2282,7 +2282,12 @@ class CompilerTest {
   }
 
   @Test public void nullValues() {
-    testError("String s = null", "null value");
+    test("String s; s", "");
+    test("String s = null", null);
+    test("Map x; x", Map.of());
+    test("Map x = null; x", null);
+    test("List x; x", List.of());
+    test("List x = null; x", null);
     testError("int i = null", "cannot convert null");
     testError("1.0 + null", "null operand");
     testError("def x; int i = x", "cannot convert null");
@@ -2926,7 +2931,7 @@ class CompilerTest {
     testError("def x = { it }; (double)x", "cannot be cast");
     testError("def x = { it }; (Decimal)x", "cannot be cast");
     testError("def x = { it }; (String)x", "cannot convert");
-    test("def x = { it }; '' + x", "MethodHandle(Continuation,String,int,Object)Object");
+    test("def x = { it }; '' + x", "MethodHandle(Continuation,String,int,Object[])Object");
     testError("def x(){ 1 }; (int)x", "cannot cast from");
     testError("def x(){ 1 }; (long)x", "cannot cast from");
     testError("def x(){ 1 }; (double)x", "cannot cast from");
@@ -3009,13 +3014,13 @@ class CompilerTest {
     testError("def x = { it }; x as long", "cannot coerce");
     testError("def x = { it }; x as double", "cannot coerce");
     testError("def x = { it }; x as Decimal", "cannot coerce");
-    test("def x = { it }; x as String", "MethodHandle(Continuation,String,int,Object)Object");
+    test("def x = { it }; x as String", "MethodHandle(Continuation,String,int,Object[])Object");
     testError("def x(){ 1 }; x as int", "cannot coerce");
     testError("def x(){ 1 }; x as long", "cannot coerce");
     testError("def x(){ 1 }; x as double", "cannot coerce");
     testError("def x(){ 1 }; x as Decimal", "cannot coerce");
 
-    test("def x(){ 1 }; x as String", "MethodHandle(Continuation,String,int,Object)Object");
+    test("def x(){ 1 }; x as String", "MethodHandle(Continuation,String,int,Object[])Object");
 
     test("1 as int", 1);
     test("int x = 1; x as int", 1);
@@ -3352,7 +3357,24 @@ class CompilerTest {
   }
 
   @Test public void passingNamedArgs() {
-    test("def f(x) { x*x }; f(x:2)", 4);
+    test("def f(x,y) { x*y }; f(x:2,y:3)", 6);
+    test("def f(x,y) { x + y }; f(x:2,y:3)", 5);
+    test("def f(x,y=[a:1]) { x + y }; f(x:2,y:3)", Map.of("x",2,"y",3,"a",1));
+    testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing value for mandatory parameter 'z'");
+    testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing value for mandatory parameter 'x'");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "invalid parameter name: a");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "invalid parameter names: a, b");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,x:1)", "invalid parameter name: b");
+    test("def f = { x,y -> x*y }; def a = [x:2,y:3]; f(a)", 6);
+    test("def f = { x,y -> x + y }; def a = [x:2,y:3]; f(a)", 5);
+    test("def f = { x,y=[a:1] -> x + y }; def a = [x:2,y:3]; f(a)", Map.of("x",2,"y",3,"a",1));
+    testError("def f = { x,y,z -> x + y + z}; def a = [x:2,y:3]; f(a)", "missing value for mandatory parameter 'z'");
+    testError("def f = { x,y,z ->x + y + z}; def a = [y:3]; f(a)", "missing value for mandatory parameter 'x'");
+    testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],y:3,z:4,a:1]; f(a)", "invalid parameter name: a");
+    testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],b:2,y:3,z:4,a:1]; f(a)", "invalid parameter names: a, b");
+    testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],b:2,y:3,z:4,x:1]; f(a)", "invalid parameter name: b");
+    testError("sleeper([x:1,y:2])", "named args not supported for built-in functions");
+    testError("def a = [x:{it*it}]; [1,2,3].map(a)", "object of type map cannot be cast to function");
   }
 
   @Test public void simpleClosures() {
@@ -3989,8 +4011,8 @@ class CompilerTest {
     test("def x = 1.0; x.toString()", "1.0");
     test("def x = 12345678901234L; x.toString()", "12345678901234");
     test("def x = ''; [a:1].each{ x += it.toString() }; x", "['a', 1]");
-    test("def f(x) {x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object)Object");
-    test("def f = { x -> x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object)Object");
+    test("def f(x) {x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object[])Object");
+    test("def f = { x -> x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object[])Object");
   }
 
   @Test public void globals() {

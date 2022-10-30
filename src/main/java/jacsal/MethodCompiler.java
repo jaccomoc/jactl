@@ -340,7 +340,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       if (expr.initialiser != null) {
         compile(expr.initialiser);
-        convertTo(expr.type, true, expr.initialiser.location);
+        // No need to cast if null
+        if (expr.type.isRef() && expr.initialiser instanceof Expr.Literal &&
+            ((Expr.Literal) expr.initialiser).value.getType().is(TokenType.NULL)) {
+          pop();
+          push(expr.type);
+        }
+        else {
+          convertTo(expr.type, true, expr.initialiser.location);
+        }
       }
       else {
         loadDefaultValue(expr.type);
@@ -1317,7 +1325,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            loadArgsAsObjectArr(expr.args);
                          },
                          () -> invokeUserMethod(true, method.implementingClass, method.wrapperMethod, ANY,
-                                                List.of(method.firstArgtype, CONTINUATION, STRING, INT, ANY)));
+                                                List.of(method.firstArgtype, CONTINUATION, STRING, INT, OBJECT_ARR)));
       }
       if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
         // If Iterator is not going to have another method invoked on it then we need to convert
@@ -1347,11 +1355,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      },
                      () -> {
                        if (expr.parent.type.is(ANY)) {
-                         invokeMethod(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class, boolean.class, Object.class, String.class, int.class);
+                         invokeMethod(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class, boolean.class, Object[].class, String.class, int.class);
                        }
                        else {
                          // Did know type of parent but no such method so load value from field
-                         invokeMethod(RuntimeUtils.class, "invokeField", Object.class, String.class, boolean.class, Object.class, String.class, int.class);
+                         invokeMethod(RuntimeUtils.class, "invokeField", Object.class, String.class, boolean.class, Object[].class, String.class, int.class);
                        }
                      });
     if (!expr.isMethodCallTarget) {
@@ -1553,7 +1561,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (invokeWrapper) {
       // Add location types to the front
-      paramTypes = List.of(CONTINUATION,STRING,INT,ANY);
+      paramTypes = List.of(CONTINUATION,STRING,INT,OBJECT_ARR);
       List<JacsalType> finalParamTypes = paramTypes;
 
       invokeMaybeAsync(true, func.returnType, 0, expr.location,
@@ -1616,7 +1624,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void invokeMethodHandle() {
-    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljacsal/runtime/Continuation;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/Object;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljacsal/runtime/Continuation;Ljava/lang/String;I[Ljava/lang/Object;)Ljava/lang/Object;", false);
     pop(5);   // callee, continuation, source, offset, Object[]
     push(ANY);
   }
