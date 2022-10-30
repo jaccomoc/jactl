@@ -140,10 +140,12 @@ public class Tokeniser {
 
   /**
    * Rewind to an early position in the stream of tokens
-   * @param token  the token to rewind to
+   * @param previous  the previous token
+   * @param current  the token to rewind to
    */
-  public void rewind(Token token) {
-    currentToken = token;
+  public void rewind(Token previous, Token current) {
+    previousToken = previous;
+    currentToken  = current;
   }
 
   /**
@@ -253,8 +255,9 @@ public class Tokeniser {
       case SINGLE_QUOTE: {
         // Work out whether we are a multi line string literal or not
         boolean tripleQuoted = available(2) && charAt(0) == '\'' && charAt(1) == '\'';
+        int stringStart = offset - 1;
         advance(tripleQuoted ? 2 : 0);
-        Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true, false);
+        Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true, false, stringStart);
         advance(tripleQuoted ? 3 : 1);
         return stringToken;
       }
@@ -265,9 +268,10 @@ public class Tokeniser {
         // double quote.
         boolean tripleQuote = available(2) && charAt(0) == '"' && charAt(1) == '"';
         String  endChars    = tripleQuote ? "\"\"\"" : "\"";
-        pushStringState(endChars, offset-1);
+        int stringStart = offset - 1;
+        pushStringState(endChars, stringStart);
         advance(tripleQuote ? 2 : 0);
-        token = parseString(true, endChars, newLinesAllowed(), true, false);
+        token = parseString(true, endChars, newLinesAllowed(), true, false, stringStart);
         return token.setType(EXPR_STRING_START);
       }
       case REGEX_SUBST_START: {
@@ -412,7 +416,7 @@ public class Tokeniser {
       }
     }
     // No embedded expression or end of string found so parse as STRING_CONST
-    return parseString(true, endChars, newLinesAllowed(), escapeChars, currentStringState.isReplace);
+    return parseString(true, endChars, newLinesAllowed(), escapeChars, currentStringState.isReplace, currentStringState.stringOffset);
   }
 
   /**
@@ -608,7 +612,7 @@ public class Tokeniser {
     }
   }
 
-  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace) {
+  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
     char endChar = endChars.charAt(0);
     Token token = createToken();
     StringBuilder sb = new StringBuilder();
@@ -668,7 +672,7 @@ public class Tokeniser {
       }
       sb.append((char)c);
     }
-    if (!finished) { throw new EOFError("Unexpected end of file in string that started", new Token(source, stringState.peek().stringOffset)); }
+    if (!finished) { throw new EOFError("Unexpected end of file in string that started", new Token(source, stringStart)); }
 
     advance(-1);     // Don't swallow '$' or ending quote
     return token.setType(STRING_CONST)

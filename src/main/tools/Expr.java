@@ -379,7 +379,7 @@ class Expr {
   /**
    * Invoke a internal utility function
    */
-  class InvokeUtility extends Expr implements ManagesResult {
+  class InvokeUtility extends Expr {
     Token       token;
     Class       clss;
     String      methodName;

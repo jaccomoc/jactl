@@ -693,6 +693,9 @@ public class BuiltinFunctions {
   /////////////////////////////
 
   private static Object[] validateArgCount(Object args, int mandatoryCount, int paramCount, String source, int offset) {
+    if (args instanceof Map) {
+      throw new RuntimeError("Named arguments not supported for built-in functions", source, offset);
+    }
     if (!(args instanceof Object[])) {
       throw new IllegalStateException("Internal error: expecting Object[] for args not " + args.getClass().getName());
     }

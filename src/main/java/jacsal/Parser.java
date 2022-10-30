@@ -634,7 +634,16 @@ public class Parser {
       // Call starts with "(" but sometimes can have just "{" if no args before
       // a closure arg
       if (operator.is(LEFT_PAREN,LEFT_BRACE)) {
-        List<Expr> args = argList();
+        List<Expr> args;
+        // Check for named args
+        if (lookahead(() -> mapKey() != null, () -> matchAny(COLON))) {
+          // For named args we create a list with single entry being the map literal that represents
+          // the name:value pairs.
+          args = List.of(mapEntries(RIGHT_PAREN));
+        }
+        else {
+          args = argList();
+        }
         expr = createCallExpr(expr, operator, args);
         continue;
       }
@@ -871,10 +880,13 @@ public class Parser {
    * as well as JSON syntax using "{" and "}".
    */
   private Expr.MapLiteral mapLiteral() {
-    expect(LEFT_SQUARE,LEFT_BRACE);
-    Token startToken = previous();
-    TokenType endToken = startToken.is(LEFT_BRACE) ? RIGHT_BRACE : RIGHT_SQUARE;
-    Expr.MapLiteral expr = new Expr.MapLiteral(startToken);
+    expect(LEFT_SQUARE, LEFT_BRACE);
+    TokenType endToken = previous().is(LEFT_BRACE) ? RIGHT_BRACE : RIGHT_SQUARE;
+    return mapEntries(endToken);
+  }
+
+  private Expr.MapLiteral mapEntries(TokenType endToken) {
+    Expr.MapLiteral expr = new Expr.MapLiteral(previous());
     if (matchAny(COLON)) {
       // Empty map
       expect(endToken);
@@ -1279,7 +1291,8 @@ public class Parser {
   @SafeVarargs
   private boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
-    Token current = peek();
+    Token previous = previous();
+    Token current  = peek();
     List<CompileError>    currentErrors    = new ArrayList<>(errors);
 
     // Set flag so that we know not to collect state such as functions per block etc
@@ -1301,7 +1314,7 @@ public class Parser {
     }
     finally {
       // Restore state
-      tokeniser.rewind(current);
+      tokeniser.rewind(previous, current);
       errors        = currentErrors;
       lookaheadCount--;
     }

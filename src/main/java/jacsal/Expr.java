@@ -593,7 +593,7 @@ abstract class Expr {
   /**
    * Invoke a internal utility function
    */
-  static class InvokeUtility extends Expr implements ManagesResult {
+  static class InvokeUtility extends Expr {
     Token       token;
     Class       clss;
     String      methodName;

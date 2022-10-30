@@ -802,13 +802,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       var descriptor = Functions.lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
         expr.methodDescriptor = descriptor;
-        validateArgCount(expr.args, descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
-        for (int i = 0; i < expr.args.size(); i++) {
-          Expr       arg       = expr.args.get(i);
-          JacsalType paramType = descriptor.paramTypes.get(i);
-          if (!arg.type.isConvertibleTo(paramType)) {
-            throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + arg.type +
-                                   " to parameter type of " + paramType, arg.location);
+        if (validateArgCount(expr.args, descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen)) {
+          for (int i = 0; i < expr.args.size(); i++) {
+            Expr       arg       = expr.args.get(i);
+            JacsalType paramType = descriptor.paramTypes.get(i);
+            if (!arg.type.isConvertibleTo(paramType)) {
+              throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + arg.type +
+                                     " to parameter type of " + paramType, arg.location);
+            }
           }
         }
         expr.type = descriptor.returnType;
@@ -881,13 +882,23 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     currentStmts.currentIdx++;
   }
 
-  private void validateArgCount(List<Expr> args, int mandatoryCount, int paramCount, Token location) {
+  /**
+   * Validate number of arguments.
+   * If we have single arg of type List/Map/ANY and function has more than one mandatory param we defer
+   * any further checking until runtime and so we return false.
+   * @return true if arg types should be validated
+   */
+  private boolean validateArgCount(List<Expr> args, int mandatoryCount, int paramCount, Token location) {
     // If the function takes more than one mandatory argument and we have a single arg of type List/ANY then
-    // we assume that the arg is a list that contains the actual argument values and defer further
-    // validation until runtime.
+    // we assume that the arg is a list that contains the actual argument values and defer further validation
+    // until runtime.
+    // Similarly, if the function has more than one mandatory argument and we have a single arg that is a Map
+    // we also defer to runtime since we will treat Map as a list of name:value pairs for the parameters.
+    // NOTE: we use mandatory arg count > 1 as the trigger for the Map/List treatment since otherwise we couldn't
+    // have a function that takes a single List or Map as an argument.
     int argCount = args.size();
-    if (mandatoryCount > 1 && argCount == 1 && args.get(0).type.is(ANY,LIST)) {
-      return;
+    if (mandatoryCount > 1 && argCount == 1 && args.get(0).type.is(ANY,LIST,MAP)) {
+      return false;
     }
     if (argCount < mandatoryCount) {
       String atLeast = mandatoryCount == paramCount ? "" : "at least ";
@@ -896,6 +907,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (paramCount >= 0 && argCount > paramCount) {
       throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", location);
     }
+    return true;
   }
 
   private JacsalType evaluateConstExpr(Expr.Binary expr) {
@@ -1408,15 +1420,22 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private Expr.FunDecl createWrapperFunction(Expr.FunDecl funDecl) {
     Token startToken = funDecl.startToken;
 
+    /////////////////////////////
+    // Some helper lambdas...
     Function<TokenType,Token>        token      = type -> new Token(type, startToken);
     Function<String,Token>           identToken = name -> token.apply(IDENTIFIER).setValue(name);
     Function<String,Expr.Identifier> ident      = name -> new Expr.Identifier(identToken.apply(name));
     Function<Object,Expr.Literal>    intLiteral = value -> new Expr.Literal(new Token(INTEGER_CONST, startToken).setValue(value));
+    Function<String,Expr.Literal>    strLiteral = value -> new Expr.Literal(new Token(STRING_CONST, startToken).setValue(value));
     Function<TokenType,Expr.Literal> typeLiteral= type  -> new Expr.Literal(token.apply(type));
     BiFunction<Expr,TokenType,Expr>  instOfExpr = (name,type) -> new Expr.Binary(name,
                                                                                  token.apply(INSTANCE_OF),
                                                                                  typeLiteral.apply(type));
-
+    BiFunction<String,Expr,Stmt>     assignStmt = (name,value) -> {
+      var assign = new Stmt.ExprStmt(startToken, new Expr.VarAssign(ident.apply(name), token.apply(EQUAL), value));
+      assign.expr.isResultUsed = false;
+      return assign;
+    };
 
     BiFunction<String, JacsalType,Stmt.VarDecl> createParam =
       (name,type) -> {
@@ -1428,6 +1447,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         return new Stmt.VarDecl(startToken,
                                 declExpr);
       };
+    ///////////////////////////////
 
     List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
 
@@ -1452,25 +1472,40 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     List<Stmt> stmtList = stmts.stmts;
     stmtList.addAll(wrapperParams);
 
-    //  : if (_$args instanceof Object[]) {
-    var objArrStmts = new Stmt.Stmts();
-    var mapStmts = new Stmt.Stmts();
-    var ifStmt  = new Stmt.If(startToken,
-                              instOfExpr.apply(argsIdent, OBJECT_ARR),
-                              new Stmt.Block(startToken, objArrStmts),
-                              //new Stmt.Block(startToken, mapStmts));
-                              new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Named arguments not yet supported"));
+    //  : boolean _$isObjArr = _$args instanceof Object[]
+    String isObjArrName = "_$isObjArr";
+    stmtList.add(varDecl(startToken, wrapperFunDecl, isObjArrName, BOOLEAN, instOfExpr.apply(argsIdent, OBJECT_ARR)));
 
-    //  :   Object[] _$argArr = (Object[])_$args
+    //  :   int _$argCount = -1
+    String argCountName = "_$argCount";
+    stmtList.add(varDecl(startToken, wrapperFunDecl, argCountName, INT, intLiteral.apply(-1)));
+    final var argCountIdent = ident.apply(argCountName);
+
+    //  :   Object[] _$argArr = null
     String argArrName = "_$argArr";
-    objArrStmts.stmts.add(varDecl(wrapperFunDecl, argArrName, JacsalType.OBJECT_ARR, argsIdent, startToken));
+    stmtList.add(varDecl(startToken, wrapperFunDecl, argArrName, JacsalType.OBJECT_ARR, null));
+
+    //  :   Map _$mapCopy = null
+    String mapCopyName = "_$mapCopy";
+    stmtList.add(varDecl(startToken, wrapperFunDecl, mapCopyName, JacsalType.MAP,  null));
+
+    //  : if (_$isObjArr) {
+    var       objArrStmts  = new Stmt.Stmts();
+    var       mapStmts     = new Stmt.Stmts();         // Stmts for when args passed as Map
+    final var isObjArrExpr = ident.apply(isObjArrName);
+    var ifStmt  = new Stmt.If(startToken,
+                              isObjArrExpr,
+                              new Stmt.Block(startToken, objArrStmts),
+                              new Stmt.Block(startToken, mapStmts));
+                              //new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Named arguments not yet supported"));
+
+    //  :   _$argArr = (Object[])_$args
+    objArrStmts.stmts.add(assignStmt.apply(argArrName, argsIdent));
     // TODO: optimise to do a direct cast to Object[] rather than invoke castToObjectArr since we know it is safe
 
-    //  :   int _$argCount = argArr.length
+    //  :   _$argCount = argArr.length
     var argArr = ident.apply(argArrName);
-    String argCountName = "_$argCount";
-    objArrStmts.stmts.add(varDecl(wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argArr), startToken));
-    var argCountIdent = ident.apply(argCountName);
+    objArrStmts.stmts.add(assignStmt.apply(argCountName, new Expr.ArrayLength(startToken, argArr)));
 
     int paramCount = funDecl.parameters.size();
     int mandatoryCount = funDecl.functionDescriptor.mandatoryArgCount;
@@ -1484,17 +1519,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       //:     _$argArr = ((List)_$argArr[0]).toArray()
       //:     _$argCount = _$argArr.length
       //:   }
-      var argCountIs1      = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
-      var arg0IsObjArr     = instOfExpr.apply(new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0)), TokenType.LIST);
-      var ifTrueStmts      = new Stmt.Stmts();
-      var getArg0          = new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0));
-      var toObjectArr      = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", List.of(Object.class), List.of(getArg0));
-      var assignToArgArr   = new Expr.VarAssign(argArr, token.apply(EQUAL), toObjectArr);
-      assignToArgArr.isResultUsed = false;
-      var assignToArgCount = new Expr.VarAssign(argCountIdent, token.apply(EQUAL), new Expr.ArrayLength(startToken, argArr));
-      assignToArgCount.isResultUsed = false;
-      ifTrueStmts.stmts.add(new Stmt.ExprStmt(startToken, assignToArgArr));
-      ifTrueStmts.stmts.add(new Stmt.ExprStmt(startToken, assignToArgCount));
+      var       argCountIs1  = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
+      var       arg0IsObjArr = instOfExpr.apply(new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0)), TokenType.LIST);
+      var       ifTrueStmts  = new Stmt.Stmts();
+      var       getArg0      = new Expr.ArrayGet(startToken, argArr, intLiteral.apply(0));
+      var       toObjectArr  = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", List.of(Object.class), List.of(getArg0));
+      ifTrueStmts.stmts.add(assignStmt.apply(argArrName, toObjectArr));
+      ifTrueStmts.stmts.add(assignStmt.apply(argCountName, new Expr.ArrayLength(startToken, argArr)));
 
       var ifArg1isObjArr = new Stmt.If(startToken,
                                        new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsObjArr),
@@ -1519,49 +1550,98 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                               null);
     objArrStmts.stmts.add(throwIf);
 
+    //  : }
+    //  : else {
+    //  :   Map _$argMap = (Map)_$args
+    String argMapName = "_$argMap";
+    mapStmts.stmts.add(varDecl(startToken, wrapperFunDecl, argMapName, JacsalType.MAP, argsIdent));
+
+    // Copy the map so we can delete the params as we go and detect unused entries
+    //  :   _$mapCopy = RuntimeUtils.copyMap(_$argMap)
+    mapStmts.stmts.add(assignStmt.apply(mapCopyName, new Expr.InvokeUtility(startToken, RuntimeUtils.class,
+                                                                            "copyMap",
+                                                                            List.of(Map.class), List.of(ident.apply(argMapName)))));
+    var mapCopyIdent = ident.apply(mapCopyName);
+
+    //  : }
+    stmtList.add(ifStmt);
+
     // For each parameter we now either load argument from Object[] or run the initialiser
     // and store value into a local variable.
     for (int i = 0; i < paramCount; i++) {
       var param = funDecl.parameters.get(i).declExpr;
+      final var paramNameIdent = strLiteral.apply(param.name.getStringValue());
       // If we have not reached mandatory arg count yet then we just create a var for the parameter
-      // from the value in our Object[]
+      // from the value in our Object[]/Map since for mandatory params there is no default initialiser
       if (i < mandatoryCount) {
-        // :   def <param_i> = _$argArr[i]
-        objArrStmts.stmts.add(paramVarDecl(wrapperFunDecl, param, new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i))));
+        Expr mapArgExpr;
+        // :  mapArgExpr = param.initialiser == null ? RuntimeUtils.removeOrThrow(_$mapCopy, param.name, source, offset)
+        // :                                         : _$mapCopy.remove(param.name) ?: param.initialiser
+        if (param.initialiser == null) {
+          // For map args mandatory depends solely on whether initialiser is present while for Object[] args
+          // it depends on the "mandatoryCount" which is based on last parameter without an initialiser.
+         mapArgExpr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "removeOrThrow",
+                                             List.of(Map.class, String.class, String.class, int.class),
+                                             List.of(mapCopyIdent, paramNameIdent, sourceIdent, offsetIdent));
+        }
+        else {
+          // We have initialiser so use it if arg not present
+          mapArgExpr = new Expr.Binary(new Expr.InvokeUtility(startToken, Map.class, "remove",
+                                                              List.of(Object.class), List.of(mapCopyIdent, paramNameIdent)),
+                                       token.apply(QUESTION_COLON),
+                                       param.initialiser);
+        }
+        // :   def <param_i> = _$isObjArr ? _$argArr[i] : mapArgExpr
+        stmtList.add(paramVarDecl(wrapperFunDecl, param,
+                                  new Expr.Ternary(isObjArrExpr, token.apply(QUESTION),
+                                                   new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i)),
+                                                   token.apply(COLON),
+                                                   mapArgExpr)));
       }
       else {
-        // We have a parameter with an initialiser so load value from Object[] if present otherwise
+        // We have a parameter with an initialiser so load value from Object[]/Map if present otherwise
         // use the initialiser
-        // :   def <param_i> = i < _$argCount ? _$argArr[i] : <param_initialiser>
-        var initialiser = new Expr.Ternary(new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent),
-                                           new Token(QUESTION, startToken),
+        // :   def <param_i> = (_$isObjArr ? (i < _$argCount ? _$argArr[i] : null)
+        // :                               : _$mapCopy.remove(param.name))
+        // :                       ?: param.initialiser
+        var objArrValue = new Expr.Ternary(new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent),
+                                           token.apply(QUESTION),
                                            new Expr.ArrayGet(startToken, argArr, intLiteral.apply(i)),
-                                           new Token(COLON, startToken),
-                                           param.initialiser);
+                                           token.apply(COLON),
+                                           new Expr.Literal(token.apply(NULL)));
+        var mapValue = new Expr.InvokeUtility(startToken, Map.class, "remove",
+                                              List.of(Object.class), List.of(mapCopyIdent, paramNameIdent));
+        var initialiser = new Expr.Binary(new Expr.Ternary(isObjArrExpr, token.apply(QUESTION), objArrValue, token.apply(COLON), mapValue),
+                                          token.apply(QUESTION_COLON),
+                                          param.initialiser);
         var varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
-        objArrStmts.stmts.add(varDecl);
+        stmtList.add(varDecl);
       }
     }
+
+    // Check that we don't still have parameter values left in our Map if passing by name
+    // : if (!_$isObjArr) {
+    // :   RuntimeUtils.checkForExtraArgs(_$mapCopy)
+    // : }
+    final var checkForExtraArgs = new Stmt.ExprStmt(startToken,
+                                                    new Expr.InvokeUtility(startToken,
+                                                                           RuntimeUtils.class,
+                                                                           "checkForExtraArgs",
+                                                                           List.of(Map.class, String.class, int.class),
+                                                                           List.of(mapCopyIdent, sourceIdent, offsetIdent)));
+    checkForExtraArgs.expr.isResultUsed = false;
+    stmtList.add(new Stmt.If(startToken, isObjArrExpr, checkForExtraArgs,null));
 
     // Add original function as a statement so that it gets resolved as a nested function of wrapper
     Stmt.FunDecl realFunction = new Stmt.FunDecl(startToken, funDecl);
     realFunction.createVar = false;   // When in wrapper don't create a variable for the MethodHandle
-    objArrStmts.stmts.add(realFunction);
+    stmtList.add(realFunction);
 
     // Now invoke the real function
     List<Expr> args = funDecl.parameters.stream()
                                         .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
                                         .collect(Collectors.toList());
-    objArrStmts.stmts.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
-
-    // : }
-    // : else {
-    // :   // Stmts for handling named args
-
-
-
-    // : }
-    stmtList.add(ifStmt);
+    stmtList.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
 
     wrapperFunDecl.block      = new Stmt.Block(startToken, stmts);
     wrapperFunDecl.isWrapper  = true;
@@ -1572,7 +1652,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return wrapperFunDecl;
   }
 
-  private Stmt.VarDecl varDecl(Expr.FunDecl ownerFunDecl, String name, JacsalType type, Expr init, Token token) {
+  private Stmt.VarDecl varDecl(Token token, Expr.FunDecl ownerFunDecl, String name, JacsalType type, Expr init) {
     return varDecl(ownerFunDecl, new Token(IDENTIFIER, token).setValue(name), type, init);
   }
 

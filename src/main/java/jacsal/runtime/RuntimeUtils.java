@@ -1394,4 +1394,24 @@ public class RuntimeUtils {
     }
     map.put(key, value);
   }
+
+  public static Map copyMap(Map map) {
+    return new HashMap(map);
+  }
+
+  public static Object removeOrThrow(Map map, String key, String source, int offset) {
+    Object result = map.remove(key);
+    if (result == null) {
+      throw new RuntimeError("Missing value for mandatory parameter '" + key + "'", source, offset);
+    }
+    return result;
+  }
+
+  public static boolean checkForExtraArgs(Map<String,Object> map, String source, int offset) {
+    if (map.size() > 0) {
+      String names = map.keySet().stream().collect(Collectors.joining(", "));
+      throw new RuntimeError("Invalid parameter name" + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
+    }
+    return true;
+  }
 }

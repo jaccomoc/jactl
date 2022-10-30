@@ -3351,6 +3351,10 @@ class CompilerTest {
     testError("def f(List x, y=4, z) { x + y + z }; f([1, 2, 3])", "int cannot be cast to List");
   }
 
+  @Test public void passingNamedArgs() {
+    test("def f(x) { x*x }; f(x:2)", 4);
+  }
+
   @Test public void simpleClosures() {
     test("{;}()", null);
     test("int i = 1; { int i = 2; i++; }; i", 1);

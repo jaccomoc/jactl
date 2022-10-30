@@ -283,6 +283,7 @@ class TokeniserTest {
       return token;
     };
 
+    var previous = tokeniser.previous();
     var token = checkToken.apply(IDENTIFIER, "a");
     checkToken.apply(DOT, null);
     checkToken.apply(INTEGER_CONST, "1");
@@ -293,7 +294,8 @@ class TokeniserTest {
     checkToken.apply(DOT, null);
     checkToken.apply(IDENTIFIER, "b");
 
-    tokeniser.rewind(token);
+    tokeniser.rewind(previous, token);
+    assertEquals(previous, tokeniser.previous());
     checkToken.apply(IDENTIFIER, "a");
     checkToken.apply(DOT, null);
     checkToken.apply(INTEGER_CONST, "1");
@@ -304,7 +306,7 @@ class TokeniserTest {
     checkToken.apply(DOT, null);
     checkToken.apply(IDENTIFIER, "b");
 
-    tokeniser.rewind(token);
+    tokeniser.rewind(previous, token);
     checkToken.apply(INTEGER_CONST, "2");
     checkToken.apply(DOT, null);
     checkToken.apply(INTEGER_CONST, "3");
@@ -501,10 +503,11 @@ class TokeniserTest {
     var tokeniser = new Tokeniser("a 1 { ]>");
     assertEquals(IDENTIFIER, tokeniser.next().getType());
     assertEquals(INTEGER_CONST, tokeniser.next().getType());
+    var prev  = tokeniser.previous();
     var token = tokeniser.next();
     assertEquals(LEFT_BRACE, token.getType());
     assertEquals(RIGHT_SQUARE, tokeniser.next().getType());
-    tokeniser.rewind(token);
+    tokeniser.rewind(prev, token);
     assertEquals(LEFT_BRACE, tokeniser.next().getType());
     assertEquals(RIGHT_SQUARE, tokeniser.next().getType());
     assertEquals(GREATER_THAN, tokeniser.next().getType());
@@ -898,10 +901,11 @@ class TokeniserTest {
   @Test public void peek() {
     var tokeniser = new Tokeniser("+ - *");
     assertEquals(PLUS, tokeniser.peek().getType());
+    var prev  = tokeniser.previous();
     var token = tokeniser.next();
     assertEquals(PLUS, token.getType());
     assertEquals(MINUS, tokeniser.peek().getType());
-    tokeniser.rewind(token);
+    tokeniser.rewind(prev, token);
     assertEquals(PLUS, tokeniser.peek().getType());
     token = tokeniser.next();
     assertEquals(PLUS, token.getType());
@@ -954,6 +958,7 @@ class TokeniserTest {
     assertEquals(EQUAL, token.getType());
     token = tokeniser.next();
     assertEquals(SLASH, token.getType());
+    Token previous   = tokeniser.previous();
     Token slashToken = token;
     tokeniser.startRegex();
     token = tokeniser.next();
@@ -986,7 +991,7 @@ class TokeniserTest {
     token = tokeniser.next();
     assertEquals(EOF, token.getType());
 
-    tokeniser.rewind(slashToken);
+    tokeniser.rewind(previous, slashToken);
     token = tokeniser.next();
     assertEquals(SLASH, token.getType());
     tokeniser.startRegex();
