@@ -205,8 +205,6 @@ public class Parser {
     if (matchAny(IF))            { return ifStmt();           }
     if (matchAny(WHILE))         { return whileStmt();        }
     if (matchAny(FOR))           { return forStmt();          }
-    if (matchAny(BREAK))         { return new Stmt.Break(previous()); }
-    if (matchAny(CONTINUE))      { return new Stmt.Continue(previous()); }
     if (peek().is(SEMICOLON))    { return null;               }
 
     Stmt.ExprStmt stmt = exprStmt();
@@ -560,7 +558,7 @@ public class Parser {
   }
 
   /**
-   *# notExpresssion -> NOT * (expr | returnExpr | printExpr) ;
+   *# notExpresssion -> NOT * (expr | returnExpr | printExpr | "break" | "continue" ) ;
    */
   private Expr notExpression() {
     Expr expr;
@@ -569,9 +567,10 @@ public class Parser {
       expr = new Expr.PrefixUnary(new Token(BANG, notToken), notExpression());
     }
     else {
-      if (matchAny(RETURN))        { expr = returnExpr(); }
-      else
-      if (matchAny(PRINT,PRINTLN)) { expr = printExpr();  }
+      if (matchAny(RETURN))        { expr = returnExpr();                  } else
+      if (matchAny(PRINT,PRINTLN)) { expr = printExpr();                   } else
+      if (matchAny(BREAK))         { expr = new Expr.Break(previous());    } else
+      if (matchAny(CONTINUE))      { expr = new Expr.Continue(previous()); }
       else {
         expr = parseExpression(0);
       }

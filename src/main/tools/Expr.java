@@ -321,6 +321,22 @@ class Expr {
     FunDecl    @funDecl;
   }
 
+  /**
+   * Break statement
+   */
+  class Break extends Expr {
+    Token breakToken;
+    Stmt.While @whileLoop;
+  }
+
+  /**
+   * Continue statement
+   */
+  class Continue extends Expr{
+    Token continueToken;
+    Stmt.While @whileLoop;
+  }
+
   class Print extends Expr {
     Token printToken;
     Expr  expr;

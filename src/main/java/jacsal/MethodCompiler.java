@@ -247,16 +247,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitBreak(Stmt.Break stmt) {
-    mv.visitJumpInsn(GOTO, stmt.whileLoop.endLoopLabel);
-    return null;
-  }
-
-  @Override public Void visitContinue(Stmt.Continue stmt) {
-    mv.visitJumpInsn(GOTO, stmt.whileLoop.continueLabel);
-    return null;
-  }
-
   @Override
   public Void visitClassDecl(Stmt.ClassDecl stmt) {
     return null;
@@ -1427,6 +1417,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     pop();
     emitReturn(returnExpr.returnType);
     push(ANY);
+    return null;
+  }
+
+  @Override public Void visitBreak(Expr.Break stmt) {
+    mv.visitJumpInsn(GOTO, stmt.whileLoop.endLoopLabel);
+    push(BOOLEAN);
+    return null;
+  }
+
+  @Override public Void visitContinue(Expr.Continue stmt) {
+    mv.visitJumpInsn(GOTO, stmt.whileLoop.continueLabel);
+    push(BOOLEAN);
     return null;
   }
 

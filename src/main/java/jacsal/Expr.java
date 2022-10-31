@@ -490,6 +490,34 @@ abstract class Expr {
     @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + ", " + "returnType=" + returnType + "]"; }
   }
 
+  /**
+   * Break statement
+   */
+  static class Break extends Expr {
+    Token breakToken;
+    Stmt.While whileLoop;
+    Break(Token breakToken) {
+      this.breakToken = breakToken;
+      this.location = breakToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
+    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + "]"; }
+  }
+
+  /**
+   * Continue statement
+   */
+  static class Continue extends Expr{
+    Token continueToken;
+    Stmt.While whileLoop;
+    Continue(Token continueToken) {
+      this.continueToken = continueToken;
+      this.location = continueToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
+    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + "]"; }
+  }
+
   static class Print extends Expr {
     Token printToken;
     Expr  expr;
@@ -634,6 +662,8 @@ abstract class Expr {
     T visitNoop(Noop expr);
     T visitClosure(Closure expr);
     T visitReturn(Return expr);
+    T visitBreak(Break expr);
+    T visitContinue(Continue expr);
     T visitPrint(Print expr);
     T visitBlock(Block expr);
     T visitArrayLength(ArrayLength expr);

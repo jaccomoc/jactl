@@ -194,34 +194,6 @@ abstract class Stmt {
   }
 
   /**
-   * Break statement
-   */
-  static class Break extends Stmt {
-    Token breakToken;
-    While whileLoop;
-    Break(Token breakToken) {
-      this.breakToken = breakToken;
-      this.location = breakToken;
-    }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
-    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + "]"; }
-  }
-
-  /**
-   * Continue statement
-   */
-  static class Continue extends Stmt {
-    Token continueToken;
-    While whileLoop;
-    Continue(Token continueToken) {
-      this.continueToken = continueToken;
-      this.location = continueToken;
-    }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
-    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + "]"; }
-  }
-
-  /**
    * Statements that are just an expression. This can be used, for example, where there
    * is an expression at the end of a function without having to exlicitly have the "return"
    * keyword to indicate that the expression is the return value of the function.
@@ -268,8 +240,6 @@ abstract class Stmt {
     T visitFunDecl(FunDecl stmt);
     T visitWhile(While stmt);
     T visitReturn(Return stmt);
-    T visitBreak(Break stmt);
-    T visitContinue(Continue stmt);
     T visitExprStmt(ExprStmt stmt);
     T visitThrowError(ThrowError stmt);
   }

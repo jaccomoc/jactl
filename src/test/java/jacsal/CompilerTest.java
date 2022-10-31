@@ -2348,6 +2348,8 @@ class CompilerTest {
     testError("if true", "unexpected token 'true'");
     test("def x; x ?= x if true", null);
     test("def x; x ?= 1 if true", 1);
+    test("int x; for (int i=0; i < 10; i++) { continue if i > 5; x += i }; x", 15);
+    test("int x; for (int i=0; i < 10; i++) { break unless i < 5; x += i }; x", 10);
   }
 
   @Test public void booleanNonBooleanComparisons() {
@@ -3224,6 +3226,8 @@ class CompilerTest {
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { sum += i * j } }; sum", 36);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) break; sum += i * j } }; sum", 18);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
+    test("int x; for (int i = 0; i < 10; i++) { i < 5 and continue or x += i }; x", 35);
+    test("int x; for (int i = 0; i < 10; i++) { i > 5 and break or x += i }; x", 15);
   }
 
   @Test public void simpleFunctions() {
@@ -3904,6 +3908,7 @@ class CompilerTest {
     test("def x = 1; x = 2 and true; x", 2);
     test("def it = 'abc'; /a/f ? true : false", true);
     test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
+    test("def x = 0; for (int i = 0; i < 10; i++) { i < 5 and do { x += i } and continue; x++ }; x", 15);
   }
 
   @Test public void builtinFunctions() {

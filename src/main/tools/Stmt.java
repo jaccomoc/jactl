@@ -142,22 +142,6 @@ class Stmt {
   }
 
   /**
-   * Break statement
-   */
-  class Break extends Stmt {
-    Token breakToken;
-    While @whileLoop;
-  }
-
-  /**
-   * Continue statement
-   */
-  class Continue extends Stmt {
-    Token continueToken;
-    While @whileLoop;
-  }
-
-  /**
    * Statements that are just an expression. This can be used, for example, where there
    * is an expression at the end of a function without having to exlicitly have the "return"
    * keyword to indicate that the expression is the return value of the function.

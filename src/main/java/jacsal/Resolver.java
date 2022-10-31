@@ -248,16 +248,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitBreak(Stmt.Break stmt) {
-    stmt.whileLoop = currentWhileLoop(stmt.breakToken);
-    return null;
-  }
-
-  @Override public Void visitContinue(Stmt.Continue stmt) {
-    stmt.whileLoop = currentWhileLoop(stmt.continueToken);
-    return null;
-  }
-
   @Override public Void visitThrowError(Stmt.ThrowError stmt) {
     resolve(stmt.source);
     resolve(stmt.offset);
@@ -728,6 +718,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Expression type not compatible with return type of function", returnExpr.expr.location);
     }
     return returnExpr.type = ANY;
+  }
+
+  @Override public JacsalType visitBreak(Expr.Break expr) {
+    expr.whileLoop = currentWhileLoop(expr.breakToken);
+    return expr.type = BOOLEAN;
+  }
+
+  @Override public JacsalType visitContinue(Expr.Continue expr) {
+    expr.whileLoop = currentWhileLoop(expr.continueToken);
+    return expr.type = BOOLEAN;
   }
 
   @Override public JacsalType visitPrint(Expr.Print printExpr) {
