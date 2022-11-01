@@ -49,11 +49,11 @@ public class BuiltinFunctions {
 
       // String methods
       registerMethod("lines", "stringLines", false);
-//      registerMethod("length", "stringLength", false);
-//      registerMethod("size", "stringLength", false);
-//      registerMethod("toLowerCase", "stringToLowerCase", false);
-//      registerMethod("toUpperCase", "stringToUpperCase", false);
-//      registerMethod("substr", "stringSubstr", false);
+      registerMethod("length", "stringLength", false);
+      registerMethod("size", "stringLength", false);
+      registerMethod("toLowerCase", "stringToLowerCase", STRING, false, 0);
+      registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
+      registerMethod("substring", "stringSubstring", STRING, true, 1);
 
       // Object methods
       registerMethod("toString", "objectToString", ANY, false, 0);
@@ -688,15 +688,99 @@ public class BuiltinFunctions {
   }
 
   /////////////////////////////
+  //// String methods
 
   // = lines
-
   public static Iterator stringLines(String str) {
     return RuntimeUtils.lines(str).iterator();
   }
   public static Object stringLinesWrapper(String str, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, 0, source, offset);
     return RuntimeUtils.lines(str).iterator();
+  }
+
+  // = length
+  public static int stringLength(String str) {
+    return str.length();
+  }
+  public static Object stringLengthWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
+    return ((String)str).length();
+  }
+
+  // = toLowerCase
+  public static String stringToLowerCase(String str, int length) {
+    if (length < 0 || length >= str.length()) {
+      return str.toLowerCase();
+    }
+    if (length == 0) {
+      return str;
+    }
+    return str.substring(0, length).toLowerCase() + str.substring(length);
+  }
+  public static Object stringToLowerCaseWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
+    if (args.length > 0) {
+      if (!(args[0] instanceof Number)) {
+        throw new RuntimeError("Argument to toLowerCase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+      }
+      return stringToLowerCase(str, ((Number)args[0]).intValue());
+    }
+    return ((String)str).toLowerCase();
+  }
+
+  // = toUpperCase
+  public static String stringToUpperCase(String str, int length) {
+    if (length < 0 || length >= str.length()) {
+      return str.toUpperCase();
+    }
+    if (length == 0) {
+      return str;
+    }
+    return str.substring(0, length).toUpperCase() + str.substring(length);
+  }
+  public static Object stringToUpperCaseWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 1, source, offset);
+    if (args.length > 0) {
+      if (!(args[0] instanceof Number)) {
+        throw new RuntimeError("Argument to toUpperCase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+      }
+      return stringToUpperCase(str, ((Number)args[0]).intValue());
+    }
+    return str.toUpperCase();
+  }
+
+  // = substring
+  public static String stringSubstring(String str, String source, int offset, int start, int end) {
+    try {
+      return str.substring(start, end);
+    }
+    catch (Exception e) {
+      throw new RuntimeError("Substring error", source, offset, e);
+    }
+  }
+  public static Object stringSubstringWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, 2, source, offset);
+    int begin = -1;
+    if (!(args[0] instanceof Number)) {
+      throw new RuntimeError("First argument to substring must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+    }
+    begin = ((Number)args[0]).intValue();
+    try {
+      if (args.length > 1) {
+        if (!(args[1] instanceof Number)) {
+          throw new RuntimeError("Second argument to substring must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+        }
+        int end = ((Number) args[1]).intValue();
+        return str.substring(begin, end);
+      }
+      else {
+        return str.substring(begin);
+      }
+    }
+    catch (Exception e) {
+      throw new RuntimeError("Substring error", source, offset, e);
+    }
   }
 
   /////////////////////////////

@@ -1979,6 +1979,101 @@ class CompilerTest {
     test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","","abc","","xyz","",""));
   }
 
+  @Test public void stringLength() {
+    test("''.length()", 0);
+    test("''.size()", 0);
+    test("def x = ''; x.length()", 0);
+    test("def x = ''; x.size()", 0);
+    test("def x = ''; def f = x.length; f()", 0);
+    test("def x = ''; def f = x.size; f()", 0);
+    test("'abc'.length()", 3);
+    test("'abc'.size()", 3);
+    test("def x = 'abc'; x.length()", 3);
+    test("def x = 'abc'; x.size()", 3);
+    testError("1.length()", "no such method");
+    testError("[1,2,3].length()", "no such method");
+    testError("def x = 1; x.length()", "no such method");
+  }
+
+  @Test public void stringToUpperLowerCase() {
+    test("'ABC'.toLowerCase()", "abc");
+    test("'ABC'.toLowerCase(1)", "aBC");
+    test("'ABC'.toLowerCase(4)", "abc");
+    test("'ABC'.toLowerCase(0)", "ABC");
+    test("''.toLowerCase(0)", "");
+    test("''.toLowerCase()", "");
+    test("''.toLowerCase(1)", "");
+    test("def x  = 'ABC'; x.toLowerCase()", "abc");
+    test("def x  = 'ABC'; x.toLowerCase(1)", "aBC");
+    test("def x  = 'ABC'; x.toLowerCase(4)", "abc");
+    test("def x  = 'ABC'; x.toLowerCase(0)", "ABC");
+    test("def x  = 'ABC'; def f = x.toLowerCase; f(2)", "abC");
+    test("def x  = ''; x.toLowerCase(0)", "");
+    test("def x  = ''; x.toLowerCase()", "");
+    test("def x  = ''; x.toLowerCase(1)", "");
+    testError("def x = []; x.toLowerCase()", "no such method");
+    test("'AbC.D_eF'.toLowerCase()", "abc.d_ef");
+
+    test("'abc'.toUpperCase()", "ABC");
+    test("'abc'.toUpperCase(1)", "Abc");
+    test("'abc'.toUpperCase(4)", "ABC");
+    test("'abc'.toUpperCase(0)", "abc");
+    test("''.toUpperCase(0)", "");
+    test("''.toUpperCase()", "");
+    test("''.toUpperCase(1)", "");
+    test("def x  = 'abc'; x.toUpperCase()", "ABC");
+    test("def x  = 'abc'; x.toUpperCase(1)", "Abc");
+    test("def x  = 'abc'; x.toUpperCase(4)", "ABC");
+    test("def x  = 'abc'; x.toUpperCase(0)", "abc");
+    test("def x  = 'abc'; def f = x.toUpperCase; f(2)", "ABc");
+    test("def x  = ''; x.toUpperCase(0)", "");
+    test("def x  = ''; x.toUpperCase()", "");
+    test("def x  = ''; x.toUpperCase(1)", "");
+    testError("def x = []; x.toUpperCase()", "no such method");
+    test("'AbC.D_eF'.toUpperCase()", "ABC.D_EF");
+  }
+
+  @Test public void substring() {
+    test("''.substring(0)", "");
+    testError("''.substring(-1)", "string index out of range");
+    testError("''.substring(1)", "string index out of range");
+    test("'abc'.substring(0)", "abc");
+    test("'abc'.substring(1)", "bc");
+    test("'abc'.substring(2)", "c");
+    test("'abc'.substring(3)", "");
+    testError("'abc'.substring(4)", "string index out of range");
+    test("'abcdef'.substring(1,4)", "bcd");
+    test("'abcdef'.substring(1,6)", "bcdef");
+    testError("'abcdef'.substring(1,7)", "StringIndexOutOfBoundsException");
+    testError("'abcdef'.substring(-1,6)", "StringIndexOutOfBoundsException");
+    test("'abcdef'.substring(0,6)", "abcdef");
+    test("'abcdef'.substring(0,1)", "a");
+    test("'abcdef'.substring(5,6)", "f");
+    test("\"a${'bc'}def\".substring(2,5)", "cde");
+    test("/a${'bc'}def/.substring(2,5)", "cde");
+
+    test("def x = ''; x.substring(0)", "");
+    testError("def x = ''; x.substring(-1)", "string index out of range");
+    testError("def x = ''; x.substring(1)", "string index out of range");
+    test("def x = 'abc'; x.substring(0)", "abc");
+    test("def x = 'abc'; x.substring(1)", "bc");
+    test("def x = 'abc'; x.substring(2)", "c");
+    test("def x = 'abc'; x.substring(3)", "");
+    testError("def x = 'abc'; x.substring(4)", "string index out of range");
+    test("def x = 'abcdef'; x.substring(1,4)", "bcd");
+    test("def x = 'abcdef'; x.substring(1,6)", "bcdef");
+    testError("def x = 'abcdef'; x.substring(1,7)", "StringIndexOutOfBoundsException");
+    testError("def x = 'abcdef'; x.substring(-1,6)", "StringIndexOutOfBoundsException");
+    test("def x = 'abcdef'; x.substring(0,6)", "abcdef");
+    test("def x = 'abcdef'; x.substring(0,1)", "a");
+    test("def x = 'abcdef'; x.substring(5,6)", "f");
+    test("def x = \"a${'bc'}def\"; x.substring(2,5)", "cde");
+    test("def x = /a${'bc'}def/; x.substring(2,5)", "cde");
+    test("def x = /a${'bc'}def/; def f = x.substring; f(2,5)", "cde");
+    test("def x = /a${'bc'}def/; def f = x.substring; f(2)", "cdef");
+    testError("def x = /a${'bc'}def/; def f = x.substring; f(2,7)", "StringIndexOutOfBounds");
+  }
+
   @Test public void join() {
     test("[].join()", "");
     test("[].join('')", "");
@@ -3294,6 +3389,8 @@ class CompilerTest {
     test("def x = [:]; int f(x){x*x}; x.a = f; x.a(2)", 4);
     testError("def f(int x) { x*x }; def g = f; g('abc')", "cannot be cast");
     testError("def f(String x) { x + x }; def g = f; g(1)", "cannot convert");
+    test("def x = [1,2,3]; def f = x.map; f{it+it}", List.of(2,4,6));
+    test("def x = [1,2,3]; def f = x.map; x = [4,5]; f{it+it}", List.of(2,4,6));
   }
 
   @Test public void functionsForwardReference() {

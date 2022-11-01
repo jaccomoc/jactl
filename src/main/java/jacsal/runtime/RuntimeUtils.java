@@ -18,6 +18,7 @@ package jacsal.runtime;
 
 import jacsal.TokenType;
 
+import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -1174,15 +1175,35 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Object[]", source, offset);
   }
 
-  public static boolean print(Object obj) {
+  public static boolean print(String obj, Object out, String source, int offset) {
     if (obj == null) { obj = "null"; }
-    System.out.print(obj);
+    if (out == null) {
+      System.out.print(obj);
+    }
+    else {
+      try {
+        ((PrintStream) out).print(obj);
+      }
+      catch (ClassCastException e) {
+        throw new RuntimeError("print: Gobal variable 'out' must be a PrintStream not '" + className(out) + "'", source, offset);
+      }
+    }
     return true;
   }
 
-  public static boolean println(Object obj) {
+  public static boolean println(String obj, Object out, String source, int offset) {
     if (obj == null) { obj = "null"; }
-    System.out.println(obj);
+    if (out == null) {
+      System.out.println(obj);
+    }
+    else {
+      try {
+        ((PrintStream) out).println(obj);
+      }
+      catch (ClassCastException e) {
+        throw new RuntimeError("println: Gobal variable 'out' must be a PrintStream not '" + className(out) + "'", source, offset);
+      }
+    }
     return true;
   }
 

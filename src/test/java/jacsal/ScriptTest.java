@@ -18,19 +18,77 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.URISyntaxException;
-import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Iterator;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 public class ScriptTest {
-  @Test public void runScript() throws Exception {
-    String script = readResource("/jacsal/GenerateClasses.jacsal");
-    String source = readResource("/Expr.java");
-    Compiler.run(script, Map.of("source", source));
+  @Test public void generateExprClasses() throws Exception {
+    String                script   = readResource("/jacsal/GenerateClasses.jacsal");
+    String                source   = readResource("/Expr.java");
+    String                expected = readResource("/jacsal/Expr.java").trim();
+    ByteArrayOutputStream baos   = new ByteArrayOutputStream();
+    PrintStream           out    = new PrintStream(baos);
+    Compiler.run(script, Map.of("source", source, "out", out));
+    String actualOutput = baos.toString().trim();
+    diff(expected, actualOutput);
+  }
+
+  @Test public void generateStmtClasses() throws Exception {
+    String                script   = readResource("/jacsal/GenerateClasses.jacsal");
+    String                source   = readResource("/Stmt.java");
+    String                expected = readResource("/jacsal/Stmt.java").trim();
+    ByteArrayOutputStream baos   = new ByteArrayOutputStream();
+    PrintStream           out    = new PrintStream(baos);
+
+    Compiler.run(script, Map.of("source", source, "out", out));
+    String actualOutput = baos.toString().trim();
+
+    diff(expected, actualOutput);
+  }
+
+  private void diff(String expected, String actualOutput) {
+    if (!expected.equals(actualOutput)) {
+      Iterator<String> expectedIter = expected.lines().iterator();
+      Iterator<String> actualIter = actualOutput.lines().iterator();
+
+      int line = 1;
+      while (expectedIter.hasNext() && actualIter.hasNext()) {
+        String prefix = "Line " + line + ":";
+        assertEquals(prefix + expectedIter.next(), prefix + actualIter.next());
+        line++;
+      }
+
+      if (expectedIter.hasNext()) {
+        System.out.println("Actual output missing these lines:");
+        while (expectedIter.hasNext()) {
+          String prefix = "Line " + line + ":";
+          System.out.println(prefix + expectedIter.next());
+          line++;
+        }
+        fail("Actual output missing lines at the end");
+      }
+
+      if (actualIter.hasNext()) {
+        System.out.println("Actual output has these extra lines:");
+        while (actualIter.hasNext()) {
+          String prefix = "Line " + line + ":";
+          System.out.println(prefix + actualIter.next());
+          line++;
+        }
+        fail("Actual output has additional lines at the end");
+      }
+      assertTrue(!expectedIter.hasNext() && !actualIter.hasNext());
+    }
   }
 
   String readResource(String resource) throws URISyntaxException, IOException {

@@ -1435,7 +1435,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitPrint(Expr.Print expr) {
     compile(expr.expr);
     convertToString();
-    invokeMethod(RuntimeUtils.class, expr.printToken.getChars(), Object.class);
+    loadGlobals();
+    loadConst(Utils.JACSAL_OUT_NAME);
+    invokeMethod(Map.class, "get", Object.class);
+    loadLocation(expr.location);
+    invokeMethod(RuntimeUtils.class, expr.printToken.getChars(), String.class, Object.class, String.class, int.class);
     return null;
   }
 

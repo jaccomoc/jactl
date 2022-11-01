@@ -29,7 +29,7 @@ repositories {
 sourceSets {
     test {
         resources {
-            srcDirs = ["src/test/resources", "src/main/tools"]
+            srcDirs = ["src/test/resources", "src/main/tools", "src/main/java"]
         }
     }
 }

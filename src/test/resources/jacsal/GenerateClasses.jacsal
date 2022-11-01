@@ -40,13 +40,13 @@ source.lines().each{
   }
 
   /^class +([A-Z][a-z]*)/f and rootClass = $1 and do {
-    println "abstract $it"
+    println "abstract $it\n"
     println "  abstract <T> T accept(Visitor<T> visitor);\n"
   } and return
 
   /^}/f and do {
     print "\n  interface Visitor<T> {\n"
-    types.each{ print "    T visit$it($it $rootClass);\n" }
+    types.each{ print "    T visit$it($it ${rootClass.toLowerCase(1)});\n" }
     print "  }\n"
     println it
   } and return
@@ -80,7 +80,7 @@ source.lines().each{
     
     // Generate toString()
     def fieldValues = constructorFields.map{ it[0] }.map{""""$it=" + $it"""}.join(' + ", " + ')
-    println """    @Override public String toString() { return "$className[" + $fieldValues + "]"; }""";
+    println """    @Override public String toString() { return "$className[" +${fieldValues?" $fieldValues +":""} "]"; }""";
     
     // Remember fields in case another class extends us
     baseClasses[className] = fields
