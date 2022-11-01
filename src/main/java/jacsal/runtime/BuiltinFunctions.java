@@ -34,6 +34,7 @@ public class BuiltinFunctions {
 
   public static void registerBuiltinFunctions() {
     if (!initialised) {
+      // Collection methods
       registerMethod("size", "listSize", false);
       registerMethod("size", "objArrSize", false);
       registerMethod("size", "mapSize", false);
@@ -45,8 +46,16 @@ public class BuiltinFunctions {
       registerMethod("map", "iteratorMap", ITERATOR, true, 0);
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0);
       registerMethod("join", "iteratorJoin", ITERATOR, false, 0);
-      registerMethod("lines", "stringLines", false);
 
+      // String methods
+      registerMethod("lines", "stringLines", false);
+//      registerMethod("length", "stringLength", false);
+//      registerMethod("size", "stringLength", false);
+//      registerMethod("toLowerCase", "stringToLowerCase", false);
+//      registerMethod("toUpperCase", "stringToUpperCase", false);
+//      registerMethod("substr", "stringSubstr", false);
+
+      // Object methods
       registerMethod("toString", "objectToString", ANY, false, 0);
 
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);

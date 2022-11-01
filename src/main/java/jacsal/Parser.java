@@ -159,7 +159,7 @@ public class Parser {
           errors.add(e);
           // Consume until end of statement to try to allow further
           // parsing and error checking to occur
-          consumeUntil(EOL, EOF, RIGHT_BRACE);
+          consumeUntil(EOL, EOF, SEMICOLON);
         }
       }
     }
@@ -360,9 +360,11 @@ public class Parser {
     expect(RIGHT_PAREN);
     Stmt trueStmt  = statement();
     Stmt falseStmt = null;
-    matchAny(EOL);
-    if (matchAny(ELSE)) {
-      falseStmt = statement();
+    if (lookahead(() -> matchAny(EOL) || true, () -> matchAny(ELSE))) {
+      matchAny(EOL);
+      if (matchAny(ELSE)) {
+        falseStmt = statement();
+      }
     }
     return new Stmt.If(ifToken, cond, trueStmt, falseStmt);
   }
@@ -451,22 +453,6 @@ public class Parser {
 //      unexpected("Expected end of expression");
 //    }
     return stmt;
-  }
-
-  /**
-   # returnExpr -> "return" expression;
-   */
-  private Expr.Return returnExpr() {
-    Token location = previous();
-    return new Expr.Return(location, parseExpression(0), null);   // returnType will be set by Resolver
-  }
-
-  /**
-   *# printExpr -> ("print" | "println") expr ?;
-   */
-  private Expr.Print printExpr() {
-    Token printToken = previous();
-    return new Expr.Print(printToken, parseExpression(0), printToken.is(PRINTLN));
   }
 
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
@@ -1076,6 +1062,7 @@ public class Parser {
    */
   private Expr closure() {
     Token openBrace = previous();
+    matchAny(EOL);
     // We need to do a lookahead to see if we have a parameter list or not
     List<Stmt.VarDecl> parameters;
     boolean noParamsDefined = false;
@@ -1095,7 +1082,31 @@ public class Parser {
     return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
   }
 
+  /**
+   # returnExpr -> "return" expression;
+   */
+  private Expr.Return returnExpr() {
+    Token location = previous();
+    Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(NULL, location).setValue(null))
+                                    : parseExpression(0);
+    return new Expr.Return(location, expr, null);   // returnType will be set by Resolver
+  }
+
+  /**
+   *# printExpr -> ("print" | "println") expr ?;
+   */
+  private Expr.Print printExpr() {
+    Token printToken = previous();
+    Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, printToken).setValue(""))
+                                    : parseExpression(0);
+    return new Expr.Print(printToken, expr, printToken.is(PRINTLN));
+  }
+
   /////////////////////////////////////////////////
+
+  private boolean isEndOfExpression() {
+    return peek().is(EOL,EOF,AND,OR,RIGHT_BRACE,RIGHT_PAREN,RIGHT_SQUARE,SEMICOLON,IF,UNLESS);
+  }
 
   /**
    * Remove the it parameter declaration from a code block.

@@ -24,6 +24,7 @@ my $rootClass;
 my $className;
 my $extends;
 my $inClass = 0;
+my %baseClasses;
 
 open(FH, $ARGV[0]) or die "Couldn't open $ARGV[0]: $!\n";
 while (<FH>) {

@@ -940,10 +940,16 @@ class TokeniserTest {
     assertEquals(IDENTIFIER, token.getType());
     token = tokeniser.next();
     assertEquals(EOL, token.getType());
+    assertEquals(IDENTIFIER, tokeniser.peek().getType());
+    assertEquals(EOL, tokeniser.previous().getType());
     token = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
+    assertEquals(IDENTIFIER, tokeniser.previous().getType());
+    assertEquals(EOL, tokeniser.peek().getType());
     token = tokeniser.next();
     assertEquals(EOL, token.getType());
+    assertEquals(EOL, tokeniser.previous().getType());
+    assertEquals(IDENTIFIER, tokeniser.peek().getType());
     token = tokeniser.next();
     assertEquals(IDENTIFIER, token.getType());
     token = tokeniser.next();

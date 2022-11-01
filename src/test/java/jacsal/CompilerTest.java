@@ -117,8 +117,14 @@ class CompilerTest {
     return System.currentTimeMillis();
   }
 
-  @Test
-  public void literals() {
+  @Test public void comments() {
+    test("  // Strip '#' comments\n1", 1);
+    test("[1,2,3].map{it}", List.of(1,2,3));
+    test("[1,2,3].map{\n\nit}", List.of(1,2,3));
+    test("[1,2,3].map{\n // Strip '#' comments\nit}", List.of(1,2,3));
+  }
+
+  @Test public void literals() {
     test("42", 42);
     test("0", 0);
     test("1", 1);
@@ -1643,15 +1649,6 @@ class CompilerTest {
     testError("def x = [a:'a']; --x.a", "non-numeric operand");
   }
 
-  @Test
-  public void endOfLine() {
-    test("1 + \n2", 3);
-    test("def x =\n1 + \n2", 3);
-    test("def x =\n1 + \n(2\n)", 3);
-    test("def x =\n1 + (\n2)\n", 3);
-    test("def x =\n1 + (\n2)\n", 3);
-  }
-
   @Test public void varScoping() {
     testError("def x = x + 1", "variable initialisation cannot refer to itself");
     test("def x = 2; if (true) { def x = 4; x++ }; x", 2);
@@ -1742,6 +1739,7 @@ class CompilerTest {
     test("def it = 'xx'; \"${it += 'yy'; return it}\"; it", "xxyy");
     test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
     test("\"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }\"", "5 pyramid numbers: 1, 5, 14, 30, 55");
+    test("['a','b'].map{\"\"\"\"$it=\" + $it\"\"\" }.join(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
   }
 
   @Test public void regexMatch() {
@@ -2334,6 +2332,10 @@ class CompilerTest {
     test("def x = 2; if (x * 2 < -5) ++x else { --x }", 1);
     test("def x = 2; if (x == 2) { def x = 5; x++ }; x", 2);
     test("def x = 2; if (x == 2) { def x = 5; x++; if (true) { def x = 1; x-- } }; x", 2);
+    testError("if (true) { if(true){1} if(true){1} }", "expecting end of statement");
+    test("if (true) { if(true){1}; if(true){1} }", 1);
+    testError("int f() { if (true) { println } }; f()", "implicit return of null");
+    test("if (true) {}", null);
   }
 
   @Test public void ifUnless() {
@@ -3232,6 +3234,7 @@ class CompilerTest {
 
   @Test public void simpleFunctions() {
     testError("def f; f()", "null value for function");
+    test("def f() {return}; f()", null);
     test("int f(int x) { x * x }; f(2)", 4);
     test("def f(def x) { x * x }; f(2)", 4);
     test("def f(x) { x * x }; f(2)", 4);
@@ -4047,6 +4050,21 @@ class CompilerTest {
     runtest.accept("x", 1);
     runtest.accept("def f(x){x*x}; f(2)", 4);
     runtest.accept("f(3)", 9);
+  }
+
+  @Test public void endOfLine() {
+    test("1 + \n2", 3);
+    test("def x =\n1 + \n2", 3);
+    test("def x =\n1 + \n(2\n)", 3);
+    test("def x =\n1 + (\n2)\n", 3);
+    test("def x =\n1 + (\n2)\n", 3);
+    test("[1,2,3].map{\n\nit}", List.of(1,2,3));
+    test("['a','b'].map{\n\n\"\"\"\"$it=\" + $it\"\"\" }.\n\njoin(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
+    test("def f = {\nreturn }; f()", null);
+    test("def f = {\nreturn\n}; f()", null);
+    test("while (false) { 1 }\n2", 2);
+    test("if (true) {\n if (true) \n1\n\n [1].map{ it }\n}\n", List.of(1));
+    test("if (true) {\n if (true) {\n1\n}\n [1].map{ it }\n}\n", List.of(1));
   }
 
   @Test public void eof() {

@@ -26,6 +26,14 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+    test {
+        resources {
+            srcDirs = ["src/test/resources", "src/main/tools"]
+        }
+    }
+}
+
 dependencies {
     implementation 'org.ow2.asm:asm:9.3'
     implementation 'org.ow2.asm:asm-util:9.3'

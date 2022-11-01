@@ -107,13 +107,6 @@ public class Tokeniser {
   public Token next() {
     populateCurrentToken();
 
-    // If we have already returned EOL last time then keep advancing until we get
-    // something that is not EOL
-    if (currentToken.is(EOL) && previousToken != null && previousToken.is(EOL)) {
-      while ((currentToken = parseToken()).is(EOL)) {}
-      previousToken.setNext(currentToken);
-    }
-
     Token result  = currentToken;
     previousToken = currentToken;
     currentToken  = previousToken.getNext();
@@ -192,6 +185,12 @@ public class Tokeniser {
     if (currentToken == null) {
       currentToken = parseToken();
       if (previousToken != null) {
+        previousToken.setNext(currentToken);
+      }
+      // If we have already returned EOL last time then keep advancing until we get
+      // something that is not EOL
+      if (currentToken.is(EOL) && previousToken != null && previousToken.is(EOL)) {
+        while ((currentToken = parseToken()).is(EOL)) {}
         previousToken.setNext(currentToken);
       }
     }

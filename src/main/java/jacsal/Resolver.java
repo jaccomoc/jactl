@@ -1327,10 +1327,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (stmt instanceof Stmt.Block) {
       List<Stmt> stmts = ((Stmt.Block) stmt).stmts.stmts;
       if (stmts.size() == 0) {
-        throw new CompileError("Missing explicit/implicit return statement for function", stmt.location);
+        if (returnType.isPrimitive()) {
+          throw new CompileError("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
+        }
+        stmts.add(returnStmt(stmt.location, returnType));
       }
-      Stmt newStmt = explicitReturn(stmts.get(stmts.size() - 1), returnType);
-      stmts.set(stmts.size() - 1, newStmt);   // Replace implicit return with explicit if necessary
+      else {
+        Stmt newStmt = explicitReturn(stmts.get(stmts.size() - 1), returnType);
+        stmts.set(stmts.size() - 1, newStmt);   // Replace implicit return with explicit if necessary
+      }
       return stmt;
     }
 
@@ -1338,14 +1343,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Stmt.If ifStmt = (Stmt.If) stmt;
       if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
         if (returnType.isPrimitive()) {
-          throw new CompileError("Implicit return of null for  " +
+          throw new CompileError("Implicit return of null for " +
                                  (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
         }
         if (ifStmt.trueStmt == null) {
-          ifStmt.trueStmt = returnStmt(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+          ifStmt.trueStmt = returnStmt(ifStmt.ifToken, returnType);
         }
         if (ifStmt.falseStmt == null) {
-          ifStmt.falseStmt = returnStmt(ifStmt.ifToken, new Expr.Literal(new Token(NULL, ifStmt.ifToken)), returnType);
+          ifStmt.falseStmt = returnStmt(ifStmt.ifToken, returnType);
         }
       }
       ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
@@ -1674,6 +1679,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return t1.getOffset() < t2.getOffset();
   }
 
+  private Stmt.Return returnStmt(Token token, JacsalType type) {
+    return new Stmt.Return(token, new Expr.Return(token, literalDefaultValue(token, type), type));
+  }
+
   private Stmt.Return returnStmt(Token token, Expr expr, JacsalType type) {
     return new Stmt.Return(token, new Expr.Return(token, expr, type));
   }
@@ -1693,4 +1702,20 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     varDecl.type = FUNCTION;
     return varDecl;
   }
+
+  private Expr literalDefaultValue(Token location, JacsalType type) {
+    switch (type.getType()) {
+      case BOOLEAN: return new Expr.Literal(new Token(FALSE,location).setValue(false));
+      case INT:     return new Expr.Literal(new Token(INTEGER_CONST,location).setValue(0));
+      case LONG:    return new Expr.Literal(new Token(LONG_CONST,location).setValue(0));
+      case DOUBLE:  return new Expr.Literal(new Token(DOUBLE_CONST,location).setValue(0));
+      case DECIMAL: return new Expr.Literal(new Token(DECIMAL_CONST,location).setValue(BigDecimal.ZERO));
+      case STRING:  return new Expr.Literal(new Token(STRING_CONST,location).setValue(""));
+      case ANY:     return new Expr.Literal(new Token(NULL,location).setValue(null));
+      case MAP:     return new Expr.MapLiteral(location);
+      case LIST:    return new Expr.ListLiteral(location);
+      default:      throw new IllegalStateException("Internal error: unexpected type " + type);
+    }
+  }
+
 }
