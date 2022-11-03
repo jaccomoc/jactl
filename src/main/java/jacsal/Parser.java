@@ -16,7 +16,10 @@
 
 package jacsal;
 
+import jacsal.runtime.Functions;
+
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -42,6 +45,7 @@ public class Parser {
   Token                 firstToken = null;
   List<CompileError>    errors     = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes    = new ArrayDeque<>();
+  boolean               ignoreEol  = false;   // Whether EOL should be treated as whitespace or not
 
   // Whether we are currently doing a lookahead in which case we don't bother keeping
   // track of state such as functions declared per block and nested functions.
@@ -71,12 +75,6 @@ public class Parser {
     finally {
       classes.pop();
     }
-  }
-
-  public Expr parseExpression() {
-    Expr expr = expression();
-    expect(EOF);
-    return expr;
   }
 
   ////////////////////////////////////////////
@@ -305,6 +303,10 @@ public class Parser {
    *       a list of VarDecls if multiple variables declared.
    */
   private Stmt varDecl() {
+    return (Stmt)ignoreNewLines(() -> doVarDecl());
+  }
+
+  private Stmt doVarDecl() {
     Token typeToken = previous();
     Stmt.Stmts stmts = new Stmt.Stmts();
     stmts.stmts.add(singleVarDecl(typeToken));
@@ -325,7 +327,7 @@ public class Parser {
     Expr  initialiser = null;
     if (matchAny(EQUAL)) {
       matchAny(EOL);
-      initialiser = parseExpression(0);
+      initialiser = parseExpression();
     }
 
     JacsalType type;
@@ -390,21 +392,18 @@ public class Parser {
     Token forToken = previous();
     expect(LEFT_PAREN);
     Stmt initialisation;
-    if (peek().is(types) || peek().is(VAR)) {
-      initialisation    = declaration();
+    if (matchAnyIgnoreEOL(Utils.concat(types,VAR))) {
+      initialisation    = varDecl();
     }
     else {
       initialisation    = commaSeparatedStatements();
     }
     if (!previous().is(SEMICOLON)) {
-      matchAny(EOL);
       expect(SEMICOLON);
     }
     Expr cond           = condition();
-    matchAny(EOL);
     expect(SEMICOLON);
     Stmt update         = commaSeparatedStatements();
-    matchAny(EOL);
     Token rightParen = expect(RIGHT_PAREN);
 
     Stmt.While whileStmt = new Stmt.While(forToken, cond);
@@ -502,12 +501,19 @@ public class Parser {
       new Pair(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
     );
 
+  // Binary operators which can also sometimes be the start of an expression. We need to know
+  // when we checking if an expression continues on the next line whether the next operator
+  // should be treated as part of the current expression or the start of a new one.
+  // NOTE: we include '/' and '/=' since they could indicate start of a regex.
+  //       '-' is also included since it can be the start of a negative number
+  private static Set<TokenType> exprStartingOps = Set.of(LEFT_SQUARE, LEFT_PAREN, LEFT_BRACE, SLASH, SLASH_EQUAL, MINUS);
+
   /**
    *# condition -> expression ;
    * Used for situations where we need a boolean condition.
    */
   private Expr condition() {
-    return expression();
+    return expression(true);
   }
 
   /**
@@ -518,6 +524,12 @@ public class Parser {
    * where "/pattern/" means "$_ =~ /pattern/".
    */
   private Expr expression() {
+    return expression(false);
+  }
+  private Expr expression(boolean ignoreEol) {
+    if (ignoreEol) {
+      return (Expr) ignoreNewLines(() -> orExpression());
+    }
     return orExpression();
   }
 
@@ -526,7 +538,7 @@ public class Parser {
    */
   private Expr orExpression() {
     Expr expr = andExpression();
-    while (matchAny(OR)) {
+    while (matchAnyIgnoreEOL(OR)) {
       expr = new Expr.Binary(expr, new Token(PIPE_PIPE, previous()), andExpression());
     }
     return expr;
@@ -537,7 +549,7 @@ public class Parser {
    */
   private Expr andExpression() {
     Expr expr = notExpression();
-    while (matchAny(AND)) {
+    while (matchAnyIgnoreEOL(AND)) {
       expr = new Expr.Binary(expr, new Token(AMPERSAND_AMPERSAND, previous()), notExpression());
     }
     return expr;
@@ -548,17 +560,18 @@ public class Parser {
    */
   private Expr notExpression() {
     Expr expr;
-    if (matchAny(NOT)) {
+    if (matchAnyIgnoreEOL(NOT)) {
       Token notToken = previous();
       expr = new Expr.PrefixUnary(new Token(BANG, notToken), notExpression());
     }
     else {
+      matchAny(EOL);
       if (matchAny(RETURN))        { expr = returnExpr();                  } else
       if (matchAny(PRINT,PRINTLN)) { expr = printExpr();                   } else
       if (matchAny(BREAK))         { expr = new Expr.Break(previous());    } else
       if (matchAny(CONTINUE))      { expr = new Expr.Continue(previous()); }
       else {
-        expr = parseExpression(0);
+        expr = parseExpression();
       }
     }
     return expr;
@@ -574,7 +587,14 @@ public class Parser {
    * then we return a primaru().
    * We check whether current level of precedence corresponds to the unary ops and
    * return unary() if that is the case.
+   * We allow EOL to be treated as whitespace if we are in a bracketed expression
+   * (for example) when it normally could signal the end of a statement.
+   * @param ignoreEol  true if EOL should be ignored
    */
+  private Expr parseExpression() {
+    return parseExpression(0);
+  }
+
   private Expr parseExpression(int level) {
     matchAny(EOL);
 
@@ -596,7 +616,7 @@ public class Parser {
 
     var expr = parseExpression(level + 1);
 
-    while (matchAny(operators)) {
+    while (matchOp(operators)) {
       Token operator = previous();
       if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF,AS)) {
         Token type = expect(types);
@@ -617,7 +637,7 @@ public class Parser {
       if (operator.is(LEFT_PAREN,LEFT_BRACE)) {
         List<Expr> args;
         // Check for named args
-        if (lookahead(() -> mapKey() != null, () -> matchAny(COLON))) {
+        if (lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
           // For named args we create a list with single entry being the map literal that represents
           // the name:value pairs.
           args = List.of(mapEntries(RIGHT_PAREN));
@@ -635,7 +655,7 @@ public class Parser {
       Expr rhs;
       if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
         // '[' and '?[' can be followed by any expression and then a ']'
-        rhs = parseExpression(0);
+        rhs = expression(true);
       }
       else {
         rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
@@ -693,25 +713,20 @@ public class Parser {
     return expr;
   }
 
-  private boolean isImplicitRegexSubstitute(Expr rhs) {
-    if (rhs instanceof Expr.VarOpAssign) {
-      Expr expr = ((Expr.VarOpAssign) rhs).expr;
-      return expr instanceof Expr.RegexSubst && ((Expr.RegexSubst) expr).implicitItMatch;
-    }
-    return false;
-  }
-
   /**
    *# unary -> ( "!" | "--" | "++" | "-" | "+" | "(" type ")" ) unary ( "--" | "++" )
    *#        | expression;
    */
   private Expr unary(int precedenceLevel) {
     Expr expr;
+    matchAny(EOL);
     if (lookahead(() -> matchAny(LEFT_PAREN), () -> matchAny(types), () -> matchAny(RIGHT_PAREN))) {
       // Type cast. Rather than create a separate operator for each type case we just use the
       // token for the type as the operator if we detect a type cast.
       expect(LEFT_PAREN);
+      matchAny(EOL);
       Token type = expect(types);
+      matchAny(EOL);
       expect(RIGHT_PAREN);
       Expr unary = unary(precedenceLevel);
       expr = new Expr.PrefixUnary(type, unary);
@@ -768,7 +783,7 @@ public class Parser {
       if (exprs.size() > 0) {
         expect(COMMA);
       }
-      exprs.add(parseExpression(0));
+      exprs.add(expression(true));
     }
     return exprs;
   }
@@ -812,7 +827,7 @@ public class Parser {
    */
   private Expr primary() {
     Supplier<Expr> nestedExpression = () -> {
-      Expr nested = expression(); // parseExpression(0);
+      Expr nested = expression(true);  // parseExpression(0);
       matchAny(EOL);
       expect(RIGHT_PAREN);
       return nested;
@@ -834,7 +849,7 @@ public class Parser {
       Token leftBrace = expect(LEFT_BRACE);
       return new Expr.Block(leftBrace, block(RIGHT_BRACE));
     }
-    return unexpected("Expecting literal or identifier or bracketed expression");
+    return unexpected("Expected start of expression");
   }
 
   /**
@@ -842,11 +857,11 @@ public class Parser {
    */
   private Expr.ListLiteral listLiteral() {
     Expr.ListLiteral expr = new Expr.ListLiteral(previous());
-    while (!matchAny(RIGHT_SQUARE)) {
+    while (!matchAnyIgnoreEOL(RIGHT_SQUARE)) {
       if (expr.exprs.size() > 0) {
         expect(COMMA);
       }
-      expr.exprs.add(parseExpression(0));
+      expr.exprs.add(expression(true));
     }
     return expr;
   }
@@ -868,18 +883,18 @@ public class Parser {
 
   private Expr.MapLiteral mapEntries(TokenType endToken) {
     Expr.MapLiteral expr = new Expr.MapLiteral(previous());
-    if (matchAny(COLON)) {
+    if (matchAnyIgnoreEOL(COLON)) {
       // Empty map
       expect(endToken);
     }
     else {
-      while (!matchAny(endToken)) {
+      while (!matchAnyIgnoreEOL(endToken)) {
         if (expr.entries.size() > 0) {
           expect(COMMA);
         }
         Expr key = mapKey();
         expect(COLON);
-        Expr value = parseExpression(0);
+        Expr value = expression(true);
         expr.entries.add(new Pair(key, value));
       }
     }
@@ -890,11 +905,12 @@ public class Parser {
    *# mapKey -> STRING_CONST | IDENTIFIER | "(" expression() + ")" | exprString | keyWord ;
    */
   private Expr mapKey() {
+    matchAny(EOL);
     if (matchAny(STRING_CONST,IDENTIFIER)) { return new Expr.Literal(previous()); }
     if (peek().is(EXPR_STRING_START))      { return exprString(); }
     if (peek().isKeyword())                { advance(); return new Expr.Literal(previous()); }
     if (matchAny(LEFT_PAREN)) {
-      Expr expr = parseExpression(0);
+      Expr expr = expression(true);
       expect(RIGHT_PAREN);
       return expr;
     }
@@ -1088,7 +1104,7 @@ public class Parser {
   private Expr.Return returnExpr() {
     Token location = previous();
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(NULL, location).setValue(null))
-                                    : parseExpression(0);
+                                    : parseExpression();
     return new Expr.Return(location, expr, null);   // returnType will be set by Resolver
   }
 
@@ -1098,11 +1114,47 @@ public class Parser {
   private Expr.Print printExpr() {
     Token printToken = previous();
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, printToken).setValue(""))
-                                    : parseExpression(0);
+                                    : parseExpression();
     return new Expr.Print(printToken, expr, printToken.is(PRINTLN));
   }
 
   /////////////////////////////////////////////////
+
+  private Object ignoreNewLines(Supplier<Object> code) {
+    boolean currentIgnoreEol = ignoreEol;
+    ignoreEol = true;
+    try {
+      return code.get();
+    }
+    finally {
+      ignoreEol = currentIgnoreEol;
+    }
+  }
+
+  /**
+   * Operator match. Returns true if next token matches any in list.
+   * If there is an EOL as first token then we ignore unless operator is one that could
+   * start an expression and we are not already in a nested expression of some sort.
+   */
+  boolean matchOp(List<TokenType> types) {
+    if (!tokeniser.peek().is(EOL)) {
+      return matchAny(types);
+    }
+    for (TokenType type: types) {
+      if (exprStartingOps.contains(type) ? matchAny(type) : matchAnyIgnoreEOL(type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean isImplicitRegexSubstitute(Expr rhs) {
+    if (rhs instanceof Expr.VarOpAssign) {
+      Expr expr = ((Expr.VarOpAssign) rhs).expr;
+      return expr instanceof Expr.RegexSubst && ((Expr.RegexSubst) expr).implicitItMatch;
+    }
+    return false;
+  }
 
   private boolean isEndOfExpression() {
     return peek().is(EOL,EOF,AND,OR,RIGHT_BRACE,RIGHT_PAREN,RIGHT_SQUARE,SEMICOLON,IF,UNLESS);
@@ -1247,8 +1299,8 @@ public class Parser {
   private boolean isMapLiteral() {
     // Check for start of a Map literal. We need to lookahead to know the difference between
     // a Map literal using '{' and '}' and a statement block or a closure.
-    return lookahead(() -> matchAny(LEFT_SQUARE, LEFT_BRACE), () -> matchAny(COLON)) ||
-           lookahead(() -> matchAny(LEFT_SQUARE, LEFT_BRACE), () -> mapKey() != null, () -> matchAny(COLON));
+    return lookahead(() -> matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE), () -> matchAnyIgnoreEOL(COLON)) ||
+           lookahead(() -> matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE), () -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON));
   }
 
   /////////////////////////////////////////////////
@@ -1266,6 +1318,15 @@ public class Parser {
     if (firstToken == null) {
       firstToken = token;
     }
+    if (ignoreEol && token.is(EOL)) {
+      // If ignoring EOL then we need to get following token but not consume existing
+      // one so save state and then restore after fetching following token
+      Token current = token;
+      Token prev = previous();
+      advance();
+      token = tokeniser.peek();
+      tokeniser.rewind(prev, current);
+    }
     return token;
   }
 
@@ -1281,6 +1342,10 @@ public class Parser {
    * @return true if next token matches, false is not
    */
   private boolean matchAny(TokenType... types) {
+    if (ignoreEol) {
+      return matchAnyIgnoreEOL(types);
+    }
+
     for (TokenType type : types) {
       if (peek().is(type)) {
         advance();
@@ -1291,11 +1356,55 @@ public class Parser {
   }
 
   private boolean matchAny(List<TokenType> types) {
+    if (ignoreEol) {
+      return matchAnyIgnoreEOL(types);
+    }
+
     for (TokenType type : types) {
       if (peek().is(type)) {
         advance();
         return true;
       }
+    }
+    return false;
+  }
+
+  /**
+   * Match any type after optionally consuming EOL. If not match then state is
+   * unchanged (EOL is not consumed).
+   */
+  private boolean matchAnyIgnoreEOL(List<TokenType> types) {
+    return matchAnyIgnoreEOL(types.toArray(TokenType[]::new));
+  }
+
+  /**
+   * Match any type after optionally consuming EOL. If not match then state is
+   * unchanged (including not consuming EOL)
+   */
+  private boolean matchAnyIgnoreEOL(TokenType... types) {
+    // Remember current tokens in case we need to rewind
+    Token previous = previous();
+    Token current  = tokeniser.peek();
+
+    boolean eolConsumed = false;
+    if (current.is(EOL)) {
+      advance();
+      eolConsumed = true;
+    }
+
+    for (TokenType type : types) {
+      if (type.is(EOL) && eolConsumed) {
+        return true;    // we have already advanced
+      }
+      if (peek().is(type)) {
+        advance();
+        return true;
+      }
+    }
+
+    // No match so rewind if necessary
+    if (eolConsumed) {
+      tokeniser.rewind(previous, current);
     }
     return false;
   }
@@ -1334,8 +1443,9 @@ public class Parser {
   @SafeVarargs
   private boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
-    Token previous = previous();
-    Token current  = peek();
+    Token previous           = previous();
+    Token current            = tokeniser.peek();
+    boolean currentIgnoreEol = ignoreEol;
     List<CompileError>    currentErrors    = new ArrayList<>(errors);
 
     // Set flag so that we know not to collect state such as functions per block etc
@@ -1360,6 +1470,7 @@ public class Parser {
       tokeniser.rewind(previous, current);
       errors        = currentErrors;
       lookaheadCount--;
+      ignoreEol = currentIgnoreEol;
     }
   }
 
@@ -1385,7 +1496,7 @@ public class Parser {
    * @return the matched token or throw error if no match
    */
   private Token expect(TokenType... types) {
-    if (matchAny(types)) {
+    if (matchAnyIgnoreEOL(types)) {
       return previous();
     }
     if (types.length > 1) {

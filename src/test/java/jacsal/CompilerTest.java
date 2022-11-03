@@ -4162,6 +4162,34 @@ class CompilerTest {
     test("while (false) { 1 }\n2", 2);
     test("if (true) {\n if (true) \n1\n\n [1].map{ it }\n}\n", List.of(1));
     test("if (true) {\n if (true) {\n1\n}\n [1].map{ it }\n}\n", List.of(1));
+    test("true or false\nand true", true);
+    test("true \nor \nreturn", true);
+    test("true \nor \nnot return", true);
+    test("true or not\nreturn", true);
+    test("true or not\nnot\nfalse\nand true", true);
+    test("true &&\nfalse", false);
+    test("true \n && \n false", false);
+    test("true &&\n!\n!\n!\nfalse", true);
+    test("def x=1; ++\nx", 2);
+    test("def x=1; ++\n++\nx", 3);
+    test("[a\n:\n1\n]", Map.of("a",1));
+    test("1\n[1].map{ it }", List.of(1));
+    test("'123'[2]", "3");
+    test("'123'\n[2]", List.of(2));
+    test("('123'\n[2])", "3");
+    test("def x=[1,2,3]; x\n[2]", List.of(2));
+    test("def x=[1,2,3]; def f={it}; f(x\n[2])", 3);
+    test("def x = 1; ++\n++\nx\n++\n++\nx\nx", 3);
+    testError("def x = 1; ++\n++\nx\n++\n++", "expected start of expression");
+    test("[\n1\n,\n2\n,\n3\n]", List.of(1,2,3));
+    test("def f(x\n,\ny\n)\n{\nx\n+\ny\n}\nf(1,2)", 3);
+    testError("4\n/2", "unexpected end of file in string");
+    test("4\n-3*2", -6);
+    test("int\ni\n=\n3\n", 3);
+    test("int\ni\n=\n1,\nj\n=\n2\n,k\ni+j", 3);
+    test("for\n(\nint\ni\n=\n4-\n3\n,\nj\n=\n4/\n2\n;\ni\n<\n10\n;\ni++\n)\n;", null);
+    test("def x = [1,2]; if\n(\nx\n[\n0\n]\n)\n4", 4);
+    test("def x = [1,2]; def i = 0; while\n(\nx\n[\n0\n]\n>\n10\n||\ni++\n<2\n)\nx[\n2\n]\n=\n7\nx[2]", 7);
   }
 
   @Test public void eof() {
