@@ -859,4 +859,20 @@ public class Tokeniser {
                       .map(sym -> sym.symbol)
                       .collect(Collectors.toSet());
   }
+
+  public static void main(String[] args) {
+    List<String> words = keyWords.stream().sorted().collect(Collectors.toList());
+    int i;
+    for (i = 0; i < words.size(); i++) {
+      System.out.print("| " + words.get(i) + " ");
+      if ((i+1) % 5 == 0) {
+        System.out.println("|");
+      }
+    }
+    int next = (i/5) * 5 + 5;
+    for (; i < next; i++) {
+      System.out.print("| ");
+    }
+    System.out.println("|");
+  }
 }
