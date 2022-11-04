@@ -475,7 +475,7 @@ abstract class Expr {
     @Override public String toString() { return "Closure[" + "startToken=" + startToken + ", " + "funDecl=" + funDecl + ", " + "noParamsDefined=" + noParamsDefined + "]"; }
   }
 
-  static class Return extends Expr implements ManagesResult {
+  static class Return extends Expr {
     Token      returnToken;
     Expr       expr;
     JacsalType returnType;      // Return type of the function we are embedded in

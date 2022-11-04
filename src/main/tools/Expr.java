@@ -314,7 +314,7 @@ class Expr {
     boolean      noParamsDefined;
   }
 
-  class Return extends Expr implements ManagesResult {
+  class Return extends Expr {
     Token      returnToken;
     Expr       expr;
     JacsalType returnType;      // Return type of the function we are embedded in

@@ -238,6 +238,7 @@ public class Parser {
     // If we have a solitary return expression then convert to return statement
     if (stmt.expr instanceof Expr.Return) {
       final var returnExpr = (Expr.Return) stmt.expr;
+      returnExpr.isResultUsed = true;
       return new Stmt.Return(returnExpr.returnToken, returnExpr);
     }
     return stmt;

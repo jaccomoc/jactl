@@ -2692,6 +2692,23 @@ class CompilerTest {
     test("def x; x ?= 1 if true", 1);
     test("int x; for (int i=0; i < 10; i++) { continue if i > 5; x += i }; x", 15);
     test("int x; for (int i=0; i < 10; i++) { break unless i < 5; x += i }; x", 10);
+    test("def it = 'abc'; return if /x/f; s/b/x/g;", "axc");
+    test("return if true; 1", null);
+    test("return if false; 1", 1);
+    test("return unless true; 1", 1);
+    test("return unless false; 1", null);
+    test("return 7 if true; 1", 7);
+    test("return 7 if false; 1", 1);
+    test("return 7 unless true; 1", 1);
+    test("return 7 unless false; 1", 7);
+    test("return and true if true; 1", null);
+    test("return and true if false; 1", 1);
+    test("return and true unless true; 1", 1);
+    test("return and true unless false; 1", null);
+    test("true and return if true; 1", null);
+    test("false or return if false; 1", 1);
+    test("true and return unless true; 1", 1);
+    test("false or return unless false; 1", null);
   }
 
   @Test public void booleanNonBooleanComparisons() {

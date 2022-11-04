@@ -1709,6 +1709,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private Stmt.Return returnStmt(Token token, Expr expr, JacsalType type) {
+    if (expr instanceof Expr.Return) {
+      // Don't need to create yet another Expr.Return if we already have one
+      return new Stmt.Return(token, (Expr.Return)expr);
+    }
     return new Stmt.Return(token, new Expr.Return(token, expr, type));
   }
 

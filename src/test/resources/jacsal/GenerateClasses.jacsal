@@ -25,7 +25,7 @@ Map baseClasses
 
 source.lines().each{
   // Strip '#' comments
-  /^#/f and return
+  return if /^#/f
   s/ *#.*$//
 
   /^package /f and do {
@@ -84,6 +84,8 @@ source.lines().each{
     
     // Remember fields in case another class extends us
     baseClasses[className] = fields
+    
+    // Reset for next class in file
     inClass = false
     fields = []
     attributes = []
