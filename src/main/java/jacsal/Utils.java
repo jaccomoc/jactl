@@ -21,9 +21,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.DOUBLE;
@@ -353,5 +351,16 @@ public class Utils {
       return s;
     }
     return s.substring(0,1).toUpperCase() + s.substring(1);
+  }
+
+  public static Map mapOf(Object... elems) {
+    Map result = new HashMap();
+    if ((elems.length % 2) != 0) {
+      throw new IllegalStateException("Internal error: mapOf needs even number of args");
+    }
+    for (int i = 0; i < elems.length; i += 2) {
+      result.put(elems[i], elems[i+1]);
+    }
+    return result;
   }
 }

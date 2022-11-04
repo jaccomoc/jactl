@@ -299,19 +299,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  // Map of which opcode to use for common binary operations based on type
-  private static final Map<TokenType,List<Object>> opCodesByOperator = Map.of(
-    PLUS,    List.of(IADD, LADD, DADD, RuntimeUtils.PLUS),
-    MINUS,   List.of(ISUB, LSUB, DSUB, RuntimeUtils.MINUS),
-    STAR,    List.of(IMUL, LMUL, DMUL, RuntimeUtils.STAR),
-    SLASH,   List.of(IDIV, LDIV, DDIV, RuntimeUtils.SLASH),
-    PERCENT, List.of(IREM, LREM, DREM, RuntimeUtils.PERCENT)
-  );
-  private static final int intIdx = 0;
-  private static final int longIdx = 1;
-  private static final int doubleIdx = 2;
-  private static final int decimalIdx = 3;
-
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
     if (expr.isParam) {
       defineVar(expr);
@@ -684,6 +671,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  // Map of which opcode to use for common binary operations based on type
+  private static final Map<TokenType,List<Object>> opCodesByOperator = Utils.mapOf(
+    PLUS,                List.of(IADD,  LADD,  DADD, RuntimeUtils.PLUS),
+    MINUS,               List.of(ISUB,  LSUB,  DSUB, RuntimeUtils.MINUS),
+    STAR,                List.of(IMUL,  LMUL,  DMUL, RuntimeUtils.STAR),
+    SLASH,               List.of(IDIV,  LDIV,  DDIV, RuntimeUtils.SLASH),
+    PERCENT,             List.of(IREM,  LREM,  DREM, RuntimeUtils.PERCENT),
+    AMPERSAND,           List.of(IAND,  LAND,  -1,   -1),
+    PIPE,                List.of(IOR,   LOR,   -1,   -1),
+    ACCENT,              List.of(IXOR,  LXOR,  -1,   -1),
+    DOUBLE_LESS_THAN,    List.of(ISHL,  LSHL,  -1,   -1),
+    DOUBLE_GREATER_THAN, List.of(ISHR,  LSHR,  -1,   -1),
+    TRIPLE_GREATER_THAN, List.of(IUSHR, LUSHR, -1,   -1)
+  );
+  private static final int intIdx = 0;
+  private static final int longIdx = 1;
+  private static final int doubleIdx = 2;
+  private static final int decimalIdx = 3;
+
   @Override public Void visitBinary(Expr.Binary expr) {
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
     if (expr.operator.is(numericOperator) && (expr.left.type.is(ANY) || expr.right.type.is(ANY))) {
@@ -966,9 +972,32 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Everything else
     compile(expr.left);
-    convertTo(expr.type, true, expr.left.location);
+    if (expr.operator.getType().isBitOperator() && expr.left.type.is(ANY)) {
+      // Don't do any conversion yet for bit manipulation ops since if we have ANY we don't know whether
+      // we want to an int or long manipulation yet. We need to box any primitives, however, if result
+      // is ANY since we are going to pass them to RuntimeUtils a bit later
+      box();
+    }
+    else {
+      convertTo(expr.type, true, expr.left.location);
+    }
     compile(expr.right);
-    convertTo(expr.type, true, expr.right.location);
+    if (expr.operator.getType().isBitShift()) {
+      // Right-hand side of shift has to be an integer
+      castToIntOrLong(INT, expr.right.location);
+    }
+    else {
+      convertTo(expr.type, true, expr.right.location);
+    }
+
+    // If we have a bit operation and we don't know the types yet then delegate to RuntimeUtils
+    if (expr.operator.getType().isBitOperator() && expr.type.is(ANY)) {
+      box();  // Box rhs so we can invoke our method
+      loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
+      loadLocation(expr.operator);
+      invokeMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, String.class, int.class);
+      return null;
+    }
 
     List<Object> opCodes = opCodesByOperator.get(expr.operator.getType());
     if (opCodes == null) {
@@ -1044,11 +1073,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-
     switch (expr.operator.getType()) {
-      case BANG:    convertToBoolean(true, expr.expr);  break;
-      case MINUS:   arithmeticNegate(expr.expr.location);       break;
-      case PLUS:    /* Nothing to do for unary plus */          break;
+      case BANG:    convertToBoolean(true, expr.expr);      break;
+      case MINUS:   arithmeticNegate(expr.expr.location);           break;
+      case PLUS:    /* Nothing to do for unary plus */              break;
+      case GRAVE:   arithmeticNot(expr.expr.location);              break;
       default:
         throw new UnsupportedOperationException("Internal error: unknown prefix operator " + expr.operator.getType());
     }
@@ -2046,6 +2075,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Conversions
 
+  private void castToIntOrLong(JacsalType type, Location location) {
+    if (peek().isBoxedOrUnboxed(INT,LONG)) {
+      // If we already have a primitive int/long then we can convert using standard mechanism
+      convertTo(type, false, location);
+      return;
+    }
+    if (peek().is(ANY)) {
+      loadLocation(location);
+      invokeMethod(RuntimeUtils.class, type.is(INT) ? "castToInt" : "castToLong", Object.class, String.class, int.class);
+      return;
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + peek());
+  }
+
   private Void convertTo(JacsalType type, boolean couldBeNull, SourceLocation location) {
     if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
     if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull) {
@@ -2280,6 +2323,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void _booleanNot() {
     _loadConst(1);
     mv.visitInsn(IXOR);
+  }
+
+  private void arithmeticNot(Token location) {
+    unbox();
+    switch (peek().getType()) {
+      case INT:
+        _loadConst((int)-1);
+        mv.visitInsn(IXOR);
+        break;
+      case LONG:
+        _loadConst((long)-1);
+        mv.visitInsn(LXOR);
+        break;
+      case ANY:
+        loadLocation(location);
+        invokeMethod(RuntimeUtils.class, "arithmeticNot", Object.class, String.class, int.class);
+        break;
+      default: throw new IllegalStateException("Internal error: Unexpected type " + peek().getType() + " for '~'");
+    }
   }
 
   private void arithmeticNegate(Token location) {

@@ -110,6 +110,16 @@ public enum TokenType {
                    GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF);
   }
 
+  boolean isBitOperator() {
+    return this.is(AMPERSAND, AMPERSAND_EQUAL, PIPE, PIPE_EQUAL, ACCENT, ACCENT_EQUAL, GRAVE,
+                   DOUBLE_LESS_THAN, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN,
+                   DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN, TRIPLE_GREATER_THAN_EQUAL);
+  }
+
+  boolean isBitShift() {
+    return this.is(DOUBLE_LESS_THAN,DOUBLE_GREATER_THAN,TRIPLE_GREATER_THAN);
+  }
+
   boolean isType() {
     return this.is(BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, DEF, OBJECT_ARR);
   }

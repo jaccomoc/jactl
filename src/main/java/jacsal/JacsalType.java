@@ -286,6 +286,8 @@ public class JacsalType {
    * @return resulting type
    */
   public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
+    type1 = type1.unboxed();
+    type2 = type2.unboxed();
     if (operator.is(IN,BANG_IN)) {
       if (!type2.is(ANY,STRING,LIST,MAP,ITERATOR)) {
         throw new CompileError("Type " + type2 + " is not a valid type for right-hand side of '" + operator.getChars() + "'", operator);
@@ -319,7 +321,7 @@ public class JacsalType {
       throw new CompileError("Cannot do regex match on types " + type1 + " and " + type2, operator);
     }
 
-    if (type1.is(ANY))                                           { return ANY;       }
+    if (operator.is(PLUS) && type1.is(ANY))                      { return ANY;       }
     if (operator.is(PLUS) && type1.is(STRING))                   { return STRING;    }
     if (operator.is(PLUS) && type1.is(LIST))                     { return LIST;      }
     if (operator.is(PLUS) && type1.is(MAP) && type2.is(MAP,ANY)) { return MAP;       }
@@ -348,13 +350,26 @@ public class JacsalType {
       return BOOLEAN;
     }
 
-    // TBD: Check for bitwise operations which should result in int/long
-
-    // Must be numeric operation
+    // Only numeric operations left so must have numeric (or ANY) operands
     checkIsNumeric(type1, "left", operator);
     checkIsNumeric(type2, "right", operator);
-    if (type1.isBoxedOrUnboxed(type2)) { return type1.unboxed(); }
-    if (type2 == ANY)                  { return ANY; }
+
+    // Check for bit manipulation operations which only work on int/long values
+    if (operator.getType().isBitOperator()) {
+      if (!type1.is(INT,LONG,ANY)) {
+        throw new CompileError("Left-hand operand for '" + operator.getChars() + "' must be int or long", operator);
+      }
+      if (!type2.is(INT,LONG,ANY)) {
+        throw new CompileError("Right-hand operand for '" + operator.getChars() + "' must be int or long", operator);
+      }
+      if (operator.getType().isBitShift()) { return type1;  }  // Result of bit shift is always type on lhs
+      if (type1.is(ANY) || type2.is(ANY))  { return ANY;    }
+      // If both args are ints then result is int. Otherwise default to long.
+      return type1.is(LONG) || type2.is(LONG) ? LONG: INT;
+    }
+
+    if (type1.is(type2))                { return type1.unboxed(); }
+    if (type1.is(ANY) || type2.is(ANY)) { return ANY;             }
 
     JacsalType result = resultType(type1, type2);
     if (result == null) {

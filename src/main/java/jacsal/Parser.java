@@ -467,7 +467,7 @@ public class Parser {
   private static TokenType[] fieldAccessOp = new TokenType[] { DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
   // NOTE: type case also has same precendence as unaryOps but has no specific operator
-  private static List<TokenType> unaryOps = List.of(/*GRAVE,*/ BANG, MINUS_MINUS, PLUS_PLUS /*, (type) */);
+  private static List<TokenType> unaryOps = List.of(GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
 
   // Operators from least precedence to highest precedence. Each entry in list is
   // a pair of a boolean and a list of the operators at that level of precedene.
@@ -475,25 +475,23 @@ public class Parser {
   // right-associative (false).
   private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
     List.of(
-//      new Pair(true, List.of(OR)),
-//      new Pair(true, List.of(AND)),
-//      new Pair(true, List.of(NOT)),
-      new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL)),
-      /* STAR_STAR_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
-         PIPE_EQUAL, ACCENT_EQUAL), */
+      // These are handled separately in separate productions to parseExpression:
+      //      new Pair(true, List.of(OR)),
+      //      new Pair(true, List.of(AND)),
+      //      new Pair(true, List.of(NOT)),
+
+      new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
+      /* STAR_STAR_EQUAL, */ DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
+         PIPE_EQUAL, ACCENT_EQUAL)),
       new Pair(true, List.of(QUESTION, QUESTION_COLON)),
       new Pair(true, List.of(PIPE_PIPE)),
       new Pair(true, List.of(AMPERSAND_AMPERSAND)),
-      /*
-      List.of(PIPE),
-      List.of(ACCENT),
-      List.of(AMPERSAND),
-      */
+      new Pair(true, List.of(PIPE)),
+      new Pair(true, List.of(ACCENT)),
+      new Pair(true, List.of(AMPERSAND)),
       new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
       new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
-/*
-      List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN),
-*/
+      new Pair(true, List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
       new Pair(true, List.of(MINUS, PLUS)),
       new Pair(true, List.of(STAR, SLASH, PERCENT)),
       //      List.of(STAR_STAR)
@@ -714,7 +712,7 @@ public class Parser {
   }
 
   /**
-   *# unary -> ( "!" | "--" | "++" | "-" | "+" | "(" type ")" ) unary ( "--" | "++" )
+   *# unary -> ( "!" | "--" | "++" | "-" | "+" | "~" | "(" type ")" ) unary ( "--" | "++" )
    *#        | expression;
    */
   private Expr unary(int precedenceLevel) {
@@ -732,7 +730,7 @@ public class Parser {
       expr = new Expr.PrefixUnary(type, unary);
     }
     else
-    if (matchAny(BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS)) {
+    if (matchAny(unaryOps)) {
       Token operator = previous();
       Expr unary = unary(precedenceLevel);
       if (operator.is(PLUS_PLUS,MINUS_MINUS) &&
@@ -1698,12 +1696,18 @@ public class Parser {
   }
 
   private static final Map<TokenType,TokenType> arithmeticOperator =
-    Map.of(PLUS_PLUS,     PLUS,
-           MINUS_MINUS,   MINUS,
-           PLUS_EQUAL,    PLUS,
-           MINUS_EQUAL,   MINUS,
-           STAR_EQUAL,    STAR,
-           SLASH_EQUAL,   SLASH,
-           PERCENT_EQUAL, PERCENT,
-           EQUAL_GRAVE,   EQUAL_GRAVE);
+    Utils.mapOf(PLUS_PLUS,                 PLUS,
+                MINUS_MINUS,               MINUS,
+                PLUS_EQUAL,                PLUS,
+                MINUS_EQUAL,               MINUS,
+                STAR_EQUAL,                STAR,
+                SLASH_EQUAL,               SLASH,
+                PERCENT_EQUAL,             PERCENT,
+                AMPERSAND_EQUAL,           AMPERSAND,
+                PIPE_EQUAL,                PIPE,
+                ACCENT_EQUAL,              ACCENT,
+                DOUBLE_LESS_THAN_EQUAL,    DOUBLE_LESS_THAN,
+                DOUBLE_GREATER_THAN_EQUAL, DOUBLE_GREATER_THAN,
+                TRIPLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN,
+                EQUAL_GRAVE,               EQUAL_GRAVE);
 }

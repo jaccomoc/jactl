@@ -33,6 +33,7 @@ import static jacsal.JacsalType.BOOLEAN;
 import static jacsal.JacsalType.DECIMAL;
 import static jacsal.JacsalType.INT;
 import static jacsal.JacsalType.LIST;
+import static jacsal.JacsalType.LONG;
 import static jacsal.JacsalType.MAP;
 import static jacsal.JacsalType.STRING;
 import static jacsal.TokenType.*;
@@ -422,8 +423,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     expr.type = expr.expr.type.unboxed();
+    if (expr.operator.is(GRAVE)) {
+      if (!expr.expr.type.is(INT,LONG,ANY)) {
+        throw new CompileError("Operand for '~' must be int or long (not " + expr.type + ")", expr.operator);
+      }
+    }
     if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
-      throw new CompileError("Prefix operator " + expr.operator.getChars() + " cannot be applied to type " + expr.expr.type, expr.operator);
+      throw new CompileError("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
     }
     if (expr.isConst) {
       expr.constValue = expr.expr.constValue;
@@ -433,6 +439,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           case LONG:    expr.constValue = -(long)expr.constValue;                 break;
           case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
           case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
+        }
+      }
+      else
+      if (expr.operator.is(GRAVE)) {
+        switch (expr.type.getType()) {
+          case INT:       expr.constValue = ~(int) expr.constValue;   break;
+          case LONG:      expr.constValue = ~(long) expr.constValue;  break;
         }
       }
       else
@@ -460,7 +473,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       return expr.type;
     }
-    throw new CompileError("Unary operator " + expr.operator.getChars() + " cannot be applied to type " + expr.expr.type, expr.operator);
+    throw new CompileError("Unary operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
   }
 
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
@@ -471,7 +484,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     switch (expr.value.getType()) {
       case INTEGER_CONST: return expr.type = INT;
-      case LONG_CONST:    return expr.type = JacsalType.LONG;
+      case LONG_CONST:    return expr.type = LONG;
       case DOUBLE_CONST:  return expr.type = JacsalType.DOUBLE;
       case DECIMAL_CONST: return expr.type = DECIMAL;
       case STRING_CONST:  return expr.type = STRING;
@@ -972,11 +985,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         int right = Utils.toInt(rightValue);
         throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
-          case PLUS:    expr.constValue = left + right; break;
-          case MINUS:   expr.constValue = left - right; break;
-          case STAR:    expr.constValue = left * right; break;
-          case SLASH:   expr.constValue = left / right; break;
-          case PERCENT: expr.constValue = left % right; break;
+          case PLUS:                expr.constValue = left + right;   break;
+          case MINUS:               expr.constValue = left - right;   break;
+          case STAR:                expr.constValue = left * right;   break;
+          case SLASH:               expr.constValue = left / right;   break;
+          case PERCENT:             expr.constValue = left % right;   break;
+          case AMPERSAND:           expr.constValue = left & right;   break;
+          case PIPE:                expr.constValue = left | right;   break;
+          case ACCENT:              expr.constValue = left ^ right;   break;
+          case DOUBLE_LESS_THAN:    expr.constValue = left << right;  break;
+          case DOUBLE_GREATER_THAN: expr.constValue = left >> right;  break;
+          case TRIPLE_GREATER_THAN: expr.constValue = left >>> right; break;
           default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
         }
         break;
@@ -986,11 +1005,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         long right = Utils.toLong(rightValue);
         throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
-          case PLUS:    expr.constValue = left + right; break;
-          case MINUS:   expr.constValue = left - right; break;
-          case STAR:    expr.constValue = left * right; break;
-          case SLASH:   expr.constValue = left / right; break;
-          case PERCENT: expr.constValue = left % right; break;
+          case PLUS:                expr.constValue = left + right;        break;
+          case MINUS:               expr.constValue = left - right;        break;
+          case STAR:                expr.constValue = left * right;        break;
+          case SLASH:               expr.constValue = left / right;        break;
+          case PERCENT:             expr.constValue = left % right;        break;
+          case AMPERSAND:           expr.constValue = left & right;        break;
+          case PIPE:                expr.constValue = left | right;        break;
+          case ACCENT:              expr.constValue = left ^ right;        break;
+          case DOUBLE_LESS_THAN:    expr.constValue = left << (int)right;  break;
+          case DOUBLE_GREATER_THAN: expr.constValue = left >> (int)right;  break;
+          case TRIPLE_GREATER_THAN: expr.constValue = left >>> (int)right; break;
           default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
         }
         break;

@@ -57,6 +57,14 @@ public class RuntimeUtils {
   public static final String INSTANCE_OF        = "instanceof";
   public static final String BANG_INSTANCE_OF   = "!instanceof";
 
+  public static final String AMPERSAND          = "&";
+  public static final String PIPE               = "|";
+  public static final String ACCENT             = "^";
+  public static final String GRAVE              = "~";
+  public static final String DOUBLE_LESS_THAN   = "<<";
+  public static final String DOUBLE_GREATER_THAN= ">>";
+  public static final String TRIPLE_GREATER_THAN= ">>>";
+
   private static final ThreadLocal<LinkedHashMap<String, Pattern>> patternCache = new ThreadLocal<>() {
     @Override protected LinkedHashMap<String, Pattern> initialValue() {
       return new LinkedHashMap<>(16, 0.75f, true) {
@@ -82,29 +90,36 @@ public class RuntimeUtils {
       return null;
     }
     switch (op) {
-      case PLUS_PLUS:          return PLUS_PLUS;
-      case MINUS_MINUS:        return MINUS_MINUS;
-      case PLUS:               return PLUS;
-      case MINUS:              return MINUS;
-      case STAR:               return STAR;
-      case SLASH:              return SLASH;
-      case PERCENT:            return PERCENT;
-      case COMPARE:            return COMPARE;
-      case PLUS_EQUAL:         return PLUS_EQUAL;
-      case MINUS_EQUAL:        return MINUS_EQUAL;
-      case STAR_EQUAL:         return STAR_EQUAL;
-      case SLASH_EQUAL:        return SLASH_EQUAL;
-      case PERCENT_EQUAL:      return PERCENT_EQUAL;
-      case BANG_EQUAL:         return BANG_EQUAL;
-      case EQUAL_EQUAL:        return EQUAL_EQUAL;
-      case LESS_THAN:          return LESS_THAN;
-      case LESS_THAN_EQUAL:    return LESS_THAN_EQUAL;
-      case GREATER_THAN:       return GREATER_THAN;
-      case GREATER_THAN_EQUAL: return GREATER_THAN_EQUAL;
-      case IN:                 return IN;
-      case BANG_IN:            return BANG_IN;
-      case INSTANCE_OF:        return INSTANCE_OF;
-      case BANG_INSTANCE_OF:   return BANG_INSTANCE_OF;
+      case PLUS_PLUS:           return PLUS_PLUS;
+      case MINUS_MINUS:         return MINUS_MINUS;
+      case PLUS:                return PLUS;
+      case MINUS:               return MINUS;
+      case STAR:                return STAR;
+      case SLASH:               return SLASH;
+      case PERCENT:             return PERCENT;
+      case COMPARE:             return COMPARE;
+      case PLUS_EQUAL:          return PLUS_EQUAL;
+      case MINUS_EQUAL:         return MINUS_EQUAL;
+      case STAR_EQUAL:          return STAR_EQUAL;
+      case SLASH_EQUAL:         return SLASH_EQUAL;
+      case PERCENT_EQUAL:       return PERCENT_EQUAL;
+      case BANG_EQUAL:          return BANG_EQUAL;
+      case EQUAL_EQUAL:         return EQUAL_EQUAL;
+      case LESS_THAN:           return LESS_THAN;
+      case LESS_THAN_EQUAL:     return LESS_THAN_EQUAL;
+      case GREATER_THAN:        return GREATER_THAN;
+      case GREATER_THAN_EQUAL:  return GREATER_THAN_EQUAL;
+      case IN:                  return IN;
+      case BANG_IN:             return BANG_IN;
+      case INSTANCE_OF:         return INSTANCE_OF;
+      case BANG_INSTANCE_OF:    return BANG_INSTANCE_OF;
+      case AMPERSAND:           return AMPERSAND;
+      case PIPE:                return PIPE;
+      case ACCENT:              return ACCENT;
+      case GRAVE:               return GRAVE;
+      case DOUBLE_LESS_THAN:    return DOUBLE_LESS_THAN;
+      case DOUBLE_GREATER_THAN: return DOUBLE_GREATER_THAN;
+      case TRIPLE_GREATER_THAN: return TRIPLE_GREATER_THAN;
       default: throw new IllegalStateException("Internal error: operator " + op + " not supported");
     }
   }
@@ -503,6 +518,65 @@ public class RuntimeUtils {
     if (operator == GREATER_THAN)       { return comparison > 0; }
     if (operator == GREATER_THAN_EQUAL) { return comparison >= 0; }
     throw new IllegalStateException("Internal error: unexpected operator " + operator);
+  }
+
+  public static Object bitOperation(Object left, Object right, String operator, String source, int offset) {
+    boolean leftIsLong = false;
+    if      (left instanceof Long)       { leftIsLong = true; }
+    else if (!(left instanceof Integer)) { throw new RuntimeError("Left-hand side of '" + operator + "' must be int or long (not " + className(left) + ")", source, offset); }
+
+    if (!(right instanceof Long) && !(right instanceof Integer)) {
+      throw new RuntimeError("Right-hand side of '" + operator + "' must be int or long (not " + className(right) + ")", source, offset);
+    }
+
+    switch (operator) {
+      case DOUBLE_LESS_THAN:
+        if (leftIsLong) {
+          return ((long)left) << ((Number)right).intValue();
+        }
+        return ((int)left) << ((Number)right).intValue();
+      case DOUBLE_GREATER_THAN:
+        if (leftIsLong) {
+          return ((long)left) >> ((Number)right).intValue();
+        }
+        return ((int)left) >> ((Number)right).intValue();
+      case TRIPLE_GREATER_THAN:
+        if (leftIsLong) {
+          return ((long)left) >>> ((Number)right).intValue();
+        }
+        return ((int)left) >>> ((Number)right).intValue();
+    }
+
+    if (leftIsLong || right instanceof Long) {
+      long lhs = ((Number)left).longValue();
+      long rhs = ((Number)right).longValue();
+      switch (operator) {
+        case AMPERSAND:           return lhs & rhs;
+        case PIPE:                return lhs | rhs;
+        case ACCENT:              return lhs ^ rhs;
+        default: throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+      }
+    }
+
+    int lhs = (int)left;
+    int rhs = (int)right;
+    switch (operator) {
+      case AMPERSAND:           return lhs & rhs;
+      case PIPE:                return lhs | rhs;
+      case ACCENT:              return lhs ^ rhs;
+      default: throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+    }
+  }
+
+  public static Object arithmeticNot(Object obj, String source, int offset) {
+    if (!(obj instanceof Long) && !(obj instanceof Integer)) {
+      throw new RuntimeError("Operand for '~' must be int or long (not " + className(obj) + ")", source, offset);
+    }
+
+    if (obj instanceof Integer) {
+      return ~(int)obj;
+    }
+    return ~(long)obj;
   }
 
   public static Object negateNumber(Object obj, String source, int offset) {
@@ -1043,6 +1117,32 @@ public class RuntimeUtils {
       }
     }
     ((List)parent).set(index, value);
+  }
+
+  public static int castToInt(Object obj, String source, int offset) {
+    if (obj instanceof Integer) {
+      return (int)obj;
+    }
+    if (obj instanceof Long) {
+      return (int)(long)obj;
+    }
+    if (obj == null) {
+      throw new NullError("Null value for int", source, offset);
+    }
+    throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to int", source, offset);
+  }
+
+  public static long castToLong(Object obj, String source, int offset) {
+    if (obj instanceof Long) {
+      return (long)obj;
+    }
+    if (obj instanceof Integer) {
+      return (long)(int)obj;
+    }
+    if (obj == null) {
+      throw new NullError("Null value for long", source, offset);
+    }
+    throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to long", source, offset);
   }
 
   public static String castToString(Object obj, String source, int offset) {
