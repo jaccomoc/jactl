@@ -1253,9 +1253,6 @@ public class Parser {
                                     boolean isScriptMain) {
     params.forEach(p -> p.declExpr.isExplicitParam = true);
     Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params);
-    if (isScriptMain) {
-      funDecl.functionDescriptor.isAsync = true;
-    }
     params.forEach(p -> p.declExpr.owner = funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
       // Add to functions in block so we can support forward references during Resolver phase

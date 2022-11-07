@@ -126,6 +126,8 @@ class Expr {
     Expr       callee;
     List<Expr> args;
 
+    boolean @isAsync;   // true if potential async invocation
+
     // If we are a call to an arbitrary function/closure then it is possible that the
     // function we are calling returns an Iterator:  def f = x.map; f()
     // In this case we need to check that if the result is not immediately used as the
@@ -142,6 +144,7 @@ class Expr {
     List<Expr> args;
 
     FunctionDescriptor @methodDescriptor;
+    boolean @isAsync = false;  // true if potential async invocation
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used

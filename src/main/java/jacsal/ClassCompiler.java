@@ -33,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static jacsal.JacsalType.ANY;
@@ -91,12 +92,15 @@ public class ClassCompiler {
 
     Class<?> clss = context.loadClass(internalName.replaceAll("/", "."), cw.toByteArray());
     try {
-      MethodHandle mh = MethodHandles.publicLookup().findVirtual(clss, Utils.JACSAL_SCRIPT_MAIN, MethodType.methodType(Object.class, Continuation.class, Map.class));
+      MethodType methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
+      boolean isAsync = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
+      MethodHandle mh   = MethodHandles.publicLookup().findVirtual(clss, Utils.JACSAL_SCRIPT_MAIN, methodType);
       return map -> {
         var future = new CompletableFuture<>();
         try {
           Object instance = clss.getDeclaredConstructor().newInstance();
-          Object result = mh.invoke(instance, (Continuation)null, map);
+          Object result = isAsync ? mh.invoke(instance, (Continuation)null, map)
+                                  : mh.invoke(instance, map);
           future.complete(result);
         }
         catch (Continuation c) {
@@ -149,9 +153,7 @@ public class ClassCompiler {
     MethodVisitor classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
     classInit.visitCode();
 
-    // Create a continuation method for every async method and every wrapper. The continuation method takes a single
-    // Continuation argument and extracts the parameter values before invoking the underlying function or function
-    // wrapper as needed when continuing from an async suspend.
+    // Helper for creating handle to continuation wrapper
     Consumer<Expr.FunDecl> createContinuationHandle = (decl) -> {
       String       continuationMethod = Utils.continuationMethod(decl.functionDescriptor.implementingMethod);
       String       handleName         = Utils.continuationHandle(decl.functionDescriptor.implementingMethod);
@@ -211,9 +213,9 @@ public class ClassCompiler {
         // Wrapper method always has a Continuation argument even if it doesn't need it since when invoking through
         // a MethodHandle we have no way of knowing whether it needs a Continuation or not
         paramTypes.add(Continuation.class);
-        paramTypes.add(String.class);    // source
-        paramTypes.add(int.class);       // offset
-        paramTypes.add(Object[].class);  // args
+        paramTypes.addAll(wrapper.parameters.stream()
+                                            .map(p -> p.declExpr.type.classFromType())
+                                            .collect(Collectors.toList()));
 
         // Load first parameter type and then load the rest in an array
         Utils.loadConst(classInit, paramTypes.remove(0));
@@ -240,10 +242,12 @@ public class ClassCompiler {
         // Store handle in static field
         classInit.visitFieldInsn(PUTSTATIC, internalName, staticHandleName, "Ljava/lang/invoke/MethodHandle;");
 
-        createContinuationHandle.accept(wrapper);
+        if (wrapper.functionDescriptor.isAsync) {
+          createContinuationHandle.accept(wrapper);
+        }
       }
 
-      if (funDecl.isScriptMain || funDecl.functionDescriptor.isAsync) {
+      if (funDecl.functionDescriptor.isAsync) {
         createContinuationHandle.accept(funDecl);
       }
     });
@@ -304,10 +308,15 @@ public class ClassCompiler {
     // invocation
     if (!isScriptMain) {
       doCompileMethod(method.wrapper, method.wrapper.functionDescriptor.implementingMethod, false);
-      emitContinuationWrapper(method.wrapper);
     }
-    if (isScriptMain || method.functionDescriptor.isAsync) {
+
+    // For async functions we need a continuation wrapper method that is used when resuming
+    if (method.functionDescriptor.isAsync) {
       emitContinuationWrapper(method);
+    }
+    if (!isScriptMain && method.wrapper.functionDescriptor.isAsync) {
+      // Need continuation wrapper for wrapper if wrapper is async (parameter initialiser is async)
+      emitContinuationWrapper(method.wrapper);
     }
   }
 
@@ -322,7 +331,8 @@ public class ClassCompiler {
     if (isScriptMain) {
       // Assign globals map to field so we can access it from anywhere
       mv.visitVarInsn(ALOAD, 0);
-      mv.visitVarInsn(ALOAD, 2);
+      boolean isAsync = method.functionDescriptor.isAsync;
+      mv.visitVarInsn(ALOAD, isAsync ? 2 : 1);
       mv.visitFieldInsn(PUTFIELD, internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
     }
 
@@ -331,6 +341,9 @@ public class ClassCompiler {
     mv.visitEnd();
   }
 
+  // Create a continuation method for every async method. The continuation method takes a single Continuation argument
+  // and extracts the parameter values before invoking the underlying function or function wrapper as needed when
+  // continuing from an async suspend.
   private void emitContinuationWrapper(Expr.FunDecl funDecl) {
     String methodName = Utils.continuationMethod(funDecl.functionDescriptor.implementingMethod);
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, methodName,

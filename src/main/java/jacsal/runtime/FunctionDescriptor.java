@@ -37,6 +37,7 @@ public class FunctionDescriptor {
   public boolean          isStatic = false;
   public boolean          isBuiltin;
   public boolean          isAsync;
+  public List<Integer>    asyncArgs = List.of(); // Async if any of these args are async
 
   public FunctionDescriptor(String name, JacsalType returnType, int paramCount, int mandatoryArgCount, boolean needsLocation) {
     this.name = name;

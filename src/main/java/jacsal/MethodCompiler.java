@@ -22,6 +22,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -1282,7 +1283,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // convert Iterator to List since Iterator is not a standard type.
     if (!expr.isMethodCallTarget) {
       emitIf(() -> ifInstanceof(ITERATOR),
-             () -> invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
+             () -> invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
                                     () -> {
                                       loadNullContinuation();
                                       invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
@@ -1306,7 +1307,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.args.size() == method.paramCount) {
         // We can invoke the method directly as we have exact number of args required
         // TODO: handle var args when we get a builtin method that needs it
-        invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
+        invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            // Get the instance
                            compile(expr.parent);
@@ -1349,7 +1350,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
         // If Iterator is not going to have another method invoked on it then we need to convert
         // to List since Iterators are not standard Jacsal types.
-        invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
+        invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
                          () -> {
                            loadNullContinuation();
                            invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
@@ -1651,7 +1652,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        },
                        () -> invokeUserMethod(func.isStatic,
-                                          func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                                              func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
                                               func.implementingMethod,
                                               func.returnType,
                                               finalParamTypes));
@@ -1803,6 +1804,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Method descriptor is return type followed by array of parameter types.
     return Type.getMethodDescriptor(returnType.descriptorType(),
                                     paramTypes.stream().map(p -> p.descriptorType()).toArray(Type[]::new));
+  }
+
+  public static MethodType getMethodType(Expr.FunDecl funDecl) {
+    return MethodType.methodType(funDecl.returnType.classFromType(),
+                                 methodParamTypes(funDecl).stream()
+                                                          .map(p -> p.classFromType())
+                                                          .toArray(Class[]::new));
   }
 
   private static List<JacsalType> methodParamTypes(Expr.FunDecl funDecl) {

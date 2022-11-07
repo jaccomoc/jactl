@@ -39,12 +39,12 @@ public class BuiltinFunctions {
       registerMethod("size", "objArrSize", false);
       registerMethod("size", "mapSize", false);
       registerMethod("size", "iteratorSize", false);
-      registerMethod("each", "iteratorEach", ITERATOR, true, 0);
-      registerMethod("collect", "iteratorCollect", ITERATOR, true, 0);
-      registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0);
+      registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
       registerMethod("sort", "iteratorSort", ITERATOR, true, 0);
-      registerMethod("map", "iteratorMap", ITERATOR, true, 0);
-      registerMethod("filter", "iteratorFilter", ITERATOR, true, 0);
+      registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
       registerMethod("join", "iteratorJoin", ITERATOR, false, 0);
 
       // String methods
@@ -93,11 +93,57 @@ public class BuiltinFunctions {
   }
 
   private static void registerMethod(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
-    registerFunction(name, methodName, false, objType, needsLocation, mandatoryArgCount);
+    registerMethod(name, methodName, objType, needsLocation, mandatoryArgCount, List.of());
+  }
+
+  /**
+   * <p>Register builtin method for given object type. We lookup the given static method on this class (BuiltinFunctions)
+   * and use that as the implementation for the method. We assume another method with "Wrapper" appeneded to the name
+   * exists and will use that method when method is invoked from places where we need to dynamically lookup the method
+   * or when the number of arguments does not match (i.e. some optional args not supplied).</p>
+   * <p>The object type specifies the type of Jacsal objects for which we want the method to apply. If null is passed as
+   * a value we derive the type from the type of the first argument of the static method. We allow a different type to
+   * be supplied to support scenarios where we want a method to work for Iterator types (List, Map, Iterator, Object[])
+   * and for which not natural super class exists. In this case the type of the first argument is Object but the objType
+   * parameter will be JacsalType.ITERATOR .</p>
+   * <p>Methods are flagged as async if arg1 (the arg after the 0th arg which is the object on which the method applies)
+   * has type Continuation. This means that when invoking the method we need to generate the scaffolding that allows
+   * Continuations to be thrown and caught and capture state. As well as flagging the method as async or not we allow
+   * a list of argument numbers to be passed in for situations where the invocation is only async if one of the given
+   * arguments itself is async.</p>
+   * <p>For example,
+   * <pre>  x.map{ ... }</pre>
+   * is only async if the closure passed in is itself async. However, if the calls are chained:
+   * <pre>  x.map{ ... }.filter{ ... }</pre>
+   * then the collection methods (map, filter, each,
+   * collect, etc) are async if either the closure passed in is async or if any of the preceding calls in the chain
+   * were async.
+   * <p>Since the preceding call is the object on which the current method is being applied, we can think of such a chain
+   * of method calls like this:</p>
+   * <pre>  filter(map(x, {...}), {...})</pre>
+   * <p>So, the call is async if arg0 is async or if arg1 is async. This means that for filter, map, etc. we pass in
+   * List.of(0,1) to indicate that if arg0 or arg1 is async then the method call is async.</p>
+   * @param name                the name that the method will have in Jacsal
+   * @param methodName          the name of the static method in this class that provides the implementation
+   * @param objType             the Jacsal type for which the method applies
+   * @param needsLocation       true if we need to pass the location (source + offset) at invocation time (for runtime errors)
+   * @param mandatoryArgCount   how many args are mandatory
+   * @param asyncArgs           List of int values specifying which arguments contribute to async behaviour
+   */
+  private static void registerMethod(String name, String methodName, JacsalType objType,
+                                     boolean needsLocation, int mandatoryArgCount,
+                                     List<Integer> asyncArgs) {
+    registerFunction(name, methodName, false, objType, needsLocation, mandatoryArgCount, asyncArgs);
   }
 
   private static void registerFunction(String name, String methodName, boolean isStatic, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
+    registerFunction(name, methodName, isStatic, objType, needsLocation, mandatoryArgCount, List.of());
+  }
+
+  private static void registerFunction(String name, String methodName, boolean isStatic, JacsalType objType,
+                                       boolean needsLocation, int mandatoryArgCount, List<Integer> asyncArgs) {
     var descriptor = getFunctionDescriptor(name, methodName, isStatic, objType, needsLocation, mandatoryArgCount);
+    descriptor.asyncArgs = asyncArgs;
     Functions.registerMethod(descriptor);
   }
 

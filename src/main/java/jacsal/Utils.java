@@ -315,6 +315,7 @@ public class Utils {
       if (obj instanceof List) {
         result.addAll((List) obj);
       }
+      else
       if (obj instanceof Object[]) {
         result.addAll(Arrays.asList((Object[])obj));
       }

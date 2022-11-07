@@ -27,6 +27,7 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.BOOLEAN;
@@ -609,7 +610,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       functions.pop();
       if (parent != null) {
         // Check if parent needs to have any additional heap vars passed to it in order for it to
-        // be able to pass them to its nested function and add them to the parent.heapLocal s map.
+        // be able to pass them to its nested function and add them to the parent.heapLocals map.
         // These vars are the ones that our nested functions close over. They will all be vars that
         // belong to a scope in our parent or in one of its antecedents.
         // We only need add these vars to our parent's list of heap vars if the var's scope is not
@@ -778,17 +779,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       validateArgCount(expr.args, func.mandatoryArgCount, func.paramCount, expr.token);
 
       // If function we are invoking is async then we are async
-      if ((func.isAsync || testAsync) && !currentFunction.isScriptMain) {
+      if (isAsync(func, null, expr.args) || testAsync) {
         currentFunction.functionDescriptor.isAsync = true;
+        expr.isAsync = true;
       }
     }
     else {
       // If we don't know whether we are invoking an async function or not (since we are invoking
       // via a function value (the MethodHandle) rather than directly) then we have to assume the
       // worst and assume it is async.
-      if (!currentFunction.isScriptMain) {
-        currentFunction.functionDescriptor.isAsync = true;
-      }
+      currentFunction.functionDescriptor.isAsync = true;
+      expr.isAsync = true;
     }
     return null;
   }
@@ -831,8 +832,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // If we are invoking a method that is marked as async then we need to mark ourselves as async
         // so that callers to us (the current function) can know to add code for handling suspend/resume
         // with Continuations.
-        if ((descriptor.isAsync || testAsync) && !functions.peek().isScriptMain) {
+        if (isAsync(descriptor, expr.parent, expr.args) || testAsync) {
           functions.peek().functionDescriptor.isAsync = true;
+          expr.isAsync = true;
         }
 
         return expr.type;
@@ -849,10 +851,58 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // Assume that what we are invoking is async since we have know way of knowing at compile time when
     // invoking through a function value or when doing run-time lookup of the method name
-    if (!functions.peek().isScriptMain) {
-      functions.peek().functionDescriptor.isAsync = true;
-    }
+    functions.peek().functionDescriptor.isAsync = true;
+    expr.isAsync = true;
     return expr.type;
+  }
+
+  /**
+   * Determine if current call/methodCall potentially calls something that does an async operation.
+   * @param arg0  for method calls this is the target object, for function calls this is null
+   * @param args  the remaining arguments
+   * @return true if call should be treated as async
+   */
+  private boolean isAsync(FunctionDescriptor func, Expr arg0, List<Expr> args) {
+    if (!func.isAsync)              { return false; }
+    if (func.asyncArgs.size() == 0) {
+      // If function has not specified any async args but has flagged itself as async then all calls to it are async
+      return true;
+    }
+
+    // If function is only async if passed an async arg then check the args. Note that index 0 means the object
+    // on whom we are peforming the method call. Other arguments start at index 1 so args.get(index-1) gets the
+    // arg value for that index.
+    for (int i: func.asyncArgs) {
+      Expr arg = i == 0 ? arg0 : (args.size() > 0 ? args.get(i-1) : null);
+      if (arg != null) {
+        if (arg.type.is(ANY)) { return true; }    // No idea what real type is so assume worst
+        if (arg instanceof Expr.Closure) {
+          Expr.Closure closure = (Expr.Closure)arg;
+          if (closure.funDecl.functionDescriptor.isAsync) {
+            // We don't know what args we are passing to the closure (which is our arg) since they
+            // could be coming from an iterator/list etc that we have no view of so we if it is
+            // potentially async then we assume the worst and say it is async
+            return true;
+          }
+        }
+        else
+        if (arg instanceof Expr.Identifier) {
+          Expr.VarDecl decl = ((Expr.Identifier)arg).varDecl;
+          if (decl != null && decl.funDecl == null || decl.funDecl.functionDescriptor.isAsync) {
+            return true;
+          }
+        }
+        else
+        if (arg instanceof Expr.Call && ((Expr.Call)arg).isAsync) {
+          return true;
+        }
+        else
+        if (arg instanceof Expr.MethodCall && ((Expr.MethodCall)arg).isAsync) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   @Override public JacsalType visitArrayLength(Expr.ArrayLength expr) {
@@ -1438,12 +1488,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
    * The job of the wrapper function is to support invocation from places where we don't know
    * how many arguments are required and what their types are.
    * E.g.:
-   *   def f(int x, String y) {...}; def g = f; g(1,'xyz')
+   * <pre>  def f(int x, String y) {...}; def g = f; g(1,'xyz')</pre>
    * When we call via the variable 'g' we don't anything about which function it points to and
    * so we pass in an Object[] and invoke the wrapper function which extracts the arguments to then
    * call the real function.
-   * The wrapper function also takes care of filling in the default values for any missing paremeters
-   * and validates that the number of arguments passed is legal for the function.
+   * <p>The wrapper function also takes care of filling in the default values for any missing paremeters
+   * and validates that the number of arguments passed is legal for the function.</p>
    * TODO: the wrapper function will also take care of named argument passing once implemented.
    * @param funDecl
    * @return
@@ -1484,11 +1534,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
 
-    Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(startToken,
-                                                      identToken.apply(Utils.wrapperName(funDecl.functionDescriptor.implementingMethod)),
-                                                      ANY,    // wrapper always returns Object
-                                                      wrapperParams);
-
     String sourceName = "_$source";
     wrapperParams.add(createParam.apply(sourceName, STRING));
     var sourceIdent = ident.apply(sourceName);
@@ -1500,6 +1545,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     String argsName = "_$args";
     wrapperParams.add(createParam.apply(argsName, JacsalType.OBJECT_ARR));
     var argsIdent = ident.apply(argsName);
+
+    Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(startToken,
+                                                      identToken.apply(Utils.wrapperName(funDecl.functionDescriptor.implementingMethod)),
+                                                      ANY,    // wrapper always returns Object
+                                                      wrapperParams);
 
     Stmt.Stmts stmts = new Stmt.Stmts();
     List<Stmt> stmtList = stmts.stmts;
