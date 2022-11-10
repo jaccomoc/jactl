@@ -3772,6 +3772,8 @@ class CompilerTest {
 
   @Test public void simpleClosures() {
     test("{;}()", null);
+    test("def f = { -> 10 }; f()", 10);
+    testError("def f = { -> 10 }; f(3)", "too many arguments");
     test("int i = 1; { int i = 2; i++; }; i", 1);
     test("def f = { x -> x * x }; f(2)", 4);
     test("def f = { int x -> x * x }; f(2)", 4);
@@ -3789,7 +3791,7 @@ class CompilerTest {
     test("def f = { -> 3 }; f()", 3);
     test("def f = { it -> it * it }; f(3)", 9);
     test("def f = { it * it }; f(3)", 9);
-    test("def f = { -> it * it }; f(3)", 9);
+    testError("def f = { -> it * it }; f(3)", "unknown variable it");
     test("def f = { { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f()", 4);
@@ -4080,6 +4082,7 @@ class CompilerTest {
     test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
     test("def f = [1,2,3].map{it*it}.map; f{it+it}", List.of(2,8,18));
     test("[1,2,3].map{it*it}[1]", 4);
+    testError("[1,2,3].map{ -> }", "too many arguments");
   }
 
   @Test public void mapEntryAsList() {

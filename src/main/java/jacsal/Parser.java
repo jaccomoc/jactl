@@ -1083,9 +1083,6 @@ public class Parser {
     boolean noParamsDefined = false;
     if (lookahead(() -> parameters(ARROW) != null)) {
       parameters = parameters(ARROW);
-      if (parameters.size() == 0) {
-        parameters = List.of(createItParam(openBrace));
-      }
     }
     else {
       // No parameter and no "->" so fill in with default "it" parameter
