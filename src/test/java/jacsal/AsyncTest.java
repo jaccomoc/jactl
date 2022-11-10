@@ -96,5 +96,7 @@ public class AsyncTest {
     async("[{it},{it*it}].map{it(2)}.size()", 2);
     async("def f = [1,2,3].size; f()", 3);
     async("def f = [1,2,3].map{sleeper(0,it)}.size; f()", 3);
+    sync("[1,2,3,4,5].filter{it>2}.map{it+it}", List.of(6,8,10));
+    async("[1,2,3,4,5].filter{sleeper(0,it)>2}.map{it+it}", List.of(6,8,10));
   }
 }

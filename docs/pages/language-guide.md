@@ -323,6 +323,22 @@ represent an individual character:
 true
 ```
 
+If you need to get the Unicode number for a given character you can cast the single character string into an int:
+```groovy
+> (int)'a'
+97
+```
+
+To convert back from a Unicode number to a single character string use the `asChar` method that exists for int values:
+```groovy
+> 97.asChar()
+a
+> def x = (int)'X'
+88
+> x.asChar()
+X
+```
+
 ### String Operators
 
 Strings can be concatenated using `+`:

@@ -3284,6 +3284,14 @@ class CompilerTest {
     testError("def x; (double)x", "cannot convert null");
     testError("def x; (Decimal)x", "null value for decimal");
 
+    test("(int)'a'", 97);
+    test("def x = 'a'; (int)x", 97);
+    testError("(int)'abc'", "string with multiple chars cannot be cast");
+    testError("def x = 'abc'; (int)x", "string with multiple chars cannot be cast");
+    testError("(int)''", "empty string cannot be cast");
+    testError("String s; (int)s", "empty string cannot be cast");
+    testError("def x = ''; (int)x", "empty string cannot be cast");
+
     testError("(Map)1", "cannot cast from int to map");
     testError("(List)1", "cannot cast from int to list");
     testError("int x = 1; (Map)x", "cannot cast from");
@@ -3342,6 +3350,18 @@ class CompilerTest {
     test("Decimal x = 1.0; (double)x", 1D);
     test("(Decimal)1.0", "#1.0");
     test("Decimal x = 1.0; (Decimal)x", "#1.0");
+  }
+
+  @Test public void asChar() {
+    test("97.asChar()", "a");
+    test("def x = 97; x.asChar()", "a");
+    test("def x = 97; def f = x.asChar; f()", "a");
+    test("def x = ((int)'X').asChar(); x", "X");
+    test("def f = ((int)'X').asChar; f()", "X");
+    testError("'a'.asChar()", "no such method");
+    testError("def x = 'a'; x.asChar()", "no such method");
+    testError("1L.asChar()", "no such method");
+    testError("def x = 1L; x.asChar()", "no such method");
   }
 
   @Test public void asType() {

@@ -403,13 +403,28 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
     if (expr.operator.getType().isType()) {
-      // Type case so if we already know we have a bad cast then throw error
+      expr.type = JacsalType.valueOf(expr.operator.getType());
+
+      // Special case for single char strings if casting to int
+      if (expr.expr.type.is(STRING) && expr.type.is(INT)) {
+        if (expr.expr.isConst && expr.expr.constValue instanceof String) {
+          String value = (String)expr.expr.constValue;
+          if (value.length() != 1) {
+            throw new CompileError((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.operator);
+          }
+          expr.isConst = true;
+          expr.constValue = (int)(value.charAt(0));
+        }
+        return expr.type;
+      }
+
+      // Type cast so if we already know we have a bad cast then throw error
       if (!expr.expr.type.isConvertibleTo(JacsalType.valueOf(expr.operator.getType()))) {
         throw new CompileError("Cannot cast from " + expr.expr.type + " to " + expr.operator.getChars(), expr.operator);
       }
 
       // We have a cast so our type is the type we are casting to
-      return expr.type = JacsalType.valueOf(expr.operator.getType());
+      return expr.type;
     }
 
     expr.isConst = expr.expr.isConst;

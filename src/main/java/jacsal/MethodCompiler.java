@@ -779,6 +779,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Check for Map/List/String access via field/index
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
       compile(expr.left);
+      box();
       compile(expr.right);
       if (expr.isCallee && expr.operator.is(DOT,QUESTION_DOT)) {
         loadMethodOrField(expr.operator);
@@ -2092,7 +2093,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (peek().is(ANY)) {
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, type.is(INT) ? "castToInt" : "castToLong", Object.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.class, type.is(INT) ? "castToIntValue" : "castToLongValue", Object.class, String.class, int.class);
       return;
     }
     throw new IllegalStateException("Internal error: unexpected type " + peek());
@@ -2186,10 +2187,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void convertToInt(SourceLocation location) {
-    if (peek().is(ANY)) {
+    if (peek().is(ANY,STRING)) {
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
-      invokeMethod(Number.class, "intValue");
+      invokeMethod(RuntimeUtils.class, "castToInt", Object.class, String.class, Integer.TYPE);
     }
     else
     if (peek().isBoxed() || peek().is(DECIMAL)) {

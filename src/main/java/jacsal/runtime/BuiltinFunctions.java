@@ -59,6 +59,9 @@ public class BuiltinFunctions {
       registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
       registerMethod("substring", "stringSubstring", STRING, true, 1);
 
+      // int methods
+      registerMethod("asChar", "intAsChar", INT, false, 0);
+
       // Object methods
       registerMethod("toString", "objectToString", ANY, false, 0);
 
@@ -179,7 +182,7 @@ public class BuiltinFunctions {
                                           : RuntimeUtils.lookupMethod(BuiltinFunctions.class,
                                                                       wrapperMethod,
                                                                       Object.class,
-                                                                      firstArgType.classFromType(),
+                                                                      firstArgType.boxed().classFromType(),
                                                                       Continuation.class,
                                                                       String.class,
                                                                       int.class,
@@ -257,6 +260,13 @@ public class BuiltinFunctions {
   /////////////////////////////////////
   // Methods
   /////////////////////////////////////
+
+  // = asChar
+  public static String intAsChar(int c) { return String.valueOf((char)c); }
+  public static Object intAsCharWrapper(Integer obj, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, 0, source, offset);
+    return String.valueOf((char)(int)obj);
+  }
 
   // = toString
 

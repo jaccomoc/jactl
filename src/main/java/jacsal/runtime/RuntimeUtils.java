@@ -982,7 +982,7 @@ public class RuntimeUtils {
       if (isOptional) {
         return null;
       }
-      throw new NullError("Null value for Map/List during field access", source, offset);
+      throw new NullError("Null value for parent during field access", source, offset);
     }
 
     if (parent instanceof Map) {
@@ -1119,7 +1119,7 @@ public class RuntimeUtils {
     ((List)parent).set(index, value);
   }
 
-  public static int castToInt(Object obj, String source, int offset) {
+  public static int castToIntValue(Object obj, String source, int offset) {
     if (obj instanceof Integer) {
       return (int)obj;
     }
@@ -1132,7 +1132,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to int", source, offset);
   }
 
-  public static long castToLong(Object obj, String source, int offset) {
+  public static long castToLongValue(Object obj, String source, int offset) {
     if (obj instanceof Long) {
       return (long)obj;
     }
@@ -1233,6 +1233,23 @@ public class RuntimeUtils {
     catch (Continuation cont) {
       throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterAsObj), methodLocation + 1, null, new Object[] { result });
     }
+  }
+
+  public static int castToInt(Object obj, String source, int offset) {
+    if (obj instanceof Number) {
+      return ((Number)obj).intValue();
+    }
+    if (obj instanceof String) {
+      String value = (String)obj;
+      if (value.length() != 1) {
+        throw new RuntimeError((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", source, offset);
+      }
+      return (int)(value.charAt(0));
+    }
+    if (obj == null) {
+      throw new NullError("Cannot convert null value to int", source, offset);
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to int", source, offset);
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {

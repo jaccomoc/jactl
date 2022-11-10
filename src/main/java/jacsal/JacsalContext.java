@@ -33,6 +33,7 @@ public class JacsalContext {
 
   private boolean initialised = false;
 
+  boolean printSize          = false;
   boolean evaluateConstExprs = true;
 
   // TODO: make BigDecimal division work same as for Groovy
@@ -66,6 +67,7 @@ public class JacsalContext {
   public JacsalContext maxScale(int scale)               { this.maxScale           = scale;   return this; }
   public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
   public JacsalContext debug(boolean value)              { this.debug              = value;   return this; }
+  public JacsalContext printSize(boolean value)          { this.printSize          = value;   return this; }
 
   public JacsalContext build() {
     eventLoop        = Executors.newFixedThreadPool(eventLoopThreads);

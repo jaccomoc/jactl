@@ -91,7 +91,9 @@ public class ClassCompiler {
     cv.visitEnd();
 
     byte[]   bytes = cw.toByteArray();
-    //System.out.println("DEBUG: class size = " + bytes.length);
+    if (context.printSize) {
+      System.out.println("Class size = " + bytes.length);
+    }
     Class<?> clss  = context.loadClass(internalName.replaceAll("/", "."), bytes);
     try {
       MethodType methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
