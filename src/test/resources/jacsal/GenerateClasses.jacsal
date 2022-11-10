@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-List types
-List fields
-List attributes
-String rootClass
-String className
-String extendsClass
-boolean inClass = false
-Map baseClasses
+def types = []
+def fields = []
+def attributes = []
+def rootClass
+def className
+def extendsClass
+def inClass = false
+def baseClasses = [:]
 
 source.lines().each{
   // Strip '#' comments

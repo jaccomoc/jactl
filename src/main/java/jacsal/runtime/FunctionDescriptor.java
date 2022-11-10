@@ -22,7 +22,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.List;
 
 public class FunctionDescriptor {
-  public JacsalType       type;            // Type method is for or null for global functions
+  public JacsalType       type;            // Type method is for, or null for global functions
   public JacsalType       firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
   public String           name;            // Jacsal method/function name
   public JacsalType       returnType;
@@ -33,7 +33,7 @@ public class FunctionDescriptor {
   public String           implementingClass;
   public String           implementingMethod;
   public String           wrapperMethod;
-  public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(clss, String source, int offset, Object args)
+  public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
   public boolean          isStatic = false;
   public boolean          isBuiltin;
   public boolean          isAsync;

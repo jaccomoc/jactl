@@ -32,6 +32,10 @@ public class BuiltinFunctions {
   private static Map<String,FunctionDescriptor> globalFunctions = new HashMap<>();
   private static boolean initialised = false;
 
+  static {
+    BuiltinFunctions.registerBuiltinFunctions();
+  }
+
   public static void registerBuiltinFunctions() {
     if (!initialised) {
       // Collection methods

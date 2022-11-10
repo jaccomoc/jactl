@@ -4059,6 +4059,7 @@ class CompilerTest {
     test("def x = [1,2,3]; def f = x.map{it*it}.map; f{it+it}", List.of(2,8,18));
     test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
     test("def f = [1,2,3].map{it*it}.map; f{it+it}", List.of(2,8,18));
+    test("[1,2,3].map{it*it}[1]", 4);
   }
 
   @Test public void mapEntryAsList() {
@@ -4327,6 +4328,39 @@ class CompilerTest {
     test("\"${sleeper(1,'a')}:${sleeper(1,2)}\"", "a:2");
     test("\"${sleeper(1,'a')}:${sleeper(1,2) + sleeper(1,3)}\"", "a:5");
     test("def x = 0; for (int i=sleeper(1,1),j=sleeper(1,2*i),k=0; k<sleeper(1,5) && i < sleeper(1,100); k=sleeper(1,k)+1,i=i+sleeper(1,1),j=sleeper(1,j+1)) { x += sleeper(1,k+i+j); }; x", 45);
+
+    test("sleeper(0,2)", 2);
+    test("def f = sleeper; f(0,2)", 2);
+    test("def f(x){x}; f(2)", 2);
+    test("def f(x){x}; def g = f; g(2)", 2);
+    test("def f(x){x}; def g; g = f; g(2)", 2);
+    test("def f(x){sleeper(0,x)}; def g; g = f; 2", 2);
+    test("def f(x){sleeper(0,x)}; def g = f; g = {it}; g(2)", 2);
+    test("def f(x){x}; def g = f; g = {it}; g(2)", 2);
+    test("def g(x){x*x}; def f(x){g(x)*x}; f(2)", 8);
+    test("def g = {it*it}; def f(x){g(x)*x}; f(2)", 8);
+    test("def g; g = {it*it}; def f(x){g(x)*x}; f(2)", 8);
+    test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; h(2)", 8);
+    test("def g = {it*it}; def h = { g(it)*it }; g = {sleeper(0,it)*it}; h(2)", 8);
+    test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; g = {sleeper(0,it)*it}; h(2)", 8);
+    test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; g = {it*it}; h(2)", 8);
+    test("def g = {it*it}; def h = { def f(x){g(x)*x}; g={it*it}; f(it) }; h(2)", 8);
+    test("{it*it*it}(2)", 8);
+    test("{it*it*sleeper(0,it)}(2)", 8);
+    test("def f(x=sleeper(0,2)){x*x}; f(3)", 9);
+    test("def f(x=sleeper(0,2)){x*x}; f()", 4);
+    test("def f(x){g(x)*g(x)}; def g(x){sleeper(0,1)+sleeper(0,x-1)}; f(2)", 4);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){x+x}; f(2)", 5);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){sleeper(0,x)+sleeper(0,x)}; f(2)", 5);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(sleeper(0,-23)+sleeper(0,x+23))}; h(x) }; def j(x){x+x}; f(2)", 5);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){f(x-1)+f(x-1)}; f(2)", 3);
+    test("def f(x){x<=1?1:g(sleeper(0,x-23)+sleeper(0,23))}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){f(x-1)+f(x-1)}; f(2)", 3);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)+j(x)}; h(x) }; def j(x){f(sleeper(0,x)-1)+f(sleeper(0,x)-1)}; f(2)", 5);
+    test("def f = {it}; f(2)", 2);
+    test("def f = {sleeper(0,it)+sleeper(0,it)}; f(2)", 4);
+    test("def f(x){g(x)}; def g(x){sleeper(0,x)+sleeper(0,x)}; f(2)+f(3)", 10);
+    test("def s = sleeper; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
+    test("def f(x){x<=1?1:g(x)}; def g(x){def s = sleeper; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
   }
 
   @Test public void asyncCollectionClosures() {
@@ -4357,6 +4391,8 @@ class CompilerTest {
     test("[5,4,1,3,2].sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(5,4,3,2,1));
     test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.collect{ it+it }", List.of(32,8,2,50,18));
     test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(25,16,9,4,1));
+    test("sleeper(0,[1,2,3].map{sleeper(0,it)*sleeper(0,it)})", List.of(1,4,9));
+    test("def f = [1,2,3].map; sleeper(0,f{sleeper(0,it)*sleeper(0,it)})", List.of(1,4,9));
   }
 
   @Test public void toStringTest() {

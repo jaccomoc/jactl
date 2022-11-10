@@ -26,10 +26,6 @@ import java.util.function.Function;
 
 public class Compiler {
 
-  static {
-    BuiltinFunctions.registerBuiltinFunctions();
-  }
-
   private static final AtomicInteger counter = new AtomicInteger();
 
   public static Object run(String source, Map<String,Object> bindings) {
@@ -50,12 +46,14 @@ public class Compiler {
     return compile(source, jacsalContext, false, bindings);
   }
 
-  private static Function<Map<String, Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, boolean testAsync, Map<String, Object> bindings) {
+  public static Function<Map<String, Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, boolean testAsync, Map<String, Object> bindings) {
     var parser   = new Parser(new Tokeniser(source));
     var script   = parser.parse();
     var resolver = new Resolver(jacsalContext, bindings);
-    resolver.testAsync = testAsync;
     resolver.resolve(script);
+    var analyser = new Analyser();
+    analyser.testAsync = testAsync;
+    analyser.analyse(script);
     script.name = new Token(TokenType.IDENTIFIER, script.name).setValue("JacsalScript_" + counter.incrementAndGet());
     return compile(source, jacsalContext, script);
   }

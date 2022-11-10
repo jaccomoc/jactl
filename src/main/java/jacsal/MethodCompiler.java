@@ -1261,7 +1261,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Invoking via a method handle so we don't know if we have an async function or not and
     // therefore take the conservative approach of assuming it is async
-    invokeMaybeAsync(true, ANY, 0, expr.location,
+    invokeMaybeAsync(expr.isAsync, ANY, 0, expr.location,
                      () -> {
                        // Need to get the method handle
                        compile(expr.callee);
@@ -1611,7 +1611,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          loadArgsAsObjectArr(expr.args);
                        },
                        () -> invokeUserMethod(func.isStatic,
-                                          func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                                              func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
                                               func.wrapperMethod,
                                               func.returnType,
                                               finalParamTypes));
@@ -1668,14 +1668,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadArgsAsObjectArr(List<Expr> args) {
     _loadConst(args.size());
     mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-    push(ANY);
+    push(OBJECT_ARR);
     for (int i = 0; i < args.size(); i++) {
-      mv.visitInsn(DUP);
-      _loadConst(i);
+      dupVal();
+      loadConst(i);
       compile(args.get(i));
       box();
       mv.visitInsn(AASTORE);
-      pop();
+      pop(3);  // arr + index + value
     }
   }
 
@@ -1780,7 +1780,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeUserMethod(Expr.FunDecl funDecl) {
     var functionDescriptor = funDecl.functionDescriptor;
     invokeUserMethod(functionDescriptor.isStatic,
-                 functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
+                     functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
                      functionDescriptor.implementingMethod,
                      functionDescriptor.returnType,
                      methodParamTypes(funDecl));
@@ -1833,19 +1833,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void push(Class clss) {
-    if (Void.TYPE.equals(clss))        { /* void */                  return; }
-    if (Boolean.TYPE.equals(clss))     { push(BOOLEAN);   return;            }
-    if (Boolean.class.equals(clss))    { push(BOXED_BOOLEAN);        return; }
-    if (Integer.TYPE.equals(clss))     { push(INT);                  return; }
-    if (Integer.class.equals(clss))    { push(BOXED_INT);            return; }
-    if (Long.TYPE.equals(clss))        { push(LONG);                 return; }
-    if (Long.class.equals(clss))       { push(BOXED_LONG);           return; }
-    if (Double.TYPE.equals(clss))      { push(DOUBLE);               return; }
-    if (Double.class.equals(clss))     { push(BOXED_DOUBLE);         return; }
-    if (BigDecimal.class.equals(clss)) { push(DECIMAL);              return; }
-    if (String.class.equals(clss))     { push(STRING);               return; }
-    if (Map.class.equals(clss))        { push(MAP);                  return; }
-    if (List.class.equals(clss))       { push(LIST);                 return; }
+    if (Void.TYPE.equals(clss))          { /* void */                  return; }
+    if (Boolean.TYPE.equals(clss))       { push(BOOLEAN);              return; }
+    if (Boolean.class.equals(clss))      { push(BOXED_BOOLEAN);        return; }
+    if (Integer.TYPE.equals(clss))       { push(INT);                  return; }
+    if (Integer.class.equals(clss))      { push(BOXED_INT);            return; }
+    if (Long.TYPE.equals(clss))          { push(LONG);                 return; }
+    if (Long.class.equals(clss))         { push(BOXED_LONG);           return; }
+    if (Double.TYPE.equals(clss))        { push(DOUBLE);               return; }
+    if (Double.class.equals(clss))       { push(BOXED_DOUBLE);         return; }
+    if (BigDecimal.class.equals(clss))   { push(DECIMAL);              return; }
+    if (String.class.equals(clss))       { push(STRING);               return; }
+    if (Map.class.equals(clss))          { push(MAP);                  return; }
+    if (List.class.equals(clss))         { push(LIST);                 return; }
+    if (MethodHandle.class.equals(clss)) { push(FUNCTION);             return; }
     push(ANY);
   }
 

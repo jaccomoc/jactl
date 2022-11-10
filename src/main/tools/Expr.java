@@ -208,6 +208,11 @@ class Expr {
     VarDecl      @parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
     VarDecl      @originalVarDecl;     // VarDecl for actual original variable declaration
 
+    // If never reassigned we know it is effectively final. This means that if we have "def f = { ... }" and
+    // closure is not async and f is never reassigned (isFinal == true) we know that calls to "f()" will never
+    // be async.
+    boolean      @isFinal = true;
+
     // When we are in the wrapper function we create a variable for every parameter.
     // This points to the parameter so we can turn it into HeapLocal if necessary and
     // to set its type (if it was declared as "var") once we know the type of the initialiser.

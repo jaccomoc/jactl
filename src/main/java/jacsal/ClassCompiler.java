@@ -90,7 +90,9 @@ public class ClassCompiler {
     compileClassInit();
     cv.visitEnd();
 
-    Class<?> clss = context.loadClass(internalName.replaceAll("/", "."), cw.toByteArray());
+    byte[]   bytes = cw.toByteArray();
+    //System.out.println("DEBUG: class size = " + bytes.length);
+    Class<?> clss  = context.loadClass(internalName.replaceAll("/", "."), bytes);
     try {
       MethodType methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
       boolean isAsync = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;

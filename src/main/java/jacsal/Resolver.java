@@ -27,7 +27,6 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.BOOLEAN;
@@ -38,7 +37,6 @@ import static jacsal.JacsalType.LONG;
 import static jacsal.JacsalType.MAP;
 import static jacsal.JacsalType.STRING;
 import static jacsal.TokenType.*;
-import static jacsal.TokenType.OBJECT_ARR;
 
 /**
  * The Resolver visits all statements and all expressions and performs the following:
@@ -352,7 +350,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           }
         }
         // '[' and '?['
-        if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,STRING)) {
+        if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,ITERATOR,STRING)) {
           throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
 
@@ -572,7 +570,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.wrapper = createWrapperFunction(expr);
       expr.wrapper.functionDescriptor.implementingMethod = Utils.wrapperName(expr.functionDescriptor.implementingMethod);
 
-      // Resolve the wrapper. The wrapper has us as an embeeded statement so we will
+      // Resolve the wrapper. The wrapper has us as an embedded statement so we will
       // get resolved as a nested function of the wrapper and the next time through here
       // our wrapper will be set
       return doVisitFunDecl(expr.wrapper, true);
@@ -663,6 +661,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // If using ?= have to allow for null being result when assignment doesn't occur
       expr.type = expr.type.boxed();
     }
+    // Flag variable as non-final since it has had an assignment to it
+    expr.identifierExpr.varDecl.isFinal = false;
+
     return expr.type;
   }
 
@@ -777,19 +778,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
       // Validate argument count. Type validation will be done by MethodCompiler.
       validateArgCount(expr.args, func.mandatoryArgCount, func.paramCount, expr.token);
-
-      // If function we are invoking is async then we are async
-      if (isAsync(func, null, expr.args) || testAsync) {
-        currentFunction.functionDescriptor.isAsync = true;
-        expr.isAsync = true;
-      }
-    }
-    else {
-      // If we don't know whether we are invoking an async function or not (since we are invoking
-      // via a function value (the MethodHandle) rather than directly) then we have to assume the
-      // worst and assume it is async.
-      currentFunction.functionDescriptor.isAsync = true;
-      expr.isAsync = true;
     }
     return null;
   }
@@ -828,15 +816,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           }
         }
         expr.type = descriptor.returnType;
-
-        // If we are invoking a method that is marked as async then we need to mark ourselves as async
-        // so that callers to us (the current function) can know to add code for handling suspend/resume
-        // with Continuations.
-        if (isAsync(descriptor, expr.parent, expr.args) || testAsync) {
-          functions.peek().functionDescriptor.isAsync = true;
-          expr.isAsync = true;
-        }
-
         return expr.type;
       }
       if (!expr.parent.type.is(MAP)) {
@@ -849,60 +828,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Don't know type of parent or couldn't find method
     expr.type = ANY;
 
-    // Assume that what we are invoking is async since we have know way of knowing at compile time when
-    // invoking through a function value or when doing run-time lookup of the method name
-    functions.peek().functionDescriptor.isAsync = true;
-    expr.isAsync = true;
     return expr.type;
-  }
-
-  /**
-   * Determine if current call/methodCall potentially calls something that does an async operation.
-   * @param arg0  for method calls this is the target object, for function calls this is null
-   * @param args  the remaining arguments
-   * @return true if call should be treated as async
-   */
-  private boolean isAsync(FunctionDescriptor func, Expr arg0, List<Expr> args) {
-    if (!func.isAsync)              { return false; }
-    if (func.asyncArgs.size() == 0) {
-      // If function has not specified any async args but has flagged itself as async then all calls to it are async
-      return true;
-    }
-
-    // If function is only async if passed an async arg then check the args. Note that index 0 means the object
-    // on whom we are peforming the method call. Other arguments start at index 1 so args.get(index-1) gets the
-    // arg value for that index.
-    for (int i: func.asyncArgs) {
-      Expr arg = i == 0 ? arg0 : (args.size() > 0 ? args.get(i-1) : null);
-      if (arg != null) {
-        if (arg.type.is(ANY)) { return true; }    // No idea what real type is so assume worst
-        if (arg instanceof Expr.Closure) {
-          Expr.Closure closure = (Expr.Closure)arg;
-          if (closure.funDecl.functionDescriptor.isAsync) {
-            // We don't know what args we are passing to the closure (which is our arg) since they
-            // could be coming from an iterator/list etc that we have no view of so we if it is
-            // potentially async then we assume the worst and say it is async
-            return true;
-          }
-        }
-        else
-        if (arg instanceof Expr.Identifier) {
-          Expr.VarDecl decl = ((Expr.Identifier)arg).varDecl;
-          if (decl != null && decl.funDecl == null || decl.funDecl.functionDescriptor.isAsync) {
-            return true;
-          }
-        }
-        else
-        if (arg instanceof Expr.Call && ((Expr.Call)arg).isAsync) {
-          return true;
-        }
-        else
-        if (arg instanceof Expr.MethodCall && ((Expr.MethodCall)arg).isAsync) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   @Override public JacsalType visitArrayLength(Expr.ArrayLength expr) {
@@ -1147,6 +1073,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Since g uses v and v does not exist when f invokes g we have to throw an error.
     // To detect such references we remember the earlies reference and check that the
     // variable we are now closing over was not declared after that reference.
+    // NOTE: even if v were another function we still need to disallow this since the
+    // MethodHandle for v won't exist at the time that g is invoked.
     if (funDecl.earliestForwardReference != null) {
       if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
         throw new CompileError("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +
