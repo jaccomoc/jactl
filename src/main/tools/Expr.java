@@ -34,6 +34,8 @@ import java.util.Deque;
 import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 
+import jacsal.JacsalType;
+import jacsal.Token;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -200,6 +202,7 @@ class Expr {
     boolean      @isHeapLocal;         // Is this a heap local var
     boolean      @isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
     boolean      @isParam;             // True if variable is a parameter of function (explicit or implicit)
+    boolean      @isField;             // True if instance field of a class
     boolean      @isExplicitParam;     // True if explicit declared parameter of function
     int          @slot = -1;           // Which local variable slot
     int          @nestingLevel;        // What level of nested function owns this variable (1 is top level)
@@ -409,5 +412,13 @@ class Expr {
     String      methodName;
     List<Class> paramTypes;
     List<Expr>  args;
+  }
+
+  /**
+   * Create a new instance of a class
+   */
+  class InvokeNew extends Expr {
+    Token      className;
+    JacsalType instanceType;
   }
 }

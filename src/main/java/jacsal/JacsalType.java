@@ -16,6 +16,7 @@
 
 package jacsal;
 
+import jacsal.runtime.ClassDescriptor;
 import jacsal.runtime.Continuation;
 import jacsal.runtime.HeapLocal;
 import jacsal.runtime.RegexMatcher;
@@ -81,7 +82,12 @@ public class JacsalType {
   private TypeEnum type;
   private boolean  boxed;
   private boolean  isRef;
-  private String   internalClassName = null;     // Used for INSTANCE types
+
+  // Used for INSTANCE types
+  private String          internalName    = null;
+  private List<String>    namePath        = null;
+  private ClassDescriptor classDescriptor = null;
+  private boolean         isResolved      = true;
 
   private JacsalType(TypeEnum type, boolean boxed, boolean isRef) {
     this.type = type;
@@ -99,9 +105,17 @@ public class JacsalType {
     return new JacsalType(type, false, true);
   }
 
-  public static JacsalType createInstance(String internalClassName) {
+  public static JacsalType createInstance(String name) {
+    JacsalType type   = createRefType(TypeEnum.INSTANCE);
+    type.internalName = name;
+    type.isResolved   = true;
+    return type;
+  }
+
+  public static JacsalType createInstance(List<String> namePath) {
     JacsalType type = createRefType(TypeEnum.INSTANCE);
-    type.internalClassName = internalClassName;
+    type.namePath  = namePath;
+    type.isResolved = false;
     return type;
   }
 
@@ -408,7 +422,7 @@ public class JacsalType {
       case STRING:         return Type.getDescriptor(String.class);
       case MAP:            return Type.getDescriptor(Map.class);
       case LIST:           return Type.getDescriptor(List.class);
-      case INSTANCE:       throw new UnsupportedOperationException();
+      case INSTANCE:       return "L" + getInternalName() + ";";
       case ANY:            return Type.getDescriptor(Object.class);
       case FUNCTION:       return Type.getDescriptor(MethodHandle.class);
       case HEAPLOCAL:      return Type.getDescriptor(jacsal.runtime.HeapLocal.class);
@@ -432,7 +446,7 @@ public class JacsalType {
       case STRING:         return Type.getType(String.class);
       case MAP:            return Type.getType(Map.class);
       case LIST:           return Type.getType(List.class);
-      case INSTANCE:       throw new UnsupportedOperationException();
+      case INSTANCE:       return Type.getType(descriptor());
       case ANY:            return Type.getType(Object.class);
       case FUNCTION:       return Type.getType(MethodHandle.class);
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
@@ -465,7 +479,12 @@ public class JacsalType {
       case ITERATOR:     return Type.getInternalName(Iterator.class);
       case MATCHER:      return Type.getInternalName(RegexMatcher.class);
       case CONTINUATION: return Type.getInternalName(Continuation.class);
-      case INSTANCE:     return this.internalClassName;
+      case INSTANCE:
+        if (!isResolved) {
+          throw new IllegalStateException("Jacsal instance type not resolved: " + this);
+        }
+        return internalName;
+        //return classDescriptor.getInternalName();
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -554,7 +573,6 @@ public class JacsalType {
       case STRING:       return "String";
       case MAP:          return "Map";
       case LIST:         return "List";
-      case INSTANCE:     return "Instance<>";
       case ANY:          return "def";
       case FUNCTION:     return "Function";
       case HEAPLOCAL:    return "HeapLocal";
@@ -564,11 +582,31 @@ public class JacsalType {
       case MATCHER:      return "Matcher";
       case ITERATOR:     return "Iterator";
       case CONTINUATION: return "Continuation";
+      case INSTANCE:
+        if (isResolved) {
+          return "Instance<" + classDescriptor.getPackagedName() + ">";
+        }
+        return "Instance<" + String.join(".", namePath) + ">";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }
 
   @Override public String toString() {
     return typeName();
+  }
+
+  public void resolve(ClassDescriptor classDescriptor) {
+    this.classDescriptor = classDescriptor;
+    this.isResolved = true;
+  }
+
+  public boolean isChildOf(JacsalType parent) {
+    if (!is(INSTANCE) || !parent.is(INSTANCE)) {
+      return false;
+    }
+    if (!isResolved || !parent.isResolved) {
+      throw new IllegalStateException("Type not resolved");
+    }
+    return classDescriptor.isChildOf(parent.classDescriptor);
   }
 }

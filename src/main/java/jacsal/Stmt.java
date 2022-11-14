@@ -30,6 +30,7 @@ import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.HashMap;
 
+import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 
 /**
@@ -62,15 +63,17 @@ abstract class Stmt {
   static class Block extends Stmt {
     Token                    openBrace;
     Stmts                    stmts;
-    Map<String,Expr.VarDecl> variables  = new HashMap<>();
     List<Expr.FunDecl>       functions  = new ArrayList<>();
+    List<Stmt.ClassDecl>     classes    = new ArrayList<>();
+
+    Map<String,Expr.VarDecl> variables  = new HashMap<>();
 
     // Used to track which Stmt.Stmts we are currently resolving in case we need to insert a new statement
     // at Resolve time
     Stmt.Stmts               currentResolvingStmts;
 
     boolean isResolvingParams = false;   // Used during resolution to tell if we are resolving function/closure
-                                          // parameters so we can tell when we need to convert a decalred parameter
+                                          // parameters so we can tell when we need to convert a declared parameter
                                           // into one that is passed as a HeapLocal (because it is closed over by
                                           // an initialiser for another parameter of the same function).
     Block(Token openBrace, Stmts stmts) {
@@ -107,20 +110,26 @@ abstract class Stmt {
    */
   static class ClassDecl extends Stmt {
     Token                name;
-    List<Expr.VarDecl>   fields   = new ArrayList<>();
-    List<Expr.FunDecl>   methods  = new ArrayList<>();
-    List<Expr.FunDecl>   closures = new ArrayList<>();
-    List<Stmt.ClassDecl> classes  = new ArrayList<>();
+    List<Token>          baseClass;
+    Stmt.FunDecl         newInstance;
+    boolean              isInterface;
+
+    List<List<Token>>   interfaces;
 
     Stmt.FunDecl             scriptMain;   // Mainline of script
     Map<String,Expr.VarDecl> fieldVars = new HashMap<>();
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
-    ClassDecl(Token name) {
+
+    ClassDescriptor classDescriptor;
+    ClassDecl(Token name, List<Token> baseClass, Stmt.FunDecl newInstance, boolean isInterface) {
       this.name = name;
+      this.baseClass = baseClass;
+      this.newInstance = newInstance;
+      this.isInterface = isInterface;
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
-    @Override public String toString() { return "ClassDecl[" + "name=" + name + "]"; }
+    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "baseClass=" + baseClass + ", " + "newInstance=" + newInstance + ", " + "isInterface=" + isInterface + "]"; }
   }
 
   /**

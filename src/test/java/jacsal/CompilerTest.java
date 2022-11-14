@@ -29,89 +29,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class CompilerTest {
-
-  boolean debug = false;
-
-  private void doTest(String code, Object expected)  {
-    doTest(code, true, false, false, expected);
-  }
-
-  private void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected)  {
-    if (expected instanceof String && ((String) expected).startsWith("#")) {
-      expected = new BigDecimal(((String) expected).substring(1));
-    }
-    try {
-      JacsalContext jacsalContext = JacsalContext.create()
-                                                 .evaluateConstExprs(evalConsts)
-                                                 .replMode(replMode)
-                                                 .debug(debug)
-                                                 .build();
-      Object result = Compiler.run(code, jacsalContext, testAsync, createGlobals());
-      if (expected instanceof Object[]) {
-        assertTrue(result instanceof Object[]);
-        assertTrue(Arrays.equals((Object[])expected, (Object[])result));
-      }
-      else {
-        assertEquals(expected, result);
-      }
-    }
-    catch (Exception e) {
-      fail(e);
-      e.printStackTrace();
-    }
-  }
-
-  private void test(String code, Object expected) {
-    doTest(code, true, false, false, expected);
-    doTest(code, false, false, false, expected);
-    doTest(code, true, true, false, expected);
-    doTest(code, false, true, false, expected);
-    doTest(code, true, true, true, expected);
-    doTest(code, true, false, true, expected);
-  }
-
-  private void testError(String code, String expectedError) {
-    doTestError(code, true, false, expectedError);
-    doTestError(code, false, false, expectedError);
-
-    // Tests in repl mode may have different errors or no errors compared
-    // to normal mode when accessing global vars so we can't run tests that
-    // generate an error and expect the same results
-    //    doTestError(code, true, true, expectedError);
-    //    doTestError(code, false, true, expectedError);
-  }
-
-  private void doTestError(String code, boolean evalConsts, boolean replMode, String expectedError) {
-    try {
-      JacsalContext jacsalContext = JacsalContext.create()
-                                                 .evaluateConstExprs(evalConsts)
-                                                 .replMode(replMode)
-                                                 .debug(debug)
-                                                 .build();
-      Compiler.run(code, jacsalContext, new HashMap<>());
-      fail("Expected JacsalError");
-    }
-    catch (JacsalError e) {
-      if (!e.getMessage().toLowerCase().contains(expectedError.toLowerCase())) {
-        e.printStackTrace();
-        fail("Message did not contain expected string '" + expectedError + "'. Message=" + e.getMessage());
-      }
-    }
-  }
-
-  private Map<String,Object> createGlobals() {
-    try {
-      var globals = new HashMap<String,Object>();
-//      MethodHandle handle  = MethodHandles.lookup().findStatic(CompilerTest.class, "timestamp", MethodType.methodType(Object.class, String.class, int.class, Object.class));
-//      globals.put("timestamp", handle);
-      return globals;
-    }
-    catch (Exception e) {
-      fail(e);
-      return null;
-    }
-  }
+class CompilerTest extends BaseTest {
 
   public static Object timestamp(String source, int offset, Object args) {
     return System.currentTimeMillis();
@@ -4566,13 +4484,4 @@ class CompilerTest {
     });
   }
 
-  private Function<Map<String,Object>,Future<Object>> compile(String code) {
-    JacsalContext jacsalContext = JacsalContext.create()
-                                               .evaluateConstExprs(true)
-                                               .replMode(true)
-                                               .debug(false)
-                                               .build();
-    Map<String,Object> globals  = new HashMap<>();
-    return Compiler.compile(code, jacsalContext, globals);
-  }
 }

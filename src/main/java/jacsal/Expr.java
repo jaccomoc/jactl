@@ -29,6 +29,8 @@ import java.util.Deque;
 import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 
+import jacsal.JacsalType;
+import jacsal.Token;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -295,6 +297,7 @@ abstract class Expr {
     boolean      isHeapLocal;         // Is this a heap local var
     boolean      isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
     boolean      isParam;             // True if variable is a parameter of function (explicit or implicit)
+    boolean      isField;             // True if instance field of a class
     boolean      isExplicitParam;     // True if explicit declared parameter of function
     int          slot = -1;           // Which local variable slot
     int          nestingLevel;        // What level of nested function owns this variable (1 is top level)
@@ -647,6 +650,21 @@ abstract class Expr {
     @Override public String toString() { return "InvokeUtility[" + "token=" + token + ", " + "clss=" + clss + ", " + "methodName=" + methodName + ", " + "paramTypes=" + paramTypes + ", " + "args=" + args + "]"; }
   }
 
+  /**
+   * Create a new instance of a class
+   */
+  static class InvokeNew extends Expr {
+    Token      className;
+    JacsalType instanceType;
+    InvokeNew(Token className, JacsalType instanceType) {
+      this.className = className;
+      this.instanceType = instanceType;
+      this.location = className;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeNew(this); }
+    @Override public String toString() { return "InvokeNew[" + "className=" + className + ", " + "instanceType=" + instanceType + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
@@ -679,5 +697,6 @@ abstract class Expr {
     T visitLoadParamValue(LoadParamValue expr);
     T visitInvokeFunction(InvokeFunction expr);
     T visitInvokeUtility(InvokeUtility expr);
+    T visitInvokeNew(InvokeNew expr);
   }
 }

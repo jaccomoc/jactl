@@ -48,6 +48,7 @@ import static jacsal.JacsalType.STRING;
 import static jacsal.JacsalType.STRING_ARR;
 import static jacsal.TokenType.*;
 import static org.objectweb.asm.Opcodes.*;
+import static org.objectweb.asm.Opcodes.NEW;
 
 /**
  * This class is the class that does most of the work from a compilation point of view.
@@ -248,8 +249,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override
-  public Void visitClassDecl(Stmt.ClassDecl stmt) {
+  @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
+    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, stmt);
+    compiler.compileClass();
     return null;
   }
 
@@ -1480,6 +1482,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
+    newInstance(expr.instanceType);
+    return null;
+  }
+
   ///////////////////////////////////////////////////////////////
 
   private void emitIf(Runnable condition, Runnable trueStmts, Runnable falseStmts) {
@@ -2116,8 +2123,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case FUNCTION:   return castToFunction(location);
       case OBJECT_ARR: return castToObjectArr(location);
       case ITERATOR:   return null;  // noop
+      case INSTANCE:   return castToInstance(type, location);
       default:         throw new IllegalStateException("Unknown type " + type);
     }
+  }
+
+  private Void castToInstance(JacsalType type, SourceLocation location) {
+    if (peek().is(INSTANCE) && peek().getInternalName().equals(type.getInternalName())) {
+      return null;
+    }
+    if (peek().is(ANY)) {
+      ifInstanceof(type);
+      throwIfFalse("Cannot cast to " + type, location);
+      checkedCast(type);
+      return null;
+    }
+    if (peek().is(INSTANCE)) {
+      if (peek().isChildOf(type)) {
+        // Nothing to do. Already of correct type.
+        return null;
+      }
+    }
+    throw new IllegalStateException("Internal error: cannot cast from " + peek() + " to " + type);
   }
 
   /**
@@ -2590,6 +2617,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/NullError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
     mv.visitLabel(isNotNull);
+  }
+
+  private void throwIfFalse(String msg, SourceLocation location) {
+    Label isTrue = new Label();
+    mv.visitJumpInsn(IFNE, isTrue);
+    mv.visitTypeInsn(NEW, "jacsal/runtime/RuntimeError");
+    mv.visitInsn(DUP);
+    _loadConst(msg);
+    _loadLocation(location);
+    mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+    mv.visitLabel(isTrue);
   }
 
   private void throwError(String msg, SourceLocation location) {

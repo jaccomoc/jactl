@@ -116,12 +116,15 @@ class TokeniserTest {
     doTest.accept("while", WHILE);
     doTest.accept("unless", UNLESS);
     doTest.accept("class", CLASS);
+    doTest.accept("package", PACKAGE);
+    doTest.accept("static", STATIC);
     doTest.accept("interface", INTERFACE);
     doTest.accept("extends", EXTENDS);
     doTest.accept("implements", IMPLEMENTS);
     doTest.accept("import", IMPORT);
     doTest.accept("as", AS);
     doTest.accept("return", RETURN);
+    doTest.accept("new", NEW);
     doTest.accept("instanceof", INSTANCE_OF);
     doTest.accept("!instanceof", BANG_INSTANCE_OF);
     doTest.accept("in", IN);

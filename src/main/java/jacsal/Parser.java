@@ -45,6 +45,7 @@ public class Parser {
   Token                 firstToken = null;
   List<CompileError>    errors     = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes    = new ArrayDeque<>();
+  Stmt.ClassDecl        scriptClass;
   boolean               ignoreEol  = false;   // Whether EOL should be treated as whitespace or not
 
   // Whether we are currently doing a lookahead in which case we don't bother keeping
@@ -59,7 +60,7 @@ public class Parser {
 
   public Stmt.ClassDecl parse() {
     Token start = peek();
-    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(new Token(IDENTIFIER, start).setValue(Utils.JACSAL_PREFIX));
+    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(new Token(IDENTIFIER, start).setValue(Utils.JACSAL_PREFIX), null, null, false);
     classes.push(scriptClass);
     try {
       scriptClass.scriptMain = script();
@@ -106,11 +107,15 @@ public class Parser {
    *#        ;
    */
   private Stmt.Block block(TokenType endBlock) {
+    return block(endBlock, () -> declaration());
+  }
+
+  private Stmt.Block block(TokenType endBlock, Supplier<Stmt> stmtSupplier) {
     Stmt.Stmts stmts = new Stmt.Stmts();
     Stmt.Block block = new Stmt.Block(peek(), stmts);
     blockStack().push(block);
     try {
-      stmts(stmts);
+      stmts(stmts, stmtSupplier);
       expect(endBlock);
       return block;
     }
@@ -122,7 +127,7 @@ public class Parser {
   /**
    *# stmts -> declaration* ;
    */
-  private void stmts(Stmt.Stmts stmts) {
+  private void stmts(Stmt.Stmts stmts, Supplier<Stmt> stmtSupplier) {
     Stmt previousStmt = null;
     stmts.location = peek();
     while (true) {
@@ -133,7 +138,7 @@ public class Parser {
 
       try {
         Token location    = peek();
-        Stmt  declaration = declaration();
+        Stmt  declaration = stmtSupplier.get();
         if (declaration != null) {
           stmts.stmts.add(declaration);
           if (previousStmt instanceof Stmt.Return) {
@@ -166,23 +171,38 @@ public class Parser {
   /**
    *# declaration -> funDecl
    *#              | varDecl
+   *#              | classDecl
    *#              | statement;
    */
   private Stmt declaration() {
+    return declaration(false);
+  }
+
+  private Stmt declaration(boolean declarationsOnly) {
     // Look for function declaration: <type> <identifier> "(" ...
-    if (lookahead(() -> matchAny(types),
-                  () -> matchAny(IDENTIFIER),
-                  () -> matchAny(LEFT_PAREN))) {
+    if (isFunDecl()) {
       return funDecl();
     }
     if (matchAny(types) || matchAny(VAR)) {
       return varDecl();
     }
+    if (matchAny(CLASS)) {
+      return classDecl();
+    }
     if (matchAny(SEMICOLON)) {
       // Empty statement
       return null;
     }
+    if (declarationsOnly) {
+      error("Expected field, method, or class declaration");
+    }
     return statement();
+  }
+
+  private boolean isFunDecl() {
+    return lookahead(() -> matchAny(types),
+                  () -> matchAny(IDENTIFIER),
+                  () -> matchAny(LEFT_PAREN));
   }
 
   /**
@@ -216,7 +236,6 @@ public class Parser {
     if (stmt.expr instanceof Expr.Closure) {
       Expr.Closure closure = (Expr.Closure)stmt.expr;
       if (closure.noParamsDefined) {
-        removeClosure(closure.funDecl);
         removeItParameter(closure.funDecl.block);
         return closure.funDecl.block;   // Treat closure as code block since no parameters
       }
@@ -284,7 +303,7 @@ public class Parser {
       Token typeToken = new Token(DEF, previous());
       if (!peek().is(IDENTIFIER)) {
         // Allow "var" or a valid type
-        typeToken = peek().is(VAR) ? expect(VAR) : expect(types);
+        typeToken = expect(Utils.concat(types,VAR));
       }
       // Note that unlike a normal varDecl where commas separate different vars of the same type,
       // with parameters we expect a separate comma for parameter with a separate type for each one
@@ -455,10 +474,65 @@ public class Parser {
     return stmt;
   }
 
+  /**
+   *# stmtBlock -> "{" statement * "}"
+   */
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
     Stmt.Stmts stmts = new Stmt.Stmts();
     stmts.stmts.addAll(List.of(statements));
     return new Stmt.Block(startToken, stmts);
+  }
+
+  /**
+   *# classDecl -> "class" IDENTIFIER "extends" className "{"
+   *#                ( singleVarDecl | "static"? funDecl | classDecl ) *
+   *#               "}" ;
+   */
+  private Stmt.ClassDecl classDecl() {
+
+    var className = expect(IDENTIFIER);
+    var baseClass = matchAny(EXTENDS) ? className() : null;
+    expect(LEFT_BRACE);
+    Stmt.Block classBlock = block(RIGHT_BRACE, () -> declaration(true));
+
+    Token newInstanceName = new Token(IDENTIFIER, className).setValue(Utils.JACSAL_NEW_INSTANCE);
+
+    // Filter out just the fields for the class and make them the parameters for our newInstance() constructor method
+    List<Stmt.VarDecl> fields = classBlock.stmts.stmts.stream()
+                                                      .filter(stmt -> stmt instanceof Stmt.VarDecl)
+                                                      .map(stmt -> (Stmt.VarDecl)stmt).collect(Collectors.toList());
+    fields.forEach(varDecl -> varDecl.declExpr.isParam = varDecl.declExpr.isField = true);
+    JacsalType   instanceType = JacsalType.createInstance(className.getStringValue());
+    Stmt.FunDecl funDecl      = convertBlockToFunction(newInstanceName, classBlock, instanceType, fields);
+    funDecl.declExpr.isStatic = true;
+
+    // Add to block (where a,b, etc are the fields):
+    //  X x = new X()
+    //  x.a = a; x.b = b; ...
+    //  return x;
+    String       varName     = Utils.JACSAL_PREFIX + "instance";
+    Token        instanceVar = new Token(IDENTIFIER, className).setValue(varName);
+    Expr.VarDecl varDecl     = new Expr.VarDecl(instanceVar, new Expr.InvokeNew(className, instanceType));
+    classBlock.stmts.stmts.add(new Stmt.VarDecl(instanceVar, varDecl));
+    fields.forEach(field -> {
+      var assign = new Expr.Assign(new Expr.Identifier(instanceVar), new Token(DOT, className), new Expr.Identifier(field.declExpr.name),
+                                   new Token(EQUAL, className), new Expr.Identifier(field.declExpr.name));
+      classBlock.stmts.stmts.add(new Stmt.ExprStmt(className, assign));
+    });
+    classBlock.stmts.stmts.add(new Stmt.Return(className, new Expr.Return(className, new Expr.Identifier(instanceVar), instanceType)));
+
+    return new Stmt.ClassDecl(className, baseClass, funDecl, false);
+  }
+
+  /**
+   *# className -> IDENTIFIER ( "." IDENTIFIER ) * ;
+   */
+  private List<Token> className() {
+    List<Token> className = new ArrayList<>();
+    do {
+      className.add(expect(IDENTIFIER));
+    } while (matchAny(DOT));
+    return className;
   }
 
   ////////////////////////////////////////////
@@ -1224,24 +1298,6 @@ public class Parser {
     }
   }
 
-  private void addMethod(Expr.FunDecl funDecl) {
-    if (lookaheadCount == 0) {
-      classes.peek().methods.add(funDecl);
-    }
-  }
-
-  private void addClosure(Expr.FunDecl funDecl) {
-    if (lookaheadCount == 0) {
-      classes.peek().closures.add(funDecl);
-    }
-  }
-
-  private void removeClosure(Expr.FunDecl funDecl) {
-    if (lookaheadCount == 0) {
-      classes.peek().closures.remove(funDecl);
-    }
-  }
-
   private Stmt.FunDecl parseFunDecl(Token start,
                                     Token name,
                                     JacsalType returnType,
@@ -1260,13 +1316,6 @@ public class Parser {
       Stmt.Block block = block(endToken);
       insertStmtsInto(params, block);
       funDecl.block = block;
-      // Add to list of closures/functions
-      if (funDecl.isClosure()) {
-        addClosure(funDecl);
-      }
-      else {
-        addMethod(funDecl);
-      }
       funDecl.isResultUsed = false;
       funDecl.type = FUNCTION;
       return new Stmt.FunDecl(start, funDecl);
@@ -1281,9 +1330,12 @@ public class Parser {
    * This is used in expression strings when the embedded expression is more than a simple expression.
    */
   private Stmt.FunDecl convertBlockToClosure(Token start, Stmt.Block block) {
-    Expr.FunDecl funDecl = Utils.createFunDecl(start, null, ANY, List.of());
+    return convertBlockToFunction(start, block, ANY, List.of());
+  }
+
+  private Stmt.FunDecl convertBlockToFunction(Token start, Stmt.Block block, JacsalType returnType, List<Stmt.VarDecl> params) {
+    Expr.FunDecl funDecl = Utils.createFunDecl(start, null, returnType, params);
     funDecl.block = block;
-    addClosure(funDecl);
     funDecl.isResultUsed = false;
     funDecl.type = FUNCTION;
     return new Stmt.FunDecl(start, funDecl);
@@ -1499,6 +1551,10 @@ public class Parser {
       unexpected("Expecting " + types[0]);
     }
     return null;
+  }
+
+  private Token expect(List<TokenType> types) {
+    return expect(types.toArray(TokenType[]::new));
   }
 
   private void consumeUntil(TokenType... types) {

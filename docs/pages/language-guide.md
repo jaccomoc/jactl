@@ -821,4 +821,5 @@ The difference between function and closure is that functions can make forward r
 * passing list as list of args
 * lazy vs non-lazy iteration (Java vs Groovy)
 ** force non-lazy by using collect()
+* no static state in classes and no static initialiser blocks either (for same reason)
 * 

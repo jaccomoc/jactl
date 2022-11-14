@@ -16,8 +16,6 @@
 
 package jacsal;
 
-import jacsal.runtime.BuiltinFunctions;
-
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -53,13 +51,13 @@ public class Compiler {
     resolver.resolve(script);
     var analyser = new Analyser();
     analyser.testAsync = testAsync;
-    analyser.analyse(script);
+    analyser.analyseScript(script);
     script.name = new Token(TokenType.IDENTIFIER, script.name).setValue("JacsalScript_" + counter.incrementAndGet());
     return compile(source, jacsalContext, script);
   }
 
   private static Function<Map<String,Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
-    var compiler = new ClassCompiler(source, jacsalContext, script);
+    var compiler = new ScriptCompiler(source, jacsalContext, script);
     return compiler.compile();
   }
 

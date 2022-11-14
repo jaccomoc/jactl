@@ -16,10 +16,7 @@
 
 package jacsal;
 
-import jacsal.runtime.BuiltinFunctions;
-import jacsal.runtime.FunctionDescriptor;
-import jacsal.runtime.Functions;
-import jacsal.runtime.RuntimeUtils;
+import jacsal.runtime.*;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -141,21 +138,26 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  JacsalType resolve(JacsalType type, Token location) {
+    if (!type.is(INSTANCE)) {
+      return type;
+    }
+    //type.resolve(lookupClass(type, location));
+    return type;
+  }
+
   //////////////////////////////////////////////////////////
 
   // = Stmt
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
+//    var outerClass = classes.peek() != null ? classes.peek().classDescriptor : null;
+//    var baseClass  = stmt.baseClass != null ? lookupClass(stmt.baseClass) : null;
+//    var interfaces = stmt.interfaces != null ? stmt.interfaces.stream().map(name -> lookupClass(name)).collect(Collectors.toList()) : null;
+//    var descriptor = new ClassDescriptor(stmt.name.getStringValue(), stmt.isInterface, outerClass, baseClass, interfaces);
     classes.push(stmt);
     try {
-      stmt.classes.forEach(this::resolve);
-      stmt.fields.forEach(this::resolve);
-
-      // Don't resolve methods and closures since that will be done by the FunDecl statements
-      // within the scriptMain function
-        //stmt.methods.forEach(this::resolve);
-        //stmt.closures.forEach(this::resolve);
-
+      resolve(stmt.newInstance);
       resolve(stmt.scriptMain);
     }
     finally {
@@ -879,6 +881,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type = BOOLEAN;
   }
 
+  @Override public JacsalType visitInvokeNew(Expr.InvokeNew expr) {
+    //resolve(expr.instanceType);
+    return expr.type = expr.instanceType;
+  }
+
   ////////////////////////////////////////////
 
   private void insertStmt(Stmt.VarDecl declStmt) {
@@ -1174,6 +1181,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private Stmt.Block getBlock() {
     return functions.peek().blocks.peek();
+  }
+
+  private ClassDescriptor lookupClass(List<Token> path) {
+    return null;
   }
 
   private Expr.VarDecl lookupFunction(Token identifier) {

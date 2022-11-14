@@ -39,6 +39,42 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private final Set<Expr.FunDecl>   isAnalysed = new HashSet<>();
   private final Map<Expr.FunDecl,List<Pair<Expr.Call,Expr.FunDecl>>> callDependencies = new HashMap<>();
 
+  void analyseScript(Stmt.ClassDecl classDecl) {
+    analyse(classDecl);
+
+    // If we still have call sites where we don't know if function was async or not due to forward references
+    // we now need to work them out. We keep looping and marking functions and call sites as async until there
+    // are no more do to. At this point the call dependencies should only refer to other functions in the
+    // dependency map so if none of them have yet been marked async then none of them are async.
+    while (true) {
+      boolean resolvedAsyncCall = false;
+      for (Expr.FunDecl caller : callDependencies.keySet()) {
+        var callSites    = callDependencies.get(caller);
+        var newCallSites = new ArrayList<Pair<Expr.Call, Expr.FunDecl>>();
+        for (Pair<Expr.Call, Expr.FunDecl> call : callSites) {
+          Expr.Call    callSite = call.first;
+          Expr.FunDecl callee   = call.second;
+          if (callee.functionDescriptor.isAsync) {
+            caller.functionDescriptor.isAsync = true;
+            callSite.isAsync = true;
+            resolvedAsyncCall = true;
+          }
+          else {
+            // Still don't know so add for next round
+            newCallSites.add(call);
+          }
+        }
+        callDependencies.put(caller, newCallSites);
+      }
+      // If no more async calls resolved then we know that all the rest are sync so nothing more to do
+      if (!resolvedAsyncCall) {
+        break;
+      }
+    }
+  }
+
+  ////////////////////////////////////////
+
   Void analyse(Stmt stmt) {
     if (stmt != null) {
       return stmt.accept(this);
@@ -287,6 +323,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
+    return null;
+  }
+
   ////////////////////////////////////
 
   // = Stmt
@@ -307,46 +347,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    stmt.classes.forEach(this::analyse);
-    stmt.fields.forEach(this::analyse);
-
-    // Don't analyse methods and closures since that will be done by the FunDecl statements
-    // within the scriptMain function
-    //stmt.methods.forEach(this::analyse);
-    //stmt.closures.forEach(this::analyse);
-
+    analyse(stmt.newInstance);
     analyse(stmt.scriptMain);
-
-    // If we still have call sites where we don't know if function was async or not due to forward references
-    // we now need to work them out. We keep looping and marking functions and call sites as async until there
-    // are no more do to. At this point the call dependencies should only refer to other functions in the
-    // dependency map so if none of them have yet been marked async then none of them are async.
-    while (true) {
-      boolean resolvedAsyncCall = false;
-      for (Expr.FunDecl caller : callDependencies.keySet()) {
-        var callSites    = callDependencies.get(caller);
-        var newCallSites = new ArrayList<Pair<Expr.Call, Expr.FunDecl>>();
-        for (Pair<Expr.Call, Expr.FunDecl> call : callSites) {
-          Expr.Call    callSite = call.first;
-          Expr.FunDecl callee   = call.second;
-          if (callee.functionDescriptor.isAsync) {
-            caller.functionDescriptor.isAsync = true;
-            callSite.isAsync = true;
-            resolvedAsyncCall = true;
-          }
-          else {
-            // Still don't know so add for next round
-            newCallSites.add(call);
-          }
-        }
-        callDependencies.put(caller, newCallSites);
-      }
-      // If no more async calls resolved then we know that all the rest are sync so nothing more to do
-      if (!resolvedAsyncCall) {
-        break;
-      }
-    }
-
     return null;
   }
 

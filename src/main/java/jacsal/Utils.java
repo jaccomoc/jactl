@@ -33,6 +33,7 @@ public class Utils {
   public static final String JACSAL_PKG         = "jacsal/pkg";
   public static final String JACSAL_PREFIX      = "_$j$";
   public static final String JACSAL_SCRIPT_MAIN = JACSAL_PREFIX + "main";
+  public static final String JACSAL_NEW_INSTANCE= JACSAL_PREFIX + "newInstance";
 
   public static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
   public static final String JACSAL_OUT_NAME = "out";      // Name of global to use as PrintStream for print/println
