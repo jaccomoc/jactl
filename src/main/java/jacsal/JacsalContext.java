@@ -16,6 +16,9 @@
 
 package jacsal;
 
+import jacsal.runtime.ClassDescriptor;
+import jacsal.runtime.JacsalPackage;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -52,14 +55,23 @@ public class JacsalContext {
   // Whether to dump byte code during compilation
   boolean debug = false;
 
+  String javaPackage = Utils.JACSAL_PKG;   // The Java package under which compiled classes will be generated
+
+  Map<String,JacsalPackage> packages = new HashMap<>();
+
+  ///////////////////////////////
+
   public static JacsalContext create() {
     return new JacsalContext();
   }
 
   private JacsalContext() {}
 
-  Class<?> loadClass(String name, byte[] bytes) {
-    return classLoader.loadClass(name, bytes);
+  Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
+    String className = descriptor.getInternalName().replaceAll("/", ".");
+    var clss = classLoader.defineClass(className, bytes);
+    addClass(descriptor);
+    return clss;
   }
 
   public JacsalContext eventLoopThreads(int threads)     { this.eventLoopThreads   = threads; return this; }
@@ -68,6 +80,7 @@ public class JacsalContext {
   public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
   public JacsalContext debug(boolean value)              { this.debug              = value;   return this; }
   public JacsalContext printSize(boolean value)          { this.printSize          = value;   return this; }
+  public JacsalContext javaPackage(String pkg)           { this.javaPackage        = pkg;     return this; }
 
   public JacsalContext build() {
     eventLoop        = Executors.newFixedThreadPool(eventLoopThreads);
@@ -77,6 +90,10 @@ public class JacsalContext {
   }
 
   //////////////////////////////////
+
+  public JacsalPackage getPackage(String name) {
+    return packages.get(name);
+  }
 
   public Object getThreadContext() { return null; }
 
@@ -96,9 +113,32 @@ public class JacsalContext {
 
   //////////////////////////////////
 
+  private void addClass(ClassDescriptor descriptor) {
+    String packageName = descriptor.getPackageName();
+    var pkg = packages.get(packageName);
+    if (pkg == null) {
+      pkg = new JacsalPackage(packageName);
+      packages.put(packageName, pkg);
+    }
+    pkg.addClass(descriptor);
+  }
+
   private static class DynamicClassLoader extends ClassLoader {
-    Class<?> loadClass(String name, byte[] bytes) {
-      return defineClass(name, bytes, 0, bytes.length);
+    private Map<String,Class<?>> classes = new HashMap<>();
+
+    @Override
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+      Class<?> clss = classes.get(name);
+      if (clss != null) {
+        return clss;
+      }
+      return super.findClass(name);
+    }
+
+    Class<?> defineClass(String name, byte[] bytes) {
+      Class<?> clss = defineClass(name, bytes, 0, bytes.length);
+      classes.put(name, clss);
+      return clss;
     }
   }
 }

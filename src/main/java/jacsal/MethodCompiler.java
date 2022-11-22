@@ -98,7 +98,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // We know we need heap vars array passed to us if our top level access level is
     // less than our current level (i.e. we access vars from one of our parents).
     if (!methodFunDecl.isStatic) {
-      allocateSlot(JacsalType.createInstance(classCompiler.internalName));  // this
+      allocateSlot(JacsalType.createInstance(classCompiler.classDecl.classDescriptor));  // this
     }
 
     // Allocate slots for heap local vars passed to us as implicit parameters from
@@ -250,7 +250,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, stmt);
+    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, classCompiler.pkg, stmt);
     compiler.compileClass();
     return null;
   }
@@ -309,13 +309,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (expr.type.is(FUNCTION) && expr.funDecl != null) {
-      // If actual function (not closure)
-
-      // For functions we have to define the var first since it might be used recursively
-      defineVar(expr);
-      loadBoundMethodHandle(expr.funDecl);
-      expr.funDecl.functionDescriptor.implementingClass = classCompiler.internalName;
-      expr.funDecl.wrapper.functionDescriptor.implementingClass = classCompiler.internalName;
+      // If actual function (not closure) and not static
+      if (!expr.funDecl.isStatic) {
+        // For functions we have to define the var first since it might be used recursively
+        defineVar(expr);
+        loadBoundMethodHandle(expr.funDecl);
+      } else {
+        return null;  // Nothing to do for static methods
+      }
     }
     else {
       if (expr.initialiser != null) {
@@ -339,7 +340,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       defineVar(expr);
     }
 
-    if (expr.isGlobal) {
+    if (expr.isGlobal || expr.isField) {
       // Flag it as initialised so we can use slot == -1 as a test for uninitialised vars
       expr.slot = -2;
     }
@@ -458,7 +459,33 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitAssign(Expr.Assign expr) {
+  @Override public Void visitFieldAssign(Expr.FieldAssign expr) {
+    Runnable storeFieldValue = () -> {
+      // If we have a user class instance and already know the field
+      if (expr.parent.type.is(INSTANCE) && expr.field instanceof Expr.Literal) {
+        if (expr.isResultUsed) {
+          dupVal();
+        }
+
+        compile(expr.parent);
+        swap();
+
+        String fieldName     = ((Expr.Literal)expr.field).value.getStringValue();
+        JacsalType fieldType = getFieldType(expr.parent.type, fieldName);
+        storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+      }
+      else {
+        box();
+        compile(expr.parent);
+        compile(expr.field);
+        box();
+        storeValueParentField(expr.accessType);
+        if (!expr.isResultUsed) {
+          popVal();
+        }
+      }
+    };
+
     if (expr.assignmentOperator.is(QUESTION_EQUAL)) {
       Label end = new Label();
       tryCatch(NullError.class,
@@ -483,20 +510,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  // If conditional assign then we know by now whether we have a null value or not
                  // so we don't need to check again when checking for type conversion
                  convertTo(expr.type, false, expr.expr.location);
-                 if (expr.isResultUsed) {
-                   dupVal();
-                 }
-
-                 compile(expr.parent);
-                 swap();
-                 compile(expr.field);
-                 box();
-                 swap();
-                 storeField(expr.accessType);
+                 storeFieldValue.run();
 
                  if (expr.isResultUsed) {
                    // Just in case our field is a primitive we need to leave a boxed result on stack
                    // to be compatible with non-assigment case when we leave null on the stack
+                   pop();
+                   push(expr.type);
                    box();
                  }
                },
@@ -511,38 +531,41 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       compile(expr.expr);
-      convertTo(ANY, true, expr.expr.location);    // Convert to ANY since all map/list entries are ANY
-      if (expr.isResultUsed) {
-        dupVal();
-      }
-      compile(expr.parent);
-      swap();
-      compile(expr.field);
-      box();
-      swap();
-      storeField(expr.accessType);
+      convertTo(expr.type, true, expr.expr.location);    // Convert to ANY since all map/list entries are ANY
+      storeFieldValue.run();
     }
     return null;
   }
 
-  @Override public Void visitOpAssign(Expr.OpAssign expr) {
+  @Override public Void visitFieldOpAssign(Expr.FieldOpAssign expr) {
     compile(expr.parent);
-    compile(expr.field);
-    box();
 
-    // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
-    // and field again to get value and to store value so duplicate parent and field on
-    // stack to get:
-    // ... parent, field, parent, field
-    dupVal2();
+    boolean isInstanceField = expr.parent.type.is(INSTANCE) && expr.field instanceof Expr.Literal;
+    String fieldName     = isInstanceField ? ((Expr.Literal)expr.field).value.getStringValue() : null;
+    JacsalType fieldType = isInstanceField ? getFieldType(expr.parent.type, fieldName) : null;
+    if (isInstanceField) {
+      dupVal();  // Need extra parent ref for later storing of field
+      loadClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+    }
+    else {
+      compile(expr.field);
+      box();
 
-    // Load the field value onto stack (or suitable default value).
-    // Default value will be based on the type of the rhs of the += or -= etc.
-    loadField(expr.accessType, false, null, RuntimeUtils.DEFAULT_VALUE);
+      // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
+      // and field again to get value and to store value so duplicate parent and field on
+      // stack to get:
+      // ... parent, field, parent, field
+      dupVal2();
+
+      // Load the field value onto stack (or suitable default value).
+      // Default value will be based on the type of the rhs of the += or -= etc.
+      loadField(expr.accessType, false, null, RuntimeUtils.DEFAULT_VALUE);
+    }
 
     // If we need the before value as the result then stash in a temp for later
     int temp = -1;
-    if (expr.isResultUsed && expr.isPreIncOrDec) {
+    boolean beforeResultUsed = expr.isResultUsed && expr.isPreIncOrDec;
+    if (beforeResultUsed) {
       dupVal();
       temp = allocateSlot(expr.type);
       storeLocal(temp);
@@ -552,18 +575,29 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.expr);
     convertTo(expr.type, true, expr.location);
 
-    // If we need the after result then stash in a temp
-    if (expr.isResultUsed && !expr.isPreIncOrDec) {
+    // If we need the after result and we have an instance field then stash in a temp for later retrieval.
+    // For non-instsance fields the storeField() will return the after result so no need for a temp.
+    boolean afterResultUsed = expr.isResultUsed && !expr.isPreIncOrDec;
+    if (afterResultUsed && isInstanceField) {
       dupVal();
       temp = allocateSlot(expr.type);
       storeLocal(temp);
     }
 
     // Store result back into field
-    storeField(expr.accessType);
+    if (isInstanceField) {
+      // Parent ref still on stack from earlier
+      storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+    }
+    else {
+      storeParentFieldValue(expr.accessType);
+      if (!afterResultUsed) {
+        popVal();
+      }
+    }
 
-    // Retrieve the required value as result if used
-    if (expr.isResultUsed) {
+    // Retrieve the required value from temp if we have used it
+    if (temp != -1) {
       loadLocal(temp);
       freeTemp(temp);
     }
@@ -714,7 +748,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // Handle ?: default operator
+    //= Handle ?: default operator
     if (expr.operator.is(QUESTION_COLON)) {
       compile(expr.left);
       if (peek().isPrimitive()) {
@@ -737,7 +771,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // String concatenation
+    //= String concatenation
     if (expr.operator.is(PLUS) && expr.type.is(STRING)) {
       compile(expr.left);
       convertToString();
@@ -747,7 +781,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // List + list
+    //= List + list
     if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
       compile(expr.left);
       compile(expr.right);
@@ -757,7 +791,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // Map + map
+    //= Map + map
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
       compile(expr.left);
       compile(expr.right);
@@ -766,7 +800,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // String repeat
+    //= String repeat
     if (expr.operator.is(STAR) && expr.type.is(STRING)) {
       compile(expr.left);
       convertToString();
@@ -778,9 +812,48 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // Check for Map/List/String access via field/index
+    //= Check for Map/List/String/Instance/Class access via field/index
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
       compile(expr.left);
+      if (expr.left.type.is(INSTANCE,JacsalType.CLASS)) {
+        if (expr.right instanceof Expr.Literal) {
+          // We know the type so get the field/method directly.
+          // Note: we know that Resolver has already checked for valid field/method name.
+          String     name      = ((Expr.Literal) expr.right).value.getValue().toString();
+          var        clss      = expr.left.type.getClassDescriptor();
+          JacsalType fieldType = clss.getField(name);
+          if (fieldType != null) {
+            loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+          }
+          else {
+            // We need to find the method handle for the given method
+            var method = clss.getMethod(name);
+            if (method == null) {
+              throw new IllegalStateException("Internal error: could not find method or field called " + name + " for " + expr.left.type);
+            }
+            // If method is static then we don't need the instance
+            if (method.isStatic && expr.left.type.is(INSTANCE)) {
+              popVal();
+            }
+            // We want the handle to the wrapper method.
+            String handleName = Utils.staticHandleName(Utils.wrapperName(name));
+            loadClassField(clss.getInternalName(), handleName, FUNCTION, true);
+            // If not static then bind to instance
+            if (!method.isStatic) {
+              swap();
+              invokeMethod(MethodHandle.class, "bindTo", Object.class);
+            }
+          }
+          return null;
+        }
+
+        // Can't determine method/field at compile time so fall through to runtime lookup
+        if (expr.left.type.is(JacsalType.CLASS)) {
+          // Need to tell runtime what class it is
+          loadConst(expr.left.type);
+        }
+      }
+
       box();
       compile(expr.right);
       if (expr.isCallee && expr.operator.is(DOT,QUESTION_DOT)) {
@@ -792,7 +865,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // instanceOf and !instanceOf
+    //= instanceOf and !instanceOf
     if (expr.operator.is(INSTANCE_OF,BANG_INSTANCE_OF)) {
       compile(expr.left);
       box();
@@ -805,7 +878,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // in and !in
+    //= in and !in
     if (expr.operator.is(IN,BANG_IN)) {
       compile(expr.left);
       box();
@@ -816,7 +889,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // as
+    //= as
     if (expr.operator.is(AS)) {
       compile(expr.left);
       if (expr.type.is(BOOLEAN)) {
@@ -837,7 +910,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    // Boolean && or ||
+    //= Boolean && or ||
     if (expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
       compile(expr.left);
       convertToBoolean(false, expr.left);
@@ -1134,6 +1207,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIdentifier(Expr.Identifier expr) {
+    if (expr.varDecl.type.is(JacsalType.CLASS)) {
+      // Nothing to do
+      //push(expr.type);
+      return null;
+    }
+
     final var name = expr.identifier.getStringValue();
     final var isBuiltinFunction = expr.varDecl.funDecl != null && expr.varDecl.funDecl.functionDescriptor.isBuiltin;
     if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1 && !isBuiltinFunction) {
@@ -1314,15 +1393,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            // Get the instance
                            compile(expr.parent);
-                           // If we are calling a "method" that is ANY but we have a primitive then we need to box it
-                           if (method.firstArgtype.is(ANY)) {
-                             box();
+                           if (method.isBuiltin) {
+                             // If we are calling a "method" that is ANY but we have a primitive then we need to box it
+                             if (method.firstArgtype.is(ANY)) {
+                               box();
+                             }
                            }
+                           else
+                           if (method.isStatic && !expr.parent.type.is(JacsalType.CLASS)) {
+                             popVal();
+                           }
+
                            if (method.isAsync) {
                              loadNullContinuation();
                            } // Continuation
                            if (method.needsLocation) {
-                             loadLocation(expr.leftParen);
+                             loadLocation(expr.methodNameLocation);
                            }
                            // Get the args
                            for (int i = 0; i < expr.args.size(); i++) {
@@ -1331,7 +1417,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              convertTo(method.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
                            }
                          },
-                         () -> invokeUserMethod(true, method.implementingClass, method.implementingMethod,
+                         () -> invokeUserMethod(method.isStatic, method.implementingClass, method.implementingMethod,
                                                 expr.type, methodParamTypes(method)));
       }
       else {
@@ -1339,16 +1425,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            compile(expr.parent);                    // Get the instance
-                           // If we are calling a "method" that is ANY but we have a primitive then we need to box it
-                           if (method.firstArgtype.is(ANY)) {
-                             box();
+                           if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(JacsalType.CLASS)) {
+                             popVal();
                            }
                            loadNullContinuation();                  // Continuation
-                           loadLocation(expr.leftParen);
+                           loadLocation(expr.methodNameLocation);
                            loadArgsAsObjectArr(expr.args);
                          },
-                         () -> invokeUserMethod(true, method.implementingClass, method.wrapperMethod, ANY,
-                                                List.of(method.firstArgtype, CONTINUATION, STRING, INT, OBJECT_ARR)));
+                         () -> {
+                           var paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
+                           if (method.isBuiltin && !method.isGlobalFunction) {
+                             paramTypes = Utils.concat(method.firstArgtype, paramTypes);
+                           }
+                           invokeUserMethod(method.isStatic, method.implementingClass, method.wrapperMethod, ANY, paramTypes);
+                           // Convert Object returned by wrapper back into return type of the function
+                           checkCast(method.returnType);
+                           if (method.returnType.isPrimitive()) {
+                             unbox();
+                           }
+                         });
       }
       if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
         // If Iterator is not going to have another method invoked on it then we need to convert
@@ -1372,19 +1467,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      () -> {
                        compile(expr.parent);           // The instance to invoke method on
                        loadConst(expr.methodName);
+                       loadConst(!expr.parent.type.is(ANY));              // Whether must be field
                        loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
                        loadArgsAsObjectArr(expr.args);
-                       loadLocation(expr.leftParen);
+                       loadLocation(expr.methodNameLocation);
                      },
-                     () -> {
-                       if (expr.parent.type.is(ANY)) {
-                         invokeMethod(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class, boolean.class, Object[].class, String.class, int.class);
-                       }
-                       else {
-                         // Did know type of parent but no such method so load value from field
-                         invokeMethod(RuntimeUtils.class, "invokeField", Object.class, String.class, boolean.class, Object[].class, String.class, int.class);
-                       }
-                     });
+                     () -> invokeMethod(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class,
+                                        boolean.class, boolean.class, Object[].class, String.class, int.class));
+
     if (!expr.isMethodCallTarget) {
       // If we are not chaining method calls then it is possible that the method we just invoked returned
       // an Iterator and since Iterators are not standard types we need to convert into a List to make the
@@ -1421,7 +1511,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
-    loadLocal(0);    // this
+    if (!expr.funDecl.isStatic) {
+      loadLocal(0);    // this
+    }
 
     // Load HeapLocals that the function needs. Note that its parent is us so we are
     // loading values from our own local slots that are needed by the function.
@@ -1483,11 +1575,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
-    newInstance(expr.instanceType);
+    newInstance(expr.type);
+    return null;
+  }
+
+  @Override public Void visitClassPath(Expr.ClassPath expr) {
+    return null;
+  }
+
+  @Override public Void visitDefaultValue(Expr.DefaultValue expr) {
+    loadDefaultValue(expr.type);
     return null;
   }
 
   ///////////////////////////////////////////////////////////////
+
+  private static JacsalType getFieldType(JacsalType type, String fieldName) {
+    JacsalType fieldType = type.getClassDescriptor().getField(fieldName);
+    if (fieldType == null) {
+      throw new IllegalStateException("Internal error: couldn't find field '" + fieldName + "' in class " + type);
+    }
+    return fieldType;
+  }
 
   private void emitIf(Runnable condition, Runnable trueStmts, Runnable falseStmts) {
     condition.run();
@@ -1509,7 +1618,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private List<JacsalType> methodParamTypes(FunctionDescriptor method) {
     List<JacsalType> types = new ArrayList<>();
-    types.add(method.firstArgtype);
+    if (method.isBuiltin) {
+      // We simulate methods with static functions so we need to add the object we
+      // are invoking method on as first arg
+      types.add(method.firstArgtype);
+    }
     if (method.isAsync)       { types.add(CONTINUATION); }
     if (method.needsLocation) { types.addAll(List.of(STRING, INT)); }
     types.addAll(method.paramTypes);
@@ -1590,7 +1703,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        }
                      },
-                     () -> invokeUserMethod(invokeWrapper ? funDecl.wrapper : funDecl));
+                     () -> {
+                       invokeUserMethod(invokeWrapper ? funDecl.wrapper : funDecl);
+                       if (invokeWrapper) {
+                         // Convert Object returned by wrapper back into return type of the function
+                         checkCast(funDecl.returnType.boxed());
+                         if (funDecl.returnType.isPrimitive()) {
+                           unbox();
+                         }
+                       }
+                     });
   }
 
   private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
@@ -1725,16 +1847,31 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     storeVar(varDecl);
   }
 
+  /**
+   * Load methodHandle onto stack that has been bound to any heap local params it needs.
+   */
   private void loadBoundMethodHandle(Expr.FunDecl funDecl) {
     // The MethodHandle will point to the wrapper function
     Expr.FunDecl wrapperFunDecl = funDecl.wrapper;
 
+    boolean isClosure = funDecl.isClosure();
+    if (isClosure) {
+      loadLocal(0);  // For closures we load the instance field so put "this" onto the stack
+    }
+
     // Value of the variable will be the handle for the function
     loadClassField(classCompiler.internalName,
-                   wrapperFunDecl.isStatic ? Utils.staticHandleName(funDecl.functionDescriptor.implementingMethod)
-                                           : Utils.handleName(funDecl.functionDescriptor.implementingMethod),
+                   isClosure ? Utils.handleName(wrapperFunDecl.functionDescriptor.implementingMethod)
+                             : Utils.staticHandleName(wrapperFunDecl.functionDescriptor.implementingMethod),
                    FUNCTION,
-                   wrapperFunDecl.isStatic);
+                   !isClosure);
+
+    // For non-static methods we need to bind them to "this" (for closures the constructor has already done this)
+    if (!wrapperFunDecl.isStatic && !isClosure) {
+      loadLocal(0);
+      invokeMethod(MethodHandle.class, "bindTo", Object.class);
+    }
+
     // If there are implicit closed over heap var params then bind them so we don't need to pass
     // them every time
 
@@ -1775,6 +1912,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DECIMAL:
       case STRING:
       case ANY:
+      case INSTANCE:
         mv.visitInsn(ARETURN);
         break;
       default: throw new IllegalStateException("Unexpected type " + returnType);
@@ -2135,11 +2273,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY)) {
       ifInstanceof(type);
       throwIfFalse("Cannot cast to " + type, location);
-      checkedCast(type);
+      checkCast(type);
       return null;
     }
     if (peek().is(INSTANCE)) {
-      if (peek().isChildOf(type)) {
+      if (peek().isConvertibleTo(type)) {
         // Nothing to do. Already of correct type.
         return null;
       }
@@ -2353,6 +2491,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private Void convertToAny(SourceLocation location) {
     box();
+    pop();
+    push(ANY);
     return null;
   }
 
@@ -2970,7 +3110,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // = Local variables
 
   /**
-   * Define a variable. It will either be a local slot variable or a heap variable
+   * Define a variable. It will either be a field, a local slot variable, or a heap variable
    * if it has been closed over.
    * For local vars of type long and double we use two slots. All others use one slot.
    */
@@ -2979,6 +3119,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // we don't already have a slot allocated
     if (var.isGlobal || var.slot != -1) {
       return;   // Nothing to do for globals or vars that already have a slot
+    }
+
+    if (var.isField) {
+      classCompiler.defineField(var.name.getStringValue(), var.type);
+      return;
     }
 
     JacsalType type = var.isHeapLocal ? HEAPLOCAL : var.type;
@@ -3006,6 +3151,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Undefine variable when no longer needed
    */
   private void undefineVar(Expr.VarDecl varDecl, Label endBlock) {
+    if (varDecl.slot == -1 || varDecl.isField) {
+      return;
+    }
     JacsalType type = varDecl.isHeapLocal ? ANY : varDecl.type;
     mv.visitLocalVariable(varDecl.name.getStringValue(), type.descriptor(), null,
                           varDecl.declLabel, endBlock, varDecl.slot);
@@ -3076,22 +3224,40 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadGlobals() {
+    loadLocal(0);
     loadClassField(classCompiler.internalName, Utils.JACSAL_GLOBALS_NAME, JacsalType.MAP, false);
   }
 
   private void loadClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
     _loadClassField(internalClassName, fieldName, type, isStatic);
+    if (!isStatic) {
+      pop();
+    }
     push(type);
   }
 
   private void _loadClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
     if (isStatic) {
-      mv.visitFieldInsn(GETSTATIC, classCompiler.internalName, fieldName, type.descriptor());
+      mv.visitFieldInsn(GETSTATIC, internalClassName, fieldName, type.descriptor());
     }
     else {
-      mv.visitVarInsn(ALOAD, 0);
-      mv.visitFieldInsn(GETFIELD, classCompiler.internalName, fieldName, type.descriptor());
+      mv.visitFieldInsn(GETFIELD, internalClassName, fieldName, type.descriptor());
     }
+  }
+
+  private void storeClassField(String fieldName, JacsalType type, boolean isStatic) {
+    storeClassField(classCompiler.internalName, fieldName, type, isStatic);
+  }
+
+  private void storeClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
+    if (isStatic) {
+      mv.visitFieldInsn(PUTSTATIC, internalClassName, fieldName, type.descriptor());
+    }
+    else {
+      mv.visitFieldInsn(PUTFIELD, internalClassName, fieldName, type.descriptor());
+      pop();  // this
+    }
+    pop();    // value
   }
 
   /**
@@ -3102,9 +3268,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadGlobals();
       loadConst(varDecl.name.getValue());
       invokeMethod(Map.class, "get", Object.class);
-      checkedCast(varDecl.type);
+      checkCast(varDecl.type);
       pop();
       push(varDecl.type);
+      return;
+    }
+
+    if (varDecl.slot < 0 && varDecl.isField) {
+      loadLocal(0);
+      loadClassField(classCompiler.internalName, varDecl.name.getStringValue(), varDecl.type, false);
       return;
     }
 
@@ -3135,8 +3307,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadLocal(varDecl.slot);
   }
 
-  private void checkedCast(JacsalType type) {
-    Utils.checkedCast(mv, type);
+  private void checkCast(JacsalType type) {
+    Utils.checkCast(mv, type);
+    pop();
+    push(type);
   }
 
   private void storeVar(Expr.VarDecl varDecl) {
@@ -3149,6 +3323,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(Map.class, "put", Object.class, Object.class);
       // Pop result of put since we are not interested in previous value
       popVal();
+      return;
+    }
+
+    if (varDecl.slot < 0 && varDecl.isField) {
+      loadLocal(0);  // "this"
+      swap();
+      storeClassField(varDecl.name.getStringValue(), varDecl.type, false);
       return;
     }
 
@@ -3245,12 +3426,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeMethod(RuntimeUtils.class, "loadMethodOrField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
   }
 
-  private void storeField(Token accessOperator) {
-    box();     // Primitive values need to be boxed to store into heap location
+  /**
+   * Expect to have on stack: ..., value, parent, field
+   */
+  private void storeValueParentField(Token accessOperator) {
+    loadConst(true);
+    doStoreField(accessOperator);
+  }
+
+  /**
+   * Expect to have on stack: ..., parent, field, value
+   */
+  private void storeParentFieldValue(Token accessOperator) {
+    loadConst(false);
+    doStoreField(accessOperator);
+  }
+
+  private void doStoreField(Token accessOperator) {
     loadConst(accessOperator.is(DOT,QUESTION_DOT));
     loadConst(accessOperator.getSource());
     loadConst(accessOperator.getOffset());
-    invokeMethod(RuntimeUtils.class, "storeField", Object.class, Object.class, Object.class, Boolean.TYPE, String.class, Integer.TYPE);
+    invokeMethod(RuntimeUtils.class, "storeField", Object.class, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
   }
 
   private Void loadLocal(int slot) {

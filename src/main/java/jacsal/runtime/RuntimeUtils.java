@@ -17,11 +17,15 @@
 package jacsal.runtime;
 
 import jacsal.TokenType;
+import jacsal.Utils;
 
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -859,51 +863,32 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static Object invokeMethodOrField(Object parent, String field, boolean isOptional, Object[] args, String source, int offset) {
+  public static Object invokeMethodOrField(Object parent, String field, boolean onlyField, boolean isOptional, Object[] args, String source, int offset) {
     if (parent == null) {
       if (isOptional) { return null; }
       throw new NullError("Tried to invoke method on null value", source, offset);
     }
 
-    MethodHandle handle = Functions.lookupWrapper(parent, field);
-    if (handle == null && parent instanceof Map) {
-      Object value = ((Map)parent).get(field);
-      if (value != null && !(value instanceof MethodHandle)) {
-        throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
+    Object value = null;
+    if (parent instanceof JacsalObject) {
+      value = getJacsalFieldOrMethod(parent, field, source, offset, false);
+    }
+    else {
+      // Fields of a map cannot override builtin methods so look up method first
+      value = onlyField ? null : Functions.lookupWrapper(parent, field);
+      if (value == null && parent instanceof Map) {
+        value = ((Map) parent).get(field);
       }
-      handle = (MethodHandle)value;
-    }
-    if (handle == null) {
-      throw new RuntimeError("No such method " + field + " for type " + className(parent), source, offset);
-    }
-    try {
-      return handle.invokeExact((Continuation)null, source, offset, args);
-    }
-    catch (RuntimeException e) {
-      throw e;
-    }
-    catch (Throwable e) {
-      throw new RuntimeError("Error during method invocation", source, offset, e);
-    }
-  }
-
-  public static Object invokeField(Object parent, String field, boolean isOptional, Object[] args, String source, int offset) {
-    if (parent == null) {
-      if (isOptional) { return null; }
-      throw new NullError("Tried to invoke method on null valuet", source, offset);
     }
 
-    if (!(parent instanceof Map)) {
-      throw new IllegalStateException("Object of type " + className(parent) +  " does not support field access");
-    }
-
-    Object value = ((Map)parent).get(field);
     if (value == null) {
-      throw new RuntimeError("No such method " + field + " for type " + className(parent), source, offset);
+      throw new RuntimeError("No such method '" + field + "' for type " + className(parent), source, offset);
     }
+
     if (!(value instanceof MethodHandle)) {
-      throw new RuntimeError("Cannot invoke value of " + field + " (type is " + className(value) + ")", source, offset);
+      throw new RuntimeError("Cannot invoke value of '" + field + "' (type is " + className(value) + ")", source, offset);
     }
+
     try {
       return ((MethodHandle)value).invokeExact((Continuation)null, source, offset, args);
     }
@@ -1005,6 +990,32 @@ public class RuntimeUtils {
       return value;
     }
 
+    if (parent instanceof Class) {
+      Class clss = (Class)parent;
+      // For classes we only support runtime lookup of static methods
+      if (JacsalObject.class.isAssignableFrom(clss)) {
+        try {
+          // Need to get map of static methods via getter rather than directly accessing the
+          // _$j$StaticMethods field because the field exists in the parent JacsalObject class
+          // which means we can't guarantee that class init for the actual class (which populates
+          // the map) has been run yet.
+          Method staticMethods = clss.getMethod(Utils.JACSAL_STATIC_METHODS_GETTER);
+          Map<String,MethodHandle> map = (Map<String, MethodHandle>)staticMethods.invoke(null);
+          return map.get(field.toString());
+        }
+        catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      else {
+        throw new RuntimeError("No static method '" + field.toString() + "' for class " + parent, source, offset);
+      }
+    }
+
+    if (parent instanceof JacsalObject) {
+      return getJacsalFieldOrMethod(parent, field, source, offset, createIfMissing);
+    }
+
     // Check for accessing method by name
     String fieldString = castToString(field);
     if (isDot && !createIfMissing && fieldString != null) {
@@ -1068,16 +1079,80 @@ public class RuntimeUtils {
     return value;
   }
 
+  private static Object getJacsalFieldOrMethod(Object parent, Object field, String source, int offset, boolean createIfMissing) {
+    // Check for field, instance method, static method, and then if that fails check if there
+    // is a generic builtin method that applies
+    String       fieldName     = field.toString();
+    JacsalObject jacsalObj     = (JacsalObject) parent;
+    Object       fieldOrMethod = jacsalObj._$j$FieldsAndMethods.get(fieldName);
+    if (fieldOrMethod instanceof MethodHandle) {
+      // Need to bind method handle to instance
+      fieldOrMethod = ((MethodHandle)fieldOrMethod).bindTo(parent);
+    }
+    if (fieldOrMethod == null && !createIfMissing) {
+      // If createIfMissing is not set we can search for matching method
+      fieldOrMethod = jacsalObj._$j$StaticMethods.get(fieldName);
+      if (fieldOrMethod == null) {
+        fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
+      }
+    }
+    // If we have a field handle then we need to get the field value
+    if (fieldOrMethod instanceof Field) {
+      var classField = (Field)fieldOrMethod;
+      try {
+        Object value = classField.get(parent);
+        if (value == null && createIfMissing) {
+          if (JacsalObject.class.isAssignableFrom(classField.getType())) {
+            JacsalObject fieldObj = (JacsalObject)classField.getType().getConstructor().newInstance();
+            fieldObj._$j$newInstance$w(null, source, offset, new Object[0]);
+            classField.set(parent, fieldObj);
+            value = fieldObj;
+          }
+          else {
+            value = defaultValue(classField.getType(), source, offset);
+            classField.set(parent, value);
+          }
+        }
+        return value;
+      }
+      catch (IllegalAccessException|InvocationTargetException|InstantiationException|NoSuchMethodException e) {
+        throw new IllegalStateException("Internal error: " + e, e);
+      }
+    }
+    else {
+      return fieldOrMethod;
+    }
+  }
+
+  private static Object defaultValue(Class clss, String source, int offset) {
+    if (Map.class.isAssignableFrom(clss))        { return new HashMap<>(); }
+    if (List.class.isAssignableFrom(clss))       { return new ArrayList<>(); }
+    if (String.class.isAssignableFrom(clss))     { return ""; }
+    if (Boolean.class.isAssignableFrom(clss))    { return false; }
+    if (Integer.class.isAssignableFrom(clss))    { return 0; }
+    if (Long.class.isAssignableFrom(clss))       { return 0L; }
+    if (Double.class.isAssignableFrom(clss))     { return 0D; }
+    if (BigDecimal.class.isAssignableFrom(clss)) { return BigDecimal.ZERO; }
+    throw new RuntimeError("Default value for " + clss.getName() + " not supported", source, offset);
+  }
+
   /**
-   * Store value into map/list field
-   * @param parent        parent (map or list)
-   * @param field         field (field name or list index)
-   * @param value         the value to store
+   * Store value into map/list field. Note that first three args are either value,parent,field or parent,field,value
+   * depending on whether valueFirst is set to true or not.
+   *  parent        parent (map or list)
+   *  field         field (field name or list index)
+   *  value         the value to store
+   * @param valueFirst    true if args are value,parent,field and false if args are parent,field,value
    * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
    * @param source        source code
    * @param offset        offset into source for operation
+   * @return the value of the field after assignment (can be different to value when storing int into long field, for example)
    */
-  public static void storeField(Object parent, Object field, Object value, boolean isDot, String source, int offset) {
+  public static Object storeField(Object arg1, Object arg2, Object arg3, boolean valueFirst, boolean isDot, String source, int offset) {
+    Object parent = valueFirst ? arg2 : arg1;
+    Object field  = valueFirst ? arg3 : arg2;
+    Object value  = valueFirst ? arg1 : arg3;
+
     if (parent == null) {
       throw new NullError("Null value for Map/List storing field value", source, offset);
     }
@@ -1088,7 +1163,25 @@ public class RuntimeUtils {
       }
       String fieldName = field.toString();
       ((Map)parent).put(fieldName, value);
-      return;
+      return value;
+    }
+
+    if (parent instanceof JacsalObject) {
+      String       fieldName     = field.toString();
+      JacsalObject jacsalObj     = (JacsalObject) parent;
+      Object       fieldOrMethod = jacsalObj._$j$FieldsAndMethods.get(fieldName);
+      if (fieldOrMethod == null || !(fieldOrMethod instanceof Field)) {
+        throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
+      }
+      try {
+        Field fieldRef = (Field) fieldOrMethod;
+        value = castTo(fieldRef.getType(), value, source, offset);
+        fieldRef.set(parent, value);
+        return value;
+      }
+      catch (IllegalAccessException e) {
+        throw new IllegalStateException("Internal error: " + e, e);
+      }
     }
 
     if (!(parent instanceof List)) {
@@ -1117,6 +1210,54 @@ public class RuntimeUtils {
       }
     }
     ((List)parent).set(index, value);
+    return value;
+  }
+
+  private enum FieldType {
+    BOOLEAN,
+    INT,
+    LONG,
+    DOUBLE,
+    DECIMAL,
+    STRING,
+    MAP,
+    LIST,
+    FUNCTION;
+  }
+
+  private static Map<Class,FieldType> classToType = Map.of(
+    boolean.class,      FieldType.BOOLEAN,
+    int.class,          FieldType.INT,
+    long.class,         FieldType.LONG,
+    double.class,       FieldType.DOUBLE,
+    BigDecimal.class,   FieldType.DECIMAL,
+    String.class,       FieldType.STRING,
+    Map.class,          FieldType.MAP,
+    List.class,         FieldType.LIST,
+    MethodHandle.class, FieldType.FUNCTION
+  );
+
+  private static Object castTo(Class clss, Object value, String source, int offset) {
+    FieldType type = classToType.get(clss);
+    if (type == null) {
+      if (clss.isAssignableFrom(value.getClass())) {
+        return value;
+      }
+    }
+    else {
+      switch (type) {
+        case BOOLEAN:  return isTruth(value, false);
+        case INT:      return castToInt(value, source, offset);
+        case LONG:     return castToLong(value, source, offset);
+        case DOUBLE:   return castToDouble(value, source, offset);
+        case DECIMAL:  return castToDecimal(value, source, offset);
+        case STRING:   return castToString(value, source, offset);
+        case MAP:      return castToMap(value, source, offset);
+        case LIST:     return castToList(value, source, offset);
+        case FUNCTION: return castToFunction(value, source, offset);
+      }
+    }
+    throw new RuntimeError("Cannot assign from " + className(value) + " to field of type " + clss.getName(), source, offset);
   }
 
   public static int castToIntValue(Object obj, String source, int offset) {
@@ -1250,6 +1391,14 @@ public class RuntimeUtils {
       throw new NullError("Cannot convert null value to int", source, offset);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to int", source, offset);
+  }
+
+  public static Number castToLong(Object obj, String source, int offset) {
+    return castToNumber(obj, source, offset).longValue();
+  }
+
+  public static Number castToDouble(Object obj, String source, int offset) {
+    return castToNumber(obj, source, offset).doubleValue();
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {

@@ -265,14 +265,14 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitAssign(Expr.Assign expr) {
+  @Override public Void visitFieldAssign(Expr.FieldAssign expr) {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
     return null;
   }
 
-  @Override public Void visitOpAssign(Expr.OpAssign expr) {
+  @Override public Void visitFieldOpAssign(Expr.FieldOpAssign expr) {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
@@ -323,9 +323,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
-    return null;
-  }
+  @Override public Void visitInvokeNew(Expr.InvokeNew expr)       { return null; }
+  @Override public Void visitClassPath(Expr.ClassPath expr)       { return null; }
+  @Override public Void visitDefaultValue(Expr.DefaultValue expr) { return null; }
 
   ////////////////////////////////////
 
@@ -347,7 +347,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    analyse(stmt.newInstance);
+    analyse(stmt.initMethod);
     analyse(stmt.scriptMain);
     return null;
   }

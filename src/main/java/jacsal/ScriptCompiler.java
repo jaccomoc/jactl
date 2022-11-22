@@ -34,7 +34,7 @@ import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 public class ScriptCompiler extends ClassCompiler {
 
   ScriptCompiler(String source, JacsalContext context, Stmt.ClassDecl classDecl) {
-    super(source, context, classDecl);
+    super(source, context, null, classDecl);
   }
 
   public Function<Map<String,Object>, Future<Object>> compile() {
@@ -44,19 +44,14 @@ public class ScriptCompiler extends ClassCompiler {
     compileScriptMain();
     finishClassCompile();
 
-    byte[]   bytes = cw.toByteArray();
-    if (context.printSize) {
-      System.out.println("Class " + className + ": compiled size = " + bytes.length);
-    }
-    Class<?> clss  = context.loadClass(internalName.replaceAll("/", "."), bytes);
     try {
       MethodType methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
       boolean    isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
-      MethodHandle mh      = MethodHandles.publicLookup().findVirtual(clss, Utils.JACSAL_SCRIPT_MAIN, methodType);
+      MethodHandle mh      = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
       return map -> {
         var future = new CompletableFuture<>();
         try {
-          Object instance = clss.getDeclaredConstructor().newInstance();
+          Object instance = compiledClass.getDeclaredConstructor().newInstance();
           Object result = isAsync ? mh.invoke(instance, (Continuation)null, map)
                                   : mh.invoke(instance, map);
           future.complete(result);

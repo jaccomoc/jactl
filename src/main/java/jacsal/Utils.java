@@ -30,15 +30,23 @@ import static org.objectweb.asm.Opcodes.*;
 
 public class Utils {
 
-  public static final String JACSAL_PKG         = "jacsal/pkg";
-  public static final String JACSAL_PREFIX      = "_$j$";
-  public static final String JACSAL_SCRIPT_MAIN = JACSAL_PREFIX + "main";
-  public static final String JACSAL_NEW_INSTANCE= JACSAL_PREFIX + "newInstance";
+  public static final String JACSAL_PKG           = "jacsal/pkg";
+  public static final String DEFAULT_JACSAL_PKG   = "";
+  public static final String JACSAL_PREFIX        = "_$j$";
+  public static final String JACSAL_SCRIPT_MAIN   = JACSAL_PREFIX + "main";
+  public static final String JACSAL_INIT          = JACSAL_PREFIX + "init";
+  public static final String JACSAL_SCRIPT_PREFIX = JACSAL_PREFIX + "Script";
+
+  public static final String JACSAL_FIELDS_METHODS_MAP    = "_$j$FieldsAndMethods";
+  public static final String JACSAL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
+  public static final String JACSAL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
 
   public static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
   public static final String JACSAL_OUT_NAME = "out";      // Name of global to use as PrintStream for print/println
   public static final String IT_VAR          = "it";       // Name of implicit arg for closures
   public static final String CAPTURE_VAR     = "$@";       // Name of internal array for capture values of a regex
+  public static final String THIS_VAR        = "this";
+  public static final String SUPER_VAR       = "super";
 
   /**
    * Get the name of the static field that will contain the handle for a given method
@@ -242,7 +250,7 @@ public class Utils {
     }
   }
 
-  public static void checkedCast(MethodVisitor mv, JacsalType type) {
+  public static void checkCast(MethodVisitor mv, JacsalType type) {
     final var internalName = type.getInternalName();
     if (internalName != null) {
       mv.visitTypeInsn(CHECKCAST, internalName);
@@ -276,7 +284,7 @@ public class Utils {
     mv.visitInsn(type.isPrimitive() ? LALOAD : AALOAD);
     if (!type.isPrimitive()) {
       if (!type.is(ANY)) {
-        Utils.checkedCast(mv, type);
+        Utils.checkCast(mv, type);
       }
     }
     else {
@@ -327,7 +335,7 @@ public class Utils {
     return result;
   }
 
-  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params) {
+  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
     Expr.FunDecl funDecl = new Expr.FunDecl(start, nameToken, returnType, params);
 
     // Build a FunctionDescriptor to unify Jacsal functions with builtin functions
@@ -336,8 +344,10 @@ public class Utils {
                                                            returnType,
                                                            params.size(),
                                                            mandatoryArgCount,
-                                                           true);
+                                                           false);
+    descriptor.isStatic = isStatic;
     funDecl.functionDescriptor = descriptor;
+    funDecl.isStatic = isStatic;
     return funDecl;
   }
 
@@ -364,5 +374,27 @@ public class Utils {
       result.put(elems[i], elems[i+1]);
     }
     return result;
+  }
+
+  public static boolean isLowerCase(String s) {
+    for (int i = 0; i < s.length(); i++) {
+      if (!Character.isLowerCase(s.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public static boolean isValidClassName(String s) {
+    if (!Character.isUpperCase(s.charAt(0))) {
+      return false;
+    }
+    for (int i = 1; i < s.length(); i++) {
+      char ch = s.charAt(i);
+      if (ch == '$' || !Character.isJavaIdentifierPart(ch)) {
+        return false;
+      }
+    }
+    return true;
   }
 }

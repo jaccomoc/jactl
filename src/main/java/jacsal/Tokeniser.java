@@ -100,7 +100,7 @@ public class Tokeniser {
    * Get the next token. If we have been rewound then we return from that point in
    * the stream of tokens rather than parsing a new one from the source code.
    * Special case for new lines is that we collapse a series of new lines into one
-   * since new lines are syntactially relevant but the number in a row has no
+   * since new lines are syntactically relevant but the number in a row has no
    * significance.
    * @return the next token in the stream of tokens
    */
@@ -111,6 +111,9 @@ public class Tokeniser {
     previousToken = currentToken;
     currentToken  = previousToken.getNext();
 
+    if (result.isError()) {
+      throw result.getError();
+    }
     return result;
   }
 
@@ -128,6 +131,9 @@ public class Tokeniser {
    */
   public Token peek() {
     populateCurrentToken();
+    if (currentToken.isError()) {
+      throw currentToken.getError();
+    }
     return currentToken;
   }
 
@@ -183,7 +189,13 @@ public class Tokeniser {
    */
   private void populateCurrentToken() {
     if (currentToken == null) {
-      currentToken = parseToken();
+      try {
+        currentToken = parseToken();
+      }
+      catch (CompileError e) {
+        currentToken = new Token(e);
+      }
+
       if (previousToken != null) {
         previousToken.setNext(currentToken);
       }
@@ -822,6 +834,8 @@ public class Tokeniser {
     new Symbol("package", PACKAGE),
     new Symbol("new", NEW),
     new Symbol("static", STATIC),
+//    new Symbol("this", THIS),
+//    new Symbol("super", SUPER),
     new Symbol("instanceof", INSTANCE_OF),
     new Symbol("!instanceof", BANG_INSTANCE_OF),
     new Symbol("in", IN),
@@ -832,12 +846,6 @@ public class Tokeniser {
     new Symbol("do", DO),
     new Symbol("print", PRINT),
     new Symbol("println", PRINTLN)
-    //    new Symbol("'", SINGLE_QUOTE),
-    //    new Symbol("\"", DOUBLE_QUOTE),
-    //    new Symbol("''", DOUBLE_SINGLE_QUOTE),
-    //    new Symbol("\"\"", DOUBLE_DOUBLE_QUOTE),
-    //    new Symbol("'''", TRIPLE_SINGLE_QUOTE),
-    //    new Symbol("\"\"\"", TRIPLE_DOUBLE_QUOTE),
   );
 
   //

@@ -92,14 +92,20 @@ class Stmt {
    */
   class ClassDecl extends Stmt {
     Token                name;
-    List<Token>          baseClass;
-    Stmt.FunDecl         newInstance;
+    String               packageName;
+    List<Expr>           baseClass;
+    Stmt.FunDecl         initMethod;
+    List<Stmt.FunDecl>   methods;
+    List<Stmt.ClassDecl> innerClasses;
     boolean              isInterface;
 
-    List<List<Token>>   @interfaces;
+    List<List<Expr>>     @interfaces = new ArrayList<>();
 
     Stmt.FunDecl             @scriptMain;   // Mainline of script
     Map<String,Expr.VarDecl> @fieldVars = new HashMap<>();
+    Expr.VarDecl             @thisField;
+
+    // Used by Parser
     Deque<Expr.FunDecl>      @nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor @classDescriptor;
@@ -110,7 +116,7 @@ class Stmt {
    * Expr type where the work is done.
    */
   class VarDecl extends Stmt {
-    Token        typeToken;
+    Token        name;
     Expr.VarDecl declExpr;
   }
 

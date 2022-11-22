@@ -49,6 +49,10 @@ public class JacsalError extends RuntimeException {
     this.location = location;
   }
 
+  public Location getLocation() {
+    return location;
+  }
+
   @Override
   public String getMessage() {
     if (location == null || location.getSource() == null) {

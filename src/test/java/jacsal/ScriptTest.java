@@ -34,7 +34,7 @@ public class ScriptTest {
   @Test public void generateExprClasses() throws Exception {
     String                script   = readResource("/jacsal/GenerateClasses.jacsal");
     String                source   = readResource("/Expr.java");
-    String                expected = readResource("/jacsal/Expr.java").trim();
+    String                expected = readResource("/jacsal/Expr.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
     Compiler.run(script, Map.of("source", source, "out", out));
@@ -45,7 +45,7 @@ public class ScriptTest {
   @Test public void generateStmtClasses() throws Exception {
     String                script   = readResource("/jacsal/GenerateClasses.jacsal");
     String                source   = readResource("/Stmt.java");
-    String                expected = readResource("/jacsal/Stmt.java").trim();
+    String                expected = readResource("/jacsal/Stmt.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
 

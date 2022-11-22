@@ -30,30 +30,63 @@ public class Compiler {
     return run(source, JacsalContext.create().build(), bindings);
   }
 
+  static Object run(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String,Object> bindings) {
+    Function<Map<String,Object>,Future<Object>> compiled = compileScript(source, jacsalContext, packageName, testAsync, bindings);
+    return runSync(compiled, bindings);
+  }
+
   static Object run(String source, JacsalContext jacsalContext, boolean testAsync, Map<String,Object> bindings) {
-    Function<Map<String,Object>,Future<Object>> compiled = compile(source, jacsalContext, testAsync, bindings);
+    Function<Map<String,Object>,Future<Object>> compiled = compileScript(source, jacsalContext, Utils.DEFAULT_JACSAL_PKG, testAsync, bindings);
     return runSync(compiled, bindings);
   }
 
   public static Object run(String source, JacsalContext jacsalContext, Map<String,Object> bindings) {
-    Function<Map<String,Object>,Future<Object>> compiled = compile(source, jacsalContext, false, bindings);
+    Function<Map<String,Object>,Future<Object>> compiled = compileScript(source, jacsalContext, Utils.DEFAULT_JACSAL_PKG, false, bindings);
     return runSync(compiled, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
-    return compile(source, jacsalContext, false, bindings);
+  public static Function<Map<String, Object>,Future<Object>> compileClass(String source, JacsalContext jacsalContext, String packageName, Map<String, Object> bindings) {
+    return compileClass(source, jacsalContext, packageName, false, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, boolean testAsync, Map<String, Object> bindings) {
-    var parser   = new Parser(new Tokeniser(source));
-    var script   = parser.parse();
+  public static Function<Map<String, Object>,Future<Object>> compileClass(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
+    return compileClass(source, jacsalContext, null, false, bindings);
+  }
+
+  public static Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
+    String className = Utils.JACSAL_SCRIPT_PREFIX + counter.incrementAndGet();
+    return compileScript(source, jacsalContext, className, Utils.DEFAULT_JACSAL_PKG, false, bindings);
+  }
+
+  public static Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    String className = Utils.JACSAL_SCRIPT_PREFIX + counter.incrementAndGet();
+    return compileScript(source, jacsalContext, className, packageName, testAsync, bindings);
+  }
+
+  public static Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, Map<String, Object> bindings) {
+    return compileScript(source, jacsalContext, className, packageName, false, bindings);
+  }
+
+  public static Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
+    var script   = parser.parse(className);
     var resolver = new Resolver(jacsalContext, bindings);
     resolver.resolve(script);
     var analyser = new Analyser();
     analyser.testAsync = testAsync;
     analyser.analyseScript(script);
-    script.name = new Token(TokenType.IDENTIFIER, script.name).setValue("JacsalScript_" + counter.incrementAndGet());
     return compile(source, jacsalContext, script);
+  }
+
+  private static Function<Map<String, Object>,Future<Object>> compileClass(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    var parser      = new Parser(new Tokeniser(source), jacsalContext, packageName);
+    var scriptClass = parser.parseClass();
+    var resolver = new Resolver(jacsalContext, bindings);
+    resolver.resolve(scriptClass);
+    var analyser = new Analyser();
+    analyser.testAsync = testAsync;
+    analyser.analyseScript(scriptClass);
+    return compile(source, jacsalContext, scriptClass);
   }
 
   private static Function<Map<String,Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {

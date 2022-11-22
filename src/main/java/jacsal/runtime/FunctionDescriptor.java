@@ -29,12 +29,15 @@ public class FunctionDescriptor {
   public List<JacsalType> paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
-  public boolean          needsLocation;
   public String           implementingClass;
   public String           implementingMethod;
+  public boolean          isStatic = false;          // Whether method itself is static or not
+
+  // Used by builtin functions:
+  public boolean          needsLocation;
   public String           wrapperMethod;
-  public MethodHandle     wrapperHandle;   // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
-  public boolean          isStatic = false;
+  public MethodHandle     wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
+  public boolean          isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean          isBuiltin;
   public boolean          isAsync;
   public List<Integer>    asyncArgs = List.of(); // Async if any of these args are async

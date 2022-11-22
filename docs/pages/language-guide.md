@@ -555,6 +555,8 @@ If the key is a valid identifier (or keyword) then the key does not need to be q
 [a:1, b:2]
 > def y = [for:1, while:2, import:3]    // keywords allowed as keys
 [for:1, while:2, import:3]
+> y.while
+2
 ```
 
 ### Variable Value as Key

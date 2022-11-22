@@ -29,8 +29,8 @@ public class AsyncTest {
 
   private boolean isAsync(String source) {
     var context  = JacsalContext.create().debug(debug).build();
-    var parser   = new Parser(new Tokeniser(source));
-    var script   = parser.parse();
+    var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACSAL_PKG);
+    var script   = parser.parse("AsyncScriptTest");
     var resolver = new Resolver(context, Map.of());
     resolver.resolve(script);
     var analyser = new Analyser();
@@ -98,5 +98,15 @@ public class AsyncTest {
     async("def f = [1,2,3].map{sleeper(0,it)}.size; f()", 3);
     sync("[1,2,3,4,5].filter{it>2}.map{it+it}", List.of(6,8,10));
     async("[1,2,3,4,5].filter{sleeper(0,it)>2}.map{it+it}", List.of(6,8,10));
+    sync("[1,2,3].size()", 3);
+    sync("[1,2,3].map{it}.size()", 3);
+    async("[1,2,3].map{sleeper(0,it)}.size()", 3);
+    sync("[3,2,1].sort()", List.of(1,2,3));
+    sync("[3,2,1].map{it}.sort()", List.of(1,2,3));
+    async("[3,2,1].map{sleeper(0,it)}.sort()", List.of(1,2,3));
+    async("[3,2,1].map{it}.sort{a,b -> sleeper(0,a) <=> sleeper(0,b) }", List.of(1,2,3));
+    sync("[1,2,3].join(':')", "1:2:3");
+    sync("[1,2,3].map{it}.join(':')", "1:2:3");
+//    async("[1,2,3].map{sleeper(0,it)}.join(':')", "1:2:3");
   }
 }

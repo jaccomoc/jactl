@@ -44,12 +44,6 @@ public class Functions {
   }
 
   /**
-   * Register a global function
-   */
-  static void registerFunction() {
-  }
-
-  /**
    * Lookup method at compile time and return FunctionDescriptor if method exists
    */
   public static FunctionDescriptor lookupMethod(JacsalType type, String methodName) {
@@ -97,9 +91,9 @@ public class Functions {
     }
 
     // Look for exact match and then generic match.
-    // Number classes (int, long, doune, Decimal) can match on Number and
+    // Number classes (int, long, double, Decimal) can match on Number and
     // List/Map/Object[] can match on Iterable.
-    var match = functions.stream().filter(f -> f.type == type).findFirst();
+    var match = functions.stream().filter(f -> f.type.is(type)).findFirst();
     if (match.isEmpty()) {
       if (type.isNumeric()) {
         // TODO
@@ -111,7 +105,7 @@ public class Functions {
     }
     // Final check is for ANY
     if (match.isEmpty()) {
-      match = functions.stream().filter(f -> f.type == ANY).findFirst();
+      match = functions.stream().filter(f -> f.type.is(ANY)).findFirst();
     }
     return match.orElse(NO_SUCH_METHOD);
   }

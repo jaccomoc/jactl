@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.BOOLEAN;
+import static jacsal.JacsalType.CLASS;
 import static jacsal.JacsalType.DECIMAL;
 import static jacsal.JacsalType.INT;
 import static jacsal.JacsalType.LIST;
@@ -89,11 +90,19 @@ import static jacsal.TokenType.*;
  */
 public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
-  private final JacsalContext      jacsalContext;
-  private final Map<String,Object> globals;
-  private final Deque<Expr.FunDecl>      functions = new ArrayDeque<>();
-  private final Deque<Stmt.ClassDecl>    classes   = new ArrayDeque<>();
+  private final JacsalContext            jacsalContext;
+  private final Map<String,Object>       globals;
+  private final Deque<Expr.FunDecl>      functions        = new ArrayDeque<>();
+  private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
   private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
+
+  private String packageName = null;
+  private String scriptName  = null;  // If this is a script
+
+  private final Map<String,ClassDescriptor> imports      = new HashMap<>();
+  private final Map<String,ClassDescriptor> localClasses = new HashMap<>();
+
+  private boolean isScript = false;
 
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
 
@@ -151,17 +160,74 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   // = Stmt
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-//    var outerClass = classes.peek() != null ? classes.peek().classDescriptor : null;
-//    var baseClass  = stmt.baseClass != null ? lookupClass(stmt.baseClass) : null;
-//    var interfaces = stmt.interfaces != null ? stmt.interfaces.stream().map(name -> lookupClass(name)).collect(Collectors.toList()) : null;
-//    var descriptor = new ClassDescriptor(stmt.name.getStringValue(), stmt.isInterface, outerClass, baseClass, interfaces);
-    classes.push(stmt);
+    if (stmt.scriptMain != null) {
+      isScript = true;
+      this.packageName = stmt.packageName;
+      this.scriptName  = stmt.name.getStringValue();
+    }
+
+    // NOTE: we only support class declarations at top level of script or directly within another class decl.
+    // TODO: add support for block-local classes (maybe)
+    var outerClass = classStack.peek() != null ? classStack.peek().classDescriptor : null;
+    var baseClass  = stmt.baseClass != null ? lookupClass(stmt.baseClass) : null;
+    var interfaces = stmt.interfaces != null ? stmt.interfaces.stream().map(name -> lookupClass(name)).collect(Collectors.toList()) : null;
+    var classDescriptor = outerClass == null ? new ClassDescriptor(stmt.name.getStringValue(), stmt.isInterface, jacsalContext.javaPackage, stmt.packageName, baseClass, interfaces)
+                                             : new ClassDescriptor(stmt.name.getStringValue(), stmt.isInterface, jacsalContext.javaPackage, outerClass, baseClass, interfaces);
+
+    stmt.classDescriptor = classDescriptor;
+    var classVarDecl = new Expr.VarDecl(stmt.name, null);
+    classVarDecl.classDescriptor = classDescriptor;
+    classVarDecl.type = JacsalType.createClass(classDescriptor);
+
+    // Find our functions and fields and add them to the ClassDescriptor
+    if (stmt.scriptMain == null) {
+      stmt.methods.forEach(decl -> {
+        //      stmt.initMethod.declExpr.block.stmts.stmts.forEach(decl -> {
+        if (decl instanceof Stmt.FunDecl) {
+          var                funDecl            = ((Stmt.FunDecl) decl).declExpr;
+          String             methodName         = funDecl.nameToken.getStringValue();
+          FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
+          functionDescriptor.firstArgtype = classVarDecl.type.createInstance();
+          if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
+            throw new CompileError("Duplicate method name '" + methodName + "' in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
+          }
+        }
+      });
+      stmt.fieldVars.values().forEach(varDecl -> {
+//        if (decl instanceof Stmt.VarDecl) {
+//          var    varDecl   = ((Stmt.VarDecl) decl).declExpr;
+          if (varDecl.isField) {
+            String fieldName = varDecl.name.getStringValue();
+            if (Functions.lookupMethod(ANY, fieldName) != null) {
+              throw new CompileError("Field name '" + fieldName + "' clashes with builtin method of same name", varDecl.name);
+            }
+            if (!classDescriptor.addField(fieldName, varDecl.type)) {
+              throw new CompileError("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
+            }
+          }
+      });
+      classDescriptor.addMethod(Utils.JACSAL_INIT, stmt.initMethod.declExpr.functionDescriptor);
+    }
+
+    if (stmt.scriptMain == null) {
+      define(stmt.name, classVarDecl);
+    }
+    localClasses.put(classDescriptor.getName(), classDescriptor);
+
+    classStack.push(stmt);
     try {
-      resolve(stmt.newInstance);
+      // Declare methods
+      stmt.methods.forEach(method -> {
+        //method.declExpr.varDecl.owner = ... ?
+        define(method.declExpr.nameToken, method.declExpr.varDecl);
+      });
+      resolve(stmt.initMethod);
+      stmt.methods.forEach(method -> resolve(method));
+      stmt.innerClasses.forEach(clss -> resolve(clss));
       resolve(stmt.scriptMain);
     }
     finally {
-      classes.pop();
+      classStack.pop();
     }
     return null;
   }
@@ -292,7 +358,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // still being as they were when the nested function/closure was invoked.
     Expr.VarDecl captureArrVar = getVars().get(Utils.CAPTURE_VAR);
     if (captureArrVar == null) {
-      final var captureArrName = new Token(IDENTIFIER, expr.operator).setValue(Utils.CAPTURE_VAR);
+      final var captureArrName = expr.operator.newIdent(Utils.CAPTURE_VAR);
       // Allocate our capture array var if we don't already have one in scope
       captureArrVar = new Expr.VarDecl(captureArrName, null);
       captureArrVar.type = MATCHER;
@@ -335,33 +401,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Field access operators
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
       expr.isConst = false;
+      expr.type = ANY;     // default type
       if (!expr.left.type.is(ANY)) {
         // Do some level of validation
-        if (expr.operator.is(DOT,QUESTION_DOT) && !expr.left.type.is(MAP)) {
-          // If obect is not a map then field access might be for a method of the object.
-          // If we the field is a string literal we can validate at compile time by searching for a matching
-          // method. If field is some sort of expression then we have to wait for runtime to find out if
-          // access was legal or not.
-          if (expr.right instanceof Expr.Literal) {
-            Object field = ((Expr.Literal)expr.right).value.getValue();
-            if (field instanceof String) {
-              if (Functions.lookupMethod(expr.left.type, (String)field) == null) {
-                throw new CompileError("Invalid object type (" + expr.left.type + ") for field access", expr.operator);
-              }
-            }
-          }
+        if (expr.operator.is(DOT,QUESTION_DOT) && expr.right instanceof Expr.Literal) {
+          expr.type = getFieldType(expr.left, expr.operator, expr.right, false);
         }
         // '[' and '?['
         if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,ITERATOR,STRING)) {
           throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
-
-        // TODO: if we have a concrete type on left-hand side we can work out type of field here.
-        //       For the moment all field access returns ANY since we don't know what has been
-        //       stored in a Map or List.
       }
-
-      expr.type = ANY;
 
       // Since we now know we are doing a map/list lookup we know what parent type should
       // be so if parent type was ANY we can change to Map/List. This is used when field
@@ -389,6 +439,59 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return evaluateConstExpr(expr);
     }
     return expr.type;
+  }
+
+  private JacsalType getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
+    String fieldName = null;
+    if (field instanceof Expr.Literal) {
+      Object fieldValue = ((Expr.Literal) field).value.getValue();
+      if (fieldValue instanceof String) {
+        fieldName = (String) fieldValue;
+      }
+      else {
+        if (parent.type.is(INSTANCE,CLASS)) {
+          throw new CompileError("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
+        }
+      }
+    }
+    if (fieldName == null) {
+      return ANY;   // Can't determine type at compile time; wait for runtime
+    }
+
+    if (parent.type.is(INSTANCE,CLASS)) {
+      // Check for valid field/method name
+      var desc = parent.type.getClassDescriptor();
+      JacsalType type = fieldName != null ? desc.getField(fieldName) : null;
+      if (type == null && fieldName != null && !fieldsOnly) {
+        var descriptor = desc.getMethod(fieldName);
+        if (descriptor == null) {
+          // Finally check if builtin method exists for that name
+          descriptor = lookupMethod(parent.type, (String) fieldName);
+        }
+        if (descriptor != null) {
+          if (parent.type.is(CLASS) && !descriptor.isStatic) {
+            throw new CompileError("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
+          }
+          type = FUNCTION;
+        }
+      }
+      if (type == null) {
+        throw new CompileError("No such field or method '" + fieldName + "' for " + parent.type, field.location);
+      }
+      return type;
+    }
+    else {
+      // Might be a builtin method...
+      if (lookupMethod(parent.type, (String) fieldName) != null) {
+        return FUNCTION;
+      }
+      if (parent.type.is(MAP,ANY)) {
+        // Either we have a map whose field could have any value or we don't know parent type so we
+        // default to ANY and figure it out at runtime
+        return ANY;
+      }
+      throw new CompileError("Invalid object type (" + parent.type + ") for field access", accessOperator);
+    }
   }
 
   @Override public JacsalType visitTernary(Expr.Ternary expr) {
@@ -534,6 +637,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitVarDecl(Expr.VarDecl expr) {
+    resolve(expr.type);
     expr.owner = functions.peek();
 
     // Functions have previously been declared by the block they belong to
@@ -541,31 +645,31 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = FUNCTION;
     }
 
-    // Declare the variable (but don't define it yet) so that we can detect self-references
-    // in the initialiser. E.g. we can catch:  int x = x + 1
-    declare(expr.name);
+    // If we have a field then we are in the initialiser method and there will be a parameter of the same
+    // name that has already been declared. We don't want to shadow the parameter so we don't add fields to
+    // the variables at this scope.
+    if (!expr.isField) {
+      // Declare the variable (but don't define it yet) so that we can detect self-references
+      // in the initialiser. E.g. we can catch:  int x = x + 1
+      declare(expr.name);
+    }
 
     JacsalType type = resolve(expr.initialiser);
-    if (expr.type == null) {
-      // If variable was declared as "var"
-      expr.type = type;
-
-      // If variable was a parameter then we have moved the initialiser to the wrapper function
-      // and now we need to update the parameter on the real function with its actual type
-      if (expr.paramVarDecl != null) {
-        expr.paramVarDecl.type = type;
-      }
-    }
-    else
     if (type != null && !type.isConvertibleTo(expr.type)) {
       throw new CompileError("Cannot convert initialiser of type " + type + " to type of variable " +
                              expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
     }
-    define(expr.name, expr);
+
+    if (!expr.isField) {
+      define(expr.name, expr);
+    }
     return expr.type;
   }
 
   @Override public JacsalType visitFunDecl(Expr.FunDecl expr) {
+    var implementingClass = classStack.peek().classDescriptor.getInternalName();
+    expr.functionDescriptor.implementingClass  = implementingClass;
+
     // If the script main function
     if (functions.size() == 0) {
       expr.functionDescriptor.implementingMethod = expr.nameToken.getStringValue();
@@ -578,14 +682,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Expr.FunDecl parent = functions.peek();
       String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.nameToken.getStringValue();
 
-      // Method name is parent + $ + functionName unless at top level in which case
-      // there is no parent so we use just functionName
-      expr.functionDescriptor.implementingMethod = functions.size() == 1 ? methodName
-                                                                         : parent.functionDescriptor.implementingMethod + "$" + methodName;
+      // Method name is parent + $ + functionName unless at script function level or at top level of a class
+      // in which case there is no parent so we use just functionName
+      var fun = functions.peek();
+      expr.functionDescriptor.implementingMethod =
+        functions.size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
+                                                      : parent.functionDescriptor.implementingMethod + "$" + methodName;
 
       // Create a wrapper function that takes var of var arg and named argument handling
       expr.wrapper = createWrapperFunction(expr);
       expr.wrapper.functionDescriptor.implementingMethod = Utils.wrapperName(expr.functionDescriptor.implementingMethod);
+      expr.wrapper.functionDescriptor.implementingClass  = implementingClass;
+      expr.functionDescriptor.wrapperMethod = expr.wrapper.functionDescriptor.implementingMethod;
 
       // Resolve the wrapper. The wrapper has us as an embedded statement so we will
       // get resolved as a nested function of the wrapper and the next time through here
@@ -611,6 +719,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Expr.FunDecl parent = functions.peek();
     functions.push(expr);
     try {
+      resolve(expr.returnType);
       // Add explicit return in places where we would implicity return the result
       explicitReturn(expr.block, expr.returnType);
       resolve(expr.block);
@@ -707,14 +816,31 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type;
   }
 
-  @Override public JacsalType visitAssign(Expr.Assign expr) {
+  @Override public JacsalType visitFieldAssign(Expr.FieldAssign expr) {
+    resolve(expr.parent);
     return resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
   }
 
-  @Override public JacsalType visitOpAssign(Expr.OpAssign expr) {
+  @Override public JacsalType visitFieldOpAssign(Expr.FieldOpAssign expr) {
+    resolve(expr.parent);
+
+    // For FieldOpAssign we will either have something like the following example:
+    //  a.b.c.d += 5 ==> new FieldOpAssign(parent = new Binary('a.b.c'),
+    //                                     accessOperator = '.',
+    //                                     field = new Expr('d'),
+    //                                     expr = new Binary(Noop, '+', '5'))
+    // Or something like this:
+    //  a.b.c.d =~ s/xxx/yyy/ ==> new FieldOpAssign(parent = new Binary('a.b.c'),
+    //                                              accessOperator = '.',
+    //                                              field = new Expr('d'),
+    //                                              expr = new RegexSubst(Noop, '=~', 'xxx', '', 'yyy', false))
     if (expr.expr instanceof Expr.Binary) {
+      // We need to set the type of the Noop to the field type (if known) so that when the
+      // BinaryOp is resolved it will be able to figure out its type properly. If we don't
+      // know the field type (e.g. it comes from a Map) then we will just use ANY as the type
+      // and figure it all out at runtime.
       Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-      valueExpr.left.type = ANY;     // for fields use ANY for the moment
+      valueExpr.left.type = getFieldType(expr.parent, expr.accessType, expr.field, true);
     }
     resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
 
@@ -722,17 +848,38 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private JacsalType resolveFieldAssignment(Expr expr, Expr parent, Expr field, Expr valueExpr, Token accessType) {
-    resolve(parent);
-    // Adjust type of parent based on type of access being done
-    if (parent instanceof Expr.Binary) {
+    boolean dottedAcess = accessType.is(DOT, QUESTION_DOT);
+    if (dottedAcess && !parent.type.is(ANY,MAP,INSTANCE)) {
+      throw new CompileError("Invalid object type (" + parent.type + ") for field access", accessType);
+    }
+    if (!dottedAcess && !parent.type.is(ANY,LIST)) {
+      if (parent.type.is(STRING)) {
+        throw new CompileError("Cannot assign to element of String", accessType);
+      }
+      throw new CompileError("Invalid object type (" + parent.type + ") for indexed (or field) access", accessType);
+    }
+
+    // If we don't already know the parent type then assume type based on type of access being done
+    if (parent.type.is(ANY) && parent instanceof Expr.Binary) {
       Expr.Binary binaryParent = (Expr.Binary) parent;
       if (binaryParent.createIfMissing) {
-        binaryParent.type = accessType.is(DOT, QUESTION_DOT) ? MAP : LIST;
+        binaryParent.type = dottedAcess ? MAP : LIST;
       }
     }
+
     resolve(field);
     resolve(valueExpr);
-    // Type will be type of expression but boxed if primitive since we are storing in a map/list
+
+    if (parent.type.is(INSTANCE)) {
+      // Type will be the field type (boxed if ?= being used due to possibility of null value)
+      JacsalType fieldType = getFieldType(parent, accessType, field, true);
+      if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign)expr).assignmentOperator.is(QUESTION_EQUAL)) {
+        fieldType = fieldType.boxed();
+      }
+      return expr.type = fieldType;
+    }
+
+    // Map, List, or we don't know...
     return expr.type = valueExpr.type.boxed();
   }
 
@@ -747,7 +894,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     returnExpr.returnType = functions.peek().returnType;
     returnExpr.funDecl = functions.peek();
     if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
-      throw new CompileError("Expression type not compatible with return type of function", returnExpr.expr.location);
+      throw new CompileError("Expression type " + returnExpr.expr.type + " not compatible with function return type of " +
+                             returnExpr.returnType + " for " + functions.peek().nameToken.getStringValue(), returnExpr.expr.location);
     }
     return returnExpr.type = ANY;
   }
@@ -819,8 +967,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Then we need to have the exact number of arguments that match the expected parameter count.
     // If we have less args we will do runtime lookup of MethodHandle that gets to wrapper method.
     if (!expr.parent.type.is(ANY)) {
-      var descriptor = Functions.lookupMethod(expr.parent.type, expr.methodName);
+      var descriptor = lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
+        if (expr.parent.type.is(CLASS) && !descriptor.isStatic) {
+          throw new CompileError("No static method '" + expr.methodName + "' exists for " + expr.parent.type, expr.location);
+        }
         expr.methodDescriptor = descriptor;
         if (validateArgCount(expr.args, descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen)) {
           for (int i = 0; i < expr.args.size(); i++) {
@@ -838,7 +989,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       if (!expr.parent.type.is(MAP)) {
         // If we are not a Map then we know at compile time that method does not exist. (If we are a Map then at
         // runtime someone could create a field in the Map with this name so we have to wait until runtime.)
-        throw new CompileError("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.accessOperator);
+        throw new CompileError("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.methodNameLocation);
       }
     }
 
@@ -882,8 +1033,25 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitInvokeNew(Expr.InvokeNew expr) {
-    //resolve(expr.instanceType);
-    return expr.type = expr.instanceType;
+    resolve(expr.className);
+    return expr.type = expr.className;
+  }
+
+  @Override public JacsalType visitClassPath(Expr.ClassPath expr) {
+    var descriptor = lookupClass(List.of(expr));
+    return expr.type = JacsalType.createClass(descriptor);
+  }
+
+  private void resolve(JacsalType type) {
+    if (type == null)                      { return; }
+    if (!type.is(INSTANCE))                { return; }
+    if (type.getClassDescriptor() != null) { return; }
+    type.setClassDescriptor(lookupClass(type.getClassName()));
+  }
+
+  @Override public JacsalType visitDefaultValue(Expr.DefaultValue expr) {
+    resolve(expr.varType);
+    return expr.type = expr.varType;
   }
 
   ////////////////////////////////////////////
@@ -1141,8 +1309,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Map<String,Expr.VarDecl> vars = getVars();
     if (!jacsalContext.replMode || !isAtTopLevel()) {
       Expr.VarDecl decl = vars.get(varName);
-      if (decl != null) {
-        error("Variable with name " + varName + " already declared in this scope", name);
+      // Allow fields to be shadowed by local variables
+      if (decl != null && !decl.isField) {
+        error("Variable with name " + varName + " already declared in this scope (" + functions.peek().nameToken.getStringValue() + ")", name);
       }
     }
     // Add variable with type of UNDEFINED as a marker to indicate variable has been declared but is
@@ -1183,8 +1352,100 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return functions.peek().blocks.peek();
   }
 
-  private ClassDescriptor lookupClass(List<Token> path) {
-    return null;
+  private FunctionDescriptor lookupMethod(JacsalType type, String methodName) {
+    if (type.is(CLASS, INSTANCE)) {
+      var clss = type.getClassDescriptor();
+      if (clss != null) {
+        var funDesc = clss.getMethod(methodName);
+        if (funDesc != null) {
+          return funDesc;
+        }
+      }
+    }
+    return Functions.lookupMethod(type, methodName);
+  }
+
+  private ClassDescriptor lookupClass(List<Expr> classNameParts) {
+    Function<Expr,String> identStr = expr -> ((Expr.Identifier)expr).identifier.getStringValue();
+
+    if (classNameParts == null || classNameParts.size() == 0) {
+      return null;
+    }
+    String classPkg  = null;
+    String firstClass = null;
+    Expr firstPart = classNameParts.get(0);
+    Token packageToken = firstPart.location;
+    Token classToken   = firstPart.location;
+    if (firstPart instanceof Expr.ClassPath) {
+      var classPath = (Expr.ClassPath)firstPart;
+      classPkg = classPath.pkg.getStringValue();
+      classToken = classPath.className;
+      firstClass = classToken.getStringValue();
+    }
+    else {
+      firstClass = identStr.apply(classNameParts.get(0));
+    }
+    classNameParts = classNameParts.subList(1, classNameParts.size());
+
+    // Build up rest of class name using '$' as separator
+    String subPath = classNameParts.stream().map(e -> identStr.apply(e)).collect(Collectors.joining("$"));
+    subPath = subPath.isEmpty() ? "" : '$' + subPath;
+
+    String className = null;
+    // If no package supplied then we need to search for within current script/class and then if not
+    // found check for any imported classes that match
+    if (classPkg == null) {
+      // Class could be any class (inner or top level) from current class scope upwards or
+      // could be X.Y.Z where X is top level in this script. So we need to find "firstClass"
+      // to then work out if we have a valid class name.
+      // Look in current class heirarchy first.
+      for (var classStmt : classStack) {
+        if (classStmt.name.getStringValue().equals(firstClass)) {
+          className = classStmt.classDescriptor.getName() + subPath;
+          break;
+        }
+      }
+      // If not in current heirarchy and in a script then look for a top level class of that name
+      if (className == null && isScript) {
+        String topLevelClass = scriptName + '$' + firstClass;
+        var topClass = localClasses.get(topLevelClass);
+        if (topClass != null) {
+          className = topLevelClass + subPath;
+        }
+      }
+      if (className == null) {
+        // Check for imports
+        var importedClass = imports.get(firstClass);
+        if (importedClass != null) {
+          // Found it so return the descriptor
+          return importedClass;
+        }
+      }
+      if (className == null) {
+        throw new CompileError("Unknown class '" + firstClass + "'", classToken);
+      }
+    }
+    else {
+      className = firstClass + subPath;
+    }
+
+    // If no package supplied or current package
+    ClassDescriptor descriptor = null;
+    if (classPkg == null || classPkg.equals(packageName)) {
+      descriptor = localClasses.get(className);
+    }
+    if (descriptor == null && classPkg != null) {
+      var jacsalPackage = jacsalContext.getPackage(classPkg);
+      if (jacsalPackage == null) {
+        throw new CompileError("Unknown package '" + classPkg + "'", packageToken);
+      }
+      descriptor = jacsalPackage.getClass(className);
+    }
+
+    if (descriptor == null) {
+      throw new CompileError("Unknown class '" + className.replaceAll("\\$", ".") + "' in package " + classPkg, classToken);
+    }
+    return descriptor;
   }
 
   private Expr.VarDecl lookupFunction(Token identifier) {
@@ -1210,9 +1471,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       name = Utils.CAPTURE_VAR;
     }
 
+    var currentFunction  = functions.peek();
+    boolean inStaticFunc = currentFunction.isStatic;
+
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
-    // Search blocks in each function until we find the variable
     FUNC_LOOP:
     for (Iterator<Expr.FunDecl> funcIt = functions.iterator(); funcIt.hasNext(); ) {
       Expr.FunDecl funDecl = funcIt.next();
@@ -1228,8 +1491,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (varDecl == null) {
       block = null;
 
-      // Look for field in classes
-      for (Iterator<Stmt.ClassDecl> it = classes.iterator(); it.hasNext();) {
+      // Look for instance field in outer classes
+      for (Iterator<Stmt.ClassDecl> it = classStack.iterator(); it.hasNext();) {
+        if (name.equals(Utils.THIS_VAR)) {
+          if (inStaticFunc) { throw new CompileError("Reference to 'this' in static context", location); }
+          varDecl = it.next().thisField;
+          break;
+        }
         varDecl = it.next().fieldVars.get(name);
         if (varDecl != null) {
           break;
@@ -1271,6 +1539,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // which we can call directly (if we are being asked to do a function lookup)
       if (varDecl.isGlobal || varDecl.nestingLevel == functions.size() ||
           (functionLookup && varDecl.funDecl != null)) {
+        return varDecl;
+      }
+
+      // No need to close over fields since they are always visible
+      if (varDecl.isField) {
         return varDecl;
       }
 
@@ -1443,14 +1716,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
    * how many arguments are required and what their types are.
    * E.g.:
    * <pre>  def f(int x, String y) {...}; def g = f; g(1,'xyz')</pre>
-   * When we call via the variable 'g' we don't anything about which function it points to and
+   * When we call via the variable 'g' we don't know anything about which function it points to and
    * so we pass in an Object[] and invoke the wrapper function which extracts the arguments to then
    * call the real function.
    * <p>The wrapper function also takes care of filling in the default values for any missing paremeters
    * and validates that the number of arguments passed is legal for the function.</p>
-   * TODO: the wrapper function will also take care of named argument passing once implemented.
-   * @param funDecl
-   * @return
+   * <p>The wrapper function will also take care of named argument passing.</p>
    */
   private Expr.FunDecl createWrapperFunction(Expr.FunDecl funDecl) {
     Token startToken = funDecl.startToken;
@@ -1476,12 +1747,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     BiFunction<String, JacsalType,Stmt.VarDecl> createParam =
       (name,type) -> {
-        Token nameToken = new Token(IDENTIFIER, funDecl.startToken).setValue(name);
+        Token nameToken = funDecl.startToken.newIdent(name);
         var declExpr = new Expr.VarDecl(nameToken,null);
         declExpr.type = type;
         declExpr.isParam = true;
         declExpr.isExplicitParam = true;
-        return new Stmt.VarDecl(startToken,
+        return new Stmt.VarDecl(nameToken,
                                 declExpr);
       };
     ///////////////////////////////
@@ -1503,7 +1774,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(startToken,
                                                       identToken.apply(Utils.wrapperName(funDecl.functionDescriptor.implementingMethod)),
                                                       ANY,    // wrapper always returns Object
-                                                      wrapperParams);
+                                                      wrapperParams,
+                                                      funDecl.isStatic);
 
     Stmt.Stmts stmts = new Stmt.Stmts();
     List<Stmt> stmtList = stmts.stmts;
@@ -1585,37 +1857,24 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                      null);
     stmtList.add(throwIfTooMany);
 
-    // For each parameter we now either load argument from Object[] or run the initialiser
+    // For each parameter we now either load argument from Object[]/Map or run the initialiser
     // and store value into a local variable.
     for (int i = 0; i < paramCount; i++) {
       var param = funDecl.parameters.get(i).declExpr;
       final var paramNameIdent = strLiteral.apply(param.name.getStringValue());
-      // If we have not reached mandatory arg count yet then we just create a var for the parameter
-      // from the value in our Object[]/Map since for mandatory params there is no default initialiser
-      if (i < mandatoryCount) {
-        Expr mapArgExpr;
-        // :  mapArgExpr = param.initialiser == null ? RuntimeUtils.removeOrThrow(_$mapCopy, param.name, source, offset)
-        // :                                         : _$mapCopy.remove(param.name) ?: param.initialiser
-        if (param.initialiser == null) {
-          // For map args mandatory depends solely on whether initialiser is present while for Object[] args
-          // it depends on the "mandatoryCount" which is based on last parameter without an initialiser.
-         mapArgExpr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "removeOrThrow",
-                                             List.of(Map.class, String.class, String.class, int.class),
-                                             List.of(mapCopyIdent, paramNameIdent, sourceIdent, offsetIdent));
-        }
-        else {
-          // We have initialiser so use it if arg not present
-          mapArgExpr = new Expr.Binary(new Expr.InvokeUtility(startToken, Map.class, "remove",
-                                                              List.of(Object.class), List.of(mapCopyIdent, paramNameIdent)),
-                                       token.apply(QUESTION_COLON),
-                                       param.initialiser);
-        }
-        // :   def <param_i> = _$isObjArr ? _$argArr[i] : mapArgExpr
+      // If we don't have an initialiser then we have mandatory arg so throw error if using named args
+      // and arg not present. (If using Object[] then we have already checked for mandatory arg count
+      // so no need to recheck each time.)
+      if (param.initialiser == null) {
+        Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "removeOrThrow",
+                                                 List.of(Map.class, String.class, String.class, int.class),
+                                                 List.of(mapCopyIdent, paramNameIdent, sourceIdent, offsetIdent));
+        // :   def <param_i> = _$isObjArr ? _$argArr[i] : RuntimeUtils.removeOrThrow(_$mapCopy, param.name, source, offset)
         stmtList.add(paramVarDecl(wrapperFunDecl, param,
-                                  new Expr.Ternary(isObjArrIdent, token.apply(QUESTION),
+                                  new Expr.Ternary(isObjArrIdent, new Token(QUESTION, param.name),
                                                    new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(i)),
-                                                   token.apply(COLON),
-                                                   mapArgExpr)));
+                                                   new Token(COLON, param.name),
+                                                   getOrThrow)));
       }
       else {
         // We have a parameter with an initialiser so load value from Object[]/Map if present otherwise
@@ -1624,14 +1883,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // :                               : _$mapCopy.remove(param.name))
         // :                       ?: param.initialiser
         var objArrValue = new Expr.Ternary(new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent),
-                                           token.apply(QUESTION),
+                                           new Token(QUESTION, param.name),
                                            new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(i)),
-                                           token.apply(COLON),
-                                           new Expr.Literal(token.apply(NULL)));
+                                           new Token(COLON, param.name),
+                                           new Expr.Literal(new Token(NULL, param.name)));
         var mapValue = new Expr.InvokeUtility(startToken, Map.class, "remove",
                                               List.of(Object.class), List.of(mapCopyIdent, paramNameIdent));
-        var initialiser = new Expr.Binary(new Expr.Ternary(isObjArrIdent, token.apply(QUESTION), objArrValue, token.apply(COLON), mapValue),
-                                          token.apply(QUESTION_COLON),
+        var initialiser = new Expr.Binary(new Expr.Ternary(isObjArrIdent, new Token(QUESTION, param.name), objArrValue, new Token(COLON, param.name), mapValue),
+                                          new Token(QUESTION_COLON, param.initialiser.location),
                                           param.initialiser);
         var varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
         stmtList.add(varDecl);
@@ -1672,7 +1931,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private Stmt.VarDecl varDecl(Token token, Expr.FunDecl ownerFunDecl, String name, JacsalType type, Expr init) {
-    return varDecl(ownerFunDecl, new Token(IDENTIFIER, token).setValue(name), type, init);
+    return varDecl(ownerFunDecl, token.newIdent(name), type, init);
   }
 
   private Stmt.VarDecl varDecl(Expr.FunDecl ownerFunDecl, Token name, JacsalType type, Expr init) {
@@ -1680,22 +1939,19 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     varDecl.type = type;
     varDecl.isResultUsed = false;
     varDecl.owner = ownerFunDecl;
-    return new Stmt.VarDecl(new Token(type == null ? VAR : type.tokenType(), name), varDecl);
+    return new Stmt.VarDecl(new Token(type.tokenType(), name), varDecl);
   }
 
+  /**
+   * Create a varDecl in varargs wrapper for a given parameter. The variable will be initialised with
+   * passed in arg or via initialiser if no arg passed in. We move initialiser from the param to the var.
+   */
   private Stmt.VarDecl paramVarDecl(Expr.FunDecl ownerFunDecl, Expr.VarDecl param, Expr init) {
     Stmt.VarDecl varDecl = varDecl(ownerFunDecl, param.name, param.type, init);
-    // Remember our original parameter because if it was declared as a "var" type then
-    // we will need to change its type once we have been resolved and worked out what
-    // our type is. And since we are using the initialiser from the parameter in the
-    // wrapper function and not the real function we should remove the initialiser from
-    // the parameter in the real function so we don't resolve it multiple times and we
-    // don't compile it multiple times. Since the initialiser will be nulled out this
-    // is another reason why we won't be able to work out the actual parameter type for
-    // "var" types if we don't link to the parameter here.
-    varDecl.declExpr.paramVarDecl = param;
-    param.initialiser = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
+    varDecl.declExpr.paramVarDecl    = param;
+    param.initialiser                = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
     varDecl.declExpr.isExplicitParam = true;
+    varDecl.declExpr.type            = param.type;
     return varDecl;
   }
 

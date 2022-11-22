@@ -27,12 +27,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
   boolean debug = false;
+  String packagName = Utils.DEFAULT_JACSAL_PKG;
 
   protected void doTest(String code, Object expected) {
     doTest(code, true, false, false, expected);
   }
 
-  private void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
+  protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
@@ -42,7 +43,7 @@ public class BaseTest {
                                                  .replMode(replMode)
                                                  .debug(debug)
                                                  .build();
-      Object result = Compiler.run(code, jacsalContext, testAsync, createGlobals());
+      Object result = Compiler.run(code, jacsalContext, packagName, testAsync, createGlobals());
       if (expected instanceof Object[]) {
         assertTrue(result instanceof Object[]);
         assertTrue(Arrays.equals((Object[]) expected, (Object[]) result));
@@ -115,6 +116,6 @@ public class BaseTest {
                                                .debug(false)
                                                .build();
     Map<String, Object> globals = new HashMap<>();
-    return Compiler.compile(code, jacsalContext, globals);
+    return Compiler.compileScript(code, jacsalContext, globals);
   }
 }

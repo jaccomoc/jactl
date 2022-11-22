@@ -18,7 +18,9 @@ package jacsal;
 
 import jacsal.runtime.Location;
 
-import static jacsal.TokenType.NULL;
+import java.util.List;
+
+import static jacsal.TokenType.*;
 
 /**
  * This class represents a single token parsed from Jacsal source code.
@@ -43,6 +45,8 @@ public class Token extends Location {
   private Object    value;        // Value of token - int, long, string, etc if literal
   private boolean   isKeyword;    // Whether token is a keyword or not
 
+  private JacsalError error;
+
   /**
    * Partially construct a token whose type and length is not yet known
    * @param source the source code of the script
@@ -63,6 +67,25 @@ public class Token extends Location {
     this.length    = token.length;
     this.value     = token.value;
     this.isKeyword = token.isKeyword;
+  }
+
+  /**
+   * Construct a Token that wraps an exception. This is used when throwing Tokeniser
+   * exceptions during lookahead to be able to remember what exceptions was thrown
+   * and reproduce it after rewind.
+   */
+  public Token(JacsalError e) {
+    super(e.getLocation());
+    this.error = e;
+    this.type = EOF;
+  }
+
+  public boolean isError() {
+    return error != null;
+  }
+
+  public JacsalError getError() {
+    return error;
   }
 
   /**
@@ -109,6 +132,10 @@ public class Token extends Location {
       }
     }
     return false;
+  }
+
+  public boolean is(List<TokenType> types) {
+    return is(types.toArray(TokenType[]::new));
   }
 
   /**
@@ -181,6 +208,10 @@ public class Token extends Location {
    */
   public String getChars() {
     return source.substring(getOffset(), getOffset() + length);
+  }
+
+  public Token newIdent(String name) {
+    return new Token(IDENTIFIER, this).setValue(name);
   }
 
   /**

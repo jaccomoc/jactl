@@ -117,6 +117,8 @@ class TokeniserTest {
     doTest.accept("unless", UNLESS);
     doTest.accept("class", CLASS);
     doTest.accept("package", PACKAGE);
+//    doTest.accept("this", THIS);
+//    doTest.accept("super", SUPER);
     doTest.accept("static", STATIC);
     doTest.accept("interface", INTERFACE);
     doTest.accept("extends", EXTENDS);

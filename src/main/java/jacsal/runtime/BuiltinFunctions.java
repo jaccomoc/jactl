@@ -39,22 +39,22 @@ public class BuiltinFunctions {
   public static void registerBuiltinFunctions() {
     if (!initialised) {
       // Collection methods
-      registerMethod("size", "listSize", false);
-      registerMethod("size", "objArrSize", false);
-      registerMethod("size", "mapSize", false);
-      registerMethod("size", "iteratorSize", false);
+      registerMethod("size", "listSize", LIST, false, 0, List.of(0));
+      registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));
+      registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
+      registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("sort", "iteratorSort", ITERATOR, true, 0);
+      registerMethod("sort", "iteratorSort", ITERATOR, true, 0, List.of(0,1));
       registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("join", "iteratorJoin", ITERATOR, false, 0);
+      registerMethod("join", "iteratorJoin", ITERATOR, false, 0, List.of(0));
 
       // String methods
-      registerMethod("lines", "stringLines", false);
-      registerMethod("length", "stringLength", false);
-      registerMethod("size", "stringLength", false);
+      registerMethod("lines", "stringLines", STRING, false);
+      registerMethod("length", "stringLength", STRING, false);
+      registerMethod("size", "stringLength", STRING, false);
       registerMethod("toLowerCase", "stringToLowerCase", STRING, false, 0);
       registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
       registerMethod("substring", "stringSubstring", STRING, true, 1);
@@ -65,6 +65,7 @@ public class BuiltinFunctions {
       // Object methods
       registerMethod("toString", "objectToString", ANY, false, 0);
 
+      // Global functions
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
       registerGlobalFunction("sleeper", "sleeper", false, 2);
@@ -91,12 +92,12 @@ public class BuiltinFunctions {
   ///////////////////////////////////////////////////
 
   private static void registerGlobalFunction(String name, String methodName, boolean needsLocation, int mandatoryArgCount) {
-    var descriptor = getFunctionDescriptor(name, methodName, true, null, needsLocation, mandatoryArgCount);
+    var descriptor = getFunctionDescriptor(name, methodName,null, needsLocation, mandatoryArgCount);
     globalFunctions.put(name, descriptor);
   }
 
-  private static void registerMethod(String name, String methodName, boolean needsLocation) {
-    registerMethod(name, methodName, null, needsLocation, -1);
+  private static void registerMethod(String name, String methodName, JacsalType objType, boolean needsLocation) {
+    registerMethod(name, methodName, objType, needsLocation, -1);
   }
 
   private static void registerMethod(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
@@ -140,53 +141,49 @@ public class BuiltinFunctions {
   private static void registerMethod(String name, String methodName, JacsalType objType,
                                      boolean needsLocation, int mandatoryArgCount,
                                      List<Integer> asyncArgs) {
-    registerFunction(name, methodName, false, objType, needsLocation, mandatoryArgCount, asyncArgs);
-  }
-
-  private static void registerFunction(String name, String methodName, boolean isStatic, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
-    registerFunction(name, methodName, isStatic, objType, needsLocation, mandatoryArgCount, List.of());
-  }
-
-  private static void registerFunction(String name, String methodName, boolean isStatic, JacsalType objType,
-                                       boolean needsLocation, int mandatoryArgCount, List<Integer> asyncArgs) {
-    var descriptor = getFunctionDescriptor(name, methodName, isStatic, objType, needsLocation, mandatoryArgCount);
+    var descriptor = getMethodDescriptor(name, methodName, objType, needsLocation, mandatoryArgCount);
     descriptor.asyncArgs = asyncArgs;
     Functions.registerMethod(descriptor);
   }
 
-  private static FunctionDescriptor getFunctionDescriptor(String name, String methodName, boolean isStatic, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
+  /**
+   * Generate FunctionDescriptor for a builtin method
+   */
+  private static FunctionDescriptor getMethodDescriptor(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
     Method[] methods = BuiltinFunctions.class.getDeclaredMethods();
     Method   method  = Arrays.stream(methods).filter(m -> m.getName().equals(methodName)).findFirst().orElse(null);
     if (method == null) {
       throw new IllegalStateException("Couldn't find method " + methodName + " in BuiltinFunctions");
     }
-    JacsalType firstArgType = isStatic ? null : JacsalType.typeFromClass(method.getParameterTypes()[0]);
+
+    Class[]    paramClasses = method.getParameterTypes();
+
+    // Sometimes the first arg type is different to the type that the method acts on (e.g. using Object for
+    // methods that act on ITERATOR since ITERATOR means Iterable or Iterator or Object[])
+    JacsalType firstArgType = paramClasses.length > 0 ? JacsalType.typeFromClass(paramClasses[0]) : null;
     if (objType == null) {
       objType = firstArgType;
     }
+
     JacsalType returnType   = JacsalType.typeFromClass(method.getReturnType());
-    Class[]    paramClasses = method.getParameterTypes();
-    boolean    isAsync      = paramClasses.length > (isStatic ? 0 : 1) && paramClasses[isStatic ? 0 : 1].equals(Continuation.class);
+    boolean    isAsync      = paramClasses.length > 1 && paramClasses[1].equals(Continuation.class);
+
+    // Reserver params for object plus optionally: Continuation, String source, int offset
+    int reservedParams = 1 + (isAsync ? 1 : 0) + (needsLocation ? 2 : 0);
     List<JacsalType> paramTypes = Arrays.stream(paramClasses)
-                                        .skip((isStatic ? 0 : 1) + (isAsync ? 1 : 0) + (needsLocation ? 2 : 0))
+                                        .skip(reservedParams)
                                         .map(JacsalType::typeFromClass)
                                         .collect(Collectors.toList());
+
     var wrapperMethod = methodName + "Wrapper";
-    MethodHandle wrapperHandle = isStatic ? RuntimeUtils.lookupMethod(BuiltinFunctions.class,
-                                                                      wrapperMethod,
-                                                                      Object.class,
-                                                                      Continuation.class,
-                                                                      String.class,
-                                                                      int.class,
-                                                                      Object[].class)
-                                          : RuntimeUtils.lookupMethod(BuiltinFunctions.class,
-                                                                      wrapperMethod,
-                                                                      Object.class,
-                                                                      firstArgType.boxed().classFromType(),
-                                                                      Continuation.class,
-                                                                      String.class,
-                                                                      int.class,
-                                                                      Object[].class);
+    MethodHandle wrapperHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class,
+                                                           wrapperMethod,
+                                                           Object.class,    // Return type
+                                                           firstArgType.boxed().classFromType(),
+                                                           Continuation.class,
+                                                           String.class,
+                                                           int.class,
+                                                           Object[].class);
     if (mandatoryArgCount < 0) {
       mandatoryArgCount = paramTypes.size();
     }
@@ -204,8 +201,63 @@ public class BuiltinFunctions {
                                             wrapperHandle);
     descriptor.wrapperMethod = wrapperMethod;
     descriptor.isBuiltin = true;
-    descriptor.isStatic = isStatic;
+    descriptor.isStatic = true;
     descriptor.isAsync = isAsync;
+    descriptor.isGlobalFunction = false;
+    return descriptor;
+  }
+
+  /**
+   * Generate FunctionDescriptor for global function
+   */
+  private static FunctionDescriptor getFunctionDescriptor(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
+    Method[] methods = BuiltinFunctions.class.getDeclaredMethods();
+    Method   method  = Arrays.stream(methods).filter(m -> m.getName().equals(methodName)).findFirst().orElse(null);
+    if (method == null) {
+      throw new IllegalStateException("Couldn't find method " + methodName + " in BuiltinFunctions");
+    }
+
+    Class[]    paramClasses = method.getParameterTypes();
+    JacsalType returnType   = JacsalType.typeFromClass(method.getReturnType());
+    boolean    isAsync      = paramClasses.length > 0 && paramClasses[0].equals(Continuation.class);
+
+    int reservedParams = (needsLocation ? 2 : 0) + (isAsync ? 1 : 0);
+    List<JacsalType> paramTypes = Arrays.stream(paramClasses)
+                                        .skip(reservedParams)
+                                        .map(JacsalType::typeFromClass)
+                                        .collect(Collectors.toList());
+
+    var wrapperMethod = methodName + "Wrapper";
+    MethodHandle wrapperHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class,
+                                                           wrapperMethod,
+                                                           Object.class,    // Return type
+                                                           Continuation.class,
+                                                           String.class,
+                                                           int.class,
+                                                           Object[].class);
+
+    if (mandatoryArgCount < 0) {
+      mandatoryArgCount = paramTypes.size();
+    }
+
+    boolean varargs = paramTypes.size() > 0 && paramTypes.get(paramTypes.size() - 1).is(OBJECT_ARR);
+    var descriptor = new FunctionDescriptor(null,
+                                            null,
+                                            name,
+                                            returnType,
+                                            paramTypes,
+                                            varargs,
+                                            mandatoryArgCount,
+                                            Type.getInternalName(BuiltinFunctions.class),
+                                            methodName,
+                                            needsLocation,
+                                            wrapperHandle);
+
+    descriptor.wrapperMethod = wrapperMethod;
+    descriptor.isBuiltin = true;
+    descriptor.isStatic = true;
+    descriptor.isAsync = isAsync;
+    descriptor.isGlobalFunction = true;
     return descriptor;
   }
 

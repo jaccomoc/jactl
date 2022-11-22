@@ -36,6 +36,7 @@ import java.util.LinkedHashMap;
 
 import jacsal.JacsalType;
 import jacsal.Token;
+import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -143,6 +144,7 @@ class Expr {
     Expr       parent;
     Token      accessOperator; // Either '.' or '?.'
     String     methodName;     // Either the method name or field name that holds a MethodHandle
+    Token      methodNameLocation;
     List<Expr> args;
 
     FunctionDescriptor @methodDescriptor;
@@ -184,6 +186,11 @@ class Expr {
     FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
   }
 
+  class ClassPath extends Expr {
+    Token pkg;
+    Token className;
+  }
+
   class ExprString extends Expr {
     Token exprStringStart;
     List<Expr> @exprList = new ArrayList<>();
@@ -195,21 +202,22 @@ class Expr {
    * is returned implicitly from a function/closure.
    */
   class VarDecl extends Expr implements ManagesResult {
-    Token        name;
-    Expr         initialiser;
-    Expr.FunDecl @owner;               // Which function variable belongs to (for local vars)
-    boolean      @isGlobal;            // Whether global (bindings var) or local
-    boolean      @isHeapLocal;         // Is this a heap local var
-    boolean      @isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
-    boolean      @isParam;             // True if variable is a parameter of function (explicit or implicit)
-    boolean      @isField;             // True if instance field of a class
-    boolean      @isExplicitParam;     // True if explicit declared parameter of function
-    int          @slot = -1;           // Which local variable slot
-    int          @nestingLevel;        // What level of nested function owns this variable (1 is top level)
-    Label        @declLabel;           // Where variable comes into scope (for debugger)
-    Expr.FunDecl @funDecl;             // If type is FUNCTION then this is the function declaration
-    VarDecl      @parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
-    VarDecl      @originalVarDecl;     // VarDecl for actual original variable declaration
+    Token           name;
+    Expr            initialiser;
+    Expr.FunDecl    @owner;               // Which function variable belongs to (for local vars)
+    boolean         @isGlobal;            // Whether global (bindings var) or local
+    boolean         @isHeapLocal;         // Is this a heap local var
+    boolean         @isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
+    boolean         @isParam;             // True if variable is a parameter of function (explicit or implicit)
+    boolean         @isField;             // True if instance field of a class
+    boolean         @isExplicitParam;     // True if explicit declared parameter of function
+    int             @slot = -1;           // Which local variable slot
+    int             @nestingLevel;        // What level of nested function owns this variable (1 is top level)
+    Label           @declLabel;           // Where variable comes into scope (for debugger)
+    Expr.FunDecl    @funDecl;             // If type is FUNCTION then this is the function declaration
+    ClassDescriptor @classDescriptor;     // If type is CLASS then this is the class descriptor
+    VarDecl         @parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
+    VarDecl         @originalVarDecl;     // VarDecl for actual original variable declaration
 
     // If never reassigned we know it is effectively final. This means that if we have "def f = { ... }" and
     // closure is not async and f is never reassigned (isFinal == true) we know that calls to "f()" will never
@@ -283,7 +291,7 @@ class Expr {
   /**
    * Used to represent assignment to a field or list element
    */
-  class Assign extends Expr implements ManagesResult {
+  class FieldAssign extends Expr implements ManagesResult {
     Expr  parent;
     Token accessType;
     Expr  field;
@@ -295,7 +303,7 @@ class Expr {
    * Used to represent assignment to a field or list element where assignment is done with
    * one of the +=, -=, *=, ... operations
    */
-  class OpAssign extends Expr implements ManagesResult {
+  class FieldOpAssign extends Expr implements ManagesResult {
     Expr  parent;
     Token accessType;
     Expr  field;
@@ -418,7 +426,15 @@ class Expr {
    * Create a new instance of a class
    */
   class InvokeNew extends Expr {
-    Token      className;
-    JacsalType instanceType;
+    Token      token;
+    JacsalType className;
+  }
+
+  /**
+   * Load default value of given type onto stack
+   */
+  class DefaultValue extends Expr {
+    Token      token;
+    JacsalType varType;
   }
 }

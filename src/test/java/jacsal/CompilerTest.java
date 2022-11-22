@@ -1847,12 +1847,13 @@ class CompilerTest extends BaseTest {
     testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
     testError("def x = 3; \"\"\"${1+2}${\"\"\" + 'abc'", "unexpected end of file");
     testError("def x = 3; \"\"\"${1+2}${x\"\"\" + 'abc'", "unexpected end of file");
+    testError("def x = 3; \"\"\"${1+2}${x\"\"\"} + 'abc'", "unexpected end of file");
     testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
     testError("def x = 3; \"$x=${\"\"\"${1+2}$\"\"\"}\"", "expecting start of identifier");
     testError("def x = 3; \"\"\"${1+2}$\"\"\" + 'abc'", "expecting start of identifier");
 
     testError("def x = 3; \"$x=${\"\"\"${1\n+2}\"\"\"}\"", "new line not allowed");
-    testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "unexpected new line");
+    testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "new line not allowed");
 
     test("def x = 1; /$x/", "1");
     test("def x = 1; def y = /$x/; y", "1");
@@ -2326,6 +2327,7 @@ class CompilerTest extends BaseTest {
     test("String x = '' + [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
 
     test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
+    test("[this:1, if:2, while:[if:[z:3],for:3]].while.if.z", 3);
   }
 
   @Test public void listMapVariables() {
@@ -2542,6 +2544,10 @@ class CompilerTest extends BaseTest {
     test("def x; def y; y ?= (y ?= x.a) ?: (y ?= x.b) ?: 4; y", 4);
     test("def x; def y; y ?= (y ?= x.size()) ?: 4; y", 4);
     test("def x; def y; y ?= (y ?= 3) + ((y ?= x.size()) ?: 4); y", 7);
+    testError("String x; x.a = 'abc'", "invalid object type");
+    testError("String x; x.a += 'abc'", "invalid object type");
+    testError("String x; x['a'] += 'abc'", "invalid object type");
+    testError("String x; x[0] += 'abc'", "cannot assign to element of string");
   }
 
   @Test public void nullValues() {
@@ -2566,7 +2572,7 @@ class CompilerTest extends BaseTest {
     test("var x = 'abcdef'; def i = 3; x[i]", "d");
     test("var x = 'abcdef'; def i = 3; x?[i]", "d");
     test("def x; x?[0]", null);
-    testError("String s = 'abc'; s[1] = s[2]", "invalid object type");
+    testError("String s = 'abc'; s[1] = s[2]", "cannot assign to element of string");
     testError("String s = 'abc'; s.a", "invalid object type");
     testError("def s = 'abc'; s.a", "field access not supported");
     testError("def s = 'abc'; s.a()", "no such method");
@@ -3638,6 +3644,7 @@ class CompilerTest extends BaseTest {
     testError("def g(x){f(x)}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)", "requires passing closed over variable g");
     test("def f(x,a=f){x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
     testError("def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)", "requires passing closed over variable h");
+    test("def f(String x, int y=1, var z='abc') { x + y + z }; f('z')", "z1abc");
   }
 
   @Test public void passingArgsAsList() {
@@ -3686,6 +3693,8 @@ class CompilerTest extends BaseTest {
     testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],b:2,y:3,z:4,x:1]; f(a)", "invalid parameter name: b");
     testError("sleeper([x:1,y:2])", "named args not supported for built-in functions");
     testError("def a = [x:{it*it}]; [1,2,3].map(a)", "object of type map cannot be cast to function");
+    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
   }
 
   @Test public void simpleClosures() {
@@ -3716,8 +3725,10 @@ class CompilerTest extends BaseTest {
     testError("def f = { it = f(it) -> { it * it }(it) }; f()", "variable initialisation cannot refer to itself");
     testError("def f = { x, y=1, z -> x + y + z }; f(0)", "missing mandatory arguments");
     testError("def f = { x, y=1, z -> x + y + z }; f(1,2,3,4)", "too many arguments");
+    test("def f = { var z='abc' -> z }; f('z')", "z");
     testError("def f = { x, y=1, z='abc' -> x + y + z }; f(1)", "non-numeric operand");
     test("def f = { x, y=1, z='abc' -> x + y + z }; f('z')", "z1abc");
+    test("def f = { x, var y=1, var z='abc' -> x + y + z }; f('z')", "z1abc");
     test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f('z')", "z1abc");
     testError("def f = { String x, int y=1, var z='abc' -> x + y + z }; f(123)", "cannot convert");
     test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f('123')", "1231abc");
@@ -3840,6 +3851,8 @@ class CompilerTest extends BaseTest {
     testError("def x = [1]; x.sizeXXX()", "no such method");
     testError("1.size()", "no such method");
     test("def x; def y; y = x?.size()?.size(); y", null);
+    test("def x = 'size'; [1,2,3].\"$x\"()", 3);
+    test("def x = 'size'; def y = [1,2,3]; y.\"$x\"()", 3);
   }
 
   @Test public void listEach() {
@@ -3901,7 +3914,7 @@ class CompilerTest extends BaseTest {
   @Test public void mapCollect() {
     test("[:].collect{}", List.of());
     test("[:].collect()", List.of());
-    testError("def x = 1; x.collect{}", "no such method collect");
+    testError("def x = 1; x.collect{}", "no such method 'collect'");
     test("[a:1,b:2,c:3].collect{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
     test("[a:1,b:2,c:3].collect{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
     test("[a:1,b:2,c:3].collect{ it.collect{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
@@ -3969,7 +3982,7 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3,4]; x.map{ x -> return {x*x}}.map{it()}", List.of(1,4,9,16));
     test("[:].map{}", List.of());
     test("[:].map()", List.of());
-    testError("def x = 1; x.map{}", "no such method map");
+    testError("def x = 1; x.map{}", "no such method 'map'");
     test("[a:1,b:2,c:3].map{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
     test("[a:1,b:2,c:3].map{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
     test("[a:1,b:2,c:3].map{ it.map{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
@@ -4243,6 +4256,7 @@ class CompilerTest extends BaseTest {
     test("sleeper(1,{it*it})(2)", 4);
     test("var x=1L; var y=1D; sleeper(1,2)", 2);
     test("sleeper(1,2) + sleeper(1,3)", 5);
+    test("List l=[1,2]; Map m=[a:1]; String s='asd'; int i=1; long L=1L; double d=1.0; Decimal D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
     test("var l=[1,2]; var m=[a:1]; var s='asd'; var i=1; var L=1L; var d=1.0; var D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
     test("def l=[1,2]; def m=[a:1]; def s='asd'; def i=1; def L=1L; def d=1.0; def D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
     test("sleeper(1,sleeper(1,2))", 2);
@@ -4302,6 +4316,11 @@ class CompilerTest extends BaseTest {
     test("def f(x){g(x)}; def g(x){sleeper(0,x)+sleeper(0,x)}; f(2)+f(3)", 10);
     test("def s = sleeper; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
     test("def f(x){x<=1?1:g(x)}; def g(x){def s = sleeper; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
+  }
+
+  @Test public void asyncFieldAccess() {
+    test("Map m = [(sleeper(0,'a')):sleeper(0,1)]; m.\"${sleeper(0,'a')}\"", 1);
+    test("def m = [(sleeper(0,'a')):sleeper(0,1)]; m.\"${sleeper(0,'a')}\"", 1);
   }
 
   @Test public void asyncCollectionClosures() {
@@ -4367,6 +4386,7 @@ class CompilerTest extends BaseTest {
     test("def x = ''; [a:1].each{ x += it.toString() }; x", "['a', 1]");
     test("def f(x) {x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object[])Object");
     test("def f = { x -> x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object[])Object");
+    test("def x = 'abc'; def f = x.toString; f()", "abc");
   }
 
   @Test public void globals() {

@@ -31,6 +31,22 @@ import java.util.Map;
 
 import static jacsal.TokenType.*;
 
+/**
+ * JacsalType objects are used to represent different types at compile time. They should not be used
+ * at runtime.
+ * <p>Types can be compared using is(type,...) which returns true if the type matches any of the supplied
+ * types. Types are checked by using the static constant fields BOOLEAN, INT, LONG, etc rather than
+ * referring to the enum type.</p>
+ * <p>Note that types should not be compared using '==' even though most of the time this will work since
+ * for INSTANCE/CLASS types we create new JacsalType objects each time. There is also a DelegatingJacsalType
+ * class which wraps a JacsalType and delegates calls to it which means that '==' would fail for these objects
+ * as well.</p>
+ * <p>For variables/fields defined as 'var' fields we don't know their type up front but need to infer the
+ * type from their initialiser expression. For these situations we create a new DelegatingJacsalType object of
+ * type UNKNOWN. The object has an embedded Expr and will delegate to the Expr.type object once known. This
+ * Expr.type starts off as null but once the Resolver has resolved types and variables it will have an actual
+ * type that the DelegatingJacsalType will start delegating to.</p>
+ */
 public class JacsalType {
 
   enum TypeEnum {
@@ -43,6 +59,7 @@ public class JacsalType {
     MAP,
     LIST,
     INSTANCE,
+    CLASS,
     ANY,
     FUNCTION,
     // internal use only
@@ -52,7 +69,8 @@ public class JacsalType {
     STRING_ARR,
     ITERATOR,
     MATCHER,
-    CONTINUATION
+    CONTINUATION,
+    UNKNOWN        // Used as placeholder for "var" until we know type of initialiser for a variable
   }
 
   public static JacsalType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
@@ -78,16 +96,19 @@ public class JacsalType {
   public static JacsalType MATCHER      = createRefType(TypeEnum.MATCHER);
   public static JacsalType CONTINUATION = createRefType(TypeEnum.CONTINUATION);
   public static JacsalType INSTANCE     = createRefType(TypeEnum.INSTANCE);
+  public static JacsalType CLASS        = createRefType(TypeEnum.CLASS);
+  public static JacsalType UNKNOWN      = createRefType(TypeEnum.UNKNOWN);
 
   private TypeEnum type;
   private boolean  boxed;
   private boolean  isRef;
 
-  // Used for INSTANCE types
+  // Used for INSTANCE and CLASS types
   private String          internalName    = null;
-  private List<String>    namePath        = null;
   private ClassDescriptor classDescriptor = null;
-  private boolean         isResolved      = true;
+  private List<Expr>      className       = null;  // Unresolved className which resolves to classDescriptor
+
+  protected JacsalType() {}
 
   private JacsalType(TypeEnum type, boolean boxed, boolean isRef) {
     this.type = type;
@@ -108,15 +129,42 @@ public class JacsalType {
   public static JacsalType createInstance(String name) {
     JacsalType type   = createRefType(TypeEnum.INSTANCE);
     type.internalName = name;
-    type.isResolved   = true;
     return type;
   }
 
-  public static JacsalType createInstance(List<String> namePath) {
-    JacsalType type = createRefType(TypeEnum.INSTANCE);
-    type.namePath  = namePath;
-    type.isResolved = false;
+  public static JacsalType createInstance(ClassDescriptor clss) {
+    JacsalType type      = createRefType(TypeEnum.INSTANCE);
+    type.classDescriptor = clss;
+    type.internalName    = type.classDescriptor.getInternalName();
     return type;
+  }
+
+  public static JacsalType createInstance(List<Expr> className) {
+    JacsalType type = createRefType(TypeEnum.INSTANCE);
+    type.className  = className;
+    return type;
+  }
+
+  // Create instance type from class type
+  public JacsalType createInstance() {
+    if (!is(CLASS)) {
+      throw new IllegalStateException("Internal error: unexpected type " + this);
+    }
+    return createInstance(getClassDescriptor());
+  }
+
+  public static JacsalType createClass(ClassDescriptor descriptor) {
+    var classType = createInstance(descriptor);
+    classType.type = TypeEnum.CLASS;
+    return classType;
+  }
+
+  public static JacsalType createUnknown() {
+    return new DelegatingJacsalType(UNKNOWN);
+  }
+
+  public void typeDependsOn(Expr expr) {
+    throw new IllegalStateException("Internal error: typeDependsOn() should only be invoke on UNKNOWN types not " + this);
   }
 
   public TypeEnum getType() {
@@ -148,6 +196,7 @@ public class JacsalType {
       case OBJECT_ARR: return OBJECT_ARR;
       case LONG_ARR:   return LONG_ARR;
       case STRING_ARR: return STRING_ARR;
+      case VAR:        return createUnknown();
       default:  throw new IllegalStateException("Internal error: unexpected token " + tokenType);
     }
   }
@@ -170,6 +219,7 @@ public class JacsalType {
       case OBJECT_ARR: return TokenType.OBJECT_ARR;
       case LONG_ARR:   return TokenType.LONG_ARR;
       case STRING_ARR: return TokenType.STRING_ARR;
+      case UNKNOWN:    return TokenType.VAR;
       default: throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
   }
@@ -215,13 +265,21 @@ public class JacsalType {
   }
 
   /**
-   * Check if type is one of the supplied types
+   * Check if type is one of the supplied types.
    * @param types array of types
    * @return true if type is one of the types
    */
   public boolean is(JacsalType... types) {
     for (JacsalType type: types) {
+      type = type.getDelegate();
       if (this == type) {
+        return true;
+      }
+      // Can't use == for INSTANCE/CLASS type since we create a new one for each class
+      if (this.type == TypeEnum.INSTANCE && type.type == TypeEnum.INSTANCE) {
+        return true;
+      }
+      if (this.type == TypeEnum.CLASS && type.type == TypeEnum.CLASS) {
         return true;
       }
     }
@@ -236,11 +294,16 @@ public class JacsalType {
    */
   public boolean isBoxedOrUnboxed(JacsalType... types) {
     for (JacsalType type: types) {
-      if (this == type || this == type.boxed() || this.boxed() == type) {
+      type = type.getDelegate();
+      if (this.type == type.type) {
         return true;
       }
     }
     return false;
+  }
+
+  protected JacsalType getDelegate() {
+    return this;
   }
 
   ///////////////////////////////////////
@@ -300,8 +363,8 @@ public class JacsalType {
    * @return resulting type
    */
   public static JacsalType result(JacsalType type1, Token operator, JacsalType type2) {
-    type1 = type1.unboxed();
-    type2 = type2.unboxed();
+    type1 = type1.getDelegate().unboxed();
+    type2 = type2.getDelegate().unboxed();
     if (operator.is(IN,BANG_IN)) {
       if (!type2.is(ANY,STRING,LIST,MAP,ITERATOR)) {
         throw new CompileError("Type " + type2 + " is not a valid type for right-hand side of '" + operator.getChars() + "'", operator);
@@ -396,19 +459,24 @@ public class JacsalType {
     if (type1.is(type2)) {
       return type1;
     }
-    return resultMap.get(new TypePair(type1.unboxed(), type2.unboxed()));
+    return resultMap.get(new TypePair(type1.getDelegate().unboxed(), type2.getDelegate().unboxed()));
   }
 
   /**
    * Check if type is compatible and can be converted to given type
-   * @param type  the type to be converted to
+   * @param otherType  the type to be converted to
    * @return true if convertible
    */
-  public boolean isConvertibleTo(JacsalType type) {
-    if (isBoxedOrUnboxed(type))              { return true; }
-    if (is(ANY) || type.is(ANY))             { return true; }
-    if (isNumeric() && type.isNumeric())     { return true; }
-    //if (type.is(STRING) && !is(FUNCTION))    { return true; }
+  public boolean isConvertibleTo(JacsalType otherType) {
+    //if (otherType.isBoxedOrUnboxed(BOOLEAN))     { return true; }
+    if (isBoxedOrUnboxed(otherType))             { return true; }
+    if (is(ANY) || otherType.is(ANY))            { return true; }
+    if (isNumeric() && otherType.isNumeric())    { return true; }
+    if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
+      if (getClassDescriptor() == null)           { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
+      if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
+      return getClassDescriptor().isSameOrChildOf(otherType.getClassDescriptor());
+    }
     return false;
   }
 
@@ -432,7 +500,7 @@ public class JacsalType {
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
       case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
       case CONTINUATION:   return Type.getDescriptor(Continuation.class);
-      default:             throw new UnsupportedOperationException();
+      default:             throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
   }
 
@@ -456,7 +524,7 @@ public class JacsalType {
       case ITERATOR:       return Type.getType(Iterator.class);
       case MATCHER:        return Type.getType(RegexMatcher.class);
       case CONTINUATION:   return Type.getType(Continuation.class);
-      default:             throw new UnsupportedOperationException();
+      default:             throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
   }
 
@@ -480,11 +548,11 @@ public class JacsalType {
       case MATCHER:      return Type.getInternalName(RegexMatcher.class);
       case CONTINUATION: return Type.getInternalName(Continuation.class);
       case INSTANCE:
-        if (!isResolved) {
-          throw new IllegalStateException("Jacsal instance type not resolved: " + this);
+      case CLASS:
+        if (internalName != null) {
+          return internalName;
         }
-        return internalName;
-        //return classDescriptor.getInternalName();
+        return getClassDescriptor().getInternalName();
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }
@@ -582,31 +650,33 @@ public class JacsalType {
       case MATCHER:      return "Matcher";
       case ITERATOR:     return "Iterator";
       case CONTINUATION: return "Continuation";
-      case INSTANCE:
-        if (isResolved) {
-          return "Instance<" + classDescriptor.getPackagedName() + ">";
-        }
-        return "Instance<" + String.join(".", namePath) + ">";
+      case INSTANCE:     return "Instance<" + getPackagedName() + ">";
+      case CLASS:        return "Class<" + getPackagedName() + ">";
+      case UNKNOWN:      return "UNKNOWN";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
+  }
+
+  private String getPackagedName() {
+    if (getClassDescriptor() == null) {
+      return internalName;
+    }
+    return classDescriptor.getPackagedName();
+  }
+
+  public List<Expr> getClassName() {
+    return className;
   }
 
   @Override public String toString() {
     return typeName();
   }
 
-  public void resolve(ClassDescriptor classDescriptor) {
-    this.classDescriptor = classDescriptor;
-    this.isResolved = true;
+  public void setClassDescriptor(ClassDescriptor descriptor) {
+    this.classDescriptor = descriptor;
   }
 
-  public boolean isChildOf(JacsalType parent) {
-    if (!is(INSTANCE) || !parent.is(INSTANCE)) {
-      return false;
-    }
-    if (!isResolved || !parent.isResolved) {
-      throw new IllegalStateException("Type not resolved");
-    }
-    return classDescriptor.isChildOf(parent.classDescriptor);
+  public ClassDescriptor getClassDescriptor() {
+    return classDescriptor;
   }
 }
