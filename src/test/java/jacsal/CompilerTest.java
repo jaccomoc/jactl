@@ -2328,6 +2328,7 @@ class CompilerTest extends BaseTest {
 
     test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
     test("[this:1, if:2, while:[if:[z:3],for:3]].while.if.z", 3);
+    test("[a:1]['a']", 1);
   }
 
   @Test public void listMapVariables() {
@@ -2396,6 +2397,14 @@ class CompilerTest extends BaseTest {
     test("[1,2,3] != [1,2,3]", false);
     test("[a:1,b:2,c:3] != [b:2,c:3]", true);
     test("[a:1,b:2,c:3] != [b:2,a:1,c:3]", false);
+    test("def x = [a:1]; x['a']", 1);
+    test("def x = [a:1]; x['a'] = 2; x.a", 2);
+    test("def x = [a:1]; def f = 'a'; x[f]", 1);
+    test("def x = [a:1]; def f = 'a'; x[f] = 2; x.a", 2);
+    test("Map x = [a:1]; x['a']", 1);
+    test("Map x = [a:1]; x['a'] = 2; x.a", 2);
+    test("Map x = [a:1]; def f = 'a'; x[f]", 1);
+    test("Map x = [a:1]; def f = 'a'; x[f] = 2; x.a", 2);
   }
 
   @Test public void fieldAssignments() {

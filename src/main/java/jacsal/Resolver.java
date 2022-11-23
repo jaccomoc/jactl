@@ -841,7 +841,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (dottedAcess && !parent.type.is(ANY,MAP,INSTANCE)) {
       throw new CompileError("Invalid object type (" + parent.type + ") for field access", accessType);
     }
-    if (!dottedAcess && !parent.type.is(ANY,LIST)) {
+    if (!dottedAcess && !parent.type.is(ANY,LIST,MAP)) {
       if (parent.type.is(STRING)) {
         throw new CompileError("Cannot assign to element of String", accessType);
       }
