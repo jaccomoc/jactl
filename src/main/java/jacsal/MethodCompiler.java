@@ -2601,7 +2601,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     switch (varDecl.type.getType()) {
       case INT:
-        if (varDecl.type.isBoxed() || varDecl.isHeapLocal || amount == null) {
+        if (varDecl.type.isBoxed() || varDecl.isHeapLocal || varDecl.isField || amount == null) {
           incOrDec.accept(() -> { mv.visitInsn(isInc ? IADD : ISUB); pop(); });
         }
         else {
@@ -3121,7 +3121,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return;   // Nothing to do for globals or vars that already have a slot
     }
 
-    if (var.isField) {
+    if (var.isField && !var.owner.isWrapper) {
       classCompiler.defineField(var.name.getStringValue(), var.type);
       return;
     }

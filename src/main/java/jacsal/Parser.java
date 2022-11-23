@@ -540,7 +540,7 @@ public class Parser {
   private Stmt.ClassDecl classDecl() {
     var className = expect(IDENTIFIER);
     var baseClass = matchAny(EXTENDS) ? className() : null;
-    expect(LEFT_BRACE);
+    var leftBrace = expect(LEFT_BRACE);
     Stmt.Block classBlock = block(RIGHT_BRACE, () -> declaration(true));
 
     // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
@@ -558,15 +558,22 @@ public class Parser {
                                                       .map(stmt -> (Stmt.VarDecl)stmt)
                                                       .collect(Collectors.toList());
 
-    // Create a default initialiser if field doesn't already have one
-    fields.stream()
-          .filter(field -> field.declExpr.initialiser == null)
-          .forEach(field -> field.declExpr.initialiser = new Expr.DefaultValue(field.name, field.declExpr.type));
+//    // Create a default initialiser if field doesn't already have one
+//    fields.stream()
+//          .filter(field -> field.declExpr.initialiser == null)
+//          .forEach(field -> field.declExpr.initialiser = new Expr.DefaultValue(field.name, field.declExpr.type));
 
-    // Replace stmts in block with just the fields statements
-    classBlock.stmts.stmts = new ArrayList<>(fields);
+    // Create varDecl for "this"
+    JacsalType   instanceType = JacsalType.createInstance(List.of(new Expr.Identifier(className)));
+    Token thisIdent = className.newIdent(Utils.THIS_VAR);
+    Expr.VarDecl varDecl = new Expr.VarDecl(thisIdent, null);
+    varDecl.isResultUsed = false;
+    varDecl.type = instanceType;
+    varDecl.isField = true;
+    varDecl.slot = 0;                // "this" is always in local var slot 0
+    var thisStmt = new Stmt.VarDecl(thisIdent, varDecl);
 
-    // We are left with a block of field declarations. We then generate an initialisation method _$j$init
+    // We have a list of field declarations. We then generate an initialisation method _$j$init
     // that initialises the fields based on what is passed in. So if x,y,z correspond to the fields of the class:
     //   X _$j$init(x=...,y=...,z=...) { this.x = x; this.y = y; this.z = z; }
     // Note that the initialisers for the fields will become initialisers of the parameters to _$j$newInstance
@@ -578,14 +585,16 @@ public class Parser {
     // For each field we create a parameter from the varDecl for our init method and move the initialiser from the
     // field to the parameter.
     List<Stmt.VarDecl> params = fields.stream()
-                                      .map(field -> createParam(field.declExpr))
+                                      .map(field -> createInitParam(field.declExpr))
                                       .collect(Collectors.toList());
+    var initStmts = new Stmt.Stmts();
+    initStmts.stmts.addAll(fields);
+    var initBlock = new Stmt.Block(leftBrace, initStmts);
+    Stmt.FunDecl initMethod = convertBlockToFunction(initName, initBlock, instanceType, params, false);
+    initMethod.declExpr.isInitMethod = true;
+    createVariableForFunction(initMethod);
 
-    JacsalType   instanceType = JacsalType.createInstance(List.of(new Expr.Identifier(className)));
-    Stmt.FunDecl funDecl      = convertBlockToFunction(initName, classBlock, instanceType, params, false);
-    createVariableForFunction(funDecl);
-
-    // Add to block (where a,b, etc are the fields):
+    // Add to initBlock (where a,b, etc are the fields):
     //  this.a = a; this.b = b; ...
     //  return this;
     fields.forEach(field -> {
@@ -595,21 +604,24 @@ public class Parser {
                                         new Token(EQUAL, field.name),
                                         new Expr.Identifier(field.name));
       assign.isResultUsed = false;
-      classBlock.stmts.stmts.add(new Stmt.ExprStmt(field.name, assign));
+      initStmts.stmts.add(new Stmt.ExprStmt(field.name, assign));
     });
-    Token thisIdent = className.newIdent(Utils.THIS_VAR);
-    classBlock.stmts.stmts.add(new Stmt.Return(className,
-                                               new Expr.Return(className,
-                                                               new Expr.Identifier(thisIdent),
-                                                               instanceType)));
 
-    var classDecl = new Stmt.ClassDecl(className, packageName, baseClass, funDecl, methods, innerClasses, false);
+    // Finally, return "this" from init method
+    initStmts.stmts.add(new Stmt.Return(className,
+                                        new Expr.Return(className,
+                                                        new Expr.Identifier(thisIdent),
+                                                        instanceType)));
+
+    // Class block will be:
+    //   thisVarDecl
+    //   initMethod (containing fields)
+    //   methods
+    //   innerClasses
+    classBlock.stmts.stmts = Utils.concat(thisStmt, initMethod, methods, innerClasses);
+
+    var classDecl = new Stmt.ClassDecl(className, packageName, baseClass, classBlock, Utils.concat(initMethod, methods), innerClasses, false);
     classDecl.fieldVars.putAll(fields.stream().collect(Collectors.toMap(f -> f.name.getStringValue(), f -> f.declExpr)));
-    Expr.VarDecl varDecl = new Expr.VarDecl(thisIdent, null);
-    varDecl.isResultUsed = false;
-    varDecl.type = instanceType;
-    varDecl.isField = true;
-    varDecl.slot = 0;                // "this" is always in local var slot 0
     classDecl.thisField = varDecl;
     return classDecl;
   }
@@ -928,11 +940,11 @@ public class Parser {
   private Expr newInstance() {
     var token     = expect(NEW);
     var className = JacsalType.createInstance(className());
-    var call      = expect(LEFT_PAREN);
+    var leftParen = expect(LEFT_PAREN);
     var args      = arguments();
     // We create the instance and then invoke _$j$init on it
     var invokeNew  = new Expr.InvokeNew(token, className);
-    return new Expr.MethodCall(token, invokeNew, new Token(DOT, token), Utils.JACSAL_INIT, token, args);
+    return new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, token), Utils.JACSAL_INIT, token, args);
   }
 
   /**
@@ -1471,7 +1483,8 @@ public class Parser {
     return createParam(token.newIdent(Utils.IT_VAR), ANY, new Expr.Literal(new Token(NULL, token)));
   }
 
-  private Stmt.VarDecl createParam(Expr.VarDecl varDecl) {
+  // Create parameter for class instance initialiser method
+  private Stmt.VarDecl createInitParam(Expr.VarDecl varDecl) {
     Stmt.VarDecl paramDecl = createParam(varDecl.name, varDecl.type, varDecl.initialiser);
     paramDecl.declExpr.paramVarDecl = varDecl;
     varDecl.initialiser = null;

@@ -1816,9 +1816,9 @@ class CompilerTest extends BaseTest {
     testError("def x = x + 1", "variable initialisation cannot refer to itself");
     test("def x = 2; if (true) { def x = 4; x++ }; x", 2);
     test("def x = 2; if (true) { def x = 4; x++; { def x = 17; x = x + 5 } }; x", 2);
-    testError("def x = 2; { def x = 3; def x = 4; }", "already declared in this scope");
-    testError("int f() { def x = 3; def x = 4; }", "already declared in this scope");
-    testError("int f(x) { def x = 3; }", "already declared in this scope");
+    testError("def x = 2; { def x = 3; def x = 4; }", "clashes with previously declared variable");
+    testError("int f() { def x = 3; def x = 4; }", "clashes with previously declared variable");
+    testError("int f(x) { def x = 3; }", "clashes with previously declared variable");
   }
 
   @Test public void exprStrings() {
@@ -3541,7 +3541,7 @@ class CompilerTest extends BaseTest {
     test("def f(x) { x * x }; f(2)", 4);
     test("int f(x) { if (x == 1) 1 else x * f(x - 1) }; f(3)", 6);
     test("def f(x) { if (x == 1) 1 else x * f(x - 1) }; f(3) + f(4)", 30);
-    testError("def f(int x) { def x = 1; x++ }", "already declared");
+    testError("def f(int x) { def x = 1; x++ }", "clashes with previously declared variable");
 
     test("int f(x) { { def x = 3; return x } }; f(1)", 3);
     test("int f(x) { { def x = 3; x } }; f(1)", 3);

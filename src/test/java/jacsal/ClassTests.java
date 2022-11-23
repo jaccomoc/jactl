@@ -51,6 +51,18 @@ public class ClassTests extends BaseTest {
     test("class X { def f(x){x*x} }; def x = new X(); def g = x.f; g(3)", 9);
     test("class X { int i = 2; def f(x){i*x} }; def x = new X(); def g = x.f; g(3)", 6);
     test("class X { int i = 2; def f(x){i*x} }; def x = new X(); def g = x.\"${'f'}\"; g(3)", 6);
+    test("class X { def f = {it*it} }; new X().f(2)", 4);
+    test("class X { def f = {it*it} }; new X().\"${'f'}\"(2)", 4);
+    test("class X { def f = {it*it} }; X x = new X(); x.f(2)", 4);
+    test("class X { def f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
+    test("class X { def f = {it*it} }; def x = new X(); x.f(2)", 4);
+    test("class X { def f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
+    test("class X { var f = {it*it} }; new X().f(2)", 4);
+    test("class X { var f = {it*it} }; new X().\"${'f'}\"(2)", 4);
+    test("class X { var f = {it*it} }; X x = new X(); x.f(2)", 4);
+    test("class X { var f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
+    test("class X { var f = {it*it} }; def x = new X(); x.f(2)", 4);
+    test("class X { var f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
 //    test("class X { Y y }; class Y { X x };", null);
   }
 
@@ -60,14 +72,14 @@ public class ClassTests extends BaseTest {
 
   @Test public void simpleFields() {
     test("class X { var i = 1 }; new X().i", 1);
-    test("class X { int i }; new X().i", 0);
-    test("class X { long i }; new X().i", 0L);
-    test("class X { double i }; new X().i", 0D);
-    test("class X { Decimal i }; new X().i", "#0");
-    test("class X { String i }; new X().i", "");
-    test("class X { Map i }; new X().i", Map.of());
-    test("class X { List i }; new X().i", List.of());
-    test("class X { def i }; new X().i", null);
+    testError("class X { int i }; new X().i", "missing mandatory arguments");
+    test("class X { long i=0 }; new X().i", 0L);
+    test("class X { double i=0 }; new X().i", 0D);
+    test("class X { Decimal i=0 }; new X().i", "#0");
+    test("class X { String i='' }; new X().i", "");
+    test("class X { Map i=[:] }; new X().i", Map.of());
+    test("class X { List i=[] }; new X().i", List.of());
+    test("class X { def i=null }; new X().i", null);
     test("class X { int i = 1 }; new X().i", 1);
     test("class X { int i = 1 }; new X().\"${'i'}\"", 1);
     test("class X { int i = 1 }; X x = new X(); x.\"${'i'}\"", 1);
@@ -77,6 +89,25 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 1; int j = i+1 }; new X().j", 2);
     test("class X { int i = 1; int j = i+1 }; new X(3).j", 4);
     test("class X { int i = 1; int j = i+1 }; new X(3,7).j", 7);
+    testError("class X { int i; int j=2; int k }; new X(1,2).j", "missing mandatory arguments");
+    testError("class X { int i; int j=2; int k }; new X(i:1,j:2).j", "missing value");
+    test("class X { int i; int j=2; int k }; new X(i:1,k:3).k", 3);
+    test("class X { int i; int j=2; int k }; new X(i:1,k:3).j", 2);
+  }
+
+  @Test public void fieldsWithInitialisers() {
+    test("class X { int i = 1; long j = i + 2 }; new X().j", 3L);
+    testError("class X { int i = j+1; long j = i + 2 }; new X().j", "forward reference");
+    test("class X { int i = 1; long j = i+1; long k = j+1 }; new X().k", 3L);
+
+    test("class X { int i = 1; long j = this.i+2 }; new X().j", 3L);
+    test("class X { int i = this.j+1; long j = this.i+2 }; new X().j", 3L);
+
+    testError("class X { int x; def z={++x + ++y}; def y=++x+2 }; new X(3).z()", "forward reference");
+    test("class X { int x; def z(){++x + ++y}; def y=++x+2 }; new X(3).z()", 12);
+    test("class X { int x; def y=++x+2; def z={++x + ++y} }; new X(3).z()", 12);
+    test("class X { int x; def y=++x+2; def z={++x + ++y} }; new X(3,2).z()", 7);
+    test("class X { int x; def y=++x+2; def z={++x + ++y} }; def x = new X(0); x.x++; x.z()", 7);
   }
 
   @Test public void mutatingPrimitiveFieldValues() {
@@ -202,29 +233,43 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void mutatingComplexFieldValues() {
-    test("class X { List a }; new X().\"${'a'}\" = [3]", List.of(3));
+    testError("class X { List a }; new X().\"${'a'}\" = [3]", "missing mandatory argument");
+    test("class X { List a = []}; new X().\"${'a'}\" = [3]", List.of(3));
     test("class X { List a = [1] }; X x = new X(); x.\"${'a'}\" = [3]", List.of(3));
-    test("class X { List a }; def x = new X(); x.\"${'a'}\" = [3]", List.of(3));
+    test("class X { List a = [1] }; X x = new X(); x.\"${'a'}\" = [3]; x.a", List.of(3));
+    test("class X { List a = [] }; def x = new X(); x.\"${'a'}\" = [3]", List.of(3));
+    test("class X { List a = [] }; def x = new X(); x.\"${'a'}\" = [3]; x.a", List.of(3));
     test("class X { List a = [1] }; new X().a += 3", List.of(1, 3));
-    test("class X { List a }; new X().\"${'a'}\" += 3", List.of(3));
-    test("class X { List a }; X x = new X(); x.\"${'a'}\" += 3", List.of(3));
+    test("class X { List a = [] }; new X().\"${'a'}\" += 3", List.of(3));
+    test("class X { List a = [] }; X x = new X(); x.\"${'a'}\" += 3", List.of(3));
+    test("class X { List a = [] }; X x = new X(); x.\"${'a'}\" += 3; x.a", List.of(3));
     test("class X { List a = [1] }; def x = new X(); x.\"${'a'}\" += 3", List.of(1, 3));
+    test("class X { List a = [1] }; def x = new X(); x.\"${'a'}\" += 3; x.a", List.of(1, 3));
 
-    test("class X { Map a }; new X().\"${'a'}\" = [a:3]", Map.of("a", 3));
+    testError("class X { Map a }; new X().\"${'a'}\" = [a:3]", "missing mandatory argument");
+    test("class X { Map a = [:] }; new X().\"${'a'}\" = [a:3]", Map.of("a", 3));
     test("class X { Map a = [b:1] }; X x = new X(); x.\"${'a'}\" = [a:3]", Map.of("a",3));
-    test("class X { Map a }; def x = new X(); x.\"${'a'}\" = [a:3]", Map.of("a",3));
+    test("class X { Map a = [b:1] }; X x = new X(); x.\"${'a'}\" = [a:3]; x.a", Map.of("a",3));
+    test("class X { Map a = [:] }; def x = new X(); x.\"${'a'}\" = [a:3]", Map.of("a",3));
+    test("class X { Map a = [:] }; def x = new X(); x.\"${'a'}\" = [a:3]; x.a", Map.of("a",3));
     test("class X { Map a = [a:1] }; new X().a += [b:3]", Map.of("a",1, "b",3));
-    test("class X { Map a }; new X().\"${'a'}\" += [b:3]", Map.of("b",3));
-    test("class X { Map a }; X x = new X(); x.\"${'a'}\" += [b:3]", Map.of("b",3));
+    test("class X { Map a = [:] }; new X().\"${'a'}\" += [b:3]", Map.of("b",3));
+    test("class X { Map a = [:] }; X x = new X(); x.\"${'a'}\" += [b:3]", Map.of("b",3));
+    test("class X { Map a = [:] }; X x = new X(); x.\"${'a'}\" += [b:3]; x.a", Map.of("b",3));
     test("class X { Map a = [a:1] }; def x = new X(); x.\"${'a'}\" += [b:3]", Map.of("a",1, "b",3));
+    test("class X { Map a = [a:1] }; def x = new X(); x.\"${'a'}\" += [b:3]; x.a", Map.of("a",1, "b",3));
 
     test("class X { String i = '1' }; new X().\"${'i'}\" = '3'", "3");
     test("class X { String i = '1' }; X x = new X(); x.\"${'i'}\" = '3'", "3");
+    test("class X { String i = '1' }; X x = new X(); x.\"${'i'}\" = '3'; x.i", "3");
     test("class X { String i = '1' }; def x = new X(); x.\"${'i'}\" = '3'", "3");
+    test("class X { String i = '1' }; def x = new X(); x.\"${'i'}\" = '3'; x.i", "3");
     test("class X { String i = '1' }; new X().i += '3'", "13");
     test("class X { String i = '1' }; new X().\"${'i'}\" += '3'", "13");
     test("class X { String i = '1' }; X x = new X(); x.\"${'i'}\" += '3'", "13");
+    test("class X { String i = '1' }; X x = new X(); x.\"${'i'}\" += '3'; x.i", "13");
     test("class X { String i = '1' }; def x = new X(); x.\"${'i'}\" += '3'", "13");
+    test("class X { String i = '1' }; def x = new X(); x.\"${'i'}\" += '3'; x.i", "13");
   }
 
   @Test public void newlinesInClassDecl() {

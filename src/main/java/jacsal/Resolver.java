@@ -182,7 +182,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Find our functions and fields and add them to the ClassDescriptor
     if (stmt.scriptMain == null) {
       stmt.methods.forEach(decl -> {
-        //      stmt.initMethod.declExpr.block.stmts.stmts.forEach(decl -> {
         if (decl instanceof Stmt.FunDecl) {
           var                funDecl            = ((Stmt.FunDecl) decl).declExpr;
           String             methodName         = funDecl.nameToken.getStringValue();
@@ -194,8 +193,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
       });
       stmt.fieldVars.values().forEach(varDecl -> {
-//        if (decl instanceof Stmt.VarDecl) {
-//          var    varDecl   = ((Stmt.VarDecl) decl).declExpr;
           if (varDecl.isField) {
             String fieldName = varDecl.name.getStringValue();
             if (Functions.lookupMethod(ANY, fieldName) != null) {
@@ -206,7 +203,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
             }
           }
       });
-      classDescriptor.addMethod(Utils.JACSAL_INIT, stmt.initMethod.declExpr.functionDescriptor);
     }
 
     if (stmt.scriptMain == null) {
@@ -216,14 +212,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     classStack.push(stmt);
     try {
-      // Declare methods
-      stmt.methods.forEach(method -> {
-        //method.declExpr.varDecl.owner = ... ?
-        define(method.declExpr.nameToken, method.declExpr.varDecl);
-      });
-      resolve(stmt.initMethod);
-      stmt.methods.forEach(method -> resolve(method));
-      stmt.innerClasses.forEach(clss -> resolve(clss));
+//      // Declare methods
+//      stmt.methods.forEach(method -> {
+//        define(method.declExpr.nameToken, method.declExpr.varDecl);
+//      });
+//      resolve(stmt.initMethod);
+//      stmt.methods.forEach(method -> resolve(method));
+//      stmt.innerClasses.forEach(clss -> resolve(clss));
+      resolve(stmt.classBlock);
       resolve(stmt.scriptMain);
     }
     finally {
@@ -364,7 +360,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       captureArrVar.type = MATCHER;
       captureArrVar.owner = functions.peek();
       captureArrVar.isResultUsed = false;
-      declare(captureArrName);
+      declare(captureArrVar);
       define(captureArrName, captureArrVar);
       expr.captureArrVarDecl = captureArrVar;
       // Insert a VarDecl statement before current statement so that if we are in a loop our CAPTURE_VAR
@@ -645,14 +641,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = FUNCTION;
     }
 
-    // If we have a field then we are in the initialiser method and there will be a parameter of the same
-    // name that has already been declared. We don't want to shadow the parameter so we don't add fields to
-    // the variables at this scope.
-    if (!expr.isField) {
-      // Declare the variable (but don't define it yet) so that we can detect self-references
-      // in the initialiser. E.g. we can catch:  int x = x + 1
-      declare(expr.name);
-    }
+    // Declare the variable (but don't define it yet) so that we can detect self-references
+    // in the initialiser. E.g. we can catch:  int x = x + 1
+    declare(expr);
 
     JacsalType type = resolve(expr.initialiser);
     if (type != null && !type.isConvertibleTo(expr.type)) {
@@ -660,9 +651,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                              expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
     }
 
-    if (!expr.isField) {
-      define(expr.name, expr);
-    }
+    define(expr.name, expr);
     return expr.type;
   }
 
@@ -690,7 +679,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                                       : parent.functionDescriptor.implementingMethod + "$" + methodName;
 
       // Create a wrapper function that takes var of var arg and named argument handling
-      expr.wrapper = createWrapperFunction(expr);
+      expr.wrapper = createVarArgWrapper(expr);
       expr.wrapper.functionDescriptor.implementingMethod = Utils.wrapperName(expr.functionDescriptor.implementingMethod);
       expr.wrapper.functionDescriptor.implementingClass  = implementingClass;
       expr.functionDescriptor.wrapperMethod = expr.wrapper.functionDescriptor.implementingMethod;
@@ -986,6 +975,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         expr.type = descriptor.returnType;
         return expr.type;
       }
+      // Could be a field that has a MethodHandle in it
+      if (expr.parent.type.is(INSTANCE)) {
+        var classDescriptor = expr.parent.type.getClassDescriptor();
+        JacsalType fieldType = classDescriptor.getField(expr.methodName);
+        if (!fieldType.is(FUNCTION,ANY)) {
+          throw new CompileError("No such method/field " + expr.methodName + " for object of type " + expr.parent.type, expr.methodNameLocation);
+        }
+      }
+      else
       if (!expr.parent.type.is(MAP)) {
         // If we are not a Map then we know at compile time that method does not exist. (If we are a Map then at
         // runtime someone could create a field in the Map with this name so we have to wait until runtime.)
@@ -1304,25 +1302,27 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null);
 
-  private void declare(Token name) {
-    String varName = name.getStringValue();
-    Map<String,Expr.VarDecl> vars = getVars();
+  private void declare(Expr.VarDecl decl) {
+    String varName = decl.name.getStringValue();
+    // If we have a field then get class block variables, otherwise get vars for current block
+    var vars = decl.isField ? classStack.peek().classBlock.variables : getVars();
     if (!jacsalContext.replMode || !isAtTopLevel()) {
-      Expr.VarDecl decl = vars.get(varName);
+      var existingDecl = vars.get(varName);
       // Allow fields to be shadowed by local variables
-      if (decl != null && !decl.isField) {
-        error("Variable with name " + varName + " already declared in this scope (" + functions.peek().nameToken.getStringValue() + ")", name);
+      if (existingDecl != null && !existingDecl.isField) {
+        error("Variable '" + varName + "' in scope " + functions.peek().nameToken.getStringValue() + " clashes with previously declared variable of same name", decl.name);
       }
     }
     // Add variable with type of UNDEFINED as a marker to indicate variable has been declared but is
     // not yet usable
-    vars.put(name.getStringValue(), UNDEFINED);
+    vars.put(varName, UNDEFINED);
   }
 
   private void define(Token name, Expr.VarDecl decl) {
-    Expr.FunDecl function = functions.peek();
+    var function = functions.peek();
     assert function != null;
-    Map<String,Expr.VarDecl> vars = getVars();
+    // If we have a field then get class block variables, otherwise get vars for current block
+    var vars = decl.isField ? classStack.peek().classBlock.variables : getVars();
 
     // In repl mode we don't have a top level block and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
@@ -1340,6 +1340,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return functions.size() == 1 && functions.peek().blocks.size() == 1;
   }
 
+  // Get variables for current block
   private Map<String,Expr.VarDecl> getVars() {
     // Special case for repl mode where we ignore top level block
     if (jacsalContext.replMode && isAtTopLevel()) {
@@ -1488,21 +1489,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
 
+    if (name.equals(Utils.THIS_VAR) && inStaticFunc) {
+      throw new CompileError("Reference to 'this' in static context", location);
+    }
+
     if (varDecl == null) {
       block = null;
-
-      // Look for instance field in outer classes
-      for (Iterator<Stmt.ClassDecl> it = classStack.iterator(); it.hasNext();) {
-        if (name.equals(Utils.THIS_VAR)) {
-          if (inStaticFunc) { throw new CompileError("Reference to 'this' in static context", location); }
-          varDecl = it.next().thisField;
-          break;
-        }
-        varDecl = it.next().fieldVars.get(name);
-        if (varDecl != null) {
-          break;
-        }
-      }
     }
 
     if (varDecl == null) {
@@ -1593,6 +1585,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
     else {
       if (!functionLookup) {
+        if (classStack.peek().fieldVars.containsKey(name)) {
+          error("Forward reference to field " + name, location);
+        }
         error("Reference to unknown variable " + name, location);
       }
     }
@@ -1723,7 +1718,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
    * and validates that the number of arguments passed is legal for the function.</p>
    * <p>The wrapper function will also take care of named argument passing.</p>
    */
-  private Expr.FunDecl createWrapperFunction(Expr.FunDecl funDecl) {
+  private Expr.FunDecl createVarArgWrapper(Expr.FunDecl funDecl) {
     Token startToken = funDecl.startToken;
 
     /////////////////////////////
@@ -1776,6 +1771,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                                       ANY,    // wrapper always returns Object
                                                       wrapperParams,
                                                       funDecl.isStatic);
+    wrapperFunDecl.isInitMethod = funDecl.isInitMethod;
 
     Stmt.Stmts stmts = new Stmt.Stmts();
     List<Stmt> stmtList = stmts.stmts;
@@ -1915,11 +1911,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     realFunction.createVar = false;   // When in wrapper don't create a variable for the MethodHandle
     stmtList.add(realFunction);
 
-    // Now invoke the real function
-    List<Expr> args = funDecl.parameters.stream()
-                                        .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
-                                        .collect(Collectors.toList());
-    stmtList.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
+    // Now invoke the real function (unless we are the init method). For init method we already initialise
+    // the fields in the varargs wrapper so we don't need to invoke the non-wrapper version of the function.
+    if (!funDecl.isInitMethod) {
+      List<Expr> args = funDecl.parameters.stream()
+                                          .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
+                                          .collect(Collectors.toList());
+      stmtList.add(returnStmt(startToken, new Expr.InvokeFunction(startToken, funDecl, args), funDecl.returnType));
+    }
+    else {
+      // Init method just returns "this"
+      stmtList.add(returnStmt(startToken, new Expr.Identifier(startToken.newIdent(Utils.THIS_VAR)), funDecl.returnType));
+    }
 
     wrapperFunDecl.block      = new Stmt.Block(startToken, stmts);
     wrapperFunDecl.isWrapper  = true;
@@ -1952,6 +1955,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     param.initialiser                = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
     varDecl.declExpr.isExplicitParam = true;
     varDecl.declExpr.type            = param.type;
+    varDecl.declExpr.isField         = ownerFunDecl.isInitMethod;
     return varDecl;
   }
 

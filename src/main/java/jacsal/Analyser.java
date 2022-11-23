@@ -347,7 +347,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    analyse(stmt.initMethod);
+    analyse(stmt.classBlock);
     analyse(stmt.scriptMain);
     return null;
   }

@@ -97,7 +97,6 @@ public class ClassCompiler {
   }
 
   protected void compileClass() {
-    compileMethod(classDecl.initMethod.declExpr);
     classDecl.methods.forEach(method -> compileMethod(method.declExpr));
     classDecl.innerClasses.forEach(clss -> {
       var compiler = new ClassCompiler(source, context, pkg, clss);

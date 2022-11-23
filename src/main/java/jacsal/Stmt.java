@@ -112,7 +112,7 @@ abstract class Stmt {
     Token                name;
     String               packageName;
     List<Expr>           baseClass;
-    Stmt.FunDecl         initMethod;
+    Stmt.Block           classBlock;
     List<Stmt.FunDecl>   methods;
     List<Stmt.ClassDecl> innerClasses;
     boolean              isInterface;
@@ -127,18 +127,18 @@ abstract class Stmt {
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor classDescriptor;
-    ClassDecl(Token name, String packageName, List<Expr> baseClass, Stmt.FunDecl initMethod, List<Stmt.FunDecl> methods, List<Stmt.ClassDecl> innerClasses, boolean isInterface) {
+    ClassDecl(Token name, String packageName, List<Expr> baseClass, Stmt.Block classBlock, List<Stmt.FunDecl> methods, List<Stmt.ClassDecl> innerClasses, boolean isInterface) {
       this.name = name;
       this.packageName = packageName;
       this.baseClass = baseClass;
-      this.initMethod = initMethod;
+      this.classBlock = classBlock;
       this.methods = methods;
       this.innerClasses = innerClasses;
       this.isInterface = isInterface;
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
-    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClass=" + baseClass + ", " + "initMethod=" + initMethod + ", " + "methods=" + methods + ", " + "innerClasses=" + innerClasses + ", " + "isInterface=" + isInterface + "]"; }
+    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClass=" + baseClass + ", " + "classBlock=" + classBlock + ", " + "methods=" + methods + ", " + "innerClasses=" + innerClasses + ", " + "isInterface=" + isInterface + "]"; }
   }
 
   /**

@@ -361,6 +361,7 @@ abstract class Expr {
     Expr.FunDecl       wrapper;     // The wrapper method that handles var arg and named arg invocations
 
     boolean    isScriptMain = false; // Whether this is the funDecl for the script main function
+    boolean    isInitMethod = false; // Whether this is the init method (constructor) for a class
     boolean    isStatic = false;
     int        closureCount = 0;
     Stmt.While currentWhileLoop;     // Used by Resolver to find target of break/continue stmts

@@ -94,7 +94,7 @@ class Stmt {
     Token                name;
     String               packageName;
     List<Expr>           baseClass;
-    Stmt.FunDecl         initMethod;
+    Stmt.Block           classBlock;
     List<Stmt.FunDecl>   methods;
     List<Stmt.ClassDecl> innerClasses;
     boolean              isInterface;
