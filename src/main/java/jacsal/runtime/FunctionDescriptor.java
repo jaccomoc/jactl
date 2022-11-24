@@ -26,6 +26,7 @@ public class FunctionDescriptor {
   public JacsalType       firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
   public String           name;            // Jacsal method/function name
   public JacsalType       returnType;
+  public List<String>     paramNames;
   public List<JacsalType> paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
@@ -40,7 +41,7 @@ public class FunctionDescriptor {
   public boolean          isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean          isBuiltin;
   public boolean          isAsync;
-  public List<Integer>    asyncArgs = List.of(); // Async if any of these args are async
+  public List<Integer>    asyncArgs = List.of();     // Async if any of these args are async
 
   public FunctionDescriptor(String name, JacsalType returnType, int paramCount, int mandatoryArgCount, boolean needsLocation) {
     this.name = name;

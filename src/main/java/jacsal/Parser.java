@@ -16,6 +16,9 @@
 
 package jacsal;
 
+import jacsal.runtime.RuntimeUtils;
+
+import javax.swing.*;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -539,7 +542,7 @@ public class Parser {
    */
   private Stmt.ClassDecl classDecl() {
     var className = expect(IDENTIFIER);
-    var baseClass = matchAny(EXTENDS) ? className() : null;
+    var baseClass = matchAny(EXTENDS) ? JacsalType.createClass(className()) : null;
     var leftBrace = expect(LEFT_BRACE);
     Stmt.Block classBlock = block(RIGHT_BRACE, () -> declaration(true));
 
@@ -970,7 +973,8 @@ public class Parser {
     if (lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
       // For named args we create a list with single entry being the map literal that represents
       // the name:value pairs.
-      return List.of(mapEntries(RIGHT_PAREN));
+      Expr.MapLiteral mapEntries = mapEntries(RIGHT_PAREN);
+      return List.of(mapEntries);
     }
     else {
       return argList();
@@ -1161,7 +1165,10 @@ public class Parser {
   }
 
   private Expr.MapLiteral mapEntries(TokenType endToken) {
-    Expr.MapLiteral expr = new Expr.MapLiteral(previous());
+    boolean         isNamedArgs= endToken.is(RIGHT_PAREN);
+    String          paramOrKey = isNamedArgs ? "Parameter" : "Map key";
+    Expr.MapLiteral expr       = new Expr.MapLiteral(previous());
+    Set<String>     keys       = new HashSet<>();
     if (matchAnyIgnoreEOL(COLON)) {
       // Empty map
       expect(endToken);
@@ -1172,11 +1179,26 @@ public class Parser {
           expect(COMMA);
         }
         Expr key = mapKey();
+        if (key instanceof Expr.Literal) {
+          Object keyValue = ((Expr.Literal) key).value.getValue();
+          if (!(keyValue instanceof String)) {
+            throw new CompileError(paramOrKey + " must be String not " + RuntimeUtils.className(keyValue), key.location);
+          }
+          if (!keys.add(keyValue.toString())) {
+            throw new CompileError(paramOrKey + " '" + keyValue.toString() + "' occurs multiple times", key.location);
+          }
+        }
+        else {
+          if (isNamedArgs) {
+            throw new CompileError("Invalid parameter name", previous());
+          }
+        }
         expect(COLON);
         Expr value = expression(true);
         expr.entries.add(new Pair(key, value));
       }
     }
+    expr.namedArgs = isNamedArgs;
     return expr;
   }
 
@@ -1496,7 +1518,7 @@ public class Parser {
     decl.isParam = true;
     decl.isResultUsed = false;
     decl.type = type;
-    return new Stmt.VarDecl(new Token(type.tokenType(), name), decl);
+    return new Stmt.VarDecl(name, decl);
   }
 
   private Deque<Expr.FunDecl> functionStack() {

@@ -255,6 +255,7 @@ abstract class Expr {
   static class MapLiteral extends Expr {
     Token start;
     List<Pair<Expr,Expr>> entries = new ArrayList<>();
+    boolean namedArgs;   // whether this map is used as named args for function/method/constructor call
     MapLiteral(Token start) {
       this.start = start;
       this.location = start;
@@ -697,6 +698,24 @@ abstract class Expr {
     @Override public String toString() { return "DefaultValue[" + "token=" + token + ", " + "varType=" + varType + "]"; }
   }
 
+  /**
+   * For situations where we know the class name up front and don't want to have to create
+   * a new JacsalType value for it.
+   */
+  static class InstanceOf extends Expr {
+    Token  token;
+    Expr   expr;      // The object for which we are checking the type
+    String className; // The internal class name to check for
+    InstanceOf(Token token, Expr expr, String className) {
+      this.token = token;
+      this.expr = expr;
+      this.className = className;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInstanceOf(this); }
+    @Override public String toString() { return "InstanceOf[" + "token=" + token + ", " + "expr=" + expr + ", " + "className=" + className + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
@@ -732,5 +751,6 @@ abstract class Expr {
     T visitInvokeUtility(InvokeUtility expr);
     T visitInvokeNew(InvokeNew expr);
     T visitDefaultValue(DefaultValue expr);
+    T visitInstanceOf(InstanceOf expr);
   }
 }

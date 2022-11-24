@@ -38,8 +38,10 @@ public class Utils {
   public static final String JACSAL_SCRIPT_PREFIX = JACSAL_PREFIX + "Script";
 
   public static final String JACSAL_FIELDS_METHODS_MAP    = "_$j$FieldsAndMethods";
+  public static final String JACSAL_FIELDS_METHODS_GETTER = "_$j$getFieldsAndMethods";
   public static final String JACSAL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
   public static final String JACSAL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
+  public static final String JACSAL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
 
   public static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
   public static final String JACSAL_OUT_NAME = "out";      // Name of global to use as PrintStream for print/println
@@ -278,7 +280,7 @@ public class Utils {
     }
   }
 
-  public static void restoreValue(MethodVisitor mv, int idx, JacsalType type, Runnable loadArray) {
+  public static void loadStoredValue(MethodVisitor mv, int idx, JacsalType type, Runnable loadArray) {
     loadArray.run();            // Get long array or object array onto stack
     Utils.loadConst(mv, idx);
     mv.visitInsn(type.isPrimitive() ? LALOAD : AALOAD);

@@ -1191,7 +1191,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitMapLiteral(Expr.MapLiteral expr) {
-    _newInstance(HashMap.class);
+    _newInstance(expr.namedArgs ? NamedArgsMap.class : HashMap.class);
     push(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
@@ -1306,30 +1306,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var callee = (Expr.Identifier)expr.callee;
       Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
-      int        argCount   = expr.args.size();
-      final var  paramTypes = functionDescriptor.paramTypes;
-      // If the function takes more than one mandatory argument and we have a single arg of type List/Map/ANY then
-      // we assume that the arg is a list or map that contains the actual argument values and defer further validation
-      // until runtime.
-      if (functionDescriptor.mandatoryArgCount > 1 && argCount == 1 && expr.args.get(0).type.is(ANY,LIST,MAP)) {
-        // Nothing to do
-      }
-      else {
-        // Validate arguments are of the right type
-        JacsalType paramType = null;
-        for (int i = 0; i < argCount; i++) {
-          Expr       arg     = expr.args.get(i);
-          JacsalType argType = arg.type;
-          paramType = paramTypes.get(i);
-          // Check for varArgs (must be last param)
-          if (paramType.is(OBJECT_ARR)) {
-            break;
-          }
-          if (!argType.isConvertibleTo(paramType)) {
-            throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
-          }
-        }
-      }
+      validateArgs(expr.args, functionDescriptor, callee.location);
 
       if (functionDescriptor.isBuiltin) {
         invokeBuiltinFunction(expr, functionDescriptor);
@@ -1355,7 +1332,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        loadLocation(expr.location);
 
                        // Any arguments will be stored in an Object[]
-                       // TODO: support named args
                        loadArgsAsObjectArr(expr.args);
                      },
                      () -> invokeMethodHandle());
@@ -1382,11 +1358,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we know what method to invoke
     if (expr.methodDescriptor != null) {
       var method = expr.methodDescriptor;
+
+      validateArgs(expr.args, method, expr.leftParen);
+
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
       // (and method allows optional args) then invoke wrapper which will worry about filling
       // missing values.
-      if (expr.args.size() == method.paramCount) {
+      if (expr.args.size() == method.paramCount && !isNamedArgs(expr.args)) {
         // We can invoke the method directly as we have exact number of args required
         // TODO: handle var args when we get a builtin method that needs it
         invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
@@ -1588,7 +1567,75 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitInstanceOf(Expr.InstanceOf expr) {
+    compile(expr.expr);
+    mv.visitTypeInsn(INSTANCEOF, expr.className);
+    pop();
+    push(BOOLEAN);
+    return null;
+  }
+
   ///////////////////////////////////////////////////////////////
+
+  private static void validateArgs(List<Expr> args, FunctionDescriptor functionDescriptor, Token location) {
+    int        argCount   = args.size();
+    final var  paramTypes = functionDescriptor.paramTypes;
+    // If the function takes more than one mandatory argument and we have a single arg of type List/Map/ANY then
+    // we assume that the arg is a list or map that contains the actual argument values and defer further validation
+    // until runtime. Only exception is when map was parsed as namedArgs (i.e. f(x:1,y:2) rather than f([x:1,y:2]).
+    boolean namedArgs = isNamedArgs(args);
+    if (!namedArgs && functionDescriptor.mandatoryArgCount > 1 && argCount == 1 && args.get(0).type.is(ANY, LIST, MAP)) {
+      // Nothing to do
+      return;
+    }
+
+    List<String> paramNames = functionDescriptor.paramNames;
+    if (namedArgs && paramNames == null) {
+      throw new CompileError(functionDescriptor.name + " does not support invocation with named arguments", location);
+    }
+
+    if (namedArgs) {
+      var argsAsList = new ArrayList<Expr>();
+      var mapEntries = ((Expr.MapLiteral)args.get(0)).entries;
+      Function<Token,JacsalType> paramType = name -> {
+        for (int i = 0; i < paramNames.size(); i++) {
+          if (paramNames.get(i).equals(name.getStringValue())) {
+            return functionDescriptor.paramTypes.get(i);
+          }
+        }
+        throw new CompileError("No such parameter '" + name.getStringValue() + "'", name);
+      };
+
+      for (int i = 0; i < mapEntries.size(); i++) {
+        Token name = ((Expr.Literal)(mapEntries.get(i).first)).value;
+        JacsalType type = paramType.apply(name);
+        JacsalType argType = mapEntries.get(i).second.type;
+        if (!argType.isConvertibleTo(type)) {
+          throw new CompileError("Cannot convert argument of type " + argType + " to parameter type of " + type, name);
+        }
+      }
+      return;
+    }
+
+    // Validate arguments are of the right type
+    JacsalType paramType = null;
+    for (int i = 0; i < argCount; i++) {
+      Expr       arg     = args.get(i);
+      JacsalType argType = arg.type;
+      paramType = paramTypes.get(i);
+      // Check for varArgs (we already know it must be last param)
+      if (paramType.is(OBJECT_ARR)) {
+        break;
+      }
+      if (!argType.isConvertibleTo(paramType)) {
+        throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
+      }
+    }
+  }
+
+  private static boolean isNamedArgs(List<Expr> args) {
+    return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).namedArgs;
+  }
 
   private static JacsalType getFieldType(JacsalType type, String fieldName) {
     JacsalType fieldType = type.getClassDescriptor().getField(fieldName);
@@ -1632,7 +1679,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeUserFunction(Expr.Call expr, Expr.FunDecl funDecl, FunctionDescriptor func) {
     // We invoke wrapper if we don't have enough args since it will fill in missing
     // values for optional parameters
-    boolean invokeWrapper = expr.args.size() != func.paramTypes.size();
+    boolean invokeWrapper = expr.args.size() != func.paramTypes.size() || isNamedArgs(expr.args);
 
     // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
     var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocalParams : funDecl.heapLocalParams).values();
@@ -2192,6 +2239,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DECIMAL:     loadConst(BigDecimal.ZERO);   break;
       case STRING:      loadConst("");           break;
       case ANY:         loadConst(null);         break;
+      case INSTANCE:    loadConst(null);         break;
       case OBJECT_ARR:  loadConst(null);         break;
       case FUNCTION:    loadConst(null);         break;   // use null for the moment to indicate identity function
       case MATCHER:
@@ -2271,8 +2319,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     if (peek().is(ANY)) {
+      Label end = new Label();
+      if (!type.isPrimitive()) {
+        // Allow null
+        _dupVal();
+        mv.visitJumpInsn(IFNULL, end);
+      }
       ifInstanceof(type);
       throwIfFalse("Cannot cast to " + type, location);
+      mv.visitLabel(end);
       checkCast(type);
       return null;
     }
@@ -2964,7 +3019,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Iterator<JacsalType> iter = savedStack.descendingIterator();
       for (int i = size - 1; i >= numLocals; i--) {
         JacsalType type = iter.next();
-        Utils.restoreValue(mv, i, type, () -> _loadLocal(type.isPrimitive() ? longArr : objArr));
+        Utils.loadStoredValue(mv, i, type, () -> _loadLocal(type.isPrimitive() ? longArr : objArr));
         push(type);
       }
     };
@@ -2995,7 +3050,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       int slot2 = minimumSlot;
       for (int i = minimumSlot; i < numLocals; i++) {
         JacsalType type = savedLocals.get(slot2);
-        Utils.restoreValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
+        Utils.loadStoredValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
         _storeLocal(type, slot2);
         slot2 += slotsNeeded(type);
       }
@@ -3003,7 +3058,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Iterator<JacsalType> iter = savedStack.descendingIterator();
       for (int i = size - 1; i >= numLocals + numArgsAlreadyOnStack; i--) {
         JacsalType type = iter.next();
-        Utils.restoreValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
+        Utils.loadStoredValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
       }
       _loadLocal(continuationVar);
       mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation", "result", "Ljava/lang/Object;");

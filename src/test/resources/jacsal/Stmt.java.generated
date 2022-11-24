@@ -111,7 +111,7 @@ abstract class Stmt {
   static class ClassDecl extends Stmt {
     Token                name;
     String               packageName;
-    List<Expr>           baseClass;
+    JacsalType           baseClass;
     Stmt.Block           classBlock;
     List<Stmt.FunDecl>   methods;
     List<Stmt.ClassDecl> innerClasses;
@@ -127,7 +127,7 @@ abstract class Stmt {
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor classDescriptor;
-    ClassDecl(Token name, String packageName, List<Expr> baseClass, Stmt.Block classBlock, List<Stmt.FunDecl> methods, List<Stmt.ClassDecl> innerClasses, boolean isInterface) {
+    ClassDecl(Token name, String packageName, JacsalType baseClass, Stmt.Block classBlock, List<Stmt.FunDecl> methods, List<Stmt.ClassDecl> innerClasses, boolean isInterface) {
       this.name = name;
       this.packageName = packageName;
       this.baseClass = baseClass;

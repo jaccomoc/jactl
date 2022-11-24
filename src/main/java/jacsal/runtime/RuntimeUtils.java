@@ -999,7 +999,7 @@ public class RuntimeUtils {
           // _$j$StaticMethods field because the field exists in the parent JacsalObject class
           // which means we can't guarantee that class init for the actual class (which populates
           // the map) has been run yet.
-          Method staticMethods = clss.getMethod(Utils.JACSAL_STATIC_METHODS_GETTER);
+          Method staticMethods = clss.getMethod(Utils.JACSAL_STATIC_METHODS_STATIC_GETTER);
           Map<String,MethodHandle> map = (Map<String, MethodHandle>)staticMethods.invoke(null);
           return map.get(field.toString());
         }
@@ -1084,14 +1084,14 @@ public class RuntimeUtils {
     // is a generic builtin method that applies
     String       fieldName     = field.toString();
     JacsalObject jacsalObj     = (JacsalObject) parent;
-    Object       fieldOrMethod = jacsalObj._$j$FieldsAndMethods.get(fieldName);
+    Object       fieldOrMethod = jacsalObj._$j$getFieldsAndMethods().get(fieldName);
     if (fieldOrMethod instanceof MethodHandle) {
       // Need to bind method handle to instance
       fieldOrMethod = ((MethodHandle)fieldOrMethod).bindTo(parent);
     }
     if (fieldOrMethod == null && !createIfMissing) {
       // If createIfMissing is not set we can search for matching method
-      fieldOrMethod = jacsalObj._$j$StaticMethods.get(fieldName);
+      fieldOrMethod = jacsalObj._$j$getStaticMethods().get(fieldName);
       if (fieldOrMethod == null) {
         fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
       }
@@ -1104,7 +1104,7 @@ public class RuntimeUtils {
         if (value == null && createIfMissing) {
           if (JacsalObject.class.isAssignableFrom(classField.getType())) {
             JacsalObject fieldObj = (JacsalObject)classField.getType().getConstructor().newInstance();
-            fieldObj._$j$newInstance$w(null, source, offset, new Object[0]);
+            fieldObj._$j$init$w(null, source, offset, new Object[0]);
             classField.set(parent, fieldObj);
             value = fieldObj;
           }
@@ -1169,7 +1169,7 @@ public class RuntimeUtils {
     if (parent instanceof JacsalObject) {
       String       fieldName     = field.toString();
       JacsalObject jacsalObj     = (JacsalObject) parent;
-      Object       fieldOrMethod = jacsalObj._$j$FieldsAndMethods.get(fieldName);
+      Object       fieldOrMethod = jacsalObj._$j$getFieldsAndMethods().get(fieldName);
       if (fieldOrMethod == null || !(fieldOrMethod instanceof Field)) {
         throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
       }
@@ -1687,17 +1687,16 @@ public class RuntimeUtils {
   }
 
   public static Object removeOrThrow(Map map, String key, String source, int offset) {
-    Object result = map.remove(key);
-    if (result == null) {
-      throw new RuntimeError("Missing value for mandatory parameter '" + key + "'", source, offset);
+    if (map.containsKey(key)) {
+      return map.remove(key);
     }
-    return result;
+    throw new RuntimeError("Missing value for mandatory parameter/field '" + key + "'", source, offset);
   }
 
   public static boolean checkForExtraArgs(Map<String,Object> map, String source, int offset) {
     if (map.size() > 0) {
       String names = map.keySet().stream().collect(Collectors.joining(", "));
-      throw new RuntimeError("Invalid parameter name" + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
+      throw new RuntimeError("No such parameter" + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
     }
     return true;
   }

@@ -93,7 +93,7 @@ class Stmt {
   class ClassDecl extends Stmt {
     Token                name;
     String               packageName;
-    List<Expr>           baseClass;
+    JacsalType           baseClass;
     Stmt.Block           classBlock;
     List<Stmt.FunDecl>   methods;
     List<Stmt.ClassDecl> innerClasses;

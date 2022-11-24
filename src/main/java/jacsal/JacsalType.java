@@ -145,6 +145,12 @@ public class JacsalType {
     return type;
   }
 
+  public static JacsalType createClass(List<Expr> className) {
+    JacsalType classType = createInstance(className);
+    classType.type = TypeEnum.CLASS;
+    return classType;
+  }
+
   // Create instance type from class type
   public JacsalType createInstance() {
     if (!is(CLASS)) {

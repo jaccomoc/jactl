@@ -69,9 +69,40 @@ public class ClassCompiler {
       cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
     }
 
-    // Add static method for retrieving map of static Jacsal methods. We need to do this in every class
-    // to make sure that class init has been run to populate the map.
-    MethodVisitor mv = cv.visitMethod(ACC_STATIC | ACC_PUBLIC, Utils.JACSAL_STATIC_METHODS_GETTER,
+    String baseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : Type.getInternalName(Object.class);
+    cv.visit(V11, ACC_PUBLIC, internalName, null, baseName, new String[] { Type.getInternalName(JacsalObject.class) });
+
+    classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+    classInit.visitCode();
+
+    // Default constructor
+    constructor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+    constructor.visitCode();
+    constructor.visitVarInsn(ALOAD, 0);
+    constructor.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Object.class), "<init>", "()V", false);
+
+    var fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    fieldVisitor.visitEnd();
+    classInit.visitTypeInsn(NEW, "java/util/HashMap");
+    classInit.visitInsn(DUP);
+    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+    classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACSAL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_STATIC_METHODS_MAP, MAP.descriptor(), null, null);
+    fieldVisitor.visitEnd();
+    classInit.visitTypeInsn(NEW, "java/util/HashMap");
+    classInit.visitInsn(DUP);
+    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+    classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACSAL_STATIC_METHODS_MAP, "Ljava/util/Map;");
+
+    // Add instance method and static for retrieving map of static Jacsal methods
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACSAL_STATIC_METHODS_GETTER,
+                                      "()Ljava/util/Map;", null, null);
+    mv.visitCode();
+    mv.visitFieldInsn(GETSTATIC, internalName, Utils.JACSAL_STATIC_METHODS_MAP, "Ljava/util/Map;");
+    mv.visitInsn(ARETURN);
+    mv.visitMaxs(0, 0);
+    mv.visitEnd();
+    mv = cv.visitMethod(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_STATIC_METHODS_STATIC_GETTER,
                                       "()Ljava/util/Map;", null, null);
     mv.visitCode();
     mv.visitFieldInsn(GETSTATIC, internalName, Utils.JACSAL_STATIC_METHODS_MAP, "Ljava/util/Map;");
@@ -79,16 +110,24 @@ public class ClassCompiler {
     mv.visitMaxs(0, 0);
     mv.visitEnd();
 
-    classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
-    classInit.visitCode();
+    // Add method for retrieving map of fields and methods
+    mv = cv.visitMethod(ACC_PUBLIC, Utils.JACSAL_FIELDS_METHODS_GETTER,
+                        "()Ljava/util/Map;", null, null);
+    mv.visitCode();
+    mv.visitFieldInsn(GETSTATIC, internalName, Utils.JACSAL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
+    mv.visitInsn(ARETURN);
+    mv.visitMaxs(0, 0);
+    mv.visitEnd();
 
-    String parentClass = Type.getInternalName(JacsalObject.class);
-    cv.visit(V11, ACC_PUBLIC, internalName, null, parentClass, null);
-    // Default constructor
-    constructor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
-    constructor.visitCode();
-    constructor.visitVarInsn(ALOAD, 0);
-    constructor.visitMethodInsn(INVOKESPECIAL, parentClass, "<init>", "()V", false);
+    if (classDecl.baseClass != null) {
+      // Add all fields/methods from parent class to this one
+      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACSAL_STATIC_METHODS_MAP, MAP.descriptor());
+      classInit.visitFieldInsn(GETSTATIC, classDecl.baseClass.getInternalName(), Utils.JACSAL_STATIC_METHODS_MAP, MAP.descriptor());
+      classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "putAll", "(Ljava/util/Map;)V", true);
+      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACSAL_FIELDS_METHODS_MAP, MAP.descriptor());
+      classInit.visitFieldInsn(GETSTATIC, classDecl.baseClass.getInternalName(), Utils.JACSAL_FIELDS_METHODS_MAP, MAP.descriptor());
+      classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "putAll", "(Ljava/util/Map;)V", true);
+    }
 
     classInit.visitTryCatchBlock(classInitTryStart, classInitTryEnd, classInitCatchBlock, "java/lang/Exception");
     classInit.visitLabel(classInitTryStart);
@@ -228,7 +267,7 @@ public class ClassCompiler {
       // Store in static field
       classInit.visitFieldInsn(PUTSTATIC, internalName, staticHandleName, "Ljava/lang/invoke/MethodHandle;");
 
-      // For methods/functions store our either _$j$FieldsAndMethods or _$j$StaticMethods as appropriate
+      // For methods/functions store in either _$j$FieldsAndMethods or _$j$StaticMethods as appropriate
       if (!funDecl.isClosure()) {
         String mapName = funDecl.isStatic ? Utils.JACSAL_STATIC_METHODS_MAP : Utils.JACSAL_FIELDS_METHODS_MAP;
         classInit.visitFieldInsn(GETSTATIC, internalName, mapName, MAP.descriptor());
@@ -316,28 +355,33 @@ public class ClassCompiler {
     mv.visitCode();
 
     // Load parameters from the Continuation and invoke the function
-    mv.visitVarInsn(ALOAD, 0);
+    if (!funDecl.isStatic) {
+      mv.visitVarInsn(ALOAD, 0);
+    }
+
+    int continuationSlot = funDecl.isStatic ? 0 : 1;
 
     final Runnable loadObjectArr = () -> {
-      mv.visitVarInsn(ALOAD, 1);
+      mv.visitVarInsn(ALOAD, continuationSlot);
       mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation", "localObjects", "[Ljava/lang/Object;");
     };
 
-    int slot = 1;
+    // Generate code for loading saved parameter values back onto stack
+    int slot = funDecl.isStatic ? 0 : 1;
     for (int i = 0; i < funDecl.heapLocalParams.size(); i++) {
-      Utils.restoreValue(mv, slot++, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, 1, HEAPLOCAL));
+      Utils.loadStoredValue(mv, slot++, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, continuationSlot, HEAPLOCAL));
     }
 
-    mv.visitVarInsn(ALOAD, 1);   // Continuation
+    mv.visitVarInsn(ALOAD, continuationSlot);   // Continuation
     slot++;
 
     for (int i = 0; i < funDecl.parameters.size(); i++) {
       final var  declExpr = funDecl.parameters.get(i).declExpr;
       JacsalType type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
-      Utils.restoreValue(mv, slot++, type, () -> Utils.loadContinuationArray(mv, 1, type));
+      Utils.loadStoredValue(mv, slot++, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));
     }
 
-    mv.visitMethodInsn(INVOKEVIRTUAL, internalName, funDecl.functionDescriptor.implementingMethod, MethodCompiler.getMethodDescriptor(funDecl), false);
+    mv.visitMethodInsn(funDecl.isStatic ? INVOKESTATIC : INVOKEVIRTUAL, internalName, funDecl.functionDescriptor.implementingMethod, MethodCompiler.getMethodDescriptor(funDecl), false);
     Utils.box(mv, funDecl.returnType);   // Box if primitive
     mv.visitInsn(ARETURN);               // Always return Object from continuation wrapper
 

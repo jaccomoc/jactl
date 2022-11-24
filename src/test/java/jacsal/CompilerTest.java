@@ -664,6 +664,11 @@ class CompilerTest extends BaseTest {
     test("Decimal x = 3.0; x *= 2D; x", "#6.00");
     test("Decimal x = 3.0; x *= 2.0", "#6.00");
     test("Decimal x = 3.0; x *= 2.0; x", "#6.00");
+
+    test("int x = 'A'[0]", 65);
+    testError("int x = 'A' as int", "not a valid int");
+    testError("int x = 'A'", "cannot convert initialiser");
+    test("int x = (int)'A'", 65);
   }
 
   @Test public void simpleVariables() {
@@ -2329,6 +2334,8 @@ class CompilerTest extends BaseTest {
     test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
     test("[this:1, if:2, while:[if:[z:3],for:3]].while.if.z", 3);
     test("[a:1]['a']", 1);
+    testError("[(1):2]", "map key must be string");
+    testError("[a:2,b:3,a:4]", "key 'a' occurs multiple times");
   }
 
   @Test public void listMapVariables() {
@@ -3678,32 +3685,51 @@ class CompilerTest extends BaseTest {
     test("def f = { x,y,z -> x + y + z }; f(1,2,3) + f([1,2,3])", 12);
     test("def f = { x,y,z -> x + y + z }; def a = [1,2,3]; f(1,2,3) + f(a)", 12);
     test("def f = { x,y,z=3 -> x + y + z }; def a = [1,2]; f(1,2,3) + f(a)", 12);
+    test("def f(x, y) { x + y }; f([1,2])", 3);
     test("def f(x, y=3) { x + y }; f([1,2])", List.of(1,2,3));
+    test("def f(x, y) { x + y }; def a = [1,2]; f(a)", 3);
+    test("def f(x, y=3) { x + y }; def a = [1,2]; f(a)", List.of(1,2,3));
+    test("def f(x, y=3) { x + y }; f(1,2)", 3);
     test("def f(List x, y=3) { x + y }; f([1,2])", List.of(1,2,3));
     testError("def f(List x, y=4, z) { x + y + z }; f([1, 2, 3])", "int cannot be cast to List");
   }
 
   @Test public void passingNamedArgs() {
+    testError("def f(x, y=[a:3]) { x + y }; f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
+    testError("def f(x, y=[a:3]) { x + y }; f(x:1,yy:2)", "no such parameter 'yy'");
+    testError("def f(int x, y=[a:3]) { x + y }; f(x:'1',y:2)", "cannot convert argument of type string to parameter type of int");
+    testError("def f(x, y=[a:3]) { x + y }; f(x:1,(''+'y'):2)", "invalid parameter name");
+    test("def f(x, y=[a:3]) { x + y }; f(x:1,y:2)", 3);
+    testError("def f(x, y) { x + y }; f([x:1,y:2])", "missing mandatory arguments");
+    test("def f(x, y=[a:3]) { x + y }; f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
     test("def f(x,y) { x*y }; f(x:2,y:3)", 6);
+    test("def f(int x, int y) { x*y }; f(x:2,y:3)", 6);
+    test("def f(int x, int y=3) { x*y }; f(x:2)", 6);
+    test("def f(Map x, int y=3) { x.y = y; x }; f([x:2])", Map.of("x",2,"y",3));
+    testError("def f(Map x, int y=3) { x.y = y; x }; f(x:2)", "cannot convert argument of type int to parameter type of Map");
+    test("def f(def x, int y=3) { x.y = y; x }; f([x:2])", Map.of("x",2,"y",3));
+    testError("def f(def x, int y=3) { x.y = y; x }; f(x:2)", "invalid object type");
+    test("def f(Map x, int y=3) { x.y = y; x }; f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("def f(def x, int y=3) { x.y = y; x }; f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("def f(int x) { x*3 }; f(x:2)", 6);
+    test("def f(int x=2) { x*3 }; f(x:2)", 6);
     test("def f(x,y) { x + y }; f(x:2,y:3)", 5);
-    test("def f(x,y=[a:1]) { x + y }; f(x:2,y:3)", Map.of("x",2,"y",3,"a",1));
-    testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing value for mandatory parameter 'z'");
-    testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing value for mandatory parameter 'x'");
-    testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "invalid parameter name: a");
-    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "invalid parameter names: a, b");
-    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,x:1)", "invalid parameter name: b");
-    test("def f = { x,y -> x*y }; def a = [x:2,y:3]; f(a)", 6);
-    test("def f = { x,y -> x + y }; def a = [x:2,y:3]; f(a)", 5);
+    test("def f(x,y=[a:1]) { x + y }; f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("def f(x,y=[a:1]) { x + y }; f(x:2,y:3)", 5);
+    testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing value for mandatory parameter/field 'z'");
+    testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing value for mandatory parameter/field 'x'");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "no such parameter 'a'");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "no such parameter 'b'");
+    testError("def f = { x,y -> x*y }; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
     test("def f = { x,y=[a:1] -> x + y }; def a = [x:2,y:3]; f(a)", Map.of("x",2,"y",3,"a",1));
-    testError("def f = { x,y,z -> x + y + z}; def a = [x:2,y:3]; f(a)", "missing value for mandatory parameter 'z'");
-    testError("def f = { x,y,z ->x + y + z}; def a = [y:3]; f(a)", "missing value for mandatory parameter 'x'");
-    testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],y:3,z:4,a:1]; f(a)", "invalid parameter name: a");
-    testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],b:2,y:3,z:4,a:1]; f(a)", "invalid parameter names: a, b");
-    testError("def f = { x,y,z ->x + y + z}; def a = [x:[1],b:2,y:3,z:4,x:1]; f(a)", "invalid parameter name: b");
+    test("def f = { x,y=[a:1] -> x + y }; f(x:2,y:3)", 5);
+    testError("def f = { x,y,z -> x + y + z}; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
+    testError("def f = { x,y,z -> x + y + z}; def a = [y:3]; f(a)", "missing mandatory arguments");
+    testError("sleeper(x:1,y:2)", "does not support invocation with named arguments");
     testError("sleeper([x:1,y:2])", "named args not supported for built-in functions");
     testError("def a = [x:{it*it}]; [1,2,3].map(a)", "object of type map cannot be cast to function");
-    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
-    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
+    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
   }
 
   @Test public void simpleClosures() {

@@ -177,6 +177,7 @@ class Expr {
   class MapLiteral extends Expr {
     Token start;
     List<Pair<Expr,Expr>> @entries = new ArrayList<>();
+    boolean @namedArgs;   // whether this map is used as named args for function/method/constructor call
   }
 
   class Identifier extends Expr {
@@ -437,5 +438,15 @@ class Expr {
   class DefaultValue extends Expr {
     Token      token;
     JacsalType varType;
+  }
+
+  /**
+   * For situations where we know the class name up front and don't want to have to create
+   * a new JacsalType value for it.
+   */
+  class InstanceOf extends Expr {
+    Token  token;
+    Expr   expr;      // The object for which we are checking the type
+    String className; // The internal class name to check for
   }
 }

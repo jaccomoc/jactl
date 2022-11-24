@@ -16,16 +16,12 @@
 
 package jacsal.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.HashMap;
-import java.util.Map;
 
 /**
- * All JacsalObjects implement this. It provides runtime access to fields and methods.
+ * Used a bit like a marker interface to indicate to runtime argument handling that the Map
+ * being passed in should be treated as named args rather than a single argument of type Map.
  */
-public interface JacsalObject {
-  public Map<String,Object>        _$j$getFieldsAndMethods();
-  public Map<String, MethodHandle> _$j$getStaticMethods();
+public class NamedArgsMap extends HashMap  {
 
-  public JacsalObject _$j$init$w(Continuation c, String source, int offset, Object[] args);
 }
