@@ -619,6 +619,8 @@ public class RuntimeUtils {
   }
 
   private static Matcher getMatcher(String str, String regex, String modifiers, String source, int offset) {
+    if (str == null)   { throw new NullError("Null string in regex match", source, offset); }
+    if (regex == null) { throw new NullError("Null regex in regex match", source, offset); }
     var cache = patternCache.get();
     String key = regex + "/" + modifiers;
     Pattern pattern = cache.get(key);
@@ -1291,7 +1293,7 @@ public class RuntimeUtils {
       return (String)obj;
     }
     if (obj == null) {
-      throw new NullError("Null value for String", source, offset);
+      return null;
     }
     throw new RuntimeError("Cannot convert object of type " + className(obj) + " to String", source, offset);
   }
@@ -1301,7 +1303,7 @@ public class RuntimeUtils {
       return (Map)obj;
     }
     if (obj == null) {
-      throw new NullError("Null value for Map", source, offset);
+      return null;
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
   }
@@ -1310,7 +1312,7 @@ public class RuntimeUtils {
     if (obj instanceof List)      { return (List)obj;                    }
     if (obj instanceof Object[])  { return Arrays.asList((Object[])obj); }
     if (obj == null) {
-      throw new NullError("Null value for List", source, offset);
+      return null;
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
   }

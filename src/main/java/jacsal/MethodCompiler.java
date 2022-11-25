@@ -27,6 +27,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -1306,7 +1307,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var callee = (Expr.Identifier)expr.callee;
       Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
-      validateArgs(expr.args, functionDescriptor, callee.location);
+      expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod);
 
       if (functionDescriptor.isBuiltin) {
         invokeBuiltinFunction(expr, functionDescriptor);
@@ -1359,13 +1360,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.methodDescriptor != null) {
       var method = expr.methodDescriptor;
 
-      validateArgs(expr.args, method, expr.leftParen);
+      expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.name.startsWith(Utils.JACSAL_INIT));
 
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
       // (and method allows optional args) then invoke wrapper which will worry about filling
       // missing values.
-      if (expr.args.size() == method.paramCount && !isNamedArgs(expr.args)) {
+      if (expr.args.size() == method.paramCount && !Utils.isNamedArgs(expr.args) && expr.validateArgsAtCompileTime) {
         // We can invoke the method directly as we have exact number of args required
         // TODO: handle var args when we get a builtin method that needs it
         invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
@@ -1577,64 +1578,105 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   ///////////////////////////////////////////////////////////////
 
-  private static void validateArgs(List<Expr> args, FunctionDescriptor functionDescriptor, Token location) {
-    int        argCount   = args.size();
-    final var  paramTypes = functionDescriptor.paramTypes;
-    // If the function takes more than one mandatory argument and we have a single arg of type List/Map/ANY then
-    // we assume that the arg is a list or map that contains the actual argument values and defer further validation
-    // until runtime. Only exception is when map was parsed as namedArgs (i.e. f(x:1,y:2) rather than f([x:1,y:2]).
-    boolean namedArgs = isNamedArgs(args);
-    if (!namedArgs && functionDescriptor.mandatoryArgCount > 1 && argCount == 1 && args.get(0).type.is(ANY, LIST, MAP)) {
-      // Nothing to do
-      return;
+  /**
+   * Validate number and type of arguments if possible.
+   * <p>If we have single arg of type List/ANY then we need to distinguish between the situation where the List
+   * is supposed to be a list of args or the List is just the value for the first parameter.
+   * If the function has more than one mandatory argument or the type of the first parameter is not compatible
+   * with the arg being a list then we assume that the List/ANY must be a list of arg values and we then defer
+   * any further validation until runtime (since we usually don't know what is inside the list at compile time).</p>
+   * <p>We also allow Lis/ANY to be passed to a function taking no args and then validate at runtime that the
+   * List is empty.</p>
+   * <p>If the single argument is a Map then we might have named args or we might just have a Map.
+   * For normal functions/methods we only support named args which are flagged as named args (by the Parser at
+   * compile time). For constructors (init method) we allow arbitray Maps to be used to populate the fields of
+   * the object.</p>
+   * @return true if args validated and false if validation should be deferred to runtime
+   */
+  private boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod) {
+    int argCount = args.size();
+    var arg0Type = argCount > 0 ? args.get(0).type : null;
+    if (argCount == 1 && arg0Type.is(ANY, LIST)) {
+      if (func.mandatoryArgCount > 1 ||
+          func.paramTypes.size() == 0 ||
+          arg0Type.is(ANY) ||
+          !func.paramTypes.get(0).is(LIST)) {
+        // Runtime validation if more than one mandatory arg or first arg is compatible with List/ANY
+        return false;
+      }
+    }
+    boolean namedArgs = Utils.isNamedArgs(args);
+    if (arg0Type != null && arg0Type.is(MAP) && isInitMethod && !namedArgs) {
+      // We will validate at runtime since we don't know what is inside map
+      return false;
     }
 
-    List<String> paramNames = functionDescriptor.paramNames;
+    var paramTypes = func.paramTypes;
+    var paramNames = func.paramNames;
     if (namedArgs && paramNames == null) {
-      throw new CompileError(functionDescriptor.name + " does not support invocation with named arguments", location);
+      throw new CompileError(func.name + " does not support invocation with named arguments", location);
     }
 
+    BiFunction<String,Integer,String> plural = (word, count) -> count <= 1 ? word : (word + "s");
+    List<String> missingArgs = new ArrayList<>();
     if (namedArgs) {
-      var argsAsList = new ArrayList<Expr>();
-      var mapEntries = ((Expr.MapLiteral)args.get(0)).entries;
-      Function<Token,JacsalType> paramType = name -> {
-        for (int i = 0; i < paramNames.size(); i++) {
-          if (paramNames.get(i).equals(name.getStringValue())) {
-            return functionDescriptor.paramTypes.get(i);
+      if (func.mandatoryParams == null) {
+        throw new CompileError(func.name + " does not support named argument invocation", location);
+      }
+      Function<Expr,String> argName = expr -> ((Expr.Literal)expr).value.getStringValue();
+      var mapEntries  = ((Expr.MapLiteral)args.get(0)).entries;
+      var namedArgMap = mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
+      for (int i = 0; i < paramNames.size(); i++) {
+        String     paramName = paramNames.get(i);
+        JacsalType paramType = func.paramTypes.get(i);
+        var        argExpr   = namedArgMap.get(paramName);
+        if (argExpr == null) {
+          if (func.mandatoryParams.contains(paramName)) {
+            missingArgs.add(paramName);
           }
         }
-        throw new CompileError("No such parameter '" + name.getStringValue() + "'", name);
-      };
+        else
+        if (!argExpr.type.isConvertibleTo(paramType)) {
+          throw new CompileError("Cannot convert argument of type " + argExpr.type + " to parameter type of " + paramType, namedArgMap.get(paramName).location);
+        }
+        namedArgMap.remove(paramName);
+      }
+      if (namedArgMap.size() > 0) {
+        throw new CompileError("No such " + plural.apply("parameter", namedArgMap.size()) + ": " + String.join(", ", namedArgMap.keySet()), location);
+      }
+    }
+    else {
+      if (func.paramCount >= 0 && argCount > func.paramCount) {
+        throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + func.paramCount + ")", location);
+      }
 
-      for (int i = 0; i < mapEntries.size(); i++) {
-        Token name = ((Expr.Literal)(mapEntries.get(i).first)).value;
-        JacsalType type = paramType.apply(name);
-        JacsalType argType = mapEntries.get(i).second.type;
-        if (!argType.isConvertibleTo(type)) {
-          throw new CompileError("Cannot convert argument of type " + argType + " to parameter type of " + type, name);
+      if (argCount < func.mandatoryArgCount) {
+        if (func.paramNames == null) {
+          throw new CompileError("Missing mandatory arguments (expected " + func.mandatoryArgCount + " but only passed " + argCount + ")", location);
+        }
+        missingArgs = func.paramNames.subList(argCount, func.mandatoryArgCount);
+      }
+      else {
+        // Validate arguments are of the right type
+        for (int i = 0; i < argCount; i++) {
+          JacsalType paramType = paramTypes.get(i);
+          Expr       arg       = args.get(i);
+          JacsalType argType   = arg.type;
+          // Check for varArgs (we already know it must be last param)
+          if (paramType.is(OBJECT_ARR)) {
+            break;
+          }
+          if (!argType.isConvertibleTo(paramType)) {
+            throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
+          }
         }
       }
-      return;
+    }
+    if (missingArgs.size() > 0) {
+      throw new CompileError("Missing mandatory " + plural.apply(isInitMethod ? "field" : "argument", missingArgs.size()) + ": " + String.join(", ", missingArgs), location);
     }
 
-    // Validate arguments are of the right type
-    JacsalType paramType = null;
-    for (int i = 0; i < argCount; i++) {
-      Expr       arg     = args.get(i);
-      JacsalType argType = arg.type;
-      paramType = paramTypes.get(i);
-      // Check for varArgs (we already know it must be last param)
-      if (paramType.is(OBJECT_ARR)) {
-        break;
-      }
-      if (!argType.isConvertibleTo(paramType)) {
-        throw new CompileError("Cannot convert " + Utils.nth(i + 1) + " argument of type " + argType + " to parameter type of " + paramType, arg.location);
-      }
-    }
-  }
-
-  private static boolean isNamedArgs(List<Expr> args) {
-    return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).namedArgs;
+    return true;
   }
 
   private static JacsalType getFieldType(JacsalType type, String fieldName) {
@@ -1679,7 +1721,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeUserFunction(Expr.Call expr, Expr.FunDecl funDecl, FunctionDescriptor func) {
     // We invoke wrapper if we don't have enough args since it will fill in missing
     // values for optional parameters
-    boolean invokeWrapper = expr.args.size() != func.paramTypes.size() || isNamedArgs(expr.args);
+    boolean invokeWrapper = expr.args.size() != func.paramTypes.size() || Utils.isNamedArgs(expr.args) || !expr.validateArgsAtCompileTime;
 
     // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
     var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocalParams : funDecl.heapLocalParams).values();

@@ -176,7 +176,8 @@ abstract class Expr {
     Expr       callee;
     List<Expr> args;
 
-    boolean isAsync;   // true if potential async invocation
+    boolean isAsync;                   // true if potential async invocation
+    boolean validateArgsAtCompileTime; // true if we should validate args at compile time rather than at runtime
 
     // If we are a call to an arbitrary function/closure then it is possible that the
     // function we are calling returns an Iterator:  def f = x.map; f()
@@ -203,7 +204,8 @@ abstract class Expr {
     List<Expr> args;
 
     FunctionDescriptor methodDescriptor;
-    boolean isAsync = false;  // true if potential async invocation
+    boolean isAsync = false;           // true if potential async invocation
+    boolean validateArgsAtCompileTime; // true if we should validate args at compile time rather than at runtime
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used

@@ -20,6 +20,7 @@ import jacsal.JacsalType;
 
 import java.lang.invoke.MethodHandle;
 import java.util.List;
+import java.util.Set;
 
 public class FunctionDescriptor {
   public JacsalType       type;            // Type method is for, or null for global functions
@@ -27,6 +28,7 @@ public class FunctionDescriptor {
   public String           name;            // Jacsal method/function name
   public JacsalType       returnType;
   public List<String>     paramNames;
+  public Set<String>      mandatoryParams;
   public List<JacsalType> paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;

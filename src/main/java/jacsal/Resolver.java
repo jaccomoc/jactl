@@ -933,9 +933,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Special case where we know the function directly and get its return type
       var func = ((Expr.Identifier)expr.callee).getFuncDescriptor();
       expr.type = func.returnType;
-
-      // Validate argument count. Type validation will be done by MethodCompiler.
-      validateArgCount(expr.args, func.mandatoryArgCount, func.paramCount, expr.token);
     }
     return null;
   }
@@ -966,8 +963,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           throw new CompileError("No static method '" + expr.methodName + "' exists for " + expr.parent.type, expr.location);
         }
         expr.methodDescriptor = descriptor;
-        // Validate argument count. Type validation will be done by MethodCompiler.
-        validateArgCount(expr.args, descriptor.mandatoryArgCount, descriptor.paramTypes.size(), expr.leftParen);
         expr.type = descriptor.returnType;
         return expr.type;
       }
@@ -1059,33 +1054,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     var currentStmts = getBlock().currentResolvingStmts;
     currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
     currentStmts.currentIdx++;
-  }
-
-  /**
-   * Validate number of arguments.
-   * If we have single arg of type List/Map/ANY and function has more than one mandatory param we defer
-   * any further checking until runtime and so we return false.
-   * @return true if arg types should be validated
-   */
-  private void validateArgCount(List<Expr> args, int mandatoryCount, int paramCount, Token location) {
-    // If the function takes more than one mandatory argument and we have a single arg of type List/ANY then
-    // we assume that the arg is a list that contains the actual argument values and defer further validation
-    // until runtime.
-    // Similarly, if the function has more than one mandatory argument and we have a single arg that is a Map
-    // we also defer to runtime since we will treat Map as a list of name:value pairs for the parameters.
-    // NOTE: we use mandatory arg count > 1 as the trigger for the Map/List treatment since otherwise we couldn't
-    // have a function that takes a single List or Map as an argument.
-    int argCount = args.size();
-    if (mandatoryCount > 1 && argCount == 1 && args.get(0).type.is(ANY,LIST,MAP)) {
-      return;
-    }
-    if (argCount < mandatoryCount) {
-      String atLeast = mandatoryCount == paramCount ? "" : "at least ";
-      throw new CompileError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", location);
-    }
-    if (paramCount >= 0 && argCount > paramCount) {
-      throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", location);
-    }
   }
 
   private JacsalType evaluateConstExpr(Expr.Binary expr) {
@@ -1798,9 +1766,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     var argCountIs1 = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
 
     // Special case to handle situation where we have List passed as only arg within the Object[].
-    // If the function expects more than one mandatory argument then the List contents become the parameter
-    // values. If the closure/function only has a single arg then it is passed the List as the arg value.
-    if (mandatoryCount > 1) {
+    // If the first parameter is of type List/ANY and there are no other mandatory args then we pass the List
+    // argument as a List. Otherwise if the first parameter is not compatible with a List or there are other
+    // mandatory parameters we treat the List as a list of argument values.
+    boolean passListAsList = paramCount > 0 && funDecl.parameters.get(0).declExpr.type.is(LIST, ANY) && mandatoryCount <= 1;
+    boolean treatSingleArgListAsArgs = !passListAsList;
+    if (treatSingleArgListAsArgs) {
       //:   if (_$argCount == 1 && _$argArr[0] instanceof List) {
       //:     _$argArr = ((List)_$argArr[0]).toArray()
       //:     _$argCount = _$argArr.length

@@ -270,7 +270,7 @@ public class BuiltinFunctions {
     throw Continuation.create(() -> { doSleep(timeMs); return result; });
   }
   public static Object sleeperWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 2, 2, source, offset);
+    args = validateArgCount(args, 2, LONG, 2, source, offset);
     try {
       sleeper(c, ((Number)args[0]).longValue(), args[1]);
     }
@@ -286,7 +286,7 @@ public class BuiltinFunctions {
   // = timestamp
   public static long timeStamp() { return System.currentTimeMillis(); }
   public static Object timeStampWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null,0, source, offset);
     return System.currentTimeMillis();
   }
 
@@ -300,7 +300,7 @@ public class BuiltinFunctions {
     }
   }
   public static Object sprintfWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, -1, source, offset);
+    args = validateArgCount(args, 1, STRING, -1, source, offset);
     try {
       return sprintf(source, offset, (String)args[0], Arrays.copyOfRange(args, 1, args.length));
     }
@@ -316,7 +316,7 @@ public class BuiltinFunctions {
   // = asChar
   public static String intAsChar(int c) { return String.valueOf((char)c); }
   public static Object intAsCharWrapper(Integer obj, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null,0, source, offset);
     return String.valueOf((char)(int)obj);
   }
 
@@ -324,7 +324,7 @@ public class BuiltinFunctions {
 
   public static String objectToString(Object obj) { return RuntimeUtils.toString(obj); }
   public static Object objectToStringWrapper(Object obj, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null, 0, source, offset);
     return RuntimeUtils.toString(obj);
   }
 
@@ -332,19 +332,19 @@ public class BuiltinFunctions {
 
   public static int mapSize(Map map) { return map.size(); }
   public static Object mapSizeWrapper(Map map, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null,0, source, offset);
     return map.size();
   }
 
   public static int listSize(List list) { return list.size(); }
   public static Object listSizeWrapper(List list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null, 0, source, offset);
     return list.size();
   }
 
   public static int objArrSize(Object[] list) { return list.length; }
   public static Object objArrSizeWrapper(Object[] list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null,0, source, offset);
     return list.length;
   }
 
@@ -363,7 +363,7 @@ public class BuiltinFunctions {
     return iteratorSize(iterator, c);
   }
   public static Object iteratorSizeWrapper(Iterator iterator, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null,0, source, offset);
     return iteratorSize(iterator, c);
   }
 
@@ -376,7 +376,7 @@ public class BuiltinFunctions {
     return new FilterIterator(iter, source, offset, closure);
   }
   public static Object iteratorFilterWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, FUNCTION, 1, source, offset);
     try {
       return iteratorFilter(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
     }
@@ -395,7 +395,7 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorMapWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, FUNCTION,1, source, offset);
     try {
       return iteratorMap(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
@@ -486,7 +486,7 @@ public class BuiltinFunctions {
                                                                              Object.class, Iterator.class, String.class,
                                                                              Integer.class, MethodHandle.class, Continuation.class);
   public static Object iteratorEachWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, 1, source, offset);
+    args = validateArgCount(args, 1, FUNCTION, 1, source, offset);
     try {
       return iteratorEach(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
@@ -570,7 +570,7 @@ public class BuiltinFunctions {
                                                                                 BiConsumer.class, String.class, Integer.class,
                                                                                 MethodHandle.class, Continuation.class);
   public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, FUNCTION, 1, source, offset);
     try {
       return iteratorCollect(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
@@ -591,7 +591,7 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, FUNCTION, 1, source, offset);
     try {
       return iteratorCollectEntries(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
@@ -650,7 +650,7 @@ public class BuiltinFunctions {
     }
   }
   public static Object iteratorSortWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, FUNCTION,1, source, offset);
     try {
       return iteratorSort(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
@@ -790,7 +790,7 @@ public class BuiltinFunctions {
     return sb.toString();
   }
   public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, STRING,1, source, offset);
     try {
       return iteratorJoin(iterable, args.length == 0 ? null : (String)args[0]);
     }
@@ -807,7 +807,7 @@ public class BuiltinFunctions {
     return RuntimeUtils.lines(str).iterator();
   }
   public static Object stringLinesWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null,0, source, offset);
     return RuntimeUtils.lines(str).iterator();
   }
 
@@ -816,7 +816,7 @@ public class BuiltinFunctions {
     return str.length();
   }
   public static Object stringLengthWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 0, source, offset);
+    args = validateArgCount(args, 0, null, 0, source, offset);
     return ((String)str).length();
   }
 
@@ -831,7 +831,7 @@ public class BuiltinFunctions {
     return str.substring(0, length).toLowerCase() + str.substring(length);
   }
   public static Object stringToLowerCaseWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, INT, 1, source, offset);
     if (args.length > 0) {
       if (!(args[0] instanceof Number)) {
         throw new RuntimeError("Argument to toLowerCase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
@@ -852,7 +852,7 @@ public class BuiltinFunctions {
     return str.substring(0, length).toUpperCase() + str.substring(length);
   }
   public static Object stringToUpperCaseWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, 1, source, offset);
+    args = validateArgCount(args, 0, INT, 1, source, offset);
     if (args.length > 0) {
       if (!(args[0] instanceof Number)) {
         throw new RuntimeError("Argument to toUpperCase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
@@ -872,7 +872,7 @@ public class BuiltinFunctions {
     }
   }
   public static Object stringSubstringWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, 2, source, offset);
+    args = validateArgCount(args, 1, STRING, 2, source, offset);
     int begin = -1;
     if (!(args[0] instanceof Number)) {
       throw new RuntimeError("First argument to substring must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
@@ -897,19 +897,24 @@ public class BuiltinFunctions {
 
   /////////////////////////////
 
-  private static Object[] validateArgCount(Object[] args, int mandatoryCount, int paramCount, String source, int offset) {
+  private static Object[] validateArgCount(Object[] args, int mandatoryCount, JacsalType firstParamType, int paramCount, String source, int offset) {
     int argCount = args.length;
 
-    // Special case for functions with 2 or more params where we have single argument of type List.
-    // We treat the list as the arguments in this case.
-    if (mandatoryCount >= 2 && argCount == 1) {
-      if (args[0] instanceof List) {
-        args = ((List) args[0]).toArray();
-        argCount = args.length;
-      }
-      else if (args[0] instanceof Map) {
-        throw new RuntimeError("Named args not supported for built-in functions", source, offset);
-      }
+    // If we have a single arg which is a List and
+    //   - we have no parameters, or
+    //   - we have more than one mandatory parameter, or
+    //   - we have single parameter that is not a List
+    // then
+    //   we treat the List as our args
+    if (argCount == 1 && args[0] instanceof List &&
+        (paramCount == 0 ||
+         !firstParamType.is(LIST,ANY) ||
+         mandatoryCount > 1)) {
+      args = ((List) args[0]).toArray();
+      argCount = args.length;
+    }
+    else if (argCount > 0 && args[0] instanceof NamedArgsMap) {
+      throw new RuntimeError("Named args not supported for built-in functions", source, offset);
     }
 
     if (argCount < mandatoryCount) {

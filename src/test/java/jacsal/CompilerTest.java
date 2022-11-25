@@ -2005,7 +2005,8 @@ class CompilerTest extends BaseTest {
   @Test public void regexCaptureVars() {
     test("def x = ''; 'abc' =~ /$x/", true);
     test ("def x = 'abc'; x =~ /${''}/", true);
-    testError("def x; 'abc' =~ x", "null value for string");
+    testError("def x; 'abc' =~ x", "null regex");
+    testError("def x; x =~ /abc/", "null string");
     test("'abcaaxy' =~ /(a+)/", true);
     test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
     test("def it = 'bcaaxy'; /(a+)/f and return $1", "aa");
@@ -2576,6 +2577,12 @@ class CompilerTest extends BaseTest {
     testError("int i = null", "cannot convert null");
     testError("1.0 + null", "null operand");
     testError("def x; int i = x", "cannot convert null");
+    test("String x = null; x = null", null);
+    test("List x = null; x = null", null);
+    test("Map x = null; x = null", null);
+    test("def f(String x){x}; f(null)", null);
+    test("def f(List x){x}; f(null)", null);
+    test("def f(Map x){x}; f(null)", null);
   }
 
   @Test public void stringIndexing() {
@@ -3210,11 +3217,11 @@ class CompilerTest extends BaseTest {
     test("(int)1L instanceof int", true);
     testError("(String)1", "cannot cast");
     testError("def x = 1; (String)x", "cannot convert");
-    testError("(String)null", "null value");
-    testError("(Map)null", "null value");
-    testError("(List)null", "null value");
-    testError("def x = null; (Map)x", "null value");
-    testError("def x = null; (List)x", "null value");
+    test("(String)null", null);
+    test("(Map)null", null);
+    test("(List)null", null);
+    test("def x = null; (Map)x", null);
+    test("def x = null; (List)x", null);
     testError("(int)null", "cannot convert null");
     testError("(long)null", "cannot convert null");
     testError("(double)null", "cannot convert null");
@@ -3585,7 +3592,7 @@ class CompilerTest extends BaseTest {
     test("def f(x) { def g(x) { def f(x) {x+x}; f(x) }; g(x) * g(x) }; f(3)", 36);
     testError("def f(String x) { x + x }; f(1)", "cannot convert");
     test("def f(def x) { '' + x + x }; f(1)", "11");
-    testError("def f(String x) { x }; f([1,2,3])", "cannot convert");
+    testError("def f(String x) { x }; f([1,2,3])", "too many arguments");
     test("def f(def x) { '' + x }; f([1,2,3])", "[1, 2, 3]");
     testError("def f(String x) { x }; f([a:1,b:2])", "cannot convert");
     test("def f(def x) { '' + x }; f([a:1,b:2])", "[a:1, b:2]");
@@ -3664,18 +3671,58 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void passingArgsAsList() {
+    test("def x = f([]); def f(){3}; x", 3);
+    test("def f(){3}; f([])", 3);
+    test("def f = { -> 3}; f([])", 3);
+    test("def f = { -> 3}; def a = []; f(a)", 3);
+    test("def f = {3}; f([])", 3);
+    test("def f(){3}; def g = f; g([])", 3);
+    testError("def f(){3}; f([4])", "too many arguments");
+    testError("def f(){3}; def g = f; g([4])", "too many arguments");
+    test("def f(int x){x}; f([3])", 3);
+    test("def f = { int x -> x}; f([3])", 3);
+    test("def f(int x){x}; def g = f; g([3])", 3);
+    test("def f(int x){x}; def a = [3]; f(a)", 3);
+    test("def f(int x){x}; def a = [3]; def g = f; g(a)", 3);
+    testError("def f(List x, int y) { x + y }; f([1,2])", "cannot be cast to List");
+    testError("def f = { List x, int y -> x + y }; f([1,2])", "cannot be cast to List");
+    testError("def f = { List x, int y -> x + y }; def a = [1,2]; f(a)", "cannot be cast to List");
+    testError("def f(List x, int y) { x + y }; def a = [1,2]; f(a)", "cannot be cast to List");
+    testError("def f(List x, int y) { x + y }; def a = [1,2]; def g = f; g(a)", "cannot be cast to List");
+    testError("def f(List x, int y) { x + y }; f([1,2])", "cannot be cast to List");
+    testError("def f(int x, int y, int z) { x + y }; f(1,2)", "missing mandatory argument");
+    testError("def f(int x, int y, int z) { x + y }; f([1,2])", "missing mandatory argument");
+    testError("def f(List x, int y) { x + y }; def a = [[1,2]]; def g = f; g(a)", "missing mandatory arguments");
+    test("def f(List x, int y) { x + y }; f([[1,2],3])", List.of(1,2,3));
+    test("def f = { List x, int y -> x + y }; f([[1,2],3])", List.of(1,2,3));
+    test("def f = { List x, int y -> x + y }; def a = [[1,2],3]; f(a)", List.of(1,2,3));
+    test("def f(List x, int y) { x + y }; def a = [[1,2],3]; f(a)", List.of(1,2,3));
+    test("def f(List x, int y) { x + y }; def a = [[1,2],3]; def g = f; g(a)", List.of(1,2,3));
+    test("def f(List x, int y = 4) { x + y }; f([[1,2],3])", List.of(List.of(1,2),3,4));
+    test("def f = {List x, int y = 4 -> x + y }; f([[1,2],3])", List.of(List.of(1,2),3,4));
+    test("def f = {List x, int y = 4 -> x + y }; def a = [[1,2],3]; f(a)", List.of(List.of(1,2),3,4));
+    test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; f(a)", List.of(List.of(1,2),3,4));
+    test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; def g = f; g(a)", List.of(List.of(1,2),3,4));
+    test("def f(int x, int y = 4) { x + y }; f([1,2])", 3);
+    test("def f = {int x, int y = 4 -> x + y }; f([1,2])", 3);
+    test("def f = {int x, int y = 4 -> x + y }; def a = [1,2]; f(a)", 3);
+    test("def f(int x, int y = 4) { x + y }; def a = [1,2]; f(a)", 3);
+    test("def f(int x, int y = 4) { x + y }; def a = [1,2]; def g = f; g(a)", 3);
+    test("def f(int x, int y = 4) { x + y }; def a = [1D,2D]; def g = f; g(a)", 3);
+    test("def f(int x, int y = 4) { x + y }; def a = [1.0,2L]; def g = f; g(a)", 3);
+
     test("sleeper([1,2])", 2);
     testError("sleeper(['1',2])", "cannot convert argument of type string to long");
     test("def a = [1,2]; sleeper(a)", 2);
     testError("def a = ['1',2]; sleeper(a)", "cannot convert argument of type string to long");
-    test("[[1,2],[3,4]].map{ a,b -> sleeper(a,b) }", List.of(2,4));
-    test("[a:2,b:4].map{ a,b -> sleeper(b,a) }", List.of("a","b"));
-    test("def x = [[1,2],[3,4]]; x.map{ a,b -> sleeper(a,b) }", List.of(2,4));
-    test("def x = [a:2,b:4]; x.map{ a,b -> sleeper(b,a) }", List.of("a","b"));
-    test("def f = [[1,2],[3,4]].map; f{ a,b -> sleeper(a,b) }", List.of(2,4));
-    test("def f = [a:2,b:4].map; f{ a,b -> sleeper(b,a) }", List.of("a","b"));
-    test("def x = [[1,2],[3,4]]; def f = x.map; f{ a,b -> sleeper(a,b) }", List.of(2,4));
-    test("def x = [a:2,b:4]; def f = x.map; f{ a,b -> sleeper(b,a) }", List.of("a","b"));
+    test("[[1,2],[3,4]].map{ a,b -> sleeper([a,b]) }", List.of(2,4));
+    test("[a:2,b:4].map{ a,b -> sleeper([b,a]) }", List.of("a","b"));
+    test("def x = [[1,2],[3,4]]; x.map{ a,b -> sleeper([a,b]) }", List.of(2,4));
+    test("def x = [a:2,b:4]; x.map([{ a,b -> sleeper([b,a]) }])", List.of("a","b"));
+    test("def f = [[1,2],[3,4]].map; f([{ a,b -> sleeper([a,b]) }])", List.of(2,4));
+    test("def f = [a:2,b:4].map; f([{ a,b -> sleeper([b,a]) }])", List.of("a","b"));
+    test("def x = [[1,2],[3,4]]; def f = x.map; f([{ a,b -> sleeper([a,b]) }])", List.of(2,4));
+    test("def x = [a:2,b:4]; def f = x.map; f([{ a,b -> sleeper([b,a]) }])", List.of("a","b"));
     test("def a = [1,2,3]; def f(x,y=7,z) { x + y + z }; f(1,2,3) + f(a)", 12);
     test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(a)", List.of(1,2,3,7,8));
     test("def f(String x, int y) { x + y }; def a = ['x',2]; f(a)", "x2");
@@ -3696,11 +3743,11 @@ class CompilerTest extends BaseTest {
 
   @Test public void passingNamedArgs() {
     testError("def f(x, y=[a:3]) { x + y }; f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
-    testError("def f(x, y=[a:3]) { x + y }; f(x:1,yy:2)", "no such parameter 'yy'");
+    testError("def f(x, y=[a:3]) { x + y }; f(x:1,yy:2)", "no such parameter: yy");
     testError("def f(int x, y=[a:3]) { x + y }; f(x:'1',y:2)", "cannot convert argument of type string to parameter type of int");
     testError("def f(x, y=[a:3]) { x + y }; f(x:1,(''+'y'):2)", "invalid parameter name");
     test("def f(x, y=[a:3]) { x + y }; f(x:1,y:2)", 3);
-    testError("def f(x, y) { x + y }; f([x:1,y:2])", "missing mandatory arguments");
+    testError("def f(x, y) { x + y }; f([x:1,y:2])", "missing mandatory argument: y");
     test("def f(x, y=[a:3]) { x + y }; f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
     test("def f(x,y) { x*y }; f(x:2,y:3)", 6);
     test("def f(int x, int y) { x*y }; f(x:2,y:3)", 6);
@@ -3716,20 +3763,19 @@ class CompilerTest extends BaseTest {
     test("def f(x,y) { x + y }; f(x:2,y:3)", 5);
     test("def f(x,y=[a:1]) { x + y }; f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
     test("def f(x,y=[a:1]) { x + y }; f(x:2,y:3)", 5);
-    testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing value for mandatory parameter/field 'z'");
-    testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing value for mandatory parameter/field 'x'");
-    testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "no such parameter 'a'");
-    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "no such parameter 'b'");
+    testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing mandatory argument: z");
+    testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing mandatory arguments");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: a, b");
     testError("def f = { x,y -> x*y }; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
     test("def f = { x,y=[a:1] -> x + y }; def a = [x:2,y:3]; f(a)", Map.of("x",2,"y",3,"a",1));
     test("def f = { x,y=[a:1] -> x + y }; f(x:2,y:3)", 5);
     testError("def f = { x,y,z -> x + y + z}; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
     testError("def f = { x,y,z -> x + y + z}; def a = [y:3]; f(a)", "missing mandatory arguments");
     testError("sleeper(x:1,y:2)", "does not support invocation with named arguments");
-    testError("sleeper([x:1,y:2])", "named args not supported for built-in functions");
-    testError("def a = [x:{it*it}]; [1,2,3].map(a)", "object of type map cannot be cast to function");
-    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
-    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
+    testError("sleeper([x:1,y:2])", "missing mandatory arguments");
+    testError("def a = [x:{it*it}]; [1,2,3].map(a)", "cannot convert arg type map to function");
+    testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing mandatory argument: c");
   }
 
   @Test public void simpleClosures() {

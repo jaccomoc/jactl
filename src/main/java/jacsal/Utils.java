@@ -22,6 +22,7 @@ import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.DOUBLE;
@@ -348,6 +349,10 @@ public class Utils {
                                                            mandatoryArgCount,
                                                            false);
     descriptor.isStatic = isStatic;
+    descriptor.mandatoryParams = params.stream()
+                                       .filter(p -> p.declExpr.initialiser == null)
+                                       .map(p -> p.declExpr.name.getStringValue())
+                                       .collect(Collectors.toSet());
     funDecl.functionDescriptor = descriptor;
     funDecl.isStatic = isStatic;
     return funDecl;
@@ -398,5 +403,9 @@ public class Utils {
       }
     }
     return true;
+  }
+
+  static boolean isNamedArgs(List<Expr> args) {
+    return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).namedArgs;
   }
 }
