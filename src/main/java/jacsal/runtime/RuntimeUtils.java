@@ -187,18 +187,15 @@ public class RuntimeUtils {
       }
       return Integer.compare(n1.intValue(), n2.intValue());
     }
-    else
     if (obj1 instanceof Boolean && obj2 instanceof Boolean) {
       return Boolean.compare((boolean)obj1, (boolean)obj2);
     }
-    else
-    if (obj1 instanceof String && obj2 instanceof String) {
-      int result = ((String)obj1).compareTo((String)obj2);
+    if (obj1 instanceof Comparable && obj1.getClass().equals(obj2.getClass())) {
+      int result = ((Comparable) obj1).compareTo(obj2);
       return result < 0 ? -1 : result == 0 ? 0 : 1;
     }
-    else {
-      throw new RuntimeError("Cannot compare objects of type " + className(obj1) + " and " + className(obj2), source, offset);
-    }
+
+    throw new RuntimeError("Cannot compare objects of type " + className(obj1) + " and " + className(obj2), source, offset);
   }
 
   /**
@@ -482,39 +479,18 @@ public class RuntimeUtils {
     String rightString;
 
     // We are left with the comparison operators
-    int comparison;
-    if (left == null && right == null)  { comparison = 0;  }
-    else if (left == null)              { comparison = -1; }
-    else if (right == null)             { comparison = 1;  }
-    else if (left instanceof Boolean && right instanceof Boolean) {
-      comparison = Boolean.compare((boolean)left, (boolean)right);
-    }
-    else if (left instanceof Number && right instanceof Number) {
-      if (left instanceof BigDecimal || right instanceof BigDecimal) {
-        comparison = toBigDecimal(left).compareTo(toBigDecimal(right));
+    if ((operator == EQUAL_EQUAL || operator == BANG_EQUAL)) {
+      if (left instanceof List  || left instanceof Map  || left instanceof JacsalObject ||
+          right instanceof List || right instanceof Map || right instanceof JacsalObject) {
+        return equality(left, right, operator);
       }
-      else
-      if (left instanceof Double || right instanceof Double) {
-        comparison = Double.compare(((Number)left).doubleValue(), ((Number)right).doubleValue());
+      // Deal with Numbers below. Everything else reverts to Object.equals():
+      if (!(left instanceof Number) || !(right instanceof Number)) {
+        return left.equals(right) == (operator == EQUAL_EQUAL);
       }
-      else
-      if (left instanceof Long || right instanceof Long) {
-        comparison = Long.compare(((Number)left).longValue(), ((Number)right).longValue());
-      }
-      else {
-        comparison = Integer.compare((int)left, (int)right);
-      }
-    }
-    else if ((leftString = castToString(left)) != null && (rightString = castToString(right)) != null) {
-      comparison = leftString.compareTo(rightString);
-    }
-    else if (operator == EQUAL_EQUAL || operator == BANG_EQUAL) {
-      return (operator == EQUAL_EQUAL) == left.equals(right);
-    }
-    else {
-      throw new RuntimeError("Object of type " + className(left) + " not comparable with object of type " + className(right), source, offset);
     }
 
+    int comparison = compareTo(left, right, source, offset);
     if (operator == EQUAL_EQUAL)        { return comparison == 0; }
     if (operator == BANG_EQUAL)         { return comparison != 0; }
     if (operator == LESS_THAN)          { return comparison < 0; }
@@ -522,6 +498,49 @@ public class RuntimeUtils {
     if (operator == GREATER_THAN)       { return comparison > 0; }
     if (operator == GREATER_THAN_EQUAL) { return comparison >= 0; }
     throw new IllegalStateException("Internal error: unexpected operator " + operator);
+  }
+
+  /**
+   * Check for == or != for List,Map,JacsalObject types
+   * @param operator  EQUAL_EQUAL or BANG_EQUAL
+   * @return true if equal or not equal based on value of operator
+   */
+  private static boolean equality(Object left, Object right, String operator) {
+    if (left == right) {
+      return operator == EQUAL_EQUAL;
+    }
+    if (left == null || right == null) {
+      return operator == BANG_EQUAL;
+    }
+    if (left instanceof List && right instanceof List) {
+      return ((List)left).equals(right) == (operator == EQUAL_EQUAL);
+    }
+    if (left instanceof Map && right instanceof Map) {
+      return ((Map)left).equals(right) == (operator == EQUAL_EQUAL);
+    }
+    if (left instanceof JacsalObject && right instanceof JacsalObject) {
+      if (!left.getClass().equals(right.getClass())) {
+        return operator == BANG_EQUAL;
+      }
+      // Have two instances of same class so check that each field is equal
+      var fieldAndMethods = ((JacsalObject)left)._$j$getFieldsAndMethods();
+      for (var iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
+           iter.hasNext(); ) {
+        var   entry = iter.next();
+        Field field = (Field) entry.getValue();
+        try {
+          // If field values differ then we are done
+          if (!equality(field.get(left), field.get(right), EQUAL_EQUAL)) {
+            return operator == BANG_EQUAL;
+          }
+        }
+        catch (IllegalAccessException e) {
+          throw new IllegalStateException("Internal error: accessing field '" + entry.getKey() + "': " + e, e);
+        }
+      }
+      return operator == EQUAL_EQUAL;
+    }
+    return left.equals(right) == (operator == EQUAL_EQUAL);
   }
 
   public static Object bitOperation(Object left, Object right, String operator, String source, int offset) {
@@ -770,11 +789,30 @@ public class RuntimeUtils {
   }
 
   public static String toString(Object obj) {
-    if (obj == null) {
-      return "null";
-    }
+    return doToString(obj, new HashSet<>());
+  }
+
+  /**
+   * Output a nice string form.
+   * @param obj             the object
+   * @param previousObjects set of previous values we have seen (for detecting circular references)
+   * @return
+   */
+  private static String doToString(Object obj, Set<Object> previousObjects) {
     if (obj instanceof Object[]) {
       obj = Arrays.asList((Object[])obj);
+    }
+
+    if (obj instanceof List || obj instanceof Map || obj instanceof JacsalObject) {
+      // If we have already visited this object then we have a circular reference so to avoid infinite recursion
+      // we output "<CIRCULAR_REF>"
+      if (!previousObjects.add(System.identityHashCode(obj))) {
+        return "<CIRCULAR_REF>";
+      }
+    }
+
+    if (obj == null) {
+      return "null";
     }
     if (obj instanceof List) {
       StringBuilder sb = new StringBuilder();
@@ -782,24 +820,36 @@ public class RuntimeUtils {
       List list = (List)obj;
       for (int i = 0; i < list.size(); i++) {
         if (i > 0) { sb.append(", "); }
-        sb.append(toQuotedString(list.get(i)));
+        sb.append(toQuotedString(list.get(i), previousObjects));
       }
       sb.append(']');
       return sb.toString();
     }
-    if (obj instanceof Map) {
+    else
+    if (obj instanceof JacsalObject || obj instanceof Map) {
+      boolean isMap = obj instanceof Map;
       StringBuilder sb = new StringBuilder();
       sb.append('[');
+      var iterator = isMap ? ((Map<String,Object>)obj).entrySet().iterator()
+                           : ((JacsalObject)obj)._$j$getFieldsAndMethods()
+                                                .entrySet()
+                                                .stream()
+                                                .filter(entry -> entry.getValue() instanceof Field)
+                                                .iterator();
       boolean first = true;
-      for (Iterator<Map.Entry<String,Object>> iter = ((Map)obj).entrySet().iterator(); iter.hasNext();) {
-        if (!first) {
-          sb.append(", ");
+      while (iterator.hasNext()) {
+        if (!first) { sb.append(", "); } else { first = false; }
+        var entry = iterator.next();
+        try {
+          Object value = entry.getValue();
+          if (!isMap) {
+            value = ((Field) entry.getValue()).get(obj);
+          }
+          sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects));
         }
-        else {
-          first = false;
+        catch (IllegalAccessException e) {
+          throw new IllegalStateException("Internal error: problem accessing field '" + entry.getKey() + "': " + e, e);
         }
-        Map.Entry entry = iter.next();
-        sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(entry.getValue()));
       }
       if (first) {
         // Empty map
@@ -817,11 +867,11 @@ public class RuntimeUtils {
    * is valid Jacsal code so we can cut-and-paste output into actual
    * scripts for testing and use in REPL.
    */
-  private static String toQuotedString(Object obj) {
+  private static String toQuotedString(Object obj, Set<Object> previousObjects) {
     if (obj instanceof String) {
       return "'" + obj + "'";
     }
-    return toString(obj);
+    return doToString(obj, previousObjects);
   }
 
   private static String keyAsString(Object obj) {
@@ -1643,12 +1693,39 @@ public class RuntimeUtils {
   }
 
   public static Map asMap(Object obj, String source, int offset) {
+    return doAsMap(obj, source, offset, new HashMap<>());
+  }
+
+  private static Map doAsMap(Object obj, String source, int offset, Map<Object,Map> fieldValues) {
     if (obj == null)           { return null; }
     if (obj instanceof Map)    { return (Map)obj; }
     if (obj instanceof List) {
       List list = (List)obj;
-      Map result = new HashMap();
+      Map result = new LinkedHashMap();
       list.forEach(elem -> addMapEntry(result, elem, source, offset));
+      return result;
+    }
+    if (obj instanceof JacsalObject) {
+      Map<String,Object> fieldsAndMethods = ((JacsalObject)obj)._$j$getFieldsAndMethods();
+      Map result = new LinkedHashMap();
+      fieldValues.put(obj,result);        // We use this to detect circular references
+      fieldsAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).forEach(entry -> {
+        String field = entry.getKey();
+        try {
+          Object value = ((Field) entry.getValue()).get(obj);
+          if (value instanceof JacsalObject) {
+            // Check we don't already have a value for this object due to circular reference somewhere
+            value = fieldValues.get(value);
+            if (value == null) {
+              value = doAsMap(value, source, offset, fieldValues);
+            }
+          }
+          result.put(field, value);
+        }
+        catch (IllegalAccessException e) {
+          throw new IllegalStateException("Internal error: problem accessing field '" + field + "': " + e, e);
+        }
+      });
       return result;
     }
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to Map", source, offset);
@@ -1685,20 +1762,20 @@ public class RuntimeUtils {
   }
 
   public static Map copyArg0AsMap(Object[] args) {
-    return new HashMap((Map)args[0]);
+    return new LinkedHashMap((Map)args[0]);
   }
 
-  public static Object removeOrThrow(Map map, String key, String source, int offset) {
+  public static Object removeOrThrow(Map map, String key, boolean isInitMethod, String source, int offset) {
     if (map.containsKey(key)) {
       return map.remove(key);
     }
-    throw new RuntimeError("Missing value for mandatory parameter/field '" + key + "'", source, offset);
+    throw new RuntimeError("Missing value for mandatory " + (isInitMethod ? "field" : "parameter") + " '" + key + "'", source, offset);
   }
 
-  public static boolean checkForExtraArgs(Map<String,Object> map, String source, int offset) {
+  public static boolean checkForExtraArgs(Map<String,Object> map, boolean isInitMethod, String source, int offset) {
     if (map.size() > 0) {
       String names = map.keySet().stream().collect(Collectors.joining(", "));
-      throw new RuntimeError("No such parameter" + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
+      throw new RuntimeError("No such " + (isInitMethod ? "field" : "parameter") + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
     }
     return true;
   }

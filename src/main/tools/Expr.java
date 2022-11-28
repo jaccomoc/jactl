@@ -28,14 +28,8 @@
 
 package jacsal;
 
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.ArrayDeque;
-import java.util.LinkedHashMap;
+import java.util.*;
 
-import jacsal.JacsalType;
-import jacsal.Token;
 import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -76,6 +70,21 @@ class Expr {
     if (!(this instanceof Expr.Identifier)) { return false; }
     var ident = (Expr.Identifier)this;
     return ident.varDecl.type.is(JacsalType.FUNCTION) && ident.varDecl.funDecl != null;
+  }
+
+  // True if expression is a MapLiteral where all keys are string literals
+  public boolean isConstMap() {
+    return this instanceof Expr.MapLiteral && ((Expr.MapLiteral)this).literalKeyMap != null;
+  }
+
+  // True if expr is "null"
+  public boolean isNull() {
+    return this instanceof Expr.Literal && ((Expr.Literal)this).value.getType().is(TokenType.NULL);
+  }
+
+  // True if this is a "new X()" expression
+  public boolean isNewInstance() {
+    return this instanceof Expr.MethodCall && ((Expr.MethodCall)this).parent instanceof Expr.InvokeNew;
   }
 
   class Binary extends Expr {
@@ -180,6 +189,7 @@ class Expr {
     Token start;
     List<Pair<Expr,Expr>> @entries = new ArrayList<>();
     boolean @namedArgs;   // whether this map is used as named args for function/method/constructor call
+    Map<String,Expr>      @literalKeyMap;  // Map based on key names if all keys were string literals
   }
 
   class Identifier extends Expr {
@@ -375,6 +385,14 @@ class Expr {
     Stmt.Block block;
   }
 
+  /**
+   * Expr for wrapping a type. Used for instanceof, !instanceof, and as
+   */
+  class TypeExpr extends Expr {
+    Token      token;
+    JacsalType typeVal;
+  }
+
   ////////////////////////////////////////////////////////////////////
 
   // = Used when generating wrapper method
@@ -450,5 +468,18 @@ class Expr {
     Token  token;
     Expr   expr;      // The object for which we are checking the type
     String className; // The internal class name to check for
+  }
+
+  /**
+   * Used in init method to convert an expression into a user instance type. If the expression
+   * is not the right type but is a Map/List we invoke the constructor to convert into the right
+   * instance type.
+   */
+  class ConvertTo extends Expr {
+    Token      token;
+    JacsalType varType;
+    Expr       expr;
+    Expr       source;
+    Expr       offset;
   }
 }

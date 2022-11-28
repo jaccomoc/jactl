@@ -655,7 +655,7 @@ public class BuiltinFunctions {
       return iteratorSort(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset, e);
     }
   }
 

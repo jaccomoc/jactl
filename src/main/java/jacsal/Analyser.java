@@ -326,7 +326,18 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitInvokeNew(Expr.InvokeNew expr)       { return null; }
   @Override public Void visitClassPath(Expr.ClassPath expr)       { return null; }
   @Override public Void visitDefaultValue(Expr.DefaultValue expr) { return null; }
-  @Override public Void visitInstanceOf(Expr.InstanceOf expr)     { return null; }
+  @Override public Void visitTypeExpr(Expr.TypeExpr expr)         { return null; }
+
+  @Override public Void visitInstanceOf(Expr.InstanceOf expr) {
+    return analyse(expr.expr);
+  }
+
+  @Override public Void visitConvertTo(Expr.ConvertTo expr) {
+    analyse(expr.expr);
+    analyse(expr.source);
+    analyse(expr.offset);
+    return null;
+  }
 
   ////////////////////////////////////
 

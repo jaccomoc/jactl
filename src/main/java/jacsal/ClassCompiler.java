@@ -83,15 +83,15 @@ public class ClassCompiler {
 
     var fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, "java/util/HashMap");
+    classInit.visitTypeInsn(NEW, "java/util/LinkedHashMap");
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/LinkedHashMap", "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACSAL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
     fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_STATIC_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, "java/util/HashMap");
+    classInit.visitTypeInsn(NEW, "java/util/LinkedHashMap");
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/HashMap", "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/LinkedHashMap", "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACSAL_STATIC_METHODS_MAP, "Ljava/util/Map;");
 
     // Add instance method and static for retrieving map of static Jacsal methods

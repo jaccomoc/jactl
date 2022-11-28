@@ -23,7 +23,8 @@ import java.util.Map;
 
 public class ClassTests extends BaseTest {
 
-  @Test public void simpleClass() {
+  @Test
+  public void simpleClass() {
     test("class X {}", null);
     test("class X { static def f(){3} }; X.f()", 3);
     test("class X { static int f(x){x*x} }; X.f(3)", 9);
@@ -63,10 +64,11 @@ public class ClassTests extends BaseTest {
     test("class X { var f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
     test("class X { var f = {it*it} }; def x = new X(); x.f(2)", 4);
     test("class X { var f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
-//    test("class X { Y y }; class Y { X x };", null);
+    //    test("class X { Y y }; class Y { X x };", null);
   }
 
-  @Test public void fieldClashWithBuiltinMethod() {
+  @Test
+  public void fieldClashWithBuiltinMethod() {
     testError("class X { int toString = 1 }; new X().toString", "clashes with builtin method");
   }
 
@@ -93,6 +95,7 @@ public class ClassTests extends BaseTest {
     testError("class X { int i; int j=2; int k }; new X(i:1,j:2).j", "missing mandatory field: k");
     test("class X { int i; int j=2; int k }; new X(i:1,k:3).k", 3);
     test("class X { int i; int j=2; int k }; new X(i:1,k:3).j", 2);
+    test("class X { int i, j=2, k }; new X(i:1,k:3).j", 2);
   }
 
   @Test public void fieldsWithInitialisers() {
@@ -244,7 +247,7 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:2,y:3)", "missing mandatory argument: z");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(y:3)", "missing mandatory arguments: x, z");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
-    testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: a, b");
+    testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; new X().f(a)", "missing mandatory argument");
     test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; new X().f(a)", Map.of("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; new X().f(x:2,y:3)", 5);
@@ -274,8 +277,8 @@ public class ClassTests extends BaseTest {
     test("class X { def f(x,y) { x + y }}; new X().\"${'f'}\"(x:2,y:3)", 5);
     test("class X { def f(x,y=[a:1]) { x + y }}; new X().\"${'f'}\"([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
     test("class X { def f(x,y=[a:1]) { x + y }}; new X().\"${'f'}\"(x:2,y:3)", 5);
-    testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter/field 'z'");
-    testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(y:3)", "missing value for mandatory parameter/field 'x'");
+    testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter 'z'");
+    testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(y:3)", "missing value for mandatory parameter 'x'");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:[1],y:3,z:4,a:1)", "no such parameter");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:[1],b:2,y:3,z:4,a:1)", "no such parameter");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; new X().\"${'f'}\"(a)", "missing mandatory argument");
@@ -283,8 +286,8 @@ public class ClassTests extends BaseTest {
     test("class X { def f = { x,y=[a:1] -> x + y }}; new X().\"${'f'}\"(x:2,y:3)", 5);
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [x:2,y:3]; new X().\"${'f'}\"(a)", "missing mandatory argument");
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; new X().\"${'f'}\"(a)", "missing mandatory argument");
-    testError("class X { def f(a, b, c) { c(a+b) }}; new X().\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
-    testError("class X { def f(a, b, c) { c(a+b) }}; new X().\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
+    testError("class X { def f(a, b, c) { c(a+b) }}; new X().\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+    testError("class X { def f(a, b, c) { c(a+b) }}; new X().\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
 
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,yy:2)", "no such parameter: yy");
@@ -310,7 +313,7 @@ public class ClassTests extends BaseTest {
     testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:2,y:3)", "missing mandatory argument: z");
     testError("class X { static def f(x,y,z) {x + y + z}}; X.f(y:3)", "missing mandatory arguments: x, z");
     testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: a, b");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     test("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3,c:{ it*it })", 25);
     testError("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3) { it*it }", "missing mandatory argument: c");
     testError("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3) { it*it }", "missing mandatory argument: c");
@@ -336,12 +339,12 @@ public class ClassTests extends BaseTest {
     test("class X { static def f(x,y) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
     test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
     test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter/field 'z'");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(y:3)", "missing value for mandatory parameter/field 'x'");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter 'z'");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(y:3)", "missing value for mandatory parameter 'x'");
     testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:[1],y:3,z:4,a:1)", "no such parameter");
     testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:[1],b:2,y:3,z:4,a:1)", "no such parameter");
-    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
-    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
+    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
 
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,yy:2)", "no such parameter: yy");
@@ -367,7 +370,7 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:2,y:3)", "missing mandatory argument: z");
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(y:3)", "missing mandatory arguments: x, z");
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
-    testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: a, b");
+    testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; X x = new X(); x.f(a)", "missing mandatory argument");
     test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; X x = new X(); x.f(a)", Map.of("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; X x = new X(); x.f(x:2,y:3)", 5);
@@ -397,17 +400,17 @@ public class ClassTests extends BaseTest {
     test("class X { def f(x,y) { x + y }}; def x = new X(); x.f(x:2,y:3)", 5);
     test("class X { def f(x,y=[a:1]) { x + y }}; def x = new X(); x.f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
     test("class X { def f(x,y=[a:1]) { x + y }}; def x = new X(); x.f(x:2,y:3)", 5);
-    testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:2,y:3)", "missing value for mandatory parameter/field 'z'");
-    testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(y:3)", "missing value for mandatory parameter/field 'x'");
+    testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:2,y:3)", "missing value for mandatory parameter 'z'");
+    testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(y:3)", "missing value for mandatory parameter 'x'");
     testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
-    testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: a, b");
+    testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; def x = new X(); x.f(a)", "missing mandatory argument");
     test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; def x = new X(); x.f(a)", Map.of("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; def x = new X(); x.f(x:2,y:3)", 5);
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [x:2,y:3]; def x = new X(); x.f(a)", "missing mandatory argument");
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; def x = new X(); x.f(a)", "missing mandatory arguments");
-    testError("class X { def f(a, b, c) { c(a+b) }}; def x = new X(); x.f(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
-    testError("class X { def f(a, b, c) { c(a+b) }}; def x = new X(); x.f(a:2,b:3) { it*it }", "missing value for mandatory parameter/field 'c'");
+    testError("class X { def f(a, b, c) { c(a+b) }}; def x = new X(); x.f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+    testError("class X { def f(a, b, c) { c(a+b) }}; def x = new X(); x.f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
   }
 
   @Test public void constructorArgsAsList() {
@@ -417,8 +420,17 @@ public class ClassTests extends BaseTest {
     testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc').b", "missing mandatory field");
     test("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc', 1, [1,2,3]).c[2]", 3);
     testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc', 1, [1,2,3], 5, 6).c[2]", "too many arguments");
-    testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc', 1, [1,2,3], 5).c[2]", "cannot convert 4th argument");
-    testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X(123, 1, [1,2,3], 5).c[2]", "cannot convert 1st argument");
+    testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc', 1, [1,2,3], 5).c[2]", "cannot convert argument of type int");
+    testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X(123, 1, [1,2,3], 5).c[2]", "cannot convert argument of type int");
+    test("class X { X x; int i}; new X(new X(null,2),1).x.i", 2);
+    test("class X { X x; int i}; new X([x:null,i:2],1).x.i", 2);
+    test("class X { X x; int i}; new X([\"${'x'}\":null,i:2],1).x.i", 2);
+    test("class X { X x; int i}; Map a = [x:null,i:2]; new X(a,1).x.i", 2);
+    test("class X { X x; int i, j=3 }; def a = [x:null,i:2]; new X(a,1).x.i", 2);
+    test("class X { X x; int i; int j=3 }; def a = [x:null,i:2]; new X(a,1).x.i", 2);
+    test("class X { X x; int i}; def a = [x:null,i:2]; new X(a,1).x.i", 2);
+    test("class X { X x; int i}; new X([null,2],1).x.i", 2);
+    test("class X { X x; int i}; new X([x:[null,3],i:2],1).x.x.i", 3);
   }
 
   @Test public void namedConstructorArgs() {
@@ -433,7 +445,49 @@ public class ClassTests extends BaseTest {
     test("class X { String a; int b=4; List c; Map d }; def args = [a:'abc',c:[1,2,3],d:[a:5]]; X x = new X(args); x.d.a + x.b", 9);
     test("class X { Map a; int b=4; List c=[]; Map d=[:] }; def args = [a:'abc',c:[1,2,3],d:[a:5]]; X x = new X(args, 3); x.a.d.a + x.b", 8);
     testError("class X { String a; int b; List c; Map d }; new X(a:'abc',c:[1,2,3],d:[a:5]).d.a", "missing mandatory field");
-    testError("class X { String a; int b; List c; Map d }; new X([a:'abc',c:[1,2,3],d:[a:5]]).d.a", "missing value for mandatory parameter/field");
+    testError("class X { String a; int b; List c; Map d }; new X([a:'abc',c:[1,2,3],d:[a:5]]).d.a", "missing mandatory field: b");
+  }
+
+  @Test public void complexTypesAsFunctionArgs() {
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; f([i:1,j:2])", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; def a = [i:1,j:2]; f(a)", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; def g = f; g([i:1,j:2])", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; def a = [i:1,j:2]; def g = f; g(a)", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; f([1,2])", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; def g = f; g([1,2])", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; def a = [1,2]; f(a)", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; def a = [1,2]; def g = f; g(a)", 3);
+    test("class X { int i; int j }; def f(X x) {x.i + x.j}; f([1,2])", 3);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; new X(3,4).f([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def g = new X(3,4).f; g([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def a = [i:1,j:2]; new X(3,4).f(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def a = [i:1,j:2]; def g = new X(3,4).f; g(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; new X(3,4).f([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def a = [1,2]; new X(3,4).f(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def a = [1,2]; def g = new X(3,4).f; g(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); x.f([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [i:1,j:2]; x.f(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [i:1,j:2]; x.\"${'f'}\"(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [i:1,j:2]; def g = x.\"${'f'}\"; g(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); x.\"${'f'}\"([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [i:1,j:2]; x.\"${'f'}\"(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [i:1,j:2]; def g = x.\"${'f'}\"; g(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def g = x.\"${'f'}\"; g([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); x.f([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); x.\"${'f'}\"([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def g = x.\"${'f'}\"; g([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def g = x.f; g([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [1,2]; x.f(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [1,2]; x.\"${'f'}\"(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; X x = new X(3,4); def a = [1,2]; def g = x.f; g(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); x.f([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); x.\"${'f'}\"([i:1,j:2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); def a = [i:1,j:2]; x.\"${'f'}\"(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); def a = [i:1,j:2]; def g = x.\"${'f'}\"; g(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); x.f([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); def a = [1,2]; x.f(a)", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); x.\"${'f'}\"([1,2])", 10);
+    test("class X { int i; int j; def f(X x) {x.i + x.j + i + j} }; def x = new X(3,4); def a = [1,2]; x.\"${'f'}\"(a)", 10);
   }
 
   @Test public void mutatingPrimitiveFieldValues() {
@@ -618,12 +672,110 @@ public class ClassTests extends BaseTest {
     test("class Y { var d=2.0 }; class X { Y y }; def x = new X(y:new Y(d:1)); x.y.d", "#1");
     testError("class Y { var d=2.0 }; class X { Y y }; def x = new X(); x.y = new Y(); x.y.d", "missing mandatory field: y");
     test("class Y { var d=2.0 }; class X { Y y }; def x = new X(y:null); x.y = new Y(); x.y.d", "#2.0");
+    test("class Y { var d=2.0 }; class X { Y y }; def x = new X([y:new Y([d:3])]); x.y.d", "#3");
+    test("class Y { var d=2.0 }; class X { Y y }; def a = [y:new Y([d:3])]; def x = new X(a); x.y.d", "#3");
+
+    // TODO: forward reference
     //test("class Y { var d=2.0 }; class X { Y y = new Y(); Z z = null }; class Z { Y z }; new X().y.d", "#2.0");
   }
 
-  @Test public void recursiveClass() {
+  @Test public void recursiveClasses() {
+    test("class X { X x }; new X(x:null).x", null);
+    test("class X { X x }; new X(x:[x:null]).x.x", null);
+    test("class X { X x }; def a = [x:[x:null]]; new X(a).x.x", null);
+    test("class X { X x = null; def y = null }; X x = new X(x:null,y:'xyz'); x.y", "xyz");
+    test("class X { X x = null; def y = null }; X x = new X([x:null,y:'xyz']); x.y", "xyz");
+    test("class X { X x = null; def y = null }; X x = new X([\"${'x'}\":null,y:'xyz']); x.y", "xyz");
+    test("class X { X x = null; def y = null }; def a = [\"${'x'}\":null,y:'xyz']; X x = new X(a); x.y", "xyz");
     test("class X { X x = null; def y = null }; X x = new X(x:null,y:'xyz'); new X(x:x,y:'abc').x.y", "xyz");
+    test("class X { X x = null; def y = null }; X x = null; x = new X(x:null,y:'xyz'); new X(x:x,y:'abc').x.y", "xyz");
+    test("class X { X x = null; def y = null }; def a = [x:null,y:'xyz']; X x = new X(a); new X(x:x,y:'abc').x.y", "xyz");
     test("class X { X x = null; def y = null }; new X(x:new X(y:'xyz'),y:'abc').x.y", "xyz");
+    testError("class X { X x; def y = null }; new X(x:[x:null,y:'xyz',z:'abc',yy:3],y:'abc').x.y", "no such fields: z, yy");
+    testError("class X { X x; def y = null }; def a = [x:null,y:'xyz',z:'abc',yy:3]; new X(a).x.y", "no such fields: z, yy");
+    testError("class X { X x; def y = null }; def a = [x:[x:null,y:'xyz',z:'abc',yy:3],y:'abc']; new X(a).x.y", "no such fields: z, yy");
+    test("class X { X x; def y = null }; new X(x:[x:null,y:'xyz'],y:'abc').x.y", "xyz");
+    test("class X { X x = null; def y = null }; new X(x:[y:'xyz'],y:'abc').x.y", "xyz");
+
+    // TODO: mutually recursive classes
+  }
+
+  @Test public void assignmentsAndEquality() {
+    test("class X { int i }; X x = [i:2]; x.i", 2);
+    test("class X { int i }; X x = [2]; x.i", 2);
+    test("class X { int i }; X x = new X(2); X y = new X(2); x == y", true);
+    test("class X { int i }; X x = new X(2); X y = new X(2); x != y", false);
+    test("class X { int i }; X x = new X(2); X y = new X(3); x = y; x.i", 3);
+    test("class X { int i }; X x = new X(2); X y = new X(3); x = y; y.i", 3);
+    test("class X { int i }; X x = new X(2); def y = new X(2); x == y", true);
+    test("class X { int i }; def x = new X(2); def y = new X(2); x == y", true);
+    test("class X { int i }; def x = new X(2); X y = new X(2); x == y", true);
+    test("class X { int i }; def x = new X(2); x == [i:2] as X", true);
+    test("class X { int i }; def x = new X(2); x == [2] as X", true);
+    test("class X { int i }; X x = new X(2); x == [i:2] as X", true);
+    test("class X { int i }; X x = new X(2); x == [2] as X", true);
+    test("class X { X x }; X x = new X(null); x.x = x; Map m = x as Map; m.x == m", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,3); x1 == x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,3); x1 != x2", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,2); x1 != x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,2); x1 == x2", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(3,2); X x2 = new X(1,2); x1 == x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(3,2); X x2 = new X(1,2); x1 != x2", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2); x1 == x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2); x1 != x2", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2,[3,4]); x1 == x2", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2,[3,4]); x1 != x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2,[4,4]); x1 == x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2,[4,4]); x1 != x2", true);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2,[3,5]); x1 == x2", false);
+    test("class X { int i; int j; X x = null }; X x1 = new X(1,2,[3,4]); X x2 = new X(1,2,[3,5]); x1 != x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2); def x2 = new X(1,3); x1 == x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2); def x2 = new X(1,3); x1 != x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2); def x2 = new X(1,2); x1 != x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2); def x2 = new X(1,2); x1 == x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(3,2); def x2 = new X(1,2); x1 == x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(3,2); def x2 = new X(1,2); x1 != x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2); x1 == x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2); x1 != x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[3,4]); x1 == x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[3,4]); x1 != x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[4,4]); x1 == x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[4,4]); x1 != x2", true);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[3,5]); x1 == x2", false);
+    test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[3,5]); x1 != x2", true);
+  }
+
+  @Test public void mapConversions() {
+    test("class X { int i = 0 }; X x = [i:2]; x.i", 2);
+    test("class X { int i = 0 }; X x = [i:2]; (x as Map).i", 2);
+    test("class X { int i = 0 }; def x = [i:2]; (x as Map).i", 2);
+    test("class X { int i = 0 }; def a = [i:2]; X x = a; x.i", 2);
+    test("class X { int i = 0 }; def a = [i:2]; (a as X).i", 2);
+    test("class X { int i = 0 }; def a = [i:2]; def b = (a as X); b.i", 2);
+    test("class X { int i = 0; long j = 2 }; new X() as Map", Map.of("i",0,"j",2L));
+    test("class X { int i = 0; long j = 2 }; X x = new X(); x as Map", Map.of("i",0,"j",2L));
+    test("class X { int i = 0; long j = 2 }; def x = new X(); x as Map", Map.of("i",0,"j",2L));
+    test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); (x as Map).toString()", "[i:0, j:2, x:null]");
+    test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; x.toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
+    test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
+    testError("class X { int i = 0; long j = 2 }; new X() as List", "cannot coerce");
+    testError("class X { int i = 0; long j = 2 }; def x = new X(); x as List", "cannot coerce");
+  }
+
+  @Test public void instanceOf() {
+    test("class X { int i=0 }; new X() instanceof X", true);
+  }
+
+  @Test public void toStringTest() {
+    test("class X { X x; int i; String s }; new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz').toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
+    test("class X { X x; int i; String s }; X x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
+    test("class X { X x; int i; String s }; def x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
+    test("class X {}; new X().toString()", "[:]");
+    test("class X {}; X x = new X(); x.toString()", "[:]");
+    test("class X {}; def x = new X(); x.toString()", "[:]");
+    test("class X {X x; long i}; new X(null,3).toString()", "[x:null, i:3]");
+    test("class X {X x; int i}; def x = new X(null,3); x.x = x; x.toString()", "[x:<CIRCULAR_REF>, i:3]");
+    test("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "[x:<CIRCULAR_REF>, i:3]");
   }
 
   @Test public void closedOverThis() {

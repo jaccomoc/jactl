@@ -16,12 +16,12 @@
 
 package jacsal.runtime;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 /**
  * Used a bit like a marker interface to indicate to runtime argument handling that the Map
  * being passed in should be treated as named args rather than a single argument of type Map.
  */
-public class NamedArgsMap extends HashMap  {
+public class NamedArgsMap extends LinkedHashMap {
 
 }

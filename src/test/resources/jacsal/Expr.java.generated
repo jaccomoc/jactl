@@ -23,14 +23,8 @@ package jacsal;
 ////////////////////////////////////////////////////////////////////
 
 
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.ArrayDeque;
-import java.util.LinkedHashMap;
+import java.util.*;
 
-import jacsal.JacsalType;
-import jacsal.Token;
 import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -74,6 +68,21 @@ abstract class Expr {
     if (!(this instanceof Expr.Identifier)) { return false; }
     var ident = (Expr.Identifier)this;
     return ident.varDecl.type.is(JacsalType.FUNCTION) && ident.varDecl.funDecl != null;
+  }
+
+  // True if expression is a MapLiteral where all keys are string literals
+  public boolean isConstMap() {
+    return this instanceof Expr.MapLiteral && ((Expr.MapLiteral)this).literalKeyMap != null;
+  }
+
+  // True if expr is "null"
+  public boolean isNull() {
+    return this instanceof Expr.Literal && ((Expr.Literal)this).value.getType().is(TokenType.NULL);
+  }
+
+  // True if this is a "new X()" expression
+  public boolean isNewInstance() {
+    return this instanceof Expr.MethodCall && ((Expr.MethodCall)this).parent instanceof Expr.InvokeNew;
   }
 
   static class Binary extends Expr {
@@ -258,6 +267,7 @@ abstract class Expr {
     Token start;
     List<Pair<Expr,Expr>> entries = new ArrayList<>();
     boolean namedArgs;   // whether this map is used as named args for function/method/constructor call
+    Map<String,Expr>      literalKeyMap;  // Map based on key names if all keys were string literals
     MapLiteral(Token start) {
       this.start = start;
       this.location = start;
@@ -579,6 +589,21 @@ abstract class Expr {
     @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + "]"; }
   }
 
+  /**
+   * Expr for wrapping a type. Used for instanceof, !instanceof, and as
+   */
+  static class TypeExpr extends Expr {
+    Token      token;
+    JacsalType typeVal;
+    TypeExpr(Token token, JacsalType typeVal) {
+      this.token = token;
+      this.typeVal = typeVal;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitTypeExpr(this); }
+    @Override public String toString() { return "TypeExpr[" + "token=" + token + ", " + "typeVal=" + typeVal + "]"; }
+  }
+
   ////////////////////////////////////////////////////////////////////
 
   // = Used when generating wrapper method
@@ -718,6 +743,29 @@ abstract class Expr {
     @Override public String toString() { return "InstanceOf[" + "token=" + token + ", " + "expr=" + expr + ", " + "className=" + className + "]"; }
   }
 
+  /**
+   * Used in init method to convert an expression into a user instance type. If the expression
+   * is not the right type but is a Map/List we invoke the constructor to convert into the right
+   * instance type.
+   */
+  static class ConvertTo extends Expr {
+    Token      token;
+    JacsalType varType;
+    Expr       expr;
+    Expr       source;
+    Expr       offset;
+    ConvertTo(Token token, JacsalType varType, Expr expr, Expr source, Expr offset) {
+      this.token = token;
+      this.varType = varType;
+      this.expr = expr;
+      this.source = source;
+      this.offset = offset;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitConvertTo(this); }
+    @Override public String toString() { return "ConvertTo[" + "token=" + token + ", " + "varType=" + varType + ", " + "expr=" + expr + ", " + "source=" + source + ", " + "offset=" + offset + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
@@ -746,6 +794,7 @@ abstract class Expr {
     T visitContinue(Continue expr);
     T visitPrint(Print expr);
     T visitBlock(Block expr);
+    T visitTypeExpr(TypeExpr expr);
     T visitArrayLength(ArrayLength expr);
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);
@@ -754,5 +803,6 @@ abstract class Expr {
     T visitInvokeNew(InvokeNew expr);
     T visitDefaultValue(DefaultValue expr);
     T visitInstanceOf(InstanceOf expr);
+    T visitConvertTo(ConvertTo expr);
   }
 }

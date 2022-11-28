@@ -483,6 +483,10 @@ public class JacsalType {
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       return getClassDescriptor().isSameOrChildOf(otherType.getClassDescriptor());
     }
+//    // Allow conversion between instances and map/list
+//    if (this.is(MAP,LIST) && otherType.is(INSTANCE) || this.is(INSTANCE) && otherType.is(MAP,LIST)) {
+//      return true;
+//    }
     return false;
   }
 

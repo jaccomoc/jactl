@@ -16,6 +16,8 @@
 
 package jacsal;
 
+import jacsal.runtime.Location;
+
 import java.util.List;
 
 public class CompileError extends JacsalError {
@@ -27,7 +29,7 @@ public class CompileError extends JacsalError {
    * @param error   the error message
    * @param token   the location where error occurred
    */
-  public CompileError(String error, Token token) {
+  public CompileError(String error, Location token) {
     super(error, token, true);
   }
 

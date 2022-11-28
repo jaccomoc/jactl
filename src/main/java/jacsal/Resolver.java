@@ -420,16 +420,33 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type;
     }
 
-    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF, AS)) {
-      TokenType tokenType = null;
-      if (expr.right instanceof Expr.Literal) {
-        tokenType = ((Expr.Literal) expr.right).value.getType();
-      }
-      if (tokenType == null || !tokenType.isType()) {
-        throw new CompileError("Right-hand side of " + expr.operator.getChars() + " must be a valid type", expr.right.location);
-      }
+    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
+      assert expr.right instanceof Expr.TypeExpr;
       expr.isConst = false;
-      return expr.type = expr.operator.is(AS) ? JacsalType.valueOf(tokenType) : BOOLEAN;
+      return expr.type = BOOLEAN;
+    }
+
+    if (expr.operator.is(AS)) {
+      assert expr.right instanceof Expr.TypeExpr;
+      expr.isConst = false;
+      if (!expr.left.type.isConvertibleTo(expr.right.type)) {
+        // Even if not normally convertible for "as" we support these conversions:
+        //  - Anything can be convert to STRING or BOOLEAN
+        //  - String can be converted to any numeric
+        //  - String can be converted to List (of chars)
+        //  - Map/List can be converted to INSTANCE
+        //  - Map/List can be converted to Map/List
+        //  - INSTANCE can be converted to Map
+        if (expr.right.type.is(BOOLEAN,STRING) ||
+            expr.left.type.is(STRING) && expr.right.type.isNumeric() ||
+            expr.left.type.is(STRING) && expr.right.type.is(LIST) ||
+            expr.left.type.is(MAP,LIST) && expr.right.type.is(MAP,LIST,INSTANCE) ||
+            expr.left.type.is(INSTANCE) && expr.right.type.is(MAP)) {
+          return expr.type = expr.right.type;
+        }
+        throw new CompileError("Cannot coerce from " + expr.left.type + " to " + expr.right.type, expr.operator);
+      }
+      return expr.type = expr.right.type;
     }
 
     expr.type = JacsalType.result(expr.left.type, expr.operator, expr.right.type);
@@ -1046,6 +1063,19 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitInstanceOf(Expr.InstanceOf expr) {
     resolve(expr.expr);
     return expr.type = BOOLEAN;
+  }
+
+  @Override public JacsalType visitConvertTo(Expr.ConvertTo expr) {
+    resolve(expr.varType);
+    resolve(expr.expr);
+    resolve(expr.source);
+    resolve(expr.offset);
+    return expr.type = expr.varType;
+  }
+
+  @Override public JacsalType visitTypeExpr(Expr.TypeExpr expr) {
+    resolve(expr.typeVal);
+    return expr.type = expr.typeVal;
   }
 
   ////////////////////////////////////////////
@@ -1699,9 +1729,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     var trueExpr  = new Expr.Literal(token.apply(TRUE).setValue(true));
     var falseExpr = new Expr.Literal(token.apply(FALSE).setValue(false));
     Function<TokenType,Expr.Literal> typeLiteral= type  -> new Expr.Literal(token.apply(type));
-    BiFunction<Expr,TokenType,Expr>  instOfExpr = (name,type) -> new Expr.Binary(name,
+    BiFunction<Expr,JacsalType,Expr> instOfExpr = (name,type) -> new Expr.Binary(name,
                                                                                  token.apply(INSTANCE_OF),
-                                                                                 typeLiteral.apply(type));
+                                                                                 new Expr.TypeExpr(startToken, type));
     BiFunction<String,Expr,Stmt>     assignStmt = (name,value) -> {
       var assign = new Stmt.ExprStmt(startToken, new Expr.VarAssign(ident.apply(name), token.apply(EQUAL), value));
       assign.expr.isResultUsed = false;
@@ -1769,14 +1799,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // If the first parameter is of type List/ANY and there are no other mandatory args then we pass the List
     // argument as a List. Otherwise if the first parameter is not compatible with a List or there are other
     // mandatory parameters we treat the List as a list of argument values.
-    boolean passListAsList = paramCount > 0 && funDecl.parameters.get(0).declExpr.type.is(LIST, ANY) && mandatoryCount <= 1;
+    boolean passListAsList = paramCount > 0 && funDecl.parameters.get(0).declExpr.type.is(INSTANCE,LIST,ANY) && mandatoryCount <= 1;
     boolean treatSingleArgListAsArgs = !passListAsList;
     if (treatSingleArgListAsArgs) {
       //:   if (_$argCount == 1 && _$argArr[0] instanceof List) {
       //:     _$argArr = ((List)_$argArr[0]).toArray()
       //:     _$argCount = _$argArr.length
       //:   }
-      var arg0IsList  = instOfExpr.apply(new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)), TokenType.LIST);
+      var arg0IsList  = instOfExpr.apply(new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)), LIST);
       var ifTrueStmts = new Stmt.Stmts();
       var getArg0     = new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0));
       var toObjectArr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", List.of(Object.class), List.of(getArg0));
@@ -1828,6 +1858,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                      null);
     stmtList.add(throwIfTooMany);
 
+    Expr.Literal isInitMethodExpr = new Expr.Literal(token.apply(funDecl.isInitMethod ? TRUE : FALSE).setValue(funDecl.isInitMethod));
+
     // For each parameter we now either load argument from Object[]/Map or run the initialiser
     // and store value into a local variable.
     for (int i = 0; i < paramCount; i++) {
@@ -1836,23 +1868,25 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // If we don't have an initialiser then we have mandatory arg so throw error if using named args
       // and arg not present. (If using Object[] then we have already checked for mandatory arg count
       // so no need to recheck each time.)
+      Expr initialiser;
       if (param.initialiser == null) {
         Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "removeOrThrow",
-                                                 List.of(Map.class, String.class, String.class, int.class),
-                                                 List.of(mapCopyIdent, paramNameIdent, sourceIdent, offsetIdent));
+                                                 List.of(Map.class, String.class, boolean.class, String.class, int.class),
+                                                 List.of(mapCopyIdent, paramNameIdent,
+                                                         isInitMethodExpr,
+                                                         sourceIdent, offsetIdent));
         // :   def <param_i> = _$isObjArr ? _$argArr[i] : RuntimeUtils.removeOrThrow(_$mapCopy, param.name, source, offset)
-        stmtList.add(paramVarDecl(wrapperFunDecl, param,
-                                  new Expr.Ternary(isObjArrIdent, new Token(QUESTION, param.name),
-                                                   new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(i)),
-                                                   new Token(COLON, param.name),
-                                                   getOrThrow)));
+        initialiser = new Expr.Ternary(isObjArrIdent, new Token(QUESTION, param.name),
+                                       new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(i)),
+                                       new Token(COLON, param.name),
+                                       getOrThrow);
       }
       else {
         // We have a parameter with an initialiser so load value from Object[]/Map if present otherwise
         // use the initialiser
         // :   def <param_i> = (_$isObjArr ? (i < _$argCount ? _$argArr[i] : null)
         // :                               : _$mapCopy.remove(param.name))
-        // :                       ?: param.initialiser
+        // :                   ?: param.initialiser
         var objArrValue = new Expr.Ternary(new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent),
                                            new Token(QUESTION, param.name),
                                            new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(i)),
@@ -1860,12 +1894,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                            new Expr.Literal(new Token(NULL, param.name)));
         var mapValue = new Expr.InvokeUtility(startToken, Map.class, "remove",
                                               List.of(Object.class), List.of(mapCopyIdent, paramNameIdent));
-        var initialiser = new Expr.Binary(new Expr.Ternary(isObjArrIdent, new Token(QUESTION, param.name), objArrValue, new Token(COLON, param.name), mapValue),
+        initialiser = new Expr.Binary(new Expr.Ternary(isObjArrIdent, new Token(QUESTION, param.name), objArrValue, new Token(COLON, param.name), mapValue),
                                           new Token(QUESTION_COLON, param.initialiser.location),
                                           param.initialiser);
-        var varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
-        stmtList.add(varDecl);
       }
+      // If parameter is a user instance type then convert initialiser to the right type (by possibly invoking its
+      // constructor).
+      if (param.type.is(INSTANCE)) {
+        initialiser = new Expr.ConvertTo(startToken, param.type, initialiser, sourceIdent, offsetIdent);
+      }
+      var varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
+      stmtList.add(varDecl);
     }
 
     // Check that we don't still have parameter values left in our Map if passing by name
@@ -1876,8 +1915,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                                     new Expr.InvokeUtility(startToken,
                                                                            RuntimeUtils.class,
                                                                            "checkForExtraArgs",
-                                                                           List.of(Map.class, String.class, int.class),
-                                                                           List.of(mapCopyIdent, sourceIdent, offsetIdent)));
+                                                                           List.of(Map.class, boolean.class, String.class, int.class),
+                                                                           List.of(mapCopyIdent,
+                                                                                   isInitMethodExpr,
+                                                                                   sourceIdent,
+                                                                                   offsetIdent)));
     checkForExtraArgs.expr.isResultUsed = false;
     stmtList.add(new Stmt.If(startToken, isObjArrIdent, null, checkForExtraArgs));
 

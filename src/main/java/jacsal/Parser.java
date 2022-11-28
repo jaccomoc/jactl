@@ -18,10 +18,10 @@ package jacsal;
 
 import jacsal.runtime.RuntimeUtils;
 
-import javax.swing.*;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static jacsal.JacsalType.ANY;
 import static jacsal.JacsalType.FUNCTION;
@@ -403,7 +403,9 @@ public class Parser {
   private Stmt.VarDecl singleVarDecl(JacsalType type, boolean inClassDecl) {
     Token identifier  = expect(IDENTIFIER);
     Expr  initialiser = null;
+    Token equalsToken = null;
     if (matchAny(EQUAL)) {
+      equalsToken = previous();
       matchAny(EOL);
       initialiser = parseExpression();
     }
@@ -413,6 +415,13 @@ public class Parser {
         unexpected("Initialiser expression required for 'var' declaration");
       }
       type.typeDependsOn(initialiser);   // Once initialiser type is known the type will then be known
+    }
+
+    // If we have an instance and initialiser is not "new X(...)" then convert to "new X(...)" in case we have
+    // named args we can validate"
+    //   X x = [i:1,j:2]  ==> X x = new X(i:1,j:2)
+    if (type.is(JacsalType.INSTANCE) && initialiser != null && !initialiser.isNull() && !initialiser.isNewInstance()) {
+      initialiser = Utils.createNewInstance(equalsToken, type, initialiser.location, List.of(initialiser));
     }
 
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, initialiser);
@@ -546,25 +555,29 @@ public class Parser {
     var leftBrace = expect(LEFT_BRACE);
     Stmt.Block classBlock = block(RIGHT_BRACE, () -> declaration(true));
 
+
+
     // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
     // separate lists:
-    List<Stmt.FunDecl> methods = classBlock.stmts.stmts.stream()
-                                                       .filter(stmt -> stmt instanceof Stmt.FunDecl)
-                                                       .map(stmt -> (Stmt.FunDecl)stmt)
-                                                       .collect(Collectors.toList());
+    List<Stmt> classStmts = classBlock.stmts.stmts;
+    List<Stmt.FunDecl> methods = classStmts.stream()
+                                      .filter(stmt -> stmt instanceof Stmt.FunDecl)
+                                      .map(stmt -> (Stmt.FunDecl)stmt)
+                                      .collect(Collectors.toList());
     List<Stmt.ClassDecl> innerClasses = classBlock.stmts.stmts.stream()
                                                               .filter(stmt -> stmt instanceof Stmt.ClassDecl)
                                                               .map(stmt -> (Stmt.ClassDecl)stmt)
                                                               .collect(Collectors.toList());
-    List<Stmt.VarDecl> fields = classBlock.stmts.stmts.stream()
-                                                      .filter(stmt -> stmt instanceof Stmt.VarDecl)
-                                                      .map(stmt -> (Stmt.VarDecl)stmt)
-                                                      .collect(Collectors.toList());
 
-//    // Create a default initialiser if field doesn't already have one
-//    fields.stream()
-//          .filter(field -> field.declExpr.initialiser == null)
-//          .forEach(field -> field.declExpr.initialiser = new Expr.DefaultValue(field.name, field.declExpr.type));
+    // Since we allow multiple fields in the same declaration we need to check for Stmt.Stmts as well as
+    // just Stmt.VarDecl (e.g. int i,j=2  --> Stmt.Stmts(VarDecl i, VarDecl j) so we use flatMap to flatten
+    // to a single stream of Stmt objects.
+    List<Stmt.VarDecl> fields = classStmts.stream()
+                                          .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts)stmt).stmts.stream()
+                                                                                      : Stream.of(stmt))
+                                          .filter(stmt -> stmt instanceof Stmt.VarDecl)
+                                          .map(stmt -> (Stmt.VarDecl)stmt)
+                                          .collect(Collectors.toList());
 
     // Create varDecl for "this"
     JacsalType   instanceType = JacsalType.createInstance(List.of(new Expr.Identifier(className)));
@@ -792,8 +805,9 @@ public class Parser {
     while (matchOp(operators)) {
       Token operator = previous();
       if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF,AS)) {
-        Token type = expect(types);
-        expr = new Expr.Binary(expr, operator, new Expr.Literal(type));
+        Token token = peek();
+        JacsalType type = type(false);
+        expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
         continue;
       }
 
@@ -945,9 +959,7 @@ public class Parser {
     var className = JacsalType.createInstance(className());
     var leftParen = expect(LEFT_PAREN);
     var args      = arguments();
-    // We create the instance and then invoke _$j$init on it
-    var invokeNew  = new Expr.InvokeNew(token, className);
-    return new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, token), Utils.JACSAL_INIT, token, args);
+    return Utils.createNewInstance(token, className, leftParen, args);
   }
 
   /**
@@ -1165,10 +1177,10 @@ public class Parser {
   }
 
   private Expr.MapLiteral mapEntries(TokenType endToken) {
-    boolean         isNamedArgs= endToken.is(RIGHT_PAREN);
-    String          paramOrKey = isNamedArgs ? "Parameter" : "Map key";
-    Expr.MapLiteral expr       = new Expr.MapLiteral(previous());
-    Set<String>     keys       = new HashSet<>();
+    boolean          isNamedArgs   = endToken.is(RIGHT_PAREN);
+    String           paramOrKey    = isNamedArgs ? "Parameter" : "Map key";
+    Expr.MapLiteral  expr          = new Expr.MapLiteral(previous());
+    Map<String,Expr> literalKeyMap = new HashMap<>();
     if (matchAnyIgnoreEOL(COLON)) {
       // Empty map
       expect(endToken);
@@ -1178,13 +1190,15 @@ public class Parser {
         if (expr.entries.size() > 0) {
           expect(COMMA);
         }
-        Expr key = mapKey();
+        Expr   key       = mapKey();
+        String keyString = null;
         if (key instanceof Expr.Literal) {
           Object keyValue = ((Expr.Literal) key).value.getValue();
           if (!(keyValue instanceof String)) {
             throw new CompileError(paramOrKey + " must be String not " + RuntimeUtils.className(keyValue), key.location);
           }
-          if (!keys.add(keyValue.toString())) {
+          keyString = keyValue.toString();
+          if (literalKeyMap.containsKey(keyString)) {
             throw new CompileError(paramOrKey + " '" + keyValue.toString() + "' occurs multiple times", key.location);
           }
         }
@@ -1196,9 +1210,17 @@ public class Parser {
         expect(COLON);
         Expr value = expression(true);
         expr.entries.add(new Pair(key, value));
+        if (keyString != null) {
+          literalKeyMap.put(keyString, value);
+        }
       }
     }
     expr.namedArgs = isNamedArgs;
+    // If we have had keys that are only string literals then we create a map based on these string keys.
+    // This can be used during named arg validation.
+    if (literalKeyMap.size() == expr.entries.size()) {
+      expr.literalKeyMap = literalKeyMap;
+    }
     return expr;
   }
 

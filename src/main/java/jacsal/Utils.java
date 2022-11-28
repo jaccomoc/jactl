@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.DOUBLE;
 import static jacsal.JacsalType.LONG;
+import static jacsal.TokenType.DOT;
 import static org.objectweb.asm.Opcodes.*;
 
 public class Utils {
@@ -405,7 +406,25 @@ public class Utils {
     return true;
   }
 
-  static boolean isNamedArgs(List<Expr> args) {
+  public static boolean isNamedArgs(List<Expr> args) {
     return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).namedArgs;
+  }
+
+  public static String plural(String word, int count) {
+    return count <= 1 ? word : (word + "s");
+  }
+
+  public static Expr createNewInstance(Token newToken, JacsalType className, Token leftParen, List<Expr> args) {
+    // Check for potential named args
+    if (args.size() == 1 && args.get(0) instanceof Expr.MapLiteral) {
+      var mapLiteral = (Expr.MapLiteral)args.get(0);
+      if (mapLiteral.literalKeyMap != null) {
+        mapLiteral.namedArgs = true;
+      }
+    }
+
+    // We create the instance and then invoke _$j$init on it
+    var invokeNew  = new Expr.InvokeNew(newToken, className);
+    return new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACSAL_INIT, newToken, args);
   }
 }

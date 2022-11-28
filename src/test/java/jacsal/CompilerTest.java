@@ -3766,7 +3766,7 @@ class CompilerTest extends BaseTest {
     testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing mandatory argument: z");
     testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing mandatory arguments");
     testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
-    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: a, b");
+    testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("def f = { x,y -> x*y }; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
     test("def f = { x,y=[a:1] -> x + y }; def a = [x:2,y:3]; f(a)", Map.of("x",2,"y",3,"a",1));
     test("def f = { x,y=[a:1] -> x + y }; f(x:2,y:3)", 5);
