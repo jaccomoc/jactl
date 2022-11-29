@@ -77,6 +77,11 @@ public class Parser {
       if (errors.size() == 1) {
         throw errors.get(0);
       }
+      List<Stmt> scriptStmts = scriptClass.scriptMain.declExpr.block.stmts.stmts;
+      scriptClass.innerClasses = scriptStmts.stream()
+                                            .filter(stmt -> stmt instanceof Stmt.ClassDecl)
+                                            .map(stmt -> (Stmt.ClassDecl)stmt)
+                                            .collect(Collectors.toList());
       return scriptClass;
     }
     finally {
@@ -550,6 +555,9 @@ public class Parser {
    *#               "}" ;
    */
   private Stmt.ClassDecl classDecl() {
+    if (!isClassDeclAllowed()) {
+      throw new CompileError("Class declaration not allowed here", previous());
+    }
     var className = expect(IDENTIFIER);
     var baseClass = matchAny(EXTENDS) ? JacsalType.createClass(className()) : null;
     var leftBrace = expect(LEFT_BRACE);
@@ -1567,6 +1575,14 @@ public class Parser {
     if (lookaheadCount == 0) {
       blockStack().peek().functions.add(funDecl);
     }
+  }
+
+  /**
+   * Class declaration is only allowed in top level block of a script or another class declaration.
+   */
+  private boolean isClassDeclAllowed() {
+    // Function will either be the top level script or the init method of our enclosing class
+    return functionStack().size() == 1 && blockStack().size() == 1;
   }
 
   private Stmt.FunDecl parseFunDecl(Token start,

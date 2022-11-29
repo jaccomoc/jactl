@@ -71,7 +71,7 @@ public class Compiler {
     var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var script   = parser.parse(className);
     var resolver = new Resolver(jacsalContext, bindings);
-    resolver.resolve(script);
+    resolver.resolveScript(script);
     var analyser = new Analyser();
     analyser.testAsync = testAsync;
     analyser.analyseScript(script);
@@ -82,7 +82,7 @@ public class Compiler {
     var parser      = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var scriptClass = parser.parseClass();
     var resolver = new Resolver(jacsalContext, bindings);
-    resolver.resolve(scriptClass);
+    resolver.resolveClass(scriptClass);
     var analyser = new Analyser();
     analyser.testAsync = testAsync;
     analyser.analyseScript(scriptClass);

@@ -23,8 +23,19 @@ import java.util.Map;
 
 public class ClassTests extends BaseTest {
 
-  @Test
-  public void simpleClass() {
+  @Test public void nameScoping() {
+    test("class X{}; int X = 1; X", 1);
+    test("class X{static def f(){2}}; Map X = [f:{3}]; X.f()", 3);
+    test("class X{static def f(){2}}; def X = [f:{3}]; X.f()", 3);
+    test("class X{int i=2}; Map X = [i:1]; X x = new X(); X.i", 1);
+    test("class X{int i=2}; Map X = [i:1]; def x = new X(); X.i", 1);
+    test("class X{int i=2}; X X = new X(); X.i", 2);
+    test("class X{int i=2}; def X = new X(); X.i", 2);
+    test("class X{int i=2}; { X X = new X(); return X.i}", 2);
+    test("class X{int i=2}; {def X = new X(); return X.i}", 2);
+  }
+
+  @Test public void simpleClass() {
     test("class X {}", null);
     test("class X { static def f(){3} }; X.f()", 3);
     test("class X { static int f(x){x*x} }; X.f(3)", 9);
@@ -67,8 +78,7 @@ public class ClassTests extends BaseTest {
     //    test("class X { Y y }; class Y { X x };", null);
   }
 
-  @Test
-  public void fieldClashWithBuiltinMethod() {
+  @Test public void fieldClashWithBuiltinMethod() {
     testError("class X { int toString = 1 }; new X().toString", "clashes with builtin method");
   }
 
@@ -96,6 +106,7 @@ public class ClassTests extends BaseTest {
     test("class X { int i; int j=2; int k }; new X(i:1,k:3).k", 3);
     test("class X { int i; int j=2; int k }; new X(i:1,k:3).j", 2);
     test("class X { int i, j=2, k }; new X(i:1,k:3).j", 2);
+    testError("int sum = 0; for(int i = 0; i < 10; i++) { class X { int x=i }; sum += new X().x }; sum", "class declaration not allowed here");
   }
 
   @Test public void fieldsWithInitialisers() {
@@ -675,8 +686,8 @@ public class ClassTests extends BaseTest {
     test("class Y { var d=2.0 }; class X { Y y }; def x = new X([y:new Y([d:3])]); x.y.d", "#3");
     test("class Y { var d=2.0 }; class X { Y y }; def a = [y:new Y([d:3])]; def x = new X(a); x.y.d", "#3");
 
-    // TODO: forward reference
-    //test("class Y { var d=2.0 }; class X { Y y = new Y(); Z z = null }; class Z { Y z }; new X().y.d", "#2.0");
+    test("class Y { var d=2.0 }; class X { Y y = new Y(); Z z = null }; class Z { Y z }; new X().y.d", "#2.0");
+    testError("class Y { var d=2.0 }; class X { Y y = new Y(); X z = null }; class X { Y z }; new X().y.d", "already exists");
   }
 
   @Test public void recursiveClasses() {
@@ -697,7 +708,9 @@ public class ClassTests extends BaseTest {
     test("class X { X x; def y = null }; new X(x:[x:null,y:'xyz'],y:'abc').x.y", "xyz");
     test("class X { X x = null; def y = null }; new X(x:[y:'xyz'],y:'abc').x.y", "xyz");
 
-    // TODO: mutually recursive classes
+    test("class X { Y y }; class Y { X x }; X x = new X(new Y(new X(null))); Y y = new Y(x); y.x == x && x.y.x.y == null", true);
+    test("class X { Y y }; class Y { X x }; X x = new X([y:[x:[y:null]]]); Y y = new Y(x); y.x == x && x.y.x.y == null", true);
+    test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = new X(a); Y y = new Y(x); y.x == x && x.y.x.y == null", true);
   }
 
   @Test public void assignmentsAndEquality() {
@@ -764,6 +777,11 @@ public class ClassTests extends BaseTest {
 
   @Test public void instanceOf() {
     test("class X { int i=0 }; new X() instanceof X", true);
+    test("class X { int i=0 }; X x = new X(); x instanceof X", true);
+    test("class X { int i=0 }; def x = new X(); x instanceof X", true);
+    test("class X { int i=0 }; new X() !instanceof X", false);
+    test("class X { int i=0 }; X x = new X(); x !instanceof X", false);
+    test("class X { int i=0 }; def x = new X(); x !instanceof X", false);
   }
 
   @Test public void toStringTest() {
@@ -783,6 +801,9 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void autoCreateFieldsDuringAssign() {
+  }
+
+  @Test public void importClasses() {
   }
 
   @Test public void newlinesInClassDecl() {

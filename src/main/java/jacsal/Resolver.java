@@ -127,6 +127,22 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, builtinVarDecl(f)));
   }
 
+  void resolveClass(Stmt.ClassDecl classDecl) {
+    // Find all classes and create their ClassDescriptors and add to localClasses
+    prepareClass(classDecl, null);
+    resolve(classDecl);
+  }
+
+  void resolveScript(Stmt.ClassDecl classDecl) {
+    isScript = true;
+    this.packageName = classDecl.packageName;
+    this.scriptName  = classDecl.name.getStringValue();
+    prepareClass(classDecl, null);
+    resolve(classDecl);
+  }
+
+  //////////////////////////////////////////////
+
   Void resolve(Stmt stmt) {
     if (stmt != null) {
       return stmt.accept(this);
@@ -158,60 +174,62 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   //////////////////////////////////////////////////////////
 
-  // = Stmt
-
-  @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    if (stmt.scriptMain != null) {
-      isScript = true;
-      this.packageName = stmt.packageName;
-      this.scriptName  = stmt.name.getStringValue();
-    }
-
-    resolve(stmt.baseClass);
-    var baseClass = stmt.baseClass != null ? stmt.baseClass.getClassDescriptor() : null;
+  private void prepareClass(Stmt.ClassDecl classDecl, Stmt.ClassDecl outerClassDecl) {
+    var baseClass = classDecl.baseClass != null ? classDecl.baseClass.getClassDescriptor() : null;
 
     // NOTE: we only support class declarations at top level of script or directly within another class decl.
-    var outerClass = classStack.peek() != null ? classStack.peek().classDescriptor : null;
-    var interfaces = stmt.interfaces != null ? stmt.interfaces.stream().map(name -> lookupClass(name)).collect(Collectors.toList()) : null;
-    var classDescriptor = outerClass == null ? new ClassDescriptor(stmt.name.getStringValue(), stmt.isInterface, jacsalContext.javaPackage, stmt.packageName, baseClass, interfaces)
-                                             : new ClassDescriptor(stmt.name.getStringValue(), stmt.isInterface, jacsalContext.javaPackage, outerClass, baseClass, interfaces);
+    var outerClass = outerClassDecl == null ? null : outerClassDecl.classDescriptor;
+    var interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(name -> lookupClass(name)).collect(Collectors.toList()) : null;
+    var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jacsalContext.javaPackage, classDecl.packageName, baseClass, interfaces)
+                                             : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jacsalContext.javaPackage, outerClass, baseClass, interfaces);
 
-    stmt.classDescriptor = classDescriptor;
-    var classVarDecl = new Expr.VarDecl(stmt.name, null);
-    classVarDecl.classDescriptor = classDescriptor;
-    classVarDecl.type = JacsalType.createClass(classDescriptor);
+    classDecl.classDescriptor = classDescriptor;
+    var classType = JacsalType.createClass(classDescriptor);
 
     // Find our functions and fields and add them to the ClassDescriptor
-    if (stmt.scriptMain == null) {
-      stmt.methods.forEach(decl -> {
+    if (classDecl.scriptMain == null) {
+      classDecl.methods.forEach(decl -> {
         if (decl instanceof Stmt.FunDecl) {
           var                funDecl            = ((Stmt.FunDecl) decl).declExpr;
           String             methodName         = funDecl.nameToken.getStringValue();
           FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
-          functionDescriptor.firstArgtype = classVarDecl.type.createInstance();
+          functionDescriptor.firstArgtype = classType.createInstance();
           if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
             throw new CompileError("Duplicate method name '" + methodName + "' in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
           }
         }
       });
-      stmt.fieldVars.values().forEach(varDecl -> {
-          if (varDecl.isField) {
-            String fieldName = varDecl.name.getStringValue();
-            if (Functions.lookupMethod(ANY, fieldName) != null) {
-              throw new CompileError("Field name '" + fieldName + "' clashes with builtin method of same name", varDecl.name);
-            }
-            if (!classDescriptor.addField(fieldName, varDecl.type)) {
-              throw new CompileError("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
-            }
+      classDecl.fieldVars.values().forEach(varDecl -> {
+        if (varDecl.isField) {
+          String fieldName = varDecl.name.getStringValue();
+          if (Functions.lookupMethod(ANY, fieldName) != null) {
+            throw new CompileError("Field name '" + fieldName + "' clashes with builtin method of same name", varDecl.name);
           }
+          if (!classDescriptor.addField(fieldName, varDecl.type)) {
+            throw new CompileError("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
+          }
+        }
       });
     }
 
-    if (stmt.scriptMain == null) {
-      define(stmt.name, classVarDecl);
-    }
-    localClasses.put(classDescriptor.getName(), classDescriptor);
+//    if (classDecl.scriptMain == null) {
+//      define(classDecl.name, classVarDecl);
+//    }
 
+    if (localClasses.put(classDescriptor.getName(), classDescriptor) != null) {
+      throw new CompileError("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
+    }
+
+    // Now declare our inner classes
+    classDecl.innerClasses.forEach(innerClass -> prepareClass(innerClass, classDecl));
+  }
+
+  //////////////////////////////////////////////////////////
+
+  // = Stmt
+
+  @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
+    resolve(stmt.baseClass);
     classStack.push(stmt);
     try {
 //      // Declare methods
@@ -1390,6 +1408,21 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     String subPath = classNameParts.stream().map(e -> identStr.apply(e)).collect(Collectors.joining("$"));
     subPath = subPath.isEmpty() ? "" : '$' + subPath;
 
+    return lookupClass(classPkg, packageToken, firstClass, classToken, subPath);
+  }
+
+  private Expr.VarDecl lookupClass(String className, Token location) {
+    var classDescriptor = lookupClass(null, null, className, null, "");
+    if (classDescriptor == null) {
+      return null;
+    }
+    var classVarDecl = new Expr.VarDecl(location.newIdent(className), null);
+    classVarDecl.classDescriptor = classDescriptor;
+    classVarDecl.type = JacsalType.createClass(classDescriptor);
+    return classVarDecl;
+  }
+
+  private ClassDescriptor lookupClass(String classPkg, Token packageToken, String firstClass, Token classToken, String subPath) {
     String className = null;
     // If no package supplied then we need to search for within current script/class and then if not
     // found check for any imported classes that match
@@ -1421,7 +1454,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
       }
       if (className == null) {
-        throw new CompileError("Unknown class '" + firstClass + "'", classToken);
+        if (classToken != null) {
+          throw new CompileError("Unknown class '" + firstClass + "'", classToken);
+        }
+        return null;
       }
     }
     else {
@@ -1441,7 +1477,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       descriptor = jacsalPackage.getClass(className);
     }
 
-    if (descriptor == null) {
+    if (descriptor == null && classToken != null) {
       throw new CompileError("Unknown class '" + className.replaceAll("\\$", ".") + "' in package " + classPkg, classToken);
     }
     return descriptor;
@@ -1500,6 +1536,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl == null) {
+      varDecl = lookupClass(name, location);
+    }
+
+    if (varDecl == null) {
       // Last chance is if reference is to a global builtin function
       varDecl = builtinFunctions.get(name);
     }
@@ -1512,6 +1552,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Variable initialisation cannot refer to itself", location);
     }
     if (varDecl != null) {
+      if (varDecl.type.is(CLASS)) {
+        return varDecl;
+      }
+
       if (varDecl.funDecl != null) {
         // Track earliest reference to detect where forward referenced function closes over
         // vars not yet declared at time of reference
