@@ -188,15 +188,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // Find our functions and fields and add them to the ClassDescriptor
     if (classDecl.scriptMain == null) {
-      classDecl.methods.forEach(decl -> {
-        if (decl instanceof Stmt.FunDecl) {
-          var                funDecl            = ((Stmt.FunDecl) decl).declExpr;
-          String             methodName         = funDecl.nameToken.getStringValue();
-          FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
-          functionDescriptor.firstArgtype = classType.createInstance();
-          if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
-            throw new CompileError("Duplicate method name '" + methodName + "' in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
-          }
+      classDecl.methods.forEach(funDeclStmt -> {
+        var    funDecl    = funDeclStmt.declExpr;
+        String methodName = funDecl.nameToken.getStringValue();
+        FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
+        functionDescriptor.firstArgtype = classType.createInstance();
+        if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
+          throw new CompileError("Duplicate method name '" + methodName + "' in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
       });
       classDecl.fieldVars.values().forEach(varDecl -> {
@@ -271,7 +269,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     try {
       // We first define our nested functions so that we can support
       // forward references to functions declared at same level as us
-      stmt.functions.forEach(nested -> {
+      stmt.functions.stream().map(nested -> nested.declExpr).forEach(nested -> {
         nested.varDecl.owner = functions.peek();
         define(nested.nameToken, nested.varDecl);
       });
@@ -922,9 +920,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     returnExpr.returnType = functions.peek().returnType;
     returnExpr.funDecl = functions.peek();
     if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
-      throw new CompileError("Expression type " + returnExpr.expr.type + " not compatible with function return type of " +
-                             returnExpr.returnType + " for " + functions.peek().nameToken.getStringValue(), returnExpr.expr.location);
+      throw new CompileError("Expression type " + returnExpr.expr.type + " not compatible with function " +
+                             functions.peek().nameToken.getStringValue() + "() return type of " +
+                             returnExpr.returnType, returnExpr.expr.location);
     }
+    // return statement doesn't really have a type or a value since it returns immediately but
+    // to keep everything happy we pretend it has a value of type ANY
     return returnExpr.type = ANY;
   }
 
@@ -2065,9 +2066,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case DOUBLE:  return new Expr.Literal(new Token(DOUBLE_CONST,location).setValue(0));
       case DECIMAL: return new Expr.Literal(new Token(DECIMAL_CONST,location).setValue(BigDecimal.ZERO));
       case STRING:  return new Expr.Literal(new Token(STRING_CONST,location).setValue(""));
-      case ANY:     return new Expr.Literal(new Token(NULL,location).setValue(null));
       case MAP:     return new Expr.MapLiteral(location);
       case LIST:    return new Expr.ListLiteral(location);
+
+      case INSTANCE:
+      case ANY:
+        return new Expr.Literal(new Token(NULL,location).setValue(null));
+
       default:      throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }

@@ -3525,9 +3525,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void checkCast(JacsalType type) {
-    Utils.checkCast(mv, type);
+    Utils.checkCast(mv, type.boxed());
     pop();
-    push(type);
+    push(type.boxed());
   }
 
   private void storeVar(Expr.VarDecl varDecl) {

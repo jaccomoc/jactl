@@ -131,7 +131,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void methodArgsAsList() {
-    test("def a = [1,2,3]; class X { def f(x,y=7,z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
+    test("def a = [1,2,3]; class X { def f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1,2,3,7,8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
@@ -149,16 +149,25 @@ public class ClassTests extends BaseTest {
     test("class X { def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1,2,3));
     testError("class X { def f(List x, y=4, z) { x + y + z }}; new X().f([1, 2, 3])", "int cannot be cast to List");
 
+    test("def a = [1,2,3]; class X { int f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
+    test("class X { int f(int x, int y, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
+    test("class X { def f = { int x, int y, int z -> x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
+    test("class X { def f = { int x, int y, int z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
+    test("class X { def f = { int x, int y, int z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
+    test("class X { int f(x, y) { x + y }}; new X().f([1,2])", 3);
+    test("class X { int f(x, y) { x + y }}; def a = [1,2]; new X().f(a)", 3);
+    test("class X { int f(x, y=3) { x + y }}; new X().f(1,2)", 3);
+
     test("def a = [1,2,3]; class X { def f(x,y=7,z) { x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
     test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().\"${'f'}\"(a)", List.of(1,2,3,7,8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().\"${'f'}\"(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().\"${'f'}\"(a)", "cannot convert object of type int to string");
     test("class X { def f = {String x, int y -> x + y }}; def a = ['x',2]; new X().\"${'f'}\"(a)", "x2");
     testError("class X { def f = {String x, int y -> x + y } };  def a = [2,'x']; new X().\"${'f'}\"(a)", "cannot convert object of type int to string");
-    test("class X { def f(x,y,z) { x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"([1,2,3])", 12);
-    test("class X { def f = { x,y,z -> x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"([1,2,3])", 12);
-    test("class X { def f = { x,y,z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
-    test("class X { def f = { x,y,z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
+    test("class X { def f(int x, int y, int z) { x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"([1,2,3])", 12);
+    test("class X { def f = { int x, int y, int z -> x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"([1,2,3])", 12);
+    test("class X { def f = { int x, int y, int z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
+    test("class X { def f = { int x, int y, int z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
     test("class X { def f(x, y) { x + y }}; new X().\"${'f'}\"([1,2])", 3);
     test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1,2,3));
     test("class X { def f(x, y) { x + y }}; def a = [1,2]; new X().\"${'f'}\"(a)", 3);
@@ -172,6 +181,7 @@ public class ClassTests extends BaseTest {
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
+    test("class X { static int f(int x,int y, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; new X().f([1,2])", 3);
     test("class X { static def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1,2,3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; new X().f(a)", 3);
@@ -756,6 +766,8 @@ public class ClassTests extends BaseTest {
     test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[4,4]); x1 != x2", true);
     test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[3,5]); x1 == x2", false);
     test("class X { int i; int j; def x = null }; def x1 = new X(1,2,[3,4]); def x2 = new X(1,2,[3,5]); x1 != x2", true);
+    test("Z f() { return new Z(3) }; class Z { int i }; Z z = f(); z instanceof Z", true);
+    test("def f() { return new Z(3) }; class Z { int i }; Z z = f(); z instanceof Z", true);
   }
 
   @Test public void mapConversions() {
@@ -782,6 +794,7 @@ public class ClassTests extends BaseTest {
     test("class X { int i=0 }; new X() !instanceof X", false);
     test("class X { int i=0 }; X x = new X(); x !instanceof X", false);
     test("class X { int i=0 }; def x = new X(); x !instanceof X", false);
+    test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = new X(a); Y y = new Y(x); x instanceof X && y instanceof Y && x !instanceof Y && y !instanceof X && x.y instanceof Y && y.x instanceof X", true);
   }
 
   @Test public void toStringTest() {
@@ -794,6 +807,20 @@ public class ClassTests extends BaseTest {
     test("class X {X x; long i}; new X(null,3).toString()", "[x:null, i:3]");
     test("class X {X x; int i}; def x = new X(null,3); x.x = x; x.toString()", "[x:<CIRCULAR_REF>, i:3]");
     test("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "[x:<CIRCULAR_REF>, i:3]");
+    test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = new X(a); x.toString()", "[y:[x:[y:null]]]");
+  }
+
+  @Test public void innerClasses() {
+    test("class X { int i; class Y { int i }}; X x = new X(1); X.Y y = new X.Y(2); x.i + y.i", 3);
+    test("class X { int i; class Y { int i; Z.ZZ f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f() instanceof Z.ZZ", true);
+    test("class X { int i; class Y { int i; def f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f() instanceof Z.ZZ", true);
+    test("class Y { int i; Z f() { return new Z(i) } }; class Z { int i }; Z z = new Y(3).f(); z instanceof Z", true);
+    test("class Y { int i; def f() { return new Z(i) } }; class Z { int i }; Z z = new Y(3).f(); z instanceof Z", true);
+    test("class X { int i; class Y { int i; def f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; Z.ZZ z = new X.Y(3).f(); z instanceof Z.ZZ", true);
+    test("class X { int i; class Y { int i; def f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; def z = new X.Y(3).f(); z instanceof Z.ZZ", true);
+    test("class X { int i; class Y { int i; Z.ZZ f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f().i", 3);
+    test("class X { int i; class Y { int i; Z.ZZ f(){ return new Z.ZZ(i) if this instanceof Y && this instanceof X.Y && this !instanceof Z.ZZ } }}; class Z { class ZZ { int i } }; new X.Y(3).f().i", 3);
+    test("class X { int i; class Y { int i; def f(){ this instanceof Y && this instanceof X.Y && this !instanceof Z.ZZ and return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f().i", 3);
   }
 
   @Test public void closedOverThis() {

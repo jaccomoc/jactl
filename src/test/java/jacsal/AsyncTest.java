@@ -32,7 +32,7 @@ public class AsyncTest {
     var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACSAL_PKG);
     var script   = parser.parse("AsyncScriptTest");
     var resolver = new Resolver(context, Map.of());
-    resolver.resolve(script);
+    resolver.resolveScript(script);
     var analyser = new Analyser();
     analyser.analyseScript(script);
     return script.scriptMain.declExpr.functionDescriptor.isAsync;

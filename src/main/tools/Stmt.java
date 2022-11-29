@@ -61,8 +61,7 @@ class Stmt {
   class Block extends Stmt {
     Token                    openBrace;
     Stmts                    stmts;
-    List<Expr.FunDecl>       @functions  = new ArrayList<>();
-    List<Stmt.ClassDecl>     @classes    = new ArrayList<>();
+    List<Stmt.FunDecl>       @functions  = new ArrayList<>();
 
     Map<String,Expr.VarDecl> @variables  = new HashMap<>();
 
@@ -94,10 +93,10 @@ class Stmt {
     Token                name;
     String               packageName;
     JacsalType           baseClass;
-    Stmt.Block           classBlock;
-    List<Stmt.FunDecl>   methods;
-    List<Stmt.ClassDecl> innerClasses;
     boolean              isInterface;
+    Stmt.Block           @classBlock;
+    List<Stmt.FunDecl>   @methods = new ArrayList<>();
+    List<Stmt.ClassDecl> @innerClasses = new ArrayList<>();
 
     List<List<Expr>>     @interfaces = new ArrayList<>();
 

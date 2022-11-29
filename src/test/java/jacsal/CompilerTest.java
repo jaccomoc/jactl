@@ -4307,6 +4307,7 @@ class CompilerTest extends BaseTest {
     test("def it = 'abc'; /a/f ? true : false", true);
     test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
     test("def x = 0; for (int i = 0; i < 10; i++) { i < 5 and do { x += i } and continue; x++ }; x", 15);
+    test("int f() { true and return 1; return 0 }; f()", 1);
   }
 
   @Test public void builtinFunctions() {

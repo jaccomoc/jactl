@@ -66,11 +66,10 @@ public class Parser {
   public Stmt.ClassDecl parse(String scriptClassName) {
     packageDecl();
     Token start = peek();
-    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, null, null, List.of(), List.of(), false);
-    classes.push(scriptClass);
+    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, null, false);
+    pushClass(scriptClass);
     try {
       scriptClass.scriptMain = script();
-      scriptClass.scriptMain.declExpr.isScriptMain = true;
       if (errors.size() > 1) {
         throw new CompileError(errors);
       }
@@ -85,7 +84,7 @@ public class Parser {
       return scriptClass;
     }
     finally {
-      classes.pop();
+      popClass();
     }
   }
 
@@ -145,20 +144,24 @@ public class Parser {
    *#        ;
    */
   private Stmt.Block block(TokenType endBlock) {
-    return block(endBlock, () -> declaration());
+    return block(previous(), endBlock, () -> declaration());
   }
 
-  private Stmt.Block block(TokenType endBlock, Supplier<Stmt> stmtSupplier) {
+  private Stmt.Block block(Token openBlock, TokenType endBlock) {
+    return block(openBlock, endBlock, () -> declaration());
+  }
+
+  private Stmt.Block block(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
     Stmt.Stmts stmts = new Stmt.Stmts();
-    Stmt.Block block = new Stmt.Block(peek(), stmts);
-    blockStack().push(block);
+    Stmt.Block block = new Stmt.Block(openBlock, stmts);
+    pushBlock(block);
     try {
       stmts(stmts, stmtSupplier);
       expect(endBlock);
       return block;
     }
     finally {
-      blockStack().pop();
+      popBlock();
     }
   }
 
@@ -422,11 +425,11 @@ public class Parser {
       type.typeDependsOn(initialiser);   // Once initialiser type is known the type will then be known
     }
 
-    // If we have an instance and initialiser is not "new X(...)" then convert to "new X(...)" in case we have
-    // named args we can validate"
-    //   X x = [i:1,j:2]  ==> X x = new X(i:1,j:2)
+    // If we have an instance and initialiser is not "new X(...)" then convert to "initilaliser as X" to
+    // convert rhs into instance of X.
+    //   X x = [i:1,j:2]  ==> X x = [i:1,j:2] as X
     if (type.is(JacsalType.INSTANCE) && initialiser != null && !initialiser.isNull() && !initialiser.isNewInstance()) {
-      initialiser = Utils.createNewInstance(equalsToken, type, initialiser.location, List.of(initialiser));
+      initialiser = new Expr.Binary(initialiser, new Token(AS, initialiser.location), new Expr.TypeExpr(initialiser.location, type));
     }
 
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, initialiser);
@@ -561,93 +564,99 @@ public class Parser {
     var className = expect(IDENTIFIER);
     var baseClass = matchAny(EXTENDS) ? JacsalType.createClass(className()) : null;
     var leftBrace = expect(LEFT_BRACE);
-    Stmt.Block classBlock = block(RIGHT_BRACE, () -> declaration(true));
+
+    var classDecl = new Stmt.ClassDecl(className, packageName, baseClass, false);
+    pushClass(classDecl);
+    try {
+      Stmt.Block classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
 
 
+      // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
+      // separate lists:
+      List<Stmt> classStmts = classBlock.stmts.stmts;
+      List<Stmt.ClassDecl> innerClasses = classBlock.stmts.stmts.stream()
+                                                                .filter(stmt -> stmt instanceof Stmt.ClassDecl)
+                                                                .map(stmt -> (Stmt.ClassDecl) stmt)
+                                                                .collect(Collectors.toList());
 
-    // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
-    // separate lists:
-    List<Stmt> classStmts = classBlock.stmts.stmts;
-    List<Stmt.FunDecl> methods = classStmts.stream()
-                                      .filter(stmt -> stmt instanceof Stmt.FunDecl)
-                                      .map(stmt -> (Stmt.FunDecl)stmt)
-                                      .collect(Collectors.toList());
-    List<Stmt.ClassDecl> innerClasses = classBlock.stmts.stmts.stream()
-                                                              .filter(stmt -> stmt instanceof Stmt.ClassDecl)
-                                                              .map(stmt -> (Stmt.ClassDecl)stmt)
-                                                              .collect(Collectors.toList());
+      // Since we allow multiple fields in the same declaration we need to check for Stmt.Stmts as well as
+      // just Stmt.VarDecl (e.g. int i,j=2  --> Stmt.Stmts(VarDecl i, VarDecl j) so we use flatMap to flatten
+      // to a single stream of Stmt objects.
+      List<Stmt.VarDecl> fields = classStmts.stream()
+                                            .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts) stmt).stmts.stream()
+                                                                                        : Stream.of(stmt))
+                                            .filter(stmt -> stmt instanceof Stmt.VarDecl)
+                                            .map(stmt -> (Stmt.VarDecl) stmt)
+                                            .collect(Collectors.toList());
 
-    // Since we allow multiple fields in the same declaration we need to check for Stmt.Stmts as well as
-    // just Stmt.VarDecl (e.g. int i,j=2  --> Stmt.Stmts(VarDecl i, VarDecl j) so we use flatMap to flatten
-    // to a single stream of Stmt objects.
-    List<Stmt.VarDecl> fields = classStmts.stream()
-                                          .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts)stmt).stmts.stream()
-                                                                                      : Stream.of(stmt))
-                                          .filter(stmt -> stmt instanceof Stmt.VarDecl)
-                                          .map(stmt -> (Stmt.VarDecl)stmt)
-                                          .collect(Collectors.toList());
+      // Create varDecl for "this"
+      JacsalType   instanceType = JacsalType.createInstance(List.of(new Expr.Identifier(className)));
+      Token        thisIdent    = className.newIdent(Utils.THIS_VAR);
+      Expr.VarDecl varDecl      = new Expr.VarDecl(thisIdent, null);
+      varDecl.isResultUsed = false;
+      varDecl.type = instanceType;
+      varDecl.isField = true;
+      varDecl.slot = 0;                // "this" is always in local var slot 0
+      var thisStmt = new Stmt.VarDecl(thisIdent, varDecl);
 
-    // Create varDecl for "this"
-    JacsalType   instanceType = JacsalType.createInstance(List.of(new Expr.Identifier(className)));
-    Token thisIdent = className.newIdent(Utils.THIS_VAR);
-    Expr.VarDecl varDecl = new Expr.VarDecl(thisIdent, null);
-    varDecl.isResultUsed = false;
-    varDecl.type = instanceType;
-    varDecl.isField = true;
-    varDecl.slot = 0;                // "this" is always in local var slot 0
-    var thisStmt = new Stmt.VarDecl(thisIdent, varDecl);
+      // We have a list of field declarations. We then generate an initialisation method _$j$init
+      // that initialises the fields based on what is passed in. So if x,y,z correspond to the fields of the class:
+      //   X _$j$init(x=...,y=...,z=...) { this.x = x; this.y = y; this.z = z; }
+      // Note that the initialisers for the fields will become initialisers of the parameters to _$j$newInstance
+      // so that the _$j$newInstance wrapper will take care of filling in missing values if not all fields passed
+      // in.
 
-    // We have a list of field declarations. We then generate an initialisation method _$j$init
-    // that initialises the fields based on what is passed in. So if x,y,z correspond to the fields of the class:
-    //   X _$j$init(x=...,y=...,z=...) { this.x = x; this.y = y; this.z = z; }
-    // Note that the initialisers for the fields will become initialisers of the parameters to _$j$newInstance
-    // so that the _$j$newInstance wrapper will take care of filling in missing values if not all fields passed
-    // in.
+      Token initName = className.newIdent(Utils.JACSAL_INIT);
 
-    Token initName = className.newIdent(Utils.JACSAL_INIT);
+      // For each field we create a parameter from the varDecl for our init method and move the initialiser from the
+      // field to the parameter.
+      List<Stmt.VarDecl> params = fields.stream()
+                                        .map(field -> createInitParam(field.declExpr))
+                                        .collect(Collectors.toList());
+      var initStmts = new Stmt.Stmts();
+      initStmts.stmts.addAll(fields);
+      var          initBlock  = new Stmt.Block(leftBrace, initStmts);
+      Stmt.FunDecl initMethod = convertBlockToFunction(initName, initBlock, instanceType, params, false);
+      initMethod.declExpr.isInitMethod = true;
+      createVariableForFunction(initMethod);
 
-    // For each field we create a parameter from the varDecl for our init method and move the initialiser from the
-    // field to the parameter.
-    List<Stmt.VarDecl> params = fields.stream()
-                                      .map(field -> createInitParam(field.declExpr))
-                                      .collect(Collectors.toList());
-    var initStmts = new Stmt.Stmts();
-    initStmts.stmts.addAll(fields);
-    var initBlock = new Stmt.Block(leftBrace, initStmts);
-    Stmt.FunDecl initMethod = convertBlockToFunction(initName, initBlock, instanceType, params, false);
-    initMethod.declExpr.isInitMethod = true;
-    createVariableForFunction(initMethod);
+      // Add to initBlock (where a,b, etc are the fields):
+      //  this.a = a; this.b = b; ...
+      //  return this;
+      fields.forEach(field -> {
+        var assign = new Expr.FieldAssign(new Expr.Identifier(field.name.newIdent("this")),
+                                          new Token(DOT, field.name),
+                                          new Expr.Literal(field.name),
+                                          new Token(EQUAL, field.name),
+                                          new Expr.Identifier(field.name));
+        assign.isResultUsed = false;
+        initStmts.stmts.add(new Stmt.ExprStmt(field.name, assign));
+      });
 
-    // Add to initBlock (where a,b, etc are the fields):
-    //  this.a = a; this.b = b; ...
-    //  return this;
-    fields.forEach(field -> {
-      var assign = new Expr.FieldAssign(new Expr.Identifier(field.name.newIdent("this")),
-                                        new Token(DOT, field.name),
-                                        new Expr.Literal(field.name),
-                                        new Token(EQUAL, field.name),
-                                        new Expr.Identifier(field.name));
-      assign.isResultUsed = false;
-      initStmts.stmts.add(new Stmt.ExprStmt(field.name, assign));
-    });
+      // Finally, return "this" from init method
+      initStmts.stmts.add(new Stmt.Return(className,
+                                          new Expr.Return(className,
+                                                          new Expr.Identifier(thisIdent),
+                                                          instanceType)));
 
-    // Finally, return "this" from init method
-    initStmts.stmts.add(new Stmt.Return(className,
-                                        new Expr.Return(className,
-                                                        new Expr.Identifier(thisIdent),
-                                                        instanceType)));
+      // Class block will be:
+      //   thisVarDecl
+      //   initMethod (containing fields)
+      //   methods
+      //   innerClasses
+      classBlock.stmts.stmts = Utils.concat(thisStmt, initMethod, classDecl.methods, innerClasses);
 
-    // Class block will be:
-    //   thisVarDecl
-    //   initMethod (containing fields)
-    //   methods
-    //   innerClasses
-    classBlock.stmts.stmts = Utils.concat(thisStmt, initMethod, methods, innerClasses);
-
-    var classDecl = new Stmt.ClassDecl(className, packageName, baseClass, classBlock, Utils.concat(initMethod, methods), innerClasses, false);
-    classDecl.fieldVars.putAll(fields.stream().collect(Collectors.toMap(f -> f.name.getStringValue(), f -> f.declExpr)));
-    classDecl.thisField = varDecl;
-    return classDecl;
+      classBlock.functions   = classDecl.methods;
+      classDecl.classBlock   = classBlock;
+      classDecl.methods      = Utils.concat(initMethod, classDecl.methods);
+      classDecl.innerClasses = innerClasses;
+      classDecl.thisField    = varDecl;
+      classDecl.fieldVars.putAll(fields.stream().collect(Collectors.toMap(f -> f.name.getStringValue(), f -> f.declExpr)));
+      return classDecl;
+    }
+    finally {
+      popClass();
+    }
   }
 
   ////////////////////////////////////////////
@@ -1551,6 +1560,14 @@ public class Parser {
     return new Stmt.VarDecl(name, decl);
   }
 
+  private void pushClass(Stmt.ClassDecl classDecl) {
+    if (lookaheadCount == 0) { classes.push(classDecl); }
+  }
+
+  private void popClass() {
+    if (lookaheadCount == 0) { classes.pop(); }
+  }
+
   private Deque<Expr.FunDecl> functionStack() {
     return classes.peek().nestedFunctions;
   }
@@ -1571,9 +1588,26 @@ public class Parser {
     return functionStack().peek().blocks;
   }
 
-  private void addFunDeclToBlock(Expr.FunDecl funDecl) {
+  private void pushBlock(Stmt.Block block) {
+    if (lookaheadCount == 0 && functionStack().size() > 0) {
+      blockStack().push(block);
+    }
+  }
+
+  private void popBlock() {
+    if (lookaheadCount == 0 && functionStack().size() > 0) {
+      blockStack().pop();
+    }
+  }
+
+  private void addFunDecl(Stmt.FunDecl funDecl) {
     if (lookaheadCount == 0) {
-      blockStack().peek().functions.add(funDecl);
+      if (functionStack().size() == 0) {
+        classes.peek().methods.add(funDecl);
+      }
+      else {
+        blockStack().peek().functions.add(funDecl);
+      }
     }
   }
 
@@ -1582,7 +1616,10 @@ public class Parser {
    */
   private boolean isClassDeclAllowed() {
     // Function will either be the top level script or the init method of our enclosing class
-    return functionStack().size() == 1 && blockStack().size() == 1;
+    return functionStack().size() == 0 ||                               // class block
+           functionStack().size() == 1 &&
+           functionStack().peek().isScriptMain &&
+           blockStack().size() == 1;
   }
 
   private Stmt.FunDecl parseFunDecl(Token start,
@@ -1595,18 +1632,21 @@ public class Parser {
     params.forEach(p -> p.declExpr.isExplicitParam = true);
     Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic);
     params.forEach(p -> p.declExpr.owner = funDecl);
+    Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(start, funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
       // Add to functions in block so we can support forward references during Resolver phase
-      addFunDeclToBlock(funDecl);
+      // or add to Class if we are in a class declaration
+      addFunDecl(funDeclStmt);
     }
+    funDecl.isScriptMain = isScriptMain;
     pushFunDecl(funDecl);
     try {
-      Stmt.Block block = block(endToken);
+      Stmt.Block block = block(peek(), endToken);
       insertStmtsInto(params, block);
       funDecl.block = block;
       funDecl.isResultUsed = false;
       funDecl.type = FUNCTION;
-      return new Stmt.FunDecl(start, funDecl);
+      return funDeclStmt;
     }
     finally {
       popFunDecl();
