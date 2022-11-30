@@ -558,7 +558,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       // Load the field value onto stack (or suitable default value).
       // Default value will be based on the type of the rhs of the += or -= etc.
-      loadField(expr.accessType, false, null, RuntimeUtils.DEFAULT_VALUE);
+      loadField(expr.accessType, false, null, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
     }
 
     // If we need the before value as the result then stash in a temp for later
@@ -815,6 +815,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
       compile(expr.left);
       if (expr.left.type.is(INSTANCE,JacsalType.CLASS)) {
+        if (expr.left.type.is(INSTANCE)) {
+          throwIfNull("Trying to access field/element of null object", expr.operator);
+        }
         if (expr.right instanceof Expr.Literal) {
           // We know the type so get the field/method directly.
           // Note: we know that Resolver has already checked for valid field/method name.
@@ -822,7 +825,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           var        clss      = expr.left.type.getClassDescriptor();
           JacsalType fieldType = clss.getField(name);
           if (fieldType != null) {
-            loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+            if (expr.createIfMissing) {
+              mv.visitInsn(DUP);
+              loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+              Label nonNull = new Label();
+              mv.visitInsn(DUP);
+              mv.visitJumpInsn(IFNONNULL, nonNull);
+              popVal();
+              // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
+              loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
+              mv.visitInsn(DUP_X1);     // Copy value and move it two slots
+              _storeClassField(clss.getInternalName(), name, fieldType, false);
+              Label end = new Label();
+              mv.visitJumpInsn(GOTO, end);
+
+              mv.visitLabel(nonNull);            // :nonNull
+              // Don't need duplicate expr.left anymore
+              mv.visitInsn(SWAP);
+              mv.visitInsn(POP);
+
+              mv.visitLabel(end);                // :end
+            }
+            else {
+              loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+            }
           }
           else {
             // We need to find the method handle for the given method
@@ -848,7 +874,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
         // Can't determine method/field at compile time so fall through to runtime lookup
         if (expr.left.type.is(JacsalType.CLASS)) {
-          // Need to tell runtime what class it is
+          // Need to tell runtime what class it is so load "class" onto stack
           loadConst(expr.left.type);
         }
       }
@@ -859,7 +885,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadMethodOrField(expr.operator);
       }
       else {
-        loadField(expr.operator, expr.createIfMissing, expr.createIfMissing ? expr.type : null, null);
+        loadField(expr.operator, expr.createIfMissing, expr.createIfMissing ? expr.type : null, null, expr.right.location);
       }
       return null;
     }
@@ -1178,7 +1204,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitListLiteral(Expr.ListLiteral expr) {
-    _newInstance(ArrayList.class);
+    _newInstance(Type.getInternalName(Utils.JACSAL_LIST_TYPE));
     push(LIST);
     expr.exprs.forEach(entry -> {
       dupVal();
@@ -1191,7 +1217,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitMapLiteral(Expr.MapLiteral expr) {
-    _newInstance(expr.namedArgs ? NamedArgsMap.class : LinkedHashMap.class);
+    _newInstance(expr.namedArgs ? NamedArgsMap.class : Utils.JACSAL_MAP_TYPE);
     push(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
@@ -2383,6 +2409,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return Utils.loadConst(mv, obj);
   }
 
+  private void loadDefaultValueOrNewInstance(JacsalType type, Location location) {
+    if (type.is(INSTANCE)) {
+      newInstance(type);
+      loadNullContinuation();
+      loadLocation(location);
+      _loadConst(0);
+      mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+      push(OBJECT_ARR);
+      invokeMethod(JacsalObject.class, Utils.JACSAL_INIT_WRAPPER, Continuation.class, String.class, int.class, Object[].class);
+      checkCast(type);
+      return;
+    }
+
+    // Other types we fall back to default value
+    loadDefaultValue(type);
+  }
+
   private void loadDefaultValue(JacsalType type) {
     switch (type.getType()) {
       case BOOLEAN:     loadConst(Boolean.FALSE);     break;
@@ -2400,11 +2443,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         push(MATCHER);
         break;
       case MAP:
-        _newInstance(HashMap.class);
+        _newInstance(Utils.JACSAL_MAP_TYPE);
         push(MAP);
         break;
       case LIST:
-        _newInstance(ArrayList.class);
+        _newInstance(Utils.JACSAL_LIST_TYPE);
         push(LIST);
         break;
       default:       throw new IllegalStateException("Internal error: unexpected type " + type);
@@ -2481,7 +2524,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
       }
     }
-    throw new IllegalStateException("Internal error: cannot cast from " + peek() + " to " + type);
+    throw new CompileError("Cannot convert from " + peek() + " to " + type, location);
   }
 
   /**
@@ -3467,14 +3510,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void storeClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
+    _storeClassField(internalClassName, fieldName, type, isStatic);
+    pop(isStatic ? 1 : 2);
+  }
+
+  private void _storeClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
     if (isStatic) {
       mv.visitFieldInsn(PUTSTATIC, internalClassName, fieldName, type.descriptor());
     }
     else {
       mv.visitFieldInsn(PUTFIELD, internalClassName, fieldName, type.descriptor());
-      pop();  // this
     }
-    pop();    // value
   }
 
   /**
@@ -3600,7 +3646,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param defaultValue    use this as the default value (only one of defaultType or defaultValue should
    *                        be supplied since they are mutally exclusive)
    */
-  private void loadField(Token accessOperator, boolean createIfMissing, JacsalType defaultType, Object defaultValue) {
+  private void loadField(Token accessOperator, boolean createIfMissing, JacsalType defaultType, Object defaultValue, Location location) {
     check(defaultType == null || defaultValue == null, "Cannot have defaultType and defaultValue specified");
     box();                        // Field name/index passed as Object
     loadConst(accessOperator.is(DOT,QUESTION_DOT));
@@ -3615,21 +3661,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(defaultValue);
       }
       box();
-      loadConst(accessOperator.getSource());
-      loadConst(accessOperator.getOffset());
+      loadLocation(location);
       invokeMethod(RuntimeUtils.class, "loadFieldOrDefault", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, String.class, Integer.TYPE);
     }
     else
     if (createIfMissing) {
       check(defaultType.is(MAP,LIST), "Type must be MAP/LIST when createIfMissing set");
       loadConst(defaultType.is(MAP));
-      loadConst(accessOperator.getSource());
-      loadConst(accessOperator.getOffset());
+      loadLocation(location);
       invokeMethod(RuntimeUtils.class, "loadOrCreateField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
     }
     else {
-      loadConst(accessOperator.getSource());
-      loadConst(accessOperator.getOffset());
+      loadLocation(location);
       invokeMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
     }
   }

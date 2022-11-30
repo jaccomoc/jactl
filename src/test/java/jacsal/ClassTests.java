@@ -98,6 +98,12 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 1 }; def x = new X(); x.\"${'i'}\"", 1);
     test("class X { int i = 1 }; new X().i = 3", 3);
     test("class X { int i = 1 }; new X(3).i", 3);
+    test("class X { int i = 1 }; new X(3)['i']", 3);
+    test("class X { int i = 1 }; X x = new X(3); x['i']", 3);
+    test("class X { int i = 1 }; def x = new X(3); x['i']", 3);
+    test("class X { int i = 1 }; def a = 'i'; new X(3)[a]", 3);
+    test("class X { int i = 1 }; def a = 'i'; X x = new X(3); x[a]", 3);
+    test("class X { int i = 1 }; def a = 'i'; def x = new X(3); x[a]", 3);
     test("class X { int i = 1; int j = i+1 }; new X().j", 2);
     test("class X { int i = 1; int j = i+1 }; new X(3).j", 4);
     test("class X { int i = 1; int j = i+1 }; new X(3,7).j", 7);
@@ -107,6 +113,7 @@ public class ClassTests extends BaseTest {
     test("class X { int i; int j=2; int k }; new X(i:1,k:3).j", 2);
     test("class X { int i, j=2, k }; new X(i:1,k:3).j", 2);
     testError("int sum = 0; for(int i = 0; i < 10; i++) { class X { int x=i }; sum += new X().x }; sum", "class declaration not allowed here");
+    testError("class X { Y y }; class Y { int j = 3 }; def x = new X(new Y(j:4)); x.y.z", "no such field 'z'");
   }
 
   @Test public void fieldsWithInitialisers() {
@@ -725,6 +732,10 @@ public class ClassTests extends BaseTest {
 
   @Test public void assignmentsAndEquality() {
     test("class X { int i }; X x = [i:2]; x.i", 2);
+    test("class X { int i }; X x = [i:2]; x.i = 3", 3);
+    test("class X { int i }; X x = [i:2]; x.i = 3; x.i", 3);
+    test("class X { int i }; X x = [i:2]; x['i'] = 3", 3);
+    test("class X { int i }; X x = [i:2]; x['i'] = 3; x['i']", 3);
     test("class X { int i }; X x = [2]; x.i", 2);
     test("class X { int i }; X x = new X(2); X y = new X(2); x == y", true);
     test("class X { int i }; X x = new X(2); X y = new X(2); x != y", false);
@@ -827,7 +838,30 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 1; def f(){ return { ++i } } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
   }
 
-  @Test public void autoCreateFieldsDuringAssign() {
+  @Test public void autoCreateFieldsDuringAssignment() {
+    testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z = 4; x.y.z", "cannot convert from int");
+    testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "missing values for mandatory fields");
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; def x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i += 4; x.y.z.i", 7);
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; def x = new X(null); x.y.z.i += 4; x.y.z.i", 7);
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i *= 4; x.y.z.i", 12);
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; def x = new X(null); x.y.z.i *= 4; x.y.z.i", 12);
+    test("class X { def y }; X x = new X(null); x.y.z.i += 4; x.y.z.i", 4);
+    test("class X { def y }; def x = new X(null); x.y.z.i += 4; x.y.z.i", 4);
+    test("class X { List y }; X x = new X(null); x.y[2].z.i += 4; x.y[2].z.i", 4);
+    test("class X { List y }; def x = new X(null); x.y[2].z.i += 4; x.y[2].z.i", 4);
+    test("class X { Y y }; class Y { def z = null }; X x = new X(null); x.y.z[2].i += 4; x.y.z[2].i", 4);
+    test("class X { Y y }; class Y { def z = null }; def x = new X(null); x.y.z[2].i += 4; x.y.z[2].i", 4);
+    testError("class X { Y y }; class Y { def z = null }; def x = new X(null); x['y']['z'][2].i += 4; x.y.z[2].i", "expected list");
+    test("class X { Y y }; class Y { def z = null }; X x = new X(null); x['y']['z'][2].i += 4; x.y.z[2].i", 4);
+    testError("class X { Y y }; class Y { int j = 3 }; def x = new X(null); x.y.z[2].i += 4; x.y.z[2].i", "no such field 'z'");
+    testError("class X { Y y }; class Y { int j =3 }; def x = new X(null); x.y.j.i += 4", "expected map/list");
+    testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j.i += 4", "expected field compatible with map");
+    testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j[2].i += 4", "expected field compatible with list");
+    test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i ?= 4; x.y.z.i", 4);
+    testError("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i", "null object");
+    testError("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i ?= true ? null : 4; x.y.z.i", "null object");
   }
 
   @Test public void importClasses() {
@@ -842,6 +876,7 @@ public class ClassTests extends BaseTest {
     test("class X { int abc = 1 }; new X().\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
     test("class X { int abc = 1 }; X x = new X(); x.\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
     test("class X { int abc = 1 }; def x = new X(); x.\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
+    test("class X { int abc = sleeper(0,1) + sleeper(0,new X(3).abc) }; def x = new X(); x.abc", 4);
   }
 
 //  @Test public void packageTests() {

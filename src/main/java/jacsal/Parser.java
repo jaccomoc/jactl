@@ -2010,14 +2010,14 @@ public class Parser {
     }
 
     if (!(variable instanceof Expr.Binary)) {
-      throw new CompileError("Left hand side of assignment is not a valid lvalue", assignmentOperator);
+      throw new CompileError("Invalid left-hand side for '" + assignmentOperator.getChars() + "' operator (invalid lvalue)", variable.location);
     }
 
     Expr.Binary fieldPath = (Expr.Binary)variable;
 
     // Make sure lhs is a valid lvalue
     if (!fieldPath.operator.is(fieldAccessOp)) {
-      throw new CompileError("Cannot assign to value on left-hand side (invalid lvalue)", assignmentOperator);
+      throw new CompileError("Invalid left-hand side for '" + assignmentOperator.getChars() + "' (invalid lvalue)", fieldPath.operator);
     }
 
     Expr parent = fieldPath.left;

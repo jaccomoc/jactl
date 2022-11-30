@@ -70,6 +70,18 @@ public class ClassDescriptor {
     return fields.put(name, type) == null;
   }
 
+  public boolean isInterface() {
+    return isInterface;
+  }
+
+  public ClassDescriptor getBaseClass() {
+    return baseClass;
+  }
+
+  public boolean isAssignableFrom(ClassDescriptor clss) {
+    return clss.isSameOrChildOf(this);
+  }
+
   /**
    * Is the same or is a child of base class or implements clss if clss is an interface.
    */

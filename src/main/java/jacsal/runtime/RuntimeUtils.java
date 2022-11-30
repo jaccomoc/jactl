@@ -753,7 +753,7 @@ public class RuntimeUtils {
    */
   public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual) {
     // If plusEqual then just merge map2 into map1
-    Map result = isPlusEqual ? map1 : new HashMap(map1);
+    Map result = isPlusEqual ? map1 : new LinkedHashMap(map1);
     result.putAll(map2);
     return result;
   }
@@ -923,7 +923,7 @@ public class RuntimeUtils {
 
     Object value = null;
     if (parent instanceof JacsalObject) {
-      value = getJacsalFieldOrMethod(parent, field, source, offset, false);
+      value = getJacsalFieldOrMethod((JacsalObject)parent, field, source, offset, false, false);
     }
     else {
       // Fields of a map cannot override builtin methods so look up method first
@@ -1030,7 +1030,7 @@ public class RuntimeUtils {
       Map    map       = (Map) parent;
       Object value     = map.get(fieldName);
       if (createIfMissing && value == null) {
-        value = isMap ? new HashMap<>() : new ArrayList<>();
+        value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
         map.put(fieldName, value);
       }
       if (value == null) {
@@ -1065,7 +1065,7 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof JacsalObject) {
-      return getJacsalFieldOrMethod(parent, field, source, offset, createIfMissing);
+      return getJacsalFieldOrMethod((JacsalObject)parent, field, source, offset, createIfMissing, isMap);
     }
 
     // Check for accessing method by name
@@ -1079,7 +1079,7 @@ public class RuntimeUtils {
 
     String parentString = null;
     if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
-      throw new RuntimeError("Invalid object type (" + className(parent) + "): expected Map/List" +
+      throw new RuntimeError("Invalid parent object type (" + className(parent) + "): expected Map/List" +
                              (isDot ? "" : " or String"), source, offset);
     }
 
@@ -1122,7 +1122,7 @@ public class RuntimeUtils {
     }
 
     if (createIfMissing && value == null) {
-      value = isMap ? new HashMap<>() : new ArrayList<>();
+      value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
       for (int i = list.size(); i < index + 1; i++) {
         list.add(null);
       }
@@ -1131,22 +1131,31 @@ public class RuntimeUtils {
     return value;
   }
 
-  private static Object getJacsalFieldOrMethod(Object parent, Object field, String source, int offset, boolean createIfMissing) {
+  /**
+   * Get the value for given field of a JacsalObject. Field could be an actual field or a method.
+   * If createIfMissing is set and field is null then we will create a default value for the field.
+   * For fields that are of type Object we create a Map or List based on the isMap field.
+   * NOTE: createIfMissing is only ever set in a Map/List context on lhs of assignment or assignment-like
+   * expression so we know that we want something that looks like a Map/List.
+   */
+  private static Object getJacsalFieldOrMethod(JacsalObject parent, Object field, String source, int offset, boolean createIfMissing, boolean isMap) {
     // Check for field, instance method, static method, and then if that fails check if there
     // is a generic builtin method that applies
     String       fieldName     = field.toString();
-    JacsalObject jacsalObj     = (JacsalObject) parent;
-    Object       fieldOrMethod = jacsalObj._$j$getFieldsAndMethods().get(fieldName);
+    Object       fieldOrMethod = parent._$j$getFieldsAndMethods().get(fieldName);
     if (fieldOrMethod instanceof MethodHandle) {
       // Need to bind method handle to instance
       fieldOrMethod = ((MethodHandle)fieldOrMethod).bindTo(parent);
     }
     if (fieldOrMethod == null && !createIfMissing) {
       // If createIfMissing is not set we can search for matching method
-      fieldOrMethod = jacsalObj._$j$getStaticMethods().get(fieldName);
+      fieldOrMethod = parent._$j$getStaticMethods().get(fieldName);
       if (fieldOrMethod == null) {
         fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
       }
+    }
+    if (fieldOrMethod == null) {
+      throw new RuntimeError("No such field '" + fieldName + "' for type " + parent.getClass().getName(), source, offset);
     }
     // If we have a field handle then we need to get the field value
     if (fieldOrMethod instanceof Field) {
@@ -1154,15 +1163,29 @@ public class RuntimeUtils {
       try {
         Object value = classField.get(parent);
         if (value == null && createIfMissing) {
-          if (JacsalObject.class.isAssignableFrom(classField.getType())) {
-            JacsalObject fieldObj = (JacsalObject)classField.getType().getConstructor().newInstance();
-            fieldObj._$j$init$w(null, source, offset, new Object[0]);
+          Class<?> fieldType = classField.getType();
+          if (JacsalObject.class.isAssignableFrom(fieldType)) {
+            // Make sure that we are not expected to have a List
+            if (!isMap) {
+              throw new RuntimeError("Expected List but found field '" + fieldName + "' of type " + fieldType, source, offset);
+            }
+            JacsalObject fieldObj = (JacsalObject) fieldType.getConstructor().newInstance();
+            fieldObj._$j$init$$w(null, source, offset, new Object[0]);
             classField.set(parent, fieldObj);
             value = fieldObj;
           }
           else {
-            value = defaultValue(classField.getType(), source, offset);
-            classField.set(parent, value);
+            // Check field is of compatible type
+            if (fieldType == Object.class ||
+                isMap && fieldType.isAssignableFrom(Map.class) ||
+                fieldType.isAssignableFrom(List.class)) {
+              value = defaultValue(isMap ? Utils.JACSAL_MAP_TYPE : Utils.JACSAL_LIST_TYPE, source, offset);
+              classField.set(parent, value);
+            }
+            else {
+              throw new RuntimeError("Expected field compatible with " + (isMap ? "Map":"List") +
+                                     " but found field '" + fieldName + "' of type " + fieldType, source, offset);
+            }
           }
         }
         return value;
@@ -1177,7 +1200,7 @@ public class RuntimeUtils {
   }
 
   private static Object defaultValue(Class clss, String source, int offset) {
-    if (Map.class.isAssignableFrom(clss))        { return new HashMap<>(); }
+    if (Map.class.isAssignableFrom(clss))        { return new LinkedHashMap<>(); }
     if (List.class.isAssignableFrom(clss))       { return new ArrayList<>(); }
     if (String.class.isAssignableFrom(clss))     { return ""; }
     if (Boolean.class.isAssignableFrom(clss))    { return false; }
@@ -1701,13 +1724,13 @@ public class RuntimeUtils {
     if (obj instanceof Map)    { return (Map)obj; }
     if (obj instanceof List) {
       List list = (List)obj;
-      Map result = new LinkedHashMap();
+      Map result = new LinkedHashMap();  // Utils.JACSAL_MAP_TYPE
       list.forEach(elem -> addMapEntry(result, elem, source, offset));
       return result;
     }
     if (obj instanceof JacsalObject) {
       Map<String,Object> fieldsAndMethods = ((JacsalObject)obj)._$j$getFieldsAndMethods();
-      Map result = new LinkedHashMap();
+      Map result = new LinkedHashMap();   // Utils.JACSAL_MAP_TYPE
       fieldValues.put(obj,result);        // We use this to detect circular references
       fieldsAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).forEach(entry -> {
         String field = entry.getKey();

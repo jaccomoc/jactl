@@ -37,6 +37,7 @@ public class Utils {
   public static final String JACSAL_PREFIX        = "_$j$";
   public static final String JACSAL_SCRIPT_MAIN   = JACSAL_PREFIX + "main";
   public static final String JACSAL_INIT          = JACSAL_PREFIX + "init";
+  public static final String JACSAL_INIT_WRAPPER  = Utils.wrapperName(JACSAL_PREFIX + "init");
   public static final String JACSAL_SCRIPT_PREFIX = JACSAL_PREFIX + "Script";
 
   public static final String JACSAL_FIELDS_METHODS_MAP    = "_$j$FieldsAndMethods";
@@ -44,6 +45,9 @@ public class Utils {
   public static final String JACSAL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
   public static final String JACSAL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
   public static final String JACSAL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
+
+  public static final Class JACSAL_MAP_TYPE  = LinkedHashMap.class;
+  public static final Class JACSAL_LIST_TYPE = ArrayList.class;
 
   public static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
   public static final String JACSAL_OUT_NAME = "out";      // Name of global to use as PrintStream for print/println

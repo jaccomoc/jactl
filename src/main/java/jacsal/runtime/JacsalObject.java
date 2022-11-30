@@ -17,7 +17,6 @@
 package jacsal.runtime;
 
 import java.lang.invoke.MethodHandle;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -27,5 +26,5 @@ public interface JacsalObject {
   public Map<String,Object>        _$j$getFieldsAndMethods();
   public Map<String, MethodHandle> _$j$getStaticMethods();
 
-  public JacsalObject _$j$init$w(Continuation c, String source, int offset, Object[] args);
+  public Object _$j$init$$w(Continuation c, String source, int offset, Object[] args);
 }

@@ -422,7 +422,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           expr.type = getFieldType(expr.left, expr.operator, expr.right, false);
         }
         // '[' and '?['
-        if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,ITERATOR,STRING)) {
+        if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,ITERATOR,STRING,INSTANCE)) {
           throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
       }
@@ -878,7 +878,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (dottedAcess && !parent.type.is(ANY,MAP,INSTANCE)) {
       throw new CompileError("Invalid object type (" + parent.type + ") for field access", accessType);
     }
-    if (!dottedAcess && !parent.type.is(ANY,LIST,MAP)) {
+    if (!dottedAcess && !parent.type.is(ANY,LIST,MAP,INSTANCE)) {
       if (parent.type.is(STRING)) {
         throw new CompileError("Cannot assign to element of String", accessType);
       }
@@ -1890,7 +1890,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       var throwIf = new Stmt.If(startToken,
                                 new Expr.Binary(isObjArrIdent, token.apply(AMPERSAND_AMPERSAND),
                                                 new Expr.Binary(argCountIdent, token.apply(LESS_THAN), intLiteral.apply(mandatoryCount))),
-                                new Stmt.ThrowError(startToken, sourceIdent, offsetIdent, "Missing mandatory arguments"),
+                                new Stmt.ThrowError(startToken, sourceIdent, offsetIdent,
+                                                    funDecl.isInitMethod ? "Constructor missing values for mandatory fields"
+                                                                         : "Missing mandatory arguments"),
                                 null);
       stmtList.add(throwIf);
     }

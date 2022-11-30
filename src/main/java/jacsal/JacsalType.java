@@ -481,7 +481,7 @@ public class JacsalType {
     if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
       if (getClassDescriptor() == null)           { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
-      return getClassDescriptor().isSameOrChildOf(otherType.getClassDescriptor());
+      return otherType.getClassDescriptor().isAssignableFrom(this.getClassDescriptor());
     }
 //    // Allow conversion between instances and map/list
 //    if (this.is(MAP,LIST) && otherType.is(INSTANCE) || this.is(INSTANCE) && otherType.is(MAP,LIST)) {

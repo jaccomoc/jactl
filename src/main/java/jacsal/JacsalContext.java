@@ -57,7 +57,8 @@ public class JacsalContext {
 
   String javaPackage = Utils.JACSAL_PKG;   // The Java package under which compiled classes will be generated
 
-  Map<String,JacsalPackage> packages = new HashMap<>();
+  Map<String,JacsalPackage>   packages    = new HashMap<>();
+  Map<String,ClassDescriptor> classLookup = new HashMap<>();  // Keyed on internal name
 
   ///////////////////////////////
 
@@ -95,6 +96,10 @@ public class JacsalContext {
     return packages.get(name);
   }
 
+  public ClassDescriptor getClassDescriptor(String internalName) {
+    return classLookup.get(internalName);
+  }
+
   public Object getThreadContext() { return null; }
 
   public void scheduleEvent(Object threadContext, Runnable event) {
@@ -121,6 +126,7 @@ public class JacsalContext {
       packages.put(packageName, pkg);
     }
     pkg.addClass(descriptor);
+    classLookup.put(descriptor.getInternalName(), descriptor);
   }
 
   private static class DynamicClassLoader extends ClassLoader {

@@ -701,7 +701,7 @@ class CompilerTest extends BaseTest {
     test("int v = 1; v = 2; v", 2);
     test("int v = 1; v = 2", 2);
     test("int v = 1; v = v + 1", 2);
-    testError("1 = 2", "valid lvalue");
+    testError("1 = 2", "invalid lvalue");
     test("def x = 1; int y = x + 1", 2);
     test("int x = 1; int y = 2; x = y = 4", 4);
     test("int x = 1; int y = 2; x = y = 4; x", 4);
@@ -2483,6 +2483,8 @@ class CompilerTest extends BaseTest {
     test("def m = []; m[1].a++; m[1].a", 1);
     test("def m = []; ++m[1].a", 1);
     test("def m = []; ++m[1].a; m[1].a", 1);
+
+    testError("def m = []; m.a.b() = 1", "invalid lvalue");
   }
 
   @Test public void conditionalAssignment() {

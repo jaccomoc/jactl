@@ -64,7 +64,7 @@ public class ClassCompiler {
     this.classDescriptor = classDecl.classDescriptor;
     internalName   = classDescriptor.getInternalName();
     this.source    = source;
-    cv = cw = new JacsalClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    cv = cw = new JacsalClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
     if (debug()) {
       cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
     }
@@ -83,15 +83,15 @@ public class ClassCompiler {
 
     var fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, "java/util/LinkedHashMap");
+    classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACSAL_MAP_TYPE));
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/LinkedHashMap", "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACSAL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACSAL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
     fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_STATIC_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, "java/util/LinkedHashMap");
+    classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACSAL_MAP_TYPE));
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, "java/util/LinkedHashMap", "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACSAL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACSAL_STATIC_METHODS_MAP, "Ljava/util/Map;");
 
     // Add instance method and static for retrieving map of static Jacsal methods
@@ -416,18 +416,54 @@ public class ClassCompiler {
 
   private static class JacsalClassWriter extends ClassWriter {
 
-    public JacsalClassWriter(int flags) {
+    JacsalContext context;
+
+    public JacsalClassWriter(int flags, JacsalContext context) {
       super(flags);
+      this.context = context;
     }
 
     private static final String objectClass = Type.getInternalName(Object.class);
 
     @Override
     protected String getCommonSuperClass(String type1, String type2) {
+      if (type1.equals(type2)) {
+        return type1;
+      }
       if (type1.equals(objectClass) || type2.equals(objectClass)) {
         return objectClass;
       }
+      String jacsalObjectClass = Type.getInternalName(JacsalObject.class);
+      if (type1.startsWith(context.javaPackage) && type2.equals(jacsalObjectClass)) {
+        return jacsalObjectClass;
+      }
+      if (type2.startsWith(context.javaPackage) && type1.equals(jacsalObjectClass)) {
+        return jacsalObjectClass;
+      }
       try {
+        if (type1.startsWith(context.javaPackage) && type2.startsWith(context.javaPackage)) {
+          var clss1 = context.getClassDescriptor(type1);
+          var clss2 = context.getClassDescriptor(type2);
+          if (clss1 != null && clss2 != null) {
+            if (clss1.isAssignableFrom(clss2)) {
+              return type1;
+            }
+            if (clss2.isAssignableFrom(clss1)) {
+              return type2;
+            }
+            if (clss1.isInterface() || clss2.isInterface()) {
+              return jacsalObjectClass;
+            }
+            else {
+              do {
+                clss1 = clss1.getBaseClass();
+              }
+              while (clss1 != null && !clss1.isAssignableFrom(clss2));
+
+              return clss1 == null ? jacsalObjectClass : clss1.getInternalName();
+            }
+          }
+        }
         return super.getCommonSuperClass(type1, type2);
       }
       catch (Exception e) {
