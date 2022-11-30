@@ -4355,6 +4355,8 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3]; def y; y ?= x?.(sleeper(sleeper(1,1),'si') + sleeper(sleeper(1,1),'ze'))(); y", 3);
     test("def f(int x) { sleeper(1,x) + sleeper(1,x) }; f(1 )", 2);
     test("def f(int x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
+    test("def f(long x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2L);
+    test("def f(double x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2D);
     test("def f(int x = sleeper(1,1) + sleeper(1,2)) { sleeper(1,x) + sleeper(1,x) }; f()", 6);
     test("def f(int x = sleeper(sleeper(1,1),sleeper(1,1))) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
     test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { x * y }; f()", 8);
@@ -4369,15 +4371,16 @@ class CompilerTest extends BaseTest {
     test("def x = 0; for (int i=sleeper(1,1),j=sleeper(1,2*i),k=0; k<sleeper(1,5) && i < sleeper(1,100); k=sleeper(1,k)+1,i=i+sleeper(1,1),j=sleeper(1,j+1)) { x += sleeper(1,k+i+j); }; x", 45);
 
     test("sleeper(0,2)", 2);
+    test("def f() { sleeper(0,1) }; f()", 1);
     test("def f = sleeper; f(0,2)", 2);
-    test("def f(x){x}; f(2)", 2);
-    test("def f(x){x}; def g = f; g(2)", 2);
-    test("def f(x){x}; def g; g = f; g(2)", 2);
+    test("def f(x){sleeper(0,x)}; f(sleeper(0,2))", 2);
+    test("def f(x){sleeper(0,x)}; def g = f; g(2)", 2);
+    test("def f(x){sleeper(0,x)}; def g; g = f; g(2)", 2);
     test("def f(x){sleeper(0,x)}; def g; g = f; 2", 2);
     test("def f(x){sleeper(0,x)}; def g = f; g = {it}; g(2)", 2);
     test("def f(x){x}; def g = f; g = {it}; g(2)", 2);
-    test("def g(x){x*x}; def f(x){g(x)*x}; f(2)", 8);
-    test("def g = {it*it}; def f(x){g(x)*x}; f(2)", 8);
+    test("def g(x){sleeper(0,x)*sleeper(0,x)}; def f(x){g(sleeper(0,x)*sleeper(0,1))*sleeper(0,x)}; f(2)", 8);
+    test("def g = {sleeper(0,it)*sleeper(0,it)}; def f(x,y){g(x)*sleeper(0,x)*sleeper(0,y)}; f(2,1)", 8);
     test("def g; g = {it*it}; def f(x){g(x)*x}; f(2)", 8);
     test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; h(2)", 8);
     test("def g = {it*it}; def h = { g(it)*it }; g = {sleeper(0,it)*it}; h(2)", 8);
@@ -4400,6 +4403,9 @@ class CompilerTest extends BaseTest {
     test("def f(x){g(x)}; def g(x){sleeper(0,x)+sleeper(0,x)}; f(2)+f(3)", 10);
     test("def s = sleeper; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
     test("def f(x){x<=1?1:g(x)}; def g(x){def s = sleeper; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
+    test("int i = 1; def f(){ return sleeper(0,{ ++i }) }; def g = f(); g() + g()", 5);
+    test("int i = sleeper(0,-1)+sleeper(0,2); def f(){ return sleeper(0,{ sleeper(0,++i - 1)+sleeper(0,1) }) }; def g = f(); g() + g()", 5);
+    test("int i = 5; def f(int x = sleeper(0,1)+sleeper(0,1), long y=sleeper(0,{x+i}())+sleeper(0,{x+i+1}()), double z=3) { sleeper(0,x)+sleeper(0,y)+sleeper(0,z) }; f()", 20D);
   }
 
   @Test public void asyncFieldAccess() {

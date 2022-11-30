@@ -355,30 +355,29 @@ public class ClassCompiler {
     mv.visitCode();
 
     // Load parameters from the Continuation and invoke the function
+    int slot = 0;
     if (!funDecl.isStatic) {
-      mv.visitVarInsn(ALOAD, 0);
+      mv.visitVarInsn(ALOAD, slot++);
     }
-
-    int continuationSlot = funDecl.isStatic ? 0 : 1;
-
-    final Runnable loadObjectArr = () -> {
-      mv.visitVarInsn(ALOAD, continuationSlot);
-      mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation", "localObjects", "[Ljava/lang/Object;");
-    };
+    int continuationSlot = slot++;
 
     // Generate code for loading saved parameter values back onto stack
-    int slot = funDecl.isStatic ? 0 : 1;
-    for (int i = 0; i < funDecl.heapLocalParams.size(); i++) {
-      Utils.loadStoredValue(mv, slot++, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, continuationSlot, HEAPLOCAL));
+    int numHeapLocals = funDecl.heapLocalParams.size();
+    for (int i = 0; i < numHeapLocals; i++) {
+      // Note that our heaplocals will be the first items in the Object[] so the heaplocal index
+      // also matches the Object[] index.
+      Utils.loadStoredValue(mv, i, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, continuationSlot, HEAPLOCAL));
     }
 
     mv.visitVarInsn(ALOAD, continuationSlot);   // Continuation
-    slot++;
 
+    // Load parameter values from our long[] or Object[] in the Continuation.
+    // The index into the long[]/Object[] will be paramIdx + heapLocals.size() since the parameters come immediately
+    // after the heaplocals (and the Continuation that we don't store).
     for (int i = 0; i < funDecl.parameters.size(); i++) {
       final var  declExpr = funDecl.parameters.get(i).declExpr;
       JacsalType type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
-      Utils.loadStoredValue(mv, slot++, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));
+      Utils.loadStoredValue(mv, numHeapLocals + i, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));
     }
 
     mv.visitMethodInsn(funDecl.isStatic ? INVOKESTATIC : INVOKEVIRTUAL, internalName, funDecl.functionDescriptor.implementingMethod, MethodCompiler.getMethodDescriptor(funDecl), false);

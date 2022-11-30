@@ -259,6 +259,9 @@ public class Utils {
   }
 
   public static void checkCast(MethodVisitor mv, JacsalType type) {
+    if (type.is(ANY)) {
+      return;          // No point in casting to Object
+    }
     final var internalName = type.getInternalName();
     if (internalName != null) {
       mv.visitTypeInsn(CHECKCAST, internalName);

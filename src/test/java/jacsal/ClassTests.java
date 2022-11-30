@@ -75,7 +75,9 @@ public class ClassTests extends BaseTest {
     test("class X { var f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
     test("class X { var f = {it*it} }; def x = new X(); x.f(2)", 4);
     test("class X { var f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
-    //    test("class X { Y y }; class Y { X x };", null);
+    testError("class X { int i = 0; static def f() { this } }; X.f()", "reference to 'this' in static function");
+    testError("class X { int i = 0; static def f() { i } }; X.f()", "reference to field in static function");
+    testError("class X { int i = sleeper(0,-1)+sleeper(0,2); static def f(){ return sleeper(0,{ sleeper(0,++i - 1)+sleeper(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", "field in static function");
   }
 
   @Test public void fieldClashWithBuiltinMethod() {
@@ -877,6 +879,11 @@ public class ClassTests extends BaseTest {
     test("class X { int abc = 1 }; X x = new X(); x.\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
     test("class X { int abc = 1 }; def x = new X(); x.\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
     test("class X { int abc = sleeper(0,1) + sleeper(0,new X(3).abc) }; def x = new X(); x.abc", 4);
+    test("class X { int i = sleeper(0,-1)+sleeper(0,2); def f(){ return sleeper(0,{ sleeper(0,++i - 1)+sleeper(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
+  }
+
+  @Test public void nestedFunctionsWithinClasses() {
+
   }
 
 //  @Test public void packageTests() {

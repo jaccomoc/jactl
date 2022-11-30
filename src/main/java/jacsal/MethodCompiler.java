@@ -3176,7 +3176,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // which array it is stored in (meaning that there is always a wasted entry in the other
     // array for every stack/local var). Note that the indexes of the locals will not match
     // because we use two slots for long/double in locals but only one slot in the long[].
-    int numLocals = numLocals();
+    // NOTE: we don't bother with preserving the "this" (if non-static) and the Continuation
+    // object since the MethodHandle will be bound to "this" and the Continuation is supplied
+    // when resuming so the current value (usually null) is irrelevant.
+    int startSlot = methodFunDecl.isStatic ? 0 : 1;
+    int numLocals = numLocals() - startSlot - 1;
     int size = numLocals + stack.size();
     int longArr = allocateSlot(LONG_ARR);
     int objArr  = allocateSlot(OBJECT_ARR);
@@ -3187,8 +3191,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
     _storeLocal(objArr);
     Deque<JacsalType> savedStack = new ArrayDeque<>(stack);
-    int               slot       = 0;
+    int               slot       = startSlot;   // skip "this"
     for (int i = 0; i < size; i++) {
+      if (slot == continuationVar) {
+        slot++;                                 // skip Continuation
+      }
       final var  isLocalVar = i < numLocals;
       JacsalType type       = isLocalVar ? locals.get(slot) : peek();
       loadLocal(type.isPrimitive() ? longArr : objArr);
@@ -3246,8 +3253,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Runnable restoreState = () -> {
       // Restore locals and stack and put result on the stack.
       // No need to restore any parameters as they have been done by the continuation wrapper
-      int slot2 = minimumSlot;
-      for (int i = minimumSlot; i < numLocals; i++) {
+      int slot2 = startSlot;
+      for (int i = 0; i < numLocals; i++) {
+        if (slot2 == continuationVar) {
+          slot2++;           // skip Continuation
+        }
         JacsalType type = savedLocals.get(slot2);
         Utils.loadStoredValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
         _storeLocal(type, slot2);
@@ -3287,8 +3297,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(DUP);
     _loadLocal(contVar);
     _loadClassField(classCompiler.internalName, Utils.continuationHandle(methodFunDecl.functionDescriptor.implementingMethod), FUNCTION, true);
-    _loadLocal(0);    // this
-    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "bindTo", "(Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;", false);
+    if (!methodFunDecl.isStatic) {
+      _loadLocal(0);    // this
+      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "bindTo", "(Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;", false);
+    }
     _loadConst(methodLocation);
     _loadLocal(longArr);
     _loadLocal(objArr);

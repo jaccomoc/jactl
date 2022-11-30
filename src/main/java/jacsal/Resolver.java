@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
@@ -1508,7 +1509,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     var currentFunction  = functions.peek();
-    boolean inStaticFunc = currentFunction.isStatic;
+    Supplier<Boolean> inStaticContext = () -> functions.stream().anyMatch(func -> func.isStatic);
 
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
@@ -1524,8 +1525,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
 
-    if (name.equals(Utils.THIS_VAR) && inStaticFunc) {
-      throw new CompileError("Reference to 'this' in static context", location);
+    if (name.equals(Utils.THIS_VAR) && inStaticContext.get()) {
+      throw new CompileError("Reference to 'this' in static function", location);
     }
 
     if (varDecl == null) {
@@ -1552,7 +1553,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (varDecl == UNDEFINED) {
       throw new CompileError("Variable initialisation cannot refer to itself", location);
     }
+
     if (varDecl != null) {
+      if (varDecl.isField && inStaticContext.get()) {
+        throw new CompileError("Reference to field in static function", location);
+      }
+
       if (varDecl.type.is(CLASS)) {
         return varDecl;
       }
