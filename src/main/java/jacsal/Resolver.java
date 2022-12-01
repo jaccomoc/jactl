@@ -419,8 +419,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.type = ANY;     // default type
       if (!expr.left.type.is(ANY)) {
         // Do some level of validation
-        if (expr.operator.is(DOT,QUESTION_DOT) && expr.right instanceof Expr.Literal) {
+        if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE) && expr.right instanceof Expr.Literal) {
           expr.type = getFieldType(expr.left, expr.operator, expr.right, false);
+          // Field access if we have an instance and if field is not a function since some functions might be
+          // static functions or builtin functions which aren't fields from a GETFIELD point of view.
+          expr.isFieldAccess = expr.left.type.is(INSTANCE) && !expr.type.is(FUNCTION);
         }
         // '[' and '?['
         if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,ITERATOR,STRING,INSTANCE)) {

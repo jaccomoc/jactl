@@ -92,6 +92,7 @@ class Expr {
     Token operator;
     Expr  right;
     boolean @createIfMissing = false;  // Used for field access used as lvalues
+    boolean @isFieldAccess   = false;  // True if this is a field access expression where field name and type are known
     Token @originalOperator;           // When -- or ++ is turned into x = x + 1 this is the actual --/++ op
   }
 

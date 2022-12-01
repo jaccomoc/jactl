@@ -2484,7 +2484,9 @@ class CompilerTest extends BaseTest {
     test("def m = []; ++m[1].a", 1);
     test("def m = []; ++m[1].a; m[1].a", 1);
 
-    testError("def m = []; m.a.b() = 1", "invalid lvalue");
+    testError("def m = [:]; m.a.b() = 1", "invalid lvalue");
+    testError("def m = [:]; m.a.['b']", "unexpected token '['");
+    testError("def m = [:]; m.a?.?['b']", "unexpected token '?['");
   }
 
   @Test public void conditionalAssignment() {
@@ -4449,6 +4451,7 @@ class CompilerTest extends BaseTest {
     testError("null.toString()", "tried to invoke method on null");
     test("1.toString()", "1");
     test("def x = 1; x.toString()", "1");
+    test("def x = 1; def f = x.toString; f()", "1");
     test("[].toString()", "[]");
     test("[1,2,3].toString()", "[1, 2, 3]");
     test("[:].toString()", "[:]");

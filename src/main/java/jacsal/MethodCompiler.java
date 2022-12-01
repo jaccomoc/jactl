@@ -813,68 +813,41 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     //= Check for Map/List/String/Instance/Class access via field/index
     if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
+      if (expr.isFieldAccess) {
+        compileFieldAccess(expr);
+        return null;
+      }
+
       compile(expr.left);
       if (expr.left.type.is(INSTANCE,JacsalType.CLASS)) {
-        if (expr.left.type.is(INSTANCE)) {
-          throwIfNull("Trying to access field/element of null object", expr.operator);
-        }
         if (expr.right instanceof Expr.Literal) {
           // We know the type so get the field/method directly.
           // Note: we know that Resolver has already checked for valid field/method name.
-          String     name      = ((Expr.Literal) expr.right).value.getValue().toString();
+          String     name      = literalString(expr.right);
           var        clss      = expr.left.type.getClassDescriptor();
-          JacsalType fieldType = clss.getField(name);
-          if (fieldType != null) {
-            if (expr.createIfMissing) {
-              mv.visitInsn(DUP);
-              loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
-              Label nonNull = new Label();
-              mv.visitInsn(DUP);
-              mv.visitJumpInsn(IFNONNULL, nonNull);
-              popVal();
-              // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
-              loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
-              mv.visitInsn(DUP_X1);     // Copy value and move it two slots
-              _storeClassField(clss.getInternalName(), name, fieldType, false);
-              Label end = new Label();
-              mv.visitJumpInsn(GOTO, end);
-
-              mv.visitLabel(nonNull);            // :nonNull
-              // Don't need duplicate expr.left anymore
-              mv.visitInsn(SWAP);
-              mv.visitInsn(POP);
-
-              mv.visitLabel(end);                // :end
-            }
-            else {
-              loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
-            }
+          // We need to find the method handle for the given method
+          var method = clss.getMethod(name);
+          if (method == null) {
+            throw new IllegalStateException("Internal error: could not find method or field called " + name + " for " + expr.left.type);
           }
-          else {
-            // We need to find the method handle for the given method
-            var method = clss.getMethod(name);
-            if (method == null) {
-              throw new IllegalStateException("Internal error: could not find method or field called " + name + " for " + expr.left.type);
-            }
-            // If method is static then we don't need the instance
-            if (method.isStatic && expr.left.type.is(INSTANCE)) {
-              popVal();
-            }
-            // We want the handle to the wrapper method.
-            String handleName = Utils.staticHandleName(Utils.wrapperName(name));
-            loadClassField(clss.getInternalName(), handleName, FUNCTION, true);
-            // If not static then bind to instance
-            if (!method.isStatic) {
-              swap();
-              invokeMethod(MethodHandle.class, "bindTo", Object.class);
-            }
+          // If method is static then we don't need the instance
+          if (method.isStatic && expr.left.type.is(INSTANCE)) {
+            popVal();
+          }
+          // We want the handle to the wrapper method.
+          String handleName = Utils.staticHandleName(Utils.wrapperName(name));
+          loadClassField(clss.getInternalName(), handleName, FUNCTION, true);
+          // If not static then bind to instance
+          if (!method.isStatic) {
+            swap();
+            invokeMethod(MethodHandle.class, "bindTo", Object.class);
           }
           return null;
         }
 
         // Can't determine method/field at compile time so fall through to runtime lookup
         if (expr.left.type.is(JacsalType.CLASS)) {
-          // Need to tell runtime what class it is so load "class" onto stack
+          // Need to tell runtime what class it is so load class onto stack
           loadConst(expr.left.type);
         }
       }
@@ -1143,6 +1116,67 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private static String literalString(Expr e) {
+    return ((Expr.Literal) e).value.getValue().toString();
+  }
+
+  private void compileFieldAccess(Expr.Binary expr) {
+    // Generate a list of our parent nodes from current node up to top most one
+    var nodes = new ArrayList<Expr.Binary>();
+    for (Expr node = expr;
+         node instanceof Expr.Binary && ((Expr.Binary)node).isFieldAccess;
+         node = ((Expr.Binary)node).left) {
+      nodes.add((Expr.Binary)node);
+    }
+    Expr.Binary leftMost = nodes.get(nodes.size() - 1);
+    // For left most field compile parent and save its value in case we need it once null value found
+    compile(leftMost.left);
+    int topMostVar = allocateSlot(leftMost.left.type);
+    storeLocal(topMostVar);
+    Label nullValue = new Label();
+    loadLocal(topMostVar);
+    throwIfNull("Trying to access field/element of null object", leftMost.operator);
+    boolean previousCreateIfMissing = false;
+    for (ListIterator<Expr.Binary> iter = nodes.listIterator(nodes.size()); iter.hasPrevious(); ) {
+      var    node = iter.previous();
+      if (!previousCreateIfMissing) {
+        throwIfNull("Trying to access field/element of null object", node.operator);
+      }
+      previousCreateIfMissing = node.createIfMissing;
+      String name = literalString(node.right);
+      var    clss = node.left.type.getClassDescriptor();
+      JacsalType fieldType   = clss.getField(name);
+      if (fieldType == null) {
+        throw new IllegalStateException("Internal error: could not find field '" + name + "' for " + JacsalType.createClass(clss));
+      }
+      if (expr.createIfMissing) {
+        dupVal();    // Save parent in case field is null and we need to store a value
+        loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+        Label nonNull = new Label();
+        mv.visitInsn(DUP);
+        mv.visitJumpInsn(IFNONNULL, nonNull);
+        popVal();    // Pop null
+        // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
+        loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
+        mv.visitInsn(DUP_X1);     // Copy value and move it two slots
+        _storeClassField(clss.getInternalName(), name, fieldType, false);
+        Label nextField = new Label();
+        mv.visitJumpInsn(GOTO, nextField);
+        mv.visitLabel(nonNull);            // :nonNull
+        // Don't need parent
+        swap();
+        popVal();
+
+        mv.visitLabel(nextField);         // :nextField
+      }
+      else {
+        loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+      }
+    }
+
+    freeTemp(topMostVar);
+  }
+
   @Override public Void visitTernary(Expr.Ternary expr) {
     compile(expr.first);
     convertToBoolean(false, expr.first);
@@ -1398,6 +1432,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            // Get the instance
                            compile(expr.parent);
+                           if (!expr.parent.type.isPrimitive() && !expr.parent.type.is(JacsalType.CLASS)) {
+                             throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
+                           }
                            if (method.isBuiltin) {
                              // If we are calling a "method" that is ANY but we have a primitive then we need to box it
                              if (method.firstArgtype.is(ANY)) {
@@ -1430,8 +1467,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            compile(expr.parent);                    // Get the instance
+                           if (!expr.parent.type.isPrimitive() && !expr.parent.type.is(JacsalType.CLASS)) {
+                             throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
+                           }
                            if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(JacsalType.CLASS)) {
                              popVal();
+                           }
+                           if (expr.parent.type.isPrimitive()) {
+                             box();
                            }
                            loadNullContinuation();                  // Continuation
                            loadLocation(expr.methodNameLocation);

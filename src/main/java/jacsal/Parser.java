@@ -852,6 +852,11 @@ public class Parser {
         rhs = expression(true);
       }
       else {
+        if (operator.is(DOT,QUESTION_DOT)) {
+          if (peek().is(LEFT_SQUARE,QUESTION_SQUARE)) {
+            unexpected("invalid token after '" + operator.getChars() + "'");
+          }
+        }
         rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
       }
 

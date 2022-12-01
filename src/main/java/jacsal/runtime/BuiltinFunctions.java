@@ -322,10 +322,19 @@ public class BuiltinFunctions {
 
   // = toString
 
-  public static String objectToString(Object obj) { return RuntimeUtils.toString(obj); }
+  public static String objectToString(Object obj, int indent) { return RuntimeUtils.toString(obj, indent); }
   public static Object objectToStringWrapper(Object obj, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null, 0, source, offset);
-    return RuntimeUtils.toString(obj);
+    args = validateArgCount(args, 0, null, 1, source, offset);
+    try {
+      int indent = args.length > 0 ? Integer.parseInt(args[0].toString()) : 0;
+      if (indent >= 0) {
+        return RuntimeUtils.toString(obj, indent);
+      }
+    }
+    catch (NumberFormatException e) {
+      // Fall through
+    }
+    throw new RuntimeError("Argument to toString() must be a positive integer", source, offset);
   }
 
   // = size

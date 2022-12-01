@@ -789,7 +789,11 @@ public class RuntimeUtils {
   }
 
   public static String toString(Object obj) {
-    return doToString(obj, new HashSet<>());
+    return doToString(obj, new HashSet<>(), "", 0);
+  }
+
+  public static String toString(Object obj, int indent) {
+    return doToString(obj, new HashSet<>(), "", indent);
   }
 
   /**
@@ -798,7 +802,7 @@ public class RuntimeUtils {
    * @param previousObjects set of previous values we have seen (for detecting circular references)
    * @return
    */
-  private static String doToString(Object obj, Set<Object> previousObjects) {
+  private static String doToString(Object obj, Set<Object> previousObjects, String prefix, int indent) {
     if (obj instanceof Object[]) {
       obj = Arrays.asList((Object[])obj);
     }
@@ -820,7 +824,7 @@ public class RuntimeUtils {
       List list = (List)obj;
       for (int i = 0; i < list.size(); i++) {
         if (i > 0) { sb.append(", "); }
-        sb.append(toQuotedString(list.get(i), previousObjects));
+        sb.append(toQuotedString(list.get(i), previousObjects, "", 0));
       }
       sb.append(']');
       return sb.toString();
@@ -845,7 +849,10 @@ public class RuntimeUtils {
           if (!isMap) {
             value = ((Field) entry.getValue()).get(obj);
           }
-          sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects));
+          if (indent > 0) {
+            sb.append('\n').append(prefix).append(" ".repeat(indent));
+          }
+          sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + " ".repeat(indent), indent));
         }
         catch (IllegalAccessException e) {
           throw new IllegalStateException("Internal error: problem accessing field '" + entry.getKey() + "': " + e, e);
@@ -854,6 +861,9 @@ public class RuntimeUtils {
       if (first) {
         // Empty map
         sb.append(':');
+      }
+      if (indent > 0) {
+        sb.append('\n').append(prefix);
       }
       sb.append(']');
       return sb.toString();
@@ -867,11 +877,11 @@ public class RuntimeUtils {
    * is valid Jacsal code so we can cut-and-paste output into actual
    * scripts for testing and use in REPL.
    */
-  private static String toQuotedString(Object obj, Set<Object> previousObjects) {
+  private static String toQuotedString(Object obj, Set<Object> previousObjects, String prefix, int indent) {
     if (obj instanceof String) {
       return "'" + obj + "'";
     }
-    return doToString(obj, previousObjects);
+    return doToString(obj, previousObjects, prefix, indent);
   }
 
   private static String keyAsString(Object obj) {
@@ -1165,10 +1175,10 @@ public class RuntimeUtils {
         if (value == null && createIfMissing) {
           Class<?> fieldType = classField.getType();
           if (JacsalObject.class.isAssignableFrom(fieldType)) {
-            // Make sure that we are not expected to have a List
-            if (!isMap) {
-              throw new RuntimeError("Expected List but found field '" + fieldName + "' of type " + fieldType, source, offset);
-            }
+//            // Make sure that we are not expected to have a List
+//            if (!isMap) {
+//              throw new RuntimeError("Expected List but found field '" + fieldName + "' of type " + fieldType, source, offset);
+//            }
             JacsalObject fieldObj = (JacsalObject) fieldType.getConstructor().newInstance();
             fieldObj._$j$init$$w(null, source, offset, new Object[0]);
             classField.set(parent, fieldObj);
@@ -1229,7 +1239,7 @@ public class RuntimeUtils {
     Object value  = valueFirst ? arg1 : arg3;
 
     if (parent == null) {
-      throw new NullError("Null value for Map/List storing field value", source, offset);
+      throw new NullError("Null value for Map/List/Object storing field value", source, offset);
     }
 
     if (parent instanceof Map) {
