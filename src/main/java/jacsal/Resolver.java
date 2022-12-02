@@ -104,6 +104,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private final Map<String,ClassDescriptor> imports      = new HashMap<>();
   private final Map<String,ClassDescriptor> localClasses = new HashMap<>();
 
+  private int lastLineNumber = -1;
+
   private boolean isScript = false;
 
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
@@ -160,7 +162,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   JacsalType resolve(Expr expr) {
     if (expr != null) {
-      return expr.accept(this);
+      var result = expr.accept(this);
+      JacsalType type = expr.type;
+      if (type != null && (type.isPrimitive() || type.is(CLASS))) {
+        expr.couldBeNull = false;
+      }
+      return result;
     }
     return null;
   }
@@ -534,6 +541,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.first);
     resolve(expr.second);
     resolve(expr.third);
+    if (expr.second.isNull() && !expr.third.type.isPrimitive()) {
+      expr.second.type = expr.third.type;
+    }
+    if (expr.third.isNull() && !expr.second.type.isPrimitive()) {
+      expr.third.type = expr.second.type;
+    }
     if (!expr.third.type.isConvertibleTo(expr.second.type)) {
       throw new CompileError("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
     }
@@ -974,7 +987,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       var func = ((Expr.Identifier)expr.callee).getFuncDescriptor();
       expr.type = func.returnType;
     }
-    return null;
+    return expr.type;
   }
 
   @Override public JacsalType visitMethodCall(Expr.MethodCall expr) {
@@ -1063,6 +1076,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitInvokeNew(Expr.InvokeNew expr) {
     resolve(expr.className);
+    expr.couldBeNull = false;
     return expr.type = expr.className;
   }
 
@@ -2026,6 +2040,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Stmt.VarDecl varDecl = varDecl(ownerFunDecl, param.name, param.type, init);
     varDecl.declExpr.paramVarDecl    = param;
     param.initialiser                = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
+    param.initialiser.type           = param.type;
     varDecl.declExpr.isExplicitParam = true;
     varDecl.declExpr.type            = param.type;
     varDecl.declExpr.isField         = ownerFunDecl.isInitMethod;

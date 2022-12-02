@@ -743,6 +743,7 @@ class CompilerTest extends BaseTest {
     test("true ? null ?: false ? 4 : 5 : 6", 5);
     test("def x = 1; true ? 1 : 2L", 1L);
     test("def x = 1; x ?: 2L", 1);
+    test("Map m = true ? null : [:]", null);
   }
 
   @Test public void plusEquals(){
@@ -3785,6 +3786,7 @@ class CompilerTest extends BaseTest {
   @Test public void simpleClosures() {
     test("{;}()", null);
     test("def f = { -> 10 }; f()", 10);
+    test("var f = { -> 10 }; var g = {20}; f = g; f()", 20);
     testError("def f = { -> 10 }; f(3)", "too many arguments");
     test("int i = 1; { int i = 2; i++; }; i", 1);
     test("def f = { x -> x * x }; f(2)", 4);

@@ -43,12 +43,13 @@ abstract class Expr {
 
   Token      location;
   JacsalType type;
-  boolean    isConst = false;  // Whether expression consists only of constants
-  Object     constValue;       // If expression is only consts then we keep the
-                               // result of evaluating the expression during the
-                               // resolve phase here.
+  boolean    isConst = false;   // Whether expression consists only of constants
+  Object     constValue;        // If expression is only consts then we keep the
+                                // result of evaluating the expression during the
+                                // resolve phase here.
 
-  boolean    isCallee = false; // Whether we are the callee in a call expression
+  boolean    isCallee    = false; // Whether we are the callee in a call expression
+  boolean    couldBeNull = true;  // Whether result could be null
 
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when

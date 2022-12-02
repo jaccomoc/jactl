@@ -1135,14 +1135,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     storeLocal(topMostVar);
     Label nullValue = new Label();
     loadLocal(topMostVar);
-    throwIfNull("Trying to access field/element of null object", leftMost.operator);
-    boolean previousCreateIfMissing = false;
+    if (leftMost.couldBeNull) {
+      throwIfNull("Trying to access field/element of null object", leftMost.operator);
+    }
+    boolean checkForNull = false;
     for (ListIterator<Expr.Binary> iter = nodes.listIterator(nodes.size()); iter.hasPrevious(); ) {
       var    node = iter.previous();
-      if (!previousCreateIfMissing) {
+      if (checkForNull) {
         throwIfNull("Trying to access field/element of null object", node.operator);
       }
-      previousCreateIfMissing = node.createIfMissing;
+      checkForNull = !node.createIfMissing;
       String name = literalString(node.right);
       var    clss = node.left.type.getClassDescriptor();
       JacsalType fieldType   = clss.getField(name);
@@ -1432,7 +1434,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            // Get the instance
                            compile(expr.parent);
-                           if (!expr.parent.type.isPrimitive() && !expr.parent.type.is(JacsalType.CLASS)) {
+                           if (expr.parent.couldBeNull) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
                            if (method.isBuiltin) {
@@ -1467,7 +1469,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMaybeAsync(expr.methodDescriptor.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            compile(expr.parent);                    // Get the instance
-                           if (!expr.parent.type.isPrimitive() && !expr.parent.type.is(JacsalType.CLASS)) {
+                           if (expr.parent.couldBeNull) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
                            if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(JacsalType.CLASS)) {

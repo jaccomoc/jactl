@@ -846,6 +846,16 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 1; def f(){ return { ++i } } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
   }
 
+  @Test public void testStuff2() {
+    debug = true;
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; Map a = [y:[z:[x:[y:[z:[i:0]]]]]]; X x = new X(a); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
+  }
+
+  @Test public void testStuff() {
+    debug = true;
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; Map a = null; X x = new X(a); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
+  }
+
   @Test public void autoCreateFieldsDuringAssignment() {
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; def x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
@@ -854,6 +864,8 @@ public class ClassTests extends BaseTest {
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i *= 4; x.y.z.i", 12);
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; def x = new X(null); x.y.z.i *= 4; x.y.z.i", 12);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(null); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; def a = [y:[z:[x:[y:[z:[i:0]]]]]]; X x = new X(a); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; def a = null; X x = new X(a); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(null); x.y.z.x.y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(null); x.y.z.x.y.z.i = 4; x.y.\"${'z'}\".x['y'].z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(null); x.y.z.x.\"${'y'}\".z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);

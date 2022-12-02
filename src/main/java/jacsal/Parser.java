@@ -2005,6 +2005,7 @@ public class Parser {
       final var leftNoop = new Expr.Noop(assignmentOperator);
       if (assignmentOperator.is(EQUAL_GRAVE)) {
         ((Expr.RegexSubst)rhs).string = leftNoop;
+        leftNoop.type = JacsalType.STRING;
       }
       else {
         var expr = new Expr.Binary(leftNoop, new Token(arithmeticOp, assignmentOperator), rhs);
