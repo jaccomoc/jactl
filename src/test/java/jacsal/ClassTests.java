@@ -33,6 +33,8 @@ public class ClassTests extends BaseTest {
     test("class X{int i=2}; def X = new X(); X.i", 2);
     test("class X{int i=2}; { X X = new X(); return X.i}", 2);
     test("class X{int i=2}; {def X = new X(); return X.i}", 2);
+    testError("def x = 1; class A { static def f(){x} }; A.f()", "unknown variable");
+    testError("def x = 1; class A { def f(){x} }; A.f()", "unknown variable");
   }
 
   @Test public void simpleClass() {

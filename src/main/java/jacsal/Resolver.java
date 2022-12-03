@@ -24,7 +24,6 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
@@ -94,7 +93,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private final JacsalContext            jacsalContext;
   private final Map<String,Object>       globals;
-  private final Deque<Expr.FunDecl>      functions        = new ArrayDeque<>();
   private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
   private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
 
@@ -218,10 +216,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       });
     }
 
-//    if (classDecl.scriptMain == null) {
-//      define(classDecl.name, classVarDecl);
-//    }
-
     if (localClasses.put(classDescriptor.getName(), classDescriptor) != null) {
       throw new CompileError("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
     }
@@ -236,15 +230,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
     resolve(stmt.baseClass);
+    stmt.nestedFunctions = new ArrayDeque<>();
+    // Create a dummy function to hold class block
+    stmt.nestedFunctions.push(new Expr.FunDecl(stmt.name, stmt.name, JacsalType.createClass(stmt.classDescriptor), List.of()));
     classStack.push(stmt);
     try {
-//      // Declare methods
-//      stmt.methods.forEach(method -> {
-//        define(method.declExpr.nameToken, method.declExpr.varDecl);
-//      });
-//      resolve(stmt.initMethod);
-//      stmt.methods.forEach(method -> resolve(method));
-//      stmt.innerClasses.forEach(clss -> resolve(clss));
       resolve(stmt.classBlock);
       resolve(stmt.scriptMain);
     }
@@ -273,19 +263,20 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitBlock(Stmt.Block stmt) {
-    functions.peek().blocks.push(stmt);
+    var currentFunction = getFunctions().peek();
+    currentFunction.blocks.push(stmt);
     try {
       // We first define our nested functions so that we can support
       // forward references to functions declared at same level as us
       stmt.functions.stream().map(nested -> nested.declExpr).forEach(nested -> {
-        nested.varDecl.owner = functions.peek();
+        nested.varDecl.owner = getFunctions().peek();
         define(nested.nameToken, nested.varDecl);
       });
 
       return resolve(stmt.stmts);
     }
     finally {
-      functions.peek().blocks.pop();
+      currentFunction.blocks.pop();
     }
   }
 
@@ -329,12 +320,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // We need to keep track of what the current while loop is so that break/continue
     // statements within body of the loop can find the right Stmt.While object
-    Stmt.While oldWhileStmt = functions.peek().currentWhileLoop;
-    functions.peek().currentWhileLoop = stmt;
+    Stmt.While oldWhileStmt = getFunctions().peek().currentWhileLoop;
+    getFunctions().peek().currentWhileLoop = stmt;
 
     resolve(stmt.body);
 
-    functions.peek().currentWhileLoop = oldWhileStmt;   // Restore old one
+    getFunctions().peek().currentWhileLoop = oldWhileStmt;   // Restore old one
     return null;
   }
 
@@ -384,7 +375,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Allocate our capture array var if we don't already have one in scope
       captureArrVar = new Expr.VarDecl(captureArrName, null);
       captureArrVar.type = MATCHER;
-      captureArrVar.owner = functions.peek();
+      captureArrVar.owner = getFunctions().peek();
       captureArrVar.isResultUsed = false;
       declare(captureArrVar);
       define(captureArrName, captureArrVar);
@@ -690,7 +681,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitVarDecl(Expr.VarDecl expr) {
     resolve(expr.type);
-    expr.owner = functions.peek();
+    expr.owner = getFunctions().peek();
 
     // Functions have previously been declared by the block they belong to
     if (expr.funDecl != null) {
@@ -716,7 +707,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     expr.functionDescriptor.implementingClass  = implementingClass;
 
     // If the script main function
-    if (functions.size() == 0) {
+    if (getFunctions().size() == 0) {
       expr.functionDescriptor.implementingMethod = expr.nameToken.getStringValue();
       return doVisitFunDecl(expr, false);
     }
@@ -730,15 +721,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
 
       // Create a name if we are a closure
-      Expr.FunDecl parent = functions.peek();
+      Expr.FunDecl parent = getFunctions().peek();
       String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.nameToken.getStringValue();
 
       // Method name is parent + $ + functionName unless at script function level or at top level of a class
       // in which case there is no parent so we use just functionName
-      var fun = functions.peek();
+      var fun = getFunctions().peek();
       expr.functionDescriptor.implementingMethod =
-        functions.size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
-                                                      : parent.functionDescriptor.implementingMethod + "$" + methodName;
+        getFunctions().size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
+                                                                                     : parent.functionDescriptor.implementingMethod + "$" + methodName;
 
       // Create a wrapper function that takes var of var arg and named argument handling
       expr.wrapper = createVarArgWrapper(expr);
@@ -767,8 +758,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (defineVar) {
       resolve(expr.varDecl);
     }
-    Expr.FunDecl parent = functions.peek();
-    functions.push(expr);
+    Expr.FunDecl parent = getFunctions().peek();
+    getFunctions().push(expr);
     try {
       resolve(expr.returnType);
       // Add explicit return in places where we would implicity return the result
@@ -784,7 +775,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = FUNCTION;
     }
     finally {
-      functions.pop();
+      getFunctions().pop();
       if (parent != null) {
         // Check if parent needs to have any additional heap vars passed to it in order for it to
         // be able to pass them to its nested function and add them to the parent.heapLocals map.
@@ -947,11 +938,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override
   public JacsalType visitReturn(Expr.Return returnExpr) {
     resolve(returnExpr.expr);
-    returnExpr.returnType = functions.peek().returnType;
-    returnExpr.funDecl = functions.peek();
+    returnExpr.returnType = getFunctions().peek().returnType;
+    returnExpr.funDecl = getFunctions().peek();
     if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
       throw new CompileError("Expression type " + returnExpr.expr.type + " not compatible with function " +
-                             functions.peek().nameToken.getStringValue() + "() return type of " +
+                             getFunctions().peek().nameToken.getStringValue() + "() return type of " +
                              returnExpr.returnType, returnExpr.expr.location);
     }
     // return statement doesn't really have a type or a value since it returns immediately but
@@ -993,7 +984,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       throw new CompileError("Null value for Function", expr.token);
     }
 
-    final var currentFunction = functions.peek();
+    final var currentFunction = getFunctions().peek();
     expr.type = ANY;
     if (expr.callee.isFunctionCall()) {
       // Special case where we know the function directly and get its return type
@@ -1263,7 +1254,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // Now iterate through parents linking VarDecls until we get to one that already
     // has a var by that name (which will be the actual VarDecl or an intermediate function
     // that already has it being passed in as a parameter).
-    for (Iterator<Expr.FunDecl> iter = functions.iterator(); iter.hasNext(); ) {
+    for (Iterator<Expr.FunDecl> iter = getFunctions().iterator(); iter.hasNext(); ) {
       // If parent already has this var as a parameter then point child to this and return
       Expr.FunDecl funDecl       = iter.next();
       Expr.VarDecl parentVarDecl = funDecl.heapLocalParams.get(name);
@@ -1337,7 +1328,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   /////////////////////////
 
   private Stmt.While currentWhileLoop(Token token) {
-    Stmt.While whileStmt = functions.peek().currentWhileLoop;
+    Stmt.While whileStmt = getFunctions().peek().currentWhileLoop;
     if (whileStmt == null) {
       throw new CompileError(token.getChars() + " must be within a while/for loop", token);
     }
@@ -1354,11 +1345,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     String varName = decl.name.getStringValue();
     // If we have a field then get class block variables, otherwise get vars for current block
     var vars = decl.isField ? classStack.peek().classBlock.variables : getVars();
-    if (!jacsalContext.replMode || !isAtTopLevel()) {
+    if (!(jacsalContext.replMode && isAtTopLevel())) {
       var existingDecl = vars.get(varName);
       // Allow fields to be shadowed by local variables
       if (existingDecl != null && !existingDecl.isField) {
-        error("Variable '" + varName + "' in scope " + functions.peek().nameToken.getStringValue() + " clashes with previously declared variable of same name", decl.name);
+        error("Variable '" + varName + "' in scope " + getFunctions().peek().nameToken.getStringValue() + " clashes with previously declared variable of same name", decl.name);
       }
     }
     // Add variable with type of UNDEFINED as a marker to indicate variable has been declared but is
@@ -1367,8 +1358,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private void define(Token name, Expr.VarDecl decl) {
-    var function = functions.peek();
-    assert function != null;
     // If we have a field then get class block variables, otherwise get vars for current block
     var vars = decl.isField ? classStack.peek().classBlock.variables : getVars();
 
@@ -1380,12 +1369,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
     // Remember at what nesting level this variable is declared. This allows us to work
     // out when looking up vars whether this belongs to the current function or not.
-    decl.nestingLevel = functions.size();
+    decl.nestingLevel = getFunctions().size();
     vars.put(name.getStringValue(), decl);
   }
 
   private boolean isAtTopLevel() {
-    return functions.size() == 1 && functions.peek().blocks.size() == 1;
+    return getFunctions().peek().isScriptMain && getFunctions().peek().blocks.size() == 1;
   }
 
   // Get variables for current block
@@ -1398,7 +1387,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private Stmt.Block getBlock() {
-    return functions.peek().blocks.peek();
+    return getFunctions().peek().blocks.peek();
   }
 
   private FunctionDescriptor lookupMethod(JacsalType type, String methodName) {
@@ -1538,14 +1527,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       name = Utils.CAPTURE_VAR;
     }
 
-    var currentFunction  = functions.peek();
+    var currentFunction  = getFunctions().peek();
 
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
     FUNC_LOOP:
-    for (Iterator<Expr.FunDecl> funcIt = functions.iterator(); funcIt.hasNext(); ) {
-      Expr.FunDecl funDecl = funcIt.next();
-      for (Iterator<Stmt.Block> it = funDecl.blocks.iterator(); it.hasNext(); ) {
+    for (var funcIt = getFunctions().iterator(); funcIt.hasNext(); ) {
+      var funDecl = funcIt.next();
+      for (var it = funDecl.blocks.iterator(); it.hasNext(); ) {
         block = it.next();
         varDecl = block.variables.get(name);
         if (varDecl != null) {
@@ -1612,7 +1601,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
       // Normal local or global variable (not a closed over var) or a function
       // which we can call directly (if we are being asked to do a function lookup)
-      if (varDecl.isGlobal || varDecl.nestingLevel == functions.size() ||
+      if (varDecl.isGlobal || varDecl.nestingLevel == getFunctions().size() ||
           (functionLookup && varDecl.funDecl != null)) {
         return varDecl;
       }
@@ -1647,7 +1636,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         varDecl.paramVarDecl.isPassedAsHeapLocal = true;
       }
 
-      Expr.FunDecl currentFunc = functions.peek();
+      Expr.FunDecl currentFunc = getFunctions().peek();
 
       // Check if we already have it in our list of heapLocal Params
       if (currentFunc.heapLocalParams.containsKey(name)) {
@@ -1678,7 +1667,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   private boolean inStaticContext() {
-    return functions.stream().anyMatch(func -> func.isStatic);
+    return getFunctions().stream().anyMatch(func -> func.isStatic);
   }
 
   private void throwIf(boolean condition, String msg, Token location) {
@@ -2124,4 +2113,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
   }
 
+  private Deque<Expr.FunDecl> getFunctions() {
+    return classStack.peek().nestedFunctions;
+  }
 }

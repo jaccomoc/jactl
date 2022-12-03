@@ -122,7 +122,7 @@ abstract class Stmt {
     Map<String,Expr.VarDecl> fieldVars = new HashMap<>();
     Expr.VarDecl             thisField;
 
-    // Used by Parser
+    // Used by Parser and Resolver
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor classDescriptor;
