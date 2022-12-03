@@ -145,6 +145,25 @@ public class ClassTests extends BaseTest {
     test("class X { Map x = null }; new X().x = null", null);
   }
 
+  @Test public void methodsAsValues() {
+    testError("class X { def f() { h = f }; def h(){3} }; def x = new X(); x.f()", "cannot assign to function");
+    test("class X { def h(){3}; def f() { def g = h; g() }; }; new X().f()", 3);
+    test("class X { def f() { def g = h; g() }; def h(){3} }; new X().f()", 3);
+    test("class X { def f() { def g = h; g() }; def h(){3} }; X x = new X(); x.f()", 3);
+    test("class X { def f() { def g = h; g() }; def h(){3} }; def x = new X(); x.f()", 3);
+    testError("class X { def f() { def g = h; g() }; def h(){3} }; X x = new X(); x.f = x.h", "field expected");
+    testError("class X { def f() { def g = h; g() }; def h(){3} }; def x = new X(); x.f = x.h", "field expected");
+    testError("class X { def f() { def g = h; g() }; def h(){3} }; X x = new X(); x.\"${'f'}\" = x.h", "field expected");
+    testError("class X { def f() { def g = h; g() }; def h(){3} }; def x = new X(); x.\"${'f'}\" = x.h", "field expected");
+    test("class X { static def f() { def g = h; g() }; static def h(){3} }; X.f()", 3);
+    test("class X { def f() { def g = h; g() }; static def h(){3} }; new X().f()", 3);
+    test("class X { def f() { def g = h; g() }; static def h(){3} }; def a = new X().f; a()", 3);
+    test("class X { int i = 3; def f() { def g = h; g() }; def h(){i} }; def a = new X(4).f; a()", 4);
+    test("class X { int i = 3; def f() { def x = i; def g(){ return { i + ++x } }; g() } }; def a = new X(4).f; a()()", 9);
+    test("class X { int i = 3; def f() { def x = i; def g(){ return { i + ++x } }; g() } }; def a = new X(4).f; def b = a(); b() + b() + new X(2).f()()", 9 + 10 + 5);
+    testError("class X { }; new X(2).a()()", "no such method");
+  }
+
   @Test public void methodArgsAsList() {
     test("def a = [1,2,3]; class X { def f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1,2,3,7,8));
@@ -846,16 +865,6 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 1; def f(){ return { ++i } } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
   }
 
-  @Test public void testStuff2() {
-    debug = true;
-    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; Map a = [y:[z:[x:[y:[z:[i:0]]]]]]; X x = new X(a); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
-  }
-
-  @Test public void testStuff() {
-    debug = true;
-    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; Map a = null; X x = new X(a); x.y.z.x.y.z.i = 4; x.y.z.x.y.z.i", 4);
-  }
-
   @Test public void autoCreateFieldsDuringAssignment() {
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; def x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
@@ -920,7 +929,57 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void nestedFunctionsWithinClasses() {
+    test("class A { static def a() { int x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6);
+    test("class A { def a() { int x = 1; return { x++ } } }; def f = new A().a(); f() + f() + f()", 6);
+    test("class A { static def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12);
+    test("class A { def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12);
+    test("class A { static def a() { long x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6L);
+    test("class A { def a() { long x = 1; return { x++ } } }; def f = new A().a(); f() + f() + f()", 6L);
+    test("class A { static def a() { long x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12L);
+    test("class A { def a() { long x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12L);
+    test("class A { long x = 1; def a() { def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12L);
+    test("class A { String x = '1'; def f = { def g() { x + x }; g() } }; new A().f()", "11");
+    test("class A { long x = 1; def f = { def g() { x + x }; g() } }; new A().f()", 2L);
+    test("class A { double x = 1; def f = { def g() { x + x }; g() } }; new A().f()", 2D);
+    test("class A { Decimal x = 1; def f = { def g() { x + x }; g() } }; new A().f()", "#2");
+    test("class A { def x = { it=2 -> it + it }; def f = { def g() { x() + x() }; g() }}; new A().f()", 8);
+    test("class A { def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}; new A().f()", 16);
+    test("class A { static def a() { def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}}; A.a()()", 16);
+    test("class A { def f(x,y=++x) { def g() { x+y }; g() }}; new A().f(3)", 8);
+    test("class A { static def f(x,y=++x) { def g() { x+y }; g() }}; A.f(3)", 8);
+    test("class A { def f(x,y={++x}) { def g() { y()+x }; g() }}; new A().f(3)", 8);
+    test("class A { static def f(x,y={++x}) { def g() { y()+x }; g() }}; A.f(3)", 8);
+    test("class A { def f(x,y=++x+2,z={++x + ++y}) { def g() { x++ + y++ + z() }; g() }}; new A().f(3)", 24);
+    test("class A { def f(x,y={++x}()) { def g() { y+x }; g() }}; new A().f(3)", 8);
+    test("class A { def f(x) { def g(x) { f(x) + f(x) }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 4);
+    test("class A { def f(x=1) { def g={x+x}; x++; g() }}; new A().f()", 4);
+    test("class A { def f(x=1,y=2) { def g(x) { f(x) + f(x) + y }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 10);
+    test("class A { def f(x=1,y=2) { def g(x) { f(x,y) + f(x,y) + y }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 10);
+    test("class A { def f(x=1,y=f(1,1)+1) { def g(x) { f(x,y) + f(x,y) + y }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 10);
+    test("class A { def f() { int x = 1; [{ it + x++}, {it - x++}]}}; def x = new A().f(); x[0](5) + x[0](5) + x[1](0) + x[1](0)", 6);
+    test("class A { static def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; A.f(2)", 5);
+    test("class A { def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; new A().f(2)", 5);
+    test("class A { def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; new A().f(4)", 19);
+    testError("class A { def a() { def x=1; def f(x){def ff() {g(x)}; ff()}; def g(a){x+a}; f(2) } }; new A().a()", "requires passing closed over variable x");
 
+    test("def g(x){x}; def f() { def a = g; a(3) }; f()", 3);
+    test("def g(x){x}; def f(x){def a = g; x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
+    test("def g(x){x}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)", 3);
+    testError("def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)", "closed over variable h");
+    testError("def f() { def a = g; a() }; def g(){4}; f()", "closes over variable g that has not yet been initialised");
+    testError("def f() { def a = g; def b=y; a()+b() }; def y(){2}; def g(){4}; f()", "closes over variables g,y that have not yet been initialised");
+    test("def x = 'x'; def f() { x += 'abc' }; f(); x", "xabc");
+    test("def x = 'x'; def f() { x = x + 'abc' }; f(); x", "xabc");
+    test("def x = 'x'; def f() { x *= 3 }; f(); x", "xxx");
+    test("def x = 'x'; def f() { x = x * 3 }; f(); x", "xxx");
+    test("def x = /x/; def f() { x += 'abc' }; f(); x", "xabc");
+    test("def x = /x/; def f() { x = x + 'abc' }; f(); x", "xabc");
+    test("def x = /x/; def f() { x *= 3 }; f(); x", "xxx");
+    test("def x = /x/; def f() { x = x * 3 }; f(); x", "xxx");
+    test("def it = 'x'; def x = /x/; def f() { x += 'abc' }; f(); x", "xabc");
+    test("def it = 'x'; def x = /x/; def f() { x = x + 'abc' }; f(); x", "xabc");
+    test("def it = 'x'; def x = /x/; def f() { x *= 3 }; f(); x", "xxx");
+    test("def it = 'x'; def x = /x/; def f() { x = x * 3 }; f(); x", "xxx");
   }
 
 //  @Test public void packageTests() {

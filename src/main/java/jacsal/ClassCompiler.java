@@ -297,8 +297,9 @@ public class ClassCompiler {
     FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC, staticHandleName, Type.getDescriptor(MethodHandle.class), null, null);
     handleVar.visitEnd();
     if (!method.isStatic && method.isClosure()) {
-      // For closures we also create a non-static method handle for the wrapper method
-      // that will be bound to the instance
+      // For non-static closures we also create a non-static method handle for the wrapper method
+      // that will be bound to the instance. For non-static functions we bind the handle when we
+      // compile the declaration and store it in the variable.
       String instanceHandleName = Utils.handleName(wrapperMethodName);
       handleVar = cv.visitField(ACC_PUBLIC, instanceHandleName, Type.getDescriptor(MethodHandle.class), null, null);
       handleVar.visitEnd();

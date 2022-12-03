@@ -1277,7 +1277,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     final var name = expr.identifier.getStringValue();
     final var isBuiltinFunction = expr.varDecl.funDecl != null && expr.varDecl.funDecl.functionDescriptor.isBuiltin;
-    if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1 && !isBuiltinFunction) {
+    if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1 && !isBuiltinFunction && !expr.varDecl.isField) {
       throw new CompileError("Forward reference to uninitialised value", expr.location);
     }
 
@@ -2125,22 +2125,33 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // The MethodHandle will point to the wrapper function
     Expr.FunDecl wrapperFunDecl = funDecl.wrapper;
 
+    // Load the handle
     boolean isClosure = funDecl.isClosure();
+    boolean isStatic  = funDecl.isStatic;
     if (isClosure) {
-      loadLocal(0);  // For closures we load the instance field so put "this" onto the stack
+      if (isStatic) {
+        loadClassField(classCompiler.internalName,
+                       Utils.staticHandleName(wrapperFunDecl.functionDescriptor.implementingMethod),
+                       FUNCTION, true);
+      }
+      else {
+        loadLocal(0);  // "this"
+        loadClassField(classCompiler.internalName,
+                       Utils.handleName(wrapperFunDecl.functionDescriptor.implementingMethod),
+                       FUNCTION,false);
+      }
     }
+    else {
+      // Value of the variable will be the handle for the function
+      loadClassField(classCompiler.internalName,
+                     Utils.staticHandleName(wrapperFunDecl.functionDescriptor.implementingMethod),
+                     FUNCTION,true);
 
-    // Value of the variable will be the handle for the function
-    loadClassField(classCompiler.internalName,
-                   isClosure ? Utils.handleName(wrapperFunDecl.functionDescriptor.implementingMethod)
-                             : Utils.staticHandleName(wrapperFunDecl.functionDescriptor.implementingMethod),
-                   FUNCTION,
-                   !isClosure);
-
-    // For non-static methods we need to bind them to "this" (for closures the constructor has already done this)
-    if (!wrapperFunDecl.isStatic && !isClosure) {
-      loadLocal(0);
-      invokeMethod(MethodHandle.class, "bindTo", Object.class);
+      // For non-static methods we need to bind them to "this" (for closures the constructor has already done this)
+      if (!isStatic) {
+        loadLocal(0);
+        invokeMethod(MethodHandle.class, "bindTo", Object.class);
+      }
     }
 
     // If there are implicit closed over heap var params then bind them so we don't need to pass
@@ -3595,8 +3606,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (varDecl.slot < 0 && varDecl.isField) {
-      loadLocal(0);
-      loadClassField(classCompiler.internalName, varDecl.name.getStringValue(), varDecl.type, false);
+      if (varDecl.funDecl == null) {
+        // Actual field
+        loadLocal(0);
+        loadClassField(classCompiler.internalName, varDecl.name.getStringValue(), varDecl.type, false);
+      }
+      else {
+        // Method
+        loadBoundMethodHandle(varDecl.funDecl);
+      }
       return;
     }
 

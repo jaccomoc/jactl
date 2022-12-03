@@ -1255,8 +1255,11 @@ public class RuntimeUtils {
       String       fieldName     = field.toString();
       JacsalObject jacsalObj     = (JacsalObject) parent;
       Object       fieldOrMethod = jacsalObj._$j$getFieldsAndMethods().get(fieldName);
-      if (fieldOrMethod == null || !(fieldOrMethod instanceof Field)) {
+      if (fieldOrMethod == null) {
         throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
+      }
+      if (!(fieldOrMethod instanceof Field)) {
+        throw new RuntimeError("Found method " + fieldName + "() for class " + className(parent) + " where field expected", source, offset);
       }
       try {
         Field fieldRef = (Field) fieldOrMethod;

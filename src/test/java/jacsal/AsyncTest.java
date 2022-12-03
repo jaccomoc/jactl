@@ -83,6 +83,9 @@ public class AsyncTest {
     async("def f(x){g(x)}; def g(x){sleeper(0,x)+sleeper(0,x)}; f(2)+f(3)", 10);
     async("def s = sleeper; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
     async("def f(x){x<=1?1:g(x)}; def g(x){def s = sleeper; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
+
+    // MAYBE TODO: analyse MethodCall/Call expressions to see if return value could be async closure/function
+    //sync("class A { static def a() { int x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6);
   }
 
   @Test public void builtinFunctions() {

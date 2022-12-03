@@ -504,13 +504,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Check for valid field/method name
       var desc = parent.type.getClassDescriptor();
       JacsalType type = fieldName != null ? desc.getField(fieldName) : null;
-      if (type == null && fieldName != null && !fieldsOnly) {
+      if (type == null && fieldName != null) {
         var descriptor = desc.getMethod(fieldName);
         if (descriptor == null) {
           // Finally check if builtin method exists for that name
           descriptor = lookupMethod(parent.type, (String) fieldName);
         }
         if (descriptor != null) {
+          // If we only want fields but have found a method then throw error
+          if (fieldsOnly) {
+            throw new CompileError("Found method where field expected", field.location);
+          }
           if (parent.type.is(CLASS) && !descriptor.isStatic) {
             throw new CompileError("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
           }
@@ -518,7 +522,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
       }
       if (type == null) {
-        throw new CompileError("No such field or method '" + fieldName + "' for " + parent.type, field.location);
+        throw new CompileError("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
       }
       return type;
     }
@@ -719,6 +723,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // Nested functions
     if (!expr.isWrapper && expr.wrapper == null) {
+      // Check if we are nested in a static context
+      if (inStaticContext()) {
+        expr.isStatic = true;
+        expr.functionDescriptor.isStatic = true;
+      }
+
       // Create a name if we are a closure
       Expr.FunDecl parent = functions.peek();
       String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.nameToken.getStringValue();
@@ -822,6 +832,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitVarAssign(Expr.VarAssign expr) {
     expr.type = resolve(expr.identifierExpr);
+    if (expr.type.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
+      throw new CompileError("Cannot assign to function", expr.identifierExpr.location);
+    }
     resolve(expr.expr);
     if (!expr.expr.type.isConvertibleTo(expr.type)) {
       throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
@@ -1023,8 +1036,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       if (expr.parent.type.is(INSTANCE)) {
         var classDescriptor = expr.parent.type.getClassDescriptor();
         JacsalType fieldType = classDescriptor.getField(expr.methodName);
-        if (!fieldType.is(FUNCTION,ANY)) {
-          throw new CompileError("No such method/field " + expr.methodName + " for object of type " + expr.parent.type, expr.methodNameLocation);
+        if (fieldType == null || !fieldType.is(FUNCTION,ANY)) {
+          throw new CompileError("No such method/field '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
         }
       }
       else
@@ -1526,7 +1539,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     var currentFunction  = functions.peek();
-    Supplier<Boolean> inStaticContext = () -> functions.stream().anyMatch(func -> func.isStatic);
 
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
@@ -1542,7 +1554,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
 
-    if (name.equals(Utils.THIS_VAR) && inStaticContext.get()) {
+    if (name.equals(Utils.THIS_VAR) && inStaticContext()) {
       throw new CompileError("Reference to 'this' in static function", location);
     }
 
@@ -1572,8 +1584,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl != null) {
-      if (varDecl.isField && inStaticContext.get()) {
-        throw new CompileError("Reference to field in static function", location);
+      if (varDecl.isField && inStaticContext()) {
+        if (varDecl.funDecl == null) {
+          throw new CompileError("Reference to field in static function", location);
+        }
+        if (!varDecl.funDecl.isStatic) {
+          throw new CompileError("Reference to non-static method in static function", location);
+        }
       }
 
       if (varDecl.type.is(CLASS)) {
@@ -1658,6 +1675,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
     }
     return null;
+  }
+
+  private boolean inStaticContext() {
+    return functions.stream().anyMatch(func -> func.isStatic);
   }
 
   private void throwIf(boolean condition, String msg, Token location) {

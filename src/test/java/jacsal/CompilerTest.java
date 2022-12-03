@@ -3607,6 +3607,8 @@ class CompilerTest extends BaseTest {
     testError("'abc'()", "cannot be called");
     testError("1D()", "cannot be called");
     testError("(3.0 + 2.0)()", "cannot be called");
+    testError("def f(){1}; def g(){2}; f=g; f()", "cannot assign to function");
+    testError("def f(){1}; def g(){2}; f += g; f()", "non-numeric operand");
 
     test("def f(x) { if (x == 1) 1 else x + f(x-1) }; f(4)", 10);
     test("def f() { int i = 1; return {++i}}; def x=f(); def y=f(); [x()+x()+x(),y()]", List.of(9,2));
