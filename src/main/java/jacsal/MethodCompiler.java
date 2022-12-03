@@ -309,14 +309,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (expr.type.is(FUNCTION) && expr.funDecl != null) {
-      // If actual function (not closure) and not static
-      if (!expr.funDecl.isStatic) {
-        // For functions we have to define the var first since it might be used recursively
-        defineVar(expr);
-        loadBoundMethodHandle(expr.funDecl);
-      } else {
-        return null;  // Nothing to do for static methods
-      }
+      // For functions we have to define the var first since it might be used recursively
+      defineVar(expr);
+      loadBoundMethodHandle(expr.funDecl);
     }
     else {
       if (expr.initialiser != null) {
