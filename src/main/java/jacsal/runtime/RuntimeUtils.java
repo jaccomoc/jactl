@@ -61,25 +61,27 @@ public class RuntimeUtils {
   public static final String INSTANCE_OF        = "instanceof";
   public static final String BANG_INSTANCE_OF   = "!instanceof";
 
-  public static final String AMPERSAND          = "&";
-  public static final String PIPE               = "|";
-  public static final String ACCENT             = "^";
-  public static final String GRAVE              = "~";
-  public static final String DOUBLE_LESS_THAN   = "<<";
-  public static final String DOUBLE_GREATER_THAN= ">>";
-  public static final String TRIPLE_GREATER_THAN= ">>>";
+  public static final String AMPERSAND           = "&";
+  public static final String PIPE                = "|";
+  public static final String ACCENT              = "^";
+  public static final String GRAVE               = "~";
+  public static final String DOUBLE_LESS_THAN    = "<<";
+  public static final String DOUBLE_GREATER_THAN = ">>";
+  public static final String TRIPLE_GREATER_THAN = ">>>";
 
   private static final ThreadLocal<LinkedHashMap<String, Pattern>> patternCache = new ThreadLocal<>() {
-    @Override protected LinkedHashMap<String, Pattern> initialValue() {
+    @Override
+    protected LinkedHashMap<String, Pattern> initialValue() {
       return new LinkedHashMap<>(16, 0.75f, true) {
-        @Override protected boolean removeEldestEntry(Map.Entry<String, Pattern> eldest) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Pattern> eldest) {
           return size() > patternCacheSize;
         }
       };
     }
   };
 
-  public  static int patternCacheSize = 100;   // Per thread cache size
+  public static int patternCacheSize = 100;   // Per thread cache size
 
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
@@ -94,46 +96,83 @@ public class RuntimeUtils {
       return null;
     }
     switch (op) {
-      case PLUS_PLUS:           return PLUS_PLUS;
-      case MINUS_MINUS:         return MINUS_MINUS;
-      case PLUS:                return PLUS;
-      case MINUS:               return MINUS;
-      case STAR:                return STAR;
-      case SLASH:               return SLASH;
-      case PERCENT:             return PERCENT;
-      case COMPARE:             return COMPARE;
-      case PLUS_EQUAL:          return PLUS_EQUAL;
-      case MINUS_EQUAL:         return MINUS_EQUAL;
-      case STAR_EQUAL:          return STAR_EQUAL;
-      case SLASH_EQUAL:         return SLASH_EQUAL;
-      case PERCENT_EQUAL:       return PERCENT_EQUAL;
-      case BANG_EQUAL:          return BANG_EQUAL;
-      case EQUAL_EQUAL:         return EQUAL_EQUAL;
-      case LESS_THAN:           return LESS_THAN;
-      case LESS_THAN_EQUAL:     return LESS_THAN_EQUAL;
-      case GREATER_THAN:        return GREATER_THAN;
-      case GREATER_THAN_EQUAL:  return GREATER_THAN_EQUAL;
-      case IN:                  return IN;
-      case BANG_IN:             return BANG_IN;
-      case INSTANCE_OF:         return INSTANCE_OF;
-      case BANG_INSTANCE_OF:    return BANG_INSTANCE_OF;
-      case AMPERSAND:           return AMPERSAND;
-      case PIPE:                return PIPE;
-      case ACCENT:              return ACCENT;
-      case GRAVE:               return GRAVE;
-      case DOUBLE_LESS_THAN:    return DOUBLE_LESS_THAN;
-      case DOUBLE_GREATER_THAN: return DOUBLE_GREATER_THAN;
-      case TRIPLE_GREATER_THAN: return TRIPLE_GREATER_THAN;
-      default: throw new IllegalStateException("Internal error: operator " + op + " not supported");
+      case PLUS_PLUS:
+        return PLUS_PLUS;
+      case MINUS_MINUS:
+        return MINUS_MINUS;
+      case PLUS:
+        return PLUS;
+      case MINUS:
+        return MINUS;
+      case STAR:
+        return STAR;
+      case SLASH:
+        return SLASH;
+      case PERCENT:
+        return PERCENT;
+      case COMPARE:
+        return COMPARE;
+      case PLUS_EQUAL:
+        return PLUS_EQUAL;
+      case MINUS_EQUAL:
+        return MINUS_EQUAL;
+      case STAR_EQUAL:
+        return STAR_EQUAL;
+      case SLASH_EQUAL:
+        return SLASH_EQUAL;
+      case PERCENT_EQUAL:
+        return PERCENT_EQUAL;
+      case BANG_EQUAL:
+        return BANG_EQUAL;
+      case EQUAL_EQUAL:
+        return EQUAL_EQUAL;
+      case LESS_THAN:
+        return LESS_THAN;
+      case LESS_THAN_EQUAL:
+        return LESS_THAN_EQUAL;
+      case GREATER_THAN:
+        return GREATER_THAN;
+      case GREATER_THAN_EQUAL:
+        return GREATER_THAN_EQUAL;
+      case IN:
+        return IN;
+      case BANG_IN:
+        return BANG_IN;
+      case INSTANCE_OF:
+        return INSTANCE_OF;
+      case BANG_INSTANCE_OF:
+        return BANG_INSTANCE_OF;
+      case AMPERSAND:
+        return AMPERSAND;
+      case PIPE:
+        return PIPE;
+      case ACCENT:
+        return ACCENT;
+      case GRAVE:
+        return GRAVE;
+      case DOUBLE_LESS_THAN:
+        return DOUBLE_LESS_THAN;
+      case DOUBLE_GREATER_THAN:
+        return DOUBLE_GREATER_THAN;
+      case TRIPLE_GREATER_THAN:
+        return TRIPLE_GREATER_THAN;
+      default:
+        throw new IllegalStateException("Internal error: operator " + op + " not supported");
     }
   }
 
   public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int maxScale, String source, int offset) {
     BigDecimal result;
     switch (operator) {
-      case PLUS:    result = left.add(right);       break;
-      case MINUS:   result = left.subtract(right);  break;
-      case STAR:    result = left.multiply(right);  break;
+      case PLUS:
+        result = left.add(right);
+        break;
+      case MINUS:
+        result = left.subtract(right);
+        break;
+      case STAR:
+        result = left.multiply(right);
+        break;
       case PERCENT:
         try {
           result = left.remainder(right);
@@ -161,7 +200,8 @@ public class RuntimeUtils {
           result = result.stripTrailingZeros();
         }
         break;
-      default: throw new IllegalStateException("Internal error: operator " + operator + " not supported for decimals");
+      default:
+        throw new IllegalStateException("Internal error: operator " + operator + " not supported for decimals");
     }
     if (result.scale() > maxScale) {
       result = result.setScale(maxScale, RoundingMode.HALF_EVEN);
@@ -170,15 +210,21 @@ public class RuntimeUtils {
   }
 
   public static int compareTo(Object obj1, Object obj2, String source, int offset) {
-    if (obj1 == null && obj2 == null) { return 0;  }
-    if (obj1 == null)                 { return -1; }
-    if (obj2 == null)                 { return 1;  }
+    if (obj1 == null && obj2 == null) {
+      return 0;
+    }
+    if (obj1 == null) {
+      return -1;
+    }
+    if (obj2 == null) {
+      return 1;
+    }
     if (obj1 instanceof Number && obj2 instanceof Number) {
       if (obj1 instanceof BigDecimal || obj2 instanceof BigDecimal) {
         return toBigDecimal(obj1).compareTo(toBigDecimal(obj2));
       }
-      Number n1 = (Number)obj1;
-      Number n2 = (Number)obj2;
+      Number n1 = (Number) obj1;
+      Number n2 = (Number) obj2;
       if (obj1 instanceof Double || obj2 instanceof Double) {
         return Double.compare(n1.doubleValue(), n2.doubleValue());
       }
@@ -188,7 +234,7 @@ public class RuntimeUtils {
       return Integer.compare(n1.intValue(), n2.intValue());
     }
     if (obj1 instanceof Boolean && obj2 instanceof Boolean) {
-      return Boolean.compare((boolean)obj1, (boolean)obj2);
+      return Boolean.compare((boolean) obj1, (boolean) obj2);
     }
     if (obj1 instanceof Comparable && obj1.getClass().equals(obj2.getClass())) {
       int result = ((Comparable) obj1).compareTo(obj2);
@@ -199,17 +245,17 @@ public class RuntimeUtils {
   }
 
   /**
-   * Perform binary operation when types are not known at compile time.
-   * NOTE: operator is a String that must be one of the static strings defined in this class
-   *       as '==' is used to compare the strings for performance reasons.
-   * @param left              left operand
-   * @param right             right operand
-   * @param operator          operator (as a String)
-   * @param originalOperator  original operator (as a String) (will be -- or ++ if inc/dec turned
-   *                          into binaryOp or null otherwise)
-   * @param maxScale          maximum scale for BigDecimal operations
-   * @param source            source code
-   * @param offset            offset into source code of operator
+   * Perform binary operation when types are not known at compile time. NOTE: operator is a String that must be one of
+   * the static strings defined in this class as '==' is used to compare the strings for performance reasons.
+   *
+   * @param left             left operand
+   * @param right            right operand
+   * @param operator         operator (as a String)
+   * @param originalOperator original operator (as a String) (will be -- or ++ if inc/dec turned into binaryOp or null
+   *                         otherwise)
+   * @param maxScale         maximum scale for BigDecimal operations
+   * @param source           source code
+   * @param offset           offset into source code of operator
    * @return result of operation
    */
   public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
@@ -238,7 +284,7 @@ public class RuntimeUtils {
       }
       if (operator == STAR) {
         if (right instanceof Number) {
-          return leftString.repeat(((Number)right).intValue());
+          return leftString.repeat(((Number) right).intValue());
         }
         throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
@@ -248,19 +294,23 @@ public class RuntimeUtils {
       if (operator != PLUS) {
         throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
       }
-      return listAdd((List)left, right, originalOperator == PLUS_EQUAL);
+      return listAdd((List) left, right, originalOperator == PLUS_EQUAL);
     }
 
     if (left instanceof Map && right instanceof Map) {
       if (operator != PLUS) {
         throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
       }
-      return mapAdd((Map)left, (Map)right, originalOperator == PLUS_EQUAL);
+      return mapAdd((Map) left, (Map) right, originalOperator == PLUS_EQUAL);
     }
 
     // All other operations expect numbers so check we have numbers
-    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
-    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+    if (!(left instanceof Number)) {
+      throwOperandError(left, true, operator, source, offset);
+    }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
 
     if (operator != PLUS && operator != MINUS) {
       throw new IllegalStateException("Internal error: unexpected operation '" + operator + "' on types " + className(left) + " and " + className(right));
@@ -281,14 +331,14 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       return lhs + rhs;
     }
 
     // Must be integers
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     return lhs + rhs;
   }
 
@@ -297,7 +347,9 @@ public class RuntimeUtils {
       return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
     }
 
-    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -311,14 +363,14 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       return lhs + rhs;
     }
 
     // Must be integers
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     return lhs + rhs;
   }
 
@@ -327,8 +379,12 @@ public class RuntimeUtils {
       return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
     }
 
-    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
-    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+    if (!(left instanceof Number)) {
+      throwOperandError(left, true, operator, source, offset);
+    }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -342,20 +398,24 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       return lhs * rhs;
     }
 
     // Must be integers
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     return lhs * rhs;
   }
 
   public static Object minus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
-    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+    if (!(left instanceof Number)) {
+      throwOperandError(left, true, operator, source, offset);
+    }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -369,20 +429,24 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       return lhs - rhs;
     }
 
     // Must be integers
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     return lhs - rhs;
   }
 
   public static Object divide(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
-    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+    if (!(left instanceof Number)) {
+      throwOperandError(left, true, operator, source, offset);
+    }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -396,8 +460,8 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       try {
         return lhs / rhs;
       }
@@ -407,8 +471,8 @@ public class RuntimeUtils {
     }
 
     // Must be integers
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     try {
       return lhs / rhs;
     }
@@ -418,8 +482,12 @@ public class RuntimeUtils {
   }
 
   public static Object remainder(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
-    if (!(left instanceof Number))  { throwOperandError(left, true, operator, source, offset); }
-    if (!(right instanceof Number)) { throwOperandError(right, false, operator, source, offset); }
+    if (!(left instanceof Number)) {
+      throwOperandError(left, true, operator, source, offset);
+    }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
@@ -433,8 +501,8 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       try {
         return lhs % rhs;
       }
@@ -444,8 +512,8 @@ public class RuntimeUtils {
     }
 
     // Must be integers
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     try {
       return lhs % rhs;
     }
@@ -456,20 +524,28 @@ public class RuntimeUtils {
 
   private static void throwOperandError(Object obj, boolean isLeft, String operator, String source, int offset) {
     if (obj == null) {
-      throw new NullError("Null operand for " + (isLeft?"left":"right") + "-hand side of '" + operator + "'", source, offset);
+      throw new NullError("Null operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "'", source, offset);
     }
-    throw new RuntimeError("Non-numeric operand for " + (isLeft?"left":"right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
+    throw new RuntimeError("Non-numeric operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
   }
 
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
     // Use == to compare since we guarantee that the actual string for the operator is passed in
     if (operator == EQUAL_EQUAL) {
-      if (left == right)                 { return true;  }
-      if (left == null || right == null) { return false; }
+      if (left == right) {
+        return true;
+      }
+      if (left == null || right == null) {
+        return false;
+      }
     }
     if (operator == BANG_EQUAL) {
-      if (left == right)                 { return false; }
-      if (left == null || right == null) { return true;  }
+      if (left == right) {
+        return false;
+      }
+      if (left == null || right == null) {
+        return true;
+      }
     }
     if (operator == IN || operator == BANG_IN) {
       throw new UnsupportedOperationException();
@@ -480,7 +556,7 @@ public class RuntimeUtils {
 
     // We are left with the comparison operators
     if ((operator == EQUAL_EQUAL || operator == BANG_EQUAL)) {
-      if (left instanceof List  || left instanceof Map  || left instanceof JacsalObject ||
+      if (left instanceof List || left instanceof Map || left instanceof JacsalObject ||
           right instanceof List || right instanceof Map || right instanceof JacsalObject) {
         return equality(left, right, operator);
       }
@@ -491,18 +567,31 @@ public class RuntimeUtils {
     }
 
     int comparison = compareTo(left, right, source, offset);
-    if (operator == EQUAL_EQUAL)        { return comparison == 0; }
-    if (operator == BANG_EQUAL)         { return comparison != 0; }
-    if (operator == LESS_THAN)          { return comparison < 0; }
-    if (operator == LESS_THAN_EQUAL)    { return comparison <= 0; }
-    if (operator == GREATER_THAN)       { return comparison > 0; }
-    if (operator == GREATER_THAN_EQUAL) { return comparison >= 0; }
+    if (operator == EQUAL_EQUAL) {
+      return comparison == 0;
+    }
+    if (operator == BANG_EQUAL) {
+      return comparison != 0;
+    }
+    if (operator == LESS_THAN) {
+      return comparison < 0;
+    }
+    if (operator == LESS_THAN_EQUAL) {
+      return comparison <= 0;
+    }
+    if (operator == GREATER_THAN) {
+      return comparison > 0;
+    }
+    if (operator == GREATER_THAN_EQUAL) {
+      return comparison >= 0;
+    }
     throw new IllegalStateException("Internal error: unexpected operator " + operator);
   }
 
   /**
    * Check for == or != for List,Map,JacsalObject types
-   * @param operator  EQUAL_EQUAL or BANG_EQUAL
+   *
+   * @param operator EQUAL_EQUAL or BANG_EQUAL
    * @return true if equal or not equal based on value of operator
    */
   private static boolean equality(Object left, Object right, String operator) {
@@ -513,17 +602,17 @@ public class RuntimeUtils {
       return operator == BANG_EQUAL;
     }
     if (left instanceof List && right instanceof List) {
-      return ((List)left).equals(right) == (operator == EQUAL_EQUAL);
+      return ((List) left).equals(right) == (operator == EQUAL_EQUAL);
     }
     if (left instanceof Map && right instanceof Map) {
-      return ((Map)left).equals(right) == (operator == EQUAL_EQUAL);
+      return ((Map) left).equals(right) == (operator == EQUAL_EQUAL);
     }
     if (left instanceof JacsalObject && right instanceof JacsalObject) {
       if (!left.getClass().equals(right.getClass())) {
         return operator == BANG_EQUAL;
       }
       // Have two instances of same class so check that each field is equal
-      var fieldAndMethods = ((JacsalObject)left)._$j$getFieldsAndMethods();
+      var fieldAndMethods = ((JacsalObject) left)._$j$getFieldsAndMethods();
       for (var iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
            iter.hasNext(); ) {
         var   entry = iter.next();
@@ -545,8 +634,12 @@ public class RuntimeUtils {
 
   public static Object bitOperation(Object left, Object right, String operator, String source, int offset) {
     boolean leftIsLong = false;
-    if      (left instanceof Long)       { leftIsLong = true; }
-    else if (!(left instanceof Integer)) { throw new RuntimeError("Left-hand side of '" + operator + "' must be int or long (not " + className(left) + ")", source, offset); }
+    if (left instanceof Long) {
+      leftIsLong = true;
+    }
+    else if (!(left instanceof Integer)) {
+      throw new RuntimeError("Left-hand side of '" + operator + "' must be int or long (not " + className(left) + ")", source, offset);
+    }
 
     if (!(right instanceof Long) && !(right instanceof Integer)) {
       throw new RuntimeError("Right-hand side of '" + operator + "' must be int or long (not " + className(right) + ")", source, offset);
@@ -555,39 +648,47 @@ public class RuntimeUtils {
     switch (operator) {
       case DOUBLE_LESS_THAN:
         if (leftIsLong) {
-          return ((long)left) << ((Number)right).intValue();
+          return ((long) left) << ((Number) right).intValue();
         }
-        return ((int)left) << ((Number)right).intValue();
+        return ((int) left) << ((Number) right).intValue();
       case DOUBLE_GREATER_THAN:
         if (leftIsLong) {
-          return ((long)left) >> ((Number)right).intValue();
+          return ((long) left) >> ((Number) right).intValue();
         }
-        return ((int)left) >> ((Number)right).intValue();
+        return ((int) left) >> ((Number) right).intValue();
       case TRIPLE_GREATER_THAN:
         if (leftIsLong) {
-          return ((long)left) >>> ((Number)right).intValue();
+          return ((long) left) >>> ((Number) right).intValue();
         }
-        return ((int)left) >>> ((Number)right).intValue();
+        return ((int) left) >>> ((Number) right).intValue();
     }
 
     if (leftIsLong || right instanceof Long) {
-      long lhs = ((Number)left).longValue();
-      long rhs = ((Number)right).longValue();
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
       switch (operator) {
-        case AMPERSAND:           return lhs & rhs;
-        case PIPE:                return lhs | rhs;
-        case ACCENT:              return lhs ^ rhs;
-        default: throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+        case AMPERSAND:
+          return lhs & rhs;
+        case PIPE:
+          return lhs | rhs;
+        case ACCENT:
+          return lhs ^ rhs;
+        default:
+          throw new IllegalStateException("Internal error: operator " + operator + " not supported");
       }
     }
 
-    int lhs = (int)left;
-    int rhs = (int)right;
+    int lhs = (int) left;
+    int rhs = (int) right;
     switch (operator) {
-      case AMPERSAND:           return lhs & rhs;
-      case PIPE:                return lhs | rhs;
-      case ACCENT:              return lhs ^ rhs;
-      default: throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+      case AMPERSAND:
+        return lhs & rhs;
+      case PIPE:
+        return lhs | rhs;
+      case ACCENT:
+        return lhs ^ rhs;
+      default:
+        throw new IllegalStateException("Internal error: operator " + operator + " not supported");
     }
   }
 
@@ -597,35 +698,59 @@ public class RuntimeUtils {
     }
 
     if (obj instanceof Integer) {
-      return ~(int)obj;
+      return ~(int) obj;
     }
-    return ~(long)obj;
+    return ~(long) obj;
   }
 
   public static Object negateNumber(Object obj, String source, int offset) {
     ensureNonNull(obj, source, offset);
-    if (obj instanceof BigDecimal) { return ((BigDecimal)obj).negate(); }
-    if (obj instanceof Double)     { return -(double)obj; }
-    if (obj instanceof Long)       { return -(long)obj; }
-    if (obj instanceof Integer)    { return -(int)obj; }
+    if (obj instanceof BigDecimal) {
+      return ((BigDecimal) obj).negate();
+    }
+    if (obj instanceof Double) {
+      return -(double) obj;
+    }
+    if (obj instanceof Long) {
+      return -(long) obj;
+    }
+    if (obj instanceof Integer) {
+      return -(int) obj;
+    }
     throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset);
   }
 
   public static Object incNumber(Object obj, String operator, String source, int offset) {
     ensureNonNull(obj, source, offset);
-    if (obj instanceof BigDecimal) { return ((BigDecimal)obj).add(BigDecimal.ONE); }
-    if (obj instanceof Double)     { return (double)obj + 1; }
-    if (obj instanceof Long)       { return (long)obj + 1; }
-    if (obj instanceof Integer)    { return (int)obj + 1; }
+    if (obj instanceof BigDecimal) {
+      return ((BigDecimal) obj).add(BigDecimal.ONE);
+    }
+    if (obj instanceof Double) {
+      return (double) obj + 1;
+    }
+    if (obj instanceof Long) {
+      return (long) obj + 1;
+    }
+    if (obj instanceof Integer) {
+      return (int) obj + 1;
+    }
     return binaryOp(obj, 1, PLUS, operator, -1, source, offset);
   }
 
   public static Object decNumber(Object obj, String operator, String source, int offset) {
     ensureNonNull(obj, source, offset);
-    if (obj instanceof BigDecimal) { return ((BigDecimal)obj).subtract(BigDecimal.ONE); }
-    if (obj instanceof Double)     { return (double)obj - 1; }
-    if (obj instanceof Long)       { return (long)obj - 1; }
-    if (obj instanceof Integer)    { return (int)obj - 1; }
+    if (obj instanceof BigDecimal) {
+      return ((BigDecimal) obj).subtract(BigDecimal.ONE);
+    }
+    if (obj instanceof Double) {
+      return (double) obj - 1;
+    }
+    if (obj instanceof Long) {
+      return (long) obj - 1;
+    }
+    if (obj instanceof Integer) {
+      return (int) obj - 1;
+    }
     return binaryOp(obj, 1, MINUS, operator, -1, source, offset);
   }
 
@@ -638,20 +763,31 @@ public class RuntimeUtils {
   }
 
   private static Matcher getMatcher(String str, String regex, String modifiers, String source, int offset) {
-    if (str == null)   { throw new NullError("Null string in regex match", source, offset); }
-    if (regex == null) { throw new NullError("Null regex in regex match", source, offset); }
-    var cache = patternCache.get();
-    String key = regex + "/" + modifiers;
+    if (str == null) {
+      throw new NullError("Null string in regex match", source, offset);
+    }
+    if (regex == null) {
+      throw new NullError("Null regex in regex match", source, offset);
+    }
+    var     cache   = patternCache.get();
+    String  key     = regex + "/" + modifiers;
     Pattern pattern = cache.get(key);
     if (pattern == null) {
       try {
         int flags = 0;
         for (int i = 0; i < modifiers.length(); i++) {
           switch (modifiers.charAt(i)) {
-            case 'i': flags += Pattern.CASE_INSENSITIVE; break;
-            case 'm': flags += Pattern.MULTILINE;        break;
-            case 's': flags += Pattern.DOTALL;           break;
-            default: throw new IllegalStateException("Internal error: unexpected regex modifier '" + modifiers.charAt(i) + "'");
+            case 'i':
+              flags += Pattern.CASE_INSENSITIVE;
+              break;
+            case 'm':
+              flags += Pattern.MULTILINE;
+              break;
+            case 's':
+              flags += Pattern.DOTALL;
+              break;
+            default:
+              throw new IllegalStateException("Internal error: unexpected regex modifier '" + modifiers.charAt(i) + "'");
           }
         }
         pattern = Pattern.compile(regex, flags);
@@ -668,11 +804,10 @@ public class RuntimeUtils {
   }
 
   /**
-   * We are doing a "find" rather than a "match" if the global modifier is set and the
-   * source string is unnchanged. In this case we continue the searching from the last
-   * unmatched char in the source string.
-   * If the source string has changed then we revert to a "match".
-   * We update the Matcher in the RegexMatcher object if the Matcher changes.
+   * We are doing a "find" rather than a "match" if the global modifier is set and the source string is unnchanged. In
+   * this case we continue the searching from the last unmatched char in the source string. If the source string has
+   * changed then we revert to a "match". We update the Matcher in the RegexMatcher object if the Matcher changes.
+   *
    * @return true if regex find/match succeeds
    */
   public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, boolean globalModifier, String modifiers, String source, int offset) {
@@ -725,18 +860,19 @@ public class RuntimeUtils {
   }
 
   /**
-   * Add to a list. If second object is a list then we concatenat the lists.
-   * Otherwise object is added to and of the list.
-   * @param list         the list
-   * @param obj          object to add or merge with list
-   * @param isPlusEqual  whether we are doing += or just +
+   * Add to a list. If second object is a list then we concatenat the lists. Otherwise object is added to and of the
+   * list.
+   *
+   * @param list        the list
+   * @param obj         object to add or merge with list
+   * @param isPlusEqual whether we are doing += or just +
    * @return new list which is result of adding second object to first list
    */
   public static List listAdd(List list, Object obj, boolean isPlusEqual) {
     // If ++= then add to existing list rather than creating a new one
     List result = isPlusEqual ? list : new ArrayList<>(list);
     if (obj instanceof List) {
-      result.addAll((List)obj);
+      result.addAll((List) obj);
     }
     else {
       result.add(obj);
@@ -745,10 +881,10 @@ public class RuntimeUtils {
   }
 
   /**
-   * Add twp maps together. The result is a new map with a merge of the
-   * keys and values from the two maps. If the same key appears in both
-   * maps the value from the second map "overwrites" the other value and
-   * becomes the value of the key in the resulting map.
+   * Add twp maps together. The result is a new map with a merge of the keys and values from the two maps. If the same
+   * key appears in both maps the value from the second map "overwrites" the other value and becomes the value of the
+   * key in the resulting map.
+   *
    * @return a new map which is the combination of the two maps
    */
   public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual) {
@@ -759,25 +895,41 @@ public class RuntimeUtils {
   }
 
   /**
-   * Return true if object satisfies truthiness check:
-   *   null    --> false
-   *   boolean --> value of the boolean
-   *   number  --> true if non-zero
-   *   String  --> true if non-empty
-   *   Object  --> true if non-null
-   * If negated is true then test is inverted and we test for "falsiness".
+   * Return true if object satisfies truthiness check: null    --> false boolean --> value of the boolean number  -->
+   * true if non-zero String  --> true if non-empty Object  --> true if non-null If negated is true then test is
+   * inverted and we test for "falsiness".
    */
   public static boolean isTruth(Object value, boolean negated) {
-    if (value == null)               { return negated; }
-    if (value instanceof Boolean)    { return negated != (boolean) value; }
-    if (value instanceof String)     { return negated == ((String) value).isEmpty(); }
-    if (value instanceof Integer)    { return negated == ((int) value == 0); }
-    if (value instanceof Long)       { return negated == ((long)value == 0); }
-    if (value instanceof Double)     { return negated == ((double)value == 0); }
-    if (value instanceof BigDecimal) { return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO); }
-    if (value instanceof List)       { return negated == ((List)value).isEmpty(); }
-    if (value instanceof Map)        { return negated == ((Map)value).isEmpty(); }
-    if (value instanceof Object[])   { return negated == (((Object[])value).length == 0); }
+    if (value == null) {
+      return negated;
+    }
+    if (value instanceof Boolean) {
+      return negated != (boolean) value;
+    }
+    if (value instanceof String) {
+      return negated == ((String) value).isEmpty();
+    }
+    if (value instanceof Integer) {
+      return negated == ((int) value == 0);
+    }
+    if (value instanceof Long) {
+      return negated == ((long) value == 0);
+    }
+    if (value instanceof Double) {
+      return negated == ((double) value == 0);
+    }
+    if (value instanceof BigDecimal) {
+      return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO);
+    }
+    if (value instanceof List) {
+      return negated == ((List) value).isEmpty();
+    }
+    if (value instanceof Map) {
+      return negated == ((Map) value).isEmpty();
+    }
+    if (value instanceof Object[]) {
+      return negated == (((Object[]) value).length == 0);
+    }
     return !negated;
   }
 
@@ -798,13 +950,14 @@ public class RuntimeUtils {
 
   /**
    * Output a nice string form.
+   *
    * @param obj             the object
    * @param previousObjects set of previous values we have seen (for detecting circular references)
    * @return
    */
   private static String doToString(Object obj, Set<Object> previousObjects, String prefix, int indent) {
     if (obj instanceof Object[]) {
-      obj = Arrays.asList((Object[])obj);
+      obj = Arrays.asList((Object[]) obj);
     }
 
     if (obj instanceof List || obj instanceof Map || obj instanceof JacsalObject) {
@@ -821,28 +974,34 @@ public class RuntimeUtils {
     if (obj instanceof List) {
       StringBuilder sb = new StringBuilder();
       sb.append('[');
-      List list = (List)obj;
+      List list = (List) obj;
       for (int i = 0; i < list.size(); i++) {
-        if (i > 0) { sb.append(", "); }
+        if (i > 0) {
+          sb.append(", ");
+        }
         sb.append(toQuotedString(list.get(i), previousObjects, "", 0));
       }
       sb.append(']');
       return sb.toString();
     }
-    else
-    if (obj instanceof JacsalObject || obj instanceof Map) {
-      boolean isMap = obj instanceof Map;
-      StringBuilder sb = new StringBuilder();
+    else if (obj instanceof JacsalObject || obj instanceof Map) {
+      boolean       isMap = obj instanceof Map;
+      StringBuilder sb    = new StringBuilder();
       sb.append('[');
-      var iterator = isMap ? ((Map<String,Object>)obj).entrySet().iterator()
-                           : ((JacsalObject)obj)._$j$getFieldsAndMethods()
-                                                .entrySet()
-                                                .stream()
-                                                .filter(entry -> entry.getValue() instanceof Field)
-                                                .iterator();
+      var iterator = isMap ? ((Map<String, Object>) obj).entrySet().iterator()
+                           : ((JacsalObject) obj)._$j$getFieldsAndMethods()
+                                                 .entrySet()
+                                                 .stream()
+                                                 .filter(entry -> entry.getValue() instanceof Field)
+                                                 .iterator();
       boolean first = true;
       while (iterator.hasNext()) {
-        if (!first) { sb.append(", "); } else { first = false; }
+        if (!first) {
+          sb.append(", ");
+        }
+        else {
+          first = false;
+        }
         var entry = iterator.next();
         try {
           Object value = entry.getValue();
@@ -872,10 +1031,9 @@ public class RuntimeUtils {
   }
 
   /**
-   * Quote if actual string, otherwise delegate back to toString(obj).
-   * This is to make the output of toString() for Map and List objects
-   * is valid Jacsal code so we can cut-and-paste output into actual
-   * scripts for testing and use in REPL.
+   * Quote if actual string, otherwise delegate back to toString(obj). This is to make the output of toString() for Map
+   * and List objects is valid Jacsal code so we can cut-and-paste output into actual scripts for testing and use in
+   * REPL.
    */
   private static String toQuotedString(Object obj, Set<Object> previousObjects, String prefix, int indent) {
     if (obj instanceof String) {
@@ -908,13 +1066,14 @@ public class RuntimeUtils {
 
   /**
    * Load field from map/list or return default value if field does not exist
-   * @param parent        parent (map or list)
-   * @param field         field (field name or list index)
-   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
-   * @param isOptional    true if access type is '?.' or '?['
-   * @param defaultValue  default value to return if field does not exist
-   * @param source        source code
-   * @param offset        offset into source for operation
+   *
+   * @param parent       parent (map or list)
+   * @param field        field (field name or list index)
+   * @param isDot        true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param isOptional   true if access type is '?.' or '?['
+   * @param defaultValue default value to return if field does not exist
+   * @param source       source code
+   * @param offset       offset into source for operation
    * @return the field value or the default value
    */
   public static Object loadFieldOrDefault(Object parent, Object field, boolean isDot, boolean isOptional, Object defaultValue, String source, int offset) {
@@ -927,13 +1086,15 @@ public class RuntimeUtils {
 
   public static Object invokeMethodOrField(Object parent, String field, boolean onlyField, boolean isOptional, Object[] args, String source, int offset) {
     if (parent == null) {
-      if (isOptional) { return null; }
+      if (isOptional) {
+        return null;
+      }
       throw new NullError("Tried to invoke method on null value", source, offset);
     }
 
     Object value = null;
     if (parent instanceof JacsalObject) {
-      value = getJacsalFieldOrMethod((JacsalObject)parent, field, source, offset, false, false);
+      value = getJacsalFieldOrMethod((JacsalObject) parent, field, source, offset, false, false);
     }
     else {
       // Fields of a map cannot override builtin methods so look up method first
@@ -952,7 +1113,7 @@ public class RuntimeUtils {
     }
 
     try {
-      return ((MethodHandle)value).invokeExact((Continuation)null, source, offset, args);
+      return ((MethodHandle) value).invokeExact((Continuation) null, source, offset, args);
     }
     catch (RuntimeException e) {
       throw e;
@@ -964,12 +1125,13 @@ public class RuntimeUtils {
 
   /**
    * Load field from map/list (return null if field or index does not exist)
-   * @param parent        parent (map or list)
-   * @param field         field (field name or list index)
-   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
-   * @param isOptional    true if access type is '?.' or '?['
-   * @param source        source code
-   * @param offset        offset into source for operation
+   *
+   * @param parent     parent (map or list)
+   * @param field      field (field name or list index)
+   * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param isOptional true if access type is '?.' or '?['
+   * @param source     source code
+   * @param offset     offset into source for operation
    * @return the field value or null
    */
   public static Object loadField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
@@ -977,15 +1139,16 @@ public class RuntimeUtils {
   }
 
   /**
-   * Load method or field. Parent can be of any type in which case we first look for a method
-   * of given name (in BuiltinFunctions) and return a MethodHandle to that method. If that
-   * returns nothing we invoke the usual loadField method to get the field value.
-   * @param parent        parent
-   * @param field         field (field name or list index)
-   * @param isDot         always true
-   * @param isOptional    true if access type is '?.' or '?['
-   * @param source        source code
-   * @param offset        offset into source for operation
+   * Load method or field. Parent can be of any type in which case we first look for a method of given name (in
+   * BuiltinFunctions) and return a MethodHandle to that method. If that returns nothing we invoke the usual loadField
+   * method to get the field value.
+   *
+   * @param parent     parent
+   * @param field      field (field name or list index)
+   * @param isDot      always true
+   * @param isOptional true if access type is '?.' or '?['
+   * @param source     source code
+   * @param offset     offset into source for operation
    * @return the field value or null
    */
   public static Object loadMethodOrField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
@@ -1009,13 +1172,14 @@ public class RuntimeUtils {
 
   /**
    * Load field from map/list (return null if field or index does not exist)
-   * @param parent        parent (map or list)
-   * @param field         field (field name or list index)
-   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
-   * @param isOptional    true if access type is '?.' or '?['
-   * @param isMap         if creating missing field we create a Map if true or a List if false
-   * @param source        source code
-   * @param offset        offset into source for operation
+   *
+   * @param parent     parent (map or list)
+   * @param field      field (field name or list index)
+   * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param isOptional true if access type is '?.' or '?['
+   * @param isMap      if creating missing field we create a Map if true or a List if false
+   * @param source     source code
+   * @param offset     offset into source for operation
    * @return the field value or null
    */
   public static Object loadOrCreateField(Object parent, Object field, boolean isDot, boolean isOptional,
@@ -1053,7 +1217,7 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof Class) {
-      Class clss = (Class)parent;
+      Class clss = (Class) parent;
       // For classes we only support runtime lookup of static methods
       if (JacsalObject.class.isAssignableFrom(clss)) {
         try {
@@ -1061,8 +1225,8 @@ public class RuntimeUtils {
           // _$j$StaticMethods field because the field exists in the parent JacsalObject class
           // which means we can't guarantee that class init for the actual class (which populates
           // the map) has been run yet.
-          Method staticMethods = clss.getMethod(Utils.JACSAL_STATIC_METHODS_STATIC_GETTER);
-          Map<String,MethodHandle> map = (Map<String, MethodHandle>)staticMethods.invoke(null);
+          Method                    staticMethods = clss.getMethod(Utils.JACSAL_STATIC_METHODS_STATIC_GETTER);
+          Map<String, MethodHandle> map           = (Map<String, MethodHandle>) staticMethods.invoke(null);
           return map.get(field.toString());
         }
         catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
@@ -1075,7 +1239,7 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof JacsalObject) {
-      return getJacsalFieldOrMethod((JacsalObject)parent, field, source, offset, createIfMissing, isMap);
+      return getJacsalFieldOrMethod((JacsalObject) parent, field, source, offset, createIfMissing, isMap);
     }
 
     // Check for accessing method by name
@@ -1105,7 +1269,7 @@ public class RuntimeUtils {
       throw new RuntimeError("Non-numeric value for indexed access", source, offset);
     }
 
-    int index = ((Number)field).intValue();
+    int index = ((Number) field).intValue();
     if (index < 0) {
       throw new RuntimeError("Index must be >= 0 (was " + index + ")", source, offset);
     }
@@ -1118,14 +1282,14 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof Object[]) {
-      Object[] arr = (Object[])parent;
+      Object[] arr = (Object[]) parent;
       if (index < arr.length) {
         return arr[index];
       }
       return null;
     }
 
-    List list = (List)parent;
+    List   list  = (List) parent;
     Object value = null;
     if (index < list.size()) {
       value = list.get(index);
@@ -1142,20 +1306,19 @@ public class RuntimeUtils {
   }
 
   /**
-   * Get the value for given field of a JacsalObject. Field could be an actual field or a method.
-   * If createIfMissing is set and field is null then we will create a default value for the field.
-   * For fields that are of type Object we create a Map or List based on the isMap field.
-   * NOTE: createIfMissing is only ever set in a Map/List context on lhs of assignment or assignment-like
-   * expression so we know that we want something that looks like a Map/List.
+   * Get the value for given field of a JacsalObject. Field could be an actual field or a method. If createIfMissing is
+   * set and field is null then we will create a default value for the field. For fields that are of type Object we
+   * create a Map or List based on the isMap field. NOTE: createIfMissing is only ever set in a Map/List context on lhs
+   * of assignment or assignment-like expression so we know that we want something that looks like a Map/List.
    */
   private static Object getJacsalFieldOrMethod(JacsalObject parent, Object field, String source, int offset, boolean createIfMissing, boolean isMap) {
     // Check for field, instance method, static method, and then if that fails check if there
     // is a generic builtin method that applies
-    String       fieldName     = field.toString();
-    Object       fieldOrMethod = parent._$j$getFieldsAndMethods().get(fieldName);
+    String fieldName     = field.toString();
+    Object fieldOrMethod = parent._$j$getFieldsAndMethods().get(fieldName);
     if (fieldOrMethod instanceof MethodHandle) {
       // Need to bind method handle to instance
-      fieldOrMethod = ((MethodHandle)fieldOrMethod).bindTo(parent);
+      fieldOrMethod = ((MethodHandle) fieldOrMethod).bindTo(parent);
     }
     if (fieldOrMethod == null && !createIfMissing) {
       // If createIfMissing is not set we can search for matching method
@@ -1169,16 +1332,12 @@ public class RuntimeUtils {
     }
     // If we have a field handle then we need to get the field value
     if (fieldOrMethod instanceof Field) {
-      var classField = (Field)fieldOrMethod;
+      var classField = (Field) fieldOrMethod;
       try {
         Object value = classField.get(parent);
         if (value == null && createIfMissing) {
           Class<?> fieldType = classField.getType();
           if (JacsalObject.class.isAssignableFrom(fieldType)) {
-//            // Make sure that we are not expected to have a List
-//            if (!isMap) {
-//              throw new RuntimeError("Expected List but found field '" + fieldName + "' of type " + fieldType, source, offset);
-//            }
             JacsalObject fieldObj = (JacsalObject) fieldType.getConstructor().newInstance();
             fieldObj._$j$init$$w(null, source, offset, new Object[0]);
             classField.set(parent, fieldObj);
@@ -1193,14 +1352,14 @@ public class RuntimeUtils {
               classField.set(parent, value);
             }
             else {
-              throw new RuntimeError("Expected field compatible with " + (isMap ? "Map":"List") +
+              throw new RuntimeError("Expected field compatible with " + (isMap ? "Map" : "List") +
                                      " but found field '" + fieldName + "' of type " + fieldType, source, offset);
             }
           }
         }
         return value;
       }
-      catch (IllegalAccessException|InvocationTargetException|InstantiationException|NoSuchMethodException e) {
+      catch (IllegalAccessException | InvocationTargetException | InstantiationException | NoSuchMethodException e) {
         throw new IllegalStateException("Internal error: " + e, e);
       }
     }
@@ -1209,29 +1368,64 @@ public class RuntimeUtils {
     }
   }
 
-  private static Object defaultValue(Class clss, String source, int offset) {
-    if (Map.class.isAssignableFrom(clss))        { return new LinkedHashMap<>(); }
-    if (List.class.isAssignableFrom(clss))       { return new ArrayList<>(); }
-    if (String.class.isAssignableFrom(clss))     { return ""; }
-    if (Boolean.class.isAssignableFrom(clss))    { return false; }
-    if (Integer.class.isAssignableFrom(clss))    { return 0; }
-    if (Long.class.isAssignableFrom(clss))       { return 0L; }
-    if (Double.class.isAssignableFrom(clss))     { return 0D; }
-    if (BigDecimal.class.isAssignableFrom(clss)) { return BigDecimal.ZERO; }
+  public static Field getFieldGetter(Object parentObj, Object field, String source, int offset) {
+    JacsalObject parent = (JacsalObject) parentObj;
+    if (field == null) {
+      throw new NullError("Null value for field name", source, offset);
+    }
+    if (!(field instanceof String)) {
+      throw new RuntimeError("Expected String for field name, not " + className(field), source, offset);
+    }
+    String fieldName = (String) field;
+    Object result    = parent._$j$getFieldsAndMethods().get(fieldName);
+    if (result == null) {
+      throw new RuntimeError("No such field '" + fieldName + "' for type " + className(parent), source, offset);
+    }
+    if (result instanceof Field) {
+      return (Field) result;
+    }
+    throw new RuntimeError("Expected field '" + fieldName + "' but found method", source, offset);
+  }
+
+  public static Object defaultValue(Class clss, String source, int offset) {
+    if (Map.class.isAssignableFrom(clss)) {
+      return new LinkedHashMap<>();
+    }
+    if (List.class.isAssignableFrom(clss)) {
+      return new ArrayList<>();
+    }
+    if (String.class.isAssignableFrom(clss)) {
+      return "";
+    }
+    if (Boolean.class.isAssignableFrom(clss)) {
+      return false;
+    }
+    if (Integer.class.isAssignableFrom(clss)) {
+      return 0;
+    }
+    if (Long.class.isAssignableFrom(clss)) {
+      return 0L;
+    }
+    if (Double.class.isAssignableFrom(clss)) {
+      return 0D;
+    }
+    if (BigDecimal.class.isAssignableFrom(clss)) {
+      return BigDecimal.ZERO;
+    }
     throw new RuntimeError("Default value for " + clss.getName() + " not supported", source, offset);
   }
 
   /**
    * Store value into map/list field. Note that first three args are either value,parent,field or parent,field,value
-   * depending on whether valueFirst is set to true or not.
-   *  parent        parent (map or list)
-   *  field         field (field name or list index)
-   *  value         the value to store
-   * @param valueFirst    true if args are value,parent,field and false if args are parent,field,value
-   * @param isDot         true if access type is '.' or '?.' (false for '[' or '?[')
-   * @param source        source code
-   * @param offset        offset into source for operation
-   * @return the value of the field after assignment (can be different to value when storing int into long field, for example)
+   * depending on whether valueFirst is set to true or not. parent        parent (map or list) field         field
+   * (field name or list index) value         the value to store
+   *
+   * @param valueFirst true if args are value,parent,field and false if args are parent,field,value
+   * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
+   * @param source     source code
+   * @param offset     offset into source for operation
+   * @return the value of the field after assignment (can be different to value when storing int into long field, for
+   * example)
    */
   public static Object storeField(Object arg1, Object arg2, Object arg3, boolean valueFirst, boolean isDot, String source, int offset) {
     Object parent = valueFirst ? arg2 : arg1;
@@ -1247,7 +1441,7 @@ public class RuntimeUtils {
         throw new NullError("Null value for field name", source, offset);
       }
       String fieldName = field.toString();
-      ((Map)parent).put(fieldName, value);
+      ((Map) parent).put(fieldName, value);
       return value;
     }
 
@@ -1286,8 +1480,8 @@ public class RuntimeUtils {
       throw new RuntimeError("Non-numeric value for index during List access", source, offset);
     }
 
-    List list = (List)parent;
-    int index = ((Number)field).intValue();
+    List list  = (List) parent;
+    int  index = ((Number) field).intValue();
     if (index < 0) {
       throw new RuntimeError("Index for List access must be >= 0 (was " + index + ")", source, offset);
     }
@@ -1297,7 +1491,7 @@ public class RuntimeUtils {
         list.add(null);
       }
     }
-    ((List)parent).set(index, value);
+    ((List) parent).set(index, value);
     return value;
   }
 
@@ -1313,15 +1507,15 @@ public class RuntimeUtils {
     FUNCTION;
   }
 
-  private static Map<Class,FieldType> classToType = Map.of(
-    boolean.class,      FieldType.BOOLEAN,
-    int.class,          FieldType.INT,
-    long.class,         FieldType.LONG,
-    double.class,       FieldType.DOUBLE,
-    BigDecimal.class,   FieldType.DECIMAL,
-    String.class,       FieldType.STRING,
-    Map.class,          FieldType.MAP,
-    List.class,         FieldType.LIST,
+  private static Map<Class, FieldType> classToType = Map.of(
+    boolean.class, FieldType.BOOLEAN,
+    int.class, FieldType.INT,
+    long.class, FieldType.LONG,
+    double.class, FieldType.DOUBLE,
+    BigDecimal.class, FieldType.DECIMAL,
+    String.class, FieldType.STRING,
+    Map.class, FieldType.MAP,
+    List.class, FieldType.LIST,
     MethodHandle.class, FieldType.FUNCTION
   );
 
@@ -1334,15 +1528,24 @@ public class RuntimeUtils {
     }
     else {
       switch (type) {
-        case BOOLEAN:  return isTruth(value, false);
-        case INT:      return castToInt(value, source, offset);
-        case LONG:     return castToLong(value, source, offset);
-        case DOUBLE:   return castToDouble(value, source, offset);
-        case DECIMAL:  return castToDecimal(value, source, offset);
-        case STRING:   return castToString(value, source, offset);
-        case MAP:      return castToMap(value, source, offset);
-        case LIST:     return castToList(value, source, offset);
-        case FUNCTION: return castToFunction(value, source, offset);
+        case BOOLEAN:
+          return isTruth(value, false);
+        case INT:
+          return castToInt(value, source, offset);
+        case LONG:
+          return castToLong(value, source, offset);
+        case DOUBLE:
+          return castToDouble(value, source, offset);
+        case DECIMAL:
+          return castToDecimal(value, source, offset);
+        case STRING:
+          return castToString(value, source, offset);
+        case MAP:
+          return castToMap(value, source, offset);
+        case LIST:
+          return castToList(value, source, offset);
+        case FUNCTION:
+          return castToFunction(value, source, offset);
       }
     }
     throw new RuntimeError("Cannot assign from " + className(value) + " to field of type " + clss.getName(), source, offset);
@@ -1350,10 +1553,10 @@ public class RuntimeUtils {
 
   public static int castToIntValue(Object obj, String source, int offset) {
     if (obj instanceof Integer) {
-      return (int)obj;
+      return (int) obj;
     }
     if (obj instanceof Long) {
-      return (int)(long)obj;
+      return (int) (long) obj;
     }
     if (obj == null) {
       throw new NullError("Null value for int", source, offset);
@@ -1363,10 +1566,10 @@ public class RuntimeUtils {
 
   public static long castToLongValue(Object obj, String source, int offset) {
     if (obj instanceof Long) {
-      return (long)obj;
+      return (long) obj;
     }
     if (obj instanceof Integer) {
-      return (long)(int)obj;
+      return (long) (int) obj;
     }
     if (obj == null) {
       throw new NullError("Null value for long", source, offset);
@@ -1376,7 +1579,7 @@ public class RuntimeUtils {
 
   public static String castToString(Object obj, String source, int offset) {
     if (obj instanceof String) {
-      return (String)obj;
+      return (String) obj;
     }
     if (obj == null) {
       return null;
@@ -1386,7 +1589,7 @@ public class RuntimeUtils {
 
   public static Map castToMap(Object obj, String source, int offset) {
     if (obj instanceof Map) {
-      return (Map)obj;
+      return (Map) obj;
     }
     if (obj == null) {
       return null;
@@ -1395,8 +1598,12 @@ public class RuntimeUtils {
   }
 
   public static List castToList(Object obj, String source, int offset) {
-    if (obj instanceof List)      { return (List)obj;                    }
-    if (obj instanceof Object[])  { return Arrays.asList((Object[])obj); }
+    if (obj instanceof List) {
+      return (List) obj;
+    }
+    if (obj instanceof Object[]) {
+      return Arrays.asList((Object[]) obj);
+    }
     if (obj == null) {
       return null;
     }
@@ -1404,18 +1611,19 @@ public class RuntimeUtils {
   }
 
   private static MethodHandle convertIteratorToListHandle = lookupMethod("convertIteratorToList$c", Object.class, Object.class, Continuation.class);
+
   public static Object convertIteratorToList$c(Object iterAsObj, Continuation c) {
     return convertIteratorToList(iterAsObj, c);
   }
 
   public static List convertIteratorToList(Object iterAsObj, Continuation c) {
-    Iterator iter = (Iterator)iterAsObj;
+    Iterator iter = (Iterator) iterAsObj;
 
     // If we are continuing (c != null) then get objects we have stored previously.
     // Object arr will have: result
     Object[] objects = c == null ? null : c.localObjects;
 
-    List result = objects == null ? new ArrayList() : (List)objects[0];
+    List result = objects == null ? new ArrayList() : (List) objects[0];
 
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
@@ -1434,7 +1642,7 @@ public class RuntimeUtils {
             methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
             break;
           case 1:                       // Continuing after hasNext() threw Continuation last time
-            hasNext = (boolean)c.result;
+            hasNext = (boolean) c.result;
             methodLocation = 2;
             break;
           case 2:                      // Have a value for "hasNext"
@@ -1460,20 +1668,20 @@ public class RuntimeUtils {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterAsObj), methodLocation + 1, null, new Object[] { result });
+      throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterAsObj), methodLocation + 1, null, new Object[]{result});
     }
   }
 
   public static int castToInt(Object obj, String source, int offset) {
     if (obj instanceof Number) {
-      return ((Number)obj).intValue();
+      return ((Number) obj).intValue();
     }
     if (obj instanceof String) {
-      String value = (String)obj;
+      String value = (String) obj;
       if (value.length() != 1) {
-        throw new RuntimeError((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", source, offset);
+        throw new RuntimeError((value.isEmpty() ? "Empty String" : "String with multiple chars") + " cannot be cast to int", source, offset);
       }
-      return (int)(value.charAt(0));
+      return (int) (value.charAt(0));
     }
     if (obj == null) {
       throw new NullError("Cannot convert null value to int", source, offset);
@@ -1491,7 +1699,7 @@ public class RuntimeUtils {
 
   public static Number castToNumber(Object obj, String source, int offset) {
     if (obj instanceof Number) {
-      return (Number)obj;
+      return (Number) obj;
     }
     if (obj == null) {
       throw new NullError("Cannot convert null value to Number", source, offset);
@@ -1511,7 +1719,7 @@ public class RuntimeUtils {
 
   public static MethodHandle castToFunction(Object obj, String source, int offset) {
     if (obj instanceof MethodHandle) {
-      return (MethodHandle)obj;
+      return (MethodHandle) obj;
     }
     if (obj == null) {
       throw new NullError("Null value for Function", source, offset);
@@ -1521,7 +1729,7 @@ public class RuntimeUtils {
 
   public static Object[] castToObjectArr(Object obj, String source, int offset) {
     if (obj instanceof Object[]) {
-      return (Object[])obj;
+      return (Object[]) obj;
     }
     if (obj == null) {
       throw new NullError("Null value for Object[]", source, offset);
@@ -1529,34 +1737,34 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Object[]", source, offset);
   }
 
-  public static boolean print(String obj, Object out, String source, int offset) {
-    if (obj == null) { obj = "null"; }
-    if (out == null) {
-      System.out.print(obj);
+  private static ThreadLocal<PrintStream> output = new ThreadLocal<>();
+
+  public static void setOutput(Object out) {
+    if (out != null && !(out instanceof PrintStream)) {
+      throw new IllegalArgumentException("Global 'out' must be a PrintStream not " + out.getClass().getName());
     }
-    else {
-      try {
-        ((PrintStream) out).print(obj);
-      }
-      catch (ClassCastException e) {
-        throw new RuntimeError("print: Gobal variable 'out' must be a PrintStream not '" + className(out) + "'", source, offset);
-      }
-    }
-    return true;
+    output.set((PrintStream) out);
   }
 
-  public static boolean println(String obj, Object out, String source, int offset) {
+  public static boolean print(String obj) {
+    return doPrint(obj, false);
+  }
+
+  public static boolean println(String obj) {
+    return doPrint(obj, true);
+  }
+
+  private static boolean doPrint(String obj, boolean newLine) {
     if (obj == null) { obj = "null"; }
+    PrintStream out = output.get();
     if (out == null) {
-      System.out.println(obj);
+      out = System.out;
+    }
+    if (newLine) {
+      out.println(obj);
     }
     else {
-      try {
-        ((PrintStream) out).println(obj);
-      }
-      catch (ClassCastException e) {
-        throw new RuntimeError("println: Gobal variable 'out' must be a PrintStream not '" + className(out) + "'", source, offset);
-      }
+      out.print(obj);
     }
     return true;
   }
@@ -1582,7 +1790,10 @@ public class RuntimeUtils {
     if (obj instanceof Map)        { return "Map"; }
     if (obj instanceof List)       { return "List"; }
     if (obj instanceof Iterator)   { return "Iterator"; }
-    return obj.getClass().getName();
+    String className = obj.getClass().getName();
+    int    lastDot   = className.lastIndexOf('.');
+    className = className.substring(lastDot == -1 ? 0 : lastDot + 1);
+    return "Instance<" + className + ">";
   }
 
   private static void ensureNonNull(Object obj, String source, int offset) {
@@ -1799,6 +2010,10 @@ public class RuntimeUtils {
 
   public static Map copyArg0AsMap(Object[] args) {
     return new LinkedHashMap((Map)args[0]);
+  }
+
+  public static Map copyNamedArgs(Object arg) {
+    return new NamedArgsMapCopy((Map)arg);
   }
 
   public static Object removeOrThrow(Map map, String key, boolean isInitMethod, String source, int offset) {

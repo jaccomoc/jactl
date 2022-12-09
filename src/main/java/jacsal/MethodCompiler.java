@@ -23,6 +23,8 @@ import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -53,16 +55,117 @@ import static org.objectweb.asm.Opcodes.NEW;
 /**
  * This class is the class that does most of the work from a compilation point of view.
  * It converts the AST for a function/method into byte code.
- *
+ * <p>
+ * <h2>Type Stack</h2>
  * To compile into byte code we keep track of the type of the objects on the JVM stack
  * with a type stack that tries to mirror what would be on the JVM stack at the point
  * where the code is being generated.
- *
+ * <p>
  * Methods with names such as loadConst(), loadVar(), storeVar(), dupVal(), popVal(),
- * etc all manipulate the type stack so that the type stack. There are also other versions
- * of some of these methods that begin with '_' such as _loadConst(), _dupVal(), _popVal()
- * that don't touch the type stack. All methods beginning with '_' leave the type stack
- * unchanged.
+ * etc all manipulate the type stack. There are also other versions of some of these
+ * methods that begin with '_' such as _loadConst(), _dupVal(), _popVal() that don't
+ * touch the type stack. All methods beginning with '_' leave the type stack unchanged.
+ * <p>
+ * <b>Note:</b> when generating code that has jump/branches we need to be careful not
+ * to have leave additional types on the type stack. For example, consider when we are
+ * generating code for something like this:
+ * <pre>
+ *   arr.length() == 0 ? null : arr[0]</pre>
+ * We will generate something like this:
+ * <pre>
+ *   compile("arr.length() == 0")           // puts boolean onto type stack
+ *   Label ifFalse = new Label()
+ *   mv.visitJumpInsn(IFEQ, ifFalse)
+ *   pop();                                 // pop boolean type off stack
+ *   compile("null")                        // pushes ANY onto type stack
+ *   Label end = new Label()
+ *   mv.visitJumpInsn(GOTO, end)
+ *   mv.visitLabel(ifFalse)  //:ifFalse//
+ *   compile("arr[0]")                      // pushes ANY onto type stack
+ *   mv.visitLabel(end)      //:end//
+ * </pre>
+ * Now we have two ANY types on the type stack even though at runtime there will only be
+ * one value. We need to make sure to pop the extra ANY type off the type stack before
+ * continuing:
+ * <pre>
+ *   pop();</pre>
+ * <p>
+ * <h2>Local Variables</h2>
+ * This class tracks what each local variable slot is being used for.
+ * Slot 0 will be the instance ("this") if the method is not a static method. Then
+ * the next slots will be for any HeapLocalsthat get passed in each time and then after
+ * those the next slots are for the actual method parameters. Local variables then take
+ * slots as they are declared and release them at the end of their scope. Temporary
+ * slots are allocated and freed as needed.
+ * <p>
+ * Most types require just one slot but long and double types take two slots. This
+ * class tracks the types in each slot and hides the callers having to know how many
+ * slots are needed.
+ * <p>
+ * <h2>Method Invocation</h2>
+ * Each function/method will have two versions of the method generated:
+ * <ul>
+ *   <li>The normal method</li>
+ *   <li>A varargs wrapper method that takes care of invocations where not all parameter values
+ *       are being passed in and also takes care of named argument handling</li>
+ * </ul>
+ * When passing methods as values or invoking them "dynamically" (when we don't know the type at
+ * compile time) we actually use a MethodHandle. The MethodHandle is generated bound to the varargs
+ * wrapper method and not the normal method because we don't know at compile time what the parameter
+ * types will be.
+ * <p>
+ * If the method is an async method (invokes code that is async or potentially async) then we also
+ * generate a continuation wrapper method for both the normal method and the varargs wrapper.
+ * This continuation wrapper is used when continuing execution after being suspended while waiting
+ * for an async operation to complete. Its only job is to extract the parameters from the Continuation
+ * object and then invoke the real method (normal or varargs wrapper as appropriate).
+ * <p>
+ * If the function closes over variables declared in an outer scope then these variables are passed
+ * in as additional arguments of type HeapLocal and the MethodHandle is bound to these HeapLocals
+ * at the time it is created so that the signature of the MethodHandle is always the same.
+ * <p>
+ * If we look at a concrete example, imagine we have a class X with a single method f() like this:
+ * <pre>
+ *   class X {
+ *     String f(List strings, String separator = '') { strings.join(separator) }
+ *   }</pre>
+ * We will generate these methods:
+ * <pre>
+ *   String f(List,String)
+ *   Object f$$w(Continuation cont, String source, int offset, Object[] args)</pre>
+ * Note that wrapper methods always have the exact same signature, irrespective of the method being
+ * wrapped. This means that when invoking them through the MethodHandle we always know what the argument
+ * types are:
+ * <ul>
+ *   <li><b>cont:</b> the Continuation object. This will always be null unless resuming after an async suspend.</li>
+ *   <li><b>source:</b> the source code.</li>
+ *   <li><b>offset:</b> the offset into the source code where the invocation is (for error reporting).</li>
+ *   <li><b>args:</b> the argument values as an Object[]. We also support the args being passed in as a List
+ *       in which case args will have length 1 and arg[0] will be the List. Named args are passed in as a Map
+ *       and again we detect this by checking for args of length 1 and arg[0] being the Map.</li>
+ * </ul>
+ * We always pass a Continuation object since we don't know whether the function we will be calling is async
+ * or not when invoking via a MethodHandle.
+ * <p>
+ * The return type of the varargs wrapper function is always of type Object, again because we want to use
+ * MethodHandle.invokeExact() for efficient method invocation and the return type is used to determine how
+ * to invoke the method.
+ * <p>
+ * If the function is async then we also generate continuation wrapper functions:
+ * <pre>
+ *   String f(Continuation cont, List strings, String separator)
+ *   String f$$c(Continuation cont)    {
+ *     return f(cont,cont.localObjects[2],cont.localObject[3]);
+ *   }
+ *   Object f$$w(Continuation cont, String source, int offset, Object[] args)
+ *   Object f$$w$$c(Continuation cont) {
+ *     return f$$w(cont,cont.localObjects[2],cont.localObjects[3],cont.localObjects[4]);
+ *   }</pre>
+ * When invoking a function, we will invoke the actual "normal" function only when we have values for all
+ * of its parameters. If there are missing values (due to optional parameters) or if we are invoking via
+ * named args invocation then we will invoke the varargs wrapper function instead. If we don't know what
+ * function we are invoking at compile time (invoking via a variable or field that contains a MethodHandle)
+ * then we invoke using the MethodHandle that will point to a varargs wrapper function.
  */
 public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
@@ -97,7 +200,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Allow room for object instance at idx 0 and optional heap vars array at idx 1.
     // We know we need heap vars array passed to us if our top level access level is
     // less than our current level (i.e. we access vars from one of our parents).
-    if (!methodFunDecl.isStatic) {
+    if (!methodFunDecl.isStatic()) {
       allocateSlot(JacsalType.createInstance(classCompiler.classDecl.classDescriptor));  // this
     }
 
@@ -150,10 +253,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throwError("Internal error: Invalid location in continuation", methodFunDecl.location);
     }
 
-    if (classCompiler.debug()) {
-      mv.visitEnd();
-      classCompiler.cv.visitEnd();
-    }
+//    if (classCompiler.debug()) {
+//      mv.visitEnd();
+//      classCompiler.cv.visitEnd();
+//    }
     mv.visitMaxs(0, 0);
 
     check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
@@ -161,11 +264,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   /////////////////////////////////////////////
 
-  // Stmt
+  //= Stmt
+
+  private int indent = 0;
 
   private Void compile(Stmt stmt) {
-    if (stmt == null) { return null; }
-    return stmt.accept(this);
+    try {
+      if (stmt == null) {
+        return null;
+      }
+      if (classCompiler.annotate()) {
+        // Annotate output with where we are by loading and immediately popping a string
+        _loadConst("  ".repeat(indent++) + "==> " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
+        mv.visitInsn(POP);
+      }
+      return stmt.accept(this);
+    }
+    finally {
+      if (classCompiler.annotate()) {
+        _loadConst("  ".repeat(--indent) + "<== " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
+        mv.visitInsn(POP);
+      }
+    }
   }
 
   @Override public Void visitStmts(Stmt.Stmts stmt) {
@@ -250,7 +370,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, classCompiler.pkg, stmt);
+    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, classCompiler.pkg, stmt, classCompiler.sourceName);
     compiler.compileClass();
     return null;
   }
@@ -270,7 +390,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   /////////////////////////////////////////////
 
-  // Expr
+  //= Expr
 
   private Void compile(Expr expr) {
     if (expr == null) {
@@ -289,17 +409,29 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitLabel(label);
       mv.visitLineNumber(currentLineNum, label);
     }
-    expr.accept(this);
+    try {
+      if (classCompiler.annotate()) {
+        _loadConst("  ".repeat(indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
+        mv.visitInsn(POP);
+      }
+      expr.accept(this);
 
-    if (!expr.isResultUsed) {
-      // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
-      // special cases since they already check to see whether they should leave something on
-      // the stack.
-      if (!(expr instanceof Expr.ManagesResult)) {
-        popVal();
+      if (!expr.isResultUsed) {
+        // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
+        // special cases since they already check to see whether they should leave something on
+        // the stack.
+        if (!(expr instanceof Expr.ManagesResult)) {
+          popVal();
+        }
+      }
+      return null;
+    }
+    finally {
+      if (classCompiler.annotate()) {
+        _loadConst("  ".repeat(--indent) + "<== " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
+        mv.visitInsn(POP);
       }
     }
-    return null;
   }
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
@@ -322,7 +454,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           push(expr.type);
         }
         else {
-          convertTo(expr.type, true, expr.initialiser.location);
+          convertTo(expr.type, expr.initialiser, true, expr.initialiser.location);
         }
       }
       else {
@@ -383,7 +515,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
                  // If conditional assign then we know by now whether we have a null value or not
                  // so we don't need to check again when checking for type conversion
-                 convertTo(expr.identifierExpr.type, !isConditionalAssign, expr.expr.location);
+                 convertTo(expr.identifierExpr.type, null, !isConditionalAssign, expr.expr.location);
                  if (expr.isResultUsed) {
                    dupVal();
                  }
@@ -411,7 +543,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       // Normal assignment
       compile(expr.expr);
-      convertTo(expr.type, true, expr.expr.location);
+      convertTo(expr.type, expr.expr, true, expr.expr.location);
       if (expr.isResultUsed) {
         dupVal();
       }
@@ -440,7 +572,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     loadVar(expr.identifierExpr.varDecl);
     compile(expr.expr);
-    convertTo(expr.type, true, expr.expr.location);
+    convertTo(expr.type, expr.expr, true, expr.expr.location);
     if (expr.isResultUsed) {
       dupVal();
     }
@@ -503,7 +635,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
                  // If conditional assign then we know by now whether we have a null value or not
                  // so we don't need to check again when checking for type conversion
-                 convertTo(expr.type, false, expr.expr.location);
+                 convertTo(expr.type, null, false, expr.expr.location);
                  storeFieldValue.run();
 
                  if (expr.isResultUsed) {
@@ -525,7 +657,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       compile(expr.expr);
-      convertTo(expr.type, true, expr.expr.location);    // Convert to ANY since all map/list entries are ANY
+      convertTo(expr.type, expr.expr, true, expr.expr.location);    // Convert to ANY since all map/list entries are ANY
       storeFieldValue.run();
     }
     return null;
@@ -553,7 +685,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       // Load the field value onto stack (or suitable default value).
       // Default value will be based on the type of the rhs of the += or -= etc.
-      loadField(expr.accessType, false, null, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
+      loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
     }
 
     // If we need the before value as the result then stash in a temp for later
@@ -567,7 +699,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Evaluate expression
     compile(expr.expr);
-    convertTo(expr.type, true, expr.location);
+    convertTo(expr.type, expr.expr, true, expr.location);
 
     // If we need the after result and we have an instance field then stash in a temp for later retrieval.
     // For non-instsance fields the storeField() will return the after result so no need for a temp.
@@ -746,7 +878,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(QUESTION_COLON)) {
       compile(expr.left);
       if (peek().isPrimitive()) {
-        convertTo(expr.type, false, expr.left.location);
+        convertTo(expr.type, null, false, expr.left.location);
       }
       else {
         pop();
@@ -755,11 +887,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitJumpInsn(IFNONNULL, isNotNull);
         mv.visitInsn(POP);
         compile(expr.right);
-        convertTo(expr.type, true, expr.right.location);
+        convertTo(expr.type, expr.right, true, expr.right.location);
         Label end = new Label();
         mv.visitJumpInsn(GOTO, end);
         mv.visitLabel(isNotNull);   // :isNotNull
-        convertTo(expr.type, true, expr.left.location);
+        convertTo(expr.type, expr.left, true, expr.left.location);
         mv.visitLabel(end);         // :end
       }
       return null;
@@ -799,7 +931,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.left);
       convertToString();
       compile(expr.right);
-      convertTo(INT, true, expr.right.location);
+      convertTo(INT, expr.right, true, expr.right.location);
       loadConst(classCompiler.source);
       loadConst(expr.operator.getOffset());
       invokeMethod(RuntimeUtils.class, "stringRepeat", String.class, Integer.TYPE, String.class, Integer.TYPE);
@@ -848,12 +980,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       box();
-      compile(expr.right);
       if (expr.isCallee && expr.operator.is(DOT,QUESTION_DOT)) {
+        compile(expr.right);
         loadMethodOrField(expr.operator);
       }
       else {
-        loadField(expr.operator, expr.createIfMissing, expr.createIfMissing ? expr.type : null, null, expr.right.location);
+        if (expr.createIfMissing) {
+          // If we are lvalue and auto-creating fields when needed then we need to know if we are a Map/List or
+          // an instance since instance creation could result in async behaviour if a field initialiser invokes
+          // an async function.
+          emitIf(() -> isInstanceOf(JacsalObject.class),
+                 () -> loadOrCreateInstanceField(expr),
+                 () -> {
+                   compile(expr.right);
+                   loadOrCreateField(expr.operator, expr.type, expr.right.location);
+                 });
+        }
+        else {
+          compile(expr.right);
+          loadField(expr.operator, null, expr.right.location);
+        }
       }
       return null;
     }
@@ -895,7 +1041,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       if (peek().unboxed().is(BOOLEAN,INT,LONG,DOUBLE,DECIMAL) && expr.type.is(BOOLEAN,INT,LONG,DOUBLE,DECIMAL) ||
           peek().is(ANY,INSTANCE,MAP,LIST) && expr.type.is(INSTANCE)) {
-        convertTo(expr.type, !peek().isPrimitive(), expr.location);
+        convertTo(expr.type, expr.left, !peek().isPrimitive(), expr.location);
         return null;
       }
       box();
@@ -960,9 +1106,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           maxType = LONG;
         }
         compile(expr.left);
-        convertTo(maxType, false, expr.left.location);
+        convertTo(maxType, expr.left, false, expr.left.location);
         compile(expr.right);
-        convertTo(maxType, false, expr.right.location);
+        convertTo(maxType, expr.right, false, expr.right.location);
         switch (maxType.getType()) {
           case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
           case DOUBLE:  mv.visitInsn(DCMPL);    pop(2);   push(INT);                           break;
@@ -1016,9 +1162,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
                                                                                          INT;
       compile(expr.left);
-      convertTo(operandType, false, expr.left.location);
+      convertTo(operandType, expr.left, false, expr.left.location);
       compile(expr.right);
-      convertTo(operandType, false, expr.right.location);
+      convertTo(operandType, expr.right, false, expr.right.location);
       mv.visitInsn(operandType.is(INT) ? ISUB : operandType.is(LONG) ? LCMP : DCMPL);
       pop(2);
       int opCode = expr.operator.is(EQUAL_EQUAL)        ? IFEQ :
@@ -1050,7 +1196,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();
     }
     else {
-      convertTo(expr.type, true, expr.left.location);
+      convertTo(expr.type, expr.left, true, expr.left.location);
     }
     compile(expr.right);
     if (expr.operator.getType().isBitShift()) {
@@ -1058,7 +1204,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       castToIntOrLong(INT, expr.right.location);
     }
     else {
-      convertTo(expr.type, true, expr.right.location);
+      convertTo(expr.type, expr.right, true, expr.right.location);
     }
 
     // If we have a bit operation and we don't know the types yet then delegate to RuntimeUtils
@@ -1126,29 +1272,32 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Expr.Binary leftMost = nodes.get(nodes.size() - 1);
     // For left most field compile parent and save its value in case we need it once null value found
     compile(leftMost.left);
-    int topMostVar = allocateSlot(leftMost.left.type);
-    storeLocal(topMostVar);
-    Label nullValue = new Label();
-    loadLocal(topMostVar);
     if (leftMost.couldBeNull) {
       throwIfNull("Trying to access field/element of null object", leftMost.operator);
     }
     boolean checkForNull = false;
+    var     lastNode = leftMost;
     for (ListIterator<Expr.Binary> iter = nodes.listIterator(nodes.size()); iter.hasPrevious(); ) {
       var    node = iter.previous();
       if (checkForNull) {
-        throwIfNull("Trying to access field/element of null object", node.operator);
+        throwIfNull("Trying to access field/element of null object" +
+                    (lastNode.createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
+                    node.operator);
       }
-      checkForNull = !node.createIfMissing;
-      String name = literalString(node.right);
-      var    clss = node.left.type.getClassDescriptor();
-      JacsalType fieldType   = clss.getField(name);
+      String fieldName = literalString(node.right);
+      var    parentClass = node.left.type.getClassDescriptor();
+      var    childType   = parentClass.getField(fieldName);
+      // Can only create if createIfMissing flag set and if there are no mandatory fields (i.e. init method
+      // has 0 parameters).
+      boolean createIfMissing = node.createIfMissing && !(childType.is(INSTANCE) && childType.getClassDescriptor().getInitMethod().paramCount > 0);
+      checkForNull = !createIfMissing;
+      JacsalType fieldType   = parentClass.getField(fieldName);
       if (fieldType == null) {
-        throw new IllegalStateException("Internal error: could not find field '" + name + "' for " + JacsalType.createClass(clss));
+        throw new IllegalStateException("Internal error: could not find field '" + fieldName + "' for " + JacsalType.createClass(parentClass));
       }
-      if (expr.createIfMissing) {
+      if (createIfMissing) {
         dupVal();    // Save parent in case field is null and we need to store a value
-        loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+        loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
         Label nonNull = new Label();
         mv.visitInsn(DUP);
         mv.visitJumpInsn(IFNONNULL, nonNull);
@@ -1156,7 +1305,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
         loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
         mv.visitInsn(DUP_X1);     // Copy value and move it two slots
-        _storeClassField(clss.getInternalName(), name, fieldType, false);
+        _storeClassField(parentClass.getInternalName(), fieldName, fieldType, false);
         Label nextField = new Label();
         mv.visitJumpInsn(GOTO, nextField);
         mv.visitLabel(nonNull);            // :nonNull
@@ -1167,11 +1316,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitLabel(nextField);         // :nextField
       }
       else {
-        loadClassField(clss.getInternalName(), name, fieldType, false);  // Note: we don't support static fields
+        loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
       }
+      lastNode = node;
     }
-
-    freeTemp(topMostVar);
   }
 
   @Override public Void visitTernary(Expr.Ternary expr) {
@@ -1181,13 +1329,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Label isFalse = new Label();
     mv.visitJumpInsn(IFEQ, isFalse);
     compile(expr.second);
-    convertTo(expr.type, true, expr.second.location);
+    convertTo(expr.type, expr.second, true, expr.second.location);
     pop();
     Label end = new Label();
     mv.visitJumpInsn(GOTO, end);
     mv.visitLabel(isFalse);     // :isFalse
     compile(expr.third);
-    convertTo(expr.type, true, expr.third.location);
+    convertTo(expr.type, expr.third, true, expr.third.location);
     mv.visitLabel(end);         // :end
     return null;
   }
@@ -1203,7 +1351,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Type cast?
     if (expr.operator.getType().isType()) {
-      convertTo(JacsalType.valueOf(expr.operator.getType()), true, expr.operator);
+      convertTo(JacsalType.valueOf(expr.operator.getType()), expr.expr, true, expr.operator);
       return null;
     }
 
@@ -1248,13 +1396,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitMapLiteral(Expr.MapLiteral expr) {
-    _newInstance(expr.namedArgs ? NamedArgsMap.class : Utils.JACSAL_MAP_TYPE);
+    _newInstance(expr.isNamedArgs ? NamedArgsMap.class : Utils.JACSAL_MAP_TYPE);
     push(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
       Expr key = entry.first;
       compile(key);
-      convertTo(STRING, true, key.location);
+      convertTo(STRING, key, true, key.location);
       compile(entry.second);
       box();
       invokeMethod(Map.class, "put", Object.class, Object.class);
@@ -1335,7 +1483,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClosure(Expr.Closure expr) {
-    classCompiler.compileMethod(expr.funDecl);
+    if (!expr.funDecl.isCompiled) {
+      classCompiler.compileMethod(expr.funDecl);
+      expr.funDecl.isCompiled = true;
+    }
     // Find our MethodHandle and put that on the stack
     loadBoundMethodHandle(expr.funDecl);
     return null;
@@ -1363,7 +1514,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var callee = (Expr.Identifier)expr.callee;
       Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
-      expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod);
+      expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
 
       if (functionDescriptor.isBuiltin) {
         invokeBuiltinFunction(expr, functionDescriptor);
@@ -1381,7 +1532,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      () -> {
                        // Need to get the method handle
                        compile(expr.callee);
-                       convertTo(FUNCTION, true, expr.callee.location);
+                       convertTo(FUNCTION, expr.callee, true, expr.callee.location);
 
                        // NOTE: we don't have to passed closed over vars here because the MethodHandle we get
                        //       has already had these values bound to it
@@ -1397,7 +1548,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // we need to check that if not immediately invoking another method call (f().each()) we must
     // convert Iterator to List since Iterator is not a standard type.
     if (!expr.isMethodCallTarget) {
-      emitIf(() -> ifInstanceof(ITERATOR),
+      emitIf(() -> isInstanceOf(ITERATOR),
              () -> invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
                                     () -> {
                                       loadNullContinuation();
@@ -1416,7 +1567,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.methodDescriptor != null) {
       var method = expr.methodDescriptor;
 
-      expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.name.startsWith(Utils.JACSAL_INIT));
+      expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.isInitMethod, method.returnType);
+
+      // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
+      boolean invokeSpecial = expr.parent.isSuper();
 
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
@@ -1453,10 +1607,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            for (int i = 0; i < expr.args.size(); i++) {
                              Expr arg = expr.args.get(i);
                              compile(arg);
-                             convertTo(method.paramTypes.get(i), !arg.type.isPrimitive(), arg.location);
+                             convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
                            }
                          },
-                         () -> invokeUserMethod(method.isStatic, method.implementingClass, method.implementingMethod,
+                         () -> invokeUserMethod(method.isStatic, invokeSpecial, method.implementingClass, method.implementingMethod,
                                                 expr.type, methodParamTypes(method)));
       }
       else {
@@ -1482,7 +1636,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (method.isBuiltin && !method.isGlobalFunction) {
                              paramTypes = Utils.concat(method.firstArgtype, paramTypes);
                            }
-                           invokeUserMethod(method.isStatic, method.implementingClass, method.wrapperMethod, ANY, paramTypes);
+                           invokeUserMethod(method.isStatic, invokeSpecial, method.implementingClass, method.wrapperMethod, ANY, paramTypes);
                            // Convert Object returned by wrapper back into return type of the function
                            checkCast(method.returnType);
                            if (method.returnType.isPrimitive()) {
@@ -1525,7 +1679,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // an Iterator and since Iterators are not standard types we need to convert into a List to make the
       // result usable by other code. So we incoke castToAny which will check for Iterator and convert
       // otherwise it returns the current value.
-      emitIf(() -> ifInstanceof(ITERATOR),
+      emitIf(() -> isInstanceOf(ITERATOR),
              () -> invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
                                     () -> {
                                       loadNullContinuation();
@@ -1555,8 +1709,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
-    if (!expr.funDecl.isStatic) {
+  @Override public Void visitInvokeFunDecl(Expr.InvokeFunDecl expr) {
+    if (!expr.funDecl.isStatic()) {
       loadLocal(0);    // this
     }
 
@@ -1579,8 +1733,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override
-  public Void visitInvokeUtility(Expr.InvokeUtility expr) {
+  @Override public Void visitInvokeUtility(Expr.InvokeUtility expr) {
     expr.args.forEach(this::compile);
     invokeMethod(expr.clss, expr.methodName, expr.paramTypes.toArray(Class[]::new));
     return null;
@@ -1588,7 +1741,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Expr.Return returnExpr) {
     compile(returnExpr.expr);
-    convertTo(returnExpr.returnType, true, returnExpr.expr.location);
+    convertTo(returnExpr.returnType, returnExpr.expr, true, returnExpr.expr.location);
     pop();
     emitReturn(returnExpr.returnType);
     push(ANY);
@@ -1610,11 +1763,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitPrint(Expr.Print expr) {
     compile(expr.expr);
     convertToString();
-    loadGlobals();
-    loadConst(Utils.JACSAL_OUT_NAME);
-    invokeMethod(Map.class, "get", Object.class);
-    loadLocation(expr.location);
-    invokeMethod(RuntimeUtils.class, expr.printToken.getChars(), String.class, Object.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.class, expr.newLine ? "println" : "print", String.class);
     return null;
   }
 
@@ -1651,16 +1800,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int offsetSlot = ((Expr.Identifier) expr.offset).varDecl.slot;
     var location   = new LocalLocation(sourceSlot, offsetSlot);
     compile(expr.expr);
-    convertToInstance(expr.varType, expr.expr.location, location);
+    convertToInstance(expr.varType, expr.expr, expr.expr.location, location);
     return null;
   }
 
-  private void convertToInstance(JacsalType varType, Location compileTimeLocation, SourceLocation runtimeLocation) {
+  private void convertToInstance(JacsalType varType, Expr expr, Location compileTimeLocation, SourceLocation runtimeLocation) {
     JacsalType valueType = peek();
-    if (valueType.is(INSTANCE) && valueType.isConvertibleTo(varType)) {
-      return;
-    }
-    if (!valueType.is(ANY, LIST, MAP)) {
+
+    if (valueType.is(INSTANCE) && valueType.isConvertibleTo(varType)) { return; }  // We have a compatible instance type
+    if (expr != null && expr.isNull())                                { return; }  // Null is valid for an Instance
+
+    if (!valueType.is(ANY, MAP)) {
       throw new CompileError("Cannot convert from type " + valueType + " to " + varType, compileTimeLocation);
     }
 
@@ -1675,18 +1825,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitInsn(DUP);
       mv.visitTypeInsn(INSTANCEOF, varType.getInternalName());
       mv.visitJumpInsn(IFNE, end);
-      mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Map.class));
-      Label invokeConstructor = new Label();
-      mv.visitJumpInsn(IFNE, invokeConstructor);
-      _loadLocal(temp);
       mv.visitInsn(DUP);
-      mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(List.class));
+      mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Map.class));
       throwIfFalseWithClassName(" is invalid type for constructing " + varType, runtimeLocation);
       mv.visitInsn(POP);
-      mv.visitLabel(invokeConstructor);                // :invokeConstructor
     }
 
-    // We have a Map or List so now we need to new the instance and invoke init method
+    // We have a Map so now we need to new the instance and invoke init method
     FunctionDescriptor method = varType.getClassDescriptor().getMethod(Utils.JACSAL_INIT);
 
     invokeMaybeAsync(method.isAsync, ANY, 4 + (method.isAsync ? 1 : 0),
@@ -1708,7 +1853,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        // Note: wrapper always has continuation since when invoking as a handle we have
                        // no idea about whether it is async or not.
                        List<JacsalType> paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
-                       invokeUserMethod(false, method.implementingClass, method.wrapperMethod, ANY,
+                       invokeUserMethod(false, false, method.implementingClass, method.wrapperMethod, ANY,
                                         paramTypes);
                        });
     mv.visitLabel(end);                          // :end
@@ -1718,6 +1863,34 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitTypeExpr(Expr.TypeExpr expr) {
+    return null;
+  }
+
+  @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
+    invokeMaybeAsync(expr.functionDescriptor.isAsync, expr.type, 0, expr.location,
+                     () -> {
+                       if (!expr.functionDescriptor.isStatic) {
+                         loadLocal(0);    // this
+                       }
+
+                       if (expr.functionDescriptor.isAsync) {
+                         loadNullContinuation();
+                       }
+
+                       // Now get the values for all the explicit parameters
+                       expr.args.forEach(this::compile);
+                     },
+                     () -> {
+                       invokeUserMethod(expr.functionDescriptor, expr.invokeSpecial);
+                     }
+    );
+
+    return null;
+  }
+
+  @Override public Void visitCastTo(Expr.CastTo expr) {
+    compile(expr.expr);
+    checkCast(expr.type);
     return null;
   }
 
@@ -1738,24 +1911,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * the object.</p>
    * @return true if args validated and false if validation should be deferred to runtime
    */
-  private static boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod) {
+  private static boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JacsalType initClass) {
     int argCount = args.size();
     var arg0Type = argCount > 0 ? args.get(0).type : null;
-    if (argCount == 1 && arg0Type.is(ANY, LIST)) {
-      if (func.mandatoryArgCount > 1 ||
-          func.paramTypes.size() == 0 ||
-          arg0Type.is(ANY) ||
-          !func.paramTypes.get(0).is(LIST)) {
-        // Runtime validation if more than one mandatory arg or first arg is compatible with List/ANY
-        return false;
+    if (!isInitMethod && argCount == 1 && arg0Type.is(ANY, LIST)) {
+      if (func.paramCount != 1 && func.mandatoryArgCount != 1) {
+        if (func.mandatoryArgCount > 1 ||
+            func.paramCount == 0 ||
+            arg0Type.is(ANY) ||
+            !func.paramTypes.get(0).is(LIST)) {
+          // Runtime validation if more than one mandatory arg or first arg is compatible with List/ANY
+          return false;
+        }
       }
     }
     boolean namedArgs = Utils.isNamedArgs(args);
-    if (arg0Type != null && arg0Type.is(MAP) && isInitMethod && !namedArgs) {
-      // We will validate at runtime since we don't know what is inside map
-      return false;
-    }
-
     var paramTypes = func.paramTypes;
     var paramNames = func.paramNames;
     if (namedArgs && paramNames == null) {
@@ -1763,16 +1933,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (namedArgs) {
-      validateNamedArgs(args, func, location, isInitMethod);
+      validateNamedArgs(args, func, location, isInitMethod, initClass);
     }
     else {
       List<String> missingArgs = new ArrayList<>();
       if (func.paramCount >= 0 && argCount > func.paramCount) {
+        if (isInitMethod) {
+          throw new CompileError("Too many arguments for constructor (passed " + argCount + " but there " + (func.paramCount==1?"is ":"are ") + (func.paramCount == 0 ? "no": "only " + func.paramCount) + " mandatory "
+                                 + Utils.plural("field",func.paramCount) + ")", location);
+        }
         throw new CompileError("Too many arguments (passed " + argCount + " but expected only " + func.paramCount + ")", location);
       }
 
       if (argCount < func.mandatoryArgCount) {
         if (func.paramNames == null) {
+          if (isInitMethod) {
+            throw new CompileError("Missing mandatory arguments for constructor (there are " + func.mandatoryArgCount + "mandatory fields but only passed " + argCount + ")", location);
+          }
           throw new CompileError("Missing mandatory arguments (expected " + func.mandatoryArgCount + " but only passed " + argCount + ")", location);
         }
         missingArgs = func.paramNames.subList(argCount, func.mandatoryArgCount);
@@ -1797,14 +1974,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return true;
   }
 
-  private static void validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod) {
+  private static void validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JacsalType initClass) {
     List<String> missingArgs = new ArrayList<>();
 
-    var paramNames = func.paramNames;
-    var paramTypes = func.paramTypes;
-    if (func.mandatoryParams == null) {
-      throw new CompileError(func.name + " does not support named argument invocation", location);
-    }
+    // For init methods the parameter names and types come from the ClassDescriptor because the init method only
+    // has the mandatory parameters while the wrapper (the one taking named arg values) accepts values for all fields.
+    var paramNames = isInitMethod ? initClass.getClassDescriptor().getAllFieldNames() : func.paramNames;
+    var paramTypes = isInitMethod ? initClass.getClassDescriptor().getAllFieldTypes() : func.paramTypes;
 
     Function<Expr,String> argName = expr -> ((Expr.Literal)expr).value.getStringValue();
     var mapEntries  = ((Expr.MapLiteral) args.get(0)).entries;
@@ -1832,7 +2008,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            .map(entry -> entry.first)
                            .collect(Collectors.toList());
       throw new CompileError("No such " + Utils.plural(isInitMethod ? "field" : "parameter", namedArgMap.size()) + ": "
-                             + keys.stream().map(expr -> argName.apply(expr)).collect(Collectors.joining(", ")),
+                             + keys.stream().map(expr -> argName.apply(expr)).collect(Collectors.joining(", ")) +
+                             (isInitMethod ? " in object of type " + initClass : ""),
                              keys.get(0).location);
     }
     if (missingArgs.size() > 0) {
@@ -1841,13 +2018,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private static void validateArg(Expr argExpr, JacsalType paramType, Token location) {
-    if (argExpr.type.is(MAP,LIST) && paramType.is(INSTANCE)) {
-      FunctionDescriptor initMethod = paramType.getClassDescriptor().getMethod(Utils.JACSAL_INIT);
+    if (argExpr.type.is(MAP) && paramType.is(INSTANCE)) {
+      FunctionDescriptor initMethod = paramType.getClassDescriptor().getInitMethod();
       if (argExpr.isConstMap()) {
-        validateNamedArgs(List.of(argExpr), initMethod, argExpr.location, true);
-      }
-      if (argExpr instanceof Expr.ListLiteral) {
-        validateArgs(((Expr.ListLiteral)argExpr).exprs, initMethod, argExpr.location, true);
+        validateNamedArgs(List.of(argExpr), initMethod, argExpr.location, true, paramType);
       }
     }
     else
@@ -1864,10 +2038,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return fieldType;
   }
 
+  /**
+   * Emit code for an if where there is a condition that emits a boolean expression and then
+   * runnables for emitting the statements for the true and false branches.
+   * We take care of manipulating the type stack and check that the stacks for the true and
+   * false branches match at the end.
+   */
   private void emitIf(Runnable condition, Runnable trueStmts, Runnable falseStmts) {
     condition.run();
     Label ifFalse = new Label();
     mv.visitJumpInsn(IFEQ, ifFalse);
+    // Save stack
+    var savedStack = new ArrayDeque<JacsalType>(stack);
     if (trueStmts != null) {
       trueStmts.run();
     }
@@ -1875,11 +2057,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (falseStmts != null) {
       mv.visitJumpInsn(GOTO, end);
     }
-    mv.visitLabel(ifFalse);
+
+    mv.visitLabel(ifFalse);               // :ifFalse
     if (falseStmts != null) {
+      // Restore stack to how it was before trueStmts ran
+      var trueStack = stack;
+      stack = savedStack;
       falseStmts.run();
+      // Make sure that both branches leave stack the same
+      if (!Utils.stacksAreEqual(trueStack, stack)) {
+        throw new IllegalStateException("Stack for true/false branches differ:\n true=" + trueStack + "\n false=" + stack);
+      }
     }
-    mv.visitLabel(end);
+    mv.visitLabel(end);                   // :end
   }
 
   private List<JacsalType> methodParamTypes(FunctionDescriptor method) {
@@ -1889,8 +2079,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // are invoking method on as first arg
       types.add(method.firstArgtype);
     }
-    if (method.isAsync)       { types.add(CONTINUATION); }
-    if (method.needsLocation) { types.addAll(List.of(STRING, INT)); }
+    if (method.isAsync || method.isWrapper) { types.add(CONTINUATION); }
+    if (method.needsLocation)               { types.addAll(List.of(STRING, INT)); }
     types.addAll(method.paramTypes);
     return types;
   }
@@ -1954,7 +2144,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            Expr arg = expr.args.get(i);
                            compile(arg);
                            Expr.VarDecl paramDecl = funDecl.parameters.get(i).declExpr;
-                           convertTo(paramDecl.type, !arg.type.isPrimitive(), arg.location);
+                           convertTo(paramDecl.type, arg, !arg.type.isPrimitive(), arg.location);
                            if (paramDecl.isPassedAsHeapLocal) {
                              box();
                              newInstance(HEAPLOCAL);
@@ -1969,16 +2159,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        }
                      },
-                     () -> {
-                       invokeUserMethod(invokeWrapper ? funDecl.wrapper : funDecl);
-                       if (invokeWrapper) {
-                         // Convert Object returned by wrapper back into return type of the function
-                         checkCast(funDecl.returnType.boxed());
-                         if (funDecl.returnType.isPrimitive()) {
-                           unbox();
-                         }
-                       }
-                     });
+                     () -> invokeUserMethod(invokeWrapper ? funDecl.wrapper : funDecl)
+    );
   }
 
   private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
@@ -2007,7 +2189,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          loadArgsAsObjectArr(expr.args);
                        },
                        () -> invokeUserMethod(func.isStatic,
-                                              func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                                              false, func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
                                               func.wrapperMethod,
                                               func.returnType,
                                               finalParamTypes));
@@ -2039,7 +2221,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            Expr       arg       = expr.args.get(argIdx);
                            JacsalType paramType = finalParamTypes.get(param);
                            compile(arg);
-                           convertTo(paramType, !arg.type.isPrimitive(), arg.location);
+                           convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
                          }
 
                          // Load the rest of the args (could be none) as var args into Object[]
@@ -2048,7 +2230,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        },
                        () -> invokeUserMethod(func.isStatic,
-                                              func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                                              false, func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
                                               func.implementingMethod,
                                               func.returnType,
                                               finalParamTypes));
@@ -2122,7 +2304,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Load the handle
     boolean isClosure = funDecl.isClosure();
-    boolean isStatic  = funDecl.isStatic;
+    boolean isStatic  = funDecl.isStatic();
     if (isClosure) {
       if (isStatic) {
         loadClassField(classCompiler.internalName,
@@ -2196,21 +2378,35 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void invokeWrapper(boolean isStatic, String internalClassName, String methodName) {
-    invokeUserMethod(isStatic, internalClassName, methodName, ANY, List.of(STRING, INT, OBJECT_ARR));
+  private void invokeUserMethod(Expr.FunDecl funDecl) {
+    // Note: param types can include heap locals if funDecl has any
+    invokeUserMethod(funDecl.functionDescriptor, methodParamTypes(funDecl), false);
   }
 
-  private void invokeUserMethod(Expr.FunDecl funDecl) {
-    var functionDescriptor = funDecl.functionDescriptor;
+  private void invokeUserMethod(FunctionDescriptor functionDescriptor, boolean isInvokeSpecial) {
+    // Note: param types based solely off functionDescriptor so no support for heap locals with this call
+    invokeUserMethod(functionDescriptor, methodParamTypes(functionDescriptor), isInvokeSpecial);
+  }
+
+  private void invokeUserMethod(FunctionDescriptor functionDescriptor, List<JacsalType> paramTypes, boolean isInvokeSpecial) {
     invokeUserMethod(functionDescriptor.isStatic,
-                     functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
+                     isInvokeSpecial, functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
                      functionDescriptor.implementingMethod,
                      functionDescriptor.returnType,
-                     methodParamTypes(funDecl));
+                     paramTypes);
+    if (functionDescriptor.isWrapper) {
+      // Convert Object returned by wrapper back into return type of the function
+      checkCast(functionDescriptor.returnType.boxed());
+      if (functionDescriptor.returnType.isPrimitive()) {
+        unbox();
+      }
+    }
   }
 
-  private void invokeUserMethod(boolean isStatic, String internalClassName, String methodName, JacsalType returnType, List<JacsalType> paramTypes) {
-    mv.visitMethodInsn(isStatic ? INVOKESTATIC : INVOKEVIRTUAL,
+  private void invokeUserMethod(boolean isStatic, boolean isInvokeSpecial, String internalClassName, String methodName, JacsalType returnType, List<JacsalType> paramTypes) {
+    mv.visitMethodInsn(isStatic ? INVOKESTATIC
+                                : isInvokeSpecial ? INVOKESPECIAL
+                                                  : INVOKEVIRTUAL,
                        internalClassName,
                        methodName,
                        getMethodDescriptor(returnType, paramTypes),
@@ -2462,14 +2658,24 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void loadDefaultValueOrNewInstance(JacsalType type, Location location) {
     if (type.is(INSTANCE)) {
-      newInstance(type);
-      loadNullContinuation();
-      loadLocation(location);
-      _loadConst(0);
-      mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-      push(OBJECT_ARR);
-      invokeMethod(JacsalObject.class, Utils.JACSAL_INIT_WRAPPER, Continuation.class, String.class, int.class, Object[].class);
-      checkCast(type);
+      // If there is no no-arg constructor (i.e. there is at least one mandatory field) then we have to throw
+      // a NullError since field is currently null
+      FunctionDescriptor initMethod = type.getClassDescriptor().getInitMethod();
+      if (initMethod.paramCount > 0) {
+        throwNullError("Null value during field access and type " + type + " cannot be auto-created due to mandatory fields", location);
+      }
+      else {
+        invokeMaybeAsync(initMethod.isAsync, type, 0, location,
+                         () -> {
+                           newInstance(type);
+                           if (initMethod.isAsync) {
+                             loadNullContinuation();
+                           }
+                         },
+                         () -> {
+                           invokeUserMethod(initMethod, false);
+                         });
+      }
       return;
     }
 
@@ -2528,7 +2734,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void castToIntOrLong(JacsalType type, Location location) {
     if (peek().isBoxedOrUnboxed(INT,LONG)) {
       // If we already have a primitive int/long then we can convert using standard mechanism
-      convertTo(type, false, location);
+      convertTo(type, null, false, location);
       return;
     }
     if (peek().is(ANY)) {
@@ -2539,9 +2745,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     throw new IllegalStateException("Internal error: unexpected type " + peek());
   }
 
-  private Void convertTo(JacsalType type, boolean couldBeNull, Location location) {
+  private Void convertTo(JacsalType type, Expr expr, boolean couldBeNull, Location location) {
     if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
     if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull) {
+      if (expr.isNull()) {
+        throw new CompileError("Cannot convert null value to " + type, location);
+      }
       throwIfNull("Cannot convert null value to " + type, location);
     }
     switch (type.getType()) {
@@ -2556,17 +2765,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case FUNCTION:   return castToFunction(location);
       case OBJECT_ARR: return castToObjectArr(location);
       case ITERATOR:   return null;  // noop
-      case INSTANCE:   return castToInstance(type, location);
+      case INSTANCE:   return castToInstance(type, expr, location);
       default:         throw new IllegalStateException("Unknown type " + type);
     }
   }
 
-  private Void castToInstance(JacsalType type, Location location) {
+  private Void castToInstance(JacsalType type, Expr expr, Location location) {
     if (peek().is(INSTANCE) && peek().getInternalName().equals(type.getInternalName())) {
       return null;
     }
     if (peek().is(ANY,LIST,MAP)) {
-      convertToInstance(type, location, location);
+      convertToInstance(type, expr, location, location);
       return null;
     }
     if (peek().is(INSTANCE)) {
@@ -2847,7 +3056,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         incOrDecValue(isInc, 1, operator);
-        convertTo(expr.type, true, operator);
+        convertTo(expr.type, expr, true, operator);
         if (!isResultUsed) {
           popVal();
         }
@@ -2882,7 +3091,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // load the inc/dec amount
       if (amount == null) {
         swap();
-        convertTo(varDecl.type, true, operator);
+        convertTo(varDecl.type, null, true, operator);
       }
       else {
         loadConst(Utils.convertNumberTo(varDecl.type, amount));
@@ -3029,9 +3238,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void ifInstanceof(JacsalType type) {
+  private void isInstanceOf(JacsalType type) {
     mv.visitInsn(DUP);
     mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
+  }
+
+  private void isInstanceOf(Class clss) {
+    mv.visitInsn(DUP);
+    mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(clss));
   }
 
   private void emitInstanceof(JacsalType type) {
@@ -3043,13 +3257,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Label isNotNull = new Label();
     mv.visitJumpInsn(IFNONNULL, isNotNull);
     _popVal();
+    throwNullError(msg, location);
+    mv.visitLabel(isNotNull);
+  }
+
+  private void throwNullError(String msg, SourceLocation location) {
     mv.visitTypeInsn(NEW, "jacsal/runtime/NullError");
     mv.visitInsn(DUP);
     _loadConst(msg);
     _loadLocation(location);
     mv.visitMethodInsn(INVOKESPECIAL, "jacsal/runtime/NullError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
-    mv.visitLabel(isNotNull);
   }
 
   /**
@@ -3179,7 +3397,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(after);
 
     // Validate that the two stacks are the same
-    check(equals(stack, savedStack), "Stack after try does not match stack after catch: tryStack=" + savedStack + ", catchStack=" + stack);
+    check(Utils.stacksAreEqual(stack, savedStack), "Stack after try does not match stack after catch: tryStack=" + savedStack + ", catchStack=" + stack);
 
     // Free our temps
     Arrays.stream(temps).forEach(i -> freeTemp(i));
@@ -3230,7 +3448,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // NOTE: we don't bother with preserving the "this" (if non-static) and the Continuation
     // object since the MethodHandle will be bound to "this" and the Continuation is supplied
     // when resuming so the current value (usually null) is irrelevant.
-    int startSlot = methodFunDecl.isStatic ? 0 : 1;
+    int startSlot = methodFunDecl.isStatic() ? 0 : 1;
     int numLocals = numLocals() - startSlot - 1;
     int size = numLocals + stack.size();
     int longArr = allocateSlot(LONG_ARR);
@@ -3325,7 +3543,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation", "result", "Ljava/lang/Object;");
       push(ANY);
       if (returnType.isPrimitive()) {
-        convertTo(returnType, false, location);
+        convertTo(returnType, null, false, location);
       }
       else {
         checkCast(returnType);
@@ -3348,7 +3566,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(DUP);
     _loadLocal(contVar);
     _loadClassField(classCompiler.internalName, Utils.continuationHandle(methodFunDecl.functionDescriptor.implementingMethod), FUNCTION, true);
-    if (!methodFunDecl.isStatic) {
+    if (!methodFunDecl.isStatic()) {
       _loadLocal(0);    // this
       mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "bindTo", "(Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;", false);
     }
@@ -3442,11 +3660,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // we don't already have a slot allocated
     if (var.isGlobal || var.slot != -1) {
       return;   // Nothing to do for globals or vars that already have a slot
-    }
-
-    if (var.isField && !var.owner.isWrapper) {
-      classCompiler.defineField(var.name.getStringValue(), var.type);
-      return;
     }
 
     JacsalType type = var.isHeapLocal ? HEAPLOCAL : var.type;
@@ -3702,26 +3915,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Load field value from a map or list.
+   * Load field value from a map or list or instance.
    * Stack is expected to have: ..., parent, field
    * A default value can be supplied which will be used if field does not exist. This is used for the
    * special case of RuntimeUtils.DEFAULT_VALUE which is a value that means use whatever sensible
    * default makes sense in the context.
    * E.g. if doing integer arithmetic use 0 or if doing string concatenation use ''.
-   * The createIfMissing flag will create the field if missing of the type specified by defaultType
-   * (which must be MAP or LIST in this case).
    * @param accessOperator  the type of field access ('.', '?.', '[', '?[')
-   * @param createIfMissing true if we should create the field if it is missing
-   * @param defaultType     used if createIfMissing set and must be MAP or LIST
    * @param defaultValue    use this as the default value (only one of defaultType or defaultValue should
    *                        be supplied since they are mutally exclusive)
    */
-  private void loadField(Token accessOperator, boolean createIfMissing, JacsalType defaultType, Object defaultValue, Location location) {
-    check(defaultType == null || defaultValue == null, "Cannot have defaultType and defaultValue specified");
+  private void loadField(Token accessOperator, Object defaultValue, Location location) {
     box();                        // Field name/index passed as Object
     loadConst(accessOperator.is(DOT,QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT,QUESTION_SQUARE));
-    if (!createIfMissing && defaultValue != null) {
+    if (defaultValue != null) {
       // Special case for RuntimeUtils.DEFAULT_VALUE
       if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
         mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "DEFAULT_VALUE", "Ljava/lang/Object;");
@@ -3734,17 +3942,98 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadLocation(location);
       invokeMethod(RuntimeUtils.class, "loadFieldOrDefault", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, String.class, Integer.TYPE);
     }
-    else
-    if (createIfMissing) {
-      check(defaultType.is(MAP,LIST), "Type must be MAP/LIST when createIfMissing set");
-      loadConst(defaultType.is(MAP));
-      loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "loadOrCreateField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
-    }
     else {
       loadLocation(location);
       invokeMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
     }
+  }
+
+  private void loadOrCreateField(Token accessOperator, JacsalType defaultType, Location location) {
+    box();                        // Field name/index passed as Object
+    loadConst(accessOperator.is(DOT,QUESTION_DOT));
+    loadConst(accessOperator.is(QUESTION_DOT,QUESTION_SQUARE));
+    check(defaultType.is(MAP,LIST), "Type must be MAP/LIST when createIfMissing set");
+    loadConst(defaultType.is(MAP));
+    loadLocation(location);
+    invokeMethod(RuntimeUtils.class, "loadOrCreateField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+  }
+
+  private void loadOrCreateInstanceField(Expr.Binary expr) {
+    check(expr.type.is(MAP,LIST), "Type must be MAP/LIST when createIfMissing set");
+    pop();
+    JacsalType parentType = createInstance(JacsalObject.class);
+    push(parentType);
+    Token   accessOperator = expr.operator;
+    boolean isMap = expr.type.is(MAP);
+    dupVal();                     // Dup parent
+    int parentVar = allocateSlot(parentType);
+    storeLocal(parentVar);
+    compile(expr.right);
+    box();                        // Field name/index passed as Object
+    loadLocation(expr.right.location);
+    invokeMethod(RuntimeUtils.class, "getFieldGetter", Object.class, Object.class, String.class, int.class);
+    int fieldVar = allocateSlot(JacsalType.createInstance(Field.class));
+    dupVal();
+    storeLocal(fieldVar);
+    loadLocal(parentVar);
+    invokeMethod(Field.class, "get", Object.class);
+    // If value is non-null then nothing else to do
+    dupVal();
+    Label end = new Label();
+    mv.visitJumpInsn(IFNONNULL, end);
+    pop();
+    popVal();
+
+    // We have no value for the field so we have to construct a default value. Type of field must be Map/List or
+    // Instance for us to be doing auto-creation.
+    emitIf(() -> {
+             loadLocal(fieldVar);
+             invokeMethod(Field.class, "getType");
+             dupVal();
+             loadConst(JacsalObject.class);
+             swap();
+             invokeMethod(Class.class, "isAssignableFrom", Class.class);
+             pop();
+           },
+           () -> {
+             // Construct new object
+             loadConst(null);
+             invokeMethod(Class.class, "getConstructor", Class[].class);
+             loadConst(null);
+             invokeMethod(Constructor.class, "newInstance", Object[].class);
+             invokeMaybeAsync(true, ANY, 1, expr.right.location,
+                              () -> {
+                                loadNullContinuation();
+                                loadLocation(expr.right.location);
+                                loadConst(null);
+                              },
+                              () -> {
+                                invokeMethod(JacsalObject.class, Utils.JACSAL_INIT_WRAPPER, Continuation.class,
+                                             String.class, int.class, Object[].class);
+                              });
+           },
+           () -> {
+             popVal();     // Don't need the field class
+             loadConst(isMap ? MAP : LIST);
+             loadLocation(expr.right.location);
+             invokeMethod(RuntimeUtils.class, "defaultValue", Class.class, String.class, int.class);
+           });
+
+    mv.visitLabel(end);        // :end
+    dupVal();
+    loadLocal(fieldVar);
+    swap();
+    loadLocal(parentVar);
+    swap();
+    tryCatch(IllegalArgumentException.class,
+             () -> invokeMethod(Field.class, "set", Object.class, Object.class),
+             () -> {
+               throwError("Cannot set field to " + (isMap ? "Map" : "List") + ": field type incomptible", expr.right.location);
+               pop(3);  // Pop types for field, parent, value
+             });
+
+    freeSlot(parentVar);
+    freeSlot(fieldVar);
   }
 
   private void loadMethodOrField(Token accessOperator) {
@@ -3819,18 +4108,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!condition) {
       throw new IllegalStateException("Internal error: " + msg);
     }
-  }
-
-  private static boolean equals(Deque stack1, Deque stack2) {
-    if (stack1.size() != stack2.size()) { return false; }
-    Iterator it1 = stack1.iterator();
-    Iterator it2 = stack2.iterator();
-    while (it1.hasNext() && it2.hasNext()) {
-      if (!it1.next().equals(it2.next())) {
-        return false;
-      }
-    }
-    return true;
   }
 
   ///////////////////////////////////

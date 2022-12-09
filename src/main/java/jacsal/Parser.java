@@ -24,7 +24,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static jacsal.JacsalType.ANY;
-import static jacsal.JacsalType.FUNCTION;
 import static jacsal.JacsalType.UNKNOWN;
 import static jacsal.TokenType.*;
 
@@ -328,8 +327,8 @@ public class Parser {
    *# funDecl -> "static"? type IDENTIFIER "(" ( varDecl ( "," varDecl ) * ) ? ")" "{" block "}" ;
    */
   private Stmt.FunDecl funDecl(boolean inClassDecl) {
-    Token start = peek();
     boolean isStatic = inClassDecl && matchAny(STATIC);
+    Token start = peek();
     JacsalType returnType = type(false);
     Token      name       = expect(IDENTIFIER);
     expect(LEFT_PAREN);
@@ -339,7 +338,7 @@ public class Parser {
     expect(LEFT_BRACE);
     matchAny(EOL);
     Stmt.FunDecl funDecl = parseFunDecl(start, name, returnType, parameters, RIGHT_BRACE, false, isStatic);
-    createVariableForFunction(funDecl);
+    Utils.createVariableForFunction(funDecl);
     funDecl.declExpr.varDecl.isField = inClassDecl;
     return funDecl;
   }
@@ -570,7 +569,6 @@ public class Parser {
     try {
       Stmt.Block classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
 
-
       // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
       // separate lists:
       List<Stmt> classStmts = classBlock.stmts.stmts;
@@ -589,69 +587,9 @@ public class Parser {
                                             .map(stmt -> (Stmt.VarDecl) stmt)
                                             .collect(Collectors.toList());
 
-      // Create varDecl for "this"
-      JacsalType   instanceType = JacsalType.createInstance(List.of(new Expr.Identifier(className)));
-      Token        thisIdent    = className.newIdent(Utils.THIS_VAR);
-      Expr.VarDecl varDecl      = new Expr.VarDecl(thisIdent, null);
-      varDecl.isResultUsed = false;
-      varDecl.type = instanceType;
-      varDecl.isField = true;
-      varDecl.slot = 0;                // "this" is always in local var slot 0
-      var thisStmt = new Stmt.VarDecl(thisIdent, varDecl);
-
-      // We have a list of field declarations. We then generate an initialisation method _$j$init
-      // that initialises the fields based on what is passed in. So if x,y,z correspond to the fields of the class:
-      //   X _$j$init(x=...,y=...,z=...) { this.x = x; this.y = y; this.z = z; }
-      // Note that the initialisers for the fields will become initialisers of the parameters to _$j$newInstance
-      // so that the _$j$newInstance wrapper will take care of filling in missing values if not all fields passed
-      // in.
-
-      Token initName = className.newIdent(Utils.JACSAL_INIT);
-
-      // For each field we create a parameter from the varDecl for our init method and move the initialiser from the
-      // field to the parameter.
-      List<Stmt.VarDecl> params = fields.stream()
-                                        .map(field -> createInitParam(field.declExpr))
-                                        .collect(Collectors.toList());
-      var initStmts = new Stmt.Stmts();
-      initStmts.stmts.addAll(fields);
-      var          initBlock  = new Stmt.Block(leftBrace, initStmts);
-      Stmt.FunDecl initMethod = convertBlockToFunction(initName, initBlock, instanceType, params, false);
-      initMethod.declExpr.isInitMethod = true;
-      createVariableForFunction(initMethod);
-
-      // Add to initBlock (where a,b, etc are the fields):
-      //  this.a = a; this.b = b; ...
-      //  return this;
-      fields.forEach(field -> {
-        var assign = new Expr.FieldAssign(new Expr.Identifier(field.name.newIdent("this")),
-                                          new Token(DOT, field.name),
-                                          new Expr.Literal(field.name),
-                                          new Token(EQUAL, field.name),
-                                          new Expr.Identifier(field.name));
-        assign.isResultUsed = false;
-        initStmts.stmts.add(new Stmt.ExprStmt(field.name, assign));
-      });
-
-      // Finally, return "this" from init method
-      initStmts.stmts.add(new Stmt.Return(className,
-                                          new Expr.Return(className,
-                                                          new Expr.Identifier(thisIdent),
-                                                          instanceType)));
-
-      // Class block will be:
-      //   thisVarDecl
-      //   initMethod (containing fields)
-      //   methods
-      //   innerClasses
-      classBlock.stmts.stmts = Utils.concat(thisStmt, initMethod, classDecl.methods, innerClasses);
-
       classBlock.functions   = classDecl.methods;
-      classDecl.classBlock   = classBlock;
-      classDecl.methods      = Utils.concat(initMethod, classDecl.methods);
       classDecl.innerClasses = innerClasses;
-      classDecl.thisField    = varDecl;
-      classDecl.fieldVars.putAll(fields.stream().collect(Collectors.toMap(f -> f.name.getStringValue(), f -> f.declExpr)));
+      fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
       return classDecl;
     }
     finally {
@@ -989,7 +927,7 @@ public class Parser {
    */
   private List<Expr> expressionList(TokenType endToken) {
     List<Expr> exprs = new ArrayList<>();
-    while (!matchAny(endToken)) {
+    while (!matchAnyIgnoreEOL(endToken)) {
       if (exprs.size() > 0) {
         expect(COMMA);
       }
@@ -1237,7 +1175,7 @@ public class Parser {
         }
       }
     }
-    expr.namedArgs = isNamedArgs;
+    expr.isNamedArgs = isNamedArgs;
     // If we have had keys that are only string literals then we create a map based on these string keys.
     // This can be used during named arg validation.
     if (literalKeyMap.size() == expr.entries.size()) {
@@ -1462,16 +1400,6 @@ public class Parser {
 
   /////////////////////////////////////////////////
 
-  private static void createVariableForFunction(Stmt.FunDecl funDecl) {
-    // Create a "variable" for the function that will have the MethodHandle as its value
-    // so we can get the function by value
-    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.nameToken, null);
-    varDecl.type = FUNCTION;
-    varDecl.funDecl = funDecl.declExpr;
-    varDecl.isResultUsed = false;
-    funDecl.declExpr.varDecl = varDecl;
-  }
-
   private Object ignoreNewLines(Supplier<Object> code) {
     boolean currentIgnoreEol = ignoreEol;
     ignoreEol = true;
@@ -1546,23 +1474,15 @@ public class Parser {
   }
 
   private Stmt.VarDecl createItParam(Token token) {
-    return createParam(token.newIdent(Utils.IT_VAR), ANY, new Expr.Literal(new Token(NULL, token)));
+    return Utils.createParam(token.newIdent(Utils.IT_VAR), ANY, new Expr.Literal(new Token(NULL, token)));
   }
 
   // Create parameter for class instance initialiser method
   private Stmt.VarDecl createInitParam(Expr.VarDecl varDecl) {
-    Stmt.VarDecl paramDecl = createParam(varDecl.name, varDecl.type, varDecl.initialiser);
+    Stmt.VarDecl paramDecl = Utils.createParam(varDecl.name, varDecl.type, varDecl.initialiser);
     paramDecl.declExpr.paramVarDecl = varDecl;
     varDecl.initialiser = null;
     return paramDecl;
-  }
-
-  private Stmt.VarDecl createParam(Token name, JacsalType type, Expr initialiser) {
-    Expr.VarDecl decl  = new Expr.VarDecl(name, initialiser);
-    decl.isParam = true;
-    decl.isResultUsed = false;
-    decl.type = type;
-    return new Stmt.VarDecl(name, decl);
   }
 
   private void pushClass(Stmt.ClassDecl classDecl) {
@@ -1635,7 +1555,7 @@ public class Parser {
                                     boolean isScriptMain,
                                     boolean isStatic) {
     params.forEach(p -> p.declExpr.isExplicitParam = true);
-    Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic);
+    Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic, false);
     params.forEach(p -> p.declExpr.owner = funDecl);
     Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(start, funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
@@ -1649,8 +1569,6 @@ public class Parser {
       Stmt.Block block = block(peek(), endToken);
       insertStmtsInto(params, block);
       funDecl.block = block;
-      funDecl.isResultUsed = false;
-      funDecl.type = FUNCTION;
       return funDeclStmt;
     }
     finally {
@@ -1667,11 +1585,9 @@ public class Parser {
   }
 
   private Stmt.FunDecl convertBlockToFunction(Token name, Stmt.Block block, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
-    Expr.FunDecl funDecl = Utils.createFunDecl(name, name, returnType, params, isStatic);
+    Expr.FunDecl funDecl = Utils.createFunDecl(name, name, returnType, params, isStatic, false);
     insertStmtsInto(params, block);
     funDecl.block = block;
-    funDecl.isResultUsed = false;
-    funDecl.type = FUNCTION;
     return new Stmt.FunDecl(name, funDecl);
   }
 

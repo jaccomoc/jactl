@@ -17,11 +17,11 @@
 package jacsal.runtime;
 
 import jacsal.JacsalType;
+import jacsal.Utils;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ClassDescriptor {
 
@@ -30,12 +30,14 @@ public class ClassDescriptor {
   String                          packagedName;
   String                          internalName;
   boolean                         isInterface;
-  ClassDescriptor                 baseClass;
+  JacsalType                      baseClass;
   List<ClassDescriptor>           interfaces;
-  Map<String, JacsalType>         fields = new HashMap<>();
-  Map<String, FunctionDescriptor> methods = new HashMap<>();
+  Map<String, JacsalType>         fields          = new LinkedHashMap<>();
+  Map<String, JacsalType>         mandatoryFields = new LinkedHashMap<>();
+  Map<String, FunctionDescriptor> methods         = new LinkedHashMap<>();
+  FunctionDescriptor              initMethod;
 
-  public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, ClassDescriptor baseClass, List<ClassDescriptor> interfaces) {
+  public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JacsalType baseClass, List<ClassDescriptor> interfaces) {
     this.name         = name;
     this.baseClass    = baseClass;
     this.isInterface  = isInterface;
@@ -45,7 +47,7 @@ public class ClassDescriptor {
     this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
   }
 
-  public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, ClassDescriptor baseClass, List<ClassDescriptor> interfaces) {
+  public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, JacsalType baseClass, List<ClassDescriptor> interfaces) {
     this(outerClass.getName() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces);
   }
 
@@ -54,20 +56,82 @@ public class ClassDescriptor {
   public String getPackagedName() { return packagedName; }
   public String getInternalName() { return internalName; }
 
-  public FunctionDescriptor getMethod(String name) { return methods.get(name); }
-  public boolean addMethod(String name, FunctionDescriptor fun) {
-    if (fields.containsKey(name)) {
-      return false;
+  public void setInitMethod(FunctionDescriptor initMethod) { this.initMethod = initMethod; }
+  public FunctionDescriptor getInitMethod() { return initMethod; }
+
+  public FunctionDescriptor getMethod(String name) {
+    if (name.equals(Utils.JACSAL_INIT)) {
+      return getInitMethod();
     }
+    var func = methods.get(name);
+    if (func == null && baseClass != null) {
+      func = baseClass.getClassDescriptor().getMethod(name);
+    }
+    return func;
+  }
+
+  /**
+   * Add method to this class descriptor. We allow methods to override methods of the same
+   * name in a base class as long as the signatures are identical.
+   * @return true if added successfully, false if clash with a field name or if we already
+   *         have a method of that name in this class
+   */
+  public boolean addMethod(String name, FunctionDescriptor fun) {
+    if (getField(name) != null)  { return false; }
     return methods.put(name, fun) == null;
   }
 
-  public JacsalType getField(String name) { return fields.get(name); }
-  public boolean addField(String name, JacsalType type) {
-    if (methods.containsKey(name)) {
-      return false;
+  public JacsalType getField(String name) {
+    var type = fields.get(name);
+    if (type == null && baseClass != null) {
+      type = getBaseClass().getField(name);
+    }
+    return type;
+  }
+
+  public boolean addField(String name, JacsalType type, boolean isMandatory) {
+    if (getField(name) != null)  { return false; }
+    if (getMethod(name) != null) { return false; }
+    if (isMandatory) {
+      mandatoryFields.put(name, type);
     }
     return fields.put(name, type) == null;
+  }
+
+  public List<String> getAllFieldNames() {
+    return getAllFields().map(Map.Entry::getKey).collect(Collectors.toList());
+  }
+
+  public List<JacsalType> getAllFieldTypes() {
+    return getAllFields().map(Map.Entry::getValue).collect(Collectors.toList());
+  }
+
+  public Stream<Map.Entry<String,JacsalType>> getAllFields() {
+    Stream<Map.Entry<String,JacsalType>> allFields = Stream.of();
+    if (getBaseClass() != null) {
+      allFields = getBaseClass().getAllFields();
+    }
+    return Stream.concat(allFields, fields.entrySet().stream());
+  }
+
+  public Stream<Map.Entry<String,FunctionDescriptor>> getAllMethods() {
+    Stream<Map.Entry<String,FunctionDescriptor>> allMethods = Stream.of();
+    if (getBaseClass() != null) {
+      allMethods = getBaseClass().getAllMethods();
+    }
+    return Stream.concat(allMethods, methods.entrySet().stream());
+  }
+
+  /**
+   * Get mandatory fields for all based classes and this class
+   */
+  public Map<String,JacsalType> getAllMandatoryFields() {
+    LinkedHashMap<String,JacsalType> allMandatoryFields = new LinkedHashMap<>();
+    if (baseClass != null) {
+      allMandatoryFields.putAll(baseClass.getClassDescriptor().getAllMandatoryFields());
+    }
+    allMandatoryFields.putAll(mandatoryFields);
+    return allMandatoryFields;
   }
 
   public boolean isInterface() {
@@ -75,7 +139,7 @@ public class ClassDescriptor {
   }
 
   public ClassDescriptor getBaseClass() {
-    return baseClass;
+    return baseClass == null ? null : baseClass.getClassDescriptor();
   }
 
   public boolean isAssignableFrom(ClassDescriptor clss) {
@@ -93,7 +157,7 @@ public class ClassDescriptor {
       return interfaces.stream().anyMatch(intf -> intf.isSameOrChildOf(clss));
     }
     if (baseClass != null) {
-      return baseClass.isSameOrChildOf(clss);
+      return baseClass.getClassDescriptor().isSameOrChildOf(clss);
     }
     return false;
   }

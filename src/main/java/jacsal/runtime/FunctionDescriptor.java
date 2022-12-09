@@ -35,6 +35,8 @@ public class FunctionDescriptor {
   public String           implementingClass;
   public String           implementingMethod;
   public boolean          isStatic = false;          // Whether method itself is static or not
+  public boolean          isInitMethod = false;
+  public boolean          isWrapper = false;
 
   // Used by builtin functions:
   public boolean          needsLocation;
@@ -64,5 +66,5 @@ public class FunctionDescriptor {
     this.wrapperHandle = wrapperHandle;
   }
 
-  FunctionDescriptor() {}
+  public FunctionDescriptor() {}
 }

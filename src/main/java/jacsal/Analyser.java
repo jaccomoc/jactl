@@ -317,7 +317,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return analyse(expr.paramDecl);
   }
 
-  @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
+  @Override public Void visitInvokeFunDecl(Expr.InvokeFunDecl expr) {
     analyse(expr.args);
     return null;
   }
@@ -340,6 +340,16 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.expr);
     analyse(expr.source);
     analyse(expr.offset);
+    return null;
+  }
+
+  @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
+    analyse(expr.args);
+    return null;
+  }
+
+  @Override public Void visitCastTo(Expr.CastTo expr) {
+    analyse(expr.expr);
     return null;
   }
 

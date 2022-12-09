@@ -18,12 +18,9 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -3524,7 +3521,7 @@ class CompilerTest extends BaseTest {
     test("int i = 0; int sum = 0; while (i < 10) sum += i++; sum", 45);
     test("int i = 0; int sum = 0; while (i < 10) { sum += i; i++ }; sum", 45);
     test("int i = 0; int sum = 0; while (i < 10) i++", null);
-    testError("while (false) i++;", "unknown variable i");
+    testError("while (false) i++;", "unknown variable 'i'");
     test("int i = 1; while (false) i++; i", 1);
     test("int i = 1; while (false) ;", null);
     test("int i = 1; while (++i < 10); i", 10);
@@ -3597,7 +3594,7 @@ class CompilerTest extends BaseTest {
     test("def f(x) { def g(x) { def f(x) {x+x}; f(x) }; g(x) * g(x) }; f(3)", 36);
     testError("def f(String x) { x + x }; f(1)", "cannot convert");
     test("def f(def x) { '' + x + x }; f(1)", "11");
-    testError("def f(String x) { x }; f([1,2,3])", "too many arguments");
+    testError("def f(String x) { x }; f([1,2,3])", "cannot convert");
     test("def f(def x) { '' + x }; f([1,2,3])", "[1, 2, 3]");
     testError("def f(String x) { x }; f([a:1,b:2])", "cannot convert");
     test("def f(def x) { '' + x }; f([a:1,b:2])", "[a:1, b:2]");
@@ -3686,11 +3683,13 @@ class CompilerTest extends BaseTest {
     test("def f(){3}; def g = f; g([])", 3);
     testError("def f(){3}; f([4])", "too many arguments");
     testError("def f(){3}; def g = f; g([4])", "too many arguments");
-    test("def f(int x){x}; f([3])", 3);
-    test("def f = { int x -> x}; f([3])", 3);
-    test("def f(int x){x}; def g = f; g([3])", 3);
-    test("def f(int x){x}; def a = [3]; f(a)", 3);
-    test("def f(int x){x}; def a = [3]; def g = f; g(a)", 3);
+    testError("def f(int x){x}; f([3])", "cannot convert");
+    testError("def f = { int x -> x}; f([3])", "cannot be cast");
+    testError("def f(int x){x}; def g = f; g([3])", "cannot be cast");
+    testError("def f(int x){x}; def a = [3]; f(a)", "cannot be cast");
+    testError("def f(int x, int y=0){x+y}; def a = [3]; f(a)", "cannot be cast");
+    test("def f(int x,int y){x+y}; def a = [3,2]; f(a)", 5);
+    test("def f(int x,int y){x+y}; def a = [3,2]; def g = f; g(a)", 5);
     testError("def f(List x, int y) { x + y }; f([1,2])", "cannot be cast to List");
     testError("def f = { List x, int y -> x + y }; f([1,2])", "cannot be cast to List");
     testError("def f = { List x, int y -> x + y }; def a = [1,2]; f(a)", "cannot be cast to List");
@@ -3710,13 +3709,19 @@ class CompilerTest extends BaseTest {
     test("def f = {List x, int y = 4 -> x + y }; def a = [[1,2],3]; f(a)", List.of(List.of(1,2),3,4));
     test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; f(a)", List.of(List.of(1,2),3,4));
     test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; def g = f; g(a)", List.of(List.of(1,2),3,4));
-    test("def f(int x, int y = 4) { x + y }; f([1,2])", 3);
-    test("def f = {int x, int y = 4 -> x + y }; f([1,2])", 3);
-    test("def f = {int x, int y = 4 -> x + y }; def a = [1,2]; f(a)", 3);
-    test("def f(int x, int y = 4) { x + y }; def a = [1,2]; f(a)", 3);
-    test("def f(int x, int y = 4) { x + y }; def a = [1,2]; def g = f; g(a)", 3);
-    test("def f(int x, int y = 4) { x + y }; def a = [1D,2D]; def g = f; g(a)", 3);
-    test("def f(int x, int y = 4) { x + y }; def a = [1.0,2L]; def g = f; g(a)", 3);
+    test("def f(int x, int y) { x + y }; f([1,2])", 3);
+    test("def f(int x, int y) { x + y }; def g = f; g([1,2])", 3);
+    testError("def f = {int x, int y = 4 -> x + y }; f([1,2])", "cannot be cast to int");
+    test("def f = {int x, int y -> x + y }; f([1,2])", 3);
+    test("def f = {int x, int y -> x + y }; def g = f; g([1,2])", 3);
+    testError("def f = {int x, int y = 4 -> x + y }; def a = [1,2]; f(a)", "cannot be cast to int");
+    test("def f = {int x = 3, int y = 4 -> x + y }; def a = [1,2]; f(a)", 3);
+    test("def f = {int x = 3, int y = 4 -> x + y }; def a = [1,2]; def g = f; g(a)", 3);
+    testError("def f(int x, int y = 4) { x + y }; def a = [1,2]; f(a)", "cannot be cast to int");
+    test("def f(int x = 3, int y = 4) { x + y }; def a = [1,2]; f(a)", 3);
+    test("def f(int x = 3, int y = 4) { x + y }; def a = [1,2]; def g = f; g(a)", 3);
+    test("def f(int x = 3, int y = 4) { x + y }; def a = [1D,2D]; def g = f; g(a)", 3);
+    test("def f(int x = 3, int y = 4) { x + y }; def a = [1.0,2L]; def g = f; g(a)", 3);
 
     test("sleeper([1,2])", 2);
     testError("sleeper(['1',2])", "cannot convert argument of type string to long");
@@ -3781,8 +3786,10 @@ class CompilerTest extends BaseTest {
     testError("def f = { x,y,z -> x + y + z}; def a = [y:3]; f(a)", "missing mandatory arguments");
     testError("sleeper(x:1,y:2)", "does not support invocation with named arguments");
     testError("sleeper([x:1,y:2])", "missing mandatory arguments");
-    testError("def a = [x:{it*it}]; [1,2,3].map(a)", "cannot convert arg type map to function");
+    testError("def a = [x:{it*it}]; [1,2,3].map(a)", "cannot be cast to function");
     testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing mandatory argument: c");
+    test("def f(a = '',b = 2) {a+b}; f('',null)", "null");
+    test("def f(a = '',b = 2) {a+b}; f(a:'',b:null)", "null");
   }
 
   @Test public void simpleClosures() {
@@ -3807,7 +3814,7 @@ class CompilerTest extends BaseTest {
     test("def f = { -> 3 }; f()", 3);
     test("def f = { it -> it * it }; f(3)", 9);
     test("def f = { it * it }; f(3)", 9);
-    testError("def f = { -> it * it }; f(3)", "unknown variable it");
+    testError("def f = { -> it * it }; f(3)", "unknown variable 'it'");
     test("def f = { { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f(3)", 9);
     test("def f = { it = 2 -> { it * it }(it) }; f()", 4);
@@ -4491,7 +4498,7 @@ class CompilerTest extends BaseTest {
     JacsalContext jacsalContext = JacsalContext.create()
                                                .evaluateConstExprs(true)
                                                .replMode(true)
-                                               .debug(debug)
+                                               .debug(debugLevel)
                                                .build();
     Map<String,Object> globals = createGlobals();
     BiConsumer<String,Object> runtest = (code,expected) -> {

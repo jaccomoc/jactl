@@ -30,6 +30,7 @@ package jacsal;
 
 import java.util.*;
 
+import jacsal.Utils;
 import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -45,6 +46,8 @@ class Expr {
 
   Token      location;
   JacsalType type;
+  boolean    isResolved = false;
+
   boolean    isConst = false;   // Whether expression consists only of constants
   Object     constValue;        // If expression is only consts then we keep the
                                 // result of evaluating the expression during the
@@ -86,6 +89,11 @@ class Expr {
   // True if this is a "new X()" expression
   public boolean isNewInstance() {
     return this instanceof Expr.MethodCall && ((Expr.MethodCall)this).parent instanceof Expr.InvokeNew;
+  }
+
+  // True if expression is "super"
+  public boolean isSuper() {
+    return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.SUPER_VAR);
   }
 
   class Binary extends Expr {
@@ -190,7 +198,7 @@ class Expr {
   class MapLiteral extends Expr {
     Token start;
     List<Pair<Expr,Expr>> @entries = new ArrayList<>();
-    boolean @namedArgs;   // whether this map is used as named args for function/method/constructor call
+    boolean               @isNamedArgs;    // whether this map is used as named args for function/method/constructor call
     Map<String,Expr>      @literalKeyMap;  // Map based on key names if all keys were string literals
   }
 
@@ -265,11 +273,11 @@ class Expr {
     boolean            @isWrapper;   // Whether this is the wrapper function or the real one
     Expr.FunDecl       @wrapper;     // The wrapper method that handles var arg and named arg invocations
 
-    boolean    @isScriptMain = false; // Whether this is the funDecl for the script main function
-    boolean    @isInitMethod = false; // Whether this is the init method (constructor) for a class
-    boolean    @isStatic = false;
-    int        @closureCount = 0;
-    Stmt.While @currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
+    boolean        @isScriptMain = false; // Whether this is the funDecl for the script main function
+    Stmt.ClassDecl @classDecl = null;     // For init methods this is our ClassDecl
+    int            @closureCount = 0;
+    Stmt.While     @currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
+    boolean        @isCompiled = false;
 
     // Stack of blocks used during Resolver phase to track variables and which scope they
     // are declared in and used during Parser phase to track function declarations so we
@@ -283,7 +291,9 @@ class Expr {
     // no variables we close over are declared after that reference
     Token @earliestForwardReference;
 
-    public boolean isClosure() { return nameToken == null; }
+    public boolean isClosure()    { return nameToken == null; }
+    public boolean isStatic()     { return functionDescriptor.isStatic; }
+    public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
   }
 
   /**
@@ -427,12 +437,25 @@ class Expr {
   }
 
   /**
-   * Invoke a user function - internal use only
+   * Invoke a user function - used for invoking actual function at end of varargs wrapper function
    */
-  class InvokeFunction extends Expr implements ManagesResult {
+  class InvokeFunDecl extends Expr implements ManagesResult {
     Token        token;
     Expr.FunDecl funDecl;
     List<Expr>   args;
+  }
+
+  /**
+   * Invoke a function based on FunctionDescriptor
+   */
+  class InvokeFunction extends Expr {
+    Token              token;
+
+    // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
+    boolean            invokeSpecial;
+
+    FunctionDescriptor functionDescriptor;
+    List<Expr>         args;
   }
 
   /**
@@ -470,6 +493,15 @@ class Expr {
     Token  token;
     Expr   expr;      // The object for which we are checking the type
     String className; // The internal class name to check for
+  }
+
+  /**
+   * Cast to given type
+   */
+  class CastTo extends Expr {
+    Token      token;
+    Expr       expr;      // Object being cast
+    JacsalType castType;  // Type to cast to
   }
 
   /**

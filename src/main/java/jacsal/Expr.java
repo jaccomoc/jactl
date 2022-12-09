@@ -25,6 +25,7 @@ package jacsal;
 
 import java.util.*;
 
+import jacsal.Utils;
 import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -43,6 +44,8 @@ abstract class Expr {
 
   Token      location;
   JacsalType type;
+  boolean    isResolved = false;
+
   boolean    isConst = false;   // Whether expression consists only of constants
   Object     constValue;        // If expression is only consts then we keep the
                                 // result of evaluating the expression during the
@@ -84,6 +87,11 @@ abstract class Expr {
   // True if this is a "new X()" expression
   public boolean isNewInstance() {
     return this instanceof Expr.MethodCall && ((Expr.MethodCall)this).parent instanceof Expr.InvokeNew;
+  }
+
+  // True if expression is "super"
+  public boolean isSuper() {
+    return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.SUPER_VAR);
   }
 
   static class Binary extends Expr {
@@ -268,7 +276,7 @@ abstract class Expr {
   static class MapLiteral extends Expr {
     Token start;
     List<Pair<Expr,Expr>> entries = new ArrayList<>();
-    boolean namedArgs;   // whether this map is used as named args for function/method/constructor call
+    boolean               isNamedArgs;    // whether this map is used as named args for function/method/constructor call
     Map<String,Expr>      literalKeyMap;  // Map based on key names if all keys were string literals
     MapLiteral(Token start) {
       this.start = start;
@@ -375,11 +383,11 @@ abstract class Expr {
     boolean            isWrapper;   // Whether this is the wrapper function or the real one
     Expr.FunDecl       wrapper;     // The wrapper method that handles var arg and named arg invocations
 
-    boolean    isScriptMain = false; // Whether this is the funDecl for the script main function
-    boolean    isInitMethod = false; // Whether this is the init method (constructor) for a class
-    boolean    isStatic = false;
-    int        closureCount = 0;
-    Stmt.While currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
+    boolean        isScriptMain = false; // Whether this is the funDecl for the script main function
+    Stmt.ClassDecl classDecl = null;     // For init methods this is our ClassDecl
+    int            closureCount = 0;
+    Stmt.While     currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
+    boolean        isCompiled = false;
 
     // Stack of blocks used during Resolver phase to track variables and which scope they
     // are declared in and used during Parser phase to track function declarations so we
@@ -393,7 +401,9 @@ abstract class Expr {
     // no variables we close over are declared after that reference
     Token earliestForwardReference;
 
-    public boolean isClosure() { return nameToken == null; }
+    public boolean isClosure()    { return nameToken == null; }
+    public boolean isStatic()     { return functionDescriptor.isStatic; }
+    public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
     FunDecl(Token startToken, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> parameters) {
       this.startToken = startToken;
       this.nameToken = nameToken;
@@ -660,20 +670,42 @@ abstract class Expr {
   }
 
   /**
-   * Invoke a user function - internal use only
+   * Invoke a user function - used for invoking actual function at end of varargs wrapper function
    */
-  static class InvokeFunction extends Expr implements ManagesResult {
+  static class InvokeFunDecl extends Expr implements ManagesResult {
     Token        token;
     Expr.FunDecl funDecl;
     List<Expr>   args;
-    InvokeFunction(Token token, Expr.FunDecl funDecl, List<Expr> args) {
+    InvokeFunDecl(Token token, Expr.FunDecl funDecl, List<Expr> args) {
       this.token = token;
       this.funDecl = funDecl;
       this.args = args;
       this.location = token;
     }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunDecl(this); }
+    @Override public String toString() { return "InvokeFunDecl[" + "token=" + token + ", " + "funDecl=" + funDecl + ", " + "args=" + args + "]"; }
+  }
+
+  /**
+   * Invoke a function based on FunctionDescriptor
+   */
+  static class InvokeFunction extends Expr {
+    Token              token;
+
+    // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
+    boolean            invokeSpecial;
+
+    FunctionDescriptor functionDescriptor;
+    List<Expr>         args;
+    InvokeFunction(Token token, boolean invokeSpecial, FunctionDescriptor functionDescriptor, List<Expr> args) {
+      this.token = token;
+      this.invokeSpecial = invokeSpecial;
+      this.functionDescriptor = functionDescriptor;
+      this.args = args;
+      this.location = token;
+    }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunction(this); }
-    @Override public String toString() { return "InvokeFunction[" + "token=" + token + ", " + "funDecl=" + funDecl + ", " + "args=" + args + "]"; }
+    @Override public String toString() { return "InvokeFunction[" + "token=" + token + ", " + "invokeSpecial=" + invokeSpecial + ", " + "functionDescriptor=" + functionDescriptor + ", " + "args=" + args + "]"; }
   }
 
   /**
@@ -746,6 +778,23 @@ abstract class Expr {
   }
 
   /**
+   * Cast to given type
+   */
+  static class CastTo extends Expr {
+    Token      token;
+    Expr       expr;      // Object being cast
+    JacsalType castType;  // Type to cast to
+    CastTo(Token token, Expr expr, JacsalType castType) {
+      this.token = token;
+      this.expr = expr;
+      this.castType = castType;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCastTo(this); }
+    @Override public String toString() { return "CastTo[" + "token=" + token + ", " + "expr=" + expr + ", " + "castType=" + castType + "]"; }
+  }
+
+  /**
    * Used in init method to convert an expression into a user instance type. If the expression
    * is not the right type but is a Map/List we invoke the constructor to convert into the right
    * instance type.
@@ -800,11 +849,13 @@ abstract class Expr {
     T visitArrayLength(ArrayLength expr);
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);
+    T visitInvokeFunDecl(InvokeFunDecl expr);
     T visitInvokeFunction(InvokeFunction expr);
     T visitInvokeUtility(InvokeUtility expr);
     T visitInvokeNew(InvokeNew expr);
     T visitDefaultValue(DefaultValue expr);
     T visitInstanceOf(InstanceOf expr);
+    T visitCastTo(CastTo expr);
     T visitConvertTo(ConvertTo expr);
   }
 }

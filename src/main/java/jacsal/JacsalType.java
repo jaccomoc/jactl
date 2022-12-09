@@ -126,9 +126,9 @@ public class JacsalType {
     return new JacsalType(type, false, true);
   }
 
-  public static JacsalType createInstance(String name) {
+  public static JacsalType createInstance(Class clss) {
     JacsalType type   = createRefType(TypeEnum.INSTANCE);
-    type.internalName = name;
+    type.internalName = Type.getInternalName(clss);
     return type;
   }
 
@@ -420,6 +420,7 @@ public class JacsalType {
         throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
       if (operator.is(QUESTION)) {
+        if (type1.is(ANY) || type2.is(ANY))                     { return ANY; }
         JacsalType result = resultType(type1, type2);
         if (result != null) {
           return result;
@@ -478,15 +479,12 @@ public class JacsalType {
     if (isBoxedOrUnboxed(otherType))             { return true; }
     if (is(ANY) || otherType.is(ANY))            { return true; }
     if (isNumeric() && otherType.isNumeric())    { return true; }
+    if (is(MAP) && otherType.is(INSTANCE))       { return true; }
     if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
       if (getClassDescriptor() == null)           { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       return otherType.getClassDescriptor().isAssignableFrom(this.getClassDescriptor());
     }
-//    // Allow conversion between instances and map/list
-//    if (this.is(MAP,LIST) && otherType.is(INSTANCE) || this.is(INSTANCE) && otherType.is(MAP,LIST)) {
-//      return true;
-//    }
     return false;
   }
 

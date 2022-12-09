@@ -33,7 +33,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.ArrayDeque;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 import jacsal.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
@@ -44,6 +44,7 @@ import org.objectweb.asm.Label;
 class Stmt {
 
   Token      location = null;
+  boolean    isResolved = false;
 
   /**
    * Represents a sequence of statments.
@@ -63,7 +64,7 @@ class Stmt {
     Stmts                    stmts;
     List<Stmt.FunDecl>       @functions  = new ArrayList<>();
 
-    Map<String,Expr.VarDecl> @variables  = new HashMap<>();
+    Map<String,Expr.VarDecl> @variables  = new LinkedHashMap<>();
 
     // Used to track which Stmt.Stmts we are currently resolving in case we need to insert a new statement
     // at Resolve time
@@ -96,12 +97,13 @@ class Stmt {
     boolean              isInterface;
     Stmt.Block           @classBlock;
     List<Stmt.FunDecl>   @methods = new ArrayList<>();
+    Stmt.FunDecl         @initMethod;
     List<Stmt.ClassDecl> @innerClasses = new ArrayList<>();
 
     List<List<Expr>>     @interfaces = new ArrayList<>();
 
     Stmt.FunDecl             @scriptMain;   // Mainline of script
-    Map<String,Expr.VarDecl> @fieldVars = new HashMap<>();
+    Map<String,Expr.VarDecl> @fieldVars = new LinkedHashMap<>();
     Expr.VarDecl             @thisField;
 
     // Used by Parser and Resolver

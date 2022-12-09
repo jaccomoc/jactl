@@ -24,6 +24,7 @@ import org.objectweb.asm.util.TraceClassVisitor;
 
 import java.io.PrintWriter;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -45,6 +46,7 @@ public class ClassCompiler {
   final String         pkg;
   final String         className;
   final Stmt.ClassDecl classDecl;
+  final String         sourceName;      // Name of source file
   protected ClassVisitor    cv;
   protected ClassWriter     cw;
   protected MethodVisitor   constructor;
@@ -56,14 +58,15 @@ public class ClassCompiler {
   private   Label         classInitTryEnd     = new Label();
   private   Label         classInitCatchBlock = new Label();
 
-  ClassCompiler(String source, JacsalContext context, String jacsalPkg, Stmt.ClassDecl classDecl) {
-    this.context   = context;
-    this.pkg       = jacsalPkg;
-    this.className = classDecl.name.getStringValue();
-    this.classDecl = classDecl;
+  ClassCompiler(String source, JacsalContext context, String jacsalPkg, Stmt.ClassDecl classDecl, String sourceName) {
+    this.context         = context;
+    this.pkg             = jacsalPkg;
+    this.className       = classDecl.name.getStringValue();
+    this.classDecl       = classDecl;
     this.classDescriptor = classDecl.classDescriptor;
-    internalName   = classDescriptor.getInternalName();
-    this.source    = source;
+    internalName         = classDescriptor.getInternalName();
+    this.source          = source;
+    this.sourceName      = sourceName;
     cv = cw = new JacsalClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
     if (debug()) {
       cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
@@ -71,6 +74,7 @@ public class ClassCompiler {
 
     String baseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : Type.getInternalName(Object.class);
     cv.visit(V11, ACC_PUBLIC, internalName, null, baseName, new String[] { Type.getInternalName(JacsalObject.class) });
+    cv.visitSource(sourceName, null);
 
     classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
     classInit.visitCode();
@@ -79,7 +83,7 @@ public class ClassCompiler {
     constructor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
     constructor.visitCode();
     constructor.visitVarInsn(ALOAD, 0);
-    constructor.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Object.class), "<init>", "()V", false);
+    constructor.visitMethodInsn(INVOKESPECIAL, baseName, "<init>", "()V", false);
 
     var fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACSAL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
@@ -136,9 +140,10 @@ public class ClassCompiler {
   }
 
   protected void compileClass() {
+    classDecl.fieldVars.forEach((field,varDecl) -> defineField(field, varDecl.type));
     classDecl.methods.forEach(method -> compileMethod(method.declExpr));
     classDecl.innerClasses.forEach(clss -> {
-      var compiler = new ClassCompiler(source, context, pkg, clss);
+      var compiler = new ClassCompiler(source, context, pkg, clss, sourceName);
       compiler.compileClass();
     });
     finishClassCompile();
@@ -165,10 +170,10 @@ public class ClassCompiler {
     classInit.visitLabel(end);
     classInit.visitInsn(RETURN);
 
-    if (debug()) {
-      classInit.visitEnd();
-      cv.visitEnd();
-    }
+//    if (debug()) {
+//      classInit.visitEnd();
+//      cv.visitEnd();
+//    }
 
     classInit.visitMaxs(0, 0);
     classInit.visitEnd();
@@ -201,11 +206,16 @@ public class ClassCompiler {
       Utils.loadConst(classInit, Continuation.class);
       classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
 
+      if (!decl.isStatic()) {
+        classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
+      }
+
       // Do the lookup
       classInit.visitMethodInsn(INVOKEVIRTUAL,
                                 "java/lang/invoke/MethodHandles$Lookup",
-                                decl.isStatic ? "findStatic" : "findVirtual",
-                                "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
+                                decl.isStatic() ? "findStatic" : "findSpecial",
+                                decl.isStatic() ? "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;"
+                                                : "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;",
                                 false);
 
       // Store handle in static field
@@ -256,7 +266,7 @@ public class ClassCompiler {
       // Do the lookup
       classInit.visitMethodInsn(INVOKEVIRTUAL,
                                 "java/lang/invoke/MethodHandles$Lookup",
-                                wrapper.isStatic ? "findStatic" : "findVirtual",
+                                wrapper.isStatic() ? "findStatic" : "findVirtual",
                                 "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
                                 false);
 
@@ -269,7 +279,7 @@ public class ClassCompiler {
 
       // For methods/functions store in either _$j$FieldsAndMethods or _$j$StaticMethods as appropriate
       if (!funDecl.isClosure()) {
-        String mapName = funDecl.isStatic ? Utils.JACSAL_STATIC_METHODS_MAP : Utils.JACSAL_FIELDS_METHODS_MAP;
+        String mapName = funDecl.isStatic() ? Utils.JACSAL_STATIC_METHODS_MAP : Utils.JACSAL_FIELDS_METHODS_MAP;
         classInit.visitFieldInsn(GETSTATIC, internalName, mapName, MAP.descriptor());
         classInit.visitInsn(SWAP);
         Utils.loadConst(classInit, funDecl.nameToken.getStringValue());
@@ -296,7 +306,7 @@ public class ClassCompiler {
     String       staticHandleName  = Utils.staticHandleName(wrapperMethodName);
     FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC, staticHandleName, Type.getDescriptor(MethodHandle.class), null, null);
     handleVar.visitEnd();
-    if (!method.isStatic && method.isClosure()) {
+    if (!method.isStatic() && method.isClosure()) {
       // For non-static closures we also create a non-static method handle for the wrapper method
       // that will be bound to the instance. For non-static functions we bind the handle when we
       // compile the declaration and store it in the variable.
@@ -322,7 +332,7 @@ public class ClassCompiler {
 
   protected void doCompileMethod(Expr.FunDecl method, String methodName, boolean isScriptMain) {
     // Parameter types: heapLocals + params
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + (method.isStatic ? ACC_STATIC : 0), methodName,
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + (method.isStatic() ? ACC_STATIC : 0), methodName,
                                       MethodCompiler.getMethodDescriptor(method),
                                       null, null);
     mv.visitCode();
@@ -350,14 +360,14 @@ public class ClassCompiler {
   // continuing from an async suspend.
   protected void emitContinuationWrapper(Expr.FunDecl funDecl) {
     String methodName = Utils.continuationMethod(funDecl.functionDescriptor.implementingMethod);
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + (funDecl.isStatic ? ACC_STATIC : 0), methodName,
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + (funDecl.isStatic() ? ACC_STATIC : 0), methodName,
                                       Type.getMethodDescriptor(Type.getType(Object.class), Type.getType(Continuation.class)),
                                       null, null);
     mv.visitCode();
 
     // Load parameters from the Continuation and invoke the function
     int slot = 0;
-    if (!funDecl.isStatic) {
+    if (!funDecl.isStatic()) {
       mv.visitVarInsn(ALOAD, slot++);
     }
     int continuationSlot = slot++;
@@ -381,14 +391,15 @@ public class ClassCompiler {
       Utils.loadStoredValue(mv, numHeapLocals + i, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));
     }
 
-    mv.visitMethodInsn(funDecl.isStatic ? INVOKESTATIC : INVOKEVIRTUAL, internalName, funDecl.functionDescriptor.implementingMethod, MethodCompiler.getMethodDescriptor(funDecl), false);
+    // INVOKESTATIC or INVOKESPECIAL to make sure we don't get overriden method (if child class has overridden us).
+    mv.visitMethodInsn(funDecl.isStatic() ? INVOKESTATIC : INVOKESPECIAL, internalName, funDecl.functionDescriptor.implementingMethod, MethodCompiler.getMethodDescriptor(funDecl), false);
     Utils.box(mv, funDecl.returnType);   // Box if primitive
     mv.visitInsn(ARETURN);               // Always return Object from continuation wrapper
 
-    if (debug()) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
+//    if (debug()) {
+//      mv.visitEnd();
+//      cv.visitEnd();
+//    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -409,7 +420,11 @@ public class ClassCompiler {
   }
 
   boolean debug() {
-    return context.debug;
+    return context.debugLevel > 0;
+  }
+
+  boolean annotate() {
+    return context.debugLevel > 1;
   }
 
   //////////////////////////////////////

@@ -346,7 +346,7 @@ public class Utils {
     return result;
   }
 
-  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
+  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic, boolean isInitMethod) {
     Expr.FunDecl funDecl = new Expr.FunDecl(start, nameToken, returnType, params);
 
     // Build a FunctionDescriptor to unify Jacsal functions with builtin functions
@@ -361,8 +361,12 @@ public class Utils {
                                        .filter(p -> p.declExpr.initialiser == null)
                                        .map(p -> p.declExpr.name.getStringValue())
                                        .collect(Collectors.toSet());
+    descriptor.paramNames = params.stream().map(p -> p.declExpr.name.getStringValue()).collect(Collectors.toList());
+    descriptor.paramTypes = params.stream().map(p -> p.declExpr.type).collect(Collectors.toList());
+    descriptor.isInitMethod = isInitMethod;
     funDecl.functionDescriptor = descriptor;
-    funDecl.isStatic = isStatic;
+    funDecl.isResultUsed = false;
+    funDecl.type = FUNCTION;
     return funDecl;
   }
 
@@ -414,24 +418,52 @@ public class Utils {
   }
 
   public static boolean isNamedArgs(List<Expr> args) {
-    return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).namedArgs;
+    return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).isNamedArgs;
   }
 
   public static String plural(String word, int count) {
-    return count <= 1 ? word : (word + "s");
+    return count == 1 ? word : (word + "s");
   }
 
   public static Expr createNewInstance(Token newToken, JacsalType className, Token leftParen, List<Expr> args) {
     // Check for potential named args
     if (args.size() == 1 && args.get(0) instanceof Expr.MapLiteral) {
       var mapLiteral = (Expr.MapLiteral)args.get(0);
-      if (mapLiteral.literalKeyMap != null) {
-        mapLiteral.namedArgs = true;
-      }
+//      if (mapLiteral.literalKeyMap != null) {
+//        mapLiteral.isNamedArgs = true;
+//      }
     }
 
     // We create the instance and then invoke _$j$init on it
     var invokeNew  = new Expr.InvokeNew(newToken, className);
     return new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACSAL_INIT, newToken, args);
+  }
+
+  public static Stmt.VarDecl createParam(Token name, JacsalType type, Expr initialiser) {
+    Expr.VarDecl decl  = new Expr.VarDecl(name, initialiser);
+    decl.isParam = true;
+    decl.isResultUsed = false;
+    decl.type = type;
+    return new Stmt.VarDecl(name, decl);
+  }
+
+  public static void createVariableForFunction(Stmt.FunDecl funDecl) {
+    // Create a "variable" for the function that will have the MethodHandle as its value
+    // so we can get the function by value
+    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.nameToken, null);
+    varDecl.type = FUNCTION;
+    varDecl.funDecl = funDecl.declExpr;
+    varDecl.isResultUsed = false;
+    funDecl.declExpr.varDecl = varDecl;
+  }
+
+  public static boolean stacksAreEqual(Deque stack1, Deque stack2) {
+    if (stack1.size() != stack2.size()) { return false; }
+    for (Iterator iter1 = stack1.iterator(), iter2 = stack2.iterator(); iter1.hasNext() && iter2.hasNext(); ) {
+      if (!iter1.next().equals(iter2.next())) {
+        return false;
+      }
+    }
+    return true;
   }
 }
