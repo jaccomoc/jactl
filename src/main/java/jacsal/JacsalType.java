@@ -476,15 +476,16 @@ public class JacsalType {
    */
   public boolean isConvertibleTo(JacsalType otherType) {
     //if (otherType.isBoxedOrUnboxed(BOOLEAN))     { return true; }
-    if (isBoxedOrUnboxed(otherType))             { return true; }
-    if (is(ANY) || otherType.is(ANY))            { return true; }
-    if (isNumeric() && otherType.isNumeric())    { return true; }
-    if (is(MAP) && otherType.is(INSTANCE))       { return true; }
     if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
       if (getClassDescriptor() == null)           { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       return otherType.getClassDescriptor().isAssignableFrom(this.getClassDescriptor());
     }
+    if (is(CLASS) || otherType.is(CLASS))        { return false; }
+    if (isBoxedOrUnboxed(otherType))             { return true; }
+    if (is(ANY) || otherType.is(ANY))            { return true; }
+    if (isNumeric() && otherType.isNumeric())    { return true; }
+    if (is(MAP) && otherType.is(INSTANCE))       { return true; }
     return false;
   }
 

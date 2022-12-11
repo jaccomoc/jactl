@@ -18,6 +18,7 @@ package jacsal;
 
 import jacsal.runtime.AsyncTask;
 import jacsal.runtime.Continuation;
+import jacsal.runtime.RuntimeUtils;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
 
@@ -34,7 +35,7 @@ import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 public class ScriptCompiler extends ClassCompiler {
 
   ScriptCompiler(String source, JacsalContext context, Stmt.ClassDecl classDecl) {
-    super(source, context, null, classDecl);
+    super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jacsal");
   }
 
   public Function<Map<String,Object>, Future<Object>> compile() {
@@ -50,6 +51,8 @@ public class ScriptCompiler extends ClassCompiler {
       MethodHandle mh      = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
       return map -> {
         var future = new CompletableFuture<>();
+        Object out = map.get("out");
+        RuntimeUtils.setOutput(out);
         try {
           Object instance = compiledClass.getDeclaredConstructor().newInstance();
           Object result = isAsync ? mh.invoke(instance, (Continuation)null, map)
@@ -59,7 +62,7 @@ public class ScriptCompiler extends ClassCompiler {
         catch (Continuation c) {
           blockingWork(future, c);
         }
-        catch (JacsalError e) {
+        catch (JacsalError|IllegalStateException|IllegalArgumentException e) {
           future.complete(e);
         }
         catch (Throwable t) {

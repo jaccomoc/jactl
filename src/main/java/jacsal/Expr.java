@@ -94,6 +94,10 @@ abstract class Expr {
     return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.SUPER_VAR);
   }
 
+  public boolean isThis() {
+    return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.THIS_VAR);
+  }
+
   static class Binary extends Expr {
     Expr  left;
     Token operator;

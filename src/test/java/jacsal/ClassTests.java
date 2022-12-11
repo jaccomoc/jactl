@@ -35,6 +35,9 @@ public class ClassTests extends BaseTest {
     test("class X{int i=2}; {def X = new X(); return X.i}", 2);
     testError("def x = 1; class A { static def f(){x} }; A.f()", "unknown variable");
     testError("def x = 1; class A { def f(){x} }; A.f()", "unknown variable");
+    testError("class X {}; def x = X", "cannot convert");
+    testError("class X {}; def x; x = X", "cannot convert");
+    testError("class X {}; def f(){X}; def x; x = f()", "not compatible");
   }
 
   @Test public void simpleClass() {
@@ -831,6 +834,31 @@ public class ClassTests extends BaseTest {
     test("class X { int i=0 }; X x = new X(); x !instanceof X", false);
     test("class X { int i=0 }; def x = new X(); x !instanceof X", false);
     test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = a as X; Y y = new Y(x); x instanceof X && y instanceof Y && x !instanceof Y && y !instanceof X && x.y instanceof Y && y.x instanceof X", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z; z instanceof X", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z instanceof X", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z instanceof Y", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z instanceof Z", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z !instanceof X", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z !instanceof Y", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z !instanceof Z", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Z(); z instanceof X", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Z(); z instanceof Y", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Z(); z instanceof Z", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Z(); z !instanceof X", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Z(); z !instanceof Y", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Z(); z !instanceof Z", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Y z = new Y(); z instanceof X", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Y z = new Y(); z instanceof Y", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Y z = new Y(); z instanceof Z", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Y z = new Y(); z !instanceof X", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Y z = new Y(); z !instanceof Y", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Y z = new Y(); z !instanceof Z", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Y(); z instanceof X", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Y(); z instanceof Y", true);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Y(); z instanceof Z", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Y(); z !instanceof X", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Y(); z !instanceof Y", false);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def z = new Y(); z !instanceof Z", true);
   }
 
   @Test public void toStringTest() {
@@ -1002,6 +1030,8 @@ public class ClassTests extends BaseTest {
   @Test public void baseClasses() {
     testError("class X { int f(){1} }; class Y extends X { long f(){1} }; new Y().f()", "'long' not compatible");
     test("class X { int i = 3 }; class Y extends X { int j = 1 }; Y y = new Y(); y.i + y.j", 4);
+    testError("class X { int i = 3 }; class Y extends X { int i = 1 }; Y y = new Y(); y.i + y.j", "field 'i' clashes");
+    testError("class X { int i = 3 }; class Y extends X { def i(x){x} }; Y y = new Y(); y.i + y.j", "method name 'i' clashes");
     testError("class X { int i = 2 }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", "too many arguments");
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
     test("class X { int i = 2 }; class Y extends X { int j = i+1 }; Y y = new Y(); y.i + y.j", 5);
@@ -1013,14 +1043,26 @@ public class ClassTests extends BaseTest {
     testError("class X { int i = 3; X f(int j){this} }; class Y extends X { Y f(long j){this} }; Y y = new Y(); y.f().i", "different parameter type");
     testError("class X { int i = 3; X f(int j){this} }; class Y extends X { Y f(int j, long jj = 0){this} }; Y y = new Y(); y.f().i", "different number of parameters");
     testError("class X { int i = 3; X f(int j){this} }; class Y extends X { Y f(int jj){this} }; Y y = new Y(); y.f().i", "different parameter name");
+    testError("class X { def f(){2} }; class Y extends X { def f(){3} }; X y = null; y.f()", "null object");
     test("class X { def f(){2} }; class Y extends X { def f(){3} }; X y = new Y(); y.f()", 3);
+    testError("class X { def f(){2} }; class Y extends X { int f = 3 }; X y = new Y(); y.f()", "field 'f' clashes");
     test("class X { def f(){2} }; class Y extends X { def f(){3} }; def y = new Y(); y.f()", 3);
     test("class X { def f(){2} }; class Y extends X { def f(){3} }; def y = new Y(); y.\"${'f'}\"()", 3);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Z())", 3);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Y())", 2);
+    test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new X())", 1);
+    testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Y()", "cannot convert");
+    testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z; z = new Y()", "cannot convert");
+  }
+
+  @Test public void superReferences() {
+    testError("class X { def f(){super.f()} }; X x = new X(); x.f()", "does not extend any base class");
     testError("class X {}; class Y extends X { def f(){super.f()} }; Y y = new Y(); y.f()", "no such method/field 'f'");
     testError("class X {}; class Y extends X { int i = 1; def f(){super.i} }; Y y = new Y(); y.f()", "no such field or method 'i'");
     test("class X {int i = 3}; class Y extends X { def f(){super.i} }; Y y = new Y(); y.f()", 3);
     testError("class X {int i = 3}; class Y extends X { def f(){super.\"${'i'}\"} }; Y y = new Y(); y.f()", "dynamic field lookup not supported");
     testError("class X { def f(){2} }; class Y extends X { def f(){super.\"${'f'}\"() + 3} }; Y y = new Y(); y.f()", "dynamic field lookup not supported");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super[\"${'f'}\"]() + 3} }; Y y = new Y(); y.f()", "dynamic field lookup not supported");
     test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { super.f(x) + 1 } }; X x = new X(); x.f(4)", 10);
     test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { super.f(x) + 1 } }; Y y = new Y(); y.f(4)", 15);
     test("class X { def f(x) { x == 0 ? 0 : this.\"${'f'}\"(x-1) + x }}; class Y extends X { def f(x) { super.f(x) + 1 } }; Y y = new Y(); y.f(4)", 15);
@@ -1028,9 +1070,20 @@ public class ClassTests extends BaseTest {
     test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { super.f(x) + 1 } }; def y = new Y(); y.f(4)", 15);
     test("class X { def f(x) { x == 0 ? 0 : this.\"${'f'}\"(x-1) + x }}; class Y extends X { def f(x) { super.f(x) + 1 } }; def y = new Y(); y.f(4)", 15);
     test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; Y y = new Y(); y.f()", 5);
-    //test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super.super.f() + super.f()} }; Z z = new Z(); z.f()", 7);
+    testError("class X { def f(){2} }; class Y extends X { def f(){super = new X(); super.f() + 3} }; Y y = new Y(); y.f()", "cannot assign to 'super'");
+    testError("class X { def f(){i}; int i = 2 }; class Y extends X { def f(){super.super.i = 3; super.f() + 3} }; Y y = new Y(); y.f()", "no such field or method 'super'");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super.super = new X(); super.f() + 3} }; Y y = new Y(); y.f()", "no such field 'super'");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super.super.f() + super.f() + 3} }; Y y = new Y(); y.f()", "no such field or method");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super.'super' = new X(); super.f() + 3} }; Y y = new Y(); y.f()", "no such field 'super'");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; Y y = new Y(); y.super.f()", "no such field");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){this.super.f() + super.f()} }; Z z = new Z(); z.f()", "no such field or method 'super'");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super['super']['f']() + super.f()} }; Z z = new Z(); z.f()", "cannot be performed via '[]'");
+    testError("class X { def f(){2} }; class Y extends X { def f(){super?['f']() + 3} }; Y y = new Y(); y.f()", "cannot be performed via '?[]'");
+    test("class X { def f(){2} }; class Y extends X { def f(){super.'f'() + 3} }; Y y = new Y(); y.f()", 5);
+    test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super.f() + super.f()} }; Z z = new Z(); z.f()", 10);
+    test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super.f() + super.f()} }; X z = new Z(); z.f()", 10);
+    test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super.f() + super.f()} }; def z = new Z(); z.f()", 10);
   }
-
 
   @Test public void asyncTests() {
     test("class X { int i = 1 }; new X().\"${sleeper(0,'i')}\"", 1);

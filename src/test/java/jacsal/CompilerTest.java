@@ -1637,6 +1637,16 @@ class CompilerTest extends BaseTest {
     testError("var x", "Initialiser expression required");
   }
 
+  @Test void prefixResultUsage() {
+    test("int x = 1; ~x; 3", 3);
+    test("def x = 1; ~x; 3", 3);
+    test("boolean x = true; !x; 3", 3);
+    test("def x = true; !x; 3", 3);
+    test("def x = 1; !x; 3", 3);
+    test("int x = 1; -x; 3", 3);
+    test("def x = 1; -x; 3", 3);
+  }
+
   @Test
   public void prefixIncOrDec() {
     testError("++null", "null value encountered");
@@ -3605,6 +3615,7 @@ class CompilerTest extends BaseTest {
     testError("1D()", "cannot be called");
     testError("(3.0 + 2.0)()", "cannot be called");
     testError("def f(){1}; def g(){2}; f=g; f()", "cannot assign to function");
+    testError("def f(){1}; def g(){2}; f ?= g; f()", "cannot assign to function");
     testError("def f(){1}; def g(){2}; f += g; f()", "non-numeric operand");
 
     test("def f(x) { if (x == 1) 1 else x + f(x-1) }; f(4)", 10);

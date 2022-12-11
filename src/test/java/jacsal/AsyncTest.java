@@ -25,10 +25,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class AsyncTest {
 
-  boolean debug = false;
+  int debugLevel = 0;
 
   private boolean isAsync(String source) {
-    var context  = JacsalContext.create().debug(debug).build();
+    var context  = JacsalContext.create().debug(debugLevel).build();
     var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACSAL_PKG);
     var script   = parser.parse("AsyncScriptTest");
     var resolver = new Resolver(context, Map.of());
@@ -40,13 +40,13 @@ public class AsyncTest {
 
   private void sync(String source, Object expected) {
     assertFalse(isAsync(source));
-    var context  = JacsalContext.create().debug(debug).build();
+    var context  = JacsalContext.create().debug(debugLevel).build();
     assertEquals(expected, Compiler.run(source, context, Map.of()));
   }
 
   private void async(String source, Object expected) {
     assertTrue(isAsync(source));
-    var context  = JacsalContext.create().debug(debug).build();
+    var context  = JacsalContext.create().debug(debugLevel).build();
     assertEquals(expected, Compiler.run(source, context, Map.of()));
   }
 

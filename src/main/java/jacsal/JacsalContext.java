@@ -53,7 +53,7 @@ public class JacsalContext {
   final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
 
   // Whether to dump byte code during compilation
-  boolean debug = false;
+  int debugLevel = 0;
 
   String javaPackage = Utils.JACSAL_PKG;   // The Java package under which compiled classes will be generated
 
@@ -79,7 +79,7 @@ public class JacsalContext {
   public JacsalContext replMode(boolean mode)            { this.replMode           = mode;    return this; }
   public JacsalContext maxScale(int scale)               { this.maxScale           = scale;   return this; }
   public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
-  public JacsalContext debug(boolean value)              { this.debug              = value;   return this; }
+  public JacsalContext debug(int value)                  { this.debugLevel         = value;   return this; }
   public JacsalContext printSize(boolean value)          { this.printSize          = value;   return this; }
   public JacsalContext javaPackage(String pkg)           { this.javaPackage        = pkg;     return this; }
 

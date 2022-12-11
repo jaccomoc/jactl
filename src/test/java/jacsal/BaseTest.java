@@ -26,8 +26,9 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
-  boolean debug = false;
-  String packagName = Utils.DEFAULT_JACSAL_PKG;
+  protected int                debugLevel = 0;
+  protected String             packagName = Utils.DEFAULT_JACSAL_PKG;
+  protected Map<String,Object> globals    = new HashMap<String,Object>();
 
   protected void doTest(String code, Object expected) {
     doTest(code, true, false, false, expected);
@@ -41,7 +42,7 @@ public class BaseTest {
       JacsalContext jacsalContext = JacsalContext.create()
                                                  .evaluateConstExprs(evalConsts)
                                                  .replMode(replMode)
-                                                 .debug(debug)
+                                                 .debug(debugLevel)
                                                  .build();
       Object result = Compiler.run(code, jacsalContext, packagName, testAsync, createGlobals());
       if (expected instanceof Object[]) {
@@ -83,9 +84,9 @@ public class BaseTest {
       JacsalContext jacsalContext = JacsalContext.create()
                                                  .evaluateConstExprs(evalConsts)
                                                  .replMode(replMode)
-                                                 .debug(debug)
+                                                 .debug(debugLevel)
                                                  .build();
-      Compiler.run(code, jacsalContext, new HashMap<>());
+      Compiler.run(code, jacsalContext, createGlobals());
       fail("Expected JacsalError");
     }
     catch (JacsalError e) {
@@ -97,23 +98,16 @@ public class BaseTest {
   }
 
   protected Map<String, Object> createGlobals() {
-    try {
-      var globals = new HashMap<String, Object>();
-      //      MethodHandle handle  = MethodHandles.lookup().findStatic(CompilerTest.class, "timestamp", MethodType.methodType(Object.class, String.class, int.class, Object.class));
-      //      globals.put("timestamp", handle);
-      return globals;
-    }
-    catch (Exception e) {
-      fail(e);
-      return null;
-    }
+    var map = new HashMap<String, Object>();
+    map.putAll(globals);
+    return map;
   }
 
   protected Function<Map<String, Object>, Future<Object>> compile(String code) {
     JacsalContext jacsalContext = JacsalContext.create()
                                                .evaluateConstExprs(true)
                                                .replMode(true)
-                                               .debug(false)
+                                               .debug(0)
                                                .build();
     Map<String, Object> globals = new HashMap<>();
     return Compiler.compileScript(code, jacsalContext, globals);

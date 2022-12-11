@@ -51,10 +51,12 @@ public class ClassDescriptor {
     this(outerClass.getName() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces);
   }
 
-  public String getName()         { return name; }
-  public String getPackageName()  { return pkg; }
-  public String getPackagedName() { return packagedName; }
-  public String getInternalName() { return internalName; }
+  public String     getName()         { return name; }
+  public String     getPackageName()  { return pkg; }
+  public String     getPackagedName() { return packagedName; }
+  public String     getInternalName() { return internalName; }
+  public JacsalType getClassType()    { return JacsalType.createClass(this); }
+  public JacsalType getInstanceType() { return getClassType().createInstance(); }
 
   public void setInitMethod(FunctionDescriptor initMethod) { this.initMethod = initMethod; }
   public FunctionDescriptor getInitMethod() { return initMethod; }

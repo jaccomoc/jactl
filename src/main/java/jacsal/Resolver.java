@@ -198,7 +198,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     classDecl.classDescriptor = classDescriptor;
 
     if (localClasses.put(classDescriptor.getName(), classDescriptor) != null) {
-      throw new CompileError("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
+      error("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
     }
 
     // Do same for our inner classes where we now become the outerclass
@@ -217,10 +217,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         if (varDecl.isField) {
           String fieldName = varDecl.name.getStringValue();
           if (Functions.lookupMethod(ANY, fieldName) != null) {
-            throw new CompileError("Field name '" + fieldName + "' clashes with builtin method of same name", varDecl.name);
+            error("Field name '" + fieldName + "' clashes with builtin method of same name", varDecl.name);
           }
           if (!classDescriptor.addField(fieldName, varDecl.type, varDecl.initialiser == null)) {
-            throw new CompileError("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
+            error("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
           }
         }
       });
@@ -236,7 +236,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
         functionDescriptor.firstArgtype       = classType.createInstance();
         if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
-          throw new CompileError("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
+          error("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
         // Make sure that if overriding a base class method we have same signature (including param names)
         var baseClass = classDescriptor.getBaseClass();
@@ -331,23 +331,23 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(baseMethod.returnType);
     if (funDecl.returnType.getType() != baseMethod.returnType.getType() ||
         funDecl.returnType.is(INSTANCE) && !baseMethod.returnType.getClassDescriptor().isAssignableFrom(funDecl.returnType.getClassDescriptor())) {
-      throw new CompileError("Method " + baseMethod.name + "(): return type '" + funDecl.returnType +
+      error("Method " + baseMethod.name + "(): return type '" + funDecl.returnType +
                              "' not compatible with return type of base method '" + baseMethod.returnType + "'",
                              funDecl.location);
     }
     // Make sure all the parameter types are the same
     if (funDecl.parameters.size() != baseMethod.paramCount) {
-      throw new CompileError("Overriding method has different number of parameters than base method", funDecl.nameToken);
+      error("Overriding method has different number of parameters than base method", funDecl.nameToken);
     }
     for (int i = 0; i < baseMethod.paramCount; i++) {
       if (!funDecl.functionDescriptor.paramTypes.get(i).equals(baseMethod.paramTypes.get(i))) {
-        throw new CompileError("Overriding method has different parameter type to base method for parameter '" +
+        error("Overriding method has different parameter type to base method for parameter '" +
                                funDecl.functionDescriptor.paramNames.get(i) + "'", funDecl.parameters.get(i).location);
       }
     }
     for (int i = 0; i < funDecl.parameters.size(); i++) {
       if (!funDecl.functionDescriptor.paramNames.get(i).equals(baseMethod.paramNames.get(i))) {
-        throw new CompileError("Overriding method has different parameter name to base method parameter '" +
+        error("Overriding method has different parameter name to base method parameter '" +
                                baseMethod.paramNames.get(i) + "'", funDecl.parameters.get(i).location);
       }
     }
@@ -478,7 +478,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // expression string. If there are modifiers but not "it" then we generate an error.
     if (expr.implicitItMatch) {
       if ((!expr.modifiers.isEmpty() || expr.isSubstitute) && !variableExists(Utils.IT_VAR)) {
-        throw new CompileError("No 'it' variable in this scope to match against", expr.location);
+        error("No 'it' variable in this scope to match against", expr.location);
       }
       if (expr.modifiers.isEmpty() && !expr.isSubstitute) {
         // Just a normal expr string
@@ -538,7 +538,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (expr.isConst && expr.left.isConst && expr.left.constValue == null && !expr.operator.getType().isBooleanOperator()) {
-      throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.left.location);
+      error("Null operand for left-hand side of '" + expr.operator.getChars() + "': cannot be null", expr.left.location);
     }
 
     // Field access operators
@@ -555,7 +555,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
         // '[' and '?['
         if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && !expr.left.type.is(MAP,LIST,ITERATOR,STRING,INSTANCE)) {
-          throw new CompileError("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
+          error("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
       }
 
@@ -592,7 +592,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
             expr.left.type.is(MAP,INSTANCE) && expr.right.type.is(MAP,INSTANCE)) {
           return expr.type = expr.right.type;
         }
-        throw new CompileError("Cannot coerce from " + expr.left.type + " to " + expr.right.type, expr.operator);
+        error("Cannot coerce from " + expr.left.type + " to " + expr.right.type, expr.operator);
       }
       return expr.type = expr.right.type;
     }
@@ -613,15 +613,19 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       else {
         if (parent.type.is(INSTANCE,CLASS)) {
-          throw new CompileError("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
+          error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
         }
       }
     }
     if (fieldName == null) {
-      if (parent instanceof Expr.Identifier && ((Expr.Identifier)parent).identifier.getStringValue().equals(SUPER_VAR)) {
-        throw new CompileError("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
+      if (parent.isSuper()) {
+        error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
       }
       return ANY;   // Can't determine type at compile time; wait for runtime
+    }
+
+    if (parent.isSuper() && accessOperator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
+      error("Field access for 'super' cannot be performed via '" + accessOperator.getChars() + "]'", accessOperator);
     }
 
     if (parent.type.is(INSTANCE,CLASS)) {
@@ -637,16 +641,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         if (descriptor != null) {
           // If we only want fields but have found a method then throw error
           if (fieldsOnly) {
-            throw new CompileError("Found method where field expected", field.location);
+            error("Found method where field expected", field.location);
           }
           if (parent.type.is(CLASS) && !descriptor.isStatic) {
-            throw new CompileError("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
+            error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
           }
           type = FUNCTION;
         }
       }
       if (type == null) {
-        throw new CompileError("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
+        error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
       }
       return type;
     }
@@ -660,8 +664,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // default to ANY and figure it out at runtime
         return ANY;
       }
-      throw new CompileError("Invalid object type (" + parent.type + ") for field access", accessOperator);
+      error("Invalid object type (" + parent.type + ") for field access", accessOperator);
     }
+    return null;
   }
 
   @Override public JacsalType visitTernary(Expr.Ternary expr) {
@@ -676,7 +681,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.third.type = expr.second.type;
     }
     if (!expr.third.type.isConvertibleTo(expr.second.type)) {
-      throw new CompileError("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
+      error("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
     }
     return expr.type = JacsalType.result(expr.second.type, expr.operator1, expr.third.type);
   }
@@ -691,7 +696,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         if (expr.expr.isConst && expr.expr.constValue instanceof String) {
           String value = (String)expr.expr.constValue;
           if (value.length() != 1) {
-            throw new CompileError((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.operator);
+            error((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.operator);
           }
           expr.isConst = true;
           expr.constValue = (int)(value.charAt(0));
@@ -701,7 +706,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
       // Type cast so if we already know we have a bad cast then throw error
       if (!expr.expr.type.isConvertibleTo(JacsalType.valueOf(expr.operator.getType()))) {
-        throw new CompileError("Cannot cast from " + expr.expr.type + " to " + expr.operator.getChars(), expr.operator);
+        error("Cannot cast from " + expr.expr.type + " to " + expr.operator.getChars(), expr.operator);
       }
 
       // We have a cast so our type is the type we are casting to
@@ -719,12 +724,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     expr.type = expr.expr.type.unboxed();
     if (expr.operator.is(GRAVE)) {
-      if (!expr.expr.type.is(INT,LONG,ANY)) {
-        throw new CompileError("Operand for '~' must be int or long (not " + expr.type + ")", expr.operator);
+      if (!expr.type.is(INT,LONG,ANY)) {
+        error("Operand for '~' must be int or long (not " + expr.expr.type + ")", expr.operator);
       }
     }
     if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
-      throw new CompileError("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
+      error("Prefix operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
     }
     if (expr.isConst) {
       expr.constValue = expr.expr.constValue;
@@ -746,7 +751,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       else
       if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
         if (expr.expr.constValue == null) {
-          throw new CompileError("Prefix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
+          error("Prefix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
         }
         expr.constValue = incOrDec(expr.operator.is(PLUS_PLUS), expr.type, expr.expr.constValue);
       }
@@ -761,14 +766,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
       if (expr.isConst) {
         if (expr.expr.constValue == null) {
-          throw new CompileError("Postfix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
+          error("Postfix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
         }
         // For const expressions, postfix inc/dec is a no-op
         expr.constValue = expr.expr.constValue;
       }
       return expr.type;
     }
-    throw new CompileError("Unary operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
+    error("Unary operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
+    return null;
   }
 
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
@@ -827,7 +833,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     JacsalType type = resolve(expr.initialiser);
     if (type != null && !type.isConvertibleTo(expr.type)) {
-      throw new CompileError("Cannot convert initialiser of type " + type + " to type of variable " +
+      error("Cannot convert initialiser of type " + type + " to type of variable " +
                              expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
     }
 
@@ -951,12 +957,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitVarAssign(Expr.VarAssign expr) {
     expr.type = resolve(expr.identifierExpr);
+    if (expr.identifierExpr.isSuper()) {
+      error("Cannot assign to 'super'", expr.identifierExpr.location);
+    }
     if (expr.type.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
-      throw new CompileError("Cannot assign to function", expr.identifierExpr.location);
+      error("Cannot assign to function", expr.identifierExpr.location);
     }
     resolve(expr.expr);
     if (!expr.expr.type.isConvertibleTo(expr.type)) {
-      throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
+      error("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
     if (expr.operator.is(QUESTION_EQUAL)) {
       // If using ?= have to allow for null being result when assignment doesn't occur
@@ -970,6 +979,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitVarOpAssign(Expr.VarOpAssign expr) {
     expr.type = resolve(expr.identifierExpr);
+    if (expr.identifierExpr.isSuper()) {
+      error("Cannot assign to 'super'", expr.identifierExpr.location);
+    }
     if (expr.expr instanceof Expr.Binary) {
       Expr.Binary valueExpr = (Expr.Binary) expr.expr;
 
@@ -980,7 +992,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.expr);
 
     if (!expr.expr.type.isConvertibleTo(expr.type)) {
-      throw new CompileError("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
+      error("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
     return expr.type;
   }
@@ -1025,13 +1037,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private JacsalType resolveFieldAssignment(Expr expr, Expr parent, Expr field, Expr valueExpr, Token accessType) {
     boolean dottedAcess = accessType.is(DOT, QUESTION_DOT);
     if (dottedAcess && !parent.type.is(ANY,MAP,INSTANCE)) {
-      throw new CompileError("Invalid object type (" + parent.type + ") for field access", accessType);
+      error("Invalid object type (" + parent.type + ") for field access", accessType);
     }
     if (!dottedAcess && !parent.type.is(ANY,LIST,MAP,INSTANCE)) {
       if (parent.type.is(STRING)) {
-        throw new CompileError("Cannot assign to element of String", accessType);
+        error("Cannot assign to element of String", accessType);
       }
-      throw new CompileError("Invalid object type (" + parent.type + ") for indexed (or field) access", accessType);
+      error("Invalid object type (" + parent.type + ") for indexed (or field) access", accessType);
     }
 
     // If we don't already know the parent type then assume type based on type of access being done
@@ -1069,7 +1081,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     returnExpr.returnType = getFunctions().peek().returnType;
     returnExpr.funDecl = getFunctions().peek();
     if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
-      throw new CompileError("Expression type " + returnExpr.expr.type + " not compatible with function " +
+      error("Expression type " + returnExpr.expr.type + " not compatible with function " +
                              currentFunctionName() + "() return type of " +
                              returnExpr.returnType, returnExpr.expr.location);
     }
@@ -1106,10 +1118,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     resolve(expr.callee);
     expr.args.forEach(this::resolve);
     if (!expr.callee.type.is(FUNCTION,ANY)) {
-      throw new CompileError("Expression of type " + expr.callee.type + " cannot be called", expr.token);
+      error("Expression of type " + expr.callee.type + " cannot be called", expr.token);
     }
     if (expr.callee.isConst && expr.callee.constValue == null) {
-      throw new CompileError("Null value for Function", expr.token);
+      error("Null value for Function", expr.token);
     }
 
     final var currentFunction = getFunctions().peek();
@@ -1145,7 +1157,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       var descriptor = lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
         if (expr.parent.type.is(CLASS) && !descriptor.isStatic) {
-          throw new CompileError("No static method '" + expr.methodName + "' exists for " + expr.parent.type, expr.location);
+          error("No static method '" + expr.methodName + "' exists for " + expr.parent.type, expr.location);
         }
         expr.methodDescriptor = descriptor;
         expr.type = descriptor.returnType;
@@ -1156,14 +1168,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         var classDescriptor = expr.parent.type.getClassDescriptor();
         JacsalType fieldType = classDescriptor.getField(expr.methodName);
         if (fieldType == null || !fieldType.is(FUNCTION,ANY)) {
-          throw new CompileError("No such method/field '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
+          error("No such method/field '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
         }
       }
       else
       if (!expr.parent.type.is(MAP)) {
         // If we are not a Map then we know at compile time that method does not exist. (If we are a Map then at
         // runtime someone could create a field in the Map with this name so we have to wait until runtime.)
-        throw new CompileError("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.methodNameLocation);
+        error("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.methodNameLocation);
       }
     }
 
@@ -1197,8 +1209,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = JacsalType.typeFromClass(method.getReturnType());
     }
     catch (NoSuchMethodException e) {
-      throw new CompileError("Could not find method " + expr.methodName + " in class " + expr.clss.getName(), expr.token);
+      error("Could not find method " + expr.methodName + " in class " + expr.clss.getName(), expr.token);
     }
+    return null;
   }
 
   @Override public JacsalType visitBlock(Expr.Block expr) {
@@ -1274,18 +1287,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       if (expr.operator.isNot(PLUS,STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings"); }
       if (expr.operator.is(PLUS)) {
         if (leftValue == null) {
-          throw new CompileError("Left-hand side of '+' cannot be null", expr.operator);
+          error("Left-hand side of '+' cannot be null", expr.operator);
         }
         expr.constValue = Utils.toString(leftValue) + Utils.toString(rightValue);
       }
       else {
         if (rightValue == null) {
-          throw new CompileError("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
+          error("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
         }
         String lhs    = Utils.toString(leftValue);
         long   length = Utils.toLong(rightValue);
         if (length < 0) {
-          throw new CompileError("String repeat count must be >= 0", expr.right.location);
+          error("String repeat count must be >= 0", expr.right.location);
         }
         expr.constValue = lhs.repeat((int)length);
       }
@@ -1319,8 +1332,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = BOOLEAN;
     }
 
-    if (leftValue == null)  { throw new CompileError("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
-    if (rightValue == null) { throw new CompileError("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
+    if (leftValue == null)  { error("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
+    if (rightValue == null) { error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
 
     switch (expr.type.getType()) {
       case INT: {
@@ -1444,7 +1457,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // MethodHandle for v won't exist at the time that g is invoked.
     if (funDecl.earliestForwardReference != null) {
       if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
-        throw new CompileError("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +
+        error("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +
                                varDecl.name.getStringValue() + " not yet declared at time of reference",
                                funDecl.earliestForwardReference);
       }
@@ -1470,7 +1483,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private Stmt.While currentWhileLoop(Token token) {
     Stmt.While whileStmt = getFunctions().peek().currentWhileLoop;
     if (whileStmt == null) {
-      throw new CompileError(token.getChars() + " must be within a while/for loop", token);
+      error(token.getChars() + " must be within a while/for loop", token);
     }
     return whileStmt;
   }
@@ -1624,7 +1637,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       if (className == null) {
         if (classToken != null) {
-          throw new CompileError("Unknown class '" + firstClass + "'", classToken);
+          error("Unknown class '" + firstClass + "'", classToken);
         }
         return null;
       }
@@ -1641,13 +1654,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (descriptor == null && classPkg != null) {
       var jacsalPackage = jacsalContext.getPackage(classPkg);
       if (jacsalPackage == null) {
-        throw new CompileError("Unknown package '" + classPkg + "'", packageToken);
+        error("Unknown package '" + classPkg + "'", packageToken);
       }
       descriptor = jacsalPackage.getClass(className);
     }
 
     if (descriptor == null && classToken != null) {
-      throw new CompileError("Unknown class '" + className.replaceAll("\\$", ".") + "' in package " + classPkg, classToken);
+      error("Unknown class '" + className.replaceAll("\\$", ".") + "' in package " + classPkg, classToken);
     }
     return descriptor;
   }
@@ -1693,7 +1706,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (varDecl == null) {  block = null;  }
 
     if (inStaticContext() && (name.equals(Utils.THIS_VAR) || name.equals(SUPER_VAR))) {
-      throw new CompileError("Reference to '" + name + "' in static function", location);
+      error("Reference to '" + name + "' in static function", location);
     }
 
     // We haven't found symbol yet so check super classes, class names, globals, and finally, builtin functions
@@ -1707,16 +1720,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl == UNDEFINED) {
-      throw new CompileError("Variable initialisation cannot refer to itself", location);
+      error("Variable initialisation cannot refer to itself", location);
     }
 
     if (varDecl != null) {
       if (varDecl.isField && inStaticContext()) {
         if (varDecl.funDecl == null) {
-          throw new CompileError("Reference to field in static function", location);
+          error("Reference to field in static function", location);
         }
         if (!varDecl.funDecl.isStatic()) {
-          throw new CompileError("Reference to non-static method in static function", location);
+          error("Reference to non-static method in static function", location);
         }
       }
 
@@ -1798,6 +1811,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         if (classStack.peek().fieldVars.containsKey(name)) {
           error("Forward reference to field '" + name + "'", location);
         }
+        if (name.equals(SUPER_VAR)) {
+          error("Reference to 'super' in class that does not extend any base class", location);
+        }
         error("Reference to unknown variable '" + name + "'", location);
       }
     }
@@ -1813,7 +1829,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return global;
     }
     if (global != null) {
-      throw new CompileError("Illegal access to global '" + name + "': access to globals not permitted within class scope", location);
+      error("Illegal access to global '" + name + "': access to globals not permitted within class scope", location);
     }
     return null;
   }
@@ -1839,7 +1855,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private void throwIf(boolean condition, String msg, Token location) {
     if (condition) {
-      throw new CompileError(msg, location);
+      error(msg, location);
     }
   }
 
@@ -1868,7 +1884,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       List<Stmt> stmts = ((Stmt.Block) stmt).stmts.stmts;
       if (stmts.size() == 0) {
         if (returnType.isPrimitive()) {
-          throw new CompileError("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
+          error("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
         }
         stmts.add(returnStmt(stmt.location, returnType));
       }
@@ -1883,7 +1899,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Stmt.If ifStmt = (Stmt.If) stmt;
       if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
         if (returnType.isPrimitive()) {
-          throw new CompileError("Implicit return of null for " +
+          error("Implicit return of null for " +
                                  (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
         }
         if (ifStmt.trueStmt == null) {
@@ -1945,7 +1961,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
 
     // Other statements are not supported for implicit return
-    throw new CompileError("Unsupported statement type " + stmt.getClass().getName()  + " for implicit return", stmt.location);
+    error("Unsupported statement type " + stmt.getClass().getName()  + " for implicit return", stmt.location);
+    return null;
   }
 
   /**

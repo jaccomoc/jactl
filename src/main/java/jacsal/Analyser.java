@@ -26,13 +26,22 @@ import static jacsal.JacsalType.ANY;
  * Class that analyses the AST for any final tweaks needed before generating the byte code.
  * This includes:
  * <ul>
- * <li>Working out which method/function invocations
- * need to be treated as potentially async invocations. This allows us to avoid having to
- * generate a lot of code for saving stack/locals state on each invocation and only do it when
- * we know we are invoking an async function or when we have no way of knowing.
- * The reason for needing another pass over the AST to do this (rather than do it all in Resolver)
- * is we need to know whether some variables are "final" or not and we only know this at the end
- * of the resolve phase.
+ * <li>
+ *   Working out which method/function invocations need to be treated as potentially async
+ *   invocations. This allows us to avoid having to generate a lot of code for saving
+ *   stack/locals state on each invocation and only do it when we know we are invoking
+ *   an async function or when we have no way of knowing. The reason for needing another
+ *   pass over the AST to do this (rather than do it all in Resolver) is we need to know
+ *   whether some variables are "final" or not and we only know this at the end of the
+ *   resolve phase.
+ * </li>
+ * <li>
+ *   While working out what calls are async we also mark the statements that that calls
+ *   belong to as async so that the MethodCompiler can work out when to store results on
+ *   the stack (non-async) or in local slots (async). This is because async behaviour
+ *   involves catching exceptions which results in any previous stack values being
+ *   discarded. By storing state in local vars instead of the stack we can then preserve
+ *   these local variables in the Continuation object for later restoration after resume.
  * </li>
  * </ul>
  */
@@ -81,7 +90,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   Void analyse(Stmt stmt) {
     if (stmt != null) {
-      return stmt.accept(this);
+      stmt.accept(this);
     }
     return null;
   }

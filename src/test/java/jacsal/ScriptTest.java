@@ -57,8 +57,8 @@ public class ScriptTest {
 
   private void diff(String expected, String actualOutput) {
     if (!expected.equals(actualOutput)) {
-      Iterator<String> expectedIter = expected.lines().iterator();
-      Iterator<String> actualIter = actualOutput.lines().iterator();
+      var expectedIter = expected.lines().iterator();
+      var actualIter   = actualOutput.lines().iterator();
 
       int line = 1;
       while (expectedIter.hasNext() && actualIter.hasNext()) {

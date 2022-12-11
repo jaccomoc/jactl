@@ -43,7 +43,7 @@ import org.objectweb.asm.Label;
  */
 class Stmt {
 
-  Token      location = null;
+  Token      location   = null;
   boolean    isResolved = false;
 
   /**

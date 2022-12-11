@@ -41,7 +41,7 @@ abstract class Stmt {
   abstract <T> T accept(Visitor<T> visitor);
 
 
-  Token      location = null;
+  Token      location   = null;
   boolean    isResolved = false;
 
   /**
