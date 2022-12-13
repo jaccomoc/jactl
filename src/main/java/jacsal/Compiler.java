@@ -89,7 +89,7 @@ public class Compiler {
     return compile(source, jacsalContext, scriptClass);
   }
 
-  private static Function<Map<String,Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
+  static Function<Map<String,Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
     var compiler = new ScriptCompiler(source, jacsalContext, script);
     return compiler.compile();
   }

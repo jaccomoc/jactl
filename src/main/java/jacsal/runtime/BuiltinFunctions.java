@@ -68,7 +68,7 @@ public class BuiltinFunctions {
       // Global functions
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
-      registerGlobalFunction("sleeper", "sleeper", false, 2);
+      registerGlobalFunction("sleep", "sleep", false, 1);
       initialised = true;
     }
   }
@@ -265,14 +265,14 @@ public class BuiltinFunctions {
   // Global Functions
   /////////////////////////////////////
 
-  // = sleeper
-  public static Object sleeper(Continuation c, long timeMs, Object result) {
+  // = sleep
+  public static Object sleep(Continuation c, long timeMs, Object result) {
     throw Continuation.create(() -> { doSleep(timeMs); return result; });
   }
-  public static Object sleeperWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 2, LONG, 2, source, offset);
+  public static Object sleepWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, LONG, 2, source, offset);
     try {
-      sleeper(c, ((Number)args[0]).longValue(), args[1]);
+      sleep(c, ((Number)args[0]).longValue(), args.length == 2 ? args[1] : null);
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(args[0]) + " to long", source, offset);

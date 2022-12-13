@@ -19,6 +19,7 @@ package jacsal;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.function.Function;
@@ -26,9 +27,11 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
+  private   static int scriptNum = 1;
   protected int                debugLevel = 0;
   protected String             packagName = Utils.DEFAULT_JACSAL_PKG;
   protected Map<String,Object> globals    = new HashMap<String,Object>();
+  protected boolean            useAsyncDecorator = true;
 
   protected void doTest(String code, Object expected) {
     doTest(code, true, false, false, expected);
@@ -44,7 +47,11 @@ public class BaseTest {
                                                  .replMode(replMode)
                                                  .debug(debugLevel)
                                                  .build();
-      Object result = Compiler.run(code, jacsalContext, packagName, testAsync, createGlobals());
+
+      var    bindings = createGlobals();
+      //var    compiled = Compiler.compileScript(code, jacsalContext, packagName, testAsync, bindings);
+      var    compiled = compileScript(code, jacsalContext, "Script" + scriptNum++, packagName, testAsync, bindings);
+      Object result   = Compiler.runSync(compiled, bindings);
       if (expected instanceof Object[]) {
         assertTrue(result instanceof Object[]);
         assertTrue(Arrays.equals((Object[]) expected, (Object[]) result));
@@ -59,13 +66,45 @@ public class BaseTest {
     }
   }
 
+  public Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
+    var script   = parser.parse(className);
+    if (testAsync) {
+      ExprDecorator exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
+                                         : new ExprDecorator(
+        expr -> {
+          if (expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
+              expr instanceof Expr.TypeExpr || expr instanceof Expr.FunDecl ||
+              expr instanceof Expr.MapLiteral && ((Expr.MapLiteral)expr).isNamedArgs ||
+              expr instanceof Expr.Binary && ((Expr.Binary)expr).createIfMissing ||
+              expr instanceof Expr.InvokeNew) {
+            return expr;
+          }
+          Expr newExpr = new Expr.Call(expr.location,
+                                       new Expr.Identifier(expr.location.newIdent("sleep")),
+                                       List.of(new Expr.Literal(new Token(TokenType.INTEGER_CONST, expr.location).setValue(0)),
+                                               expr));
+          newExpr.isResultUsed = expr.isResultUsed;
+          expr.isResultUsed = true;
+          return newExpr;
+        });
+      exprDecorator.decorate(script);
+    }
+    var resolver = new Resolver(jacsalContext, bindings);
+    resolver.resolveScript(script);
+    var analyser = new Analyser();
+    //analyser.testAsync = testAsync;
+    analyser.analyseScript(script);
+    return Compiler.compile(source, jacsalContext, script);
+  }
+
   protected void test(String code, Object expected) {
     doTest(code, true, false, false, expected);
     doTest(code, false, false, false, expected);
     doTest(code, true, true, false, expected);
     doTest(code, false, true, false, expected);
-    doTest(code, true, true, true, expected);
     doTest(code, true, false, true, expected);
+    doTest(code, true, true, true, expected);
   }
 
   protected void testError(String code, String expectedError) {

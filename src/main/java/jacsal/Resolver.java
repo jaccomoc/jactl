@@ -203,6 +203,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // Do same for our inner classes where we now become the outerclass
     classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
+    classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
   }
 
   private void prepareClass(Stmt.ClassDecl classDecl) {
@@ -648,6 +649,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           }
           type = FUNCTION;
         }
+        if (descriptor == null && parent.type.is(CLASS)) {
+          // Look for an inner class if parent is a Class
+          var innerClass = parent.type.getClassDescriptor().getInnerClass(fieldName);
+          if (innerClass != null) {
+            type = JacsalType.createClass(innerClass);
+          }
+        }
       }
       if (type == null) {
         error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
@@ -968,8 +976,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       error("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
     if (expr.operator.is(QUESTION_EQUAL)) {
-      // If using ?= have to allow for null being result when assignment doesn't occur
-      expr.type = expr.type.boxed();
+      // If using ?= have to allow for null being result
+      expr.type = ANY;
     }
     // Flag variable as non-final since it has had an assignment to it
     expr.identifierExpr.varDecl.isFinal = false;
@@ -1060,10 +1068,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (parent.type.is(INSTANCE)) {
       // Type will be the field type (boxed if ?= being used due to possibility of null value)
       JacsalType fieldType = getFieldType(parent, accessType, field, true);
-      if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign)expr).assignmentOperator.is(QUESTION_EQUAL)) {
+      if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign) expr).assignmentOperator.is(QUESTION_EQUAL)) {
         fieldType = fieldType.boxed();
       }
       return expr.type = fieldType;
+    }
+
+    if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign)expr).assignmentOperator.is(QUESTION_EQUAL)) {
+      return expr.type = ANY;
     }
 
     // Map, List, or we don't know...
@@ -1610,16 +1622,18 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // found check for any imported classes that match
     if (classPkg == null) {
       // Class could be any class (inner or top level) from current class scope upwards or
-      // could be X.Y.Z where X is top level in this script. So we need to find "firstClass"
-      // to then work out if we have a valid class name.
-      // Look in current class heirarchy first.
+      // a path that starts from any class in the hierarchy.
       for (var classStmt : classStack) {
         if (classStmt.name.getStringValue().equals(firstClass)) {
           className = classStmt.classDescriptor.getName() + subPath;
           break;
         }
+        if (classStmt.classDescriptor.getInnerClass(firstClass) != null) {
+          className = classStmt.classDescriptor.getName() + '$' + firstClass + subPath;
+          break;
+        }
       }
-      // If not in current heirarchy and in a script then look for a top level class of that name
+      // If not in current hierarchy and in a script then look for a top level class of that name
       if (className == null && isScript) {
         String topLevelClass = scriptName + '$' + firstClass;
         var topClass = localClasses.get(topLevelClass);
@@ -2326,13 +2340,17 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     initWrapper.block         = new Stmt.Block(classDecl.name, wrapperSmts);
     wrapperSmts.stmts.addAll(List.of(objectArrParam, sourceParam, offsetParam));
 
-    // If null value for args and we have no mandatory fields then invoke normal init method. Otherwise generate
-    // error.
+    // If null value for args or empty array and we have no mandatory fields then invoke normal init method.
+    // Otherwise generate error.
+    Expr.Literal zero = new Expr.Literal(new Token(INTEGER_CONST, classDecl.name).setValue(0));
     var mandatoryFields = initMethod.functionDescriptor.mandatoryArgCount > 0;
     var ifNullArgArr = new Stmt.If(classDecl.name,
-                                   new Expr.Binary(new Expr.Identifier(objectArrToken),
-                                                   new Token(EQUAL_EQUAL, classDecl.name),
-                                                   new Expr.Literal(new Token(NULL,classDecl.name).setValue(null))),
+                                   new Expr.Binary(new Expr.Binary(new Expr.Identifier(objectArrToken),
+                                                                   new Token(EQUAL_EQUAL, classDecl.name),
+                                                                   new Expr.Literal(new Token(NULL,classDecl.name).setValue(null))),
+                                                   new Token(PIPE_PIPE, classDecl.name),
+                                                   new Expr.Binary(new Expr.ArrayLength(classDecl.name, new Expr.Identifier(objectArrToken)),
+                                                                   new Token(EQUAL_EQUAL, classDecl.name), zero)),
                                    mandatoryFields ? new Stmt.ThrowError(classDecl.name,
                                                                          new Expr.Identifier(sourceToken),
                                                                          new Expr.Identifier(offsetToken),
@@ -2341,9 +2359,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                    null);
     wrapperSmts.stmts.add(ifNullArgArr);
 
-    Expr.ArrayGet arg0        = new Expr.ArrayGet(classDecl.name,
-                                                  new Expr.Identifier(objectArrToken),
-                                                  new Expr.Literal(new Token(INTEGER_CONST, classDecl.name).setValue(0)));
+    Expr.ArrayGet arg0        = new Expr.ArrayGet(classDecl.name, new Expr.Identifier(objectArrToken), zero);
     var instanceOfNamedArgs   = new Expr.InstanceOf(classDecl.name, arg0, Type.getInternalName(NamedArgsMapCopy.class));
 
     String argMapName         = "_$argMap";

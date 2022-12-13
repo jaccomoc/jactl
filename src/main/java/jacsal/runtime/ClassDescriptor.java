@@ -35,6 +35,7 @@ public class ClassDescriptor {
   Map<String, JacsalType>         fields          = new LinkedHashMap<>();
   Map<String, JacsalType>         mandatoryFields = new LinkedHashMap<>();
   Map<String, FunctionDescriptor> methods         = new LinkedHashMap<>();
+  Map<String, ClassDescriptor>    innerClasses    = new LinkedHashMap<>();
   FunctionDescriptor              initMethod;
 
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JacsalType baseClass, List<ClassDescriptor> interfaces) {
@@ -134,6 +135,14 @@ public class ClassDescriptor {
     }
     allMandatoryFields.putAll(mandatoryFields);
     return allMandatoryFields;
+  }
+
+  public void addInnerClasses(List<ClassDescriptor> classes) {
+    innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.name, desc -> desc)));
+  }
+
+  public ClassDescriptor getInnerClass(String className) {
+    return innerClasses.get(name + '$' + className);
   }
 
   public boolean isInterface() {

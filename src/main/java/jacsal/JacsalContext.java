@@ -28,11 +28,13 @@ public class JacsalContext {
 
   private final DynamicClassLoader classLoader = new DynamicClassLoader();
 
-  private ExecutorService    eventLoop;
-  private ExecutorService    blockingExecutor;
+  private static int eventLoopThreads = Runtime.getRuntime().availableProcessors();
+  private static int blockingThreads  = Runtime.getRuntime().availableProcessors() * 4;
 
-  int eventLoopThreads = Runtime.getRuntime().availableProcessors();
-  int blockingThreads  = Runtime.getRuntime().availableProcessors() * 4;
+  // Make static for the moment to avoid creating too many threads during unit test executions
+  private static ExecutorService eventLoop = Executors.newFixedThreadPool(eventLoopThreads);
+  private static ExecutorService blockingExecutor = Executors.newFixedThreadPool(blockingThreads);
+
 
   private boolean initialised = false;
 
@@ -75,7 +77,7 @@ public class JacsalContext {
     return clss;
   }
 
-  public JacsalContext eventLoopThreads(int threads)     { this.eventLoopThreads   = threads; return this; }
+//  public JacsalContext eventLoopThreads(int threads)     { this.eventLoopThreads   = threads; return this; }
   public JacsalContext replMode(boolean mode)            { this.replMode           = mode;    return this; }
   public JacsalContext maxScale(int scale)               { this.maxScale           = scale;   return this; }
   public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
@@ -84,8 +86,6 @@ public class JacsalContext {
   public JacsalContext javaPackage(String pkg)           { this.javaPackage        = pkg;     return this; }
 
   public JacsalContext build() {
-    eventLoop        = Executors.newFixedThreadPool(eventLoopThreads);
-    blockingExecutor = Executors.newFixedThreadPool(blockingThreads);
     initialised = true;
     return this;
   }

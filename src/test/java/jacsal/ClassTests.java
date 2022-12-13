@@ -42,16 +42,6 @@ public class ClassTests extends BaseTest {
 
   @Test public void simpleClass() {
     test("class X {}", null);
-    test("class X { static def f(){3} }; X.f()", 3);
-    test("class X { static int f(x){x*x} }; X.f(3)", 9);
-    testError("class X { static int f(x){x*x} }; def g = X.ff; g(3)", "No such field or method 'ff'");
-    test("class X { static def f(x){x*x} }; new X().f(3)", 9);
-    test("class X { static int f(x){x*x} }; def g = X.f; g(3)", 9);
-    test("class X { static int f(x){x*x} }; def g = new X().f; g(3)", 9);
-    test("class X { static int f(x){x*x} }; X.\"${'f'}\"(3)", 9);
-    test("class X { static int f(x){x*x} }; new X().\"${'f'}\"(3)", 9);
-    test("class X { static int f(x){x*x} }; def g = X.\"${'f'}\"; g(3)", 9);
-    test("class X { static def f(x){x*x} }; def g = new X().f; g(3)", 9);
     test("class X { def f(){3} }; new X().f()", 3);
     test("class X { def f(){3} }; new X().\"${'f'}\"()", 3);
     test("class X { def f(){3} }; def g = new X().f; g()", 3);
@@ -80,9 +70,35 @@ public class ClassTests extends BaseTest {
     test("class X { var f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
     test("class X { var f = {it*it} }; def x = new X(); x.f(2)", 4);
     test("class X { var f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
+    testError("class X { int i = sleep(0,-1)+sleep(0,2); static def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", "field in static function");
+  }
+
+  @Test public void simpleStaticMethods() {
+    useAsyncDecorator = false;    // sleep(0,X) won't compile so can't test with async decorator
+
+    test("class X { static def f(){3} }; X.f()", 3);
+    test("class X { static int f(x){x*x} }; X.f(3)", 9);
+    test("class X { static def f(x){x*x} }; new X().f(3)", 9);
+    test("class X { static int f(x){x*x} }; def g = X.f; g(3)", 9);
+    test("class X { static int f(x){x*x} }; def g = new X().f; g(3)", 9);
+    test("class X { static int f(x){x*x} }; X.\"${'f'}\"(3)", 9);
+    test("class X { static int f(x){x*x} }; new X().\"${'f'}\"(3)", 9);
+    test("class X { static int f(x){x*x} }; def g = X.\"${'f'}\"; g(3)", 9);
+    test("class X { static def f(x){x*x} }; def g = new X().f; g(3)", 9);
+
+    test("class X { static def f(){sleep(0,2) + sleep(0,1)} }; X.f()", 3);
+    test("class X { static int f(x){sleep(0,x)*sleep(0,x)} }; X.f(3)", 9);
+    test("class X { static def f(x){sleep(0,x)*sleep(0,x)} }; new X().f(3)", 9);
+    test("class X { static int f(x){sleep(0,x)*sleep(0,x)} }; def g = X.f; g(3)", 9);
+    test("class X { static int f(x){sleep(0,x)*sleep(0,x)} }; def g = new X().f; g(3)", 9);
+    test("class X { static int f(x){sleep(0,x)*sleep(0,x)} }; X.\"${'f'}\"(3)", 9);
+    test("class X { static int f(x){sleep(0,x)*sleep(0,x)} }; new X().\"${'f'}\"(3)", 9);
+    test("class X { static int f(x){sleep(0,x)*sleep(0,x)} }; def g = X.\"${'f'}\"; g(3)", 9);
+    test("class X { static def f(x){sleep(0,x)*sleep(0,x)} }; def g = new X().f; g(3)", 9);
+
+    testError("class X { static int f(x){x*x} }; def g = X.ff; g(3)", "No such field or method 'ff'");
     testError("class X { int i = 0; static def f() { this } }; X.f()", "reference to 'this' in static function");
     testError("class X { int i = 0; static def f() { i } }; X.f()", "reference to field in static function");
-    testError("class X { int i = sleeper(0,-1)+sleeper(0,2); static def f(){ return sleeper(0,{ sleeper(0,++i - 1)+sleeper(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", "field in static function");
   }
 
   @Test public void fieldClashWithBuiltinMethod() {
@@ -167,7 +183,6 @@ public class ClassTests extends BaseTest {
     testError("class X { def f() { def g = h; g() }; def h(){3} }; def x = new X(); x.f = x.h", "field expected");
     testError("class X { def f() { def g = h; g() }; def h(){3} }; X x = new X(); x.\"${'f'}\" = x.h", "field expected");
     testError("class X { def f() { def g = h; g() }; def h(){3} }; def x = new X(); x.\"${'f'}\" = x.h", "field expected");
-    test("class X { static def f() { def g = h; g() }; static def h(){3} }; X.f()", 3);
     test("class X { def f() { def g = h; g() }; static def h(){3} }; new X().f()", 3);
     test("class X { def f() { def g = h; g() }; static def h(){3} }; def a = new X().f; a()", 3);
     test("class X { int i; def f() { def g = h; g() }; def h(){i} }; def a = new X(4).f; a()", 4);
@@ -176,9 +191,14 @@ public class ClassTests extends BaseTest {
     testError("class X { }; new X(2).a()()", "no such method");
   }
 
+  @Test public void staticMethodAsValues() {
+    useAsyncDecorator = false;
+    test("class X { static def f() { def g = h; g() }; static def h(){3} }; X.f()", 3);
+  }
+
   @Test public void methodArgsAsList() {
     test("def a = [1,2,3]; class X { def f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
-    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1, 2, 3, 7, 8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
     test("class X { def f = {String x, int y -> x + y }}; def a = ['x',2]; new X().f(a)", "x2");
@@ -188,11 +208,11 @@ public class ClassTests extends BaseTest {
     test("class X { def f = { x,y,z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("class X { def f = { x,y,z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("class X { def f(x, y) { x + y }}; new X().f([1,2])", 3);
-    test("class X { def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1,2,3));
+    test("class X { def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
     test("class X { def f(x, y) { x + y }}; def a = [1,2]; new X().f(a)", 3);
-    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", List.of(1,2,3));
+    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", List.of(1, 2, 3));
     test("class X { def f(x, y=3) { x + y }}; new X().f(1,2)", 3);
-    test("class X { def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1,2,3));
+    test("class X { def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
     testError("class X { def f(List x, y=4, z) { x + y + z }}; new X().f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { int f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
@@ -205,7 +225,7 @@ public class ClassTests extends BaseTest {
     test("class X { int f(x, y=3) { x + y }}; new X().f(1,2)", 3);
 
     test("def a = [1,2,3]; class X { def f(x,y=7,z) { x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
-    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().\"${'f'}\"(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().\"${'f'}\"(a)", List.of(1, 2, 3, 7, 8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().\"${'f'}\"(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().\"${'f'}\"(a)", "cannot convert object of type int to string");
     test("class X { def f = {String x, int y -> x + y }}; def a = ['x',2]; new X().\"${'f'}\"(a)", "x2");
@@ -215,52 +235,56 @@ public class ClassTests extends BaseTest {
     test("class X { def f = { int x, int y, int z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
     test("class X { def f = { int x, int y, int z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
     test("class X { def f(x, y) { x + y }}; new X().\"${'f'}\"([1,2])", 3);
-    test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1,2,3));
+    test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1, 2, 3));
     test("class X { def f(x, y) { x + y }}; def a = [1,2]; new X().\"${'f'}\"(a)", 3);
-    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().\"${'f'}\"(a)", List.of(1,2,3));
+    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().\"${'f'}\"(a)", List.of(1, 2, 3));
     test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"(1,2)", 3);
-    test("class X { def f(List x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1,2,3));
+    test("class X { def f(List x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1, 2, 3));
     testError("class X { def f(List x, y=4, z) { x + y + z }}; new X().\"${'f'}\"([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1, 2, 3, 7, 8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static int f(int x,int y, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; new X().f([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; new X().f(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", List.of(1, 2, 3));
     test("class X { static def f(x, y=3) { x + y }}; new X().f(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1,2,3));
+    test("class X { static def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; new X().f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; def x = new X(); x.f(1,2,3) + x.f(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.f(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.f(a)", List.of(1, 2, 3, 7, 8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; def x = new X(); x.f(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; def x = new X(); x.f(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; def x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; def x = new X(); x.f([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.f([1,2])", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.f([1,2])", List.of(1, 2, 3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; def x = new X(); x.f(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.f(a)", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.f(a)", List.of(1, 2, 3));
     test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.f(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.f([1,2])", List.of(1,2,3));
+    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.f([1,2])", List.of(1, 2, 3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; def x = new X(); x.f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; def x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.\"${'f'}\"(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.\"${'f'}\"(a)", List.of(1, 2, 3, 7, 8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; def x = new X(); x.\"${'f'}\"(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; def x = new X(); x.\"${'f'}\"(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; def x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", List.of(1, 2, 3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; def x = new X(); x.\"${'f'}\"(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.\"${'f'}\"(a)", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.\"${'f'}\"(a)", List.of(1, 2, 3));
     test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", List.of(1,2,3));
+    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", List.of(1, 2, 3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; def x = new X(); x.\"${'f'}\"([1, 2, 3])", "int cannot be cast to List");
+  }
+
+  @Test public void staticMethodArgsAsList() {
+    useAsyncDecorator = false;
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; X.f(1,2,3) + X.f(a)", 12);
     test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; X.f(a)", List.of(1,2,3,7,8));
@@ -356,63 +380,6 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(a, b, c) { c(a+b) }}; new X().\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
     testError("class X { def f(a, b, c) { c(a+b) }}; new X().\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
 
-    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
-    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,yy:2)", "no such parameter: yy");
-    testError("class X { static def f(int x, y=[a:3]) { x + y }}; X.f(x:'abc',y:2)", "cannot convert argument of type string to parameter type of int");
-    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,(''+'y'):2)", "invalid parameter name");
-    test("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,y:2)", 3);
-    testError("class X { static def f(x, y) { x + y }}; X.f([x:1,y:2])", "missing mandatory argument");
-    test("class X { static def f(x, y=[a:3]) { x + y }}; X.f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
-    test("class X { static def f(x,y) { x*y }}; X.f(x:2,y:3)", 6);
-    test("class X { static def f(int x, int y) { x*y }}; X.f(x:2,y:3)", 6);
-    test("class X { static def f(int x, int y=3) { x*y }}; X.f(x:2)", 6);
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2])", Map.of("x",2,"y",3));
-    testError("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f(x:2)", "cannot convert argument of type int to parameter type of Map");
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2])", Map.of("x",2,"y",3));
-    testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f(x:2)", "invalid object type");
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { static def f(int x) { x*3 }}; X.f(x:2)", 6);
-    test("class X { static def f(int x=2) { x*3 }}; X.f(x:2)", 6);
-    test("class X { static def f(x,y) { x + y }}; X.f(x:2,y:3)", 5);
-    test("class X { static def f(x,y=[a:1]) { x + y }}; X.f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
-    test("class X { static def f(x,y=[a:1]) { x + y }}; X.f(x:2,y:3)", 5);
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:2,y:3)", "missing mandatory argument: z");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(y:3)", "missing mandatory arguments: x, z");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
-    test("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3,c:{ it*it })", 25);
-    testError("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3) { it*it }", "missing mandatory argument: c");
-    testError("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3) { it*it }", "missing mandatory argument: c");
-
-    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
-    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,yy:2)", "no such parameter");
-    testError("class X { static def f(int x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:'abc',y:2)", "cannot be cast to int");
-    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,(''+'y'):2)", "invalid parameter name");
-    test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,y:2)", 3);
-    testError("class X { static def f(x, y) { x + y }}; X.\"${'f'}\"([x:1,y:2])", "missing mandatory argument");
-    test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
-    test("class X { static def f(x,y) { x*y }}; X.\"${'f'}\"(x:2,y:3)", 6);
-    test("class X { static def f(int x, int y) { x*y }}; X.\"${'f'}\"(x:2,y:3)", 6);
-    test("class X { static def f(int x, int y=3) { x*y }}; X.\"${'f'}\"(x:2)", 6);
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
-    testError("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "cannot be cast to Map");
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
-    testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "invalid object type");
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { static def f(int x) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
-    test("class X { static def f(int x=2) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
-    test("class X { static def f(x,y) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
-    test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
-    test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter 'z'");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(y:3)", "missing value for mandatory parameter 'x'");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:[1],y:3,z:4,a:1)", "no such parameter");
-    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:[1],b:2,y:3,z:4,a:1)", "no such parameter");
-    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
-    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
-
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,yy:2)", "no such parameter: yy");
     testError("class X { def f(int x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:'abc',y:2)", "cannot convert argument of type string to parameter type of int");
@@ -478,6 +445,67 @@ public class ClassTests extends BaseTest {
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; def x = new X(); x.f(a)", "missing mandatory arguments");
     testError("class X { def f(a, b, c) { c(a+b) }}; def x = new X(); x.f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
     testError("class X { def f(a, b, c) { c(a+b) }}; def x = new X(); x.f(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+  }
+
+  @Test public void staticNamedMethodArgs() {
+    useAsyncDecorator = false;
+
+    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
+    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,yy:2)", "no such parameter: yy");
+    testError("class X { static def f(int x, y=[a:3]) { x + y }}; X.f(x:'abc',y:2)", "cannot convert argument of type string to parameter type of int");
+    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,(''+'y'):2)", "invalid parameter name");
+    test("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,y:2)", 3);
+    testError("class X { static def f(x, y) { x + y }}; X.f([x:1,y:2])", "missing mandatory argument");
+    test("class X { static def f(x, y=[a:3]) { x + y }}; X.f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { static def f(x,y) { x*y }}; X.f(x:2,y:3)", 6);
+    test("class X { static def f(int x, int y) { x*y }}; X.f(x:2,y:3)", 6);
+    test("class X { static def f(int x, int y=3) { x*y }}; X.f(x:2)", 6);
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2])", Map.of("x",2,"y",3));
+    testError("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f(x:2)", "cannot convert argument of type int to parameter type of Map");
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2])", Map.of("x",2,"y",3));
+    testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f(x:2)", "invalid object type");
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(int x) { x*3 }}; X.f(x:2)", 6);
+    test("class X { static def f(int x=2) { x*3 }}; X.f(x:2)", 6);
+    test("class X { static def f(x,y) { x + y }}; X.f(x:2,y:3)", 5);
+    test("class X { static def f(x,y=[a:1]) { x + y }}; X.f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { static def f(x,y=[a:1]) { x + y }}; X.f(x:2,y:3)", 5);
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:2,y:3)", "missing mandatory argument: z");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(y:3)", "missing mandatory arguments: x, z");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
+    test("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3,c:{ it*it })", 25);
+    testError("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3) { it*it }", "missing mandatory argument: c");
+    testError("class X { static def f(a, b, c) { c(a+b) }}; X.f(a:2,b:3) { it*it }", "missing mandatory argument: c");
+
+    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
+    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,yy:2)", "no such parameter");
+    testError("class X { static def f(int x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:'abc',y:2)", "cannot be cast to int");
+    testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,(''+'y'):2)", "invalid parameter name");
+    test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,y:2)", 3);
+    testError("class X { static def f(x, y) { x + y }}; X.\"${'f'}\"([x:1,y:2])", "missing mandatory argument");
+    test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { static def f(x,y) { x*y }}; X.\"${'f'}\"(x:2,y:3)", 6);
+    test("class X { static def f(int x, int y) { x*y }}; X.\"${'f'}\"(x:2,y:3)", 6);
+    test("class X { static def f(int x, int y=3) { x*y }}; X.\"${'f'}\"(x:2)", 6);
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
+    testError("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "cannot be cast to Map");
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
+    testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "invalid object type");
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(int x) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
+    test("class X { static def f(int x=2) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
+    test("class X { static def f(x,y) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
+    test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter 'z'");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(y:3)", "missing value for mandatory parameter 'x'");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:[1],y:3,z:4,a:1)", "no such parameter");
+    testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:[1],b:2,y:3,z:4,a:1)", "no such parameter");
+    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
+    testError("class X { static def f(a, b, c) { c(a+b) }}; X.\"${'f'}\"(a:2,b:3) { it*it }", "missing value for mandatory parameter 'c'");
   }
 
   @Test public void constructorArgsAsList() {
@@ -889,6 +917,14 @@ public class ClassTests extends BaseTest {
     testError("class X { int i = 2; class Y { def f(){i} }}; new X.Y().f()", "reference to unknown variable 'i'");
   }
 
+  @Test public void innerClassesStaticMethod() {
+    useAsyncDecorator = false;
+    testError("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) } }; class Z { class ZZ { int i } }}; X.Y.f() instanceof X.Y.Z.ZZ", "unknown class");
+    test("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) }; class Z { class ZZ { int i } }}}; X.Y.f() instanceof X.Y.Z.ZZ", true);
+    test("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) } }; class Z { class ZZ { int i } }}; X.Y.f().i", 3);
+    test("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) }; class Z { class ZZ { int i; static def f(){4} } }}}; X.Y.Z.ZZ.f()", 4);
+  }
+
   @Test public void closedOverThis() {
     test("class X { int i = 1; def f(){ return { ++i } } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
   }
@@ -949,13 +985,9 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void nestedFunctionsWithinClasses() {
-    test("class A { static def a() { int x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6);
     test("class A { def a() { int x = 1; return { x++ } } }; def f = new A().a(); f() + f() + f()", 6);
-    test("class A { static def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12);
     test("class A { def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12);
-    test("class A { static def a() { long x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6L);
     test("class A { def a() { long x = 1; return { x++ } } }; def f = new A().a(); f() + f() + f()", 6L);
-    test("class A { static def a() { long x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12L);
     test("class A { def a() { long x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12L);
     test("class A { long x = 1; def a() { def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12L);
     test("class A { String x = '1'; def f = { def g() { x + x }; g() } }; new A().f()", "11");
@@ -964,11 +996,8 @@ public class ClassTests extends BaseTest {
     test("class A { Decimal x = 1; def f = { def g() { x + x }; g() } }; new A().f()", "#2");
     test("class A { def x = { it=2 -> it + it }; def f = { def g() { x() + x() }; g() }}; new A().f()", 8);
     test("class A { def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}; new A().f()", 16);
-    test("class A { static def a() { def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}}; A.a()()", 16);
     test("class A { def f(x,y=++x) { def g() { x+y }; g() }}; new A().f(3)", 8);
-    test("class A { static def f(x,y=++x) { def g() { x+y }; g() }}; A.f(3)", 8);
     test("class A { def f(x,y={++x}) { def g() { y()+x }; g() }}; new A().f(3)", 8);
-    test("class A { static def f(x,y={++x}) { def g() { y()+x }; g() }}; A.f(3)", 8);
     test("class A { def f(x,y=++x+2,z={++x + ++y}) { def g() { x++ + y++ + z() }; g() }}; new A().f(3)", 24);
     test("class A { def f(x,y={++x}()) { def g() { y+x }; g() }}; new A().f(3)", 8);
     test("class A { def f(x) { def g(x) { f(x) + f(x) }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 4);
@@ -977,7 +1006,6 @@ public class ClassTests extends BaseTest {
     test("class A { def f(x=1,y=2) { def g(x) { f(x,y) + f(x,y) + y }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 10);
     test("class A { def f(x=1,y=f(1,1)+1) { def g(x) { f(x,y) + f(x,y) + y }; if (x == 1) 1 else g(x-1) }}; new A().f(3)", 10);
     test("class A { def f() { int x = 1; [{ it + x++}, {it - x++}]}}; def x = new A().f(); x[0](5) + x[0](5) + x[1](0) + x[1](0)", 6);
-    test("class A { static def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; A.f(2)", 5);
     test("class A { def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; new A().f(2)", 5);
     test("class A { def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; new A().f(4)", 19);
     testError("class A { def a() { def x=1; def f(x){def ff() {g(x)}; ff()}; def g(a){x+a}; f(2) } }; new A().a()", "requires passing closed over variable x");
@@ -1000,7 +1028,19 @@ public class ClassTests extends BaseTest {
     test("class A { def func() { def it = 'x'; def x = /x/; def f() { x = x + 'abc' }; f(); x}}; new A().func()", "xabc");
     test("class A { def func() { def it = 'x'; def x = /x/; def f() { x *= 3 }; f(); x}}; new A().func()", "xxx");
     test("class A { def func() { def it = 'x'; def x = /x/; def f() { x = x * 3 }; f(); x}}; new A().func()", "xxx");
+  }
 
+  @Test public void nestedStaticFunctions() {
+    useAsyncDecorator = false;
+
+    test("class A { static def a() { int x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6);
+    test("class A { static def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12);
+    test("class A { static def a() { long x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6L);
+    test("class A { static def a() { long x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12L);
+    test("class A { static def a() { def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}}; A.a()()", 16);
+    test("class A { static def f(x,y=++x) { def g() { x+y }; g() }}; A.f(3)", 8);
+    test("class A { static def f(x,y={++x}) { def g() { y()+x }; g() }}; A.f(3)", 8);
+    test("class A { static def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; A.f(2)", 5);
     test("class A { static def func() { def g(x){x}; def f() { def a = g; a(3) }; f()}}; A.func()", 3);
     test("class A { static def func() { def g(x){x}; def f(x){def a = g; x == 1 ? 1 : x+a(x-1)}; f(2)}}; A.func()", 3);
     test("class A { static def func() { def g(x){x}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)}}; A.func()", 3);
@@ -1086,19 +1126,19 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void asyncTests() {
-    test("class X { int i = 1 }; new X().\"${sleeper(0,'i')}\"", 1);
-    test("class X { int abc = 1 }; new X().\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
-    test("class X { int abc = 1 }; X x = new X(); x.\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
-    test("class X { int abc = 1 }; def x = new X(); x.\"${sleeper(0,'a') + sleeper(0,'bc')}\"", 1);
-    test("class X { int abc = sleeper(0,1) + sleeper(0,new X(abc:3).abc) }; def x = new X(); x.abc", 4);
-    test("class X { int i = sleeper(0,-1)+sleeper(0,2); def f(){ return sleeper(0,{ sleeper(0,++i - 1)+sleeper(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
-    test("class X { Y y = sleeper(0,null) }; class Y { int i = sleeper(0,1) }; X x = new X(); x.y.i = 2; x.y.i", 2);
-    test("class X { Y y = sleeper(0,null) }; class Y { int i = sleeper(0,1) }; def x = new X(); x.y.i = 2; x.y.i", 2);
-    test("class X { def f() { sleeper(0,1) + sleeper(0,2) }}; class Y extends X { def f() { sleeper(0,5) + sleeper(0,4)} }; def y = new Y(); y.f()", 9);
+    test("class X { int i = 1 }; new X().\"${sleep(0,'i')}\"", 1);
+    test("class X { int abc = 1 }; new X().\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
+    test("class X { int abc = 1 }; X x = new X(); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
+    test("class X { int abc = 1 }; def x = new X(); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
+    test("class X { int abc = sleep(0,1) + sleep(0,new X(abc:3).abc) }; def x = new X(); x.abc", 4);
+    test("class X { int i = sleep(0,-1)+sleep(0,2); def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
+    test("class X { Y y = sleep(0,null) }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2; x.y.i", 2);
+    test("class X { Y y = sleep(0,null) }; class Y { int i = sleep(0,1) }; def x = new X(); x.y.i = 2; x.y.i", 2);
+    test("class X { def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { def f() { sleep(0,5) + sleep(0,4)} }; def y = new Y(); y.f()", 9);
     test("class X { def f() { 1 + 2 }}; class Y extends X { def f() { super.f() + 5 + 4} }; def y = new Y(); y.f()", 12);
-    test("class X { def f() { sleeper(0,1) + sleeper(0,2) }}; class Y extends X { def f() { super.f() + sleeper(0,5) + sleeper(0,4)} }; def y = new Y(); y.f()", 12);
-    test("class X { def f(x) { x == 0 ? 0 : sleeper(0,f(x-1)) + sleeper(0,x) }}; class Y extends X { def f(x) { sleeper(0, super.f(x)) + sleeper(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
-    test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { sleeper(0, super.f(x)) + sleeper(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
+    test("class X { def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { def f() { super.f() + sleep(0,5) + sleep(0,4)} }; def y = new Y(); y.f()", 12);
+    test("class X { def f(x) { x == 0 ? 0 : sleep(0,f(x-1)) + sleep(0,x) }}; class Y extends X { def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
+    test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
   }
 
   //  @Test public void cast() {

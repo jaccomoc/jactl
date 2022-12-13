@@ -339,8 +339,8 @@ abstract class Expr {
     boolean         isHeapLocal;         // Is this a heap local var
     boolean         isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
     boolean         isParam;             // True if variable is a parameter of function (explicit or implicit)
-    boolean         isField;             // True if instance field of a class
     boolean         isExplicitParam;     // True if explicit declared parameter of function
+    boolean         isField;             // True if instance field of a class
     int             slot = -1;           // Which local variable slot
     int             nestingLevel;        // What level of nested function owns this variable (1 is top level)
     Label           declLabel;           // Where variable comes into scope (for debugger)

@@ -286,6 +286,7 @@ public class Utils {
       case DOUBLE:
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
         break;
+      default: // Nothing to do for other types
     }
   }
 
@@ -457,7 +458,7 @@ public class Utils {
     funDecl.declExpr.varDecl = varDecl;
   }
 
-  public static boolean stacksAreEqual(Deque stack1, Deque stack2) {
+  public static boolean stacksAreEqual(Collection stack1, Collection stack2) {
     if (stack1.size() != stack2.size()) { return false; }
     for (Iterator iter1 = stack1.iterator(), iter2 = stack2.iterator(); iter1.hasNext() && iter2.hasNext(); ) {
       if (!iter1.next().equals(iter2.next())) {

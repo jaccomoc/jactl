@@ -185,6 +185,7 @@ abstract class Stmt {
     Stmt  updates;       // used for For loops
     Label endLoopLabel;  // where to jump to on break stmt
     Label continueLabel; // where to jump to on a continue stmt
+    int   stackDepth;    // depth of stack where while loop is (used by continue/break)
     While(Token whileToken, Expr condition) {
       this.whileToken = whileToken;
       this.condition = condition;

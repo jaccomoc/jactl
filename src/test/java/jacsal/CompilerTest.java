@@ -710,6 +710,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void questionColon() {
+    useAsyncDecorator = false;
     test("null ?: 1", 1);
     test("null ? 0 : 1", 1);
     test("1 ?: null", 1);
@@ -2037,6 +2038,7 @@ class CompilerTest extends BaseTest {
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\" }(); x", "zyx");
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x", "zyxb");
     test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x += $3; x", "zyxbz");
+    test("def it = 'xyz'; def x; it =~ sleep(0,/(x)(y)(z)/) and { x = \"$3$2$1\" }(); x", "zyx");
   }
 
   @Test public void regexGlobalMatch() {
@@ -2495,9 +2497,13 @@ class CompilerTest extends BaseTest {
     testError("def m = [:]; m.a.b() = 1", "invalid lvalue");
     testError("def m = [:]; m.a.['b']", "unexpected token '['");
     testError("def m = [:]; m.a?.?['b']", "unexpected token '?['");
+    test("Map m; sleep(0,m).a.b = 1", 1);
+    test("Map m; sleep(0,m).(sleep(0,'a')).b = 1", 1);
   }
 
   @Test public void conditionalAssignment() {
+    test("Map x = [a:1]; 2 + (x.a?=3)", 5);
+    test("Map x = [a:1]; (x.a?=3) + 2", 5);
     test("def x = [:]; int i; i ?= x.a", null);
     test("def x; int i; i ?= x.a", null);
     test("def x = [a:3]; long y; y ?= x.a", 3L);
@@ -3324,6 +3330,8 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void asType() {
+    testError("true as int", "cannot coerce");
+    testError("(int)true", "cannot cast");
     test("1L as int", 1);
     test("(1L as int) instanceof int", true);
     test("1 as String", "1");
@@ -3566,6 +3574,9 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
     test("int x; for (int i = 0; i < 10; i++) { i < 5 and continue or x += i }; x", 35);
     test("int x; for (int i = 0; i < 10; i++) { i > 5 and break or x += i }; x", 15);
+    test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and continue; sum += i }; sum", 15);
+    test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and sleep(0,continue); sum += i }; sum", 15);
+    test("def f(x){x}; int sum = 0; double i = 0; while (i++ < 10) { i > 5 and f(continue); sum += i }; sum", 15);
   }
 
   @Test public void simpleFunctions() {
@@ -3734,18 +3745,18 @@ class CompilerTest extends BaseTest {
     test("def f(int x = 3, int y = 4) { x + y }; def a = [1D,2D]; def g = f; g(a)", 3);
     test("def f(int x = 3, int y = 4) { x + y }; def a = [1.0,2L]; def g = f; g(a)", 3);
 
-    test("sleeper([1,2])", 2);
-    testError("sleeper(['1',2])", "cannot convert argument of type string to long");
-    test("def a = [1,2]; sleeper(a)", 2);
-    testError("def a = ['1',2]; sleeper(a)", "cannot convert argument of type string to long");
-    test("[[1,2],[3,4]].map{ a,b -> sleeper([a,b]) }", List.of(2,4));
-    test("[a:2,b:4].map{ a,b -> sleeper([b,a]) }", List.of("a","b"));
-    test("def x = [[1,2],[3,4]]; x.map{ a,b -> sleeper([a,b]) }", List.of(2,4));
-    test("def x = [a:2,b:4]; x.map([{ a,b -> sleeper([b,a]) }])", List.of("a","b"));
-    test("def f = [[1,2],[3,4]].map; f([{ a,b -> sleeper([a,b]) }])", List.of(2,4));
-    test("def f = [a:2,b:4].map; f([{ a,b -> sleeper([b,a]) }])", List.of("a","b"));
-    test("def x = [[1,2],[3,4]]; def f = x.map; f([{ a,b -> sleeper([a,b]) }])", List.of(2,4));
-    test("def x = [a:2,b:4]; def f = x.map; f([{ a,b -> sleeper([b,a]) }])", List.of("a","b"));
+    test("def f(long t, def x) { sleep(t,x) }; f([1,2])", 2);
+    testError("def f(long t, def x) { sleep(t,x) }; f(['1',2])", "cannot be cast to number");
+    test("def f(long t, def x) { sleep(t,x) }; def a = [1,2]; f(a)", 2);
+    testError("def f(long t, def x) { sleep(t,x) }; def a = ['1',2]; f(a)", "cannot be cast to number");
+    test("def f(long t, def x) { sleep(t,x) }; [[1,2],[3,4]].map{ a,b -> f([a,b]) }", List.of(2,4));
+    test("def f(long t, def x) { sleep(t,x) }; [a:2,b:4].map{ a,b -> f([b,a]) }", List.of("a","b"));
+    test("def f(long t, def x) { sleep(t,x) }; def x = [[1,2],[3,4]]; x.map{ a,b -> f([a,b]) }", List.of(2,4));
+    test("def f(long t, def x) { sleep(t,x) }; def x = [a:2,b:4]; x.map([{ a,b -> f([b,a]) }])", List.of("a","b"));
+    test("def f(long t, def x) { sleep(t,x) }; def g = [[1,2],[3,4]].map; g([{ a,b -> f([a,b]) }])", List.of(2,4));
+    test("def f(long t, def x) { sleep(t,x) }; def g = [a:2,b:4].map; g([{ a,b -> f([b,a]) }])", List.of("a","b"));
+    test("def f(long t, def x) { sleep(t,x) }; def x = [[1,2],[3,4]]; def g = x.map; g([{ a,b -> f([a,b]) }])", List.of(2,4));
+    test("def f(long t, def x) { sleep(t,x) }; def x = [a:2,b:4]; def g = x.map; g([{ a,b -> f([b,a]) }])", List.of("a","b"));
     test("def a = [1,2,3]; def f(x,y=7,z) { x + y + z }; f(1,2,3) + f(a)", 12);
     test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(a)", List.of(1,2,3,7,8));
     test("def f(String x, int y) { x + y }; def a = ['x',2]; f(a)", "x2");
@@ -3795,8 +3806,8 @@ class CompilerTest extends BaseTest {
     test("def f = { x,y=[a:1] -> x + y }; f(x:2,y:3)", 5);
     testError("def f = { x,y,z -> x + y + z}; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
     testError("def f = { x,y,z -> x + y + z}; def a = [y:3]; f(a)", "missing mandatory arguments");
-    testError("sleeper(x:1,y:2)", "does not support invocation with named arguments");
-    testError("sleeper([x:1,y:2])", "missing mandatory arguments");
+    testError("sleep(x:1,y:2)", "does not support invocation with named arguments");
+    testError("sleep([x:1,y:2])", "cannot convert argument of type map");
     testError("def a = [x:{it*it}]; [1,2,3].map(a)", "cannot be cast to function");
     testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing mandatory argument: c");
     test("def f(a = '',b = 2) {a+b}; f('',null)", "null");
@@ -3907,6 +3918,11 @@ class CompilerTest extends BaseTest {
     test("def it = 'x'; def x = /x/; def f() { x = x + 'abc' }; f(); x", "xabc");
     test("def it = 'x'; def x = /x/; def f() { x *= 3 }; f(); x", "xxx");
     test("def it = 'x'; def x = /x/; def f() { x = x * 3 }; f(); x", "xxx");
+    test("def f(x) { def g() { sleep(0,x)+sleep(0,x) }; g() }; f(3)", 6);
+    test("def f(x,y=sleep(0,{++x})) { def g() { y()+x }; g() }; f(3)", 8);
+    test("def f(x,y={8}) { def g() { y() }; g() }; f(3)", 8);
+    test("def f(x,y=++x) { def g() { sleep(0,y)+x }; g() }; f(3)", 8);
+    test("def f(x,y=++x) { def g() { sleep(0,y)+sleep(0,x) }; g() }; f(3)", 8);
   }
 
   @Test public void closurePassingSyntax() {
@@ -4064,8 +4080,8 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Map.of("1",1,"22",4,"333",9,"4444",16));
     test("def x = [1,2,3,4]; x.map{ [it.toString()*it,it*it] }.collectEntries()", Map.of("1",1,"22",4,"333",9,"4444",16));
     testError("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries()", "expected string type for key");
-    test("def x = [1,2,3,4]; x.collectEntries{ [sleeper(0,it.toString())*sleeper(0,it),sleeper(0,it)*it] }", Map.of("1",1,"22",4,"333",9,"4444",16));
-    test("def x = [1,2,3,4]; x.map{ [sleeper(0,it),sleeper(0,it)*sleeper(0,it)] }.collectEntries{ a,b -> [sleeper(0,a.toString())*sleeper(0,a),sleeper(0,b)] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [1,2,3,4]; x.collectEntries{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] }", Map.of("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }", Map.of("1",1,"22",4,"333",9,"4444",16));
   }
 
   @Test public void collectionMap() {
@@ -4160,7 +4176,7 @@ class CompilerTest extends BaseTest {
     sorted.sort(null);
     test("" + randomNums + ".sort{ a,b -> a <=> b }", sorted);
     test("" + randomNums + ".sort()", sorted);
-    test("" + randomNums + ".sort{ a,b -> sleeper(sleeper(0,0),a) <=> sleeper(0,sleeper(0,b)) }", sorted);
+    test("" + randomNums + ".sort{ a,b -> sleep(sleep(0,0),a) <=> sleep(0,sleep(0,b)) }", sorted);
   }
 
   @Test public void stringAddRepeat() {
@@ -4355,118 +4371,123 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void asyncFunctions() {
-    test("sleeper(1,2)", 2);
-    test("sleeper(1,2L)", 2L);
-    test("sleeper(1,2D)", 2D);
-    test("sleeper(1,2.0)", "#2.0");
-    test("sleeper(1,[])", List.of());
-    test("sleeper(1,[:])", Map.of());
-    test("sleeper(1,{it*it})(2)", 4);
-    test("var x=1L; var y=1D; sleeper(1,2)", 2);
-    test("sleeper(1,2) + sleeper(1,3)", 5);
-    test("List l=[1,2]; Map m=[a:1]; String s='asd'; int i=1; long L=1L; double d=1.0; Decimal D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
-    test("var l=[1,2]; var m=[a:1]; var s='asd'; var i=1; var L=1L; var d=1.0; var D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
-    test("def l=[1,2]; def m=[a:1]; def s='asd'; def i=1; def L=1L; def d=1.0; def D=1D; sleeper(1,2) + l.size() + m.size() + i + L + d + D + sleeper(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
-    test("sleeper(1,sleeper(1,2))", 2);
-    test("sleeper(sleeper(1,1),2)", 2);
-    test("sleeper(sleeper(1,1),sleeper(1,2))", 2);
-    test("sleeper(1,sleeper(sleeper(1,1),2)) + sleeper(1,3)", 5);
-    test("def y; y ?= sleeper(1,2); y", 2);
-    test("def y; y ?= sleeper(1,null); y", null);
-    test("def x; def y; y ?= sleeper(1,x)?.size(); y", null);
-    test("def x; def y; y ?= x?.(sleeper(1,'si') + sleeper(1,'ze'))()?.size(); y", null);
-    test("def x = [1,2,3]; def y; y ?= x?.(sleeper(1,'si') + sleeper(1,'ze'))(); y", 3);
-    test("def x = [1,2,3]; def y; y ?= x?.(sleeper(sleeper(1,1),'si') + sleeper(sleeper(1,1),'ze'))(); y", 3);
-    test("def f(int x) { sleeper(1,x) + sleeper(1,x) }; f(1 )", 2);
-    test("def f(int x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
-    test("def f(long x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2L);
-    test("def f(double x = sleeper(1,1)) { sleeper(1,x) + sleeper(1,x) }; f()", 2D);
-    test("def f(int x = sleeper(1,1) + sleeper(1,2)) { sleeper(1,x) + sleeper(1,x) }; f()", 6);
-    test("def f(int x = sleeper(sleeper(1,1),sleeper(1,1))) { sleeper(1,x) + sleeper(1,x) }; f()", 2);
-    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { x * y }; f()", 8);
-    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { x * y }; f(sleeper(1,3),sleeper(1,5))", 15);
-    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { sleeper(1,x) * sleeper(1,y) }; f()", 8);
-    test("def f(x=8) { def g = {sleeper(1,it)}; g(x) }; f()", 8);
-    test("def f(x = sleeper(1,2),y=sleeper(1,x*x)) { def g = { sleeper(1,it) + sleeper(1,it) }; g(x)*g(y) }; f()", 32);
-    test("\"${sleeper(1,2) + sleeper(1,3)}\"", "5");
-    test("\"${sleeper(1,'a')}:2\"", "a:2");
-    test("\"${sleeper(1,'a')}:${sleeper(1,2)}\"", "a:2");
-    test("\"${sleeper(1,'a')}:${sleeper(1,2) + sleeper(1,3)}\"", "a:5");
-    test("def x = 0; for (int i=sleeper(1,1),j=sleeper(1,2*i),k=0; k<sleeper(1,5) && i < sleeper(1,100); k=sleeper(1,k)+1,i=i+sleeper(1,1),j=sleeper(1,j+1)) { x += sleeper(1,k+i+j); }; x", 45);
+    test("sleep(1,2)", 2);
+    test("sleep(1,2L)", 2L);
+    test("sleep(1,2D)", 2D);
+    test("sleep(1,2.0)", "#2.0");
+    test("sleep(1,[])", List.of());
+    test("sleep(1,[:])", Map.of());
+    test("sleep(1,{it*it})(2)", 4);
+    test("var x=1L; var y=1D; sleep(1,2)", 2);
+    test("sleep(1,2) + sleep(1,3)", 5);
+    test("List l=[1,2]; Map m=[a:1]; String s='asd'; int i=1; long L=1L; double d=1.0; Decimal D=1D; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("var l=[1,2]; var m=[a:1]; var s='asd'; var i=1; var L=1L; var d=1.0; var D=1D; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("def l=[1,2]; def m=[a:1]; def s='asd'; def i=1; def L=1L; def d=1.0; def D=1D; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("sleep(1,sleep(1,2))", 2);
+    test("sleep(sleep(1,1),2)", 2);
+    test("sleep(sleep(1,1),sleep(1,2))", 2);
+    test("sleep(1,sleep(sleep(1,1),2)) + sleep(1,3)", 5);
+    test("def y; y ?= sleep(1,2); y", 2);
+    test("def y; y ?= sleep(1,null); y", null);
+    test("def x; def y; y ?= sleep(1,x)?.size(); y", null);
+    test("def x; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))()?.size(); y", null);
+    test("def x = [1,2,3]; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))(); y", 3);
+    test("def x = [1,2,3]; def y; y ?= x?.(sleep(sleep(1,1),'si') + sleep(sleep(1,1),'ze'))(); y", 3);
+    test("def f(int x) { sleep(1,x) + sleep(1,x) }; f(1 )", 2);
+    test("def f(int x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2);
+    test("def f(long x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2L);
+    test("def f(double x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2D);
+    test("def f(int x = sleep(1,1) + sleep(1,2)) { sleep(1,x) + sleep(1,x) }; f()", 6);
+    test("def f(int x = sleep(sleep(1,1),sleep(1,1))) { sleep(1,x) + sleep(1,x) }; f()", 2);
+    test("def f(x = sleep(1,2),y=sleep(1,x*x)) { x * y }; f()", 8);
+    test("def f(x = sleep(1,2),y=sleep(1,x*x)) { x * y }; f(sleep(1,3),sleep(1,5))", 15);
+    test("def f(x = sleep(1,2),y=sleep(1,x*x)) { sleep(1,x) * sleep(1,y) }; f()", 8);
+    test("def f(x=8) { def g = {sleep(1,it)}; g(x) }; f()", 8);
+    test("def f(x = sleep(1,2),y=sleep(1,x*x)) { def g = { sleep(1,it) + sleep(1,it) }; g(x)*g(y) }; f()", 32);
+    test("\"${sleep(1,2) + sleep(1,3)}\"", "5");
+    test("\"${sleep(1,'a')}:2\"", "a:2");
+    test("\"${sleep(1,'a')}:${sleep(1,2)}\"", "a:2");
+    test("\"${sleep(1,'a')}:${sleep(1,2) + sleep(1,3)}\"", "a:5");
+    test("def x = 0; for (int i=sleep(1,1),j=sleep(1,2*i),k=0; k<sleep(1,5) && i < sleep(1,100); k=sleep(1,k)+1,i=i+sleep(1,1),j=sleep(1,j+1)) { x += sleep(1,k+i+j); }; x", 45);
 
-    test("sleeper(0,2)", 2);
-    test("def f() { sleeper(0,1) }; f()", 1);
-    test("def f = sleeper; f(0,2)", 2);
-    test("def f(x){sleeper(0,x)}; f(sleeper(0,2))", 2);
-    test("def f(x){sleeper(0,x)}; def g = f; g(2)", 2);
-    test("def f(x){sleeper(0,x)}; def g; g = f; g(2)", 2);
-    test("def f(x){sleeper(0,x)}; def g; g = f; 2", 2);
-    test("def f(x){sleeper(0,x)}; def g = f; g = {it}; g(2)", 2);
+    test("sleep(0,2)", 2);
+    test("def f() { sleep(0,1) }; f()", 1);
+    test("def f = sleep; f(0,2)", 2);
+    test("def f(x){sleep(0,x)}; f(sleep(0,2))", 2);
+    test("def f(x){sleep(0,x)}; def g = f; g(2)", 2);
+    test("def f(x){sleep(0,x)}; def g; g = f; g(2)", 2);
+    test("def f(x){sleep(0,x)}; def g; g = f; 2", 2);
+    test("def f(x){sleep(0,x)}; def g = f; g = {it}; g(2)", 2);
     test("def f(x){x}; def g = f; g = {it}; g(2)", 2);
-    test("def g(x){sleeper(0,x)*sleeper(0,x)}; def f(x){g(sleeper(0,x)*sleeper(0,1))*sleeper(0,x)}; f(2)", 8);
-    test("def g = {sleeper(0,it)*sleeper(0,it)}; def f(x,y){g(x)*sleeper(0,x)*sleeper(0,y)}; f(2,1)", 8);
+    test("def g(x){sleep(0,x)*sleep(0,x)}; def f(x){g(sleep(0,x)*sleep(0,1))*sleep(0,x)}; f(2)", 8);
+    test("def g = {sleep(0,it)*sleep(0,it)}; def f(x,y){g(x)*sleep(0,x)*sleep(0,y)}; f(2,1)", 8);
     test("def g; g = {it*it}; def f(x){g(x)*x}; f(2)", 8);
     test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; h(2)", 8);
-    test("def g = {it*it}; def h = { g(it)*it }; g = {sleeper(0,it)*it}; h(2)", 8);
-    test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; g = {sleeper(0,it)*it}; h(2)", 8);
+    test("def g = {it*it}; def h = { g(it)*it }; g = {sleep(0,it)*it}; h(2)", 8);
+    test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; g = {sleep(0,it)*it}; h(2)", 8);
     test("def g = {it*it}; def h = { def f(x){g(x)*x}; f(it) }; g = {it*it}; h(2)", 8);
     test("def g = {it*it}; def h = { def f(x){g(x)*x}; g={it*it}; f(it) }; h(2)", 8);
     test("{it*it*it}(2)", 8);
-    test("{it*it*sleeper(0,it)}(2)", 8);
-    test("def f(x=sleeper(0,2)){x*x}; f(3)", 9);
-    test("def f(x=sleeper(0,2)){x*x}; f()", 4);
-    test("def f(x){g(x)*g(x)}; def g(x){sleeper(0,1)+sleeper(0,x-1)}; f(2)", 4);
+    test("{it*it*sleep(0,it)}(2)", 8);
+    test("def f(x=sleep(0,2)){x*x}; f(3)", 9);
+    test("def f(x=sleep(0,2)){x*x}; f()", 4);
+    test("def f(x){g(x)*g(x)}; def g(x){sleep(0,1)+sleep(0,x-1)}; f(2)", 4);
     test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){x+x}; f(2)", 5);
-    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){sleeper(0,x)+sleeper(0,x)}; f(2)", 5);
-    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(sleeper(0,-23)+sleeper(0,x+23))}; h(x) }; def j(x){x+x}; f(2)", 5);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){sleep(0,x)+sleep(0,x)}; f(2)", 5);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(sleep(0,-23)+sleep(0,x+23))}; h(x) }; def j(x){x+x}; f(2)", 5);
     test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){f(x-1)+f(x-1)}; f(2)", 3);
-    test("def f(x){x<=1?1:g(sleeper(0,x-23)+sleeper(0,23))}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){f(x-1)+f(x-1)}; f(2)", 3);
-    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)+j(x)}; h(x) }; def j(x){f(sleeper(0,x)-1)+f(sleeper(0,x)-1)}; f(2)", 5);
+    test("def f(x){x<=1?1:g(sleep(0,x-23)+sleep(0,23))}; def g(x){ def h(x){f(x-1)+j(x)}; h(x) }; def j(x){f(x-1)+f(x-1)}; f(2)", 3);
+    test("def f(x){x<=1?1:g(x)}; def g(x){ def h(x){f(x-1)+j(x)+j(x)}; h(x) }; def j(x){f(sleep(0,x)-1)+f(sleep(0,x)-1)}; f(2)", 5);
     test("def f = {it}; f(2)", 2);
-    test("def f = {sleeper(0,it)+sleeper(0,it)}; f(2)", 4);
-    test("def f(x){g(x)}; def g(x){sleeper(0,x)+sleeper(0,x)}; f(2)+f(3)", 10);
-    test("def s = sleeper; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
-    test("def f(x){x<=1?1:g(x)}; def g(x){def s = sleeper; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
-    test("int i = 1; def f(){ return sleeper(0,{ ++i }) }; def g = f(); g() + g()", 5);
-    test("int i = sleeper(0,-1)+sleeper(0,2); def f(){ return sleeper(0,{ sleeper(0,++i - 1)+sleeper(0,1) }) }; def g = f(); g() + g()", 5);
-    test("int i = 5; def f(int x = sleeper(0,1)+sleeper(0,1), long y=sleeper(0,{x+i}())+sleeper(0,{x+i+1}()), double z=3) { sleeper(0,x)+sleeper(0,y)+sleeper(0,z) }; f()", 20D);
+    test("def f = {sleep(0,it)+sleep(0,it)}; f(2)", 4);
+    test("def f(x){g(x)}; def g(x){sleep(0,x)+sleep(0,x)}; f(2)+f(3)", 10);
+    test("def s = sleep; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
+    test("def f(x){x<=1?1:g(x)}; def g(x){def s = sleep; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
+    test("int i = 1; def f(){ return sleep(0,{ ++i }) }; def g = f(); g() + g()", 5);
+    test("int i = sleep(0,-1)+sleep(0,2); def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) }; def g = f(); g() + g()", 5);
+    test("int i = 5; def f(int x = sleep(0,1)+sleep(0,1), long y=sleep(0,{x+i}())+sleep(0,{x+i+1}()), double z=3) { sleep(0,x)+sleep(0,y)+sleep(0,z) }; f()", 20D);
+    test("def x = 1; while (true) { (false and break) or x = sleep(0,2); break }; x", 2);
+    test("def x = 1; true and sleep(0, x = 2); x", 2);
+    test("def x = 1; true and sleep(0, x ?= 2); x", 2);
+    test("int x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
+    test("def x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
   }
 
   @Test public void asyncFieldAccess() {
-    test("Map m = [(sleeper(0,'a')):sleeper(0,1)]; m.\"${sleeper(0,'a')}\"", 1);
-    test("def m = [(sleeper(0,'a')):sleeper(0,1)]; m.\"${sleeper(0,'a')}\"", 1);
+    test("Map m = [(sleep(0,'a')):sleep(0,1)]; m.\"${sleep(0,'a')}\"", 1);
+    test("def m = [(sleep(0,'a')):sleep(0,1)]; m.\"${sleep(0,'a')}\"", 1);
   }
 
   @Test public void asyncCollectionClosures() {
-    test("def x = [1,2,3].map{ sleeper(1,it) * sleeper(1,it) }; x.size()", 3);
-    test("[1,2,3].map{ sleeper(1,it) * sleeper(1,it) }.size()", 3);
-    test("def f = [1,2,3].map; f{ sleeper(1,it) * sleeper(1,it) }.size()", 3);
-    test("[1,2,3].map{ sleeper(1,it) * sleeper(1,it) }", List.of(1,4,9));
-    test("[1,2,3].map{ sleeper(1,it) }.map{ sleeper(1,it) * sleeper(1,it) }", List.of(1,4,9));
-    test("[a:1,b:2,c:3].map{ sleeper(1,it) }.map{ sleeper(sleeper(1,1),it[1]) }.map{ sleeper(1,it) * sleeper(1,it) }", List.of(1,4,9));
-    test("[a:1,b:2,c:3].map{ sleeper(1,it) }.map{ \"${sleeper(1,it[0])}:${sleeper(1,it[1])*sleeper(1,it[1])}\" }", List.of("a:1","b:4","c:9"));
-    test("[1,2,3,4].filter{ sleeper(1,true) }", List.of(1,2,3,4));
-    test("[1,2,3,4].filter{ sleeper(1,it) % 2 }", List.of(1,3));
-    test("[1,2,3,4].filter{ sleeper(1,it) % sleeper(1,2) }", List.of(1,3));
-    test("[1,2,3,4].filter{ sleeper(1,true) }.filter{ sleeper(1,it) % sleeper(1,2) }", List.of(1,3));
-    test("def x = 0; [1,2,3,4].each{ x += sleeper(1,it) + sleeper(1,it) }; x", 20);
-    test("def x = 0; [1,2,3,4].map{ sleeper(1,it) + sleeper(1,it) }.each{ x += sleeper(1,it) + sleeper(1,it) }; x", 40);
-    test("[1,2,3,4].collect{ sleeper(1,it) }", List.of(1,2,3,4));
-    test("[1,2,3,4].collect{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }", List.of(2,4,6,8));
-    test("[1,2,3,4].collect{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }.size()", 4);
-    test("def x = 0; def c = [1,2,3,4].collect{ sleeper(1,it) }; c.each{ x += sleeper(1,it) }; x", 10);
-    test("def x = 0; [1,2,3,4].collect{ sleeper(1,it) }.each{ x += sleeper(1,it) }; x", 10);
-    test("[1,2,3,4].map{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }", List.of(2,4,6,8));
-    test("def x = 0; [1,2,3,4].map{ sleeper(1,it) }.collect{ sleeper(1,it) + sleeper(1,it) }.each{ x += sleeper(1,it) }; x", 20);
-    test("[1,2,3].map{ sleeper(1,it) * sleeper(1,it) }.filter{ sleeper(1,it) > 3 }.collect{ sleeper(1,it) + sleeper(1,it) }", List.of(8,18));
-    test("[5,4,1,3,2].sort{ a,b -> sleeper(1,a) <=> b }", List.of(1,2,3,4,5));
-    test("[5,4,1,3,2].sort{ a,b -> sleeper(1,a) <=> sleeper(1,b) }", List.of(1,2,3,4,5));
-    test("[5,4,1,3,2].sort{ sleeper(1,it[0]) <=> sleeper(1,it[1]) }", List.of(1,2,3,4,5));
-    test("[5,4,1,3,2].sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(5,4,3,2,1));
-    test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.collect{ it+it }", List.of(32,8,2,50,18));
-    test("[4,2,1,5,3].map{ sleeper(1,it) * sleeper(1,it) }.sort{ sleeper(1,it[1]) <=> sleeper(1,it[0]) }", List.of(25,16,9,4,1));
-    test("sleeper(0,[1,2,3].map{sleeper(0,it)*sleeper(0,it)})", List.of(1,4,9));
-    test("def f = [1,2,3].map; sleeper(0,f{sleeper(0,it)*sleeper(0,it)})", List.of(1,4,9));
+    test("def x = [1,2,3].map{ sleep(1,it) * sleep(1,it) }; x.size()", 3);
+    test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }.size()", 3);
+    test("def f = [1,2,3].map; f{ sleep(1,it) * sleep(1,it) }.size()", 3);
+    test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }", List.of(1,4,9));
+    test("[1,2,3].map{ sleep(1,it) }.map{ sleep(1,it) * sleep(1,it) }", List.of(1,4,9));
+    test("[a:1,b:2,c:3].map{ sleep(1,it) }.map{ sleep(sleep(1,1),it[1]) }.map{ sleep(1,it) * sleep(1,it) }", List.of(1,4,9));
+    test("[a:1,b:2,c:3].map{ sleep(1,it) }.map{ \"${sleep(1,it[0])}:${sleep(1,it[1])*sleep(1,it[1])}\" }", List.of("a:1","b:4","c:9"));
+    test("[1,2,3,4].filter{ sleep(1,true) }", List.of(1,2,3,4));
+    test("[1,2,3,4].filter{ sleep(1,it) % 2 }", List.of(1,3));
+    test("[1,2,3,4].filter{ sleep(1,it) % sleep(1,2) }", List.of(1,3));
+    test("[1,2,3,4].filter{ sleep(1,true) }.filter{ sleep(1,it) % sleep(1,2) }", List.of(1,3));
+    test("def x = 0; [1,2,3,4].each{ x += sleep(1,it) + sleep(1,it) }; x", 20);
+    test("def x = 0; [1,2,3,4].map{ sleep(1,it) + sleep(1,it) }.each{ x += sleep(1,it) + sleep(1,it) }; x", 40);
+    test("[1,2,3,4].collect{ sleep(1,it) }", List.of(1,2,3,4));
+    test("[1,2,3,4].collect{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }", List.of(2,4,6,8));
+    test("[1,2,3,4].collect{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }.size()", 4);
+    test("def x = 0; def c = [1,2,3,4].collect{ sleep(1,it) }; c.each{ x += sleep(1,it) }; x", 10);
+    test("def x = 0; [1,2,3,4].collect{ sleep(1,it) }.each{ x += sleep(1,it) }; x", 10);
+    test("[1,2,3,4].map{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }", List.of(2,4,6,8));
+    test("def x = 0; [1,2,3,4].map{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }.each{ x += sleep(1,it) }; x", 20);
+    test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }.filter{ sleep(1,it) > 3 }.collect{ sleep(1,it) + sleep(1,it) }", List.of(8,18));
+    test("[5,4,1,3,2].sort{ a,b -> sleep(1,a) <=> b }", List.of(1,2,3,4,5));
+    test("[5,4,1,3,2].sort{ a,b -> sleep(1,a) <=> sleep(1,b) }", List.of(1,2,3,4,5));
+    test("[5,4,1,3,2].sort{ sleep(1,it[0]) <=> sleep(1,it[1]) }", List.of(1,2,3,4,5));
+    test("[5,4,1,3,2].sort{ sleep(1,it[1]) <=> sleep(1,it[0]) }", List.of(5,4,3,2,1));
+    test("[4,2,1,5,3].map{ sleep(1,it) * sleep(1,it) }.collect{ it+it }", List.of(32,8,2,50,18));
+    test("[4,2,1,5,3].map{ sleep(1,it) * sleep(1,it) }.sort{ sleep(1,it[1]) <=> sleep(1,it[0]) }", List.of(25,16,9,4,1));
+    test("sleep(0,[1,2,3].map{sleep(0,it)*sleep(0,it)})", List.of(1,4,9));
+    test("def f = [1,2,3].map; sleep(0,f{sleep(0,it)*sleep(0,it)})", List.of(1,4,9));
   }
 
   @Test public void toStringTest() {
@@ -4573,8 +4594,8 @@ class CompilerTest extends BaseTest {
   @Test public void fib() {
     final String fibDef = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
     final String fibInt = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
-    final String fibDefSleep = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : sleeper(0, fib(x-1)) + sleeper(0, fib(x-2)) }";
-    final String fibIntSleep = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : sleeper(0, fib(x-1)) + sleeper(0, fib(x-2)) }";
+    final String fibDefSleep = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : sleep(0, fib(x-1)) + sleep(0, fib(x-2)) }";
+    final String fibIntSleep = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : sleep(0, fib(x-1)) + sleep(0, fib(x-2)) }";
 
     BiConsumer<Integer,Object> runFibDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected);
     BiConsumer<Integer,Object> runFibInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected);
@@ -4610,12 +4631,12 @@ class CompilerTest extends BaseTest {
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
       Compiler.runSync(scriptSleepDef, globals);
-      System.out.println("Sleeper Def Duration=" + (System.currentTimeMillis() - start) + "ms");
+      System.out.println("sleep Def Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
       Compiler.runSync(scriptSleepInt, globals);
-      System.out.println("Sleeper Int Duration=" + (System.currentTimeMillis() - start) + "ms");
+      System.out.println("sleep Int Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
   }
 
