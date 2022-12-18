@@ -1125,11 +1125,6 @@ public class ClassTests extends BaseTest {
     test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super.f() + super.f()} }; def z = new Z(); z.f()", 10);
   }
 
-  @Test public void testStuff() {
-    debugLevel = 1;
-    doTest("class X { Y y = null }; class Y { int i = 1 }; def x = new X(); x.y.i = 2", 2);
-  }
-
   @Test public void asyncTests() {
     test("class X { int i = 1 }; new X().\"${sleep(0,'i')}\"", 1);
     test("class X { int abc = 1 }; new X().\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
