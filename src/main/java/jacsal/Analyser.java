@@ -21,6 +21,7 @@ import jacsal.runtime.FunctionDescriptor;
 import java.util.*;
 
 import static jacsal.JacsalType.ANY;
+import static jacsal.JacsalType.INSTANCE;
 
 /**
  * Class that analyses the AST for any final tweaks needed before generating the byte code.
@@ -51,6 +52,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private final Deque<Expr.FunDecl> functions = new ArrayDeque<>();
   private final Set<Expr.FunDecl>   isAnalysed = new HashSet<>();
   private final Map<Expr.FunDecl,List<Pair<Expr.Call,Expr.FunDecl>>> callDependencies = new HashMap<>();
+
+  private Deque<Expr> currentExpr = new ArrayDeque<>();
+  private Deque<Stmt> currentStmt = new ArrayDeque<>();
 
   void analyseScript(Stmt.ClassDecl classDecl) {
     analyse(classDecl);
@@ -90,14 +94,38 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   Void analyse(Stmt stmt) {
     if (stmt != null) {
-      stmt.accept(this);
+      try {
+        currentStmt.push(stmt);
+        stmt.accept(this);
+      }
+      finally {
+        currentStmt.pop();
+        Stmt parent = currentStmt.peek();
+        if (parent != null && stmt.isAsync) {
+          parent.isAsync = true;
+        }
+      }
     }
     return null;
   }
 
   Void analyse(Expr expr) {
     if (expr != null) {
-      return expr.accept(this);
+      try {
+        currentExpr.push(expr);
+        return expr.accept(this);
+      }
+      finally {
+        currentExpr.pop();
+        var parent = currentExpr.peek();
+        var stmt   = currentStmt.peek();
+        if (parent != null && expr.isAsync) {
+          parent.isAsync = true;
+        }
+        if (stmt != null && expr.isAsync) {
+          stmt.isAsync = true;
+        }
+      }
     }
     return null;
   }
@@ -174,6 +202,20 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitBinary(Expr.Binary expr) {
     analyse(expr.left);
     analyse(expr.right);
+    if (expr.createIfMissing) {
+      // Async if class init for field is async
+      if (expr.isFieldAccess) {
+        if (expr.type.is(INSTANCE) && expr.type.getClassDescriptor().getInitMethod().isAsync) {
+          functions.peek().functionDescriptor.isAsync = true;
+          expr.isAsync = true;
+        }
+      }
+      else {
+        // We have no idea of the field type since we will find out at runtime so have to assume async just in case
+        functions.peek().functionDescriptor.isAsync = true;
+        expr.isAsync = true;
+      }
+    }
     return null;
   }
 

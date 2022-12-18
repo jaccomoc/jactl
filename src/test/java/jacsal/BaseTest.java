@@ -37,6 +37,10 @@ public class BaseTest {
     doTest(code, true, false, false, expected);
   }
 
+  protected void doTest(String code, Object expected, boolean testAsync) {
+    doTest(code, true, false, testAsync, expected);
+  }
+
   protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));

@@ -1352,8 +1352,8 @@ public class RuntimeUtils {
               classField.set(parent, value);
             }
             else {
-              throw new RuntimeError("Expected field compatible with " + (isMap ? "Map" : "List") +
-                                     " but found field '" + fieldName + "' of type " + fieldType, source, offset);
+              throw new RuntimeError("Field '" + fieldName + "' of type " + fieldType + " cannot be set to " +
+                                     (isMap ? "Map" : "List"), source, offset);
             }
           }
         }

@@ -45,6 +45,7 @@ class Stmt {
 
   Token      location   = null;
   boolean    isResolved = false;
+  boolean    isAsync    = false;   // Whether statement contains an async call
 
   /**
    * Represents a sequence of statments.

@@ -267,7 +267,13 @@ public class BuiltinFunctions {
 
   // = sleep
   public static Object sleep(Continuation c, long timeMs, Object result) {
-    throw Continuation.create(() -> { doSleep(timeMs); return result; });
+    if (timeMs >=0) {
+      throw Continuation.create(() -> {
+        doSleep(timeMs);
+        return result;
+      });
+    }
+    return result;
   }
   public static Object sleepWrapper(Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, LONG, 2, source, offset);

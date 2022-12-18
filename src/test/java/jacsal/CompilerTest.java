@@ -16,6 +16,8 @@
 
 package jacsal;
 
+import jacsal.runtime.BuiltinFunctions;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -775,9 +777,11 @@ class CompilerTest extends BaseTest {
     test("double x = 1; int y = 3; x += y", 4.0D);
     test("def x = 1.0D; int y = 3; y += x", 4);
     test("def x = 1.0D; int y = 3; x += y", 4.0D);
+    test("def x = [a:2]; x.a += 3", 5);
     test("def x = [a:2]; x.a += (x.a += 3)", 7);
     test("Map x = [a:2]; x.a += (x.a += 3)", 7);
     test("def x = [:]; x.a += (x.a += 3)", 3);
+    test("Map x; x.a += 3", 3);
     test("Map x; x.a += (x.a += 3)", 3);
     test("def x = [:]; x.a += 'xxx'", "xxx");
     test("Map x; x.a += 'xxx'", "xxx");
@@ -2573,6 +2577,15 @@ class CompilerTest extends BaseTest {
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += 2", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2)", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2); m.a.b.c", 3);
+    test("def m = [:]; Map x; (m.a ?= 1) + (x.a ?= 2)", 3);
+    test("def m = [:]; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += 2", 3);
+    test("def m = [:]; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += (x.c ?= 2)", 3);
+    test("def m = [:]; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += (x.c ?= 2); m.a.b.c", 3);
+    test("def m = [:]; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += 2", 3);
+    test("def m = [:]; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2)", 3);
+    test("def m = [:]; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2); m.a.b.c", 3);
+    test("def m = [:]; def x; m.a.b.c = 1; m.a.(x ?= (x ?= 'b')).c += 2", 3);
+    test("def m = [:]; def x; m.a.b.c = 1; m.a.(x ?= (x ?= true ? true ? 'b' : 'z' : 'zz')).c += (x ?= 2)", 3);
     test("def x; def y; y ?= (y ?= x.a); y", null);
     test("def x; def y; y ?= (y ?= x.size()); y", null);
     test("def x; def y; y ?= (y ?= x.a) ?: 4; y", 4);
@@ -4148,27 +4161,32 @@ class CompilerTest extends BaseTest {
     test("[].sort()", List.of());
     test("[].sort{it[1] <=> it[0]}", List.of());
     test("[1].sort{it[1] <=> it[0]}", List.of(1));
-    test("[1,2].sort{it[1] <=> it[0]}", List.of(2,1));
-    test("[3,2,1].sort()", List.of(1,2,3));
-    test("[3,3,4,1,2,2,5].sort()", List.of(1,2,2,3,3,4,5));
-    test("[3,3,4,1,2,2,5].sort{ a,b -> a <=> b }", List.of(1,2,2,3,3,4,5));
-    test("def f = [3,2,1].sort; f()", List.of(1,2,3));
-    test("def f = [3,2,1].sort; f{a,b -> b <=> a}", List.of(3,2,1));
+    test("[1,2].sort{it[1] <=> it[0]}", List.of(2, 1));
+    test("[3,2,1].sort()", List.of(1, 2, 3));
+    test("[3,3,4,1,2,2,5].sort()", List.of(1, 2, 2, 3, 3, 4, 5));
+    test("[3,3,4,1,2,2,5].sort{ a,b -> a <=> b }", List.of(1, 2, 2, 3, 3, 4, 5));
+    test("def f = [3,2,1].sort; f()", List.of(1, 2, 3));
+    test("def f = [3,2,1].sort; f{a,b -> b <=> a}", List.of(3, 2, 1));
     testError("def f = [3,2,1].sort; f('z')", "cannot convert");
-    test("[1,2,3].sort()", List.of(1,2,3));
-    test("[3,2,1,4,5].sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
-    test("def x = [3,2,1,4,5].sort{a,b -> b <=> a}; x", List.of(5,4,3,2,1));
-    test("[3,2,1,4,5].sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
-    test("def x = [3,2,1,4,5]; x.sort{a,b -> b <=> a}", List.of(5,4,3,2,1));
-    test("def x = [3,2,1,4,5]; x.sort{it[1] <=> it[0]}", List.of(5,4,3,2,1));
-    test("def x = [3,2,1,4,5]; def f = x.sort; f{a,b -> b <=> a}", List.of(5,4,3,2,1));
-    test("def x = [3,2,1,4,5]; def f = x.sort; f{it[1] <=> it[0]}", List.of(5,4,3,2,1));
+    test("[1,2,3].sort()", List.of(1, 2, 3));
+    test("[3,2,1,4,5].sort{a,b -> b <=> a}", List.of(5, 4, 3, 2, 1));
+    test("def x = [3,2,1,4,5].sort{a,b -> b <=> a}; x", List.of(5, 4, 3, 2, 1));
+    test("[3,2,1,4,5].sort{it[1] <=> it[0]}", List.of(5, 4, 3, 2, 1));
+    test("def x = [3,2,1,4,5]; x.sort{a,b -> b <=> a}", List.of(5, 4, 3, 2, 1));
+    test("def x = [3,2,1,4,5]; x.sort{it[1] <=> it[0]}", List.of(5, 4, 3, 2, 1));
+    test("def x = [3,2,1,4,5]; def f = x.sort; f{a,b -> b <=> a}", List.of(5, 4, 3, 2, 1));
+    test("def x = [3,2,1,4,5]; def f = x.sort; f{it[1] <=> it[0]}", List.of(5, 4, 3, 2, 1));
     testError("def x = [3,2,'a',4,5]; def f = x.sort{it[1] <=> it[0]}", "cannot compare");
     test("def x = [a:1,x:4,e:3,g:7]; x.sort{a,b -> a[0] <=> b[0]}",
-         List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
+         List.of(List.of("a", 1), List.of("e", 3), List.of("g", 7), List.of("x", 4)));
     test("def x = [a:1,x:4,e:3,g:7]; x.sort{it[0][0] <=> it[1][0]}",
-         List.of(List.of("a",1),List.of("e",3),List.of("g",7),List.of("x",4)));
-    final int SORT_SIZE = ThreadLocalRandom.current().nextInt(260);
+         List.of(List.of("a", 1), List.of("e", 3), List.of("g", 7), List.of("x", 4)));
+  }
+
+  @Test public void largeSort() {
+    useAsyncDecorator = false;
+
+    final int SORT_SIZE = ThreadLocalRandom.current().nextInt(500);
     List<Integer> randomNums = IntStream.range(0, SORT_SIZE)
                                         .mapToObj(i -> ThreadLocalRandom.current().nextInt(100000))
                                         .collect(Collectors.toList());
@@ -4371,6 +4389,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void asyncFunctions() {
+    useAsyncDecorator = false;
     test("sleep(1,2)", 2);
     test("sleep(1,2L)", 2L);
     test("sleep(1,2D)", 2D);
@@ -4451,6 +4470,8 @@ class CompilerTest extends BaseTest {
     test("def x = 1; true and sleep(0, x ?= 2); x", 2);
     test("int x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
     test("def x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
+    test("def f(int x, long y, String z, double d) { sleep(0,x++); sleep(0,y++); sleep(0,d++); z = sleep(0,z) * sleep(0,x); z + \": x=$x,y=$y,d=$d\" }; f(1,2,'x',3D)", "xx: x=2,y=3,d=4.0");
+    test("int x = 1; long y = 2; double d = 3; sleep(0, d = sleep(0, y = sleep(0, x += sleep(0,x=3)) + x) + y) + x", 20.0D);
   }
 
   @Test public void asyncFieldAccess() {
@@ -4599,8 +4620,10 @@ class CompilerTest extends BaseTest {
 
     BiConsumer<Integer,Object> runFibDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected);
     BiConsumer<Integer,Object> runFibInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected);
-    BiConsumer<Integer,Object> runFibSleepDef = (num, expected) -> doTest(fibDefSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
-    BiConsumer<Integer,Object> runFibSleepInt = (num, expected) -> doTest(fibIntSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
+    BiConsumer<Integer,Object> runFibSleepDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected, true);
+    BiConsumer<Integer,Object> runFibSleepInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected, true);
+//    BiConsumer<Integer,Object> runFibSleepDef = (num, expected) -> doTest(fibDefSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
+//    BiConsumer<Integer,Object> runFibSleepInt = (num, expected) -> doTest(fibIntSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
 
 //    debug=true;
     runFibDef.accept(40, 102334155);

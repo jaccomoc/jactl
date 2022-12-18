@@ -53,6 +53,7 @@ abstract class Expr {
 
   boolean    isCallee    = false; // Whether we are the callee in a call expression
   boolean    couldBeNull = true;  // Whether result could be null
+  boolean    isAsync     = false; // Whether expression contains an async call
 
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when
@@ -199,7 +200,6 @@ abstract class Expr {
     Expr       callee;
     List<Expr> args;
 
-    boolean isAsync;                   // true if potential async invocation
     boolean validateArgsAtCompileTime; // true if we should validate args at compile time rather than at runtime
 
     // If we are a call to an arbitrary function/closure then it is possible that the
@@ -227,8 +227,7 @@ abstract class Expr {
     List<Expr> args;
 
     FunctionDescriptor methodDescriptor;
-    boolean isAsync = false;           // true if potential async invocation
-    boolean validateArgsAtCompileTime; // true if we should validate args at compile time rather than at runtime
+    boolean validateArgsAtCompileTime;     // true if we should validate args at compile time rather than at runtime
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used

@@ -1125,6 +1125,11 @@ public class ClassTests extends BaseTest {
     test("class X { def f(){2} }; class Y extends X { def f(){super.f() + 3} }; class Z extends Y { def f(){super.f() + super.f()} }; def z = new Z(); z.f()", 10);
   }
 
+  @Test public void testStuff() {
+    debugLevel = 1;
+    doTest("class X { Y y = null }; class Y { int i = 1 }; def x = new X(); x.y.i = 2", 2);
+  }
+
   @Test public void asyncTests() {
     test("class X { int i = 1 }; new X().\"${sleep(0,'i')}\"", 1);
     test("class X { int abc = 1 }; new X().\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
@@ -1139,6 +1144,17 @@ public class ClassTests extends BaseTest {
     test("class X { def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { def f() { super.f() + sleep(0,5) + sleep(0,4)} }; def y = new Y(); y.f()", 12);
     test("class X { def f(x) { x == 0 ? 0 : sleep(0,f(x-1)) + sleep(0,x) }}; class Y extends X { def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
     test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.(sleep(0,'y')).z.x.y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.(sleep(0,'z')).x.y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.(sleep(0,'x')).y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.x.(sleep(0,'y')).z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.x.y.(sleep(0,'z')).i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
+    test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.x.y.z.(sleep(0,'i')) = 4; x.y.z.\"${'x'}\".y.z.i", 4);
+    test("class X { int i = sleep(0,3) }; sleep(0,new X()).i", 3);
+    test("class X { int i }; sleep(0,new X(i:sleep(0,3))).i", 3);
+    test("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
+    test("class X { Y y = null }; class Y { int i = sleep(0,1) }; def x = new X(); x.y.i = 2", 2);
+    test("class X { Y y = null }; class Y { int i = 1 }; def x = new X(); x.y.i = 2", 2);
   }
 
   //  @Test public void cast() {

@@ -688,4 +688,22 @@ public class JacsalType {
   public ClassDescriptor getClassDescriptor() {
     return classDescriptor;
   }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (!(obj instanceof JacsalType)) {
+      return false;
+    }
+    JacsalType other = (JacsalType)obj;
+    if (this.type != other.type) {
+      return false;
+    }
+    if (is(INSTANCE,CLASS)) {
+      if (this.getInternalName() != null) {
+        return this.getInternalName().equals(other.getInternalName());
+      }
+      return this.getClassDescriptor().equals(other.getClassDescriptor());
+    }
+    return true;
+  }
 }

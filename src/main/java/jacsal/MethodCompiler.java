@@ -179,13 +179,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private static class LocalEntry {
     JacsalType type;
     int refCount = 1;
+    LocalEntry(JacsalType type)  { this.type = type; }
+    LocalEntry(LocalEntry entry) { this.type = entry.type; this.refCount = entry.refCount; }
+    @Override public boolean equals(Object that) { return type.equals(((LocalEntry)that).type) && refCount == ((LocalEntry)that).refCount; }
     @Override public String toString() { return "[" + type + "," + refCount + "]"; }
   }
 
-  private final List<LocalEntry> locals         = new ArrayList<>();
+  private List<LocalEntry> locals                 = new ArrayList<>();
 
-  private List<Label>    asyncLocations         = new ArrayList<>();
-  private List<Runnable> asyncStateRestorations = new ArrayList<>();
+  private List<Label>      asyncLocations         = new ArrayList<>();
+  private List<Runnable>   asyncStateRestorations = new ArrayList<>();
 
   private static final BigDecimal DECIMAL_MINUS_1 = BigDecimal.valueOf(-1);
 
@@ -198,18 +201,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // of -1. We also track how many references to each slot exist on our virtual stack. This is
   // to allow us to dup() values without having to actually do anything except increment the
   // reference count. We release the local var slot once the reference count goes to 0.
-  private static class StackEntry {
+  private class StackEntry {
     JacsalType type;
     int slot = -1;
-    StackEntry(JacsalType type) { this.type = type; }
+    StackEntry(JacsalType type)            { this.type = type; }
+    StackEntry(JacsalType type, int slot)  { this.type = type; this.slot = slot; }
+    StackEntry(StackEntry entry)           { type = entry.type; slot = entry.slot; }
+    boolean isLocal() { return slot != -1; }
+    boolean isStack() { return !isLocal(); }
+    void convertToStack() { if (isLocal()) { _loadLocal(slot); freeSlot(slot); slot = -1; } }
+    void convertToLocal() { if (isStack()) { slot = allocateSlot(type); _storeLocal(slot); } }
+    void convertToLocal(int slot) { this.slot = slot; setSlot(slot, type); _storeLocal(slot); }
     @Override public boolean equals(Object obj) {
       return ((StackEntry)obj).type.equals(type) && ((StackEntry)obj).slot == slot;
     }
     @Override public String toString() { return "[" + type + "," + slot + "]"; }
   }
-  private Deque<StackEntry> stack    = new ArrayDeque<>();
+  private Deque<StackEntry> stack      = new ArrayDeque<>();
 
-  private Deque<TryCatch> tryCatches = new ArrayDeque<>();
+  private Deque<TryCatch>   tryCatches = new ArrayDeque<>();
 
   MethodCompiler(ClassCompiler classCompiler, Expr.FunDecl funDecl, MethodVisitor mv) {
     this.classCompiler = classCompiler;
@@ -356,10 +366,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
-    emitIf(() -> {
+    boolean isAsync = stmt.trueStmt  != null && stmt.trueStmt.isAsync ||
+                      stmt.falseStmt != null && stmt.falseStmt.isAsync;
+    emitIf(isAsync, IfTest.IS_TRUE,
+           () -> {
              compile(stmt.condition);
              convertToBoolean(false, stmt.condition);
-             pop();
            },
            stmt.trueStmt  == null ? null : () -> compile(stmt.trueStmt),
            stmt.falseStmt == null ? null : () -> compile(stmt.falseStmt));
@@ -379,9 +391,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(loop);
     compile(stmt.condition);
     convertToBoolean(false, stmt.condition);
-    pop();
     expect(1);
     mv.visitJumpInsn(IFEQ, stmt.endLoopLabel);
+    pop();
 
     compile(stmt.body);
     if (stmt.updates != null) {
@@ -897,10 +909,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.context.maxScale);
       loadLocation(expr.operator);
       String methodName = methodNames.get(expr.operator.getType());
-      if (methodName == null) {
-        //methodName = "binaryOp";
-        throw new IllegalStateException("Internal error: unsupported operator type " + expr.operator.getChars());
-      }
+      check(methodName != null, "unsupported operator type " + expr.operator.getChars());
       invokeMethod(RuntimeUtils.class, methodName, Object.class, Object.class, String.class, String.class, int.class, String.class, int.class);
       //convertTo(expr.type, true, expr.operator);  // Convert to expected type
       return null;
@@ -913,9 +922,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         convertTo(expr.type, null, false, expr.left.location);
       }
       else {
-        pop();
         Label isNotNull = new Label();
         expect(1);
+        pop();
         mv.visitInsn(DUP);
         mv.visitJumpInsn(IFNONNULL, isNotNull);
         mv.visitInsn(POP);
@@ -997,9 +1006,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
           // We need to find the method handle for the given method
           var method = clss.getMethod(name);
-          if (method == null) {
-            throw new IllegalStateException("Internal error: could not find method or field called " + name + " for " + expr.left.type);
-          }
+          check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
           // If method is static then we don't need the instance
           if (method.isStatic && expr.left.type.is(INSTANCE)) {
             popVal();
@@ -1029,10 +1036,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         if (expr.createIfMissing) {
-          // If we are lvalue and auto-creating fields when needed then we need to know if we are a Map/List or
-          // an instance since instance creation could result in async behaviour if a field initialiser invokes
-          // an async function.
-          emitIf(() -> isInstanceOf(JacsalObject.class),
+          // If we are lvalue and auto-creating fields then at this point we don't know the type of the parent
+          // or the field we are going to create (otherwise we would have set the isFieldAccess flag which handles
+          // the case for auto-creation of instance fields where we know the types up front). We have to assume
+          // that we might end up invoking an instance initialiser here since parent could be an instance and since
+          // we don't know the type we assume that the initialiser could be async so we wrap in appropriate code to
+          // handle async invocation.
+          dupVal();
+          emitIf(true,  // potentially async since auto-creation can call constructors which could be async
+                 IfTest.IS_TRUE,
+                 () -> isInstanceOf(JacsalObject.class),
                  () -> loadOrCreateInstanceField(expr),
                  () -> {
                    compile(expr.right);
@@ -1051,11 +1064,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(INSTANCE_OF,BANG_INSTANCE_OF)) {
       compile(expr.left);
       box();
-      emitInstanceof(expr.right.type);
+      isInstanceOf(expr.right.type);
       if (expr.operator.is(BANG_INSTANCE_OF)) {
         _booleanNot();
       }
-      setStackType(BOOLEAN);
       return null;
     }
 
@@ -1098,7 +1110,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(AMPERSAND_AMPERSAND,PIPE_PIPE)) {
       compile(expr.left);
       convertToBoolean(false, expr.left);
-      expect(1);
 
       // Look for short-cutting && or || (i.e. if we already know the result
       // we don't need to evaluate right hand side)
@@ -1106,6 +1117,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // Handle case for &&
         Label isFalse = new Label();
         Label end     = new Label();
+        expect(1);
         mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
         pop();
         compile(expr.right);
@@ -1123,6 +1135,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // Handle case for ||
         Label end    = new Label();
         Label isTrue = new Label();
+        expect(1);
         mv.visitJumpInsn(IFNE, isTrue);
         pop();
         compile(expr.right);
@@ -1314,20 +1327,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitTernary(Expr.Ternary expr) {
-    compile(expr.first);
-    convertToBoolean(false, expr.first);
-    pop();
-    Label isFalse = new Label();
-    mv.visitJumpInsn(IFEQ, isFalse);
-    compile(expr.second);
-    convertTo(expr.type, expr.second, true, expr.second.location);
-    pop();
-    Label end = new Label();
-    mv.visitJumpInsn(GOTO, end);
-    mv.visitLabel(isFalse);     // :isFalse
-    compile(expr.third);
-    convertTo(expr.type, expr.third, true, expr.third.location);
-    mv.visitLabel(end);         // :end
+    emitIf(expr.second.isAsync || expr.third.isAsync, IfTest.IS_TRUE,
+           () -> {
+             compile(expr.first);
+             convertToBoolean(false, expr.first);
+           },
+           () -> {
+             compile(expr.second);
+             convertTo(expr.type, expr.second, true, expr.second.location);
+           },
+           () -> {
+             compile(expr.third);
+             convertTo(expr.type, expr.third, true, expr.third.location);
+           }
+    );
     return null;
   }
 
@@ -1538,15 +1551,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // we need to check that if not immediately invoking another method call (f().each()) we must
     // convert Iterator to List since Iterator is not a standard type.
     if (!expr.isMethodCallTarget) {
-      emitIf(() -> isInstanceOf(ITERATOR),
-             () -> invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
-                                    () -> {
-                                      loadNullContinuation();
-                                      invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
-                                      pop();
-                                      push(ANY);   // Don't know if call occurs so we still have to assume ANY
-                                    }),
-             null);
+      convertIteratorToList(expr.isAsync, expr.location);
     }
 
     return null;
@@ -1667,17 +1672,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!expr.isMethodCallTarget) {
       // If we are not chaining method calls then it is possible that the method we just invoked returned
       // an Iterator and since Iterators are not standard types we need to convert into a List to make the
-      // result usable by other code. So we incoke castToAny which will check for Iterator and convert
-      // otherwise it returns the current value.
-      emitIf(() -> isInstanceOf(ITERATOR),
-             () -> invokeMaybeAsync(true, ANY, 1, expr.location, () -> {},
-                                    () -> {
-                                      loadNullContinuation();
-                                      invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
-                                      pop();
-                                      push(ANY);   // Don't know if call occurs so we still have to assume ANY
-                                    }),
-             null);
+      // result usable by other code.
+      convertIteratorToList(true, expr.location);
     }
     return null;
   }
@@ -1835,6 +1831,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   ///////////////////////////////////////////////////////////////
 
+  private void convertIteratorToList(boolean isAsync, Token location) {
+    dupVal();
+    emitIf(true, IfTest.IS_TRUE,
+           () -> isInstanceOf(ITERATOR),
+           () -> invokeMaybeAsync(isAsync, ANY, 1, location, () -> {},
+                                  () -> {
+                                    expect(1);
+                                    loadNullContinuation();
+                                    invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                                    pop();
+                                    push(ANY);   // Don't know if call occurs so we still have to assume ANY
+                                  }),
+           null);
+  }
+
   /**
    * Expect value on stack.
    * Convert to given instance type (varType) if value is instance of child class or is a map.
@@ -1938,28 +1949,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       boolean createIfMissing = node.createIfMissing && !(childType.is(INSTANCE) && childType.getClassDescriptor().getInitMethod().paramCount > 0);
       checkForNull = !createIfMissing;
       JacsalType fieldType   = parentClass.getField(fieldName);
-      if (fieldType == null) {
-        throw new IllegalStateException("Internal error: could not find field '" + fieldName + "' for " + JacsalType.createClass(parentClass));
-      }
+      check(fieldType != null, "could not find field '" + fieldName + "' for " + JacsalType.createClass(parentClass));
       if (createIfMissing) {
         dupVal();    // Save parent in case field is null and we need to store a value
-        loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
-        Label nonNull = new Label();
-        mv.visitInsn(DUP);
-        mv.visitJumpInsn(IFNONNULL, nonNull);
-        popVal();    // Pop null
-        // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
-        loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
-        mv.visitInsn(DUP_X1);     // Copy value and move it two slots
-        _storeClassField(parentClass.getInternalName(), fieldName, fieldType, false);
-        Label nextField = new Label();
-        mv.visitJumpInsn(GOTO, nextField);
-        mv.visitLabel(nonNull);            // :nonNull
-        // Don't need parent
-        swap();
-        popVal();
 
-        mv.visitLabel(nextField);         // :nextField
+        emitIf(true, IfTest.IS_NULL,
+               () -> {
+                 loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);
+                 dupVal();
+               },
+               () -> {
+                 popVal();             // pop the duplicate null
+                 // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
+                 loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
+                 setStackType(fieldType);
+                 expect(2);
+                 dupValX1();          // Copy value and move it two slots
+                 storeClassField(parentClass.getInternalName(), fieldName, fieldType, false);
+               },
+               () -> {
+                 // Not null so for x.y we have on stack: ..., x, y
+                 // We need to get rid of x so swap and pop to get: ..., y
+                 swap();
+                 popVal();
+               });
       }
       else {
         loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
@@ -2104,9 +2117,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private static JacsalType getFieldType(JacsalType type, String fieldName) {
     JacsalType fieldType = type.getClassDescriptor().getField(fieldName);
-    if (fieldType == null) {
-      throw new IllegalStateException("Internal error: couldn't find field '" + fieldName + "' in class " + type);
-    }
+    check(fieldType != null, "couldn't find field '" + fieldName + "' in class " + type);
     return fieldType;
   }
 
@@ -2116,13 +2127,31 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * We take care of manipulating the type stack and check that the stacks for the true and
    * false branches match at the end.
    */
-  private void emitIf(Runnable condition, Runnable trueStmts, Runnable falseStmts) {
+  enum IfTest {
+    // NOTE: opCode is op code for false test
+    IS_TRUE(IFEQ),
+    IS_NULL(IFNONNULL);
+    final int opCode; IfTest(int opCode) { this.opCode = opCode; }
+  }
+  private void emitIf(boolean isAsync, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {
     condition.run();
+
+    // If async and we have stmts for both branches then we need to save stack in locals to ensure
+    // that result after each branch from a stack point of view looks the same or is at least close
+    // enough that simple saving or loading values makes the stack the same.
+    if (isAsync && trueStmts != null && falseStmts != null) {
+      convertStackToLocals();
+    }
+
     Label ifFalse = new Label();
     expect(1);
-    mv.visitJumpInsn(IFEQ, ifFalse);
-    // Save stack
-    var savedStack = new ArrayDeque<StackEntry>(stack);
+    mv.visitJumpInsn(testInstruction.opCode, ifFalse);
+    pop();
+
+    // Save stack and locals
+    var savedStack = copyStack(stack);
+    var savedLocals = copyLocals(locals);
+
     if (trueStmts != null) {
       trueStmts.run();
     }
@@ -2135,12 +2164,32 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (falseStmts != null) {
       // Restore stack to how it was before trueStmts ran
       var trueStack = stack;
+      var trueLocals = locals;
       stack = savedStack;
+      locals = savedLocals;
       falseStmts.run();
       // Make sure that both branches leave stack the same
-      if (!Utils.stacksAreEqual(trueStack, stack)) {
-        throw new IllegalStateException("Stack for true/false branches differ:\n true=" + trueStack + "\n false=" + stack);
+      check(stackTypesAreEqual(trueStack, stack), "Stack for true/false branches differ:\n true=" + trueStack + "\n false=" + stack);
+      // If there are differences about which stack elements are really on the stack and which ones are in locals
+      // then make the false branch match the true branch
+      if (!stacksAreEqual(trueStack, stack)) {
+        check(stacksAreMostlyEqual(1, trueStack, stack) && (trueStack.peek().isStack() || stack.peek().isStack()),
+              "Stack for true/false branches differ by more than one entry:\n true=" + trueStack + "\n false=" + stack);
+        if (trueStack.peek().isStack()) {
+          convertLocalsToStack(1);
+        }
+        else {
+          int slot = trueStack.peek().slot;
+          // Make sure slot is available
+          if (slotIsFree(slot)) {
+            stack.peek().convertToLocal(slot);
+          }
+          else {
+            throw new IllegalStateException("Internal error: could not allocate slot " + slot + "\n locals=" + locals);
+          }
+        }
       }
+      check(stacksAreEqual(locals, trueLocals), "locals differ between true and false branches:\n true  = " + trueLocals + "\n false = " + locals);
     }
     mv.visitLabel(end);                   // :end
   }
@@ -2345,19 +2394,105 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  /**
+   * Expect n entries on the stack.
+   * This method will convert any entries that are currently stored in locals
+   * back into entries on the real stack.
+   */
   private void expect(int count) {
-    // TODO:
+    check(stack.size() >= count, "stack size is " + stack.size() + " but expecting at least " + count + " entries");
+
+    // First copy the top n entries so we can iterate in reverse order
+    List<StackEntry> copy = new ArrayList<>(count);
+    var iter = stack.iterator();
+    boolean seenEntryOnStack = false;
+    boolean needToStoreInLocals = false;
+    for (int i = 0; i < count; i++) {
+      StackEntry entry = iter.next();
+      // Need to store stack values in locals if we have a local value in the middle of our stack
+      if (entry.isLocal() && seenEntryOnStack) {
+        needToStoreInLocals = true;
+      }
+      seenEntryOnStack = entry.slot == -1;
+      copy.add(entry);
+    }
+
+    // If there are a mixture of stack and locals then convert all stack to locals
+    if (needToStoreInLocals) {
+      convertStackToLocals(count);
+    }
+
+    // Now iterate in reverse order and turn all locals entries into stack entries
+    convertLocalsToStack(count);
   }
 
   private void convertStackToLocals() {
-    var iter = stack.iterator();
-    while (iter.hasNext()) {
-      var entry = iter.next();
-      if (entry.slot == -1) {
-        entry.slot = allocateSlot(entry.type);
-        _storeLocal(entry.slot);
+    convertStackToLocals(stack.size());
+  }
+
+  private void convertStackToLocals(int n) {
+    // If entry is on the real stack then store in a local
+    stack.stream().limit(n).forEach(StackEntry::convertToLocal);
+  }
+
+  private void convertStackToLocalsExcept(int n) {
+    // First check if there are any to convert
+    if (stack.stream().skip(n).anyMatch(StackEntry::isStack)) {
+      // Need to save first n elements and restore afterwards
+      convertStackToLocals(n);
+
+      // If entry is on the real stack then store in a local
+      stack.stream().skip(n).forEach(StackEntry::convertToLocal);
+
+      // Restore our first n
+      convertLocalsToStack(n);
+    }
+  }
+
+  private void convertLocalsToStack(int n) {
+    // Restore in reverse order
+    stack.stream()
+         .limit(n)
+         .collect(Collectors.toCollection(ArrayDeque::new))
+         .descendingIterator()
+         .forEachRemaining(StackEntry::convertToStack);
+  }
+
+  /**
+   * Make the current stack the same as the passed in stack.
+   * This means making sure that whatever is on the real stack matches what is on the real stack of the
+   * other one and if entries are local stack entries their slots have to match.
+   * We need to come up with a set of instructions that result in the current stack ending up like the
+   * other one.
+   */
+  private void makeStackSameAs(Deque<StackEntry> other) {
+    check(stack.size() == other.size(), "stack sizes must be the same.\n thisStack=" + stack + "\n thatStack=" + other);
+    // Convert the two stacks into lists for easy access. Note that lists are in stack order with
+    // first element being the top of the stack.
+    List<StackEntry> thisStack = new ArrayList<>(stack);
+    List<StackEntry> thatStack = new ArrayList<>(other);
+
+    // Iterate in reverse order and find where the two stacks diverge
+    int firstDifferent = -1;
+    for (int i = stack.size() - 1; i >= 0; i--) {
+      if (!thisStack.get(i).equals(thatStack.get(i))) {
+        firstDifferent = i;
+        break;
       }
     }
+
+    if (firstDifferent == -1) {
+      return;  // Nothing to do
+    }
+
+    // Discard parts that are the same
+    thisStack = thisStack.subList(0, firstDifferent + 1);
+    thatStack = thatStack.subList(0, firstDifferent + 1);
+
+    // First find entries which are stored in local slots but the slots are different and generate instructions
+    // for moving values between slots. Note that the slot to move to might be currently allocated so it may need
+    // to move as well.
+    throw new UnsupportedOperationException();
   }
 
   private void dup() {
@@ -2365,7 +2500,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (entry.slot >= 0) {
       locals.get(entry.slot).refCount++;
     }
-    stack.push(stack.peek());
+    var dup = new StackEntry(entry);
+    stack.push(dup);
   }
 
   /**
@@ -2412,6 +2548,51 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
+   * Duplicate top most element and move it
+   * <pre>
+   * Before:  ..., y, x
+   * After:   ..., x, y, x
+   * </pre>
+   */
+  private void dupValX1() {
+    var x = stack.pop();
+    var y = stack.pop();
+    if (x.isStack() && y.isStack()) {
+      int xslots = slotsNeeded(x.type);
+      int yslots = slotsNeeded(y.type);
+      if (xslots == 1 && yslots == 1) {
+        mv.visitInsn(DUP_X1);
+      }
+      else
+      if (xslots == 2 && yslots == 2) {
+        mv.visitInsn(DUP2_X2);
+      }
+      else
+      if (xslots == 1 && yslots == 2) {
+        mv.visitInsn(DUP_X2);
+      }
+      else
+      if (xslots == 2 && yslots == 1) {
+        mv.visitInsn(DUP2_X1);
+      }
+      else {
+        throw new IllegalStateException("Internal error: xslots=" + xslots + ", yslots=" + yslots);
+      }
+    }
+    else
+    if (x.isStack() && y.isLocal()) {
+      mv.visitInsn(x.type.is(DOUBLE,LONG) ? DUP2 : DUP);
+    }
+    else {
+      // x local or both local
+      locals.get(x.slot).refCount++;
+    }
+    stack.push(x);
+    stack.push(y);
+    stack.push(new StackEntry(x));
+  }
+
+  /**
    * Duplicate value on JVM stack but don't touch type stack
    */
   private void _dupVal() {
@@ -2420,9 +2601,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   /**
    * Duplicate top two elemenets on the stack:
+   * <pre>
    *   ... x, y ->
    *   ... x, y, x, y
-   *
+   * </pre>
    * Note that we need to take care whether any of the types are long or double
    * since the JVM operation dup2 only duplicates the top two slots of the stack
    * rather than the top two values.
@@ -2431,7 +2613,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     var x = stack.pop();
     var y = stack.pop();
 
-    if (x.slot == -1 && y.slot == -1) {
+    if (x.isStack() && y.isStack()) {
       JacsalType type1 = x.type;
       JacsalType type2 = y.type;
       if (slotsNeeded(type1) == 1 && slotsNeeded(type2) == 1) {
@@ -2456,21 +2638,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       // We have at least one value in local vars
-      if (y.slot == -1) {
+      if (y.isStack()) {
+        push(y.type);
+        _dupVal();
         stack.push(x);
         locals.get(x.slot).refCount++;
         push(y.type);
-        _dupVal();
-        stack.push(x);
-        push(y.type);
+        stack.push(new StackEntry(x));
       }
       else {
-        push(x.type);
-        _dupVal();
+        // x is on stack
+        check(x.isStack(), "x should be on stack (not in locals)");
         stack.push(y);
         locals.get(y.slot).refCount++;
         push(x.type);
-        stack.push(y);
+        _dupVal();
+        stack.push(new StackEntry(y));
+        push(x.type);
       }
     }
   }
@@ -2479,7 +2663,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Pop value off JVM stack and corresponding type off type stack
    */
   private void popVal() {
-    _popVal();
+    if (stack.peek().isStack()) {
+      _popVal();
+    }
     pop();
   }
 
@@ -2498,9 +2684,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Pop real values off stack but leave type stack unchanged
     var iter = stack.iterator();
     for (int i = 0; i < n; i++) {
-      if (!iter.hasNext()) {
-        throw new IllegalStateException("Internal error: stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack);
-      }
+      check(iter.hasNext(), "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack);
       var entry = iter.next();
       if (entry.slot != -1) {
         continue;  // Nothing to do since "stack" location is a local var
@@ -3194,19 +3378,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void isInstanceOf(JacsalType type) {
     expect(1);
-    mv.visitInsn(DUP);
     mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
+    pop();
+    push(BOOLEAN);
   }
 
   private void isInstanceOf(Class clss) {
     expect(1);
-    mv.visitInsn(DUP);
     mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(clss));
-  }
-
-  private void emitInstanceof(JacsalType type) {
-    expect(1);
-    mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
+    pop();
+    push(BOOLEAN);
   }
 
   private void throwIfNull(String msg, SourceLocation location) {
@@ -3274,21 +3455,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we have values on the stack we save them in temp locations and then put them back
     // onto the stack for the try block to use. After the catch we also restore them so that
     // code in the catch block has the same stack as the code in the try block.
-    int[] temps = new int[stack.size()];
-    if (stack.size() > 0) {
-      for (int i = 0; i < temps.length; i++) {
-        temps[i] = allocateSlot(peek());
-        storeLocal(temps[i]);
-      }
-    }
-
-    // Restore stack by loading values from the locals we have stored them in
-    Runnable restoreStack = () -> {
-      // Restore in reverse order
-      for (int i = temps.length - 1; i >= 0; i--) {
-        loadLocal(temps[i]);
-      }
-    };
+    convertStackToLocals();
 
     // If we were in a try/catch then terminate previous one (we will reinstate later)
     if (tryCatches.size() > 0) {
@@ -3309,8 +3476,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // a NOP just to make sure that this can't happen.
     mv.visitInsn(NOP);
 
-    restoreStack.run();
+    var preTryStack = copyStack(stack);
+    var preTryLocals = copyLocals(locals);
     tryBlock.run();
+    var postTryStack = copyStack(stack);
 
     TryCatch myTryCatch = tryCatches.pop();
 
@@ -3338,17 +3507,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // We save the type stack we have after the try block and restore the stack ready for the
     // catch block.
     mv.visitInsn(POP);           // Don't need the exception
-    var savedStack = stack;
-    stack = new ArrayDeque<>();
-    restoreStack.run();
+    stack = preTryStack;
+    locals = preTryLocals;
     catchBlock.run();
     mv.visitLabel(after);
 
     // Validate that the two stacks are the same
-    check(Utils.stacksAreEqual(stack, savedStack), "Stack after try does not match stack after catch: tryStack=" + savedStack + ", catchStack=" + stack);
-
-    // Free our temps
-    Arrays.stream(temps).forEach(i -> freeTemp(i));
+    check(stacksAreEqual(stack, postTryStack), "Stack after try does not match stack after catch: tryStack=" + postTryStack + ", catchStack=" + stack);
   }
 
   /**
@@ -3388,82 +3553,43 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invoker.run();
       return;
     }
+    invokeAsync(returnType, numArgsAlreadyOnStack, location, compileArgs, invoker);
+  }
 
-    // We need to create two arrays to store our stack and locals in:
+  private void invokeAsync(JacsalType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
+    // We need to preserve our stack and locals so that when we are resumed we can restore these
+    // values as they were when we were suspended.
+    // We first convert all values on the stack into locals.
+    // We need to create two arrays to store our locals in:
     //  - one for all the primitives, and
     //  - one for al the objects
     // Note that we store boolean, int, long, and double values all in an array of longs.
-    // We create two arrays of the same length (locals size + stack size) and then we have
-    // a consistent indexing across both arrays. The type of the stack/local var dictates
-    // which array it is stored in (meaning that there is always a wasted entry in the other
-    // array for every stack/local var). Note that the indexes of the locals will not match
-    // because we use two slots for long/double in locals but only one slot in the long[].
+    // We create two arrays of the same length and then we have a consistent indexing across both
+    // arrays. The type of the local var dictates which array it is stored in (meaning that there
+    // is always a wasted entry in the other array for every stack/local var). Note that the indexes
+    // of the locals will not match because we use two slots for long/double in locals but only one
+    // slot in the long[].
     // NOTE: we don't bother with preserving the "this" (if non-static) and the Continuation
     // object since the MethodHandle will be bound to "this" and the Continuation is supplied
     // when resuming so the current value (usually null) is irrelevant.
+    convertStackToLocalsExcept(numArgsAlreadyOnStack);
     int startSlot = methodFunDecl.isStatic() ? 0 : 1;
-    int numLocals = numLocals() - startSlot - 1;
-    int size = numLocals + stack.size();
+    var savedLocals = getLocalTypes(startSlot);
+    int numLocals = savedLocals.size();
     int longArr = allocateSlot(LONG_ARR);
     int objArr  = allocateSlot(OBJECT_ARR);
-    _loadConst(size);
+    _loadConst(numLocals);
     mv.visitIntInsn(NEWARRAY, T_LONG);
     _storeLocal(longArr);
-    _loadConst(size);
+    _loadConst(numLocals);
     mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
     _storeLocal(objArr);
-    var savedStack = new ArrayDeque<>(stack);
-
-    // Save stack into these long[] and Object[]
-    for (int i = numLocals; i < size; i++) {
-      JacsalType type = peek();
-      loadLocal(type.isPrimitive() ? longArr : objArr);
-      // Stack var
-      swap();
-      loadConst(i);
-      swap();
-      expect(3);
-      if (type.isPrimitive()) {
-        if (type.is(BOOLEAN,INT)) { mv.visitInsn(I2L); }
-        if (type.is(DOUBLE))      { invokeMethod(Double.class, "doubleToRawLongBits", double.class); }
-      }
-      mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
-      pop(3);
-    }
-
-    // Now we need to restore the stack since preserving it destroyed its contents.
-    // Restore stack by loading values from the locals we have stored them in (in reverse order).
-    var iter = savedStack.descendingIterator();
-    for (int i = size - 1; i >= numLocals; i--) {
-      JacsalType type = iter.next().type;
-      Utils.loadStoredValue(mv, i, type, () -> _loadLocal(type.isPrimitive() ? longArr : objArr));
-      push(type);
-    }
 
     // Compile the args to the function before starting the try/catch block since the async part is in the
     // invocation of the function. If the args compilation requires async behaviour then it will take care
     // of it when compiling the expression for the argument.
     compileArgs.run();
 
-    // Now save our locals. We do this _after_ processing args in case call is like func('abc',x=2) which
-    // might modify local vars.
-    int slot = startSlot;                        // skip "this"
-    for (int i = 0; i < numLocals; i++) {
-      if (slot == continuationVar) {
-        slot++;                                 // skip Continuation
-      }
-      JacsalType type = localsType(slot);
-      loadLocal(type.isPrimitive() ? longArr : objArr);
-      loadConst(i);
-      loadLocal(slot++);
-      if (type.isPrimitive()) {
-        if (type.is(BOOLEAN,INT)) { mv.visitInsn(I2L); }
-        if (type.is(DOUBLE))      { invokeMethod(Double.class, "doubleToRawLongBits", double.class); }
-        if (type.is(LONG,DOUBLE)) { slot++; }
-      }
-      mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
-      pop(3);
-    }
 
     Label blockStart = new Label();
     Label blockEnd   = new Label();
@@ -3477,26 +3603,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Add a runnable for this continuation that restores state. This will be invoked in switch statement that is
     // run when resuming (see MethodCompiler::compile()) before jumping back to place in code where we resume from.
-    List<LocalEntry> savedLocals = new ArrayList<>(locals);
     Runnable restoreState = () -> {
-      // Restore locals and stack and put result on the stack.
-      // No need to restore any parameters as they have been done by the continuation wrapper
-      int slot2 = startSlot;
-      for (int i = 0; i < numLocals; i++) {
-        if (slot2 == continuationVar) {
-          slot2++;           // skip Continuation
-        }
-        JacsalType type = savedLocals.get(slot2).type;
+      // Restore locals and put result on the stack.
+      for (int i = 0; i < savedLocals.size(); i++) {
+        var entry = savedLocals.get(i);
+        var type  = entry.type;
         Utils.loadStoredValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
-        _storeLocal(type, slot2);
-        setSlot(slot2, type);
-        slot2 += slotsNeeded(type);
-      }
-      // Restore stack in reverse order. Don't restore any args that were already on the stack.
-      var stackIter = savedStack.descendingIterator();
-      for (int i = size - 1; i >= numLocals + numArgsAlreadyOnStack; i--) {
-        JacsalType type = stackIter.next().type;
-        Utils.loadStoredValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
+        _storeLocal(type, entry.slot);
+        setSlot(entry.slot, type);
       }
       _loadLocal(continuationVar);
       mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation", "result", "Ljava/lang/Object;");
@@ -3518,12 +3632,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(blockEnd);     // :blockEnd
 
     mv.visitLabel(catchLabel);   // :catchLabel
-    int contVar = allocateSlot(CONTINUATION);
-    _storeLocal(contVar);
-    // Need to create a new Continuation chained to the one we caught and save our state in it
+    saveLocals(savedLocals, longArr, objArr);
     mv.visitTypeInsn(NEW, "jacsal/runtime/Continuation");
-    mv.visitInsn(DUP);
-    _loadLocal(contVar);
+
+    // Move copy of new Continuation to before current one and then swap to get order we want
+    // We have     : ...,caughtCont,newCont
+    // after dup_x1: ...,newCont,caughtCont,newCont
+    // after swap  : ...,newCont,newCont,caughtCont
+    mv.visitInsn(DUP_X1);
+    mv.visitInsn(SWAP);
+
     _loadClassField(classCompiler.internalName, Utils.continuationHandle(methodFunDecl.functionDescriptor.implementingMethod), FUNCTION, true);
     if (!methodFunDecl.isStatic()) {
       _loadLocal(0);    // this
@@ -3540,32 +3658,44 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(after);              // :after
 
     // Free our temps
-    freeTemp(contVar);
     freeTemp(longArr);
     freeTemp(objArr);
   }
 
-  private int numLocals() {
-    int lastLocal = 0;
-    for (int i = locals.size() - 1; i >= 0; i--) {
-      JacsalType type = localsType(i);
-      if (type != null) {
-        lastLocal = type == ANY && i > 0 && localsType(i-1).is(LONG,DOUBLE) ? i - 1 : i;
-        break;
+  /**
+   * Get a list of types for each local. Return list of StackEntry objects
+   * where each element specifies the slot number and type of slot for the
+   * current locals.
+   */
+  private List<StackEntry> getLocalTypes(int startSlot) {
+    List<StackEntry> types = new ArrayList<>();
+    for (int i = startSlot; i < locals.size(); i++) {
+      var local = locals.get(i);
+      // Skip null entries and skip our continuation var
+      if (local == null || i == continuationVar) {
+        continue;
       }
+      var type = local.type;
+      types.add(new StackEntry(type,i));
+      i += slotsNeeded(type) - 1;
     }
-    // Now count them, skipping empty slots
-    int localsSize = 0;
-    for (int i = 0; i <= lastLocal; i++) {
-      JacsalType type = localsType(i);
-      if (type != null) {
-        localsSize++;
-        if (type.is(LONG,DOUBLE)) {
-          i++;
-        }
+    return types;
+  }
+
+  private void saveLocals(List<StackEntry> localTypes, int longArr, int objArr) {
+    for (int i = 0; i < localTypes.size(); i++) {
+      var entry = localTypes.get(i);
+      var type = entry.type;
+      loadLocal(type.isPrimitive() ? longArr : objArr);
+      loadConst(i);
+      loadLocal(entry.slot);
+      if (type.isPrimitive()) {
+        if (type.is(BOOLEAN,INT)) { mv.visitInsn(I2L); }
+        if (type.is(DOUBLE))      { invokeMethod(Double.class, "doubleToRawLongBits", double.class); }
       }
+      mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
+      pop(3);
     }
-    return localsSize;
   }
 
   //////////////////////////////////////////////////////
@@ -3971,10 +4101,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Set first slot to type. For multi-slot types others are marked as ANY.
     for(int i = 0; i < slotsNeeded(type); i++) {
-      var entry = new LocalEntry();
-      entry.type = i == 0 ? type : ANY;
+      var entry = new LocalEntry(i == 0 ? type : ANY);
       locals.set(idx + i, entry);
     }
+  }
+
+  private boolean slotIsFree(int slot) {
+    return slot >= locals.size() || locals.get(slot) == null;
   }
 
   private void loadGlobals() {
@@ -3983,6 +4116,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadClassField(String internalClassName, String fieldName, JacsalType type, boolean isStatic) {
+    if (!isStatic) {
+      expect(1);
+    }
     _loadClassField(internalClassName, fieldName, type, isStatic);
     if (!isStatic) {
       pop();
@@ -4194,8 +4330,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Expect on stack: parent
    */
   private void loadOrCreateInstanceField(Expr.Binary expr) {
-    check(expr.type.is(MAP,LIST), "Type must be MAP/LIST when createIfMissing set");
-    boolean isMap = expr.type.is(MAP);
+    boolean isMap = !expr.type.is(LIST);
 
     int parentVar = saveInTemp();
     loadLocal(parentVar);
@@ -4218,14 +4353,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // We have no value for the field so we have to construct a default value. Type of field must be Map/List or
     // Instance for us to be doing auto-creation.
-    emitIf(() -> {
+    emitIf(true, IfTest.IS_TRUE,
+           () -> {
              loadLocal(fieldVar);
              invokeMethod(Field.class, "getType");
              dupVal();
              loadConst(JacsalObject.class);
              swap();
              invokeMethod(Class.class, "isAssignableFrom", Class.class);
-             pop();
            },
            () -> {
              // Construct new object
@@ -4307,10 +4442,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void loadLocal(int slot) {
-    if (slot == -1) {
-      throw new IllegalStateException("Internal error: trying to load from unitilialised variable (slot is -1)");
-    }
-
+    check(slot != -1, "trying to load from unitilialised variable (slot is -1)");
     _loadLocal(slot);
     JacsalType type = localsType(slot);
     push(type);
@@ -4337,9 +4469,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (entry == null) {
       return null;
     }
-    if (entry.refCount < 1) {
-      throw new IllegalStateException("Internal error: ref count for slot " + slot + " is " + entry.refCount);
-    }
     return entry.type;
   }
 
@@ -4353,7 +4482,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void check(boolean condition, String msg) {
+  private static void check(boolean condition, String msg) {
     if (!condition) {
       throw new IllegalStateException("Internal error: " + msg);
     }
@@ -4402,5 +4531,58 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       this.tryBlockEnd = tryBlockEnd;
       this.catchBlock = catchBlock;
     }
+  }
+
+  private static boolean stackTypesAreEqual(Collection<StackEntry> stack1, Collection<StackEntry> stack2) {
+    if (stack1.size() != stack2.size()) { return false; }
+    for (Iterator<StackEntry> iter1 = stack1.iterator(), iter2 = stack2.iterator(); iter1.hasNext() && iter2.hasNext(); ) {
+      if (!iter1.next().type.equals(iter2.next().type)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean stacksAreEqual(Collection stack1, Collection stack2) {
+    return stacksAreMostlyEqual(0, stack1, stack2);
+  }
+
+  private static boolean stacksAreMostlyEqual(int skip, Collection stack1, Collection stack2) {
+    Iterator iter1 = stack1.iterator();
+    Iterator iter2 = stack2.iterator();
+    while (iter1.hasNext() && iter2.hasNext()) {
+      var next1 = iter1.next();
+      var next2 = iter2.next();
+      if (skip-- > 0) {
+        continue;
+      }
+      if (next1 == next2) {
+        continue;
+      }
+      if (next1 == null || next2 == null) {
+        return false;
+      }
+      if (!next1.equals(next2)) {
+        return false;
+      }
+    }
+    // Can have different sizes if all remaining values are null
+    Iterator iter = iter1.hasNext() ? iter1 : iter2;
+    while (iter.hasNext()) {
+      if (iter.next() != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private Deque<StackEntry> copyStack(Deque<StackEntry> stack) {
+    var copy = stack.stream().map(StackEntry::new).collect(Collectors.toCollection(ArrayDeque::new));
+    return copy;
+  }
+
+  private List<LocalEntry> copyLocals(List<LocalEntry> locals) {
+    var copy = locals.stream().map(local -> local == null ? null : new LocalEntry(local)).collect(Collectors.toList());
+    return copy;
   }
 }
