@@ -92,44 +92,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     isFirstPass = true;
     analyse(classDecl);
 
-    // If we still have call sites where we don't know if function was async or not due to forward references
-    // we now need to work them out. We keep looping and marking functions and call sites as async until there
-    // are no more do to. At this point the call dependencies should only refer to other functions in the
-    // dependency map so if none of them have yet been marked async then none of them are async.
-    while (true) {
-      boolean resolvedAsyncCall = false;
-      for (var caller : callDependencies.keySet()) {
-        var callSites    = callDependencies.get(caller);
-        var newCallSites = new ArrayList<Pair<Expr,FunctionDescriptor>>();
-        for (var call: callSites) {
-          var callSite = call.first;
-          var callee   = call.second;
-          if (callee.isAsync != null) {
-            if (callee.isAsync) {
-              caller.functionDescriptor.isAsync = true;
-              callSite.isAsync = true;
-              resolvedAsyncCall = true;
-            }
-          }
-          else {
-            // Still don't know so add for next round
-            newCallSites.add(call);
-          }
-        }
-        callDependencies.put(caller, newCallSites);
-      }
-      // If no more async calls resolved then we know that all the rest are sync so nothing more to do
-      if (!resolvedAsyncCall) {
-        break;
-      }
-    }
-
-    // Mark all remaining functions as not async
-    for (var callSites: callDependencies.values()) {
-      for (var callSite: callSites) {
-        callSite.second.isAsync = false;
-      }
-    }
+    resolveDependencies();
 
     isFirstPass = false;
     analyse(classDecl);
@@ -298,6 +261,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitPostfixUnary(Expr.PostfixUnary expr) {
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
+  }
+
+  @Override public Void visitCast(Expr.Cast expr) {
     analyse(expr.expr);
     freeLocals(1);
     return null;
@@ -513,7 +482,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
+  @Override public Void visitInvokeInit(Expr.InvokeInit expr) {
     expr.args.forEach(this::analyse);
     freeLocals(expr.args.size());
     return null;
@@ -752,6 +721,47 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       callDependencies.put(caller, callees);
     }
     callees.add(new Pair(callSite, callee));
+  }
+
+  private void resolveDependencies() {
+    // If we still have call sites where we don't know if function was async or not due to forward references
+    // we now need to work them out. We keep looping and marking functions and call sites as async until there
+    // are no more do to. At this point the call dependencies should only refer to other functions in the
+    // dependency map so if none of them have yet been marked async then none of them are async.
+    while (true) {
+      boolean resolvedAsyncCall = false;
+      for (var caller : callDependencies.keySet()) {
+        var callSites    = callDependencies.get(caller);
+        var newCallSites = new ArrayList<Pair<Expr,FunctionDescriptor>>();
+        for (var call: callSites) {
+          var callSite = call.first;
+          var callee   = call.second;
+          if (callee.isAsync != null) {
+            if (callee.isAsync) {
+              caller.functionDescriptor.isAsync = true;
+              callSite.isAsync = true;
+              resolvedAsyncCall = true;
+            }
+          }
+          else {
+            // Still don't know so add for next round
+            newCallSites.add(call);
+          }
+        }
+        callDependencies.put(caller, newCallSites);
+      }
+      // If no more async calls resolved then we know that all the rest are sync so nothing more to do
+      if (!resolvedAsyncCall) {
+        break;
+      }
+    }
+
+    // Mark all remaining functions as not async
+    for (var callSites: callDependencies.values()) {
+      for (var callSite: callSites) {
+        callSite.second.isAsync = false;
+      }
+    }
   }
 
   private Expr.FunDecl currentFunction() {

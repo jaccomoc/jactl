@@ -195,6 +195,20 @@ abstract class Expr {
     @Override public String toString() { return "PostfixUnary[" + "expr=" + expr + ", " + "operator=" + operator + "]"; }
   }
 
+  static class Cast extends Expr implements ManagesResult {
+    Token       token;
+    JacsalType  castType;
+    Expr        expr;
+    Cast(Token token, JacsalType castType, Expr expr) {
+      this.token = token;
+      this.castType = castType;
+      this.expr = expr;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCast(this); }
+    @Override public String toString() { return "Cast[" + "token=" + token + ", " + "castType=" + castType + ", " + "expr=" + expr + "]"; }
+  }
+
   static class Call extends Expr {
     Token      token;
     Expr       callee;
@@ -410,7 +424,7 @@ abstract class Expr {
     int          maxLocals = 0;
 
     void allocateLocals(int n) { localsCnt += n; maxLocals = maxLocals > localsCnt ? maxLocals : localsCnt; }
-    void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0; }
+    void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0;}
 
 
     public boolean isClosure()    { return nameToken == null; }
@@ -699,25 +713,23 @@ abstract class Expr {
   }
 
   /**
-   * Invoke a function based on FunctionDescriptor
+   * Invoke init method of a class
    */
-  static class InvokeFunction extends Expr {
-    Token              token;
-
+  static class InvokeInit extends Expr {
+    Token            token;
     // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
-    boolean            invokeSpecial;
-
-    FunctionDescriptor functionDescriptor;
-    List<Expr>         args;
-    InvokeFunction(Token token, boolean invokeSpecial, FunctionDescriptor functionDescriptor, List<Expr> args) {
+    boolean          invokeSpecial;
+    ClassDescriptor  classDescriptor;
+    List<Expr>       args;
+    InvokeInit(Token token, boolean invokeSpecial, ClassDescriptor classDescriptor, List<Expr> args) {
       this.token = token;
       this.invokeSpecial = invokeSpecial;
-      this.functionDescriptor = functionDescriptor;
+      this.classDescriptor = classDescriptor;
       this.args = args;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunction(this); }
-    @Override public String toString() { return "InvokeFunction[" + "token=" + token + ", " + "invokeSpecial=" + invokeSpecial + ", " + "functionDescriptor=" + functionDescriptor + ", " + "args=" + args + "]"; }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeInit(this); }
+    @Override public String toString() { return "InvokeInit[" + "token=" + token + ", " + "invokeSpecial=" + invokeSpecial + ", " + "classDescriptor=" + classDescriptor + ", " + "args=" + args + "]"; }
   }
 
   /**
@@ -836,6 +848,7 @@ abstract class Expr {
     T visitTernary(Ternary expr);
     T visitPrefixUnary(PrefixUnary expr);
     T visitPostfixUnary(PostfixUnary expr);
+    T visitCast(Cast expr);
     T visitCall(Call expr);
     T visitMethodCall(MethodCall expr);
     T visitLiteral(Literal expr);
@@ -862,7 +875,7 @@ abstract class Expr {
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);
     T visitInvokeFunDecl(InvokeFunDecl expr);
-    T visitInvokeFunction(InvokeFunction expr);
+    T visitInvokeInit(InvokeInit expr);
     T visitInvokeUtility(InvokeUtility expr);
     T visitInvokeNew(InvokeNew expr);
     T visitDefaultValue(DefaultValue expr);

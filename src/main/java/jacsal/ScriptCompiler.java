@@ -42,6 +42,7 @@ public class ScriptCompiler extends ClassCompiler {
     FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
     globalVars.visitEnd();
 
+    compileInnerClasses();
     compileScriptMain();
     finishClassCompile();
 

@@ -1091,6 +1091,8 @@ public class ClassTests extends BaseTest {
     test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Z())", 3);
     test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Y())", 2);
     test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new X())", 1);
+    test("class X { def f(){1}; class Y extends X { def f(){2} }}; class Z extends X.Y { def f(){3} }; def g(X x){x.f()}; g(new X())", 1);
+    test("class Y extends X { def f(){2} }; class X { def f(){1} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Z())", 3);
     testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Y()", "cannot convert");
     testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z; z = new Y()", "cannot convert");
   }
@@ -1152,9 +1154,23 @@ public class ClassTests extends BaseTest {
     test("class X { Y y = null }; class Y { int i = 1 }; def x = new X(); x.y.i = 2", 2);
   }
 
-  //  @Test public void cast() {
-//    test("class X {int i=3}; X x = new X(); ((X)x).i", 3);
-//  }
+  @Test public void cast() {
+    testError("class X {int i}; int i = 3; X x = (X)i", "cannot cast");
+    testError("class X {int i}; def i = 3; X x = (X)i", "invalid type");
+    test("class X {int i}; def a = [i:3]; X x = (X)a; x.i", 3);  // ???
+    test("class X {int i}; Map a = [i:3]; X x = (X)a; x.i", 3);  // ???
+    test("class X {int i=3}; X x = new X(); ((X)x).i", 3);
+    test("class X {int i=3}; def x = new X(); ((X)x).i", 3);
+    test("class X { class Y { int i = 3 }; def f(){ def y = new Y(); ((Y)y).i }}; def x = new X(); x.f()", 3);
+    test("class X { class Y { int i = 3 }; def f(){ def y = new Y(); ((Y)y).i }}; def x = new X(); ((X)x).f()", 3);
+    test("class X { class Y extends X { int i = 3 }; def f(){ def y = new Y(); ((Y)y).i }}; def x = new X.Y(); ((X)x).f()", 3);
+    testError("class X {}; class Y {}; X x = new X(); Y y = (Y)x", "cannot cast");
+    test("class X {def f(){2}}; class Y extends X {def f(){3}}; Y y = new Y(); X x = (X)y; x.f()", 3);
+    test("class X {}; class Y extends X {def f(){3}}; X x = new Y(); Y y = (Y)x; y.f()", 3);
+    testError("class X {}; class Y {}; def x = new X(); def y = (Y)x", "invalid type");
+    test("class X {def f(){2}}; class Y extends X {def f(){3}}; def y = new Y(); def x = (X)y; x.f()", 3);
+    test("class X {}; class Y extends X {def f(){3}}; def x = new Y(); def y = (Y)x; y.f()", 3);
+  }
 
 //  @Test public void packageTests() {
 //    packagName = "x.y.z";

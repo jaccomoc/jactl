@@ -396,8 +396,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, classCompiler.pkg, stmt, classCompiler.sourceName);
-    compiler.compileClass();
+//    var compiler = new ClassCompiler(classCompiler.source, classCompiler.context, classCompiler.pkg, stmt, classCompiler.sourceName);
+//    compiler.compileClass();
     return null;
   }
 
@@ -1343,12 +1343,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     compile(expr.expr);
 
-    // Type cast?
-    if (expr.operator.getType().isType()) {
-      convertTo(JacsalType.valueOf(expr.operator.getType()), expr.expr, true, expr.operator);
-      return null;
-    }
-
     switch (expr.operator.getType()) {
       case BANG:    convertToBoolean(true, expr.expr);      break;
       case MINUS:   arithmeticNegate(expr.expr.location);           break;
@@ -1360,6 +1354,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!expr.isResultUsed) {
       popVal();
     }
+    return null;
+  }
+
+  @Override public Void visitCast(Expr.Cast expr) {
+    compile(expr.expr);
+    convertTo(expr.type, expr.expr, true, expr.location);
     return null;
   }
 
@@ -1791,14 +1791,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
-    invokeMaybeAsync(expr.functionDescriptor.isAsync, expr.type, 0, expr.location,
+  @Override public Void visitInvokeInit(Expr.InvokeInit expr) {
+    FunctionDescriptor initMethod = expr.classDescriptor.getInitMethod();
+    invokeMaybeAsync(initMethod.isAsync, expr.type, 0, expr.location,
                      () -> {
-                       if (!expr.functionDescriptor.isStatic) {
+                       if (!initMethod.isStatic) {
                          loadLocal(0);    // this
                        }
 
-                       if (expr.functionDescriptor.isAsync) {
+                       if (initMethod.isAsync) {
                          loadNullContinuation();
                        }
 
@@ -1806,7 +1807,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        expr.args.forEach(this::compile);
                      },
                      () -> {
-                       invokeUserMethod(expr.functionDescriptor, expr.invokeSpecial);
+                       invokeUserMethod(initMethod, expr.invokeSpecial);
                      }
     );
 
@@ -2630,8 +2631,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     if (peek().is(INSTANCE)) {
-      if (peek().isConvertibleTo(type)) {
-        // Nothing to do. Already of correct type.
+      if (peek().isConvertibleTo(type) || type.isConvertibleTo(peek())) {
+        checkCast(type);
         return null;
       }
     }

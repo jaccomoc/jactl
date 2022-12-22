@@ -30,7 +30,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static jacsal.JacsalType.*;
 import static jacsal.JacsalType.LONG;
@@ -141,13 +143,36 @@ public class ClassCompiler {
   }
 
   protected void compileClass() {
+    compileSingleClass();
+    compileInnerClasses();
+  }
+
+  protected void compileSingleClass() {
     classDecl.fieldVars.forEach((field,varDecl) -> defineField(field, varDecl.type));
     classDecl.methods.forEach(method -> compileMethod(method.declExpr));
-    classDecl.innerClasses.forEach(clss -> {
-      var compiler = new ClassCompiler(source, context, pkg, clss, sourceName);
-      compiler.compileClass();
-    });
     finishClassCompile();
+  }
+
+  protected void compileInnerClasses() {
+    var orderedInnerClasses = allInnerClasses(classDecl).sorted((a,b) -> Integer.compare(ancestorCount(a), ancestorCount(b))).collect(Collectors.toList());
+    orderedInnerClasses.forEach(clss -> {
+      if (clss != classDecl) {
+        var compiler = new ClassCompiler(source, context, pkg, clss, sourceName);
+        compiler.compileSingleClass();
+      }
+    });
+  }
+
+  private Stream<Stmt.ClassDecl> allInnerClasses(Stmt.ClassDecl classDecl) {
+    return Stream.concat(Stream.of(classDecl), classDecl.innerClasses.stream().flatMap(this::allInnerClasses));
+  }
+
+  private int ancestorCount(Stmt.ClassDecl classDecl) {
+    int count = 0;
+    for (var baseClass = classDecl.classDescriptor.getBaseClass(); baseClass != null; baseClass = baseClass.getBaseClass()) {
+      count++;
+    }
+    return count;
   }
 
   void finishClassCompile() {

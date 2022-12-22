@@ -698,31 +698,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
-    if (expr.operator.getType().isType()) {
-      expr.type = JacsalType.valueOf(expr.operator.getType());
-
-      // Special case for single char strings if casting to int
-      if (expr.expr.type.is(STRING) && expr.type.is(INT)) {
-        if (expr.expr.isConst && expr.expr.constValue instanceof String) {
-          String value = (String)expr.expr.constValue;
-          if (value.length() != 1) {
-            error((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.operator);
-          }
-          expr.isConst = true;
-          expr.constValue = (int)(value.charAt(0));
-        }
-        return expr.type;
-      }
-
-      // Type cast so if we already know we have a bad cast then throw error
-      if (!expr.expr.type.isConvertibleTo(JacsalType.valueOf(expr.operator.getType()))) {
-        error("Cannot cast from " + expr.expr.type + " to " + expr.operator.getChars(), expr.operator);
-      }
-
-      // We have a cast so our type is the type we are casting to
-      return expr.type;
-    }
-
     expr.isConst = expr.expr.isConst;
     if (expr.operator.is(BANG)) {
       expr.type = BOOLEAN;
@@ -785,6 +760,33 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     }
     error("Unary operator '" + expr.operator.getChars() + "' cannot be applied to type " + expr.expr.type, expr.operator);
     return null;
+  }
+
+  @Override public JacsalType visitCast(Expr.Cast expr) {
+    resolve(expr.expr);
+    resolve(expr.castType);
+    expr.type = expr.castType;
+
+    // Special case for single char strings if casting to int
+    if (expr.expr.type.is(STRING) && expr.type.is(INT)) {
+      if (expr.expr.isConst && expr.expr.constValue instanceof String) {
+        String value = (String)expr.expr.constValue;
+        if (value.length() != 1) {
+          error((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.location);
+        }
+        expr.isConst = true;
+        expr.constValue = (int)(value.charAt(0));
+      }
+      return expr.type;
+    }
+
+    // Throw error if bad cast
+    if (!expr.expr.type.isConvertibleTo(expr.type) && !expr.type.isConvertibleTo(expr.expr.type)) {
+      error("Cannot cast from " + expr.expr.type + " to " + expr.type, expr.location);
+    }
+
+    // We have a cast so our type is the type we are casting to
+    return expr.type;
   }
 
   @Override public JacsalType visitLiteral(Expr.Literal expr) {
@@ -1267,10 +1269,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return expr.type = expr.typeVal;
   }
 
-  @Override public JacsalType visitInvokeFunction(Expr.InvokeFunction expr) {
+  @Override public JacsalType visitInvokeInit(Expr.InvokeInit expr) {
     expr.args.forEach(this::resolve);
-    resolve(expr.functionDescriptor.returnType);
-    return expr.type = expr.functionDescriptor.returnType;
+    resolve(expr.classDescriptor.getClassType());
+    return expr.type = expr.classDescriptor.getClassType();
   }
 
   @Override public JacsalType visitCastTo(Expr.CastTo expr) {
@@ -2276,8 +2278,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (classDescriptor.getBaseClass() != null) {
       // Invoke super.init() if we have a base class
       var baseMandatoryFields = classDescriptor.getBaseClass().getAllMandatoryFields().keySet();
-      var invokeSuperInit = new Expr.InvokeFunction(token, true, classDescriptor.getBaseClass().getInitMethod(),
-                                                    baseMandatoryFields.stream()
+      var invokeSuperInit = new Expr.InvokeInit(token, true, classDescriptor.getBaseClass(),
+                                                baseMandatoryFields.stream()
                                                                        .map(f -> new Expr.Identifier(token.newIdent(paramName.apply(f))))
                                                                        .collect(Collectors.toList()));
       invokeSuperInit.isResultUsed = false;

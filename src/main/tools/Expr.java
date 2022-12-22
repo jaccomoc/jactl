@@ -148,6 +148,12 @@ class Expr {
     Token operator;
   }
 
+  class Cast extends Expr implements ManagesResult {
+    Token       token;
+    JacsalType  castType;
+    Expr        expr;
+  }
+
   class Call extends Expr {
     Token      token;
     Expr       callee;
@@ -458,16 +464,14 @@ class Expr {
   }
 
   /**
-   * Invoke a function based on FunctionDescriptor
+   * Invoke init method of a class
    */
-  class InvokeFunction extends Expr {
-    Token              token;
-
+  class InvokeInit extends Expr {
+    Token            token;
     // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
-    boolean            invokeSpecial;
-
-    FunctionDescriptor functionDescriptor;
-    List<Expr>         args;
+    boolean          invokeSpecial;
+    ClassDescriptor  classDescriptor;
+    List<Expr>       args;
   }
 
   /**

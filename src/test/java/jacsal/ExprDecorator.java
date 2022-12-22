@@ -78,6 +78,11 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     return expr;
   }
 
+  @Override public Expr visitCast(Expr.Cast expr) {
+    expr.expr = decorate(expr.expr);
+    return expr;
+  }
+
   @Override public Expr visitPostfixUnary(Expr.PostfixUnary expr) {
     //expr.expr = decorate(expr.expr);
     return expr;
@@ -199,7 +204,7 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     return expr;
   }
 
-  @Override public Expr visitInvokeFunction(Expr.InvokeFunction expr) {
+  @Override public Expr visitInvokeInit(Expr.InvokeInit expr) {
     expr.args = decorate(expr.args);
     return expr;
   }

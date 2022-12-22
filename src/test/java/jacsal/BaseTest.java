@@ -74,9 +74,10 @@ public class BaseTest {
     var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var script   = parser.parse(className);
     if (testAsync) {
-      ExprDecorator exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
-                                         : new ExprDecorator(
+      var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
+                                             : new ExprDecorator(
         expr -> {
+          assert expr != null;
           if (expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
               expr instanceof Expr.TypeExpr || expr instanceof Expr.FunDecl ||
               expr instanceof Expr.MapLiteral && ((Expr.MapLiteral)expr).isNamedArgs ||

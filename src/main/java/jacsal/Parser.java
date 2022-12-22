@@ -858,16 +858,17 @@ public class Parser {
   private Expr unary(int precedenceLevel) {
     Expr expr;
     matchAny(EOL);
-    if (lookahead(() -> matchAny(LEFT_PAREN), () -> matchAny(types), () -> matchAny(RIGHT_PAREN))) {
+    if (lookahead(() -> matchAny(LEFT_PAREN), () -> type(false) != null, () -> matchAny(RIGHT_PAREN))) {
       // Type cast. Rather than create a separate operator for each type case we just use the
       // token for the type as the operator if we detect a type cast.
       expect(LEFT_PAREN);
       matchAny(EOL);
-      Token type = expect(types);
+      Token typeToken = peek();
+      var castType = type(false);
       matchAny(EOL);
       expect(RIGHT_PAREN);
       Expr unary = unary(precedenceLevel);
-      expr = new Expr.PrefixUnary(type, unary);
+      expr = new Expr.Cast(typeToken, castType, unary);
     }
     else
     if (matchAny(unaryOps)) {
