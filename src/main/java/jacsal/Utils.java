@@ -78,6 +78,8 @@ public class Utils {
   static String continuationMethod(String methodName) { return methodName + "$$c"; }
   static String continuationHandle(String methodName) { return methodName + "$ch"; }
 
+  static String maxLocalsName(String methodName) { return methodName + "$maxLocals"; }
+
   /**
    * Return the numeric type which is the "greater" of the two based on this ordering:
    *   int, long, double, BigDecimal

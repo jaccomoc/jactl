@@ -1577,8 +1577,7 @@ class CompilerTest extends BaseTest {
     test("def x; false && x.a", false);
   }
 
-  @Test
-  public void explicitReturnFromScript() {
+  @Test public void explicitReturnFromScript() {
     test("double v = 2; return v", 2D);
     test("int v = 2; { v = v + 1; return v }; v = v + 3", 3);
     test("String v = '2'; { v = v + 1; { return v }}", "21");
@@ -4399,9 +4398,9 @@ class CompilerTest extends BaseTest {
     test("sleep(1,{it*it})(2)", 4);
     test("var x=1L; var y=1D; sleep(1,2)", 2);
     test("sleep(1,2) + sleep(1,3)", 5);
-    test("List l=[1,2]; Map m=[a:1]; String s='asd'; int i=1; long L=1L; double d=1.0; Decimal D=1D; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
-    test("var l=[1,2]; var m=[a:1]; var s='asd'; var i=1; var L=1L; var d=1.0; var D=1D; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
-    test("def l=[1,2]; def m=[a:1]; def s='asd'; def i=1; def L=1L; def d=1.0; def D=1D; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("List l=[1,2]; Map m=[a:1]; String s='asd'; int i=1; long L=1L; double d=1.0D; Decimal D=1.0; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("var l=[1,2]; var m=[a:1]; var s='asd'; var i=1; var L=1L; var d=1.0D; var D=1.0; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
+    test("def l=[1,2]; def m=[a:1]; def s='asd'; def i=1; def L=1L; def d=1.0D; def D=1.0; sleep(1,2) + l.size() + m.size() + i + L + d + D + sleep(1,3) + l.size() + m.size() + i + L + d + D", "#19.0");
     test("sleep(1,sleep(1,2))", 2);
     test("sleep(sleep(1,1),2)", 2);
     test("sleep(sleep(1,1),sleep(1,2))", 2);

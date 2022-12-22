@@ -33,7 +33,7 @@ public class AsyncTest {
     var script   = parser.parse("AsyncScriptTest");
     var resolver = new Resolver(context, Map.of());
     resolver.resolveScript(script);
-    var analyser = new Analyser();
+    var analyser = new Analyser(context);
     analyser.analyseScript(script);
     return script.scriptMain.declExpr.functionDescriptor.isAsync;
   }
@@ -98,6 +98,14 @@ public class AsyncTest {
     sync("class X{ Y y = null }; class Y { int i = 3; int j = 4; }; X x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
     async("class X{ Y y = null }; class Y { int i = 3; int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
     async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+    async("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
+    sync("class X { Y y = null }; class Y { int i = 1 }; X x = new X(); x.y.i = 2", 2);
+
+    // Call to f() is async since one day another class may override with async version
+    async("class X { Y y = null; def f(x){ y = new Y(x) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
+
+    async("class X { Y y = null; def f(x){ y = new Y(sleep(0,x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
+    async("class X { Y y = null; def f(x){ y = sleep(0,new Y(x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
   }
 
   @Test public void builtinFunctions() {
@@ -122,6 +130,9 @@ public class AsyncTest {
     async("[3,2,1].map{it}.sort{a,b -> sleep(0,a) <=> sleep(0,b) }", List.of(1,2,3));
     sync("[1,2,3].join(':')", "1:2:3");
     sync("[1,2,3].map{it}.join(':')", "1:2:3");
-//    async("[1,2,3].map{sleep(0,it)}.join(':')", "1:2:3");
+    sync("[].collectEntries()", Map.of());
+    sync("[3,6,4,2,3,5].sort().toString()", "[2, 3, 3, 4, 5, 6]");
+
+    //    async("[1,2,3].map{sleep(0,it)}.join(':')", "1:2:3");
   }
 }

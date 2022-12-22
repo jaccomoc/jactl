@@ -96,7 +96,7 @@ public class BaseTest {
     }
     var resolver = new Resolver(jacsalContext, bindings);
     resolver.resolveScript(script);
-    var analyser = new Analyser();
+    var analyser = new Analyser(jacsalContext);
     //analyser.testAsync = testAsync;
     analyser.analyseScript(script);
     return Compiler.compile(source, jacsalContext, script);

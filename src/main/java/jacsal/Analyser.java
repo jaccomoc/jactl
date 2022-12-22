@@ -44,19 +44,52 @@ import static jacsal.JacsalType.INSTANCE;
  *   discarded. By storing state in local vars instead of the stack we can then preserve
  *   these local variables in the Continuation object for later restoration after resume.
  * </li>
+ * <li>
+ *   Counting how many local slots and maximum stack size is needed per method. This
+ *   allows us to work out how big an array we need for storing the local values if/when
+ *   we suspend and we need to save our state. Note: we just track the expression results
+ *   and local vars and then allow a "safety margin" of (at the moment) 10 additional values
+ *   that might get pushed onto stack as part of a function call that the expression might
+ *   invoke as part of its implementation.
+ *   <p>NOTE: we don't use this functionality at the moment since we do the counting instead
+ *      in the MethodCompiler phase but leaving this code here just in case we need it one
+ *      day.</p>
+ * </li>
  * </ul>
+ * <h2>Two Passes</h2>
+ * <p>
+ *   We use two passes to do this analysis. The first pass finds all call sites and
+ *   builds up a dependency map between callers and callees for situations where we don't
+ *   know whether the callee is async. At the end of this pass we process the dependencies
+ *   to work out what is async and what isn't.
+ * </p>
+ * <p>
+ *   The second pass then flags each Expr as async or not based on the results of the first
+ *   pass. This allows us to know when evaluating an Expr during the compile phase whether
+ *   it or any child of it will invoke an async function.
+ * </p>
  */
 public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   boolean testAsync = false;         // Used in testing to simulate what happens if every call is potentially async
-  private final Deque<Expr.FunDecl> functions = new ArrayDeque<>();
-  private final Set<Expr.FunDecl>   isAnalysed = new HashSet<>();
-  private final Map<Expr.FunDecl,List<Pair<Expr.Call,Expr.FunDecl>>> callDependencies = new HashMap<>();
 
-  private Deque<Expr> currentExpr = new ArrayDeque<>();
-  private Deque<Stmt> currentStmt = new ArrayDeque<>();
+  private final Deque<Stmt.ClassDecl>   classStack        = new ArrayDeque<>();
+
+  private final Map<Expr.FunDecl,List<Pair<Expr,FunctionDescriptor>>> callDependencies = new HashMap<>();
+
+  private final JacsalContext context;
+
+  private final Deque<Expr> currentExpr = new ArrayDeque<>();
+  private final Deque<Stmt> currentStmt = new ArrayDeque<>();
+
+  private boolean isFirstPass = true;       // True if doing first pass through
+
+  Analyser(JacsalContext context) {
+    this.context = context;
+  }
 
   void analyseScript(Stmt.ClassDecl classDecl) {
+    isFirstPass = true;
     analyse(classDecl);
 
     // If we still have call sites where we don't know if function was async or not due to forward references
@@ -65,16 +98,18 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // dependency map so if none of them have yet been marked async then none of them are async.
     while (true) {
       boolean resolvedAsyncCall = false;
-      for (Expr.FunDecl caller : callDependencies.keySet()) {
+      for (var caller : callDependencies.keySet()) {
         var callSites    = callDependencies.get(caller);
-        var newCallSites = new ArrayList<Pair<Expr.Call, Expr.FunDecl>>();
-        for (Pair<Expr.Call, Expr.FunDecl> call : callSites) {
-          Expr.Call    callSite = call.first;
-          Expr.FunDecl callee   = call.second;
-          if (callee.functionDescriptor.isAsync) {
-            caller.functionDescriptor.isAsync = true;
-            callSite.isAsync = true;
-            resolvedAsyncCall = true;
+        var newCallSites = new ArrayList<Pair<Expr,FunctionDescriptor>>();
+        for (var call: callSites) {
+          var callSite = call.first;
+          var callee   = call.second;
+          if (callee.isAsync != null) {
+            if (callee.isAsync) {
+              caller.functionDescriptor.isAsync = true;
+              callSite.isAsync = true;
+              resolvedAsyncCall = true;
+            }
           }
           else {
             // Still don't know so add for next round
@@ -88,6 +123,16 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         break;
       }
     }
+
+    // Mark all remaining functions as not async
+    for (var callSites: callDependencies.values()) {
+      for (var callSite: callSites) {
+        callSite.second.isAsync = false;
+      }
+    }
+
+    isFirstPass = false;
+    analyse(classDecl);
   }
 
   ////////////////////////////////////////
@@ -113,7 +158,14 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr != null) {
       try {
         currentExpr.push(expr);
-        return expr.accept(this);
+        expr.accept(this);
+        if (getFunctions().peek() != null) {
+          allocateLocals(1);  // For the result
+          if (!expr.isResultUsed) {
+            freeLocals(1);    // Result not used
+          }
+        }
+        return null;
       }
       finally {
         currentExpr.pop();
@@ -130,16 +182,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  Void analyse(List nodes) {
+  Void analyse(List<Stmt> nodes) {
     if (nodes != null) {
-      nodes.forEach(node -> {
-        if (node instanceof Expr) {
-          analyse((Expr)node);
-        }
-        else {
-          analyse((Stmt)node);
-        }
-      });
+      nodes.forEach(this::analyse);
     }
     return null;
   }
@@ -150,52 +195,56 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitCall(Expr.Call expr) {
     analyse(expr.callee);
-    analyse(expr.args);
-    final var currentFunction = functions.peek();
-    var funDecl = getFunDecl(expr.callee);
+    expr.args.forEach(this::analyse);
+    var function = getFunction(expr.callee);
 
-    if (funDecl != null) {
-      if (!isAnalysed.contains(funDecl) && !funDecl.functionDescriptor.isBuiltin) {
+    if (function != null) {
+      if (function.isAsync == null) {
+        assert isFirstPass;
         // Forward reference to a function so we don't yet know if it will be async or not.
         // Add ourselves to dependency map so we can be re-analysed at the end when we will
         // hopefully know whether callee is async or not.
-        addCallDependency(currentFunction, expr, funDecl);
-        return null;
+        addCallDependency(currentFunction(), expr, function);
       }
-
-      // If function we are invoking is async then we are async
-      if (isAsync(funDecl.functionDescriptor, null, expr.args)) {
-        currentFunction.functionDescriptor.isAsync = true;
-        expr.isAsync = true;
+      else {
+        // If function we are invoking is async then we are async
+        if (isAsync(function, null, expr.args)) {
+          async(expr);
+        }
       }
-      return null;
+    }
+    else {
+      // If we don't know whether we are invoking an async function or not then assume the worst
+      async(expr);
     }
 
-    // If we don't know whether we are invoking an async function or not then assume the worst
-    currentFunction.functionDescriptor.isAsync = true;
-    expr.isAsync = true;
+    freeLocals(1 + expr.args.size());
     return null;
   }
 
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
     analyse(expr.parent);
-    analyse(expr.args);
-    final var currentFunction = functions.peek();
+    expr.args.forEach(this::analyse);
     if (expr.methodDescriptor != null) {
-      // If we are invoking a method that is marked as async then we need to mark ourselves as async
-      // so that callers to us (the current function) can know to add code for handling suspend/resume
-      // with Continuations.
-      if (isAsync(expr.methodDescriptor, expr.parent, expr.args)) {
-        currentFunction.functionDescriptor.isAsync = true;
-        expr.isAsync = true;
+      if (expr.methodDescriptor.isAsync == null) {
+        assert isFirstPass;
+        addCallDependency(currentFunction(), expr, expr.methodDescriptor);
+      }
+      else {
+        // If we are invoking a method that is marked as async then we need to mark ourselves as async
+        // so that callers to us (the current function) can know to add code for handling suspend/resume
+        // with Continuations.
+        if (isAsync(expr.methodDescriptor, expr.parent, expr.args)) {
+          async(expr);
+        }
       }
     }
     else {
       // Assume that what we are invoking is async since we have know way of knowing at compile time when
       // invoking through a function value or when doing run-time lookup of the method name
-      currentFunction.functionDescriptor.isAsync = true;
-      expr.isAsync = true;
+      async(expr);
     }
+    freeLocals(1 + expr.args.size());
     return null;
   }
 
@@ -205,49 +254,64 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.createIfMissing) {
       // Async if class init for field is async
       if (expr.isFieldAccess) {
-        if (expr.type.is(INSTANCE) && expr.type.getClassDescriptor().getInitMethod().isAsync) {
-          functions.peek().functionDescriptor.isAsync = true;
-          expr.isAsync = true;
+        if (expr.type.is(INSTANCE)) {
+          asyncIfTypeIsAsync(expr);
         }
       }
       else {
         // We have no idea of the field type since we will find out at runtime so have to assume async just in case
-        functions.peek().functionDescriptor.isAsync = true;
-        expr.isAsync = true;
+        async(expr);
       }
     }
+
+    freeLocals(2);       // Two input values
     return null;
   }
 
   @Override public Void visitRegexMatch(Expr.RegexMatch expr) {
     analyse(expr.string);
     analyse(expr.pattern);
+    freeLocals(expr.string == null ? 1 : 2);
     return null;
   }
 
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
-    return analyse(expr.replace);
+    analyse(expr.string);
+    analyse(expr.pattern);
+    analyse(expr.replace);
+    freeLocals(3);     // 3 input values
+    return null;
   }
 
   @Override public Void visitTernary(Expr.Ternary expr) {
     analyse(expr.first);
     analyse(expr.second);
     analyse(expr.third);
+    freeLocals(3);     // 3 input values
     return null;
   }
 
   @Override public Void visitPrefixUnary(Expr.PrefixUnary expr) {
-    return analyse(expr.expr);
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitPostfixUnary(Expr.PostfixUnary expr) {
-    return analyse(expr.expr);
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
   }
 
-  @Override public Void visitLiteral(Expr.Literal expr) { return null; }
+  @Override public Void visitLiteral(Expr.Literal expr) {
+    return null;
+  }
 
   @Override public Void visitListLiteral(Expr.ListLiteral expr) {
-    analyse(expr.exprs);
+    expr.exprs.forEach(e -> {
+      analyse(e);
+      freeLocals(1);
+    });
     return null;
   }
 
@@ -255,19 +319,31 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expr.entries.forEach(entry -> {
       analyse(entry.first);
       analyse(entry.second);
+      freeLocals(2);
     });
     return null;
   }
 
-  @Override public Void visitIdentifier(Expr.Identifier expr) { return null; }
+  @Override public Void visitIdentifier(Expr.Identifier expr) {
+    return null;
+  }
 
   @Override public Void visitExprString(Expr.ExprString expr) {
-    analyse(expr.exprList);
+    expr.exprList.forEach(e -> {
+      analyse(e);
+      freeLocals(1);
+    });
     return null;
   }
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
     analyse(expr.initialiser);
+    if (expr.initialiser != null) {
+      freeLocals(1);
+    }
+    if (!expr.isGlobal) {
+      allocateLocals(1);
+    }
     return null;
   }
 
@@ -279,29 +355,33 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we have a wrapper then resolve it. Note that it has an embedded FunDecl for us so we will
     // get analysed as part of its statement block. This means we need to check next time not to
     // analyse wrapper if we are already analysiing it.
-    if (funDecl.wrapper != null && functions.peek() != funDecl.wrapper) {
+    if (funDecl.wrapper != null && getFunctions().peek() != funDecl.wrapper) {
       expr = funDecl.wrapper;
     }
 
-    functions.push(expr);
-    try {
-      analyse(expr.block);
-    } finally {
-      functions.pop();
-    }
+    getFunctions().push(expr);
+    analyse(expr.block);
+    assert funDecl.localsCnt == 0;
+    getFunctions().pop();
 
-    // If we were the wrapper and we are async then function is also marked as async.
-    // If we were cleverer we could track better when invoking wrapper and wouldn't need
-    // to be so conservative about this...
-    if (expr != funDecl) {
-      if (expr.functionDescriptor.isAsync) {
-        funDecl.functionDescriptor.isAsync = true;
+    // If still not marked async then we must be sync...
+    if (expr.functionDescriptor.isAsync == null) {
+      if (!isFirstPass) {
+        expr.functionDescriptor.isAsync = false;
       }
     }
-    else {
-      // Add function (not wrapper) to set of analysed functions as long as we don't have any unresolved dependencies
-      if (!callDependencies.containsKey(funDecl)) {
-        isAnalysed.add(funDecl);
+
+    // If we are the wrapper
+    if (expr != funDecl) {
+      // If we were the wrapper and we are async then function is also marked as async.
+      // If we were cleverer we could track better when invoking wrapper and wouldn't need
+      // to be so conservative about this...
+      if (expr.functionDescriptor.isAsync != null && expr.functionDescriptor.isAsync) {
+        funDecl.functionDescriptor.isAsync = true;
+      }
+
+      if (expr.varDecl != null && !expr.varDecl.isGlobal) {
+        allocateLocals(1);
       }
     }
 
@@ -311,12 +391,14 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitVarAssign(Expr.VarAssign expr) {
     analyse(expr.identifierExpr);
     analyse(expr.expr);
+    freeLocals(2);
     return null;
   }
 
   @Override public Void visitVarOpAssign(Expr.VarOpAssign expr) {
     analyse(expr.identifierExpr);
     analyse(expr.expr);
+    freeLocals(2);
     return null;
   }
 
@@ -324,6 +406,13 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
+    if (expr.expr.isAsync) {
+      async(expr);
+    }
+    if (expr.type.is(INSTANCE)) {
+      asyncIfTypeIsAsync(expr);
+    }
+    freeLocals(3);
     return null;
   }
 
@@ -331,76 +420,108 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
+    freeLocals(3);
     return null;
   }
 
-  @Override public Void visitNoop(Expr.Noop expr) { return null; }
+  @Override public Void visitNoop(Expr.Noop expr) {
+    return null;
+  }
 
   @Override public Void visitClosure(Expr.Closure expr) {
-    return analyse(expr.funDecl);
+    analyse(expr.funDecl);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitReturn(Expr.Return expr) {
-    return analyse(expr.expr);
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitBreak(Expr.Break expr) { return null; }
   @Override public Void visitContinue(Expr.Continue expr) { return null; }
+
   @Override public Void visitPrint(Expr.Print expr) {
-    return analyse(expr.expr);
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitBlock(Expr.Block expr) {
-    return analyse(expr.block);
+    analyse(expr.block);
+    return null;
   }
 
   @Override public Void visitArrayLength(Expr.ArrayLength expr) {
-    return analyse(expr.array);
+    analyse(expr.array);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitArrayGet(Expr.ArrayGet expr) {
     analyse(expr.array);
     analyse(expr.index);
+    freeLocals(2);
     return null;
   }
 
   @Override public Void visitLoadParamValue(Expr.LoadParamValue expr) {
-    return analyse(expr.paramDecl);
+    analyse(expr.paramDecl);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitInvokeFunDecl(Expr.InvokeFunDecl expr) {
-    analyse(expr.args);
+    expr.args.forEach(this::analyse);
+    freeLocals(expr.args.size());
     return null;
   }
 
   @Override public Void visitInvokeUtility(Expr.InvokeUtility expr) {
-    analyse(expr.args);
+    expr.args.forEach(this::analyse);
+    freeLocals(expr.args.size());
     return null;
   }
 
-  @Override public Void visitInvokeNew(Expr.InvokeNew expr)       { return null; }
-  @Override public Void visitClassPath(Expr.ClassPath expr)       { return null; }
-  @Override public Void visitDefaultValue(Expr.DefaultValue expr) { return null; }
-  @Override public Void visitTypeExpr(Expr.TypeExpr expr)         { return null; }
+  @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
+    return null;
+  }
+
+  @Override public Void visitClassPath(Expr.ClassPath expr) { return null; }
+
+  @Override public Void visitTypeExpr(Expr.TypeExpr expr)   {
+    return null;
+  }
+
+  @Override public Void visitDefaultValue(Expr.DefaultValue expr) {
+    return null;
+  }
 
   @Override public Void visitInstanceOf(Expr.InstanceOf expr) {
-    return analyse(expr.expr);
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitConvertTo(Expr.ConvertTo expr) {
     analyse(expr.expr);
     analyse(expr.source);
     analyse(expr.offset);
+    freeLocals(3);
     return null;
   }
 
   @Override public Void visitInvokeFunction(Expr.InvokeFunction expr) {
-    analyse(expr.args);
+    expr.args.forEach(this::analyse);
+    freeLocals(expr.args.size());
     return null;
   }
 
   @Override public Void visitCastTo(Expr.CastTo expr) {
     analyse(expr.expr);
+    freeLocals(1);
     return null;
   }
 
@@ -413,52 +534,104 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitBlock(Stmt.Block stmt) {
-    return analyse(stmt.stmts);
+    analyse(stmt.stmts);
+    int nonGlobals = (int)stmt.variables.values().stream().filter(v -> !v.isGlobal).count();
+    freeLocals(nonGlobals);
+    return null;
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
     analyse(stmt.condition);
+    freeLocals(1);
     analyse(stmt.trueStmt);
     analyse(stmt.falseStmt);
     return null;
   }
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    analyse(stmt.classBlock);
-    analyse(stmt.scriptMain);
+    stmt.nestedFunctions = new ArrayDeque<>();
+    classStack.push(stmt);
+    try {
+      analyse(stmt.classBlock);
+      analyse(stmt.scriptMain);
+    }
+    finally {
+      classStack.pop();
+    }
     return null;
   }
 
   @Override public Void visitVarDecl(Stmt.VarDecl stmt) {
-    return analyse(stmt.declExpr);
+    analyse(stmt.declExpr);
+    return null;
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
-    return analyse(stmt.declExpr);
+    analyse(stmt.declExpr);
+    return null;
   }
 
   @Override public Void visitWhile(Stmt.While stmt) {
     analyse(stmt.condition);
+    freeLocals(1);
     analyse(stmt.updates);
     analyse(stmt.body);
     return null;
   }
 
   @Override public Void visitReturn(Stmt.Return stmt) {
-    return analyse(stmt.expr);
+    analyse(stmt.expr);
+    freeLocals(1);
+    return null;
   }
 
   @Override public Void visitExprStmt(Stmt.ExprStmt stmt) {
-    return analyse(stmt.expr);
+    analyse(stmt.expr);
+    return null;
   }
 
   @Override public Void visitThrowError(Stmt.ThrowError stmt) {
     analyse(stmt.source);
     analyse(stmt.offset);
+    freeLocals(2);
     return null;
   }
 
   ///////////////////////////////////////
+
+  private void async(Expr expr) {
+    currentFunction().functionDescriptor.isAsync = true;
+    expr.isAsync = true;
+  }
+
+  private void asyncIfTypeIsAsync(Expr expr) {
+    if (!expr.type.is(INSTANCE)) { return; }
+    var classDescriptor = expr.type.getClassDescriptor();
+    var existingClass = context.getClassDescriptor(classDescriptor.getInternalName());
+    if (existingClass != null) {
+      if (existingClass.getInitMethod().isAsync) {
+        async(expr);
+      }
+    }
+    else {
+      if (classDescriptor.getInitMethod().isAsync == null) {
+        assert isFirstPass;
+        addCallDependency(currentFunction(), expr, classDescriptor.getInitMethod());
+      }
+      else
+      if (classDescriptor.getInitMethod().isAsync) {
+        async(expr);
+      }
+    }
+  }
+
+  private FunctionDescriptor getFunction(Expr expr) {
+    var funDecl = getFunDecl(expr);
+    if (funDecl == null) {
+      return null;
+    }
+    return funDecl.functionDescriptor;
+  }
 
   private Expr.FunDecl getFunDecl(Expr expr) {
     if (expr == null) { return null; }
@@ -546,12 +719,20 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Check for an initialiser that is a closure/function and return its asyncness
     if (arg instanceof Expr.FunDecl) {
-      return ((Expr.FunDecl) arg).functionDescriptor.isAsync;
+      Boolean isAsync = ((Expr.FunDecl) arg).functionDescriptor.isAsync;
+      if (isAsync == null) {
+        assert isFirstPass;
+      }
+      return isAsync != null && isAsync;
     }
 
     // Check for a closure
     if (arg instanceof Expr.Closure) {
-      return ((Expr.Closure)arg).funDecl.functionDescriptor.isAsync;
+      Boolean isAsync = ((Expr.Closure) arg).funDecl.functionDescriptor.isAsync;
+      if (isAsync == null) {
+        assert isFirstPass;
+      }
+      return isAsync != null && isAsync;
     }
 
     // If arg is itself a function/method call then it is async if the call is async
@@ -564,12 +745,32 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return false;
   }
 
-  private void addCallDependency(Expr.FunDecl caller, Expr.Call callSite, Expr.FunDecl callee) {
+  private void addCallDependency(Expr.FunDecl caller, Expr callSite, FunctionDescriptor callee) {
     var callees = callDependencies.get(caller);
     if (callees == null) {
       callees = new ArrayList<>();
       callDependencies.put(caller, callees);
     }
     callees.add(new Pair(callSite, callee));
+  }
+
+  private Expr.FunDecl currentFunction() {
+    return getFunctions().peek();
+  }
+
+  private Deque<Expr.FunDecl> getFunctions() {
+    return classStack.peek().nestedFunctions;
+  }
+
+  private void freeLocals(int n) {
+    if (getFunctions().peek() != null) {
+      getFunctions().peek().freeLocals(n);
+    }
+  }
+
+  private void allocateLocals(int n) {
+    if (getFunctions().peek() != null) {
+      getFunctions().peek().allocateLocals(n);
+    }
   }
 }

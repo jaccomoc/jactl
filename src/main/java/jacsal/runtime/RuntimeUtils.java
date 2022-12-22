@@ -2030,4 +2030,9 @@ public class RuntimeUtils {
     }
     return true;
   }
+
+  public static boolean debugBreakPoint(Object data, String info) {
+    System.out.println("DEBUG: " + info + ": " + data);
+    return true;
+  }
 }

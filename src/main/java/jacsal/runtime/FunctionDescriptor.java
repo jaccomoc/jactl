@@ -44,7 +44,7 @@ public class FunctionDescriptor {
   public MethodHandle     wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
   public boolean          isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean          isBuiltin;
-  public boolean          isAsync;
+  public Boolean          isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
   public List<Integer>    asyncArgs = List.of();     // Async if any of these args are async
 
   public FunctionDescriptor(String name, JacsalType returnType, int paramCount, int mandatoryArgCount, boolean needsLocation) {

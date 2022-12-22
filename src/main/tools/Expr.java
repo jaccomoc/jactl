@@ -294,6 +294,15 @@ class Expr {
     // no variables we close over are declared after that reference
     Token @earliestForwardReference;
 
+    // Keep track of maximum number of locals needed so we know how big an array to
+    // allocate for capturing our state if we suspend
+    int          @localsCnt = 0;
+    int          @maxLocals = 0;
+
+    void allocateLocals(int n) { localsCnt += n; maxLocals = maxLocals > localsCnt ? maxLocals : localsCnt; }
+    void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0;}
+
+
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }

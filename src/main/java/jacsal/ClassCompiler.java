@@ -33,6 +33,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
+import static jacsal.JacsalType.LONG;
 import static org.objectweb.asm.ClassWriter.*;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -346,7 +347,7 @@ public class ClassCompiler {
       mv.visitFieldInsn(PUTFIELD, internalName, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class));
     }
 
-    MethodCompiler methodCompiler = new MethodCompiler(this, method, mv);
+    MethodCompiler methodCompiler = new MethodCompiler(this, method, methodName, mv);
     methodCompiler.compile();
     mv.visitEnd();
 
@@ -374,10 +375,8 @@ public class ClassCompiler {
 
     // Generate code for loading saved parameter values back onto stack
     int numHeapLocals = funDecl.heapLocalParams.size();
-    for (int i = 0; i < numHeapLocals; i++) {
-      // Note that our heaplocals will be the first items in the Object[] so the heaplocal index
-      // also matches the Object[] index.
-      Utils.loadStoredValue(mv, i, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, continuationSlot, HEAPLOCAL));
+    for (int i = 0; i < numHeapLocals; i++, slot++) {
+      Utils.loadStoredValue(mv, slot, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, continuationSlot, HEAPLOCAL));
     }
 
     mv.visitVarInsn(ALOAD, continuationSlot);   // Continuation
@@ -385,13 +384,16 @@ public class ClassCompiler {
     // Load parameter values from our long[] or Object[] in the Continuation.
     // The index into the long[]/Object[] will be paramIdx + heapLocals.size() since the parameters come immediately
     // after the heaplocals (and the Continuation that we don't store).
-    for (int i = 0; i < funDecl.parameters.size(); i++) {
+    for (int i = 0; i < funDecl.parameters.size(); i++, slot++) {
       final var  declExpr = funDecl.parameters.get(i).declExpr;
       JacsalType type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
-      Utils.loadStoredValue(mv, numHeapLocals + i, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));
+      Utils.loadStoredValue(mv, slot, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));
+      if (type.is(LONG,JacsalType.DOUBLE)) {
+        slot++;
+      }
     }
 
-    // INVOKESTATIC or INVOKESPECIAL to make sure we don't get overriden method (if child class has overridden us).
+    // INVOKESTATIC or INVOKESPECIAL to make sure we don't get overridden method (if child class has overridden us).
     mv.visitMethodInsn(funDecl.isStatic() ? INVOKESTATIC : INVOKESPECIAL, internalName, funDecl.functionDescriptor.implementingMethod, MethodCompiler.getMethodDescriptor(funDecl), false);
     Utils.box(mv, funDecl.returnType);   // Box if primitive
     mv.visitInsn(ARETURN);               // Always return Object from continuation wrapper

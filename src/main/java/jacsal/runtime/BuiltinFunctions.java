@@ -351,7 +351,9 @@ public class BuiltinFunctions {
     return map.size();
   }
 
-  public static int listSize(List list) { return list.size(); }
+  public static int listSize(List list) {
+    return list.size();
+  }
   public static Object listSizeWrapper(List list, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, null, 0, source, offset);
     return list.size();

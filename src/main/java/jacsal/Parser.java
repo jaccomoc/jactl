@@ -110,6 +110,7 @@ public class Parser {
     Expr.VarDecl declExpr = new Expr.VarDecl(name, null);
     declExpr.type = JacsalType.MAP;
     declExpr.isParam = true;
+    declExpr.isResultUsed = false;
     Stmt.VarDecl globals  = new Stmt.VarDecl(new Token(MAP, start), declExpr);
     Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true, false);
     classes.peek().scriptMain = funDecl;
