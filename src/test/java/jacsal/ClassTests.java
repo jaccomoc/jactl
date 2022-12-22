@@ -1095,6 +1095,9 @@ public class ClassTests extends BaseTest {
     test("class Y extends X { def f(){2} }; class X { def f(){1} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Z())", 3);
     testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Y()", "cannot convert");
     testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z; z = new Y()", "cannot convert");
+    testError("class X extends Y{}; class Y extends X{}; new X()", "current class as a base class");
+    testError("class X extends Y{}; class Y extends Z{}; class Z extends X{}; new X()", "current class as a base class");
+    testError("class X extends X{}; new X()", "class cannot extend itself");
   }
 
   @Test public void superReferences() {

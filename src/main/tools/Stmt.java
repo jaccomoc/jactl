@@ -94,6 +94,7 @@ class Stmt {
   class ClassDecl extends Stmt {
     Token                name;
     String               packageName;
+    Token                baseClassToken;
     JacsalType           baseClass;
     boolean              isInterface;
     Stmt.Block           @classBlock;

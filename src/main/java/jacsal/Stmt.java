@@ -112,6 +112,7 @@ abstract class Stmt {
   static class ClassDecl extends Stmt {
     Token                name;
     String               packageName;
+    Token                baseClassToken;
     JacsalType           baseClass;
     boolean              isInterface;
     Stmt.Block           classBlock;
@@ -129,15 +130,16 @@ abstract class Stmt {
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor classDescriptor;
-    ClassDecl(Token name, String packageName, JacsalType baseClass, boolean isInterface) {
+    ClassDecl(Token name, String packageName, Token baseClassToken, JacsalType baseClass, boolean isInterface) {
       this.name = name;
       this.packageName = packageName;
+      this.baseClassToken = baseClassToken;
       this.baseClass = baseClass;
       this.isInterface = isInterface;
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
-    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClass=" + baseClass + ", " + "isInterface=" + isInterface + "]"; }
+    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClassToken=" + baseClassToken + ", " + "baseClass=" + baseClass + ", " + "isInterface=" + isInterface + "]"; }
   }
 
   /**

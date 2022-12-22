@@ -149,6 +149,10 @@ public class ClassDescriptor {
     return isInterface;
   }
 
+  public JacsalType getBaseClassType() {
+    return baseClass;
+  }
+
   public ClassDescriptor getBaseClass() {
     return baseClass == null ? null : baseClass.getClassDescriptor();
   }

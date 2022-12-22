@@ -65,7 +65,7 @@ public class Parser {
   public Stmt.ClassDecl parse(String scriptClassName) {
     packageDecl();
     Token start = peek();
-    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, null, false);
+    Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, null, null, false);
     pushClass(scriptClass);
     try {
       scriptClass.scriptMain = script();
@@ -562,10 +562,15 @@ public class Parser {
       throw new CompileError("Class declaration not allowed here", previous());
     }
     var className = expect(IDENTIFIER);
-    var baseClass = matchAny(EXTENDS) ? JacsalType.createClass(className()) : null;
+    Token baseClassToken = null;
+    JacsalType baseClass = null;
+    if (matchAny(EXTENDS)) {
+      baseClassToken = peek();
+      baseClass = JacsalType.createClass(className());
+    }
     var leftBrace = expect(LEFT_BRACE);
 
-    var classDecl = new Stmt.ClassDecl(className, packageName, baseClass, false);
+    var classDecl = new Stmt.ClassDecl(className, packageName, baseClassToken, baseClass, false);
     pushClass(classDecl);
     try {
       Stmt.Block classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
@@ -725,7 +730,6 @@ public class Parser {
    * return unary() if that is the case.
    * We allow EOL to be treated as whitespace if we are in a bracketed expression
    * (for example) when it normally could signal the end of a statement.
-   * @param ignoreEol  true if EOL should be ignored
    */
   private Expr parseExpression() {
     return parseExpression(0);
@@ -1025,7 +1029,6 @@ public class Parser {
 
   /**
    *# classPathOrIdentifier -> IDENTIFIER | classPath ;
-   * @param expectClassName  true if we know we are expecting a class name, false if we don't know
    */
   private Expr classPathOrIdentifier() {
     // Can only be classPath if previous token was not "." since we want to avoid treating a.x.y.z.A
@@ -1900,8 +1903,6 @@ public class Parser {
    * and creating any missing subfields just once and load the original value (or create a default
    * value) before evaluating the rest of the expression. Finally it can store the result back
    * into the right field (or element) of the Map/List.
-   * @param errorIfNotLValue    true if we should throw an error if value is not a valid LValue
-   *                            false if we should just return null
    * @param variable            the lhs of the assignment
    * @param assignmentOperator  the operator
    * @param rhs                 the rhs of the operator

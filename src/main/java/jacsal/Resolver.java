@@ -193,7 +193,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // NOTE: we only support class declarations at top level of script or directly within another class decl.
     var outerClass = outerClassDecl == null ? null : outerClassDecl.classDescriptor;
-    var interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(name -> lookupClass(name)).collect(Collectors.toList()) : null;
+    var interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
     var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jacsalContext.javaPackage, classDecl.packageName, baseClass, interfaces)
                                              : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jacsalContext.javaPackage, outerClass, baseClass, interfaces);
 
@@ -212,7 +212,20 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     var classDescriptor = classDecl.classDescriptor;
     var classType = JacsalType.createClass(classDescriptor);
 
-    resolve(classDecl.baseClass);
+
+    // Make sure we don't have circular extends relationship somewhere
+    String previousBaseClass = null;
+    for (var baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType()) {
+      resolve(baseClass);
+      if (baseClass.getClassDescriptor() == classDescriptor) {
+        if (previousBaseClass == null) {
+          throw new CompileError("Class cannot extend itself", classDecl.baseClassToken);
+        }
+        throw new CompileError("Class " + classDecl.name.getStringValue() + " extends another class " +
+                               "that has current class as a base class (" + previousBaseClass + ")", classDecl.baseClassToken);
+      }
+      previousBaseClass = baseClass.getClassDescriptor().getName();
+    }
 
     // Find our functions and fields and add them to the ClassDescriptor
     if (classDecl.scriptMain == null) {
