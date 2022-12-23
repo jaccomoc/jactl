@@ -35,8 +35,8 @@ public class Compiler {
     return runSync(compiled, bindings);
   }
 
-  static Object run(String source, JacsalContext jacsalContext, boolean testAsync, Map<String,Object> bindings) {
-    Function<Map<String,Object>,Future<Object>> compiled = compileScript(source, jacsalContext, Utils.DEFAULT_JACSAL_PKG, testAsync, bindings);
+  public static Object run(String source, JacsalContext jacsalContext, String packageName, Map<String,Object> bindings) {
+    Function<Map<String,Object>,Future<Object>> compiled = compileScript(source, jacsalContext, packageName, false, bindings);
     return runSync(compiled, bindings);
   }
 
@@ -45,12 +45,12 @@ public class Compiler {
     return runSync(compiled, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compileClass(String source, JacsalContext jacsalContext, String packageName, Map<String, Object> bindings) {
-    return compileClass(source, jacsalContext, packageName, false, bindings);
+  public static void compileClass(String source, JacsalContext jacsalContext, String packageName, Map<String, Object> bindings) {
+    compileClass(source, jacsalContext, packageName, false, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compileClass(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
-    return compileClass(source, jacsalContext, null, false, bindings);
+  public static void compileClass(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
+    compileClass(source, jacsalContext, null, false, bindings);
   }
 
   public static Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
@@ -74,24 +74,29 @@ public class Compiler {
     resolver.resolveScript(script);
     var analyser = new Analyser(jacsalContext);
     analyser.testAsync = testAsync;
-    analyser.analyseScript(script);
+    analyser.analyseClass(script);
     return compile(source, jacsalContext, script);
   }
 
-  private static Function<Map<String, Object>,Future<Object>> compileClass(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  private static void compileClass(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
     var parser      = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var scriptClass = parser.parseClass();
     var resolver = new Resolver(jacsalContext, bindings);
     resolver.resolveClass(scriptClass);
     var analyser = new Analyser(jacsalContext);
     analyser.testAsync = testAsync;
-    analyser.analyseScript(scriptClass);
-    return compile(source, jacsalContext, scriptClass);
+    analyser.analyseClass(scriptClass);
+    compileClass(source, jacsalContext, packageName, scriptClass);
   }
 
   static Function<Map<String,Object>,Future<Object>> compile(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
     var compiler = new ScriptCompiler(source, jacsalContext, script);
     return compiler.compile();
+  }
+
+  static void compileClass(String source, JacsalContext jacsalContext, String packageName, Stmt.ClassDecl clss) {
+    var compiler = new ClassCompiler(source, jacsalContext, packageName, clss, clss.name.getStringValue() + ".jacsal");
+    compiler.compileClass();
   }
 
   public static Object runSync(Function<Map<String,Object>,Future<Object>> script, Map<String,Object> globals) {

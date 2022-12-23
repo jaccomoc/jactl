@@ -34,7 +34,7 @@ public class AsyncTest {
     var resolver = new Resolver(context, Map.of());
     resolver.resolveScript(script);
     var analyser = new Analyser(context);
-    analyser.analyseScript(script);
+    analyser.analyseClass(script);
     return script.scriptMain.declExpr.functionDescriptor.isAsync;
   }
 

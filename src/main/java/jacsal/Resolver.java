@@ -119,8 +119,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
    */
   Resolver(JacsalContext jacsalContext, Map<String,Object> globals) {
     this.jacsalContext = jacsalContext;
-    this.globals        = globals;
-    globals.keySet().forEach(global -> {
+    this.globals        = globals == null ? Map.of() : globals;
+    this.globals.keySet().forEach(global -> {
       if (!jacsalContext.globalVars.containsKey(global)) {
         Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(global),
                                                 null);
@@ -1685,6 +1685,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     if (descriptor == null && classPkg != null) {
       var jacsalPackage = jacsalContext.getPackage(classPkg);
       if (jacsalPackage == null) {
+        if (classPkg.equals(packageName)) {
+          error("Unknown class '" + classPkg + "." + className + "'", classToken);
+        }
         error("Unknown package '" + classPkg + "'", packageToken);
       }
       descriptor = jacsalPackage.getClass(className);

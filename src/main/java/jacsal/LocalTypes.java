@@ -403,6 +403,13 @@ public class LocalTypes {
   }
 
   public void saveLocals(int continuationVar, int longArr, int objArr) {
+    Utils.loadConst(mv, locals.size());
+    mv.visitInsn(DUP);
+    mv.visitIntInsn(NEWARRAY, T_LONG);
+    _storeLocal(longArr);
+    mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+    _storeLocal(objArr);
+
     int startSlot = isStatic ? 0 : 1;
     for (int i = startSlot; i < locals.size(); i++) {
       var entry = locals.get(i);

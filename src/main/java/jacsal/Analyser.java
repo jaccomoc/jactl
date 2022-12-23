@@ -88,7 +88,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     this.context = context;
   }
 
-  void analyseScript(Stmt.ClassDecl classDecl) {
+  void analyseClass(Stmt.ClassDecl classDecl) {
     isFirstPass = true;
     analyse(classDecl);
 

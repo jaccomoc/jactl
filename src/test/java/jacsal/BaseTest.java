@@ -28,9 +28,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
   private   static int scriptNum = 1;
-  protected int                debugLevel = 0;
-  protected String             packagName = Utils.DEFAULT_JACSAL_PKG;
-  protected Map<String,Object> globals    = new HashMap<String,Object>();
+  protected int                debugLevel  = 0;
+  protected String             packageName = Utils.DEFAULT_JACSAL_PKG;
+  protected Map<String,Object> globals     = new HashMap<String,Object>();
   protected boolean            useAsyncDecorator = true;
 
   protected void doTest(String code, Object expected) {
@@ -42,6 +42,10 @@ public class BaseTest {
   }
 
   protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
+    doTest(List.of(), code, evalConsts, replMode, testAsync, expected);
+  }
+
+  protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
@@ -53,8 +57,11 @@ public class BaseTest {
                                                  .build();
 
       var    bindings = createGlobals();
-      //var    compiled = Compiler.compileScript(code, jacsalContext, packagName, testAsync, bindings);
-      var    compiled = compileScript(code, jacsalContext, "Script" + scriptNum++, packagName, testAsync, bindings);
+
+      classCode.forEach(code -> compileClass(code, jacsalContext, packageName, testAsync));
+
+      var    compiled = compileScript(scriptCode, jacsalContext, "Script" + scriptNum++, packageName, testAsync, bindings);
+
       Object result   = Compiler.runSync(compiled, bindings);
       if (expected instanceof Object[]) {
         assertTrue(result instanceof Object[]);
@@ -70,9 +77,17 @@ public class BaseTest {
     }
   }
 
+  public void compileClass(String source, JacsalContext jacsalContext, String packageName, boolean testAsync) {
+    doCompile(false, source, jacsalContext, null, packageName, testAsync, null);
+  }
+
   public Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
-    var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
-    var script   = parser.parse(className);
+    return doCompile(true, source, jacsalContext, className, packageName, testAsync, bindings);
+  }
+
+  public Function<Map<String, Object>,Future<Object>> doCompile(boolean isScript, String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    var parser = new Parser(new Tokeniser(source), jacsalContext, packageName);
+    var code   = isScript ? parser.parse(className) : parser.parseClass();
     if (testAsync) {
       var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
                                              : new ExprDecorator(
@@ -93,14 +108,18 @@ public class BaseTest {
           expr.isResultUsed = true;
           return newExpr;
         });
-      exprDecorator.decorate(script);
+      exprDecorator.decorate(code);
     }
     var resolver = new Resolver(jacsalContext, bindings);
-    resolver.resolveScript(script);
+    resolver.resolveScript(code);
     var analyser = new Analyser(jacsalContext);
     //analyser.testAsync = testAsync;
-    analyser.analyseScript(script);
-    return Compiler.compile(source, jacsalContext, script);
+    analyser.analyseClass(code);
+    if (isScript) {
+      return Compiler.compile(source, jacsalContext, code);
+    }
+    Compiler.compileClass(source, jacsalContext, packageName, code);
+    return null;
   }
 
   protected void test(String code, Object expected) {
@@ -112,9 +131,22 @@ public class BaseTest {
     doTest(code, true, true, true, expected);
   }
 
+  protected void ctest(List<String> classCode, String scriptCode, Object expected) {
+    doTest(classCode, scriptCode, true, false, false, expected);
+    doTest(classCode, scriptCode, false, false, false, expected);
+    doTest(classCode, scriptCode, true, true, false, expected);
+    doTest(classCode, scriptCode, false, true, false, expected);
+    doTest(classCode, scriptCode, true, false, true, expected);
+    doTest(classCode, scriptCode, true, true, true, expected);
+  }
+
   protected void testError(String code, String expectedError) {
-    doTestError(code, true, false, expectedError);
-    doTestError(code, false, false, expectedError);
+    testError(List.of(), code, expectedError);
+  }
+
+  protected void testError(List<String> classCode, String scriptCode, String expectedError) {
+    doTestError(classCode, scriptCode, true, false, expectedError);
+    doTestError(classCode, scriptCode, false, false, expectedError);
 
     // Tests in repl mode may have different errors or no errors compared
     // to normal mode when accessing global vars so we can't run tests that
@@ -123,14 +155,16 @@ public class BaseTest {
     //    doTestError(code, false, true, expectedError);
   }
 
-  private void doTestError(String code, boolean evalConsts, boolean replMode, String expectedError) {
+  private void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
     try {
       JacsalContext jacsalContext = JacsalContext.create()
                                                  .evaluateConstExprs(evalConsts)
                                                  .replMode(replMode)
                                                  .debug(debugLevel)
                                                  .build();
-      Compiler.run(code, jacsalContext, createGlobals());
+      Map<String, Object> bindings = createGlobals();
+      classCode.forEach(code -> compileClass(code, jacsalContext, packageName, false));
+      Compiler.run(scriptCode, jacsalContext, packageName, bindings);
       fail("Expected JacsalError");
     }
     catch (JacsalError e) {

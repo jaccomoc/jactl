@@ -142,7 +142,7 @@ public class ClassCompiler {
     classInit.visitVarInsn(ASTORE, 0);
   }
 
-  protected void compileClass() {
+  public void compileClass() {
     compileSingleClass();
     compileInnerClasses();
   }

@@ -232,17 +232,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     // Allocate slots for our long[] and Object[] that we will use when saving state during suspension.
-    // We get the size from the generated class field where we store the max number of locals we use
-    // during compilation.
     if (methodFunDecl.functionDescriptor.isAsync) {
       longArr = stack.allocateSlot(LONG_ARR);
       objArr  = stack.allocateSlot(OBJECT_ARR);
-      _loadClassField(classCompiler.internalName, Utils.maxLocalsName(methodName), INT, true);
-      mv.visitInsn(DUP);
-      mv.visitIntInsn(NEWARRAY, T_LONG);
-      _storeLocal(longArr);
-      mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-      _storeLocal(objArr);
    }
 
     // Compile statements.
@@ -266,18 +258,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throwError("Internal error: Invalid location in continuation", methodFunDecl.location);
     }
 
-    var fieldVisitor = classCompiler.cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
-                                                   Utils.maxLocalsName(methodName),
-                                                   INT.descriptor(),
-                                                   null,
-                                                   stack.getMaxLocals());
-    fieldVisitor.visitEnd();
-
-
-    if (classCompiler.debug()) {
-      mv.visitEnd();
-      classCompiler.cv.visitEnd();
-    }
+//    if (classCompiler.debug()) {
+//      mv.visitEnd();
+//      classCompiler.cv.visitEnd();
+//    }
     mv.visitMaxs(0, 0);
 
     check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);

@@ -1175,8 +1175,21 @@ public class ClassTests extends BaseTest {
     test("class X {}; class Y extends X {def f(){3}}; def x = new Y(); def y = (Y)x; y.f()", 3);
   }
 
+//  @Test public void testStuff() {
+//    packageName = "x.y.z";
+//    testError(List.of("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", "xx");
+//  }
+//
 //  @Test public void packageTests() {
-//    packagName = "x.y.z";
+//    packageName = "x.y.z";
+//    testError("package x.y.z; class X { static def f(){3}; }; x.y.z.Y.f()", "unknown class 'x.y.z.Y'");
+//    testError(List.of("package a.b.c; class X { static def f(){3}; }"), "x.y.z.X.f()", "'a.b.c' conflicts with package name");
+//    testError(List.of("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", "xx");
+//    test("class X { static f(){3} }; X.f()", 3);
+//  }
+//
+//  @Test public void packageTests2() {
+//    testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "conflicts with package name");
 //    test("package x.y.z; class X { static def f(){3}; }; x.y.z.X.f()", 3);
 //    test("class X { static f(){3} }; X.f()", 3);
 //  }
