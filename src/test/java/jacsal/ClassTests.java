@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.fail;
+
 public class ClassTests extends BaseTest {
 
   @Test public void nameScoping() {
@@ -535,9 +537,9 @@ public class ClassTests extends BaseTest {
     test("class X { def a; X x = null }; def z = [a:2,x:null]; new X([a:3,x:z]).a.a", 3);
     test("class X { def a; X x = null }; def z = [a:2,x:null]; new X(a:3,x:z).x.a", 2);
     testError("class X { def a; X x = null }; int z = 1; new X(a:3,x:z).x.a", "cannot convert");
-    testError("class X { def a; X x = null }; def z = 1; new X(a:3,x:z).x.a", "invalid type");
-    testError("class X { def a; X x = null }; def z = [a:4,x:4]; new X(a:3,x:z).x.a", "invalid type");
-    testError("class X { def a; X x = null }; def z = [a:4,x:[1,null]]; new X(a:3,x:z).x.a", "invalid type");
+    testError("class X { def a; X x = null }; def z = 1; new X(a:3,x:z).x.a", "int cannot be cast to");
+    testError("class X { def a; X x = null }; def z = [a:4,x:4]; new X(a:3,x:z).x.a", "int cannot be cast to");
+    testError("class X { def a; X x = null }; def z = [a:4,x:[1,null]]; new X(a:3,x:z).x.a", "List cannot be cast to");
     test("class X { def a }; new X(a:3).a", 3);
     test("class X { def a }; def z = [a:3]; new X(z).a.a", 3);
     test("class X { int i }; new X(2).i", 2);
@@ -835,6 +837,20 @@ public class ClassTests extends BaseTest {
     test("class X { int i; int j; def x = null }; def x1 = new X(i:1,j:2,x:[i:3,j:4]); def x2 = new X(1,2); x1 != x2", true);
     test("Z f() { return new Z(3) }; class Z { int i }; Z z = f(); z instanceof Z", true);
     test("def f() { return new Z(3) }; class Z { int i }; Z z = f(); z instanceof Z", true);
+    test("class X { int i=1; int j=2 }; new X() == [i:1,j:2]", true);
+    test("class X { int i=1; int j=2 }; new X() != [i:1,j:2]", false);
+    test("class X { int i=1; int j=2 }; new X() == [i:1,j:2,k:3]", false);
+    test("class X { int i=1; int j=2 }; new X() != [i:1,j:2,k:3]", true);
+    test("class X { int i=1; int j=2 }; [i:1,j:2] == new X()", true);
+    test("class X { int i=1; int j=2 }; [i:1,j:2] != new X()", false);
+    test("class X { int i=1; int j=2 }; def x = new X(); def y = [i:1,j:2]; x == y", true);
+    test("class X { int i=1; int j=2 }; def x = new X(); def y = [i:1,j:2]; x != y", false);
+    test("class X { int i=1; int j=2 }; def x = [i:1,j:2]; def y = new X(); x == y", true);
+    test("class X { int i=1; int j=2 }; def x = [i:1,j:2]; def y = new X(); x != y", false);
+    test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; new X() == [i:1,j:2,x:[i:3,j:4,x:null]]", true);
+    test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; new X() != [i:1,j:2,x:[i:3,j:4,x:null]]", false);
+    test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; def x = new X(); def y = [i:1,j:2,x:[i:3,j:4,x:null]]; x == y && y == x", true);
+    test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; def x = new X(); def y = [i:1,j:2,x:[i:3,j:4,x:null]]; x != y && y != x", false);
   }
 
   @Test public void mapConversions() {
@@ -975,9 +991,6 @@ public class ClassTests extends BaseTest {
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.\"${'f'}\"()", "null value");
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; def x = new X(null); x.y.\"${'f'}\"()", "null value");
     testError("class X { Y y }; class Y { Z z = null; int i = 2 }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.i = 4; x.y.z.f()", "null object");
-  }
-
-  @Test public void importClasses() {
   }
 
   @Test public void newlinesInClassDecl() {
@@ -1159,7 +1172,7 @@ public class ClassTests extends BaseTest {
 
   @Test public void cast() {
     testError("class X {int i}; int i = 3; X x = (X)i", "cannot cast");
-    testError("class X {int i}; def i = 3; X x = (X)i", "invalid type");
+    testError("class X {int i}; def i = 3; X x = (X)i", "cannot be cast to");
     test("class X {int i}; def a = [i:3]; X x = (X)a; x.i", 3);  // ???
     test("class X {int i}; Map a = [i:3]; X x = (X)a; x.i", 3);  // ???
     test("class X {int i=3}; X x = new X(); ((X)x).i", 3);
@@ -1170,28 +1183,104 @@ public class ClassTests extends BaseTest {
     testError("class X {}; class Y {}; X x = new X(); Y y = (Y)x", "cannot cast");
     test("class X {def f(){2}}; class Y extends X {def f(){3}}; Y y = new Y(); X x = (X)y; x.f()", 3);
     test("class X {}; class Y extends X {def f(){3}}; X x = new Y(); Y y = (Y)x; y.f()", 3);
-    testError("class X {}; class Y {}; def x = new X(); def y = (Y)x", "invalid type");
+    testError("class X {}; class Y {}; def x = new X(); def y = (Y)x", "cannot be cast to");
     test("class X {def f(){2}}; class Y extends X {def f(){3}}; def y = new Y(); def x = (X)y; x.f()", 3);
     test("class X {}; class Y extends X {def f(){3}}; def x = new Y(); def y = (Y)x; y.f()", 3);
+    test("class X{int i=3}; X f(){[i:4]}; f().i", 4);
+    testError("class X{}; class Y{}; def x = new Y(); ((X)x)", "cannot be cast to");
   }
 
-//  @Test public void testStuff() {
-//    packageName = "x.y.z";
-//    testError(List.of("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", "xx");
-//  }
-//
-//  @Test public void packageTests() {
-//    packageName = "x.y.z";
-//    testError("package x.y.z; class X { static def f(){3}; }; x.y.z.Y.f()", "unknown class 'x.y.z.Y'");
-//    testError(List.of("package a.b.c; class X { static def f(){3}; }"), "x.y.z.X.f()", "'a.b.c' conflicts with package name");
-//    testError(List.of("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", "xx");
-//    test("class X { static f(){3} }; X.f()", 3);
-//  }
-//
-//  @Test public void packageTests2() {
-//    testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "conflicts with package name");
-//    test("package x.y.z; class X { static def f(){3}; }; x.y.z.X.f()", 3);
-//    test("class X { static f(){3} }; X.f()", 3);
-//  }
+  @Test public void classCompilationExtraStatements() {
+    testError(List.of("int i = 1; class X{}"), "", "expecting 'class'");
+    testError(List.of("\nint i = 1; class X{}"), "", "expecting 'class'");
+    testError(List.of("class X{}; int i = 1"), "", "expecting 'end-of-file'");
+    testError(List.of("class X{}\n int i = 1"), "", "expecting 'end-of-file'");
+  }
 
+  @Test public void classRecompilation() {
+    test(List.of("class X{}", "class X{ def f(){3}}"), "new X().f()", 3);
+    testError(List.of("class X{def f(){1}}",
+                 "class Y extends X{def f(){2 + super.f()}}",
+                 "class X extends Y{def f(){3}}"),
+         "def x = new Y(); ((X)x).f() + ((Y)x).f() + x.f()", "cannot be cast");
+  }
+
+  @Test public void packages() {
+    packageName = "x.y.z";
+    testError("package x.y.z; class X { static def f(){3}; }; x.y.z.Y.f()", "unknown class 'Y'");
+    testError("package x.y.z; class X { static def f(){3}; }; a.b.c.Y.f()", "unknown variable 'a'");
+    testError(List.of("package a.b.c; class X { static def f(){3}; }"), "x.y.z.X.f()", "'a.b.c' conflicts with package name");
+    test(List.of("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", 3);
+    test(List.of("class X { def f(){3} }"), "new X().f()", 3);
+    test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+    test(List.of("class X { class Y { def f(){3} } }"), "new x.y.z.X.Y().f()", 3);
+    test(List.of("class Y { def f(){3} }", "class X { Y y = null }"), "new x.y.z.X(y:new Y()).y.f()", 3);
+    test(List.of("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new x.y.z.X(y:new x.y.z.Y()).y.f()", 3);
+    test(List.of("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new X(y:new Y()).y.f()", 3);
+  }
+
+  @Test public void packageStaticMethods() {
+    // async tests don't work with static calls when no package specified because sleep(0,X).f() doesn't work when X is a class
+    useAsyncDecorator = false;
+    packageName = "x.y.z";
+    test(List.of("class X { static def f(){3} }"), "X.f()", 3);
+    packageName = "";
+    test(List.of("class X { static def f(){3}; }"), "X.f()", 3);
+  }
+
+  @Test public void rootPackage() {
+    packageName = "";
+    testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "conflicts with package name");
+    test(List.of("class X { static def f(){3}; }"), "new X().f()", 3);
+    test(List.of("class X { def f(){3} }"), "new X().f()", 3);
+    test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+    packageName = null;
+    test(List.of("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
+  }
+
+  @Test public void noPackage() {
+    packageName = null;
+    testError("def x = 1", "package name not declared");
+    testError(List.of("class X{}"), "def x = 1", "package name not declared");
+  }
+
+  @Test public void separateClassCompilation() {
+    packageName = null;
+    test(List.of("package a.b; class X{def f(){1}}", "package a.c; class Y extends a.b.X{def f(){2}}"),
+         "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 6);
+    test(List.of("package a.b; class X{def f(){sleep(0,1)}}", "package a.c; class Y extends a.b.X{def f(){sleep(0,2) + super.f()}}"),
+         "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 9);
+    test(List.of("package a.b; class X{def f(){sleep(0,1)}}", "package a.c; class Y extends a.b.X{ a.b.X x = new a.b.X(); def f(){sleep(0,2) + super.f() + x.f()}}"),
+         "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 12);
+  }
+
+  @Test public void importStatements() {
+    // TODO:
+  }
+
+  @Test public void tripleEquals() {
+    test("class X{}; new X() === new X()", false);
+    test("class X{}; new X() !== new X()", true);
+    test("class X{}; X x = new X(); X y = new X(); x === y", false);
+    test("class X{}; X x = new X(); X y = new X(); x !== y", true);
+    test("class X{}; X x = new X(); X y = x; x === y", true);
+    test("class X{}; X x = new X(); X y = x; x !== y", false);
+    test("class X{}; def x = new X(); def y = new X(); x === y", false);
+    test("class X{}; def x = new X(); def y = new X(); x !== y", true);
+    test("class X{}; def x = new X(); def y = x; x === y", true);
+    test("class X{}; def x = new X(); def y = x; x !== y", false);
+    test("class X{}; def x = new X(); def y = 1; x !== y", true);
+    test("class X{int i=1}; X x = new X(); x == [i:1]", true);
+    test("class X{int i=1}; X x = new X(); x === [i:1]", false);
+    test("class X{int i=1}; X x = new X(); x !== [i:1]", true);
+    test("class X{int i=1}; def x = new X(); x == [i:1]", true);
+    test("class X{int i=1}; def x = new X(); x === [i:1]", false);
+    test("class X{int i=1}; def x = new X(); x !== [i:1]", true);
+    test("class X{int i=1}; X x = new X(); [i:1] == x", true);
+    test("class X{int i=1}; X x = new X(); [i:1] != x", false);
+    test("class X{int i=1}; X x = new X(); [i:1] !== x", true);
+    test("class X{int i=1}; def x = new X(); [i:1] == x", true);
+    test("class X{int i=1}; def x = new X(); [i:1] === x", false);
+    test("class X{int i=1}; def x = new X(); [i:1] !== x", true);
+  }
 }

@@ -52,6 +52,8 @@ public class RuntimeUtils {
 
   public static final String BANG_EQUAL         = "!=";
   public static final String EQUAL_EQUAL        = "==";
+  public static final String BANG_EQUAL_EQUAL   = "!==";
+  public static final String TRIPLE_EQUAL       = "===";
   public static final String LESS_THAN          = "<";
   public static final String LESS_THAN_EQUAL    = "<=";
   public static final String GREATER_THAN       = ">";
@@ -96,66 +98,38 @@ public class RuntimeUtils {
       return null;
     }
     switch (op) {
-      case PLUS_PLUS:
-        return PLUS_PLUS;
-      case MINUS_MINUS:
-        return MINUS_MINUS;
-      case PLUS:
-        return PLUS;
-      case MINUS:
-        return MINUS;
-      case STAR:
-        return STAR;
-      case SLASH:
-        return SLASH;
-      case PERCENT:
-        return PERCENT;
-      case COMPARE:
-        return COMPARE;
-      case PLUS_EQUAL:
-        return PLUS_EQUAL;
-      case MINUS_EQUAL:
-        return MINUS_EQUAL;
-      case STAR_EQUAL:
-        return STAR_EQUAL;
-      case SLASH_EQUAL:
-        return SLASH_EQUAL;
-      case PERCENT_EQUAL:
-        return PERCENT_EQUAL;
-      case BANG_EQUAL:
-        return BANG_EQUAL;
-      case EQUAL_EQUAL:
-        return EQUAL_EQUAL;
-      case LESS_THAN:
-        return LESS_THAN;
-      case LESS_THAN_EQUAL:
-        return LESS_THAN_EQUAL;
-      case GREATER_THAN:
-        return GREATER_THAN;
-      case GREATER_THAN_EQUAL:
-        return GREATER_THAN_EQUAL;
-      case IN:
-        return IN;
-      case BANG_IN:
-        return BANG_IN;
-      case INSTANCE_OF:
-        return INSTANCE_OF;
-      case BANG_INSTANCE_OF:
-        return BANG_INSTANCE_OF;
-      case AMPERSAND:
-        return AMPERSAND;
-      case PIPE:
-        return PIPE;
-      case ACCENT:
-        return ACCENT;
-      case GRAVE:
-        return GRAVE;
-      case DOUBLE_LESS_THAN:
-        return DOUBLE_LESS_THAN;
-      case DOUBLE_GREATER_THAN:
-        return DOUBLE_GREATER_THAN;
-      case TRIPLE_GREATER_THAN:
-        return TRIPLE_GREATER_THAN;
+      case PLUS_PLUS:           return PLUS_PLUS;
+      case MINUS_MINUS:         return MINUS_MINUS;
+      case PLUS:                return PLUS;
+      case MINUS:               return MINUS;
+      case STAR:                return STAR;
+      case SLASH:               return SLASH;
+      case PERCENT:             return PERCENT;
+      case COMPARE:             return COMPARE;
+      case PLUS_EQUAL:          return PLUS_EQUAL;
+      case MINUS_EQUAL:         return MINUS_EQUAL;
+      case STAR_EQUAL:          return STAR_EQUAL;
+      case SLASH_EQUAL:         return SLASH_EQUAL;
+      case PERCENT_EQUAL:       return PERCENT_EQUAL;
+      case BANG_EQUAL:          return BANG_EQUAL;
+      case EQUAL_EQUAL:         return EQUAL_EQUAL;
+      case BANG_EQUAL_EQUAL:    return BANG_EQUAL_EQUAL;
+      case TRIPLE_EQUAL:        return TRIPLE_EQUAL;
+      case LESS_THAN:           return LESS_THAN;
+      case LESS_THAN_EQUAL:     return LESS_THAN_EQUAL;
+      case GREATER_THAN:        return GREATER_THAN;
+      case GREATER_THAN_EQUAL:  return GREATER_THAN_EQUAL;
+      case IN:                  return IN;
+      case BANG_IN:             return BANG_IN;
+      case INSTANCE_OF:         return INSTANCE_OF;
+      case BANG_INSTANCE_OF:    return BANG_INSTANCE_OF;
+      case AMPERSAND:           return AMPERSAND;
+      case PIPE:                return PIPE;
+      case ACCENT:              return ACCENT;
+      case GRAVE:               return GRAVE;
+      case DOUBLE_LESS_THAN:    return DOUBLE_LESS_THAN;
+      case DOUBLE_GREATER_THAN: return DOUBLE_GREATER_THAN;
+      case TRIPLE_GREATER_THAN: return TRIPLE_GREATER_THAN;
       default:
         throw new IllegalStateException("Internal error: operator " + op + " not supported");
     }
@@ -530,35 +504,31 @@ public class RuntimeUtils {
   }
 
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
-    // Use == to compare since we guarantee that the actual string for the operator is passed in
-    if (operator == EQUAL_EQUAL) {
-      if (left == right) {
-        return true;
-      }
-      if (left == null || right == null) {
-        return false;
-      }
+    if (operator == TRIPLE_EQUAL) {
+      if (left instanceof Boolean || left instanceof String)    { return left.equals(right); }
+      if (!(left instanceof Number && right instanceof Number)) { return left == right; }
+      // If both Number then fall through...
     }
-    if (operator == BANG_EQUAL) {
-      if (left == right) {
-        return false;
-      }
-      if (left == null || right == null) {
-        return true;
-      }
-    }
-    if (operator == IN || operator == BANG_IN) {
-      throw new UnsupportedOperationException();
+    if (operator == BANG_EQUAL_EQUAL) {
+      if (left instanceof Boolean || left instanceof String)    { return !left.equals(right); }
+      if (!(left instanceof Number && right instanceof Number)) { return left != right; }
+      // If both Number then fall through...
     }
 
-    String leftString;
-    String rightString;
+    if (operator == EQUAL_EQUAL || operator == TRIPLE_EQUAL) {
+      if (left == right)                 { return true;  }
+      if (left == null || right == null) { return false; }
+    }
+    if (operator == BANG_EQUAL || operator == BANG_EQUAL_EQUAL) {
+      if (left == right)                 { return false; }
+      if (left == null || right == null) { return true;  }
+    }
 
     // We are left with the comparison operators
     if ((operator == EQUAL_EQUAL || operator == BANG_EQUAL)) {
       if (left instanceof List || left instanceof Map || left instanceof JacsalObject ||
           right instanceof List || right instanceof Map || right instanceof JacsalObject) {
-        return equality(left, right, operator);
+        return equality(left, right, operator, source, offset);
       }
       // Deal with Numbers below. Everything else reverts to Object.equals():
       if (!(left instanceof Number) || !(right instanceof Number)) {
@@ -567,25 +537,17 @@ public class RuntimeUtils {
     }
 
     int comparison = compareTo(left, right, source, offset);
-    if (operator == EQUAL_EQUAL) {
-      return comparison == 0;
-    }
-    if (operator == BANG_EQUAL) {
-      return comparison != 0;
-    }
-    if (operator == LESS_THAN) {
-      return comparison < 0;
-    }
-    if (operator == LESS_THAN_EQUAL) {
-      return comparison <= 0;
-    }
-    if (operator == GREATER_THAN) {
-      return comparison > 0;
-    }
-    if (operator == GREATER_THAN_EQUAL) {
-      return comparison >= 0;
-    }
+    if (operator == EQUAL_EQUAL || operator == TRIPLE_EQUAL)    { return comparison == 0; }
+    if (operator == BANG_EQUAL || operator == BANG_EQUAL_EQUAL) { return comparison != 0; }
+    if (operator == LESS_THAN)                                  { return comparison < 0; }
+    if (operator == LESS_THAN_EQUAL)                            { return comparison <= 0; }
+    if (operator == GREATER_THAN)                               { return comparison > 0; }
+    if (operator == GREATER_THAN_EQUAL)                         { return comparison >= 0; }
     throw new IllegalStateException("Internal error: unexpected operator " + operator);
+  }
+
+  private static boolean isEquals(Object left, Object right, String source, int offset) {
+    return booleanOp(left, right, EQUAL_EQUAL, source, offset);
   }
 
   /**
@@ -594,32 +556,50 @@ public class RuntimeUtils {
    * @param operator EQUAL_EQUAL or BANG_EQUAL
    * @return true if equal or not equal based on value of operator
    */
-  private static boolean equality(Object left, Object right, String operator) {
-    if (left == right) {
+  private static boolean equality(Object leftObj, Object rightObj, String operator, String source, int offset) {
+    if (leftObj == rightObj)                 { return operator == EQUAL_EQUAL; }
+    if (leftObj == null || rightObj == null) { return operator == BANG_EQUAL; }
+
+    if (leftObj instanceof List && rightObj instanceof List) {
+      List left = (List)leftObj;
+      List right = (List)rightObj;
+      if (left.size() != right.size()) { return operator == BANG_EQUAL; }
+      for (int i = 0; i < left.size(); i++) {
+        if (!isEquals(left.get(i), right.get(i), source, offset)) {
+          return operator == BANG_EQUAL;
+        }
+      }
       return operator == EQUAL_EQUAL;
     }
-    if (left == null || right == null) {
-      return operator == BANG_EQUAL;
+
+    if (leftObj instanceof Map && rightObj instanceof Map) {
+      Map<String,Object> left = (Map<String,Object>)leftObj;
+      Map<String,Object> right = (Map<String,Object>)rightObj;
+      if (left.size() != right.size()) { return operator == BANG_EQUAL; }
+      for (String key: left.keySet()) {
+        if (!right.containsKey(key)) {
+          return operator == BANG_EQUAL;
+        }
+        if (!isEquals(left.get(key), right.get(key), source, offset)) {
+          return operator == BANG_EQUAL;
+        }
+      }
+      return operator == EQUAL_EQUAL;
     }
-    if (left instanceof List && right instanceof List) {
-      return ((List) left).equals(right) == (operator == EQUAL_EQUAL);
-    }
-    if (left instanceof Map && right instanceof Map) {
-      return ((Map) left).equals(right) == (operator == EQUAL_EQUAL);
-    }
-    if (left instanceof JacsalObject && right instanceof JacsalObject) {
-      if (!left.getClass().equals(right.getClass())) {
+
+    if (leftObj instanceof JacsalObject && rightObj instanceof JacsalObject) {
+      if (!leftObj.getClass().equals(rightObj.getClass())) {
         return operator == BANG_EQUAL;
       }
       // Have two instances of same class so check that each field is equal
-      var fieldAndMethods = ((JacsalObject) left)._$j$getFieldsAndMethods();
+      var fieldAndMethods = ((JacsalObject) leftObj)._$j$getFieldsAndMethods();
       for (var iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
            iter.hasNext(); ) {
         var   entry = iter.next();
         Field field = (Field) entry.getValue();
         try {
           // If field values differ then we are done
-          if (!equality(field.get(left), field.get(right), EQUAL_EQUAL)) {
+          if (!isEquals(field.get(leftObj), field.get(rightObj), source, offset)) {
             return operator == BANG_EQUAL;
           }
         }
@@ -629,7 +609,35 @@ public class RuntimeUtils {
       }
       return operator == EQUAL_EQUAL;
     }
-    return left.equals(right) == (operator == EQUAL_EQUAL);
+
+    if (leftObj instanceof JacsalObject && rightObj instanceof Map || leftObj instanceof Map && rightObj instanceof JacsalObject) {
+      Map<String,Object> map = (Map<String,Object>)(leftObj instanceof Map ? leftObj : rightObj);
+      JacsalObject       obj = (JacsalObject)(leftObj instanceof JacsalObject ? leftObj : rightObj);
+      Set<String> mapKeys = new HashSet<>(map.keySet());
+      var fieldAndMethods = obj._$j$getFieldsAndMethods();
+      for (var iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
+           iter.hasNext(); ) {
+        var   entry = iter.next();
+        Field field = (Field) entry.getValue();
+        String key  = entry.getKey();
+        try {
+          // If field values differ then we are done
+          if (!isEquals(field.get(obj), map.get(key), source, offset)) {
+            return operator == BANG_EQUAL;
+          }
+          mapKeys.remove(key);
+        }
+        catch (IllegalAccessException e) {
+          throw new IllegalStateException("Internal error: accessing field '" + key + "': " + e, e);
+        }
+      }
+      if (mapKeys.size() > 0) {
+        return operator == BANG_EQUAL;
+      }
+      return operator == EQUAL_EQUAL;
+    }
+
+    return leftObj.equals(rightObj) == (operator == EQUAL_EQUAL);
   }
 
   public static Object bitOperation(Object left, Object right, String operator, String source, int offset) {
@@ -1804,7 +1812,7 @@ public class RuntimeUtils {
 
   public static List<String> lines(String str) {
     if (str.isEmpty()) {
-      return Collections.EMPTY_LIST;
+      return List.of(str);
     }
     List<String> lines = new ArrayList<>();
     int offset = 0;

@@ -227,8 +227,8 @@ public class Token extends Location {
   @Override
   public String toString() {
     return "Token{" +
-           "type=" + type +
-           ", value='" + getValue() + '\'' +
+           "type='" + type +
+           "', value='" + getValue() + '\'' +
            '}';
   }
 

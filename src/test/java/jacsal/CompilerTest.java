@@ -2145,13 +2145,13 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void lines() {
-    test("''.lines()", List.of());
+    test("''.lines()", List.of(""));
     testError("[].lines()", "no such method");
     testError("def x = []; x.lines()", "no such method");
     test("' '.lines()", List.of(" "));
     test("'\\n'.lines()", List.of("",""));
     test("'abc\\nxyz'.lines()", List.of("abc","xyz"));
-    test("def x = ''; x.lines()", List.of());
+    test("def x = ''; x.lines()", List.of(""));
     test("def x = ' '; x.lines()", List.of(" "));
     test("def x = '\\n'; x.lines()", List.of("",""));
     test("def x = 'abc\\nxyz'; x.lines()", List.of("abc","xyz"));
@@ -2726,6 +2726,31 @@ class CompilerTest extends BaseTest {
     test("def x = 1L; def y = false; x != y", true);
     test ("def x = 1L; def y = false; x == y", false);
 
+    test("1 == 1.0", true);
+    test("1 == 1L", true);
+    test("1 == 1D", true);
+    test("1L == 1D", true);
+    test("1L == 1.0", true);
+    test("1D == 1.0", true);
+    test("1 != 1.0", false);
+    test("1 != 1L", false);
+    test("1 != 1D", false);
+    test("1L != 1D", false);
+    test("1L != 1.0", false);
+    test("1D != 1.0", false);
+    test("def x = 1; def y = 1.0; x == y", true);
+    test("def x = 1; def y = 1L; x == y", true);
+    test("def x = 1; def y = 1D; x == y", true);
+    test("def x = 1L; def y = 1D; x == y", true);
+    test("def x = 1L; def y = 1.0; x == y", true);
+    test("def x = 1D; def y = 1.0; x == y", true);
+    test("def x = 1; def y = 1.0; x != y", false);
+    test("def x = 1; def y = 1L; x != y", false);
+    test("def x = 1; def y = 1D; x != y", false);
+    test("def x = 1L; def y = 1D; x != y", false);
+    test("def x = 1L; def y = 1.0; x != y", false);
+    test("def x = 1D; def y = 1.0; x != y", false);
+
     test("boolean x = true; double y = 1; x != y", true);
     test("boolean x = true; double y = 1; x == y", false);
     test("double x = 1; boolean y = false; x != y", true);
@@ -2761,6 +2786,155 @@ class CompilerTest extends BaseTest {
     test("def x = 1; def y = '1'; x == y", false);
     test("def x = '1'; def y = 1; x != y", true);
     test ("def x = '1'; def y = 1; x == y", false);
+
+    test("[1,2,3] == [1,2,3]", true);
+    test("[1,2,3] != [1,2,3]", false);
+    test("[a:1,b:[1,2,3],c:[x:1]] == [a:1,b:[1,2,3],c:[x:1]]", true);
+    test("[a:1,b:[1,2,3],c:[x:1]] != [a:1,b:[1,2,3],c:[x:1]]", false);
+    test("[1,2,3] == 1", false);
+    test("[a:1,b:[1,2,3],c:[x:1]] == 1", false);
+    test("[1,2,3] != 1", true);
+    test("[a:1,b:[1,2,3],c:[x:1]] != 1", true);
+    test("def x = [1,2,3]; def y= [1,2,3]; x == y", true);
+    test("def x = [1,2,3]; def y = [1,2,3]; x != y", false);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = [a:1,b:[1,2,3],c:[x:1]]; x == y", true);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = [a:1,b:[1,2,3],c:[x:1]]; x != y", false);
+    test("def x = [1,2,3]; def y = 1; x == y", false);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = 1; x == y", false);
+    test("def x = [1,2,3]; def y = 1; x != y", true);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = 1; x != y", true);
+    test("[] == []", true);
+    test("[] != []", false);
+    test("[] == [:]", false);
+    test("[] != [:]", true);
+    test("def x = []; def y = []; x == y", true);
+    test("def x = []; def y = []; x != y", false);
+    test("def x = []; def y = [:]; x == y", false);
+    test("def x = []; def y = [:]; x != y", true);
+  }
+
+  @Test public void tripleEqualsNotEquals() {
+    test("true !== 1", true);
+    test("true === 1", false);
+    test("1 !== false", true);
+    test ("1 === false", false);
+    test("true !== 1L", true);
+    test("true === 1L", false);
+    test("1L !== false", true);
+    test ("1L === false", false);
+    test("true !== 1D", true);
+    test("true === 1D", false);
+    test("1D !== false", true);
+    test ("1D === false", false);
+    test("true !== 1.0", true);
+    test("true === 1.0", false);
+    test("1.0 !== false", true);
+    test ("1.0 === false", false);
+    test("boolean x = true; int y = 1; x !== y", true);
+    test("boolean x = true; int y = 1; x === y", false);
+    test("int x = 1; boolean y = false; x !== y", true);
+    test ("int x = 1; boolean y = false; x === y", false);
+    test("def x = true; def y = 1; x !== y", true);
+    test("def x = true; def y = 1; x === y", false);
+    test("def x = 1; def y = false; x !== y", true);
+    test ("def x = 1; def y = false; x === y", false);
+    test("boolean x = true; long y = 1; x !== y", true);
+    test("boolean x = true; long y = 1; x === y", false);
+    test("long x = 1; boolean y = false; x !== y", true);
+    test ("long x = 1; boolean y = false; x === y", false);
+    test("def x = true; def y = 1L; x !== y", true);
+    test("def x = true; def y = 1L; x === y", false);
+    test("def x = 1L; def y = false; x !== y", true);
+    test ("def x = 1L; def y = false; x === y", false);
+
+    test("1 === 1L", true);
+    test("1 === 1D", true);
+    test("1 === 1.0", true);
+    test("1L === 1D", true);
+    test("1L === 1.0", true);
+    test("1D === 1.0", true);
+    test("1 !== 1L", false);
+    test("1 !== 1D", false);
+    test("1 !== 1.0", false);
+    test("1L !== 1D", false);
+    test("1L !== 1.0", false);
+    test("1D !== 1.0", false);
+    test("def x = 1; def y = 1.0; x === y", true);
+    test("def x = 1; def y = 1L; x === y", true);
+    test("def x = 1; def y = 1D; x === y", true);
+    test("def x = 1L; def y = 1D; x === y", true);
+    test("def x = 1L; def y = 1.0; x === y", true);
+    test("def x = 1D; def y = 1.0; x === y", true);
+    test("def x = 1; def y = 1.0; x !== y", false);
+    test("def x = 1; def y = 1L; x !== y", false);
+    test("def x = 1; def y = 1D; x !== y", false);
+    test("def x = 1L; def y = 1D; x !== y", false);
+    test("def x = 1L; def y = 1.0; x !== y", false);
+    test("def x = 1D; def y = 1.0; x !== y", false);
+
+    test("boolean x = true; double y = 1; x !== y", true);
+    test("boolean x = true; double y = 1; x === y", false);
+    test("double x = 1; boolean y = false; x !== y", true);
+    test ("double x = 1; boolean y = false; x === y", false);
+    test("def x = true; def y = 1D; x !== y", true);
+    test("def x = true; def y = 1D; x === y", false);
+    test("def x = 1D; def y = false; x !== y", true);
+    test ("def x = 1D; def y = false; x === y", false);
+
+    test("boolean x = true; Decimal y = 1; x !== y", true);
+    test("boolean x = true; Decimal y = 1; x === y", false);
+    test("Decimal x = 1; boolean y = false; x !== y", true);
+    test ("Decimal x = 1; boolean y = false; x === y", false);
+    test("def x = true; def y = 1.0; x !== y", true);
+    test("def x = true; def y = 1.0; x === y", false);
+    test("def x = 1.0; def y = false; x !== y", true);
+    test ("def x = 1.0; def y = false; x === y", false);
+
+    test("boolean x = true; String y = '1'; x !== y", true);
+    test("boolean x = true; String y = '1'; x === y", false);
+    test("String x = '1'; boolean y = false; x !== y", true);
+    test ("String x = '1'; boolean y = false; x === y", false);
+    test("def x = true; def y = '1'; x !== y", true);
+    test("def x = true; def y = '1'; x === y", false);
+    test("def x = '1'; def y = false; x !== y", true);
+    test ("def x = '1'; def y = false; x === y", false);
+
+    test("int x = 1; String y = '1'; x !== y", true);
+    test("int x = 1; String y = '1'; x === y", false);
+    test("String x = '1'; int y = 1; x !== y", true);
+    test ("String x = '1'; int y = 1; x === y", false);
+    test("def x = 1; def y = '1'; x !== y", true);
+    test("def x = 1; def y = '1'; x === y", false);
+    test("def x = '1'; def y = 1; x !== y", true);
+    test ("def x = '1'; def y = 1; x === y", false);
+
+    test("[1,2,3] === [1,2,3]", false);
+    test("[1,2,3] !== [1,2,3]", true);
+    test("[a:1,b:[1,2,3],c:[x:1]] === [a:1,b:[1,2,3],c:[x:1]]", false);
+    test("[a:1,b:[1,2,3],c:[x:1]] !== [a:1,b:[1,2,3],c:[x:1]]", true);
+    test("[1,2,3] === 1", false);
+    test("[a:1,b:[1,2,3],c:[x:1]] === 1", false);
+    test("[1,2,3] !== 1", true);
+    test("[a:1,b:[1,2,3],c:[x:1]] !== 1", true);
+    test("def x = [1,2,3]; def y= [1,2,3]; x === y", false);
+    test("def x = [1,2,3]; def y= x; x === y", true);
+    test("def x = [1,2,3]; def y = [1,2,3]; x !== y", true);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = [a:1,b:[1,2,3],c:[x:1]]; x === y", false);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = x; x === y", true);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = x; x !== y", false);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = [a:1,b:[1,2,3],c:[x:1]]; x !== y", true);
+    test("def x = [1,2,3]; def y = 1; x === y", false);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = 1; x === y", false);
+    test("def x = [1,2,3]; def y = 1; x !== y", true);
+    test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = 1; x !== y", true);
+    test("[] === []", false);
+    test("[] !== []", true);
+    test("[] === [:]", false);
+    test("[] !== [:]", true);
+    test("def x = []; def y = []; x === y", false);
+    test("def x = []; def y = []; x !== y", true);
+    test("def x = []; def y = [:]; x === y", false);
+    test("def x = []; def y = [:]; x !== y", true);
   }
 
   @Test public void constBooleanComparisons() {

@@ -1667,6 +1667,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
       }
       if (className == null) {
+        // Check for class in current package
+        if (jacsalContext.getClassDescriptor(packageName, firstClass + subPath) != null) {
+          className = firstClass + subPath;
+        }
+      }
+      if (className == null) {
         if (classToken != null) {
           error("Unknown class '" + firstClass + "'", classToken);
         }
@@ -1679,18 +1685,21 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     // If no package supplied or current package
     ClassDescriptor descriptor = null;
-    if (classPkg == null || classPkg.equals(packageName)) {
+    if (classPkg == null) {
+      classPkg = packageName;
+    }
+    if (classPkg.equals(packageName)) {
       descriptor = localClasses.get(className);
     }
-    if (descriptor == null && classPkg != null) {
-      var jacsalPackage = jacsalContext.getPackage(classPkg);
-      if (jacsalPackage == null) {
-        if (classPkg.equals(packageName)) {
-          error("Unknown class '" + classPkg + "." + className + "'", classToken);
-        }
-        error("Unknown package '" + classPkg + "'", packageToken);
+    if (descriptor == null) {
+      if (jacsalContext.packageExists(classPkg)) {
+        descriptor = jacsalContext.getClassDescriptor(classPkg, className);
       }
-      descriptor = jacsalPackage.getClass(className);
+      else {
+        if (!classPkg.equals(packageName)) {
+          error("Unknown package '" + classPkg + "'", packageToken);
+        }
+      }
     }
 
     if (descriptor == null && classToken != null) {

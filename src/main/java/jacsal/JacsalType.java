@@ -379,11 +379,12 @@ public class JacsalType {
     }
 
     // Boolean comparisons
-    if (operator.is(EQUAL_EQUAL,BANG_EQUAL,AMPERSAND_AMPERSAND,PIPE_PIPE)) { return BOOLEAN; }
+    if (operator.is(EQUAL_EQUAL,BANG_EQUAL,TRIPLE_EQUAL,
+                    BANG_EQUAL_EQUAL,AMPERSAND_AMPERSAND,PIPE_PIPE))   { return BOOLEAN; }
     if (operator.getType().isBooleanOperator()) {
-      if (type1.is(ANY) || type2.is(ANY))                       { return BOOLEAN; }
-      if (type1.isNumeric() && type2.isNumeric())               { return BOOLEAN; }
-      if (type1.is(BOOLEAN,STRING) && type1.equals(type2))      { return BOOLEAN; }
+      if (type1.is(ANY) || type2.is(ANY))                              { return BOOLEAN; }
+      if (type1.isNumeric() && type2.isNumeric())                      { return BOOLEAN; }
+      if (type1.is(BOOLEAN,STRING) && type1.equals(type2))             { return BOOLEAN; }
       throw new CompileError("Type " + type1 + " cannot be compared to " + type2, operator);
     }
 

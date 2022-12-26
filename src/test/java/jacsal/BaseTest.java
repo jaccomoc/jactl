@@ -97,7 +97,8 @@ public class BaseTest {
               expr instanceof Expr.TypeExpr || expr instanceof Expr.FunDecl ||
               expr instanceof Expr.MapLiteral && ((Expr.MapLiteral)expr).isNamedArgs ||
               expr instanceof Expr.Binary && ((Expr.Binary)expr).createIfMissing ||
-              expr instanceof Expr.InvokeNew) {
+              expr instanceof Expr.InvokeNew ||
+              expr instanceof Expr.ClassPath) {
             return expr;
           }
           Expr newExpr = new Expr.Call(expr.location,
@@ -131,7 +132,7 @@ public class BaseTest {
     doTest(code, true, true, true, expected);
   }
 
-  protected void ctest(List<String> classCode, String scriptCode, Object expected) {
+  protected void test(List<String> classCode, String scriptCode, Object expected) {
     doTest(classCode, scriptCode, true, false, false, expected);
     doTest(classCode, scriptCode, false, false, false, expected);
     doTest(classCode, scriptCode, true, true, false, expected);

@@ -1182,16 +1182,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       // Left with boolean, int, long, double types
       if ((expr.left.type.is(BOOLEAN) || expr.right.type.is(BOOLEAN)) && !expr.left.type.equals(expr.right.type)) {
-        // If one type is boolean and the other isn't then we must be doing == or != comparison
+        // If one type is boolean and the other isn't then we must be doing == or != or === or !== comparison
         // since Resolver would have already given compile error if other type of comparison
-        check(expr.operator.is(EQUAL_EQUAL,BANG_EQUAL), "Unexpected operator " + expr.operator + " comparing boolean and non-boolean");
+        check(expr.operator.is(EQUAL_EQUAL,BANG_EQUAL,TRIPLE_EQUAL,BANG_EQUAL_EQUAL), "Unexpected operator " + expr.operator + " comparing boolean and non-boolean");
         // Since types are not compatible we already know that they are not equal so pop values and
         // load result
         compile(expr.left);
         compile(expr.right);
         popVal();
         popVal();
-        loadConst(expr.operator.is(BANG_EQUAL));    // true when op is !=
+        loadConst(expr.operator.is(BANG_EQUAL,BANG_EQUAL_EQUAL));    // true when op is != or !==
         return null;
       }
 
@@ -1208,7 +1208,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitInsn(operandType.is(INT) ? ISUB : operandType.is(LONG) ? LCMP : DCMPL);
       pop(2);
       int opCode = expr.operator.is(EQUAL_EQUAL)        ? IFEQ :
+                   expr.operator.is(TRIPLE_EQUAL)       ? IFEQ :
                    expr.operator.is(BANG_EQUAL)         ? IFNE :
+                   expr.operator.is(BANG_EQUAL_EQUAL)   ? IFNE :
                    expr.operator.is(LESS_THAN)          ? IFLT :
                    expr.operator.is(LESS_THAN_EQUAL)    ? IFLE :
                    expr.operator.is(GREATER_THAN)       ? IFGT :
@@ -1852,7 +1854,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitJumpInsn(IFNE, end);
       mv.visitInsn(DUP);
       mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Map.class));
-      _throwIfFalseWithClassName(" is invalid type for constructing " + varType, runtimeLocation);
+      _throwIfFalseWithClassName(" cannot be cast to " + varType, runtimeLocation);
       mv.visitInsn(POP);
     }
 

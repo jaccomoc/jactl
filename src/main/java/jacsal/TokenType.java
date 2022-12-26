@@ -21,56 +21,148 @@ package jacsal;
  */
 public enum TokenType {
   //= Single char tokens
-  LEFT_PAREN, RIGHT_PAREN, LEFT_SQUARE, RIGHT_SQUARE, LEFT_BRACE, RIGHT_BRACE,
-  BANG, PERCENT, ACCENT, AMPERSAND, STAR, MINUS, PLUS, SLASH,
-  EQUAL, LESS_THAN, GREATER_THAN, QUESTION, COMMA, DOT, GRAVE, BACKSLASH,
-  PIPE, COLON, SEMICOLON,
-  SINGLE_QUOTE, DOUBLE_QUOTE,
+  LEFT_PAREN("("),
+  RIGHT_PAREN(")"),
+  LEFT_SQUARE("["),
+  RIGHT_SQUARE("]"),
+  LEFT_BRACE("{"),
+  RIGHT_BRACE("}"),
+  BANG("!"),
+  PERCENT("%"),
+  ACCENT("^"),
+  AMPERSAND("&"),
+  STAR("*"),
+  MINUS("-"),
+  PLUS("+"),
+  SLASH("/"),
+  EQUAL("="),
+  LESS_THAN("<"),
+  GREATER_THAN(">"),
+  QUESTION("?"),
+  COMMA(","),
+  DOT("."),
+  GRAVE("~"),
+  BACKSLASH("\\"),
+  PIPE("|"),
+  COLON(":"),
+  SEMICOLON(";"),
+  SINGLE_QUOTE("'"),
+  DOUBLE_QUOTE("\""),
 
   //= Double char tokens
-  BANG_EQUAL, EQUAL_EQUAL, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, QUESTION_COLON,
-  AMPERSAND_AMPERSAND, PIPE_PIPE, ARROW,
-  MINUS_EQUAL, PLUS_EQUAL, SLASH_EQUAL, STAR_EQUAL, AMPERSAND_EQUAL, PIPE_EQUAL,
-  ACCENT_EQUAL, QUESTION_EQUAL,
-  DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN,
-  MINUS_MINUS, PLUS_PLUS, STAR_STAR,
-  EQUAL_GRAVE, BANG_GRAVE,
-  PERCENT_EQUAL, STAR_STAR_EQUAL,
-  QUESTION_DOT, QUESTION_SQUARE,
+  BANG_EQUAL("!="),
+  EQUAL_EQUAL("=="),
+  LESS_THAN_EQUAL("<="),
+  GREATER_THAN_EQUAL(">="),
+  QUESTION_COLON("?:"),
+  AMPERSAND_AMPERSAND("&&"),
+  PIPE_PIPE("||"),
+  ARROW("->"),
+  MINUS_EQUAL("-="),
+  PLUS_EQUAL("+="),
+  SLASH_EQUAL("/="),
+  STAR_EQUAL("*="),
+  AMPERSAND_EQUAL("&="),
+  PIPE_EQUAL("|="),
+  ACCENT_EQUAL("^="),
+  QUESTION_EQUAL("?="),
+  DOUBLE_LESS_THAN("<<"),
+  DOUBLE_GREATER_THAN(">>"),
+  MINUS_MINUS("--"),
+  PLUS_PLUS("++"),
+  STAR_STAR("**"),
+  EQUAL_GRAVE("=~"),
+  BANG_GRAVE("!~"),
+  PERCENT_EQUAL("%="),
+  STAR_STAR_EQUAL("**="),
+  QUESTION_DOT("?."),
+  QUESTION_SQUARE("?["),
 
   //= Triple char tokens
-  TRIPLE_GREATER_THAN, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL,
-  TRIPLE_EQUAL, BANG_EQUAL_EQUAL,
+  TRIPLE_GREATER_THAN(">>>"),
+  DOUBLE_LESS_THAN_EQUAL("<<="),
+  DOUBLE_GREATER_THAN_EQUAL(">>="),
+  TRIPLE_EQUAL("==="),
+  BANG_EQUAL_EQUAL("!=="),
 
-  COMPARE, // <=>
+  COMPARE("<=>"), // <=>
 
   //= 4 char tokens
-  TRIPLE_GREATER_THAN_EQUAL,
+  TRIPLE_GREATER_THAN_EQUAL(">>>="),
 
   //= Literals
-  IDENTIFIER, STRING_CONST, INTEGER_CONST, LONG_CONST, DOUBLE_CONST, DECIMAL_CONST,
+  IDENTIFIER("IDENTIFIER"),
+  STRING_CONST("String"),
+  INTEGER_CONST("int"),
+  LONG_CONST("long"),
+  DOUBLE_CONST("double"),
+  DECIMAL_CONST("Decimal"),
 
   //= String expressions
-  EXPR_STRING_START, EXPR_STRING_END,
-  REGEX_SUBST_START, REGEX_REPLACE,
+  EXPR_STRING_START("EXPR_STRING_START"),
+  EXPR_STRING_END("EXPR_STRING_END"),
+  REGEX_SUBST_START("REGEX_SUBST_START"),
+  REGEX_REPLACE("REGEX_REPLACE"),
 
   //= Keywords
-  DEF, VAR, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, VOID, MAP, LIST,
-  FOR, IF, UNLESS, WHILE, ELSE, CONTINUE, BREAK,
-  CLASS, INTERFACE, EXTENDS, IMPLEMENTS, PACKAGE, STATIC,
-  //THIS, SUPER,
-  IMPORT, AS, TRUE, FALSE, NULL, IN, BANG_IN,
-  INSTANCE_OF, BANG_INSTANCE_OF,
-  RETURN, NEW,
-  AND, OR, NOT, DO,
-  PRINT, PRINTLN,
+  DEF("def"),
+  VAR("var"),
+  BOOLEAN("boolean"),
+  INT("int"),
+  LONG("long"),
+  DOUBLE("double"),
+  DECIMAL("Decimal"),
+  STRING("String"),
+  VOID("void"),
+  MAP("Map"),
+  LIST("List"),
+  FOR("for"),
+  IF("if"),
+  UNLESS("unless"),
+  WHILE("while"),
+  ELSE("else"),
+  CONTINUE("continue"),
+  BREAK("break"),
+  CLASS("class"),
+  INTERFACE("interface"),
+  EXTENDS("extends"),
+  IMPLEMENTS("implements"),
+  PACKAGE("package"),
+  STATIC("static"),
+  IMPORT("import"),
+  AS("as"),
+  TRUE("true"),
+  FALSE("false"),
+  NULL("null"),
+  IN("in"),
+  BANG_IN("!in"),
+  INSTANCE_OF("instanceof"),
+  BANG_INSTANCE_OF("!instanceof"),
+  RETURN("return"),
+  NEW("new"),
+  AND("and"),
+  OR("or"),
+  NOT("not"),
+  DO("do"),
+  PRINT("print"),
+  PRINTLN("println"),
 
   //= Special
-  EOL,            // End of line
-  EOF,            // End of file
+  EOL("end-of-line"),            // End of line
+  EOF("end-of-file"),            // End of file
 
   // Internal use only
-  OBJECT_ARR, LONG_ARR, STRING_ARR;
+  OBJECT_ARR("Object[]"),
+  LONG_ARR("long[]"),
+  STRING_ARR("String[]");
+
+  final String asString;
+
+  TokenType(String str) {
+    this.asString = str;
+  }
+
+
 
   boolean is(TokenType... types) {
     for (TokenType type: types) {
@@ -107,8 +199,9 @@ public enum TokenType {
   }
 
   boolean isBooleanOperator() {
-    return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, LESS_THAN, LESS_THAN_EQUAL,
-                   GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF, BANG_INSTANCE_OF);
+    return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL,
+                   LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF,
+                   BANG_INSTANCE_OF);
   }
 
   boolean isBitOperator() {
@@ -123,5 +216,10 @@ public enum TokenType {
 
   boolean isType() {
     return this.is(BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, DEF, OBJECT_ARR);
+  }
+
+  @Override
+  public String toString() {
+    return asString;
   }
 }

@@ -89,7 +89,11 @@ public class Parser {
 
   public Stmt.ClassDecl parseClass() {
     packageDecl();
-    return classDecl();
+    expect(CLASS);
+    Stmt.ClassDecl classDecl = classDecl();
+    matchAnyIgnoreEOL(SEMICOLON);
+    expect(EOF);
+    return classDecl;
   }
 
   ////////////////////////////////////////////
@@ -132,6 +136,7 @@ public class Parser {
         throw new CompileError("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
       }
       packageName = pkg;
+      matchAnyIgnoreEOL(SEMICOLON);
     }
     if (packageName == null) {
       throw new CompileError("Package name not declared or otherwise supplied", peek());
@@ -632,7 +637,7 @@ public class Parser {
       new Pair(true, List.of(PIPE)),
       new Pair(true, List.of(ACCENT)),
       new Pair(true, List.of(AMPERSAND)),
-      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE /*, TRIPLE_EQUAL, BANG_EQUAL_EQUAL*/)),
+      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL)),
       new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
       new Pair(true, List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
       new Pair(true, List.of(MINUS, PLUS)),
@@ -1063,7 +1068,7 @@ public class Parser {
           if (path.size() > 0) {
             // We have a possible class path so check for package name
             String pkg = String.join(".", path.stream().map(p -> p.getStringValue()).collect(Collectors.toList()));
-            if (pkg.equals(packageName) || context.getPackage(pkg) != null) {
+            if (pkg.equals(packageName) || context.packageExists(pkg)) {
               return new Expr.ClassPath(path.get(0).newIdent(pkg), token);
             }
           }
@@ -1546,10 +1551,11 @@ public class Parser {
    */
   private boolean isClassDeclAllowed() {
     // Function will either be the top level script or the init method of our enclosing class
-    return functionStack().size() == 0 ||                               // class block
-           functionStack().size() == 1 &&
+    return classes.size() == 0 ||
+           functionStack().size() == 0 ||                               // class block
+           (functionStack().size() == 1 &&
            functionStack().peek().isScriptMain &&
-           blockStack().size() == 1;
+           blockStack().size() == 1);
   }
 
   private Stmt.FunDecl parseFunDecl(Token start,
@@ -1793,10 +1799,14 @@ public class Parser {
       return previous();
     }
     if (types.length > 1) {
-      unexpected("Expecting one of " + Arrays.stream(types).map(Enum::toString).collect(Collectors.joining(", ")));
+      unexpected("Expecting one of " +
+                 Arrays.stream(types)
+                       .map(Enum::toString)
+                       .map(t -> "'" + t + "'")
+                       .collect(Collectors.joining(", ")));
     }
     else {
-      unexpected("Expecting " + types[0]);
+      unexpected("Expecting '" + types[0].toString() + "'");
     }
     return null;
   }
