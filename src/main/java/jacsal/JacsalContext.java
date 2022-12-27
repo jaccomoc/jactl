@@ -98,7 +98,8 @@ public class JacsalContext {
   public ClassDescriptor getClassDescriptor(String packageName, String className) {
     String pname = packageName == null || packageName.equals("") ? "" : packageName + '.';
     String name  = javaPackage + '.' + pname + className.replaceAll("\\.", "$");
-    return classLookup.get(name.replaceAll("\\.", "/"));
+    name = name.replaceAll("\\.", "/");
+    return classLookup.get(name);
   }
 
   public ClassDescriptor getClassDescriptor(String internalName) {

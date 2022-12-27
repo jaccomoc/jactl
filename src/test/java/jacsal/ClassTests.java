@@ -1255,7 +1255,33 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void importStatements() {
-    // TODO:
+    useAsyncDecorator = false;
+    packageName = null;
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; new X().f()", 3);
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X; new X().f()", 3);
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X as Y; new Y().f()", 3);
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X; new X().f()", 3);
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X as Y; new Y().f()", 3);
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; new X().f()", 3);
+    test(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; new Y().f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; X.f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import a.b.c.X; X.f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import a.b.c.X as Y; Y.f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import X; X.f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import X as Y; Y.f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X; X.f()", 3);
+    test(List.of("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X as Y; Y.f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y; new Y().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y as C; new C().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{static def f(){3}} }"), "package x.y.z; import a.b.c.X; X.Y.f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X; new X.Y().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X as C; new C.Y().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y; new Y().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y as C; new C().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y; new Y().f()", 3);
+    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as C; new C().f()", 3);
+    testError(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
+    testError(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
   }
 
   @Test public void tripleEquals() {

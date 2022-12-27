@@ -62,10 +62,15 @@ public class Parser {
     this.packageName = packageName;
   }
 
-  public Stmt.ClassDecl parse(String scriptClassName) {
+  /**
+   ** parseScript -> packageDecl? script;
+   */
+  public Stmt.ClassDecl parseScript(String scriptClassName) {
     packageDecl();
+    List<Stmt.Import> importStmts = importStmts();
     Token start = peek();
     Stmt.ClassDecl scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, null, null, false);
+    scriptClass.imports = importStmts;
     pushClass(scriptClass);
     try {
       scriptClass.scriptMain = script();
@@ -87,10 +92,15 @@ public class Parser {
     }
   }
 
+  /**
+   ** parseClass -> packageDecl? classDecl EOF;
+   */
   public Stmt.ClassDecl parseClass() {
     packageDecl();
+    List<Stmt.Import> importStmts = importStmts();
     expect(CLASS);
     Stmt.ClassDecl classDecl = classDecl();
+    classDecl.imports = importStmts;
     matchAnyIgnoreEOL(SEMICOLON);
     expect(EOF);
     return classDecl;
@@ -141,6 +151,24 @@ public class Parser {
     if (packageName == null) {
       throw new CompileError("Package name not declared or otherwise supplied", peek());
     }
+  }
+
+  /**
+   ** importStmt -> "import" classPath ("as" IDENTIFIER)? ;
+   */
+  List<Stmt.Import> importStmts() {
+    List<Stmt.Import> stmts = new ArrayList<>();
+    while (matchAnyIgnoreEOL(IMPORT)) {
+      Token importToken = previous();
+      List<Expr> className = className();
+      Token as = null;
+      if (matchAnyIgnoreEOL(AS)) {
+         as = expect(IDENTIFIER);
+      }
+      stmts.add(new Stmt.Import(importToken, className, as));
+      matchAnyIgnoreEOL(SEMICOLON);
+    }
+    return stmts;
   }
 
   /**

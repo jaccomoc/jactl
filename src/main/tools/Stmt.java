@@ -97,6 +97,7 @@ class Stmt {
     Token                baseClassToken;
     JacsalType           baseClass;
     boolean              isInterface;
+    List<Stmt.Import>    @imports;
     Stmt.Block           @classBlock;
     List<Stmt.FunDecl>   @methods = new ArrayList<>();
     Stmt.FunDecl         @initMethod;
@@ -112,6 +113,15 @@ class Stmt {
     Deque<Expr.FunDecl>      @nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor @classDescriptor;
+  }
+
+  /**
+   * Import statement
+   */
+  class Import extends Stmt {
+    Token token;
+    List<Expr> className;
+    Token as;
   }
 
   /**

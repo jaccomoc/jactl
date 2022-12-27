@@ -293,6 +293,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  @Override public Void visitImport(Stmt.Import stmt) {
+    return null;
+  }
+
   @Override public Void visitStmts(Stmt.Stmts stmt) {
     stmt.stmts.forEach(this::compile);
     return null;

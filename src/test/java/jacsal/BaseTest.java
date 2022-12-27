@@ -87,7 +87,7 @@ public class BaseTest {
 
   public Function<Map<String, Object>,Future<Object>> doCompile(boolean isScript, String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
     var parser = new Parser(new Tokeniser(source), jacsalContext, packageName);
-    var code   = isScript ? parser.parse(className) : parser.parseClass();
+    var code   = isScript ? parser.parseScript(className) : parser.parseClass();
     if (testAsync) {
       var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
                                              : new ExprDecorator(

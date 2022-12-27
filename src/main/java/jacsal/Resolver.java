@@ -99,7 +99,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private final Map<String,Object>       globals;
   private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
   private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
-  Map<Expr.FunDecl,Set<FunctionDescriptor>> callDependencies = new HashMap<>();
 
   private String packageName = null;
   private String scriptName  = null;  // If this is a script
@@ -134,7 +133,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   void resolveClass(Stmt.ClassDecl classDecl) {
-    // Find all classes and create their ClassDescriptors and add to localClasses
+    this.packageName = classDecl.packageName;
+    classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
     prepareClass(classDecl);
     resolve(classDecl);
@@ -142,11 +142,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   void resolveScript(Stmt.ClassDecl classDecl) {
     isScript = true;
-    this.packageName = classDecl.packageName;
     this.scriptName  = classDecl.name.getStringValue();
-    createClassDescriptors(classDecl, null);
-    prepareClass(classDecl);
-    resolve(classDecl);
+    resolveClass(classDecl);
   }
 
   //////////////////////////////////////////////
@@ -199,7 +196,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     classDecl.classDescriptor = classDescriptor;
 
-    if (localClasses.put(classDescriptor.getName(), classDescriptor) != null) {
+    if (localClasses.put(classDescriptor.getNamePath(), classDescriptor) != null) {
       error("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
     }
 
@@ -224,7 +221,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         throw new CompileError("Class " + classDecl.name.getStringValue() + " extends another class " +
                                "that has current class as a base class (" + previousBaseClass + ")", classDecl.baseClassToken);
       }
-      previousBaseClass = baseClass.getClassDescriptor().getName();
+      previousBaseClass = baseClass.getClassDescriptor().getNamePath();
     }
 
     // Find our functions and fields and add them to the ClassDescriptor
@@ -390,7 +387,16 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
-@Override public Void visitFunDecl(Stmt.FunDecl stmt) {
+  @Override public Void visitImport(Stmt.Import stmt) {
+    var classDesc = lookupClass(stmt.className);
+    String name = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
+    if (imports.put(name, classDesc) != null) {
+      error("Class of name '" + name + "' already imported", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+    }
+    return null;
+  }
+
+  @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
     resolve(stmt.declExpr);
     return null;
   }
@@ -1642,11 +1648,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // a path that starts from any class in the hierarchy.
       for (var classStmt : classStack) {
         if (classStmt.name.getStringValue().equals(firstClass)) {
-          className = classStmt.classDescriptor.getName() + subPath;
+          className = classStmt.classDescriptor.getNamePath() + subPath;
           break;
         }
         if (classStmt.classDescriptor.getInnerClass(firstClass) != null) {
-          className = classStmt.classDescriptor.getName() + '$' + firstClass + subPath;
+          className = classStmt.classDescriptor.getNamePath() + '$' + firstClass + subPath;
           break;
         }
       }
@@ -1662,8 +1668,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // Check for imports
         var importedClass = imports.get(firstClass);
         if (importedClass != null) {
-          // Found it so return the descriptor
-          return importedClass;
+          className = importedClass.getNamePath() + subPath;
+          classPkg  = importedClass.getPackageName();
         }
       }
       if (className == null) {

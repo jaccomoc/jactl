@@ -69,7 +69,7 @@ public class Compiler {
 
   public static Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
     var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
-    var script   = parser.parse(className);
+    var script   = parser.parseScript(className);
     var resolver = new Resolver(jacsalContext, bindings);
     resolver.resolveScript(script);
     var analyser = new Analyser(jacsalContext);

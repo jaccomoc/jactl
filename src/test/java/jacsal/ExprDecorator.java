@@ -222,6 +222,10 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     stmts.forEach(this::decorate);
   }
 
+  @Override public Void visitImport(Stmt.Import stmt) {
+    return null;
+  }
+
   @Override public Void visitStmts(Stmt.Stmts stmt) {
     decorateStmts(stmt.stmts);
     return null;

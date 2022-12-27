@@ -30,7 +30,7 @@ public class AsyncTest {
   private boolean isAsync(String source) {
     var context  = JacsalContext.create().debug(debugLevel).build();
     var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACSAL_PKG);
-    var script   = parser.parse("AsyncScriptTest");
+    var script   = parser.parseScript("AsyncScriptTest");
     var resolver = new Resolver(context, Map.of());
     resolver.resolveScript(script);
     var analyser = new Analyser(context);
@@ -54,11 +54,11 @@ public class AsyncTest {
     async("sleep(0,2)", 2);
     async("def f = sleep; f(0,2)", 2);
     sync("def f(x){x}; f(2)", 2);
-    sync("def f(x){x}; def g = f; g(2)", 2);                         // g is final
-    async("def f(x){x}; def g; g = f; g(2)", 2);                     // g is not final
+    sync("def f(x){x}; def g = f; g(2)", 2);                       // g is final
+    async("def f(x){x}; def g; g = f; g(2)", 2);                   // g is not final
     sync("def f(x){sleep(0,x)}; def g; g = f; 2", 2);              // f not invoked
     async("def f(x){sleep(0,x)}; def g = f; g = {it}; g(2)", 2);   // g not final
-    async("def f(x){x}; def g = f; g = {it}; g(2)", 2);              // g not final
+    async("def f(x){x}; def g = f; g = {it}; g(2)", 2);            // g not final
     sync("def g(x){x*x}; def f(x){g(x)*x}; f(2)", 8);
     sync("def g = {it*it}; def f(x){g(x)*x}; f(2)", 8);
     async("def g; g = {it*it}; def f(x){g(x)*x}; f(2)", 8);

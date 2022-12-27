@@ -498,6 +498,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Stmt
 
+  @Override public Void visitImport(Stmt.Import stmt) {
+    return null;
+  }
+
   @Override public Void visitStmts(Stmt.Stmts stmt) {
     return analyse(stmt.stmts);
   }

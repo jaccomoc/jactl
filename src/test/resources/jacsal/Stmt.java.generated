@@ -115,6 +115,7 @@ abstract class Stmt {
     Token                baseClassToken;
     JacsalType           baseClass;
     boolean              isInterface;
+    List<Stmt.Import>    imports;
     Stmt.Block           classBlock;
     List<Stmt.FunDecl>   methods = new ArrayList<>();
     Stmt.FunDecl         initMethod;
@@ -140,6 +141,23 @@ abstract class Stmt {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
     @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClassToken=" + baseClassToken + ", " + "baseClass=" + baseClass + ", " + "isInterface=" + isInterface + "]"; }
+  }
+
+  /**
+   * Import statement
+   */
+  static class Import extends Stmt {
+    Token token;
+    List<Expr> className;
+    Token as;
+    Import(Token token, List<Expr> className, Token as) {
+      this.token = token;
+      this.className = className;
+      this.as = as;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitImport(this); }
+    @Override public String toString() { return "Import[" + "token=" + token + ", " + "className=" + className + ", " + "as=" + as + "]"; }
   }
 
   /**
@@ -256,6 +274,7 @@ abstract class Stmt {
     T visitBlock(Block stmt);
     T visitIf(If stmt);
     T visitClassDecl(ClassDecl stmt);
+    T visitImport(Import stmt);
     T visitVarDecl(VarDecl stmt);
     T visitFunDecl(FunDecl stmt);
     T visitWhile(While stmt);

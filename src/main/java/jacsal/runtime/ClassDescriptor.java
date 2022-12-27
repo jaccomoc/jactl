@@ -25,9 +25,10 @@ import java.util.stream.Stream;
 
 public class ClassDescriptor {
 
-  String                          name;
-  String                          pkg;
-  String                          packagedName;
+  String                          className;     // Name declared in class: class Z { }
+  String                          namePath;      // Name including outerclasses: X$Y$Z
+  String                          pkg;           // a.b.c
+  String                          packagedName;  // a.b.c.X.Y.Z
   String                          internalName;
   boolean                         isInterface;
   JacsalType                      baseClass;
@@ -39,20 +40,26 @@ public class ClassDescriptor {
   FunctionDescriptor              initMethod;
 
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JacsalType baseClass, List<ClassDescriptor> interfaces) {
-    this.name         = name;
+    this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces);
+  }
+
+  public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, JacsalType baseClass, List<ClassDescriptor> interfaces) {
+    this(name, outerClass.getNamePath() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces);
+  }
+
+  ClassDescriptor(String name, String namePath, boolean isInterface, String javaPackage, String pkgName, JacsalType baseClass, List<ClassDescriptor> interfaces) {
+    this.className    = name;
+    this.namePath     = namePath;
     this.baseClass    = baseClass;
     this.isInterface  = isInterface;
     this.interfaces   = interfaces != null ? interfaces : new ArrayList<>();
     this.pkg          = pkgName;
-    this.packagedName = (pkgName.equals("")?"":(pkgName + ".")) + name;
+    this.packagedName = (pkgName.equals("")?"":(pkgName + ".")) + namePath;
     this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
   }
 
-  public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, JacsalType baseClass, List<ClassDescriptor> interfaces) {
-    this(outerClass.getName() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces);
-  }
-
-  public String     getName()         { return name; }
+  public String     getClassName()    { return className; }
+  public String     getNamePath()     { return namePath; }
   public String     getPackageName()  { return pkg; }
   public String     getPackagedName() { return packagedName; }
   public String     getInternalName() { return internalName; }
@@ -138,11 +145,11 @@ public class ClassDescriptor {
   }
 
   public void addInnerClasses(List<ClassDescriptor> classes) {
-    innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.name, desc -> desc)));
+    innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.namePath, desc -> desc)));
   }
 
   public ClassDescriptor getInnerClass(String className) {
-    return innerClasses.get(name + '$' + className);
+    return innerClasses.get(namePath + '$' + className);
   }
 
   public boolean isInterface() {
