@@ -22,6 +22,7 @@ import org.objectweb.asm.Type;
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -45,7 +46,9 @@ public class BuiltinFunctions {
       registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
       registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(2));
+      registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(0,2));
+      registerMethod("skip", "iteratorSkip", ITERATOR, true, 1, List.of(0));
+      registerMethod("limit", "iteratorLimit", ITERATOR, true, 1, List.of(0));
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
       registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
@@ -398,6 +401,58 @@ public class BuiltinFunctions {
     args = validateArgCount(args, 0, FUNCTION, 1, source, offset);
     try {
       return iteratorFilter(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
+    }
+  }
+
+  ////////////////////////////////
+
+  // = skip
+
+  public static Iterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
+    Iterator iter = createIterator(iterable);
+    return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+  }
+
+  private static MethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
+                                                                              Object.class, Integer.class, AtomicInteger.class,
+                                                                              Continuation.class, String.class, int.class, Object[].class);
+  public static Object shouldNotSkip(Integer skipAmount, AtomicInteger index, Continuation ignore1, String ignore2, int ignore3, Object[] ignore4) {
+    return index.getAndIncrement() >= skipAmount;
+  }
+
+  public static Object iteratorSkipWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, INT, 1, source, offset);
+    try {
+      return iteratorSkip(iterable, c, source, offset, args.length == 0 ? null : (int)args[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
+    }
+  }
+
+  ////////////////////////////////
+
+  // = limit
+
+  public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int count) {
+    Iterator iter = createIterator(iterable);
+    return new FilterIterator(iter, source, offset, limitHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+  }
+
+  private static MethodHandle limitHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "isUnderLimit",
+                                                                      Object.class, Integer.class, AtomicInteger.class,
+                                                                      Continuation.class, String.class, int.class, Object[].class);
+  public static Object isUnderLimit(Integer limit, AtomicInteger index, Continuation ignore1, String ignore2, int ignore3, Object[] ignore4) {
+    return index.getAndIncrement() < limit;
+  }
+
+  public static Object iteratorLimitWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, INT, 1, source, offset);
+    try {
+      return iteratorLimit(iterable, c, source, offset, args.length == 0 ? null : (int)args[0]);
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);

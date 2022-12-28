@@ -601,7 +601,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       expr.isConst = false;
       if (!expr.left.type.isConvertibleTo(expr.right.type)) {
         // Even if not normally convertible for "as" we support these conversions:
-        //  - Anything can be convert to STRING or BOOLEAN
+        //  - Anything can be converted to STRING or BOOLEAN
         //  - String can be converted to any numeric
         //  - String can be converted to List (of chars)
         //  - Map/List can be converted to Map/List
@@ -610,7 +610,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         if (expr.right.type.is(BOOLEAN,STRING) ||
             expr.left.type.is(STRING) && expr.right.type.isNumeric() ||
             expr.left.type.is(STRING) && expr.right.type.is(LIST) ||
-            expr.left.type.is(MAP,LIST) && expr.right.type.is(MAP,LIST) ||
+            expr.left.type.is(MAP,LIST,ITERATOR) && expr.right.type.is(MAP,LIST) ||
             expr.left.type.is(MAP,INSTANCE) && expr.right.type.is(MAP,INSTANCE)) {
           return expr.type = expr.right.type;
         }

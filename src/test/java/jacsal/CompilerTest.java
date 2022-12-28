@@ -2132,8 +2132,10 @@ class CompilerTest extends BaseTest {
     test("def x = []; x.filter()", List.of());
     test("def x = [:]; x.filter()", List.of());
     testError("null.filter()", "null value");
-    testError("''.filter()", "no such method");
-    testError("def x = 'abc'; x.filter()", "no such method");
+    test("''.filter()", List.of());
+    test("'abacad'.filter{it != 'a'}.join()", "bcd");
+    test("def f = 'abacad'.filter; f{it != 'a'}.join()", "bcd");
+    test("def x = 'abc'; x.filter().join()", "abc");
     testError("def x = null; x.filter()", "null value");
     test("[1,2,3].filter()", List.of(1,2,3));
     test("[1,2,3].filter{it>1}", List.of(2,3));
@@ -3649,6 +3651,7 @@ class CompilerTest extends BaseTest {
     test("[a:1] as List", List.of(List.of("a",1)));
     test("[a:1,b:2] as List", List.of(List.of("a",1), List.of("b",2)));
     test("[a:1,b:2] as List as Map", Map.of("a",1,"b",2));
+    test("[1,2,3].map{it*it}.map{[it.toString(),it]} as Map", Map.of("1",1,"4",4,"9",9));
     testError("'abc' as Map", "cannot coerce");
     test("'abc' as List", List.of("a","b","c"));
     test("'' as List", List.of());
@@ -4350,6 +4353,62 @@ class CompilerTest extends BaseTest {
     test("[a:1,b:2].reduce(''){ it[0] + it[1] }", "['a', 1]['b', 2]");
     test("def x = [a:1,b:2]; def f = x.reduce; f(''){ v,e -> v + e }", "['a', 1]['b', 2]");
     test("'abcasfiieefaeiihsaiggaaasdh'.reduce([:]){m,c -> m[c]++; m}.sort{a,b -> b[1] <=> a[1]}.join(':')", "['a', 7]:['i', 5]:['s', 3]:['e', 3]:['f', 2]:['h', 2]:['g', 2]:['b', 1]:['c', 1]:['d', 1]");
+  }
+
+  @Test public void skipLimit() {
+    test("[1,2,3].skip(1)", List.of(2, 3));
+    test("[1,2,3].skip(-1)", List.of(1, 2, 3));
+    test("[1,2,3].skip(0)", List.of(1, 2, 3));
+    test("[1,2,3].skip(3)", List.of());
+    test("[1,2,3].skip(4)", List.of());
+    test("[].skip(1)", List.of());
+    test("[1,2,3].map{it+it}.skip(1)", List.of(4, 6));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,it)}.skip(1).map{it*it}", List.of(16, 36));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,it)}.skip(2).map{it*it}", List.of(36));
+    test("'abc'.skip(2).join()", "c");
+    test("[a:1,b:2,c:3].skip(1) as Map", Map.of("b", 2, "c", 3));
+    test("def x = [1,2,3]; x.skip(1)", List.of(2, 3));
+    test("def x = [1,2,3]; x.skip(-1)", List.of(1, 2, 3));
+    test("def x = [1,2,3]; x.skip(0)", List.of(1, 2, 3));
+    test("def x = [1,2,3]; x.skip(3)", List.of());
+    test("def x = [1,2,3]; x.skip(4)", List.of());
+    test("def x = []; x.skip(1)", List.of());
+    test("def x = [1,2,3]; x.map{it+it}.skip(1)", List.of(4, 6));
+    test("def x = [1,2,3]; x.map{sleep(0,it)+sleep(0,it)}.skip(1).map{it*it}", List.of(16, 36));
+    test("def x = [1,2,3]; def f = x.map{sleep(0,it)+sleep(0,it)}.skip; f(1).map{it*it}", List.of(16, 36));
+    test("def x = [1,2,3]; def f = x.map{sleep(0,it)+sleep(0,it)}.skip(1).map; f{it*it}", List.of(16, 36));
+    test("def x = [1,2,3]; x.map{sleep(0,it)+sleep(0,it)}.skip(2).map{it*it}", List.of(36));
+    test("def x = 'abc'; x.skip(2).join()", "c");
+    test("def x = [a:1,b:2,c:3]; x.skip(1) as Map", Map.of("b", 2, "c", 3));
+    test("def x = [a:1,b:2,c:3]; def f = x.skip; f(1) as Map", Map.of("b", 2, "c", 3));
+
+    test("[1,2,3].limit(1)", List.of(1));
+    test("[1,2,3].limit(-1)", List.of());
+    test("[1,2,3].limit(0)", List.of());
+    test("[1,2,3].limit(3)", List.of(1, 2, 3));
+    test("[1,2,3].limit(4)", List.of(1, 2, 3));
+    test("[1,2,3].limit(2)", List.of(1, 2));
+    test("[1,2,3].limit(2).skip(1)", List.of(2));
+    test("[].limit(1)", List.of());
+    test("[].limit(0)", List.of());
+    test("[1,2,3].map{it+it}.limit(2)", List.of(2, 4));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,it)}.limit(2).map{it*it}", List.of(4, 16));
+    test("'abc'.limit(2).join()", "ab");
+    test("[a:1,b:2,c:3].limit(2) as Map", Map.of("a", 1, "b", 2));
+    test("def x = [1,2,3]; x.limit(1)", List.of(1));
+    test("def x = [1,2,3]; x.limit(-1)", List.of());
+    test("def x = [1,2,3]; x.limit(0)", List.of());
+    test("def x = [1,2,3]; x.limit(3)", List.of(1, 2, 3));
+    test("def x = [1,2,3]; x.limit(4)", List.of(1, 2, 3));
+    test("def x = [1,2,3]; x.limit(2)", List.of(1, 2));
+    test("def x = [1,2,3]; x.limit(2).skip(1)", List.of(2));
+    test("def x = []; x.limit(1)", List.of());
+    test("def x = []; x.limit(0)", List.of());
+    test("def x = [1,2,3]; x.map{it+it}.limit(2)", List.of(2, 4));
+    test("def x = [1,2,3]; x.map{sleep(0,it)+sleep(0,it)}.limit(2).map{it*it}", List.of(4, 16));
+    test("def x = [1,2,3]; def f = x.map{sleep(0,it)+sleep(0,it)}.limit; f(2).map{it*it}", List.of(4, 16));
+    test("def x = 'abc'; x.limit(2).join()", "ab");
+    test("def x = [a:1,b:2,c:3]; x.limit(2) as Map", Map.of("a", 1, "b", 2));
   }
 
   @Test public void collectionSort() {
