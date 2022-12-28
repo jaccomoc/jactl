@@ -45,6 +45,7 @@ public class BuiltinFunctions {
       registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
       registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(2));
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
       registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
@@ -434,6 +435,14 @@ public class BuiltinFunctions {
         @Override public Object next()     { return arr[index++];       }
       };
     }
+    if (obj instanceof String)  {
+      String str = (String)obj;
+      return new Iterator<String>() {
+        int i = 0;
+        @Override public boolean hasNext() { return i < str.length(); }
+        @Override public String next()     { return Character.toString(str.charAt(i++)); }
+      };
+    }
     throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
   }
 
@@ -594,6 +603,88 @@ public class BuiltinFunctions {
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
+    }
+  }
+
+  /////////////////////////////
+
+  // = reduce
+
+  public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, MethodHandle closure) {
+    return iteratorReduce$c(createIterator(iterable), source, offset, initialValue, closure, c);
+  }
+  public static Object iteratorReduce$c(Iterator iter, String source, Integer offset, Object value, MethodHandle closure, Continuation c) {
+    int methodLocation = c == null ? 0 : c.methodLocation;
+    try {
+      boolean hasNext         = true;
+      Object  elem            = null;
+      // Implement as a simple state machine since iter.hasNext() and iter.next() can both throw a Continuation.
+      // iter.hasNext() can throw if we have chained iterators and hasNext() needs to get the next value of the
+      // previous iterator in the chain to see if it has a value.
+      // We track our state using the methodLocation that we pass to our own Continuation when/if we throw.
+      // Even states are the synchronous behavior and the odd states are for handling the async case if the
+      // synchronous state throws and is later continued.
+      while (true) {
+        switch (methodLocation) {
+          case 0:                       // Initial state
+            hasNext = iter.hasNext();
+            methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
+            break;
+          case 1:                       // Continuing after hasNext() threw Continuation last time
+            hasNext = (boolean)c.result;
+            methodLocation = 2;
+            break;
+          case 2:                      // Have a value for "hasNext"
+            if (!hasNext) {
+              return value;            // EXIT: exit loop when underlying iterator has no more elements
+            }
+            elem = iter.next();
+            methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
+            break;
+          case 3:                      // Continuing after iter.next() threw Continuation previous time
+            elem = c.result;
+            methodLocation = 4;
+            break;
+          case 4:                      // Have result of iter.next()
+            elem = RuntimeUtils.mapEntryToList(elem);
+            elem = Arrays.asList(value, elem);
+            value = closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
+            methodLocation = 6;
+            break;
+          case 5:
+            value = c.result;
+            methodLocation = 6;
+            break;
+          case 6:
+            methodLocation = 0;
+            break;
+          default:
+            throw new IllegalStateException("Internal error: unexpected state " + methodLocation);
+        }
+      }
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, iteratorReduceHandle.bindTo(iter).bindTo(source).bindTo(offset).bindTo(value).bindTo(closure),
+                             methodLocation + 1, null, null);
+    }
+    catch (RuntimeError e) {
+      throw e;
+    }
+    catch (Throwable t) {
+      throw new RuntimeError("Unexpected error", source, offset, t);
+    }
+  }
+
+  private static MethodHandle iteratorReduceHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReduce$c",
+                                                                                Object.class, Iterator.class, String.class, Integer.class,
+                                                                                Object.class, MethodHandle.class, Continuation.class);
+  public static Object iteratorReduceWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 2, FUNCTION, 2, source, offset);
+    try {
+      return iteratorReduce(iterable, c, source, offset, args[0], (MethodHandle) args[1]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[1]) + " to Function", source, offset);
     }
   }
 

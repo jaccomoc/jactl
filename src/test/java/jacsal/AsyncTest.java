@@ -134,5 +134,8 @@ public class AsyncTest {
     sync("[3,6,4,2,3,5].sort().toString()", "[2, 3, 3, 4, 5, 6]");
     async("[1,2,3].map{sleep(0,it)}.collectEntries{[sleep(0,it.toString()),sleep(0,it)*sleep(0,it)]}", Map.of("1",1,"2",4,"3",9));
     async("[1,2,3].map{sleep(0,it)}.join(':')", "1:2:3");
+    sync("[1,2,3].reduce([]){v,e -> v + e}", List.of(1,2,3));
+    async("[1,2,3].map{sleep(0,it) + sleep(0,it)}.reduce([]){v,e -> v + e}", List.of(2,4,6));
+    async("[1,2,3].reduce([]){v,e -> sleep(0,v) + sleep(0,e)}", List.of(1,2,3));
   }
 }

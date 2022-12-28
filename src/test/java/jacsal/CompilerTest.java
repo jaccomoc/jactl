@@ -4323,12 +4323,33 @@ class CompilerTest extends BaseTest {
     test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
     test("def f = [1,2,3].map{it*it}.map; f{it+it}", List.of(2,8,18));
     test("[1,2,3].map{it*it}[1]", 4);
+    test("'abcde'.map{it+it}.join()", "aabbccddee");
+    test("def x = 'abcde'; x.map{it+it}.join()", "aabbccddee");
+    test("def x = 'abcde'; def f = x.map; f{it+it}.join()", "aabbccddee");
     testError("[1,2,3].map{ -> }", "too many arguments");
   }
 
   @Test public void mapEntryAsList() {
     test("def x; [a:1].each{ x = it }; x", List.of("a",1));
     test("def x; [a:1].each{ x = it }; x; x.size()", 2);
+  }
+
+  @Test public void reduce() {
+    test("[].reduce(null){}", null);
+    test("[1].reduce(null){}", null);
+    test("[1].reduce(0){v,e -> v + e}", 1);
+    test("[1,2,3].reduce(0){v,e -> v + e}", 6);
+    test("[1,2,3].reduce(10){v,e -> v + e}", 16);
+    test("[1,2,3].reduce([]){v,e -> v + e}", List.of(1,2,3));
+    test("def f = [1,2,3].reduce; f([]){v,e -> v + e}", List.of(1,2,3));
+    test("[1,2,3].reduce([]){it[0] + it[1]}", List.of(1,2,3));
+    test("def f = [1,2,3].reduce; f([]){it[0] + it[1]}", List.of(1,2,3));
+    test("def x = [1,2,3]; x.reduce([]){v,e -> sleep(0,v) + sleep(0,e)}", List.of(1,2,3));
+    test("[1,2,3].reduce([]){v,e -> sleep(0,v) + sleep(0,e)}", List.of(1,2,3));
+    test("def f = [1,2,3].reduce; f([]){v,e -> sleep(0,v) + sleep(0,e)}", List.of(1,2,3));
+    test("[a:1,b:2].reduce(''){ it[0] + it[1] }", "['a', 1]['b', 2]");
+    test("def x = [a:1,b:2]; def f = x.reduce; f(''){ v,e -> v + e }", "['a', 1]['b', 2]");
+    test("'abcasfiieefaeiihsaiggaaasdh'.reduce([:]){m,c -> m[c]++; m}.sort{a,b -> b[1] <=> a[1]}.join(':')", "['a', 7]:['i', 5]:['s', 3]:['e', 3]:['f', 2]:['h', 2]:['g', 2]:['b', 1]:['c', 1]:['d', 1]");
   }
 
   @Test public void collectionSort() {
@@ -4355,6 +4376,10 @@ class CompilerTest extends BaseTest {
          List.of(List.of("a", 1), List.of("e", 3), List.of("g", 7), List.of("x", 4)));
     test("def x = [a:1,x:4,e:3,g:7]; x.sort{it[0][0] <=> it[1][0]}",
          List.of(List.of("a", 1), List.of("e", 3), List.of("g", 7), List.of("x", 4)));
+    test("'afedcba'.sort().join()", "aabcdef");
+    test("'afedcba'.sort{a,b -> a <=> b}.join()", "aabcdef");
+    test("'afedcba'.sort{a,b -> b <=> a}.join()", "fedcbaa");
+    test("''.sort{a,b -> b <=> a}.join()", "");
   }
 
   @Test public void largeSort() {
