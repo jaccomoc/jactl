@@ -23,6 +23,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
@@ -46,10 +47,10 @@ public class BuiltinFunctions {
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
       registerMethod("sort", "iteratorSort", ITERATOR, true, 0, List.of(0,1));
       registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("join", "iteratorJoin", ITERATOR, false, 0, List.of(0));
 
       // String methods
       registerMethod("lines", "stringLines", STRING, false);
@@ -517,9 +518,9 @@ public class BuiltinFunctions {
   // = collect
 
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorCollect$c(createIterator(iterable), new ArrayList(), (list,elem) -> ((List)list).add(elem), source, offset, closure, null);
+    return iteratorCollect$c(createIterator(iterable), new ArrayList(), (list,elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
   }
-  public static Object iteratorCollect$c(Iterator iter, Object result, BiConsumer<Object,Object> collector, String source, Integer offset, MethodHandle closure, Continuation c) {
+  public static Object iteratorCollect$c(Iterator iter, Object result, BiFunction<Object,Object,Object> collector, String source, Integer offset, MethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext         = true;
@@ -543,7 +544,7 @@ public class BuiltinFunctions {
             break;
           case 2:                      // Have a value for "hasNext"
             if (!hasNext) {
-              return result;        // EXIT: exit loop when underlying iterator has no more elements
+              return result;           // EXIT: exit loop when underlying iterator has no more elements
             }
             elem = iter.next();
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
@@ -562,7 +563,7 @@ public class BuiltinFunctions {
             methodLocation = 6;
             break;
           case 6:
-            collector.accept(result, transformedElem);
+            result = collector.apply(result, transformedElem);
             methodLocation = 0;
             break;
           default:
@@ -584,7 +585,7 @@ public class BuiltinFunctions {
 
   private static MethodHandle iteratorCollectHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorCollect$c",
                                                                                 Object.class, Iterator.class, Object.class,
-                                                                                BiConsumer.class, String.class, Integer.class,
+                                                                                BiFunction.class, String.class, Integer.class,
                                                                                 MethodHandle.class, Continuation.class);
   public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, FUNCTION, 1, source, offset);
@@ -596,13 +597,42 @@ public class BuiltinFunctions {
     }
   }
 
+  /////////////////////////////
+
+  // = join
+
+  public static String iteratorJoin(Object iterable, String joinStr, Continuation c, String source, int offset) {
+    BiFunction<Object,Object,Object> joiner = (str,elem) -> {
+      if (str.equals("")) {
+        return RuntimeUtils.toString(elem);
+      }
+      else {
+        String strValue = (String)str;
+        return joinStr == null ? strValue.concat(elem.toString())
+                               : strValue.concat(joinStr).concat(RuntimeUtils.toString(elem));
+      }
+    };
+    return (String)iteratorCollect$c(createIterator(iterable), "", joiner, source, offset, null, c);
+  }
+
+  public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, STRING,1, source, offset);
+    try {
+      return iteratorJoin(iterable, args.length == 0 ? null : (String)args[0], c, source, offset);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
+    }
+  }
+
   //////////////////////////////////////
 
   // = collectEntries
 
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    BiConsumer<Object,Object> collector = (mapObj,elem) -> {
+    BiFunction<Object,Object,Object> collector = (mapObj,elem) -> {
       RuntimeUtils.addMapEntry((Map) mapObj, elem, source, offset);
+      return mapObj;
     };
     return iteratorCollect$c(createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
   }
@@ -786,34 +816,6 @@ public class BuiltinFunctions {
       }
     }
     return null;
-  }
-
-  /////////////////////////////
-
-  // = join
-
-  public static String iteratorJoin(Object iterable, String joinStr) {
-    StringBuilder sb = new StringBuilder();
-    boolean first = true;
-    for (Iterator iter = createIterator(iterable); iter.hasNext(); ) {
-      if (!first && joinStr != null) {
-        sb.append(joinStr);
-      }
-      else {
-        first = false;
-      }
-      sb.append(RuntimeUtils.toString(iter.next()));
-    }
-    return sb.toString();
-  }
-  public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, STRING,1, source, offset);
-    try {
-      return iteratorJoin(iterable, args.length == 0 ? null : (String)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
-    }
   }
 
   /////////////////////////////

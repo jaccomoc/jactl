@@ -2267,7 +2267,7 @@ class CompilerTest extends BaseTest {
     test("['x'].join(',')", "x");
     test("['x','y'].join(',')", "x,y");
     test("['x','y',1].join(', ')", "x, y, 1");
-    test("[x:1,y:2].join(',')", "x=1,y=2");
+    test("[x:1,y:2].join(',')", "['x', 1],['y', 2]");
     test("[[x:1],[y:2]].join(', ')", "[x:1], [y:2]");
     test("def x = []; x.join()", "");
     test("def x = []; x.join('')", "");
@@ -2278,10 +2278,11 @@ class CompilerTest extends BaseTest {
     test("def x = ['x']; x.join(',')", "x");
     test("def x = ['x','y']; x.join(',')", "x,y");
     test("def x = ['x','y',1]; x.join(', ')", "x, y, 1");
-    test("def x = [x:1,y:2]; x.join(',')", "x=1,y=2");
+    test("def x = [x:1,y:2]; x.join(',')", "['x', 1],['y', 2]");
     test("def x = [[x:1],[y:2]]; x.join(', ')", "[x:1], [y:2]");
     test("['x','y','1','2','a'].filter{ /[a-z]/f }.join(',')", "x,y,a");
     test("def x = ['x','y','1','2','a']; x.filter{ /[a-z]/f }.join(',')", "x,y,a");
+    test("['a','b'].map{sleep(0,it)+sleep(0,it)}.join(':')", "aa:bb");
   }
 
   @Test public void listLiterals() {

@@ -40,7 +40,7 @@ public class AsyncTest {
 
   private void sync(String source, Object expected) {
     assertFalse(isAsync(source));
-    var context  = JacsalContext.create().debug(debugLevel).build();
+    var context = JacsalContext.create().debug(debugLevel).build();
     assertEquals(expected, Compiler.run(source, context, Map.of()));
   }
 
@@ -132,7 +132,7 @@ public class AsyncTest {
     sync("[1,2,3].map{it}.join(':')", "1:2:3");
     sync("[].collectEntries()", Map.of());
     sync("[3,6,4,2,3,5].sort().toString()", "[2, 3, 3, 4, 5, 6]");
-
-    //    async("[1,2,3].map{sleep(0,it)}.join(':')", "1:2:3");
+    async("[1,2,3].map{sleep(0,it)}.collectEntries{[sleep(0,it.toString()),sleep(0,it)*sleep(0,it)]}", Map.of("1",1,"2",4,"3",9));
+    async("[1,2,3].map{sleep(0,it)}.join(':')", "1:2:3");
   }
 }

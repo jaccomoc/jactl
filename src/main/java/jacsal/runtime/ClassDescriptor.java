@@ -25,7 +25,7 @@ import java.util.stream.Stream;
 
 public class ClassDescriptor {
 
-  String                          className;     // Name declared in class: class Z { }
+  String                          className;     // Declared name: class Z { }
   String                          namePath;      // Name including outerclasses: X$Y$Z
   String                          pkg;           // a.b.c
   String                          packagedName;  // a.b.c.X.Y.Z
