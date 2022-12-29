@@ -63,6 +63,7 @@ public class BuiltinFunctions {
       registerMethod("toLowerCase", "stringToLowerCase", STRING, false, 0);
       registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
       registerMethod("substring", "stringSubstring", STRING, true, 1);
+      registerMethod("split", "stringSplit", STRING, true, 0);
 
       // int methods
       registerMethod("asChar", "intAsChar", INT, false, 0);
@@ -1059,6 +1060,72 @@ public class BuiltinFunctions {
       throw new RuntimeError("Substring error", source, offset, e);
     }
   }
+
+  // = split
+  public static Iterator stringSplit(String str, String source, int offset, String regex, String modifiers) {
+    if (regex == null) {
+      return new Iterator() {
+        int i = 0;
+        @Override public boolean hasNext() { return i++ == 0; }
+        @Override public Object next()     { return str; }
+      };
+    }
+    if (regex.isEmpty()) {
+      return createIterator(str);
+    }
+    var matcher = RuntimeUtils.getMatcher(str, regex, modifiers, source, offset);
+    return new Iterator() {
+      int index = 0;
+      boolean last = false;
+      boolean hasNext = false;
+      boolean findNext = true;
+      @Override public boolean hasNext() {
+        if (!findNext) { return hasNext; }
+        findNext = false;
+        if (!last && matcher.find()) {
+          return hasNext = true;
+        }
+        if (!last) {
+          last = true;
+          return hasNext = true;
+        }
+        return false;
+      }
+      @Override public Object next() {
+        if (hasNext()) {
+          findNext = true;
+          if (last) {
+            return str.substring(index);
+          }
+          int    nextIndex = matcher.start();
+          String result    = str.substring(index, nextIndex);
+          index = matcher.end();
+          return result;
+        }
+        throw new IllegalStateException("Internal error: split() - no more matches");
+      }
+    };
+  }
+  public static Object stringSplitWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, STRING, 2, source, offset);
+    String regex;
+    try {
+      regex = args.length == 0 ? null : (String) args[0];
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Regex for split() must be String not " + RuntimeUtils.className(args[0]), source, offset);
+    }
+    String modifiers;
+    try {
+      modifiers = args.length <= 1 ? "" : (String) args[1];
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Modifiers for split() must be String not " + RuntimeUtils.className(args[0]), source, offset);
+    }
+    return stringSplit(str, source, offset, regex, modifiers);
+  }
+
+
 
   /////////////////////////////
 

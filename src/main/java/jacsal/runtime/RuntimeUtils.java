@@ -770,7 +770,7 @@ public class RuntimeUtils {
     return str.repeat(count);
   }
 
-  private static Matcher getMatcher(String str, String regex, String modifiers, String source, int offset) {
+  public static Matcher getMatcher(String str, String regex, String modifiers, String source, int offset) {
     if (str == null) {
       throw new NullError("Null string in regex match", source, offset);
     }
@@ -795,7 +795,7 @@ public class RuntimeUtils {
               flags += Pattern.DOTALL;
               break;
             default:
-              throw new IllegalStateException("Internal error: unexpected regex modifier '" + modifiers.charAt(i) + "'");
+              throw new RuntimeError("Unexpected regex modifier '" + modifiers.charAt(i) + "'", source, offset);
           }
         }
         pattern = Pattern.compile(regex, flags);

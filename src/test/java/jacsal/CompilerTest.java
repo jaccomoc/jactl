@@ -2164,6 +2164,38 @@ class CompilerTest extends BaseTest {
     test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","","abc","","xyz","",""));
   }
 
+  @Test public void split() {
+    test("'a:b:c'.split(/:/)", List.of("a","b","c"));
+    test("'abc'.split()", List.of("abc"));
+    test("'abc'.split(null)", List.of("abc"));
+    testError("'abc'.split(1)", "cannot convert argument of type int");
+    testError("'abc'.split(/a/,1)", "cannot convert argument of type int");
+    testError("'abc'.split(/a/,'1')", "unexpected regex modifier");
+    testError("'abc'.split(/a/,'f')", "unexpected regex modifier");
+    testError("'abc'.split(/a/,'',1)", "too many arguments");
+    test("'abc'.split('')", List.of("a","b","c"));
+    test("'abc'.split(/./)", List.of("","","",""));
+    test("'aXbXYcX'.split(/[A-Z]+/)", List.of("a","b","c",""));
+    test("':aX:bXY:cX:'.split(/[A-Z]+/,'i')", List.of(":",":",":",":"));
+    test("'a::b:\\nc'.split(/:./)", List.of("a","b:\nc"));
+    test("'aX:bX\\nc'.split(/x./,'is')", List.of("a","b","c"));
+    test("'aX:bX\\nc'.split(/x./,'si')", List.of("a","b","c"));
+    test("'aX:bX\\nc'.split(/x$/,'si')", List.of("aX:bX\nc"));
+    test("'aX:bX\\nc'.split(/x$/,'mi')", List.of("aX:b","\nc"));
+    test("'aX:bX\\nc'.split(/x$./,'mi')", List.of("aX:bX\nc"));
+    test("'aX:bX\\nc'.split(/x$./,'smi')", List.of("aX:b","c"));
+    test("def f = 'aX:bX\\nc'.split; f(/x$./,'smi')", List.of("aX:b","c"));
+    test("def x = 'aX:bX\\nc'; def f = x.split; f(/x$./,'smi')", List.of("aX:b","c"));
+    test("def x = 'a:b:c'; x.split(/:/)", List.of("a","b","c"));
+    test("def x = 'abc'; x.split()", List.of("abc"));
+    test("def x = 'abc'; x.split('')", List.of("a","b","c"));
+    test("def x = 'abc'; x.split(/./)", List.of("","","",""));
+    test("def x = 'aXbXYcX'; x.split(/[A-Z]+/)", List.of("a","b","c",""));
+    test("def x = 'aXbXYcX'; x.split(/[A-Z]+/).map{sleep(0,it)+sleep(0,'x')+sleep(0,it)}.join()", "axabxbcxcx");
+    test("def x = 'aXbXYcX'; def f = x.split; f(/[A-Z]+/)", List.of("a","b","c",""));
+    testError("[1,2,3].split(/[A-Z]+/)", "no such method");
+  }
+
   @Test public void stringLength() {
     test("''.length()", 0);
     test("''.size()", 0);
