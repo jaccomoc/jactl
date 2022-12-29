@@ -161,24 +161,30 @@ public class RuntimeUtils {
         }
         break;
       case SLASH:
-        try {
-          result = left.divide(right);
-        }
-        catch (ArithmeticException e) {
-          if (e.getMessage().startsWith("Division by zero")) {
-            throw new RuntimeError("Divide by zero error", source, offset);
-          }
-
-          // Result is non-terminating so try again with restricted scale
-          result = left.divide(right, maxScale, RoundingMode.HALF_EVEN);
-          result = result.stripTrailingZeros();
-        }
+        result = decimalDivide(left, right, maxScale, source, offset);
         break;
       default:
         throw new IllegalStateException("Internal error: operator " + operator + " not supported for decimals");
     }
     if (result.scale() > maxScale) {
       result = result.setScale(maxScale, RoundingMode.HALF_EVEN);
+    }
+    return result;
+  }
+
+  public static BigDecimal decimalDivide(BigDecimal left, BigDecimal right, int maxScale, String source, int offset) {
+    BigDecimal result;
+    try {
+      result = left.divide(right);
+    }
+    catch (ArithmeticException e) {
+      if (e.getMessage().startsWith("Division by zero")) {
+        throw new RuntimeError("Divide by zero error", source, offset);
+      }
+
+      // Result is non-terminating so try again with restricted scale
+      result = left.divide(right, maxScale, RoundingMode.HALF_EVEN);
+      result = result.stripTrailingZeros();
     }
     return result;
   }
@@ -1779,7 +1785,7 @@ public class RuntimeUtils {
 
   //////////////////////////////////////
 
-  private static BigDecimal toBigDecimal(Object val) {
+  public static BigDecimal toBigDecimal(Object val) {
     if (val instanceof BigDecimal) { return (BigDecimal)val; }
     if (val instanceof Integer)    { return BigDecimal.valueOf((int)val); }
     if (val instanceof Long)       { return BigDecimal.valueOf((long)val); }

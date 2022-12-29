@@ -17,14 +17,16 @@
 package jacsal.runtime;
 
 import jacsal.JacsalType;
+import jacsal.Utils;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
@@ -47,6 +49,10 @@ public class BuiltinFunctions {
       registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
       registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(0,2));
+      registerMethod("min", "iteratorMin", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("max", "iteratorMax", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("avg", "iteratorAvg", ITERATOR, true, 0, List.of(0));
+      registerMethod("sum", "iteratorSum", ITERATOR, true, 0, List.of(0));
       registerMethod("skip", "iteratorSkip", ITERATOR, true, 1, List.of(0));
       registerMethod("limit", "iteratorLimit", ITERATOR, true, 1, List.of(0));
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
@@ -667,9 +673,23 @@ public class BuiltinFunctions {
   // = reduce
 
   public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, MethodHandle closure) {
-    return iteratorReduce$c(createIterator(iterable), source, offset, initialValue, closure, c);
+    return iteratorReduce$c(createIterator(iterable), source, offset, initialValue, (value,elem) -> {
+      elem = Arrays.asList(value, elem);
+      try {
+        return closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
+      }
+      catch (Continuation | RuntimeError e) {
+        throw e;
+      }
+      catch (Throwable t) {
+        throw new RuntimeError("Unexpected error", source, offset, t);
+      }
+    }, null, c);
   }
-  public static Object iteratorReduce$c(Iterator iter, String source, Integer offset, Object value, MethodHandle closure, Continuation c) {
+  public static Object iteratorReduce$c(Iterator iter, String source, Integer offset, Object value,
+                                        BiFunction<Object,Object,Object> invoker,
+                                        Function<Object,Object> resultProcessor,
+                                        Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext         = true;
@@ -691,8 +711,8 @@ public class BuiltinFunctions {
             methodLocation = 2;
             break;
           case 2:                      // Have a value for "hasNext"
-            if (!hasNext) {
-              return value;            // EXIT: exit loop when underlying iterator has no more elements
+            if (!hasNext) {            // EXIT: exit loop when underlying iterator has no more elements
+              return resultProcessor == null ? value : resultProcessor.apply(value);
             }
             elem = iter.next();
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
@@ -703,8 +723,7 @@ public class BuiltinFunctions {
             break;
           case 4:                      // Have result of iter.next()
             elem = RuntimeUtils.mapEntryToList(elem);
-            elem = Arrays.asList(value, elem);
-            value = closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
+            value = invoker.apply(value, elem);
             methodLocation = 6;
             break;
           case 5:
@@ -720,7 +739,8 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorReduceHandle.bindTo(iter).bindTo(source).bindTo(offset).bindTo(value).bindTo(closure),
+      throw new Continuation(cont, iteratorReduceHandle.bindTo(iter).bindTo(source).bindTo(offset)
+                                                       .bindTo(value).bindTo(invoker).bindTo(resultProcessor),
                              methodLocation + 1, null, null);
     }
     catch (RuntimeError e) {
@@ -733,7 +753,7 @@ public class BuiltinFunctions {
 
   private static MethodHandle iteratorReduceHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReduce$c",
                                                                                 Object.class, Iterator.class, String.class, Integer.class,
-                                                                                Object.class, MethodHandle.class, Continuation.class);
+                                                                                Object.class, BiFunction.class, Function.class, Continuation.class);
   public static Object iteratorReduceWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 2, FUNCTION, 2, source, offset);
     try {
@@ -770,6 +790,130 @@ public class BuiltinFunctions {
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
     }
+  }
+
+  /////////////////////////////
+
+  // = avg
+
+  public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
+    int[] counter = new int[]{0};
+    return iteratorReduce$c(createIterator(iterable), source, offset, BigDecimal.ZERO,
+                            (value,elem) -> {
+                              counter[0]++;
+                              return addNumbers(value, elem, source, offset);
+                            },
+                            (value) -> {
+                              if (counter[0] == 0) {
+                                throw new RuntimeError("Empty list for avg() function", source, offset);
+                              }
+                              if (value instanceof Double)                           { value = BigDecimal.valueOf((double)value); }
+                              if (value instanceof Integer || value instanceof Long) { value = BigDecimal.valueOf(((Number)value).longValue()); }
+                              return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(counter[0]), Utils.DEFAULT_SCALE, source, offset);
+                            },
+                            c);
+  }
+  public static Object iteratorAvgWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, null,0, source, offset);
+    return iteratorAvg(iterable, c, source, offset);
+  }
+
+  // = sum
+
+  public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
+    return iteratorReduce$c(createIterator(iterable), source, offset, 0,
+                            (value,elem) -> addNumbers(value, elem, source, offset),
+                            (value) -> value,
+                            c);
+  }
+
+  public static Object iteratorSumWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, null,0, source, offset);
+    return iteratorSum(iterable, c, source, offset);
+  }
+
+  private static Object addNumbers(Object valueObj, Object elemObj, String source, int offset) {
+    if (!(elemObj instanceof Number)) {
+      throw new RuntimeError("Non-numeric element in list (type is " + RuntimeUtils.className(elemObj) + ")", source, offset);
+    }
+    if (valueObj instanceof BigDecimal || elemObj instanceof BigDecimal) {
+      BigDecimal value = valueObj instanceof BigDecimal ? (BigDecimal)valueObj : RuntimeUtils.toBigDecimal(valueObj);
+      BigDecimal elem  = elemObj instanceof BigDecimal ? (BigDecimal)elemObj : RuntimeUtils.toBigDecimal(elemObj);
+      return value.add(elem);
+    }
+    if (valueObj instanceof Double || elemObj instanceof Double) {
+      double value = ((Number)valueObj).doubleValue();
+      double elem  = ((Number)elemObj).doubleValue();
+      return value + elem;
+    }
+    if (valueObj instanceof Long || elemObj instanceof Long) {
+      return ((Number)valueObj).longValue() + ((Number)elemObj).longValue();
+    }
+    return (int)valueObj + (int)elemObj;
+  }
+
+  // = min/max
+
+  public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+    return iteratorReduce$c(createIterator(iterable), source, offset, null,
+                            (value,elem) -> minMaxInvoker(source, offset, closure, false, value, elem, c),
+                            (value) -> value == null ? null : ((Object[])value)[1],
+                            c);
+  }
+
+  public static Object iteratorMinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, FUNCTION,1, source, offset);
+    return iteratorMin(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
+  }
+
+  public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+    return iteratorReduce$c(createIterator(iterable), source, offset, null,
+                            (value,elem) -> minMaxInvoker(source, offset, closure, true, value, elem, c),
+                            (value) -> value == null ? null : ((Object[])value)[1],
+                            c);
+  }
+  public static Object iteratorMaxWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, FUNCTION,1, source, offset);
+    return iteratorMax(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
+  }
+
+  private static final MethodHandle minMaxInvokerHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "minMaxInvoker",
+                                                                                    Object.class, String.class, Integer.class,
+                                                                                    MethodHandle.class, Boolean.class, Object.class,
+                                                                                    Object.class, Continuation.class);
+  public static Object minMaxInvoker(String source, Integer offset, MethodHandle closure, Boolean isMax, Object currentValueObj, Object elem, Continuation c) {
+    Object[] currentValue = (Object[])currentValueObj;
+    Object[] nextValue;
+    if (c != null) {
+      nextValue = new Object[]{ c.result, elem };
+    }
+    else {
+      if (closure == null) {
+        nextValue = new Object[]{ elem, elem };
+      }
+      else {
+        try {
+          nextValue = new Object[] { closure.invokeExact((Continuation) null, source, (int)offset, new Object[]{elem}), elem };
+        }
+        catch (Continuation cont) {
+          throw new Continuation(cont, minMaxInvokerHandle.bindTo(source).bindTo(offset).bindTo(closure)
+                                                          .bindTo(isMax).bindTo(currentValue).bindTo(elem),
+                                 0, null, null);
+        }
+        catch (RuntimeError e) {
+          throw e;
+        }
+        catch (Throwable t) {
+          throw new RuntimeError("Unexpected error", source, offset, t);
+        }
+      }
+    }
+    if (currentValue == null) {
+      return nextValue;
+    }
+    int compare = RuntimeUtils.compareTo(currentValue[0], nextValue[0], source, offset);
+    return compare < 0 ? (isMax ? nextValue : currentValue)
+                       : (isMax ? currentValue : nextValue);
   }
 
   //////////////////////////////////////

@@ -18,6 +18,7 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -40,13 +41,19 @@ public class AsyncTest {
 
   private void sync(String source, Object expected) {
     assertFalse(isAsync(source));
-    var context = JacsalContext.create().debug(debugLevel).build();
-    assertEquals(expected, Compiler.run(source, context, Map.of()));
+    runTest(source, expected);
   }
 
   private void async(String source, Object expected) {
     assertTrue(isAsync(source));
-    var context  = JacsalContext.create().debug(debugLevel).build();
+    runTest(source, expected);
+  }
+
+  private void runTest(String source, Object expected) {
+    var context = JacsalContext.create().debug(debugLevel).build();
+    if (expected instanceof String && ((String) expected).startsWith("#")) {
+      expected = new BigDecimal(((String)((String) expected).substring(1)));
+    }
     assertEquals(expected, Compiler.run(source, context, Map.of()));
   }
 
@@ -137,5 +144,9 @@ public class AsyncTest {
     sync("[1,2,3].reduce([]){v,e -> v + e}", List.of(1,2,3));
     async("[1,2,3].map{sleep(0,it) + sleep(0,it)}.reduce([]){v,e -> v + e}", List.of(2,4,6));
     async("[1,2,3].reduce([]){v,e -> sleep(0,v) + sleep(0,e)}", List.of(1,2,3));
+    sync("[1,2,3].sum()", 6);
+    sync("[1,2,3].avg()", "#2");
+    async("[1,2,3].map{sleep(0,it)}.sum()", 6);
+    async("[1,2,3].map{sleep(0,it)}.avg()", "#2");
   }
 }

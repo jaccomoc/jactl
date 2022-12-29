@@ -2196,6 +2196,77 @@ class CompilerTest extends BaseTest {
     testError("[1,2,3].split(/[A-Z]+/)", "no such method");
   }
 
+  @Test public void minMax() {
+    test("[1,2,3].min()", 1);
+    test("'zxyab'.min()", "a");
+    test("def f = [1,2,3].min; f()", 1);
+    test("[2L,3.5,1.0,4D].min()", "#1.0");
+    test("['z','a','bbb'].min()", "a");
+    test("[[1,2,3],[1],[2,3]].min{it.size()}", List.of(1));
+    test("['123.5','244','124'].min{ it as double }", "123.5");
+    test("['123.5','244','124'].map{sleep(0,it)+sleep(0,'')}.min{ it as double }", "123.5");
+    test("def f = ['123.5','244','124'].map{sleep(0,it)+sleep(0,'')}.min; f{ it as double }", "123.5");
+    test("def x = [1,2,3]; x.min()", 1);
+    test("def x = 'zxyab'; x.min()", "a");
+    test("def x = [1,2,3]; def f = x.min; f()", 1);
+    test("def x = [2L,3.5,1.0,4D]; x.min()", "#1.0");
+    test("def x = ['z','a','bbb']; x.min()", "a");
+    test("def x = [[1,2,3],[1],[2,3]]; x.min{it.size()}", List.of(1));
+    test("def x = ['123.5','244','124']; x.min{ it as double }", "123.5");
+    test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.min{ it as double }", "123.5");
+    test("def x = ['123.5','244','124']; def f = x.map{sleep(0,it)+sleep(0,'')}.min; f{ it as double }", "123.5");
+    testError("1.min()", "no such method");
+
+    test("[1,2,3].max()", 3);
+    test("'zxyab'.max()", "z");
+    test("def f = [1,2,3].max; f()", 3);
+    test("[2L,3.5,1.0,4D].max()", 4D);
+    test("['z','a','bbb'].max()", "z");
+    test("[[1,2,3],[1],[2,3]].max{it.size()}", List.of(1,2,3));
+    test("['123.5','244','124'].max{ it as double }", "244");
+    test("['123.5','244','124'].map{sleep(0,it)+sleep(0,'')}.max{ it as double }", "244");
+    test("def f = ['123.5','244','124'].map{sleep(0,it)+sleep(0,'')}.max; f{ it as double }", "244");
+    test("def x = [1,2,3]; x.max()", 3);
+    test("def x = 'zxyab'; x.max()", "z");
+    test("def x = [1,2,3]; def f = x.max; f()", 3);
+    test("def x = [2L,3.5,1.0,4D]; x.max()", 4D);
+    test("def x = ['z','a','bbb']; x.max()", "z");
+    test("def x = [[1,2,3],[1],[2,3]]; x.max{it.size()}", List.of(1,2,3));
+    test("def x = ['123.5','244','124']; x.max{ it as double }", "244");
+    test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.max{ it as double }", "244");
+    test("def x = ['123.5','244','124']; def f = x.map{sleep(0,it)+sleep(0,'')}.max; f{ it as double }", "244");
+    testError("1.max()", "no such method");
+  }
+
+  @Test public void testSumAvg() {
+    test("[1,2,3].sum()", 6);
+    test("[1,2,3].avg()", "#2");
+    test("[].sum()", 0);
+    testError("[].avg()", "empty list for avg");
+    testError("['abc'].avg()", "non-numeric element in list");
+    testError("['abc'].sum()", "non-numeric element in list");
+    test("[1.0,2,3].sum()", "#6.0");
+    test("[1D,2,3].sum()", 6D);
+    test("[1,2L,3].sum()", 6L);
+    test("[1,2,3].avg()", "#2");
+    test("[1,2].avg()", "#1.5");
+    test("def x = [1,2,3]; x.sum()", 6);
+    test("def x = [1,2,3]; x.avg()", "#2");
+    test("def x = []; x.sum()", 0);
+    testError("def x = []; x.avg()", "empty list for avg");
+    testError("def x = ['abc']; x.avg()", "non-numeric element in list");
+    testError("def x = ['abc']; x.sum()", "non-numeric element in list");
+    test("def x = [1.0,2,3]; x.sum()", "#6.0");
+    test("def x = [1D,2,3]; x.sum()", 6D);
+    test("def x = [1,2L,3]; x.sum()", 6L);
+    test("def x = [1,2L,3]; x.map{sleep(0,it)+sleep(0,it)}.sum()", 12L);
+    test("def x = [1,2,3]; x.avg()", "#2");
+    test("def x = [1,2,3]; x.map{sleep(0,it)+sleep(0,it)}.avg()", "#4");
+    test("def x = [1,2]; x.avg()", "#1.5");
+    test("def x = [1,2L,3]; def f = x.sum; f()", 6L);
+    test("def x = [1,2,3]; def f = x.avg; f()", "#2");
+  }
+
   @Test public void stringLength() {
     test("''.length()", 0);
     test("''.size()", 0);

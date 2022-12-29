@@ -40,8 +40,7 @@ public class JacsalContext {
   boolean printSize          = false;
   boolean evaluateConstExprs = true;
 
-  // TODO: make BigDecimal division work same as for Groovy
-  int     maxScale           = 20;
+  int     maxScale           = Utils.DEFAULT_SCALE;
 
   // In repl mode top level vars are stored in the globals map and their type
   // is tracked here. We also allow redefinitions of existing vars. We don't
