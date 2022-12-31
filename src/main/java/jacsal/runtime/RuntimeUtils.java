@@ -19,6 +19,8 @@ package jacsal.runtime;
 import jacsal.TokenType;
 import jacsal.Utils;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -1751,15 +1753,6 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Object[]", source, offset);
   }
 
-  private static ThreadLocal<PrintStream> output = new ThreadLocal<>();
-
-  public static void setOutput(Object out) {
-    if (out != null && !(out instanceof PrintStream)) {
-      throw new IllegalArgumentException("Global 'out' must be a PrintStream not " + out.getClass().getName());
-    }
-    output.set((PrintStream) out);
-  }
-
   public static boolean print(String obj) {
     return doPrint(obj, false);
   }
@@ -1770,7 +1763,7 @@ public class RuntimeUtils {
 
   private static boolean doPrint(String obj, boolean newLine) {
     if (obj == null) { obj = "null"; }
-    PrintStream out = output.get();
+    PrintStream out = RuntimeState.getState().output;
     if (out == null) {
       out = System.out;
     }

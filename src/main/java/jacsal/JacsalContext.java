@@ -39,6 +39,8 @@ public class JacsalContext {
 
   boolean printSize          = false;
   boolean evaluateConstExprs = true;
+  boolean printLoop          = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
+  boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
 
   int     maxScale           = Utils.DEFAULT_SCALE;
 
@@ -82,6 +84,8 @@ public class JacsalContext {
   public JacsalContext debug(int value)                  { this.debugLevel         = value;   return this; }
   public JacsalContext printSize(boolean value)          { this.printSize          = value;   return this; }
   public JacsalContext javaPackage(String pkg)           { this.javaPackage        = pkg;     return this; }
+  public JacsalContext printLoop(boolean value)          { this.printLoop          = value;   return this; }
+  public JacsalContext nonPrintLoop(boolean value)       { this.nonPrintLoop       = value;   return this; }
 
   public JacsalContext build() {
     initialised = true;
@@ -89,6 +93,9 @@ public class JacsalContext {
   }
 
   //////////////////////////////////
+
+  public boolean printLoop()    { return printLoop; }
+  public boolean nonPrintLoop() { return nonPrintLoop; }
 
   public boolean packageExists(String name) {
     return packages.contains(name);

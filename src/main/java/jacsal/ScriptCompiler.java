@@ -18,6 +18,7 @@ package jacsal;
 
 import jacsal.runtime.AsyncTask;
 import jacsal.runtime.Continuation;
+import jacsal.runtime.RuntimeState;
 import jacsal.runtime.RuntimeUtils;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
@@ -49,11 +50,11 @@ public class ScriptCompiler extends ClassCompiler {
     try {
       MethodType methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
       boolean    isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
-      MethodHandle mh      = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
+      MethodHandle mh       = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
       return map -> {
         var future = new CompletableFuture<>();
-        Object out = map.get("out");
-        RuntimeUtils.setOutput(out);
+        RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
+        RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
         try {
           Object instance = compiledClass.getDeclaredConstructor().newInstance();
           Object result = isAsync ? mh.invoke(instance, (Continuation)null, map)

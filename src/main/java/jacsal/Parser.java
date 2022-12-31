@@ -38,15 +38,14 @@ import static jacsal.TokenType.*;
  * to the Resolver which resolves all variable references and does as much validation as possible
  * to validate types of operands in expressions.
  *
- * Finally the Compiler then should be invoked to compile the AST into JVM byte code.
+ * Finally, the Compiler then should be invoked to compile the AST into JVM byte code.
  */
 public class Parser {
   Tokeniser tokeniser;
-  Token                 firstToken = null;
-  List<CompileError>    errors     = new ArrayList<>();
-  Deque<Stmt.ClassDecl> classes    = new ArrayDeque<>();
-  Stmt.ClassDecl        scriptClass;
-  boolean               ignoreEol  = false;   // Whether EOL should be treated as whitespace or not
+  Token                 firstToken  = null;
+  List<CompileError>    errors      = new ArrayList<>();
+  Deque<Stmt.ClassDecl> classes     = new ArrayDeque<>();
+  boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
   String                packageName = null;
   JacsalContext         context;
 
@@ -63,7 +62,7 @@ public class Parser {
   }
 
   /**
-   ** parseScript -> packageDecl? script;
+   *# parseScript -> packageDecl? script;
    */
   public Stmt.ClassDecl parseScript(String scriptClassName) {
     packageDecl();
@@ -80,11 +79,6 @@ public class Parser {
       if (errors.size() == 1) {
         throw errors.get(0);
       }
-      List<Stmt> scriptStmts = scriptClass.scriptMain.declExpr.block.stmts.stmts;
-      scriptClass.innerClasses = scriptStmts.stream()
-                                            .filter(stmt -> stmt instanceof Stmt.ClassDecl)
-                                            .map(stmt -> (Stmt.ClassDecl)stmt)
-                                            .collect(Collectors.toList());
       return scriptClass;
     }
     finally {
@@ -92,8 +86,13 @@ public class Parser {
     }
   }
 
+  private boolean isNotBeginEndBlock(Stmt stmt) {
+    boolean isBeginEndBlock = stmt instanceof Stmt.Block && (((Stmt.Block) stmt).isBeginBlock || ((Stmt.Block) stmt).isEndBlock);
+    return !isBeginEndBlock;
+  }
+
   /**
-   ** parseClass -> packageDecl? classDecl EOF;
+   *# parseClass -> packageDecl? classDecl EOF;
    */
   public Stmt.ClassDecl parseClass() {
     packageDecl();
@@ -127,7 +126,55 @@ public class Parser {
     declExpr.isResultUsed = false;
     Stmt.VarDecl globals  = new Stmt.VarDecl(new Token(MAP, start), declExpr);
     Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true, false);
-    classes.peek().scriptMain = funDecl;
+    Stmt.ClassDecl scriptClass = classes.peek();
+    scriptClass.scriptMain = funDecl;
+    List<Stmt> scriptStmts = scriptClass.scriptMain.declExpr.block.stmts.stmts;
+    scriptClass.innerClasses = scriptStmts.stream()
+                                          .filter(stmt -> stmt instanceof Stmt.ClassDecl)
+                                          .map(stmt -> (Stmt.ClassDecl)stmt)
+                                          .collect(Collectors.toList());
+    // Find all BEGIN blocks and move to start and END blocks and move to the end
+    var beginBlocks = scriptStmts.stream()
+                                 .filter(stmt -> stmt instanceof Stmt.Block)
+                                 .filter(stmt -> ((Stmt.Block) stmt).isBeginBlock)
+                                 .collect(Collectors.toList());
+    var endBlocks = scriptStmts.stream()
+                               .filter(stmt -> stmt instanceof Stmt.Block)
+                               .filter(stmt -> ((Stmt.Block) stmt).isEndBlock)
+                               .collect(Collectors.toList());
+
+    // If we have begin/end blocks or have to wrap script in a while loop for reading from input
+    if (beginBlocks.size() > 0 || endBlocks.size() > 0 || context.printLoop() || context.nonPrintLoop()) {
+      Stream<Stmt> bodyStream = scriptStmts.stream().filter(this::isNotBeginEndBlock).filter(stmt -> stmt != globals);
+      if (context.nonPrintLoop() || context.printLoop()) {
+        var body = bodyStream.collect(Collectors.toList());
+        Token whileToken = body.size() > 0 ? body.get(0).location : start;
+        // : while (it = nextLine())
+        var whileStmt = new Stmt.While(whileToken,
+                                       new Expr.VarAssign(new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)),
+                                                          new Token(EQUAL,whileToken),
+                                                          new Expr.Call(whileToken,
+                                                                        new Expr.Identifier(whileToken.newIdent("nextLine")),
+                                                                        List.of())));
+        if (context.printLoop()) {
+          Expr.Print println = new Expr.Print(whileToken, new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)), true);
+          println.isResultUsed = false;
+          body.add(new Stmt.ExprStmt(whileToken, println));
+        }
+        Stmt.Stmts whileBody = new Stmt.Stmts();
+        whileBody.stmts = body;
+        whileStmt.body = whileBody;
+        bodyStream = Stream.of(whileStmt);
+      }
+
+      scriptClass.scriptMain.declExpr.block.stmts.stmts =
+        Stream.of(Stream.of(globals),
+                  beginBlocks.stream(),
+                  bodyStream,
+                  endBlocks.stream())
+              .flatMap(s -> s)
+              .collect(Collectors.toList());
+    }
     return funDecl;
   }
 
@@ -154,7 +201,7 @@ public class Parser {
   }
 
   /**
-   ** importStmt -> "import" classPath ("as" IDENTIFIER)? ;
+   *# importStmt -> "import" classPath ("as" IDENTIFIER)? ;
    */
   List<Stmt.Import> importStmts() {
     List<Stmt.Import> stmts = new ArrayList<>();
@@ -227,18 +274,6 @@ public class Parser {
       }
       catch (CompileError e) {
         throw e;
-//        if (e instanceof EOFError) {
-//          // Only add error once
-//          if (errors.stream().noneMatch(err -> err instanceof EOFError)) {
-//            errors.add(e);
-//          }
-//        }
-//        else {
-//          errors.add(e);
-//          // Consume until end of statement to try to allow further
-//          // parsing and error checking to occur
-//          consumeUntil(EOL, EOF, SEMICOLON);
-//        }
       }
     }
   }
@@ -279,6 +314,7 @@ public class Parser {
    *#            | ifStmt
    *#            | forStmt
    *#            | whileStmt
+   *#            | ("BEGIN" | "END") block
    *#            | exprStatement;
    */
   private Stmt statement() {
@@ -289,10 +325,11 @@ public class Parser {
         return exprStmt();
       }
     }
-    if (matchAny(IF))            { return ifStmt();           }
-    if (matchAny(WHILE))         { return whileStmt();        }
-    if (matchAny(FOR))           { return forStmt();          }
-    if (peek().is(SEMICOLON))    { return null;               }
+    if (isAtScriptTopLevel() && matchAny(BEGIN,END)) { return beginEndBlock();    }
+    if (matchAny(IF))                                { return ifStmt();           }
+    if (matchAny(WHILE))                             { return whileStmt();        }
+    if (matchAny(FOR))                               { return forStmt();          }
+    if (peek().is(SEMICOLON))                        { return null;               }
 
     Stmt.ExprStmt stmt = exprStmt();
     // We need to check if exprStmt was a parameterless closure and if so convert back into
@@ -546,6 +583,7 @@ public class Parser {
     return forStmt;
   }
 
+
   /**
    *# commaSeparatedStatements -> ( statement ( "," statement ) * ) ? ;
    */
@@ -560,6 +598,18 @@ public class Parser {
       stmts.stmts.add(statement());
     }
     return stmts;
+  }
+
+  /**
+   *# beginEndBlock -> ("BEGIN" | "END") "{" statements "}" ;
+   */
+  Stmt.Block beginEndBlock() {
+    Token blockType = previous();
+    expect(LEFT_BRACE);
+    Stmt.Block block = block(previous(), RIGHT_BRACE);
+    block.isBeginBlock = blockType.is(BEGIN);
+    block.isEndBlock   = blockType.is(END);
+    return block;
   }
 
   /**
@@ -1581,9 +1631,11 @@ public class Parser {
     // Function will either be the top level script or the init method of our enclosing class
     return classes.size() == 0 ||
            functionStack().size() == 0 ||                               // class block
-           (functionStack().size() == 1 &&
-           functionStack().peek().isScriptMain &&
-           blockStack().size() == 1);
+           isAtScriptTopLevel();
+  }
+
+  private boolean isAtScriptTopLevel() {
+    return functionStack().size() == 1 && functionStack().peek().isScriptMain && blockStack().size() == 1;
   }
 
   private Stmt.FunDecl parseFunDecl(Token start,

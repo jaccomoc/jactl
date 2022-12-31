@@ -16,10 +16,9 @@
 
 package jacsal;
 
-import jacsal.runtime.BuiltinFunctions;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
@@ -4973,6 +4972,52 @@ class CompilerTest extends BaseTest {
     testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected eof");
   }
 
+  InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
+    Runnable setInput = () -> globals.put(Utils.JACSAL_GLOBALS_INPUT,
+                                          input == null ? null
+                                                        : new BufferedReader(new InputStreamReader(new ByteArrayInputStream(input.getBytes()))));
+    ByteArrayOutputStream output;
+
+    setInput.run();
+    globals.put(Utils.JACSAL_GLOBALS_OUTPUT, new PrintStream(output = new ByteArrayOutputStream()));
+    doTest(code, true, true, false, expectedResult);
+    assertEquals(expectedOutput, output.toString());
+
+    setInput.run();
+    globals.put(Utils.JACSAL_GLOBALS_OUTPUT, new PrintStream(output = new ByteArrayOutputStream()));
+    doTest(code, false, true, false, expectedResult);
+    assertEquals(expectedOutput, output.toString());
+
+    setInput.run();
+    globals.put(Utils.JACSAL_GLOBALS_OUTPUT, new PrintStream(output = new ByteArrayOutputStream()));
+    doTest(code, true, true, true, expectedResult);
+    assertEquals(expectedOutput, output.toString());
+  };
+
+  @Test public void beginEndBlocks() {
+    // Test in repl mode only so that we can use global vars
+    // Auto-creation ???
+//    test.accept("x = x + 1", 1, "");
+//    test.accept("++x", 1, "");
+//    test.accept("x.a = 1", 1, "");
+//    test.accept("x.a = 1; x.a", 1, "");
+
+    replTest.accept("BEGIN{ x = 1 }; x", null, 1, "");
+    replTest.accept("BEGIN{ x = [:] }; x.a = 1", null, 1, "");
+    replTest.accept("BEGIN{ x = [:] }; x.a; BEGIN { x.a = 1 }", null, 1, "");
+    replTest.accept("END { print 'x' }", null, true, "x");
+    replTest.accept("END { x = 7 }; x = 2; BEGIN { x = 3 }", null, 7, "");
+    replTest.accept("BEGIN { def x = 7 }; x = 2; END { x + x }", null, 4, "");
+//    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
+  }
+
+  @Test public void nextLine() {
+    replTest.accept("nextLine() == null", null,true, "");
+    replTest.accept("nextLine() == 'x'", "x",true, "");
+    replTest.accept("nextLine() == 'x' && nextLine() == null", "x",true, "");
+    replTest.accept("while (it = nextLine()) println it", "x",null, "x\n");
+  }
+
   @Test public void fib() {
     final String fibDef = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
     final String fibInt = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
@@ -5024,4 +5069,7 @@ class CompilerTest extends BaseTest {
     });
   }
 
+  private interface InputOutputTest {
+    public void accept(String code, String input, Object expectedResult, String expectedOutput);
+  }
 }

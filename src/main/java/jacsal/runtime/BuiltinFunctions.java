@@ -20,6 +20,8 @@ import jacsal.JacsalType;
 import jacsal.Utils;
 import org.objectweb.asm.Type;
 
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -81,6 +83,7 @@ public class BuiltinFunctions {
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
       registerGlobalFunction("sleep", "sleep", false, 1);
+      registerGlobalFunction("nextLine", "nextLine", false, 0);
       initialised = true;
     }
   }
@@ -324,6 +327,43 @@ public class BuiltinFunctions {
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
+    }
+  }
+
+  // = nextLine()
+  public static String nextLine(Continuation c) {
+    var input = RuntimeState.getState().input;
+    if (input == null) {
+      return null;
+    }
+    String result = null;
+    try {
+      if (input.ready()) {
+        result = readLine(input);
+      }
+      else {
+        // Might block so schedule blocking operation and suspend
+        throw Continuation.create(() -> readLine(input));
+      }
+    }
+    catch (IOException ignored) {
+    }
+    if (result == null) {
+      RuntimeState.setInput(null);
+    }
+    return result;
+  }
+  public static Object nextLineWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, null,0, source, offset);
+    return nextLine(null);
+  }
+
+  private static String readLine(BufferedReader input) {
+    try {
+      return input.readLine();
+    }
+    catch (IOException e) {
+      return null;
     }
   }
 

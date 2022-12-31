@@ -32,7 +32,9 @@ class TokeniserTest {
   @Test public void simpleTokens() {
     BiConsumer<String,TokenType> doTest = (source,type) -> {
       var tokeniser = new Tokeniser(source);
-      assertEquals(type, tokeniser.next().getType());
+      Token token    = tokeniser.next();
+      assertEquals(type, token.getType());
+      assertTrue(token.is(type));
       assertEquals(EOF, tokeniser.next().getType());
     };
     doTest.accept("(", LEFT_PAREN);
@@ -142,6 +144,24 @@ class TokeniserTest {
     doTest.accept("println", PRINTLN);
     doTest.accept("continue", CONTINUE);
     doTest.accept("break", BREAK);
+    doTest.accept("BEGIN", BEGIN);
+    doTest.accept("END", END);
+  }
+
+  @Test public void eolToken() {
+    BiConsumer<String,TokenType> doTest = (source,type) -> {
+      var tokeniser = new Tokeniser(source);
+      Token token    = tokeniser.next();
+      assertEquals(type, token.getType());
+      assertTrue(token.is(type));
+      assertEquals(BANG, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
+    };
+    // Need ! because we strip trailing newlines
+    doTest.accept("\n!", EOL);
+    doTest.accept("\r\n!", EOL);
+    doTest.accept("\n!\n\n", EOL);
+    doTest.accept("\r\n!\r\n\r\n", EOL);
   }
 
   @Test public void booleans() {
@@ -690,6 +710,30 @@ class TokeniserTest {
     assertEquals(INTEGER_CONST, token.getType());
   }
 
+  @Test public void multiLineStringsWithCarriageReturns() {
+    var tokeniser = new Tokeniser("a = '''a\\'b//\r\n/*\\t*/\\b\\r\\f\r\nc'''\r\n b = 2");
+    Token     token     = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("a", token.getValue());
+    assertEquals(1, token.getLineNum());
+    assertEquals(1, token.getColumn());
+    token = tokeniser.next();
+    assertEquals(EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("a'b//\r\n/*\t*/\b\r\f\r\nc", token.getValue());
+    assertEquals(1, token.getLineNum());
+    assertEquals(8, token.getColumn());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(INTEGER_CONST, token.getType());
+  }
+
   @Test public void keywordFollowedByWordChar() {
     var tokeniser = new Tokeniser("!instanceof !instanceofx forx while whilex while2");
     BiConsumer<TokenType,String> checkToken = (type,identifier) -> {
@@ -939,6 +983,30 @@ class TokeniserTest {
 
   @Test public void newlines() {
     var tokeniser = new Tokeniser("\n\na\nb\n\nc\n\n\n\n");
+    var token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    assertEquals(IDENTIFIER, tokeniser.peek().getType());
+    assertEquals(EOL, tokeniser.previous().getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals(IDENTIFIER, tokeniser.previous().getType());
+    assertEquals(EOL, tokeniser.peek().getType());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    assertEquals(EOL, tokeniser.previous().getType());
+    assertEquals(IDENTIFIER, tokeniser.peek().getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+  }
+
+  @Test public void newlinesWithCarriageReturns() {
+    var tokeniser = new Tokeniser("\r\n\r\na\r\nb\r\n\r\nc\r\n\r\n\r\n\r\n");
     var token = tokeniser.next();
     assertEquals(EOL, token.getType());
     token = tokeniser.next();

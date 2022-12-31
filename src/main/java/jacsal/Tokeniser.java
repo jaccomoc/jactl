@@ -18,6 +18,7 @@ package jacsal;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -92,7 +93,7 @@ public class Tokeniser {
    */
   public Tokeniser(String source) {
     // Strip trailing new lines so that EOF errors point to somewhere useful
-    this.source = source.replaceAll("\\n*$", "");
+    this.source = source.replaceAll("\\R*$", "");
     this.length = this.source.length();
   }
 
@@ -730,124 +731,6 @@ public class Tokeniser {
     public char    charAt(int offset) { return symbol.charAt(offset); }
   }
 
-  private static List<Symbol> symbols = List.of(
-    new Symbol("(", LEFT_PAREN),
-    new Symbol(")", RIGHT_PAREN),
-    new Symbol("[", LEFT_SQUARE),
-    new Symbol("]", RIGHT_SQUARE),
-    new Symbol("{", LEFT_BRACE),
-    new Symbol("}", RIGHT_BRACE),
-    new Symbol("!", BANG),
-    new Symbol("%", PERCENT),
-    new Symbol("^", ACCENT),
-    new Symbol("&", AMPERSAND),
-    new Symbol("*", STAR),
-    new Symbol("-", MINUS),
-    new Symbol("+", PLUS),
-    new Symbol("/", SLASH),
-    new Symbol("=", EQUAL),
-    new Symbol("<", LESS_THAN),
-    new Symbol(">", GREATER_THAN),
-    new Symbol("?", QUESTION),
-    new Symbol(",", COMMA),
-    new Symbol(".", DOT),
-    new Symbol("~", GRAVE),
-    new Symbol("\\", BACKSLASH),
-    new Symbol("|", PIPE),
-    new Symbol(":", COLON),
-    new Symbol(";", SEMICOLON),
-    new Symbol("--", MINUS_MINUS),
-    new Symbol("++", PLUS_PLUS),
-    new Symbol("!=", BANG_EQUAL),
-    new Symbol("==", EQUAL_EQUAL),
-    new Symbol("<=", LESS_THAN_EQUAL),
-    new Symbol(">=", GREATER_THAN_EQUAL),
-    new Symbol("?:", QUESTION_COLON),
-    new Symbol("?.", QUESTION_DOT),
-    new Symbol("?[", QUESTION_SQUARE),
-    new Symbol("&&", AMPERSAND_AMPERSAND),
-    new Symbol("||", PIPE_PIPE),
-    new Symbol("-=", MINUS_EQUAL),
-    new Symbol("+=", PLUS_EQUAL),
-    new Symbol("/=", SLASH_EQUAL),
-    new Symbol("*=", STAR_EQUAL),
-    new Symbol("&=", AMPERSAND_EQUAL),
-    new Symbol("|=", PIPE_EQUAL),
-    new Symbol("^=", ACCENT_EQUAL),
-    new Symbol("?=", QUESTION_EQUAL),
-    new Symbol("<<", DOUBLE_LESS_THAN),
-    new Symbol(">>", DOUBLE_GREATER_THAN),
-    new Symbol(">>>", TRIPLE_GREATER_THAN),
-    new Symbol("<<=", DOUBLE_LESS_THAN_EQUAL),
-    new Symbol(">>=", DOUBLE_GREATER_THAN_EQUAL),
-    new Symbol(">>>=", TRIPLE_GREATER_THAN_EQUAL),
-    new Symbol("<=>", COMPARE),
-    new Symbol("===", TRIPLE_EQUAL),
-    new Symbol("!==", BANG_EQUAL_EQUAL),
-    new Symbol("=~", EQUAL_GRAVE),
-    new Symbol("!~", BANG_GRAVE),
-    new Symbol("**", STAR_STAR),
-    new Symbol("%=", PERCENT_EQUAL),
-    new Symbol("**=", STAR_STAR_EQUAL),
-    new Symbol("->", ARROW),
-    //new Symbol("", IDENTIFIER),
-    //new Symbol("", STRING_CONST),
-    //new Symbol("", INTEGER_CONST),
-    //new Symbol("", LONG_CONST),
-    //new Symbol("", DOUBLE_CONST),
-    //new Symbol("", DECIMAL_CONST),
-
-    new Symbol("'", SINGLE_QUOTE),
-    new Symbol("\"", DOUBLE_QUOTE),
-    new Symbol("s/", REGEX_SUBST_START),
-    new Symbol("\n", EOL),
-
-    // Keywords
-    new Symbol("true", TRUE),
-    new Symbol("false", FALSE),
-    new Symbol("null", NULL),
-    new Symbol("def", DEF),
-    new Symbol("var", VAR),
-    new Symbol("boolean", BOOLEAN),
-    new Symbol("int", INT),
-    new Symbol("long", LONG),
-    new Symbol("double", DOUBLE),
-    new Symbol("Decimal", DECIMAL),
-    new Symbol("String", STRING),
-    new Symbol("Map", MAP),
-    new Symbol("List", LIST),
-    new Symbol("void", VOID),
-    new Symbol("for", FOR),
-    new Symbol("if", IF),
-    new Symbol("unless", UNLESS),
-    new Symbol("else", ELSE),
-    new Symbol("while", WHILE),
-    new Symbol("continue", CONTINUE),
-    new Symbol("break", BREAK),
-    new Symbol("class", CLASS),
-    new Symbol("interface", INTERFACE),
-    new Symbol("extends", EXTENDS),
-    new Symbol("implements", IMPLEMENTS),
-    new Symbol("import", IMPORT),
-    new Symbol("as", AS),
-    new Symbol("return", RETURN),
-    new Symbol("package", PACKAGE),
-    new Symbol("new", NEW),
-    new Symbol("static", STATIC),
-//    new Symbol("this", THIS),
-//    new Symbol("super", SUPER),
-    new Symbol("instanceof", INSTANCE_OF),
-    new Symbol("!instanceof", BANG_INSTANCE_OF),
-    new Symbol("in", IN),
-    new Symbol("!in", BANG_IN),
-    new Symbol("and", AND),
-    new Symbol("not", NOT),
-    new Symbol("or", OR),
-    new Symbol("do", DO),
-    new Symbol("print", PRINT),
-    new Symbol("println", PRINTLN)
-  );
-
   //
   // Array of symbols keyed on first letter for efficient lookup. Each element in the array
   // is a list of symbols reverse sorted (long strings first) by their string representation.
@@ -860,7 +743,20 @@ public class Tokeniser {
   private static Set<String> keyWords;
 
   static {
-    symbols.forEach(sym -> symbolLookup[sym.symbol.charAt(0)].add(sym));
+    List<Symbol> symbols = Arrays.stream(TokenType.values())
+                                 .filter(type -> type.asString != null)
+                                 .map(type -> new Symbol(type.asString, type))
+                                 .collect(Collectors.toList());
+
+    symbols.forEach(sym -> symbolLookup[sym.charAt(0)].add(sym));
+
+    // Special case for EOL. We cater for both '\n' and '\r\n' indicating EOL.
+    symbolLookup['\r'].add(new Symbol("\r\n", EOL));
+    symbolLookup['\n'].add(new Symbol("\n", EOL));
+
+    // Regex substitute
+    symbolLookup['s'].add(new Symbol("s/", REGEX_SUBST_START));
+
     IntStream.range(0, 256).forEach(i -> symbolLookup[i].sort((a, b) -> b.symbol.compareTo(a.symbol)));
     // Map digits to INT for the moment
     IntStream.range(0, 10).forEach(i -> symbolLookup[Integer.toString(i).charAt(0)] = List.of(new Symbol(Integer.toString(i), INTEGER_CONST)));

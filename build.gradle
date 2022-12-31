@@ -48,3 +48,14 @@ tasks.withType(JavaCompile) {
 test {
     useJUnitPlatform()
 }
+
+jar {
+    duplicatesStrategy 'exclude'
+    manifest {
+        attributes "Main-Class": "jacsal.Jacsal"
+    }
+
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

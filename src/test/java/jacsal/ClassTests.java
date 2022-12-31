@@ -1193,8 +1193,8 @@ public class ClassTests extends BaseTest {
   @Test public void classCompilationExtraStatements() {
     testError(List.of("int i = 1; class X{}"), "", "expecting 'class'");
     testError(List.of("\nint i = 1; class X{}"), "", "expecting 'class'");
-    testError(List.of("class X{}; int i = 1"), "", "expecting 'end-of-file'");
-    testError(List.of("class X{}\n int i = 1"), "", "expecting 'end-of-file'");
+    testError(List.of("class X{}; int i = 1"), "", "expecting 'EOF'");
+    testError(List.of("class X{}\n int i = 1"), "", "expecting 'EOF'");
   }
 
   @Test public void classRecompilation() {

@@ -24,6 +24,7 @@ public class Continuation extends RuntimeException {
   private AsyncTask    asyncTask;          // The blocking task that needs to be done asynchronously
   private Continuation parentContinuation; // Continuation for our parent stack frame
   private MethodHandle methodHandle;       // Handle pointing to continuation wrapper function
+  private RuntimeState runtimeState;       // ThreadLocal runtime state that needs to be restored on resumption
   public  int          methodLocation;     // Location within method where resuumption should continue
   public  long[]       localPrimitives;
   public  Object[]     localObjects;
@@ -31,7 +32,8 @@ public class Continuation extends RuntimeException {
 
   Continuation(AsyncTask asyncTask) {
     super(null, null, false, false);
-    this.asyncTask = asyncTask;
+    this.asyncTask    = asyncTask;
+    this.runtimeState = RuntimeState.getState();
   }
 
   /**
@@ -75,7 +77,10 @@ public class Continuation extends RuntimeException {
   }
 
   public Object continueExecution(Object result) {
-    // First Continuation object has no state as it was the one constructed in the async function.
+    // Restore ThreadLocal state
+    RuntimeState.setState(runtimeState);
+
+    // First Continuation object has no stack/locals as it was the one constructed in the async function.
     // Just invoke our parent's continuation to continue the code.
     return parentContinuation.doContinue(result);
   }

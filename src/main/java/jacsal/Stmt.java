@@ -65,9 +65,12 @@ abstract class Stmt {
   static class Block extends Stmt {
     Token                    openBrace;
     Stmts                    stmts;
-    List<Stmt.FunDecl>       functions  = new ArrayList<>();
+    List<Stmt.FunDecl>       functions    = new ArrayList<>();
 
     Map<String,Expr.VarDecl> variables  = new LinkedHashMap<>();
+
+    boolean isBeginBlock;
+    boolean isEndBlock;
 
     // Used to track which Stmt.Stmts we are currently resolving in case we need to insert a new statement
     // at Resolve time

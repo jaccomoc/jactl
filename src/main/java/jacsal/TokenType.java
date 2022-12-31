@@ -91,18 +91,18 @@ public enum TokenType {
   TRIPLE_GREATER_THAN_EQUAL(">>>="),
 
   //= Literals
-  IDENTIFIER("IDENTIFIER"),
-  STRING_CONST("String"),
-  INTEGER_CONST("int"),
-  LONG_CONST("long"),
-  DOUBLE_CONST("double"),
-  DECIMAL_CONST("Decimal"),
+  IDENTIFIER(),
+  STRING_CONST(),
+  INTEGER_CONST(),
+  LONG_CONST(),
+  DOUBLE_CONST(),
+  DECIMAL_CONST(),
 
   //= String expressions
-  EXPR_STRING_START("EXPR_STRING_START"),
-  EXPR_STRING_END("EXPR_STRING_END"),
-  REGEX_SUBST_START("REGEX_SUBST_START"),
-  REGEX_REPLACE("REGEX_REPLACE"),
+  EXPR_STRING_START(),
+  EXPR_STRING_END(),
+  REGEX_SUBST_START(),
+  REGEX_REPLACE(),
 
   //= Keywords
   DEF("def"),
@@ -146,23 +146,24 @@ public enum TokenType {
   DO("do"),
   PRINT("print"),
   PRINTLN("println"),
+  BEGIN("BEGIN"),
+  END("END"),
 
   //= Special
-  EOL("end-of-line"),            // End of line
-  EOF("end-of-file"),            // End of file
+  EOL(),            // End of line
+  EOF(),            // End of file
 
   // Internal use only
-  OBJECT_ARR("Object[]"),
-  LONG_ARR("long[]"),
-  STRING_ARR("String[]");
+  OBJECT_ARR(),
+  LONG_ARR(),
+  STRING_ARR();
 
   final String asString;
 
   TokenType(String str) {
     this.asString = str;
   }
-
-
+  TokenType()           { this.asString = null; }
 
   boolean is(TokenType... types) {
     for (TokenType type: types) {
@@ -220,6 +221,6 @@ public enum TokenType {
 
   @Override
   public String toString() {
-    return asString;
+    return asString != null ? asString : super.toString();
   }
 }

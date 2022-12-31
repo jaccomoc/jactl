@@ -119,13 +119,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   Resolver(JacsalContext jacsalContext, Map<String,Object> globals) {
     this.jacsalContext = jacsalContext;
     this.globals        = globals == null ? Map.of() : globals;
-    this.globals.keySet().forEach(global -> {
-      if (!jacsalContext.globalVars.containsKey(global)) {
-        Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(global),
-                                                null);
-        varDecl.type = JacsalType.typeOf(globals.get(global));
-        varDecl.isGlobal = true;
-        jacsalContext.globalVars.put(global, varDecl);
+    this.globals.keySet().forEach(name -> {
+      if (!jacsalContext.globalVars.containsKey(name)) {
+        Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)));
+        jacsalContext.globalVars.put(name, varDecl);
       }
     });
     // Build map of builtin functions, making them look like internal functions for consistency
@@ -425,7 +422,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         define(nested.nameToken, nested.varDecl);
       });
 
-      return resolve(stmt.stmts);
+      resolve(stmt.stmts);
+      return null;
     }
     finally {
       currentFunction.blocks.pop();
@@ -1758,11 +1756,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       error("Reference to '" + name + "' in static function", location);
     }
 
-    // We haven't found symbol yet so check super classes, class names, globals, and finally, builtin functions
-    if (varDecl == null) { varDecl = lookupGlobals(name, location); }
+    // We haven't found symbol yet so check super classes, class names, builtin functions
     if (varDecl == null) { varDecl = lookupClassMember(name);       }
     if (varDecl == null) { varDecl = lookupClass(name, location);   }
     if (varDecl == null) { varDecl = builtinFunctions.get(name);    }
+
+    // Finally check for global. If in repl mode then we will allow auto-creation of globals
+    // if value does not already exist.
+    if (varDecl == null) { varDecl = lookupGlobals(name, location); }
 
     if (existenceCheckOnly) {
       return varDecl;
@@ -1875,6 +1876,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // access to "this" for the script itself which we don't have.
     var global = jacsalContext.globalVars.get(name);
     if (isScriptScope()) {
+      if (jacsalContext.replMode && global == null) {
+        // Allow reference to a global to auto-create it in repl mode
+        global = createGlobalVarDecl(name, ANY);
+        jacsalContext.globalVars.put(name, global);
+      }
       return global;
     }
     if (global != null) {
@@ -2548,5 +2554,13 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private Expr.FunDecl currentFunction() {
     return getFunctions().peek();
+  }
+
+  private static Expr.VarDecl createGlobalVarDecl(String name, JacsalType type) {
+    Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(name),
+                                            null);
+    varDecl.type = type;
+    varDecl.isGlobal = true;
+    return varDecl;
   }
 }

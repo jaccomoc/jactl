@@ -22,6 +22,7 @@ import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
@@ -49,8 +50,10 @@ public class Utils {
   public static final Class JACSAL_MAP_TYPE  = LinkedHashMap.class;
   public static final Class JACSAL_LIST_TYPE = ArrayList.class;
 
-  public static final String JACSAL_GLOBALS_NAME = JACSAL_PREFIX + "globals";
-  public static final String JACSAL_OUT_NAME = "out";      // Name of global to use as PrintStream for print/println
+  public static final String JACSAL_GLOBALS_NAME   = JACSAL_PREFIX + "globals";
+  public static final String JACSAL_GLOBALS_OUTPUT = "output";   // Name of global to use as PrintStream for print/println
+  public static final String JACSAL_GLOBALS_INPUT  = "input";    // Name of global to use when reading from stdin
+
   public static final String IT_VAR          = "it";       // Name of implicit arg for closures
   public static final String CAPTURE_VAR     = "$@";       // Name of internal array for capture values of a regex
   public static final String THIS_VAR        = "this";
@@ -457,5 +460,95 @@ public class Utils {
     varDecl.funDecl = funDecl.declExpr;
     varDecl.isResultUsed = false;
     funDecl.declExpr.varDecl = varDecl;
+  }
+
+  public static Map<Character,Object> parseArgs(String[] args, String descriptor, String usage) {
+    Consumer<String> error = msg -> {
+      System.err.println(msg);
+      System.err.println(usage);
+      throw new IllegalArgumentException(msg);
+    };
+    final int OPT_VALUE = 1;
+    final int OPT_MULTI = 2;
+    Map<Character,Integer> options = new HashMap<>();
+    for (int i = 0; i < descriptor.length();) {
+      char opt = descriptor.charAt(i++);
+      char c;
+      int flags = 0;
+      while (i < descriptor.length() && !Character.isAlphabetic(c = descriptor.charAt(i))) {
+        switch (c) {
+          case ':': flags |= OPT_VALUE;    break;
+          case '*': flags |= OPT_MULTI;    break;
+          default:  throw new IllegalArgumentException("Bad modifier for " + opt + ": '" + c + "'");
+        }
+        i++;
+      }
+      options.put(opt, flags);
+    }
+
+    boolean optionsFinished = false;
+    Map<Character,Object> result = new HashMap<>();
+    List<String> files = new ArrayList<>();
+    int i;
+    ARGS: for (i = 0; i < args.length; i++) {
+      if (args[i].startsWith("-")) {
+        if (args[i].length() == 1) {
+          error.accept("Encountered option flag '-' with no option");
+        }
+        for (int j = 1; j < args[i].length(); j++) {
+          char opt = args[i].charAt(j);
+          if (opt == 'h') {
+            System.out.println(usage);
+            throw new RuntimeException();
+          }
+          if (opt == '-') {
+            i++;
+            break ARGS;
+          }
+          Integer flags = options.get(opt);
+          if (flags == null) {
+            error.accept("Unknown option '-" + opt + "'");
+          }
+          if ((flags & OPT_VALUE) != 0) {
+            String value = args[i].length() > j+1 ? args[i].substring(j+1) : i + 1 < args.length ? args[++i] : null;
+            if (value == null) {
+              error.accept("Missing value for option '-" + opt + "'");
+            }
+            if ((flags & OPT_MULTI) != 0) {
+              List<String> values = (List<String>) result.get(opt);
+              if (values == null) {
+                values = new ArrayList<>();
+                result.put(opt, values);
+              }
+              values.add(value);
+            }
+            else {
+              if (result.containsKey(opt)) {
+                error.accept("Multiple values specified for '-" + opt + "'");
+              }
+              result.put(opt, value);
+            }
+            break;
+          }
+          else {
+            if (result.containsKey(opt) && (flags & OPT_MULTI) == 0) {
+              error.accept("Multiple values specified for '-" + opt + "'");
+            }
+            // For options without values count how many times they appear
+            Integer count = (Integer) result.get(opt);
+            if (count == null) {
+              count = 0;
+            }
+            result.put(opt, count + 1);
+          }
+        }
+      }
+      else {
+        files.add(args[i]);
+      }
+    }
+    result.put('*', files);                                                 // List of files
+    result.put('@', List.of(Arrays.copyOfRange(args, i, args.length)));     // List of arguments
+    return result;
   }
 }

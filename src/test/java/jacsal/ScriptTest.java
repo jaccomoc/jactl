@@ -37,7 +37,7 @@ public class ScriptTest {
     String                expected = readResource("/jacsal/Expr.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
-    Compiler.run(script, Map.of("source", source, "out", out));
+    Compiler.run(script, Map.of("source", source, Utils.JACSAL_GLOBALS_OUTPUT, out));
     String actualOutput = baos.toString().trim();
     diff(expected, actualOutput);
   }
@@ -49,7 +49,7 @@ public class ScriptTest {
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
 
-    Compiler.run(script, Map.of("source", source, "out", out));
+    Compiler.run(script, Map.of("source", source, Utils.JACSAL_GLOBALS_OUTPUT, out));
     String actualOutput = baos.toString().trim();
 
     diff(expected, actualOutput);
