@@ -149,13 +149,16 @@ public class Parser {
       if (context.nonPrintLoop() || context.printLoop()) {
         var body = bodyStream.collect(Collectors.toList());
         Token whileToken = body.size() > 0 ? body.get(0).location : start;
-        // : while (it = nextLine())
+        // : while ((it = nextLine()) != null)
         var whileStmt = new Stmt.While(whileToken,
-                                       new Expr.VarAssign(new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)),
-                                                          new Token(EQUAL,whileToken),
-                                                          new Expr.Call(whileToken,
-                                                                        new Expr.Identifier(whileToken.newIdent("nextLine")),
-                                                                        List.of())));
+                                       new Expr.Binary(
+                                         new Expr.VarAssign(new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)),
+                                                            new Token(EQUAL,whileToken),
+                                                            new Expr.Call(whileToken,
+                                                                          new Expr.Identifier(whileToken.newIdent("nextLine")),
+                                                                          List.of())),
+                                         new Token(BANG_EQUAL, whileToken),
+                                         new Expr.Literal(new Token(NULL, whileToken).setValue(null))));
         if (context.printLoop()) {
           Expr.Print println = new Expr.Print(whileToken, new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)), true);
           println.isResultUsed = false;

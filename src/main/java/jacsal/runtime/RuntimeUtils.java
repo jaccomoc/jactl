@@ -19,8 +19,6 @@ package jacsal.runtime;
 import jacsal.TokenType;
 import jacsal.Utils;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -1658,7 +1656,7 @@ public class RuntimeUtils {
             methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
             break;
           case 1:                       // Continuing after hasNext() threw Continuation last time
-            hasNext = (boolean) c.result;
+            hasNext = (boolean) c.getResult();
             methodLocation = 2;
             break;
           case 2:                      // Have a value for "hasNext"
@@ -1669,7 +1667,7 @@ public class RuntimeUtils {
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
             break;
           case 3:                      // Continuing after iter.next() threw Continuation previous time
-            elem = c.result;
+            elem = c.getResult();
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
@@ -1820,7 +1818,9 @@ public class RuntimeUtils {
       lines.add(str.substring(lastOffset, offset));
       lastOffset = offset + 1;  // skip new line
     }
-    lines.add(str.substring(lastOffset));
+    if (lastOffset < str.length()) {
+      lines.add(str.substring(lastOffset));
+    }
     return lines;
   }
 

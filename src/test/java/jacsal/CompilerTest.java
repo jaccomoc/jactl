@@ -2150,17 +2150,17 @@ class CompilerTest extends BaseTest {
     testError("[].lines()", "no such method");
     testError("def x = []; x.lines()", "no such method");
     test("' '.lines()", List.of(" "));
-    test("'\\n'.lines()", List.of("",""));
+    test("'\\n'.lines()", List.of(""));
     test("'abc\\nxyz'.lines()", List.of("abc","xyz"));
     test("def x = ''; x.lines()", List.of(""));
     test("def x = ' '; x.lines()", List.of(" "));
-    test("def x = '\\n'; x.lines()", List.of("",""));
+    test("def x = '\\n'; x.lines()", List.of(""));
     test("def x = 'abc\\nxyz'; x.lines()", List.of("abc","xyz"));
     test("'abc\\n\\nxyz'.lines()", List.of("abc","","xyz"));
-    test("'abc\\n\\nxyz\\n'.lines()", List.of("abc","","xyz",""));
-    test("'abc\\n\\nxyz\\n\\n'.lines()", List.of("abc","","xyz","",""));
-    test("'\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","abc","","xyz","",""));
-    test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","","abc","","xyz","",""));
+    test("'abc\\n\\nxyz\\n'.lines()", List.of("abc","","xyz"));
+    test("'abc\\n\\nxyz\\n\\n'.lines()", List.of("abc","","xyz",""));
+    test("'\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","abc","","xyz",""));
+    test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", List.of("","","abc","","xyz",""));
   }
 
   @Test public void split() {
@@ -2264,6 +2264,8 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2]; x.avg()", "#1.5");
     test("def x = [1,2L,3]; def f = x.sum; f()", 6L);
     test("def x = [1,2,3]; def f = x.avg; f()", "#2");
+    test("def x = 1; def y = 2; [x,y].sum()", 3);
+    test("def f = { it + it }; def x = 1; def y = 2; [x,y].map(f).sum()", 6);
   }
 
   @Test public void stringLength() {
@@ -4832,6 +4834,9 @@ class CompilerTest extends BaseTest {
     test("def x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
     test("def f(int x, long y, String z, double d) { sleep(0,x++); sleep(0,y++); sleep(0,d++); z = sleep(0,z) * sleep(0,x); z + \": x=$x,y=$y,d=$d\" }; f(1,2,'x',3D)", "xx: x=2,y=3,d=4.0");
     test("int x = 1; long y = 2; double d = 3; sleep(0, d = sleep(0, y = sleep(0, x += sleep(0,x=3)) + x) + y) + x", 20.0D);
+    test("def x = 1; x ?= sleep(0, null as int); x", 1);
+    test("def f = null; f = { null as int }; def x = 1; x ?= sleep(0, 1) + f(); x", 1);
+    test("def f = null; f = { sleep(0,null) as int }; def x = 1; x ?= f(); x", 1);
   }
 
   @Test public void asyncFieldAccess() {
@@ -4869,6 +4874,7 @@ class CompilerTest extends BaseTest {
     test("[4,2,1,5,3].map{ sleep(1,it) * sleep(1,it) }.sort{ sleep(1,it[1]) <=> sleep(1,it[0]) }", List.of(25,16,9,4,1));
     test("sleep(0,[1,2,3].map{sleep(0,it)*sleep(0,it)})", List.of(1,4,9));
     test("def f = [1,2,3].map; sleep(0,f{sleep(0,it)*sleep(0,it)})", List.of(1,4,9));
+    testError("def f(x){sleep(0,null) as int}; [1].map(f)", "null value cannot be coerced to int");
   }
 
   @Test public void toStringTest() {
@@ -4975,7 +4981,7 @@ class CompilerTest extends BaseTest {
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
     Runnable setInput = () -> globals.put(Utils.JACSAL_GLOBALS_INPUT,
                                           input == null ? null
-                                                        : new BufferedReader(new InputStreamReader(new ByteArrayInputStream(input.getBytes()))));
+                                                        : new BufferedReader(new StringReader(input)));
     ByteArrayOutputStream output;
 
     setInput.run();
@@ -5016,6 +5022,25 @@ class CompilerTest extends BaseTest {
     replTest.accept("nextLine() == 'x'", "x",true, "");
     replTest.accept("nextLine() == 'x' && nextLine() == null", "x",true, "");
     replTest.accept("while (it = nextLine()) println it", "x",null, "x\n");
+    replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n",null, "x\ny\n\nz\n");
+  }
+
+  @Test public void stream() {
+    replTest.accept("stream{nextLine()}", "1\n4\n3\n", List.of("1","4","3"), "");
+    replTest.accept("stream{nextLine()}.size()", "1\n4\n3\n", 3, "");
+    replTest.accept("stream{nextLine() as int}", "1\n4\n3\n", List.of(1,4,3), "");
+    replTest.accept("stream(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
+  }
+
+  @Test public void grouped() {
+    test("[].grouped(2)", List.of());
+    test("[1,2].grouped(2)", List.of(List.of(1,2)));
+    test("[1].grouped(2)", List.of(List.of(1)));
+    test("[1,2,3,4].grouped(2)", List.of(List.of(1,2),List.of(3,4)));
+    test("[1,2,3].grouped(2)", List.of(List.of(1,2),List.of(3)));
+    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3,4)));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3)));
+    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
   }
 
   @Test public void fib() {

@@ -42,7 +42,7 @@ class MapIterator implements Iterator {
   private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(MapIterator.class, "hasNext$c", Object.class, MapIterator.class, Continuation.class);
 
   public static Object hasNext$c(MapIterator iter, Continuation c) {
-    return c.result;
+    return c.getResult();
   }
 
   @Override
@@ -75,7 +75,7 @@ class MapIterator implements Iterator {
         location = 2;
       }
       if (location == 1) {
-        elem = c.result;
+        elem = c.getResult();
         location = 2;
       }
       if (location == 2) {
@@ -84,7 +84,7 @@ class MapIterator implements Iterator {
       }
       else {
         // location == 3
-        return c.result;
+        return c.getResult();
       }
     }
     catch (Continuation cont) {

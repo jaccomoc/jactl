@@ -78,7 +78,10 @@ public class Jacsal {
                                  .printLoop(argMap.containsKey('p'))
                                  .nonPrintLoop(argMap.containsKey('n'))
                                  .build();
-      Compiler.run(script, context, globals);
+      var result = Compiler.run(script, context, globals);
+      if (!context.printLoop() && !context.nonPrintLoop && result != null) {
+        System.out.println(result);
+      }
       System.exit(0);
     }
     catch (CompileError e) {

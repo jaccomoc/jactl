@@ -19,6 +19,7 @@ package jacsal;
 import jacsal.runtime.FunctionDescriptor;
 
 import java.util.*;
+import java.util.function.Function;
 
 import static jacsal.JacsalType.ANY;
 import static jacsal.JacsalType.INSTANCE;
@@ -646,11 +647,21 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return true;
     }
 
-    // If function is only async if passed an async arg then check the args. Note that index 0 means the object
-    // on whom we are peforming the method call. Other arguments start at index 1 so args.get(index-1) gets the
-    // arg value for that index.
+    // If function is only async if passed an async arg then check the args.
+    // For methods note that index 0 means the object on whom we are performing the method call so other
+    // arguments start at index 1 so args.get(index-1) gets the arg value for that index.
+    // For calls to builtin functions arg0 is null and counting is as per args list indexing.
+    Function<Integer, Expr> getArg = i -> {
+      if (arg0 != null) {
+        // Method call
+        if (i == 0) { return arg0; }
+        i--;
+      }
+      return args.size() > i ? args.get(i) : null;
+    };
+
     return func.asyncArgs.stream()
-                         .map(i -> i == 0 ? arg0 : (args.size() > 0 ? args.get(i-1) : null))
+                         .map(getArg)
                          .anyMatch(this::isAsyncArg);
   }
 

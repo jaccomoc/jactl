@@ -32,6 +32,7 @@ public class BaseTest {
   protected String             packageName = Utils.DEFAULT_JACSAL_PKG;
   protected Map<String,Object> globals     = new HashMap<String,Object>();
   protected boolean            useAsyncDecorator = true;
+  protected boolean            replMode = true;
 
   protected void doTest(String code, Object expected) {
     doTest(code, true, false, false, expected);
@@ -126,19 +127,23 @@ public class BaseTest {
   protected void test(String code, Object expected) {
     doTest(code, true, false, false, expected);
     doTest(code, false, false, false, expected);
-    doTest(code, true, true, false, expected);
-    doTest(code, false, true, false, expected);
     doTest(code, true, false, true, expected);
-    doTest(code, true, true, true, expected);
+    if (replMode) {
+      doTest(code, true, true, false, expected);
+      doTest(code, false, true, false, expected);
+      doTest(code, true, true, true, expected);
+    }
   }
 
   protected void test(List<String> classCode, String scriptCode, Object expected) {
     doTest(classCode, scriptCode, true, false, false, expected);
     doTest(classCode, scriptCode, false, false, false, expected);
-    doTest(classCode, scriptCode, true, true, false, expected);
-    doTest(classCode, scriptCode, false, true, false, expected);
     doTest(classCode, scriptCode, true, false, true, expected);
-    doTest(classCode, scriptCode, true, true, true, expected);
+    if (replMode) {
+      doTest(classCode, scriptCode, true, true, false, expected);
+      doTest(classCode, scriptCode, false, true, false, expected);
+      doTest(classCode, scriptCode, true, true, true, expected);
+    }
   }
 
   protected void testError(String code, String expectedError) {

@@ -62,6 +62,7 @@ public class BuiltinFunctions {
       registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
       registerMethod("sort", "iteratorSort", ITERATOR, true, 0, List.of(0,1));
       registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("grouped", "iteratorGrouped", ITERATOR, true, 1, List.of(0));
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
 
       // String methods
@@ -84,6 +85,7 @@ public class BuiltinFunctions {
       registerGlobalFunction("sprintf", "sprintf", true, 1);
       registerGlobalFunction("sleep", "sleep", false, 1);
       registerGlobalFunction("nextLine", "nextLine", false, 0);
+      registerGlobalFunction("stream", "stream", true, 1, List.of(0));
       initialised = true;
     }
   }
@@ -108,6 +110,13 @@ public class BuiltinFunctions {
 
   private static void registerGlobalFunction(String name, String methodName, boolean needsLocation, int mandatoryArgCount) {
     var descriptor = getFunctionDescriptor(name, methodName,null, needsLocation, mandatoryArgCount);
+    globalFunctions.put(name, descriptor);
+  }
+
+  private static void registerGlobalFunction(String name, String methodName, boolean needsLocation, int mandatoryArgCount,
+                                             List<Integer> asyncArgs) {
+    var descriptor = getFunctionDescriptor(name, methodName,null, needsLocation, mandatoryArgCount);
+    descriptor.asyncArgs = asyncArgs;
     globalFunctions.put(name, descriptor);
   }
 
@@ -367,6 +376,15 @@ public class BuiltinFunctions {
     }
   }
 
+  //= stream
+  public static Iterator stream(Continuation c, String source, int offset, MethodHandle closure) {
+    return new StreamIterator(source, offset, closure);
+  }
+  public static Object streamWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, FUNCTION,1, source, offset);
+    return stream(null, source, offset, (MethodHandle)args[0]);
+  }
+
   /////////////////////////////////////
   // Methods
   /////////////////////////////////////
@@ -420,7 +438,7 @@ public class BuiltinFunctions {
   public static int iteratorSize(Iterator iterator, Continuation c) {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterator, null)
-                            : (List)c.result;
+                            : (List) c.getResult();
       return list.size();
     }
     catch (Continuation cont) {
@@ -508,6 +526,26 @@ public class BuiltinFunctions {
 
   ////////////////////////////////
 
+  // = grouped
+
+  public static Iterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
+    Iterator iter = createIterator(iterable);
+    if (size == 1) {
+      return iter;
+    }
+    if (size <= 0) {
+      throw new RuntimeError("Value for grouped() must be > 0 (was " + size + ")", source, offset);
+    }
+    return new GroupedIterator(iter, source, offset, size);
+  }
+
+  public static Object iteratorGroupedWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, INT,1, source, offset);
+    return iteratorGrouped(iterable, c, source, offset, (int)args[0]);
+  }
+
+  ////////////////////////////////
+
   // = map
 
   public static Iterator iteratorMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
@@ -573,7 +611,7 @@ public class BuiltinFunctions {
             methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
             break;
           case 1:                       // Continuing after hasNext() threw Continuation last time
-            hasNext = (boolean)c.result;
+            hasNext = (boolean) c.getResult();
             methodLocation = 2;
             break;
           case 2:                      // Have a value for "hasNext"
@@ -584,7 +622,7 @@ public class BuiltinFunctions {
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
             break;
           case 3:                      // Continuing after iter.next() threw Continuation previous time
-            elem = c.result;
+            elem = c.getResult();
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
@@ -650,7 +688,7 @@ public class BuiltinFunctions {
             methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
             break;
           case 1:                       // Continuing after hasNext() threw Continuation last time
-            hasNext = (boolean)c.result;
+            hasNext = (boolean) c.getResult();
             methodLocation = 2;
             break;
           case 2:                      // Have a value for "hasNext"
@@ -661,7 +699,7 @@ public class BuiltinFunctions {
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
             break;
           case 3:                      // Continuing after iter.next() threw Continuation previous time
-            elem = c.result;
+            elem = c.getResult();
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
@@ -670,7 +708,7 @@ public class BuiltinFunctions {
             methodLocation = 6;
             break;
           case 5:
-            transformedElem = c.result;
+            transformedElem = c.getResult();
             methodLocation = 6;
             break;
           case 6:
@@ -747,7 +785,7 @@ public class BuiltinFunctions {
             methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
             break;
           case 1:                       // Continuing after hasNext() threw Continuation last time
-            hasNext = (boolean)c.result;
+            hasNext = (boolean) c.getResult();
             methodLocation = 2;
             break;
           case 2:                      // Have a value for "hasNext"
@@ -758,7 +796,7 @@ public class BuiltinFunctions {
             methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
             break;
           case 3:                      // Continuing after iter.next() threw Continuation previous time
-            elem = c.result;
+            elem = c.getResult();
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
@@ -767,7 +805,7 @@ public class BuiltinFunctions {
             methodLocation = 6;
             break;
           case 5:
-            value = c.result;
+            value = c.getResult();
             methodLocation = 6;
             break;
           case 6:
@@ -925,7 +963,7 @@ public class BuiltinFunctions {
     Object[] currentValue = (Object[])currentValueObj;
     Object[] nextValue;
     if (c != null) {
-      nextValue = new Object[]{ c.result, elem };
+      nextValue = new Object[]{c.getResult(), elem };
     }
     else {
       if (closure == null) {
@@ -1001,7 +1039,7 @@ public class BuiltinFunctions {
         location = 2;
       }
       if (location == 1) {
-        result = (List)c.result;
+        result = (List) c.getResult();
         location = 2;
       }
       if (location == 2) {
@@ -1019,7 +1057,7 @@ public class BuiltinFunctions {
         }
       }
       else {
-        return (List)c.result;
+        return (List) c.getResult();
       }
     }
     catch (Continuation cont) {
@@ -1099,7 +1137,7 @@ public class BuiltinFunctions {
       i1 = (int)c.localPrimitives[0];
       i2 = (int)c.localPrimitives[1];
       dstPos = (int)c.localPrimitives[2];
-      comparison = c.result;
+      comparison = c.getResult();
     }
 
     // Copy, in order, to dst where dstPos is current position in dst

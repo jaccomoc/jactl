@@ -86,7 +86,7 @@ class FilterIterator implements Iterator {
             location = 2;
             break;
           case 1:
-            hasNext = (boolean) c.result;
+            hasNext = (boolean) c.getResult();
             location = 2;
             break;
           case 2:
@@ -98,7 +98,7 @@ class FilterIterator implements Iterator {
             location = 4;
             break;
           case 3:
-            elem = c.result;
+            elem = c.getResult();
             location = 4;
             break;
           case 4:
@@ -107,7 +107,7 @@ class FilterIterator implements Iterator {
             location = 6;
             break;
           case 5:
-            filterCond = c.result;
+            filterCond = c.getResult();
             location = 6;
             break;
           case 6:

@@ -1501,6 +1501,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       if (functionDescriptor.isBuiltin) {
         invokeBuiltinFunction(expr, functionDescriptor);
+        if (functionDescriptor.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
+          // If Iterator is not going to have another method invoked on it then we need to convert
+          // to List since Iterators are not standard Jacsal types.
+          invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
+                           () -> {
+                             loadNullContinuation();
+                             invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                           });
+        }
       }
       else {
         // If user defined function we need to take care of HeapLocals
@@ -3317,16 +3326,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // run when resuming (see MethodCompiler::compile()) before jumping back to place in code where we resume from.
     Runnable restoreState = () -> {
       savedState.restoreLocals(continuationVar);
-      _loadLocal(continuationVar);
-      mv.visitFieldInsn(GETFIELD, "jacsal/runtime/Continuation", "result", "Ljava/lang/Object;");
-      push(ANY);
-      if (returnType.isPrimitive()) {
-        convertTo(returnType, null, false, location);
-      }
-      else {
-        checkCast(returnType);
-      }
-      pop();
     };
     asyncStateRestorations.add(restoreState);
 
@@ -3359,6 +3358,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(ATHROW);
 
     mv.visitLabel(continuation);       // :continuation
+
+    // Check for exeption and rethrow. Otherwise convert result to return type of function we invoked.
+    loadLocal(continuationVar);
+    invokeMethod(Continuation.class, "getResult");
+    if (returnType.isPrimitive()) {
+      convertTo(returnType, null, false, location);
+    }
+    else {
+      checkCast(returnType);
+    }
+    pop();
 
     mv.visitLabel(after);              // :after
   }
@@ -3508,16 +3518,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                               finalParamTypes));
     }
     else {
-      if (func.isAsync) {
-        paramTypes = Stream.concat(Stream.of(CONTINUATION), paramTypes.stream()).collect(Collectors.toList());
-      }
       if (func.needsLocation) {
         // Add location types to the front
         paramTypes = Stream.concat(Stream.of(STRING, INT), paramTypes.stream()).collect(Collectors.toList());
       }
+      if (func.isAsync) {
+        // Add Continuation to the front if async
+        paramTypes = Stream.concat(Stream.of(CONTINUATION), paramTypes.stream()).collect(Collectors.toList());
+      }
       List<JacsalType> finalParamTypes = paramTypes;
 
-      invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
+      invokeMaybeAsync(expr.isAsync, func.returnType, 0, expr.location,
                        () -> {
                          int param = 0;
                          if (func.isAsync) {

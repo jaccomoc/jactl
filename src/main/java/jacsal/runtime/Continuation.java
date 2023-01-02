@@ -28,7 +28,7 @@ public class Continuation extends RuntimeException {
   public  int          methodLocation;     // Location within method where resuumption should continue
   public  long[]       localPrimitives;
   public  Object[]     localObjects;
-  public  Object       result;             // Result of the async call when continuing after suspend
+  private Object       result;             // Result of the async call when continuing after suspend
 
   Continuation(AsyncTask asyncTask) {
     super(null, null, false, false);
@@ -99,6 +99,10 @@ public class Continuation extends RuntimeException {
         cont.parentContinuation = c.parentContinuation;
         throw cont;
       }
+      catch (RuntimeError runtimeError) {
+        // Need to continue execution with error so that resumption code can rethrow
+        result = runtimeError;
+      }
       catch (Throwable e) {
         throw new IllegalStateException("Internal error: " + e.getMessage(), e);
       }
@@ -108,5 +112,12 @@ public class Continuation extends RuntimeException {
 
   public AsyncTask getAsyncTask() {
     return asyncTask;
+  }
+
+  public Object getResult() {
+    if (result instanceof RuntimeError) {
+      throw (RuntimeError)result;
+    }
+    return result;
   }
 }

@@ -18,6 +18,8 @@ package jacsal;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -40,21 +42,27 @@ public class AsyncTest {
   }
 
   private void sync(String source, Object expected) {
+    sync(source, "", expected);
+  }
+  private void sync(String source, String input, Object expected) {
     assertFalse(isAsync(source));
-    runTest(source, expected);
+    runTest(source, input, expected);
   }
 
   private void async(String source, Object expected) {
+    async(source,"", expected);
+  }
+  private void async(String source, String input, Object expected) {
     assertTrue(isAsync(source));
-    runTest(source, expected);
+    runTest(source, input, expected);
   }
 
-  private void runTest(String source, Object expected) {
+  private void runTest(String source, String input, Object expected) {
     var context = JacsalContext.create().debug(debugLevel).build();
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String)((String) expected).substring(1)));
     }
-    assertEquals(expected, Compiler.run(source, context, Map.of()));
+    assertEquals(expected, Compiler.run(source, context, Utils.mapOf(Utils.JACSAL_GLOBALS_INPUT, new BufferedReader(new StringReader(input)))));
   }
 
   @Test public void asyncTests() {
@@ -148,5 +156,10 @@ public class AsyncTest {
     sync("[1,2,3].avg()", "#2");
     async("[1,2,3].map{sleep(0,it)}.sum()", 6);
     async("[1,2,3].map{sleep(0,it)}.avg()", "#2");
+    async("stream{nextLine()}", "1\n2\n3", List.of("1","2","3"));
+    async("stream(nextLine)", "1\n2\n3", List.of("1","2","3"));
+    async("def f = nextLine; stream(f)", "1\n2\n3", List.of("1","2","3"));
+    async("def f = null; f = nextLine; stream(f)", "1\n2\n3", List.of("1","2","3"));
+    sync("def i = 0; stream{ i++ < 3 ? i : null }", List.of(1,2,3));
   }
 }
