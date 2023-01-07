@@ -121,7 +121,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     this.globals        = globals == null ? Map.of() : globals;
     this.globals.keySet().forEach(name -> {
       if (!jacsalContext.globalVars.containsKey(name)) {
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)));
+        Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
         jacsalContext.globalVars.put(name, varDecl);
       }
     });

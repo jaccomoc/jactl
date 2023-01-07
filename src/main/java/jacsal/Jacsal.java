@@ -19,11 +19,13 @@ package jacsal;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -70,6 +72,19 @@ public class Jacsal {
 
     globals.put("args", arguments);
     globals.put("input", new BufferedReader(new InputStreamReader(System.in)));
+    boolean[] printInvoked = new boolean[]{ false };
+    globals.put("output", new PrintStream(System.out) {
+      @Override public void print(String s) {
+        super.print(s);
+        printInvoked[0] = true;
+      }
+
+      @Override public void println(String x) {
+        super.println(x);
+        super.flush();
+        printInvoked[0] = true;
+      }
+    });
 
     try {
       var context = JacsalContext.create()
@@ -79,7 +94,9 @@ public class Jacsal {
                                  .nonPrintLoop(argMap.containsKey('n'))
                                  .build();
       var result = Compiler.run(script, context, globals);
-      if (!context.printLoop() && !context.nonPrintLoop && result != null) {
+
+      // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
+      if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
         System.out.println(result);
       }
       System.exit(0);

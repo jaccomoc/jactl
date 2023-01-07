@@ -871,6 +871,13 @@ public class ClassTests extends BaseTest {
     testError("class X { int i = 0; long j = 2 }; def x = new X(); x as List", "cannot coerce");
   }
 
+  @Test public void questionColon() {
+    testError("class X { int i }; (true ? new X(0) : [i:1]).i", "must be compatible");
+    testError("class X { int i }; (true ? [i:1] : new X(2)).i", "must be compatible");
+    test("class X { int i }; (true ? new X(0) as Map: [i:1]).i", 0);
+    test("class X { int i }; (true ? [i:1] as X: new X(2)).i", 1);
+  }
+
   @Test public void instanceOf() {
     test("class X { int i=0 }; new X() instanceof X", true);
     test("class X { int i=0 }; X x = new X(); x instanceof X", true);

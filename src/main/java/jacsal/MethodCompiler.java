@@ -1206,8 +1206,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                                                          INT;
       compile(expr.left);
       convertTo(operandType, expr.left, false, expr.left.location);
+      unbox();
       compile(expr.right);
       convertTo(operandType, expr.right, false, expr.right.location);
+      unbox();
       expect(2);
       mv.visitInsn(operandType.is(INT) ? ISUB : operandType.is(LONG) ? LCMP : DCMPL);
       pop(2);
@@ -2616,6 +2618,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case FUNCTION:   return castToFunction(location);
       case OBJECT_ARR: return castToObjectArr(location);
       case ITERATOR:   return null;  // noop
+      case NUMBER:     return castToNumber(location);
       case INSTANCE:   return castToInstance(type, expr, location);
       default:         throw new IllegalStateException("Unknown type " + type);
     }
@@ -2845,7 +2848,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    return null;
+    throw new IllegalStateException("Internal error: unexpected type " + peek());
+  }
+
+  private Void castToNumber(SourceLocation location) {
+    if (peek().isNumeric()) {
+      box();
+      return null;
+    }
+    if (peek().is(ANY)) {
+      expect(1);
+      loadLocation(location);
+      invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
+      return null;
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + peek());
   }
 
   private Void castToFunction(SourceLocation location) {
@@ -3763,7 +3780,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(Map.class, "get", Object.class);
       checkCast(varDecl.type);
       pop();
-      push(varDecl.type);
+      push(varDecl.type.boxed());
       return;
     }
 

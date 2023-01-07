@@ -270,7 +270,7 @@ public class Parser {
           }
           previousStmt = declaration;
 
-          if (peek().isNot(EOL, EOF, SEMICOLON, RIGHT_BRACE)) {
+          if (!peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
             unexpected("Expecting end of statement");
           }
         }
@@ -1528,7 +1528,7 @@ public class Parser {
   }
 
   private boolean isEndOfExpression() {
-    return peek().is(EOL,EOF,AND,OR,RIGHT_BRACE,RIGHT_PAREN,RIGHT_SQUARE,SEMICOLON,IF,UNLESS);
+    return peekIsEOL() || peek().is(EOF,AND,OR,RIGHT_BRACE,RIGHT_PAREN,RIGHT_SQUARE,SEMICOLON,IF,UNLESS);
   }
 
   /**
@@ -1719,6 +1719,10 @@ public class Parser {
     return token;
   }
 
+  private boolean peekIsEOL() {
+    return tokeniser.peek().is(EOL);
+  }
+
   private Token previous() {
     return tokeniser.previous();
   }
@@ -1866,7 +1870,7 @@ public class Parser {
     if (peek().getType().is(EOF)) {
       throw new EOFError("Unexpected EOF: " + msg, peek());
     }
-    final var chars = peek().is(EOL) ? "EOL" : peek().getChars();
+    final var chars = peekIsEOL() ? "EOL" : peek().getChars();
     error("Unexpected token '" + chars + "': " + msg);
     return null;
   }

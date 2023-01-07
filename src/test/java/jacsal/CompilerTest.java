@@ -254,6 +254,8 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void simpleVariableArithmetic() {
+    test("List x = [[1,2],[3,4]]; def h = x[1][0]\nh", 3);
+    test("def x = [[1,2],[3,4]]; def h = x[1][0]\nh", 3);
     testError("int x = 1; boolean b = true; x + b", "non-numeric operand for right-hand side");
     testError("def x = 1; def b = true; x + b", "non-numeric operand for right-hand side");
     testError("boolean b = false; int x = 1; b + x", "non-numeric operand for left-hand side");
@@ -743,6 +745,10 @@ class CompilerTest extends BaseTest {
     test("def x = 1; true ? 1 : 2L", 1L);
     test("def x = 1; x ?: 2L", 1);
     test("Map m = true ? null : [:]", null);
+    test("def x = [1]; true ? x.map() : [x]", List.of(1));
+    test("def x = [1]; false ? x.flatMap() : [x]", List.of(List.of(1)));
+    test("List x = [1]; true ? x : x.map()", List.of(1));
+    test("List x = [1]; false ? x : x.flatMap()", List.of(1));
   }
 
   @Test public void plusEquals(){
@@ -1873,7 +1879,7 @@ class CompilerTest extends BaseTest {
 
     test("def x = 1; /$x/", "1");
     test("def x = 1; def y = /$x/; y", "1");
-    test("def x = 1; def y = /\\$x/; y", "$x");
+    test("def x = 1; def y = /\\$x/; y", "\\$x");
     test("def x = 1; def y = /$x\\//; y", "1/");
     test("def x = /${1}/; x", "1");
     test("def x = 1; def y = /${x}/; y", "1");
@@ -2011,6 +2017,13 @@ class CompilerTest extends BaseTest {
     testError("def it = 'abc'; def x; for (; /a/;) ;", "regex string used in boolean context");
     test("def x = 'abc'; def y; x =~ /a/ and y = 'y'; y", "y");
     test("def x = 'a=b'; x =~ /=b/", true);
+    test("'^ cd' =~ /^\\^ cd/", true);
+    test("'$ cd' =~ /^\\$/", true);
+    test("'''\n:''' =~ /^$.:$/ms", true);
+    test("def x = 'aa'; 'abcaa' =~ /$x/", true);
+    test("def x = 'aa'; 'abcaa' =~ /\\$x/", false);
+    test("def x = 'aa'; 'abc$x' =~ /\\$x/", true);
+    test("def x = 'aa'; 'abc$x' =~ /\\$x$/", true);
   }
 
   @Test public void regexCaptureVars() {
@@ -2082,9 +2095,9 @@ class CompilerTest extends BaseTest {
     test("def it = 'abaac'; s//a/g; it", "aaabaaaaaca");
     test("def it = 'ab\\ncd'; /b$/mf", true);
     test("def it = 'ab\\n#d'; /b$\\n#/mf", true);
-    test("def it = 'ab\\ncd'; /b\\$\\nc/mf", true);
-    test("def it = 'ab\\ncd'; /b\\$.c/smf", true);
+    test("def it = 'ab\\ncd'; /b\\$\\nc/mf", false);
     test("def it = 'ab\\ncd'; /b$.c/smf", true);
+    test("def it = 'ab\\ncd'; /b\\$.c/smf", false);
     test("def it = 'ab\\ncd'; /b.c/smf", true);
   }
 
@@ -2143,6 +2156,9 @@ class CompilerTest extends BaseTest {
     test("def x = [a:true,b:false,c:true]; x.filter{it[1]}.map{it[0]}", List.of("a","c"));
     testError("[1,2,3].filter('abc')", "cannot convert");
     testError("def f = [1,2,3].filter; f('abc')", "cannot convert");
+    test("[null,null,'P'].filter{it != ' '}", Arrays.asList(null, null, "P"));
+    test("[null,null,'P'].map{sleep(0,it)}.filter{it != ' '}", Arrays.asList(null, null, "P"));
+    test("[null,null,'P'].map{sleep(0,it)}.filter{it}", List.of("P"));
   }
 
   @Test public void lines() {
@@ -2214,7 +2230,7 @@ class CompilerTest extends BaseTest {
     test("def x = ['123.5','244','124']; x.min{ it as double }", "123.5");
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.min{ it as double }", "123.5");
     test("def x = ['123.5','244','124']; def f = x.map{sleep(0,it)+sleep(0,'')}.min; f{ it as double }", "123.5");
-    testError("1.min()", "no such method");
+    test("1.min()", 0);
 
     test("[1,2,3].max()", 3);
     test("'zxyab'.max()", "z");
@@ -2234,7 +2250,8 @@ class CompilerTest extends BaseTest {
     test("def x = ['123.5','244','124']; x.max{ it as double }", "244");
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.max{ it as double }", "244");
     test("def x = ['123.5','244','124']; def f = x.map{sleep(0,it)+sleep(0,'')}.max; f{ it as double }", "244");
-    testError("1.max()", "no such method");
+    test("1.max()", 0);
+    test("3.max()", 2);
   }
 
   @Test public void testSumAvg() {
@@ -4146,6 +4163,7 @@ class CompilerTest extends BaseTest {
     test("def f = { String x, int y=1, var z='abc' -> x + y + z }; f('123')", "1231abc");
     test("def f = { for(var i=0;i<10;i++); }; f()", null);
     test("def f; f = { it = 2 -> { it * it }(it) }; f()", 4);
+    test("List trees = [[1,2],[3,4]]; def f = { x,y -> \ndef h = trees[x][y]\ntrees[x][y] + h}; f(1,0)", 6);
   }
 
   @Test public void closedOverVars() {
@@ -4239,6 +4257,12 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void builtinMethods() {
+    test("2.map{it}", List.of(0,1));
+    test("def x = 2; x.map{it}", List.of(0,1));
+    test("def x = 2; def f = x.map; f{it}", List.of(0,1));
+    test("2.size()", 2);
+    test("def x = 2; x.size()", 2);
+    test("def x = 2; def f = x.size; f()", 2);
     test("List x; x.size()", 0);
     test("List x = []; x.size()", 0);
     test("List x = [1,2,3]; x.size()", 3);
@@ -4250,7 +4274,6 @@ class CompilerTest extends BaseTest {
     test("Map x = [:]; x.size()", 0);
     test("Map x = [a:1,b:2]; x.size()", 2);
     test("Map x = [a:1,b:[c:3]]; x.b.size()", 1);
-    testError("Map x = [a:1,b:[c:3]]; x.a.size()", "no such method");
     testError("def x; x.size()", "null value");
     test("def x; def y; y ?= x.size(); y", null);
     test("def x = [:]; x.size()", 0);
@@ -4258,18 +4281,43 @@ class CompilerTest extends BaseTest {
     test("def x = [a:1,b:2]; x?.size()", 2);
     test("def x = [a:1,b:[c:3]]; x.b.size()", 1);
     test("def x = [a:1,b:[1,2,3]]; x.b.size()", 3);
-    testError("def x = [a:1,b:[c:3]]; x.a.size()", "no such method");
+    test("def x = [a:1,b:[c:3]]; x.b.c.size()", 3);
     test("def x = [1,2,3]; def f = x.size; f()", 3);
     test("List x = [1,2,3]; def f = x.size; f()", 3);
     test("def x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
     test("Map x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
     test("List x = [1,2,3]; x.'size'()", 3);
-    testError("def x = 1; x.size()", "no such method");
     testError("def x = [1]; x.sizeXXX()", "no such method");
-    testError("1.size()", "no such method");
     test("def x; def y; y = x?.size()?.size(); y", null);
     test("def x = 'size'; [1,2,3].\"$x\"()", 3);
     test("def x = 'size'; def y = [1,2,3]; y.\"$x\"()", 3);
+  }
+
+  @Test public void abs() {
+    test("abs(0)", 0);
+    test("abs(-0)", 0);
+    test("abs(-1)", 1);
+    test("abs(1)", 1);
+    test("abs(1.0)", "#1.0");
+    test("abs(-1.0)", "#1.0");
+    test("abs(1.0D)", 1.0D);
+    test("abs(-1.0D)", 1.0D);
+    test("abs(1L)", 1L);
+    test("abs(-1L)", 1L);
+    test("def f = abs; f(-1L)", 1L);
+    testError("abs('abc')", "cannot convert argument");
+    test("def x = -0; abs(x)", 0);
+    test("def x = 0; abs(x)", 0);
+    test("def x = -1; abs(x)", 1);
+    test("def x = 1; abs(x)", 1);
+    test("def x = 1.0; abs(x)", "#1.0");
+    test("def x = -1.0; abs(x)", "#1.0");
+    test("def x = 1.0D; abs(x)", 1.0D);
+    test("def x = -1.0D; abs(x)", 1.0D);
+    test("def x = 1L; abs(x)", 1L);
+    test("def x = -1L; abs(x)", 1L);
+    test("def f = abs; def x = -1L; f(x)", 1L);
+    testError("def x = 'abc'; abs(x)", "cannot be cast to Number");
   }
 
   @Test public void listEach() {
@@ -4287,6 +4335,18 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; [1,2,3].each{ x,y=2 -> sum += x+y }; sum", 12);
     test("int sum = 0; [1,2,3].each{ x=7,y=2 -> sum += x+y }; sum", 12);
     testError("int sum = 0; [1,2,3].each{ x,y -> sum += x+y }; sum", "missing mandatory argument");
+    test("0.each{}", null);
+    test("1.each{}", null);
+    test("int sum = 0; 3.each{ x=7,y=2 -> sum += x+y }; sum", 9);
+    test("''.each{}", null);
+    test("'1'.each{}", null);
+    test("def x=''; '1'.each{ x += it }; x", "1");
+    test("def x=''; 'abc'.each{ x += it }; x", "abc");
+    test("def x = 0; x.each{}", null);
+    test("def x = 1; x.each{}", null);
+    test("int sum = 0; def x = 3; x.each{ x=7,y=2 -> sum += x+y }; sum", 9);
+    test("int sum = 0; def x = 3; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
+    test("int sum = 0; def x = 3.4; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
   }
 
   @Test public void mapEach() {
@@ -4306,6 +4366,8 @@ class CompilerTest extends BaseTest {
     test("def result = ''; def x = [a:1,b:2]; x.each{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
     test("def result = ''; Map x = [a:1,b:2]; def f = x.each; f{ List x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
     test("def result = ''; def x = [a:1,b:2]; def f = x.each; f{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
+    test("3.map{ it+1 }", List.of(1,2,3));
+    test("(-3).map{ it+1 }", List.of());
   }
 
   @Test public void listCollect() {
@@ -4331,7 +4393,7 @@ class CompilerTest extends BaseTest {
   @Test public void mapCollect() {
     test("[:].collect{}", List.of());
     test("[:].collect()", List.of());
-    testError("def x = 1; x.collect{}", "no such method 'collect'");
+    test("def x = 1; x.collect{it}", List.of(0));
     test("[a:1,b:2,c:3].collect{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
     test("[a:1,b:2,c:3].collect{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
     test("[a:1,b:2,c:3].collect{ it.collect{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
@@ -4399,7 +4461,8 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3,4]; x.map{ x -> return {x*x}}.map{it()}", List.of(1,4,9,16));
     test("[:].map{}", List.of());
     test("[:].map()", List.of());
-    testError("def x = 1; x.map{}", "no such method 'map'");
+    test("def x = 1; x.map{}", Collections.singletonList(null));
+    test("def x = 1; x.map{it}", List.of(0));
     test("[a:1,b:2,c:3].map{ [it[0]+it[0],it[1]+it[1]] }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
     test("[a:1,b:2,c:3].map{ it[0]+it[0]+it[1]+it[1] }", List.of("aa11","bb22","cc33"));
     test("[a:1,b:2,c:3].map{ it.map{ it+it } }", List.of(List.of("aa",2),List.of("bb",4),List.of("cc",6)));
@@ -4434,6 +4497,55 @@ class CompilerTest extends BaseTest {
     test("def x = 'abcde'; x.map{it+it}.join()", "aabbccddee");
     test("def x = 'abcde'; def f = x.map; f{it+it}.join()", "aabbccddee");
     testError("[1,2,3].map{ -> }", "too many arguments");
+  }
+
+  @Test public void reverse() {
+    test("[].reverse()", List.of());
+    test("[1].reverse()", List.of(1));
+    test("1.reverse()", List.of(0));
+    test("'abc'.reverse().join()", "cba");
+    test("[1,2,3].reverse()", List.of(3,2,1));
+    test("[1,2,3,4].reverse()", List.of(4,3,2,1));
+    test("3.reverse()", List.of(2,1,0));
+    test("def x = []; x.reverse()", List.of());
+    test("def x = [1]; x.reverse()", List.of(1));
+    test("def x = 1; x.reverse()", List.of(0));
+    test("def x = 'abc'; x.reverse().join()", "cba");
+    test("def x = [1,2,3]; x.reverse()", List.of(3,2,1));
+    test("def x = [1,2,3,4]; x.reverse()", List.of(4,3,2,1));
+    test("def x = [1,2,3,4]; def f = x.reverse; f()", List.of(4,3,2,1));
+    test("def x = 3; x.reverse()", List.of(2,1,0));
+  }
+
+  @Test public void collectionFlatMap() {
+    test("[].flatMap()", List.of());
+    test("def f = [].flatMap; f()", List.of());
+    testError("[].flatMap{}{}", "too many arguments");
+    testError("def x = []; x.flatMap{}{}", "too many arguments");
+    test("[].flatMap{}", List.of());
+    test("[1,2,3].flatMap{}", List.of());
+    test("[1,2,3].flatMap()", List.of(1,2,3));
+    test("['a','abc','xyz'].flatMap{ it.map{it} }", List.of("a", "a", "b", "c", "x", "y", "z"));
+    test("def x = [1,2,3]; x.flatMap{}", List.of());
+    test("def x = [1,2,3]; x.flatMap()", List.of(1,2,3));
+    test("def x = []; x.flatMap{}", List.of());
+    test("def x = []; x.flatMap()", List.of());
+    test("List x = []; x.flatMap{}", List.of());
+    testError("def x; x.flatMap{}", "null value");
+    test("[:].flatMap{}", List.of());
+    test("[:].flatMap()", List.of());
+    test("[a:1,b:2,c:3].flatMap{ [it[0]+it[0],it[1]+it[1]] }", List.of("aa", 2, "bb", 4, "cc", 6));
+    test("def x = [1,2,3]; def y = x.flatMap{}; y.size()", 0);
+    test("var x = [1,2,3]; def y = x.flatMap{}; y.size()", 0);
+    test("def x = [1,2,3]; def y = x.flatMap{[it]}; y.size()", 3);
+    test("'abcde'.flatMap{it+it}.join()", "aabbccddee");
+    test("def x = 'abcde'; x.flatMap{it+it}.join()", "aabbccddee");
+    test("def x = 'abcde'; def f = x.flatMap; f{it+it}.join()", "aabbccddee");
+    testError("[1,2,3].flatMap{ -> }", "too many arguments");
+    test("[1,[2,3,4]].flatMap()", List.of(1,2,3,4));
+    test("[1,[2,3,4]].flatMap{ it instanceof List ? it : [it] }", List.of(1,2,3,4));
+    test("[1,[2,[3,4],5]].flatMap()", List.of(1,2,List.of(3,4), 5));
+    test("[1,[2,[3,4],5]].flatMap{ it instanceof List ? it.flatMap() : it }", List.of(1,2,3,4,5));
   }
 
   @Test public void mapEntryAsList() {
@@ -4627,6 +4739,7 @@ class CompilerTest extends BaseTest {
     test("[] + 1", List.of(1));
     test("[] + [a:1]", List.of(Map.of("a",1)));
     test("[1] + 2", List.of(1,2));
+    test("[1] + [2]", List.of(1,2));
     test("[1,2] + [3,4]", List.of(1,2,3,4));
     test("def x = [1,2]; x + [3,4]", List.of(1,2,3,4));
     test("def x = [1,2]; def y = [3,4]; x + y", List.of(1,2,3,4));
@@ -4748,6 +4861,17 @@ class CompilerTest extends BaseTest {
     testError("sprintf('%zs%d','x','y')", "bad format string");
     testError("sprintf()", "missing mandatory arguments");
     testError("def f = sprintf; f()", "missing mandatory arguments");
+  }
+
+  @Test public void eval() {
+    test("eval('1',[:])", 1);
+    test("eval('x + 1',[x:3])", 4);
+    test("eval('x + 1',[x:3]) + eval('x+3',[x:3])", 10);
+    test("eval('x x + 1',[x:3])", null);
+    test("def vars = [x:3]; eval('x x + 1',vars); vars.'$error' =~ /unexpected token/i", true);
+    test("def vars = [:]; eval('''def x = 'abc'; output = x.size()''',vars); vars.output", 3);
+    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[:])", 10);
+    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[:])", 10);
   }
 
   @Test public void asyncFunctions() {

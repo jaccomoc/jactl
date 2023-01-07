@@ -22,6 +22,7 @@ import jacsal.runtime.HeapLocal;
 import jacsal.runtime.RegexMatcher;
 import org.objectweb.asm.Type;
 
+import javax.crypto.spec.PSource;
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -68,6 +69,7 @@ public class JacsalType {
     LONG_ARR,
     STRING_ARR,
     ITERATOR,
+    NUMBER,
     MATCHER,
     CONTINUATION,
     UNKNOWN        // Used as placeholder for "var" until we know type of initialiser for a variable
@@ -93,6 +95,7 @@ public class JacsalType {
   public static JacsalType LONG_ARR     = createRefType(TypeEnum.LONG_ARR);
   public static JacsalType STRING_ARR   = createRefType(TypeEnum.STRING_ARR);
   public static JacsalType ITERATOR     = createRefType(TypeEnum.ITERATOR);
+  public static JacsalType NUMBER       = createRefType(TypeEnum.NUMBER);
   public static JacsalType MATCHER      = createRefType(TypeEnum.MATCHER);
   public static JacsalType CONTINUATION = createRefType(TypeEnum.CONTINUATION);
   public static JacsalType INSTANCE     = createRefType(TypeEnum.INSTANCE);
@@ -222,6 +225,7 @@ public class JacsalType {
       case LIST:       return TokenType.LIST;
       case ANY:        return TokenType.DEF;
       case FUNCTION:   return TokenType.DEF;
+      case NUMBER:     return TokenType.NUMBER;
       case OBJECT_ARR: return TokenType.OBJECT_ARR;
       case LONG_ARR:   return TokenType.LONG_ARR;
       case STRING_ARR: return TokenType.STRING_ARR;
@@ -240,6 +244,7 @@ public class JacsalType {
       case LONG:
       case DOUBLE:
       case DECIMAL:
+      case NUMBER:
         return true;
       default:
         return false;
@@ -336,24 +341,25 @@ public class JacsalType {
   }
 
   private static List                            resultTypes = List.of(
-    new TypePair(INT, LONG),       LONG,
-    new TypePair(INT, DOUBLE),     DOUBLE,
-    new TypePair(INT, DECIMAL),    DECIMAL,
-    new TypePair(INT, STRING),     STRING,
-    new TypePair(INT, ANY),        ANY,
+    new TypePair(INT,     LONG),      LONG,
+    new TypePair(INT,     DOUBLE),    DOUBLE,
+    new TypePair(INT,     DECIMAL),   DECIMAL,
+    new TypePair(INT,     STRING),    STRING,
+    new TypePair(INT,     ANY),       ANY,
 
-    new TypePair(DOUBLE, LONG),    DOUBLE,
-    new TypePair(DOUBLE, DECIMAL), DECIMAL,
-    new TypePair(DOUBLE, STRING),  STRING,
-    new TypePair(DOUBLE, ANY),     ANY,
+    new TypePair(DOUBLE,   LONG),     DOUBLE,
+    new TypePair(DOUBLE,   DECIMAL),  DECIMAL,
+    new TypePair(DOUBLE,   STRING),   STRING,
+    new TypePair(DOUBLE,   ANY),      ANY,
 
-    new TypePair(DECIMAL, LONG),    DECIMAL,
-    new TypePair(DECIMAL, STRING),  STRING,
-    new TypePair(DECIMAL, ANY),     ANY,
+    new TypePair(DECIMAL,  LONG),     DECIMAL,
+    new TypePair(DECIMAL,  STRING),   STRING,
+    new TypePair(DECIMAL,  ANY),      ANY,
 
-    new TypePair(STRING, BOOLEAN), STRING,
-    new TypePair(STRING, LONG),    STRING,
-    new TypePair(STRING, ANY),     ANY
+    new TypePair(STRING,   BOOLEAN),  STRING,
+    new TypePair(STRING,   LONG),     STRING,
+    new TypePair(STRING,   ANY),      ANY,
+    new TypePair(LIST,     ITERATOR), LIST
   );
   private static final Map<TypePair, JacsalType> resultMap   = new HashMap<>();
   static {
@@ -426,7 +432,7 @@ public class JacsalType {
         if (result != null) {
           return result;
         }
-        throw new IllegalStateException("Internal error: no result type for (" + type1 +", " + type2 + ")");
+        throw new CompileError("Types for both true and false cases must be compatible", operator);
       }
       return type1;
     }
@@ -482,11 +488,13 @@ public class JacsalType {
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       return otherType.getClassDescriptor().isAssignableFrom(this.getClassDescriptor());
     }
-    if (is(CLASS) || otherType.is(CLASS))        { return false; }
-    if (isBoxedOrUnboxed(otherType))             { return true; }
-    if (is(ANY) || otherType.is(ANY))            { return true; }
-    if (isNumeric() && otherType.isNumeric())    { return true; }
-    if (is(MAP) && otherType.is(INSTANCE))       { return true; }
+    if (is(CLASS) || otherType.is(CLASS))                 { return false; }
+    if (isBoxedOrUnboxed(otherType))                      { return true; }
+    if (is(ANY) || otherType.is(ANY))                     { return true; }
+    if (isNumeric() && otherType.isNumeric())             { return true; }
+    if (is(MAP) && otherType.is(INSTANCE))                { return true; }
+    if (is(MAP,INSTANCE) && otherType.is(MAP,INSTANCE))   { return true; }
+    if (is(LIST,ITERATOR) && otherType.is(LIST,ITERATOR)) { return true; }
     return false;
   }
 
@@ -532,6 +540,7 @@ public class JacsalType {
       case LONG_ARR:       return Type.getType(long[].class);
       case STRING_ARR:     return Type.getType(String[].class);
       case ITERATOR:       return Type.getType(Iterator.class);
+      case NUMBER:         return Type.getType(Number.class);
       case MATCHER:        return Type.getType(RegexMatcher.class);
       case CONTINUATION:   return Type.getType(Continuation.class);
       default:             throw new IllegalStateException("Internal error: unexpected type " + this.type);
@@ -555,6 +564,7 @@ public class JacsalType {
       case LONG_ARR:     return Type.getInternalName(long[].class);
       case STRING_ARR:   return Type.getInternalName(String[].class);
       case ITERATOR:     return Type.getInternalName(Iterator.class);
+      case NUMBER:       return Type.getInternalName(Number.class);
       case MATCHER:      return Type.getInternalName(RegexMatcher.class);
       case CONTINUATION: return Type.getInternalName(Continuation.class);
       case INSTANCE:
@@ -605,6 +615,7 @@ public class JacsalType {
     if (clss == String[].class)     { return STRING_ARR;    }
     if (clss == Object[].class)     { return OBJECT_ARR;    }
     if (clss == Iterator.class)     { return ITERATOR;      }
+    if (clss == Number.class)       { return NUMBER;        }
     if (clss == RegexMatcher.class) { return MATCHER;       }
     if (clss == Continuation.class) { return CONTINUATION;  }
     if (clss == Object.class)       { return ANY;           }
@@ -659,6 +670,7 @@ public class JacsalType {
       case STRING_ARR:   return "String[]";
       case MATCHER:      return "Matcher";
       case ITERATOR:     return "Iterator";
+      case NUMBER:       return "Number";
       case CONTINUATION: return "Continuation";
       case INSTANCE:     return "Instance<" + getPackagedName() + ">";
       case CLASS:        return "Class<" + getPackagedName() + ">";

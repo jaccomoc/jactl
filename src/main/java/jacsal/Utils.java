@@ -54,6 +54,8 @@ public class Utils {
   public static final String JACSAL_GLOBALS_OUTPUT = "output";   // Name of global to use as PrintStream for print/println
   public static final String JACSAL_GLOBALS_INPUT  = "input";    // Name of global to use when reading from stdin
 
+  public static final String EVAL_ERROR      = "$error";   // Name of output variable containing error (if any) for eval()
+
   public static final String IT_VAR          = "it";       // Name of implicit arg for closures
   public static final String CAPTURE_VAR     = "$@";       // Name of internal array for capture values of a regex
   public static final String THIS_VAR        = "this";

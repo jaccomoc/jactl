@@ -156,7 +156,8 @@ public enum TokenType {
   // Internal use only
   OBJECT_ARR(),
   LONG_ARR(),
-  STRING_ARR();
+  STRING_ARR(),
+  NUMBER();
 
   final String asString;
 

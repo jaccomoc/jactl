@@ -16,8 +16,8 @@
 
 package jacsal.runtime;
 
-import jacsal.JacsalType;
-import jacsal.Utils;
+import jacsal.*;
+import jacsal.Compiler;
 import org.objectweb.asm.Type;
 
 import java.io.BufferedReader;
@@ -49,6 +49,7 @@ public class BuiltinFunctions {
       registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));
       registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
       registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
+      registerMethod("reverse", "iteratorReverse", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
       registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(0,2));
       registerMethod("min", "iteratorMin", ITERATOR, true, 0, List.of(0,1));
@@ -62,6 +63,7 @@ public class BuiltinFunctions {
       registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
       registerMethod("sort", "iteratorSort", ITERATOR, true, 0, List.of(0,1));
       registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("flatMap", "iteratorFlatMap", ITERATOR, true, 0, List.of(0,1));
       registerMethod("grouped", "iteratorGrouped", ITERATOR, true, 1, List.of(0));
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
 
@@ -86,6 +88,9 @@ public class BuiltinFunctions {
       registerGlobalFunction("sleep", "sleep", false, 1);
       registerGlobalFunction("nextLine", "nextLine", false, 0);
       registerGlobalFunction("stream", "stream", true, 1, List.of(0));
+      registerGlobalFunction("abs", "abs", false, 1);
+      registerGlobalFunction("eval", "eval", false, 2);
+
       initialised = true;
     }
   }
@@ -376,13 +381,64 @@ public class BuiltinFunctions {
     }
   }
 
-  //= stream
+  // = stream
   public static Iterator stream(Continuation c, String source, int offset, MethodHandle closure) {
     return new StreamIterator(source, offset, closure);
   }
   public static Object streamWrapper(Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, FUNCTION,1, source, offset);
     return stream(null, source, offset, (MethodHandle)args[0]);
+  }
+
+  // = eval
+  public static Object eval(Continuation c, String code, Map bindings) {
+    if (c != null) {
+      return c.getResult();
+    }
+    try {
+      var context = JacsalContext.create().replMode(true).build();
+      var script = Compiler.compileScript(code, context, bindings);
+      return script.apply(bindings);
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, evalHandle, 0, null, null);
+    }
+    catch (JacsalError e) {
+      bindings.put(Utils.EVAL_ERROR, e.toString());
+      return null;
+    }
+  }
+  public static Object evalWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 2, STRING,2, source, offset);
+    if (!(args[1] instanceof Map)) {
+      throw new RuntimeError("Argument of type " + RuntimeUtils.className(args[1]) + " cannot be converted to Map", source, offset);
+    }
+    return eval(null, (String)args[0], (Map)args[1]);
+  }
+  private static MethodHandle evalHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "eval$c", Object.class, Continuation.class);
+  public static Object eval$c(Continuation c) {
+    return eval(c, null, null);
+  }
+
+  // = abs
+  public static Object abs(Number num) {
+    if (num instanceof BigDecimal) {
+      return ((BigDecimal)num).abs();
+    }
+    if (num instanceof Double) {
+      double d = (double)num;
+      return d < 0 ? -d : d;
+    }
+    if (num instanceof Long) {
+      long n = (long)num;
+      return n < 0 ? -n : n;
+    }
+    int n = (int)num;
+    return n < 0 ? -n : n;
+  }
+  public static Object absWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, NUMBER,1, source, offset);
+    return abs((Number)args[0]);
   }
 
   /////////////////////////////////////
@@ -435,23 +491,23 @@ public class BuiltinFunctions {
     return list.length;
   }
 
-  public static int iteratorSize(Iterator iterator, Continuation c) {
+  public static int iteratorSize(Object iterable, Continuation c) {
     try {
-      List list = c == null ? RuntimeUtils.convertIteratorToList(iterator, null)
+      List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
                             : (List) c.getResult();
       return list.size();
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorSizeHandle.bindTo(iterator), 0, null, null);
+      throw new Continuation(cont, iteratorSizeHandle.bindTo(iterable), 0, null, null);
     }
   }
-  private static MethodHandle iteratorSizeHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSize$c", Object.class, Iterator.class, Continuation.class);
-  public static Object iteratorSize$c(Iterator iterator, Continuation c) {
-    return iteratorSize(iterator, c);
+  private static MethodHandle iteratorSizeHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSize$c", Object.class, Object.class, Continuation.class);
+  public static Object iteratorSize$c(Object iterable, Continuation c) {
+    return iteratorSize(iterable, c);
   }
-  public static Object iteratorSizeWrapper(Iterator iterator, Continuation c, String source, int offset, Object[] args) {
+  public static Object iteratorSizeWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, null,0, source, offset);
-    return iteratorSize(iterator, c);
+    return iteratorSize(iterable, c);
   }
 
   ////////////////////////////////
@@ -459,7 +515,7 @@ public class BuiltinFunctions {
   // = filter
 
   public static Iterator iteratorFilter(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    Iterator iter = createIterator(iterable);
+    Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, closure);
   }
   public static Object iteratorFilterWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
@@ -474,10 +530,37 @@ public class BuiltinFunctions {
 
   ////////////////////////////////
 
+  // = reverse
+
+  public static List iteratorReverse(Object iterable, Continuation c) {
+    try {
+      List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
+                            : (List) c.getResult();
+      List result = new ArrayList(list.size());
+      for (int i = list.size() - 1; i >= 0; i--) {
+        result.add(list.get(i));
+      }
+      return result;
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, iteratorSizeHandle.bindTo(iterable), 0, null, null);
+    }
+  }
+  private static MethodHandle iteratorReverseHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSize$c", Object.class, Object.class, Continuation.class);
+  public static Object iteratorReverse$c(Object iterable, Continuation c) {
+    return iteratorReverse(iterable, c);
+  }
+  public static Object iteratorReverseWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, null,0, source, offset);
+    return iteratorReverse(iterable, c);
+  }
+
+  ////////////////////////////////
+
   // = skip
 
   public static Iterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
-    Iterator iter = createIterator(iterable);
+    Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new AtomicInteger(0)));
   }
 
@@ -503,7 +586,7 @@ public class BuiltinFunctions {
   // = limit
 
   public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int count) {
-    Iterator iter = createIterator(iterable);
+    Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, limitHandle.bindTo(count).bindTo(new AtomicInteger(0)));
   }
 
@@ -529,7 +612,7 @@ public class BuiltinFunctions {
   // = grouped
 
   public static Iterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
-    Iterator iter = createIterator(iterable);
+    Iterator iter = RuntimeUtils.createIterator(iterable);
     if (size == 1) {
       return iter;
     }
@@ -549,7 +632,7 @@ public class BuiltinFunctions {
   // = map
 
   public static Iterator iteratorMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    Iterator iter = createIterator(iterable);
+    Iterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure);
   }
 
@@ -563,35 +646,31 @@ public class BuiltinFunctions {
     }
   }
 
-  private static Iterator createIterator(Object obj) {
-    if (obj instanceof Iterator) { return (Iterator)obj;                    }
-    if (obj instanceof Iterable) { return ((Iterable)obj).iterator();       }
-    if (obj instanceof Map)      { return ((Map)obj).entrySet().iterator(); }
-    if (obj instanceof Object[]) {
-      Object[] arr = (Object[])obj;
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < arr.length; }
-        @Override public Object next()     { return arr[index++];       }
-      };
-    }
-    if (obj instanceof String)  {
-      String str = (String)obj;
-      return new Iterator<String>() {
-        int i = 0;
-        @Override public boolean hasNext() { return i < str.length(); }
-        @Override public String next()     { return Character.toString(str.charAt(i++)); }
-      };
-    }
-    throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
+  ////////////////////////////////
+
+  // = flatMap
+
+  public static Iterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+    Iterator iter = RuntimeUtils.createIterator(iterable);
+    return new FlatMapIterator(iter, source, offset, closure);
   }
 
-  /////////////////////////////////////
+  public static Object iteratorFlatMapWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, FUNCTION,1, source, offset);
+    try {
+      return iteratorFlatMap(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
+    }
+  }
+
+  //////////////////////////////////
 
   // = each
 
   public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorEach$c(createIterator(iterable), source, offset, closure, null);
+    return iteratorEach$c(RuntimeUtils.createIterator(iterable), source, offset, closure, null);
   }
   public static Object iteratorEach$c(Iterator iter, String source, Integer offset, MethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
@@ -667,7 +746,7 @@ public class BuiltinFunctions {
   // = collect
 
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorCollect$c(createIterator(iterable), new ArrayList(), (list,elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
+    return iteratorCollect$c(RuntimeUtils.createIterator(iterable), new ArrayList(), (list, elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
   }
   public static Object iteratorCollect$c(Iterator iter, Object result, BiFunction<Object,Object,Object> collector, String source, Integer offset, MethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
@@ -751,7 +830,7 @@ public class BuiltinFunctions {
   // = reduce
 
   public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, MethodHandle closure) {
-    return iteratorReduce$c(createIterator(iterable), source, offset, initialValue, (value,elem) -> {
+    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, initialValue, (value, elem) -> {
       elem = Arrays.asList(value, elem);
       try {
         return closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
@@ -857,7 +936,7 @@ public class BuiltinFunctions {
                                : strValue.concat(joinStr).concat(RuntimeUtils.toString(elem));
       }
     };
-    return (String)iteratorCollect$c(createIterator(iterable), "", joiner, source, offset, null, c);
+    return (String)iteratorCollect$c(RuntimeUtils.createIterator(iterable), "", joiner, source, offset, null, c);
   }
 
   public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
@@ -876,7 +955,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
     int[] counter = new int[]{0};
-    return iteratorReduce$c(createIterator(iterable), source, offset, BigDecimal.ZERO,
+    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO,
                             (value,elem) -> {
                               counter[0]++;
                               return addNumbers(value, elem, source, offset);
@@ -899,7 +978,7 @@ public class BuiltinFunctions {
   // = sum
 
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
-    return iteratorReduce$c(createIterator(iterable), source, offset, 0,
+    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, 0,
                             (value,elem) -> addNumbers(value, elem, source, offset),
                             (value) -> value,
                             c);
@@ -933,7 +1012,7 @@ public class BuiltinFunctions {
   // = min/max
 
   public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorReduce$c(createIterator(iterable), source, offset, null,
+    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, null,
                             (value,elem) -> minMaxInvoker(source, offset, closure, false, value, elem, c),
                             (value) -> value == null ? null : ((Object[])value)[1],
                             c);
@@ -945,7 +1024,7 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorReduce$c(createIterator(iterable), source, offset, null,
+    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, null,
                             (value,elem) -> minMaxInvoker(source, offset, closure, true, value, elem, c),
                             (value) -> value == null ? null : ((Object[])value)[1],
                             c);
@@ -1003,7 +1082,7 @@ public class BuiltinFunctions {
       RuntimeUtils.addMapEntry((Map) mapObj, elem, source, offset);
       return mapObj;
     };
-    return iteratorCollect$c(createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
+    return iteratorCollect$c(RuntimeUtils.createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
   }
 
   public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
@@ -1035,7 +1114,7 @@ public class BuiltinFunctions {
     try {
       if (location == 0) {
         result = iterable instanceof List ? new ArrayList((List) iterable)
-                                          : RuntimeUtils.convertIteratorToList(createIterator(iterable), null);
+                                          : RuntimeUtils.convertIteratorToList(RuntimeUtils.createIterator(iterable), null);
         location = 2;
       }
       if (location == 1) {
@@ -1293,7 +1372,7 @@ public class BuiltinFunctions {
       };
     }
     if (regex.isEmpty()) {
-      return createIterator(str);
+      return RuntimeUtils.createIterator(str);
     }
     var matcher = RuntimeUtils.getMatcher(str, regex, modifiers, source, offset);
     return new Iterator() {

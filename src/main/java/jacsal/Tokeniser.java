@@ -354,7 +354,8 @@ public class Tokeniser {
     switch (c) {
       case '$': {
         // We either have an identifer following or as '{'
-        if (charAt(1) == '{') {
+        int nextChar = charAt(1);
+        if (nextChar == '{') {
           inString = false;
           // Remember where we are so that when we see matching '}' we go back into string expr mode
           currentStringState.braceLevel = nestedBraces++;
@@ -364,12 +365,17 @@ public class Tokeniser {
           advance(1);
         }
         else {
+          // If we are in a regex string then we allow '$' without requiring a valid identifier
+          if (!escapeChars && !Character.isDigit(nextChar) && !isIdentifierStart(nextChar)) {
+            break;
+          }
+
           // We know that we have an identifier following the '$' in this case because
           // we would have already swollowed the '$' in previous parseString() call if there
           // was no identifier following the '$'. For capture vars the '$' is part of the name
           // so we don't advance past the '$'.
-          if (!Character.isDigit(charAt(1))) {
-            advance(1);
+          if (!Character.isDigit(nextChar)) {
+            advance(1);  // Skip '$'
           }
           token = parseIdentifier(createToken(), remaining);
           if (keyWords.contains(token.getChars())) {
@@ -655,15 +661,14 @@ public class Tokeniser {
             c = escapedChar(charAt(0));
           }
           else {
-            // Only thing we can escape is the end of string and $. Otherwise \ is just a \
+            // Only thing we can escape is the end of string. For everything else leave '\' in the string as is.
             int nextChar = charAt(1);
-            // For replacement strings, if the $ is escaped we leave as \$ to tell regex substitution
-            // not to interpret \$1 as $1, for example
-            if (isReplace && nextChar == '$') {
-              sb.append('\\');
+            if (nextChar == endChar) {
+              advance(1);
+              c = nextChar;
             }
-
-            if (nextChar == endChar || nextChar == '$') {
+            if (nextChar == '$') {
+              sb.append('\\');
               advance(1);
               c = nextChar;
             }

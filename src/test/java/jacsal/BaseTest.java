@@ -118,7 +118,7 @@ public class BaseTest {
     //analyser.testAsync = testAsync;
     analyser.analyseClass(code);
     if (isScript) {
-      return Compiler.compile(source, jacsalContext, code);
+      return Compiler.compileWithFuture(source, jacsalContext, code);
     }
     Compiler.compileClass(source, jacsalContext, packageName, code);
     return null;
@@ -194,6 +194,6 @@ public class BaseTest {
                                                .debug(0)
                                                .build();
     Map<String, Object> globals = new HashMap<>();
-    return Compiler.compileScript(code, jacsalContext, globals);
+    return Compiler.compileScriptWithFuture(code, jacsalContext, globals);
   }
 }

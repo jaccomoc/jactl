@@ -1509,6 +1509,63 @@ public class RuntimeUtils {
     return value;
   }
 
+  /**
+   * Create an iterator from List, Map, Object[] or if not one of those
+   * then return an iterator over singleton list containing given object.
+   * Used by flatMap to give results that more closely match what would
+   * be naively expected rather than createIterator() which would turn
+   * String and Number objects into lists of chars or list of numbers.
+   */
+  public static Iterator createIteratorFlatMap(Object obj) {
+    Iterator iter = doCreateIterator(obj);
+    if (iter != null) {
+      return iter;
+    }
+    if (obj == null) {
+      return List.of().iterator();
+    }
+    return List.of(obj).iterator();
+  }
+
+  public static Iterator createIterator(Object obj) {
+    Iterator iter = doCreateIterator(obj);
+    if (iter != null) {
+      return iter;
+    }
+    if (obj instanceof Number) {
+      long num = ((Number)obj).longValue();
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < num; }
+        @Override public Object next()     { return index++;     }
+      };
+    }
+    if (obj instanceof String)  {
+      String str = (String)obj;
+      return new Iterator<String>() {
+        int i = 0;
+        @Override public boolean hasNext() { return i < str.length(); }
+        @Override public String next()     { return Character.toString(str.charAt(i++)); }
+      };
+    }
+    throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
+  }
+
+  private static Iterator doCreateIterator(Object obj) {
+    if (obj instanceof Iterator) { return (Iterator)obj;                    }
+    if (obj instanceof Iterable) { return ((Iterable)obj).iterator();       }
+    if (obj instanceof Map)      { return ((Map)obj).entrySet().iterator(); }
+    if (obj instanceof Object[]) {
+      Object[] arr = (Object[])obj;
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < arr.length; }
+        @Override public Object next()     { return arr[index++];       }
+      };
+    }
+    return null;
+  }
+
   private enum FieldType {
     BOOLEAN,
     INT,
@@ -1630,8 +1687,8 @@ public class RuntimeUtils {
     return convertIteratorToList(iterAsObj, c);
   }
 
-  public static List convertIteratorToList(Object iterAsObj, Continuation c) {
-    Iterator iter = (Iterator) iterAsObj;
+  public static List convertIteratorToList(Object iterable, Continuation c) {
+    Iterator iter = createIterator(iterable);
 
     // If we are continuing (c != null) then get objects we have stored previously.
     // Object arr will have: result
@@ -1682,7 +1739,7 @@ public class RuntimeUtils {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterAsObj), methodLocation + 1, null, new Object[]{result});
+      throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterable), methodLocation + 1, null, new Object[]{result});
     }
   }
 

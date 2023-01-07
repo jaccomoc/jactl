@@ -31,6 +31,7 @@ class FilterIterator implements Iterator {
   int          offset;
   MethodHandle closure;
   Object       next;
+  boolean      hasNext = false;
 
   FilterIterator(Iterator iter, String source, int offset, MethodHandle closure) {
     this.iter = iter;
@@ -47,12 +48,12 @@ class FilterIterator implements Iterator {
 
   @Override
   public boolean hasNext() {
-    if (next != null) {
+    if (hasNext) {
       return true;
     }
     try {
       findNext(null);
-      return next != null;
+      return hasNext;
     }
     catch (Continuation cont) {
       throw new Continuation(cont, hasNextHandle.bindTo(this), 0, null, null);
@@ -69,7 +70,6 @@ class FilterIterator implements Iterator {
   private void findNext(Continuation c) {
     int     location   = c == null ? 0 : c.methodLocation;
     Object  elem       = c == null ? null : c.localObjects[0];
-    boolean hasNext    = false;
     Object  filterCond = null;
     try {
       // Implement a simple state machine. Every even state is where we attempt to synchronously do something.
@@ -148,8 +148,9 @@ class FilterIterator implements Iterator {
 
   private Object doNext(Continuation c) {
     if (c == null) {
-      if (next == null) {
+      if (!hasNext) {
         try {
+          next = null;
           findNext(null);
         }
         catch (Continuation cont) {
@@ -157,8 +158,7 @@ class FilterIterator implements Iterator {
         }
       }
     }
-    Object result = next;
-    next = null;
-    return result;
+    hasNext = false;
+    return next;
   }
 }

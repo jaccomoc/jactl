@@ -91,15 +91,10 @@ public class Functions {
     }
 
     // Look for exact match and then generic match.
-    // Number classes (int, long, double, Decimal) can match on Number and
     // List/Map/Object[]/String can match on Iterable.
     var match = functions.stream().filter(f -> f.type.is(type)).findFirst();
     if (match.isEmpty()) {
-      if (type.isNumeric()) {
-        // TODO
-      }
-      else
-      if (type.is(LIST,MAP,OBJECT_ARR,STRING)) {
+      if (type.is(LIST,MAP,OBJECT_ARR,STRING,INT,LONG,DOUBLE,DECIMAL)) {
         match = functions.stream().filter(f -> f.type == ITERATOR).findFirst();
       }
     }

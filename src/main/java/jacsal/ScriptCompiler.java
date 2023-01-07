@@ -16,10 +16,7 @@
 
 package jacsal;
 
-import jacsal.runtime.AsyncTask;
-import jacsal.runtime.Continuation;
-import jacsal.runtime.RuntimeState;
-import jacsal.runtime.RuntimeUtils;
+import jacsal.runtime.*;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
 
@@ -39,7 +36,30 @@ public class ScriptCompiler extends ClassCompiler {
     super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jacsal");
   }
 
-  public Function<Map<String,Object>, Future<Object>> compile() {
+  public Function<Map<String,Object>, Future<Object>> compileWithFuture() {
+    var scriptMain = compile();
+
+    return map -> {
+      var future = new CompletableFuture<>();
+      RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
+      RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
+      try {
+        future.complete(scriptMain.apply(map));
+      }
+      catch (Continuation c) {
+        blockingWork(future, c);
+      }
+      catch (JacsalError | IllegalStateException | IllegalArgumentException e) {
+        future.complete(e);
+      }
+      catch (Throwable t) {
+        future.complete(new IllegalStateException("Invocation error: " + t, t));
+      }
+      return future;
+    };
+  }
+
+  public Function<Map<String,Object>, Object> compile() {
     FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
     globalVars.visitEnd();
 
@@ -48,29 +68,27 @@ public class ScriptCompiler extends ClassCompiler {
     finishClassCompile();
 
     try {
-      MethodType methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
-      boolean    isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
-      MethodHandle mh       = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
+      MethodType   methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
+      boolean      isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
+      MethodHandle mh         = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
       return map -> {
-        var future = new CompletableFuture<>();
         RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
         RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
         try {
           Object instance = compiledClass.getDeclaredConstructor().newInstance();
-          Object result = isAsync ? mh.invoke(instance, (Continuation)null, map)
+          Object result = isAsync ? mh.invoke(instance, (Continuation) null, map)
                                   : mh.invoke(instance, map);
-          future.complete(result);
+          return result;
         }
         catch (Continuation c) {
-          blockingWork(future, c);
+          throw c;
         }
-        catch (JacsalError|IllegalStateException|IllegalArgumentException e) {
-          future.complete(e);
+        catch (RuntimeError e) {
+          throw e;
         }
-        catch (Throwable t) {
-          future.complete(new IllegalStateException("Invocation error: " + t, t));
+        catch (Throwable e) {
+          throw new RuntimeException(e);
         }
-        return future;
       };
     }
     catch (NoSuchMethodException | IllegalAccessException e) {
