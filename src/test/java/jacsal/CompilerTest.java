@@ -4742,6 +4742,8 @@ class CompilerTest extends BaseTest {
     test("[1] + [2]", List.of(1,2));
     test("[1,2] + [3,4]", List.of(1,2,3,4));
     test("def x = [1,2]; x + [3,4]", List.of(1,2,3,4));
+    test("def x = [1,2]; x + [[3,4]]", List.of(1,2,List.of(3,4)));
+    test("def x = ['a','b']; x + [[3,4]]", List.of("a","b",List.of(3,4)));
     test("def x = [1,2]; def y = [3,4]; x + y", List.of(1,2,3,4));
     test("['a','b'] + 'c'", List.of("a","b","c"));
     test("['a','b'] + 1", List.of("a","b",1));
@@ -4778,6 +4780,22 @@ class CompilerTest extends BaseTest {
     testError("def x = ['a','b']; --x", "non-numeric operand");
   }
 
+  @Test public void listAddSingle() {
+    test("[] << 1", List.of(1));
+    testError("[] <<= 1", "invalid lvalue");
+    test("def x = []; x << 1", List.of(1));
+    test("def x = []; x << 1; x", List.of());
+    test("List x = []; x << 1; x", List.of());
+    test("def x = []; x <<= 1; x", List.of(1));
+    test("List x = []; x <<= 1; x", List.of(1));
+    test("List x = []; x <<= 1 << 2; x", List.of(4));
+    test("List x = []; x <<= [1] << 2; x", List.of(List.of(1,2)));
+    test("List x = ['a','b']; x <<= [1] << 2", List.of("a","b",List.of(1,2)));
+    test("List x = ['a','b']; x <<= [1] << 2; x", List.of("a","b",List.of(1,2)));
+    test("def x = ['a','b']; def y = [1] << 2; x <<= y", List.of("a","b",List.of(1,2)));
+    test("def x = ['a','b']; def y = [1] << 2; x <<= y; x", List.of("a","b",List.of(1,2)));
+  }
+
   @Test public void mapAdd() {
     test("[:] + [:]", Map.of());
     test("def x = [:]; x + x", Map.of());
@@ -4806,6 +4824,25 @@ class CompilerTest extends BaseTest {
     testError("def x = [a:1,b:2]; x--", "non-numeric operand");
     testError("var x = [a:1,b:2]; --x", "operator '--' cannot be applied to type map");
     testError("def x = [a:1,b:2]; --x", "non-numeric operand");
+  }
+
+  @Test public void mapRemove() {
+    testError("Map m = null; m.remove('a')", "null object");
+    testError("def m = null; m.remove('a')", "null value");
+    test("[:].remove('a')", null);
+    test("[b:2].remove('a')", null);
+    test("Map m = [:]; m.remove('a')", null);
+    test("Map m = [:]; m.remove('a'); m", Map.of());
+    test("def m = [:]; m.remove('a'); m", Map.of());
+    test("Map m = [a:1]; m.remove('a')", 1);
+    test("def m = [a:1]; m.remove('a')", 1);
+    test("Map m = [a:1]; m.remove('a'); m", Map.of());
+    test("def m = [a:1]; m.remove('a'); m", Map.of());
+    test("def m = [a:1]; def f = m.remove; f('a')", 1);
+    test("def m = [a:1]; def f = m.remove; f('a'); m", Map.of());
+    test("def m = [a:1,b:2]; def f = m.remove; f('a')", 1);
+    test("def m = [a:1,b:2]; def f = m.remove; f('a'); m", Map.of("b",2));
+    test("def m = [a:1,b:2]; def f = m.remove; f('c'); m", Map.of("a",1,"b",2));
   }
 
   @Test public void andOrNot() {
@@ -4866,6 +4903,8 @@ class CompilerTest extends BaseTest {
   @Test public void eval() {
     test("eval('1',[:])", 1);
     test("eval('x + 1',[x:3])", 4);
+    test("eval('x + 1L',[x:3])", 4L);
+    test("eval('x + 1',[x:3L])", 4L);
     test("eval('x + 1',[x:3]) + eval('x+3',[x:3])", 10);
     test("eval('x x + 1',[x:3])", null);
     test("def vars = [x:3]; eval('x x + 1',vars); vars.'$error' =~ /unexpected token/i", true);

@@ -408,6 +408,12 @@ public class Parser {
     expect(LEFT_PAREN);
     matchAny(EOL);
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
+    if (inClassDecl && !isStatic && name.getStringValue().equals(Utils.TO_STRING)) {
+      Optional<Stmt.VarDecl> mandatoryParam = parameters.stream().filter(p -> p.declExpr.initialiser == null).findFirst();
+      if (mandatoryParam.isPresent()) {
+        throw new CompileError(Utils.TO_STRING + "() cannot have mandatory parameters", mandatoryParam.get().name);
+      }
+    }
     matchAny(EOL);
     expect(LEFT_BRACE);
     matchAny(EOL);

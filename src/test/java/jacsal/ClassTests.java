@@ -924,6 +924,13 @@ public class ClassTests extends BaseTest {
     test("class X {X x; int i}; def x = new X(null,3); x.x = x; x.toString()", "[x:<CIRCULAR_REF>, i:3]");
     test("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "[x:<CIRCULAR_REF>, i:3]");
     test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = a as X; x.toString()", "[y:[x:[y:null]]]");
+    test("class X { def toString() { 'xxx' } }; new X().toString()", "xxx");
+    test("class X { def toString() { 'xxx' } }; def x = [new X()]; x.toString()", "[xxx]");
+    testError("class X { int i=3; def toString(x) { x + 'xxx' } }; def x = [new X()]; x.toString()", "toString() cannot have mandatory parameters");
+  }
+
+  @Test public void closedOverParams() {
+    test("class X { int i=3; String toString() { \"i=$i\" } }; def f(X x){ def g(){x.toString()}; g()}; f(new X())", "i=3");
   }
 
   @Test public void innerClasses() {
@@ -1317,4 +1324,5 @@ public class ClassTests extends BaseTest {
     test("class X{int i=1}; def x = new X(); [i:1] === x", false);
     test("class X{int i=1}; def x = new X(); [i:1] !== x", true);
   }
+
 }

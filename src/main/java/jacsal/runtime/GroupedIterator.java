@@ -18,8 +18,6 @@ public class GroupedIterator implements Iterator {
   boolean      finished = false;
   List<Object> group = null;
 
-  final static Object[] emptyArgs = new Object[0];
-
   GroupedIterator(Iterator iter, String source, int offset, int size) {
     this.iter   = iter;
     this.source = source;

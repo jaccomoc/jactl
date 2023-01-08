@@ -16,6 +16,8 @@
 
 package jacsal.runtime;
 
+import jacsal.Compiler;
+import jacsal.JacsalContext;
 import jacsal.TokenType;
 import jacsal.Utils;
 
@@ -29,6 +31,8 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -84,6 +88,15 @@ public class RuntimeUtils {
   };
 
   public static int patternCacheSize = 100;   // Per thread cache size
+
+  private static final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
+    new LinkedHashMap<>(16, 0.75f, true) {
+      @Override protected boolean removeEldestEntry(Map.Entry<String, Function<Map<String,Object>,Object>> eldest) {
+        return size() > patternCacheSize;
+      }
+    });
+
+  public static int scriptCacheSize = 100;  // Total number of compiled scripts we keep for use by eval() function
 
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
@@ -646,7 +659,22 @@ public class RuntimeUtils {
     return leftObj.equals(rightObj) == (operator == EQUAL_EQUAL);
   }
 
-  public static Object bitOperation(Object left, Object right, String operator, String source, int offset) {
+  /**
+   * Perform bitwise operation.
+   * Also caters for list << elem and list <<= elem
+   * @param left          the lhs
+   * @param right         the rhs
+   * @param operator      the operator (without '=': e.g. <<= is just <<)
+   * @param isAssignment  whether original operator ended in '=' (e.g. was <<=). only used for list <<= elem
+   * @param source        source code
+   * @param offset        offset where operator is
+   * @return the result of the operation
+   */
+  public static Object bitOperation(Object left, Object right, String operator, boolean isAssignment, String source, int offset) {
+    if (left instanceof List && operator == DOUBLE_LESS_THAN) {
+      return listAddSingle((List)left, right, isAssignment);
+    }
+
     boolean leftIsLong = false;
     if (left instanceof Long) {
       leftIsLong = true;
@@ -895,6 +923,19 @@ public class RuntimeUtils {
   }
 
   /**
+   * Add single element to a list even if element is itself a list.
+   * @param list         the list
+   * @param elem         the element
+   * @param isAssignment true if <<= (add to existing list), false creates a new list
+   * @return the list (same list for <<= and new list for <<)
+   */
+  public static List listAddSingle(List list, Object elem, boolean isAssignment) {
+    List result = isAssignment ? list : new ArrayList(list);
+    result.add(elem);
+    return result;
+  }
+
+  /**
    * Add twp maps together. The result is a new map with a merge of the keys and values from the two maps. If the same
    * key appears in both maps the value from the second map "overwrites" the other value and becomes the value of the
    * key in the resulting map.
@@ -998,7 +1039,28 @@ public class RuntimeUtils {
       sb.append(']');
       return sb.toString();
     }
-    else if (obj instanceof JacsalObject || obj instanceof Map) {
+
+    if (obj instanceof JacsalObject) {
+      JacsalObject jobj = (JacsalObject)obj;
+      Object toString = jobj._$j$getFieldsAndMethods().get(Utils.TO_STRING);
+      if (toString instanceof MethodHandle) {
+        MethodHandle mh = (MethodHandle)toString;
+        if (mh.type().parameterCount() == 5) {
+          try {
+            Object result = mh.invoke(obj, (Continuation)null, null, 0, Utils.EMPTY_OBJ_ARR);
+            return result == null ? "null" : result.toString();
+          }
+          catch (RuntimeError e) {
+            throw e;
+          }
+          catch (Throwable e) {
+            throw new IllegalStateException("Unexpected error in toString(): " + e, e);
+          }
+        }
+      }
+    }
+
+    if (obj instanceof JacsalObject || obj instanceof Map) {
       boolean       isMap = obj instanceof Map;
       StringBuilder sb    = new StringBuilder();
       sb.append('[');
@@ -2098,5 +2160,15 @@ public class RuntimeUtils {
   public static boolean debugBreakPoint(Object data, String info) {
     System.out.println("DEBUG: " + info + ": " + data);
     return true;
+  }
+
+  public static Function<Map<String,Object>,Object> compileScript(String code, Map bindings) {
+    var script = evalScriptCache.get(code);
+    if (script == null) {
+      var context = JacsalContext.create().replMode(true).build();
+      script = Compiler.compileScript(code, context, Map.of());
+      evalScriptCache.put(code, script);
+    }
+    return script;
   }
 }

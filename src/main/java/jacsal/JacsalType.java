@@ -437,6 +437,8 @@ public class JacsalType {
       return type1;
     }
 
+    if (operator.is(DOUBLE_LESS_THAN) && type1.is(LIST))       { return LIST; }
+
     if (operator.getType().isBooleanOperator()) {
       return BOOLEAN;
     }

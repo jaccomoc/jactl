@@ -938,6 +938,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    //= List << elem
+    if (expr.operator.is(DOUBLE_LESS_THAN) && expr.type.is(LIST)) {
+      compile(expr.left);
+      compile(expr.right);
+      expect(2);
+      box();
+      loadConst(expr.originalOperator != null && expr.originalOperator.is(DOUBLE_LESS_THAN_EQUAL));
+      invokeMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
+      return null;
+    }
+
     //= Map + map
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
       compile(expr.left);
@@ -1248,8 +1259,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     compile(expr.right);
     if (expr.operator.getType().isBitShift()) {
-      // Right-hand side of shift has to be an integer
-      castToIntOrLong(INT, expr.right.location);
+      // Right-hand side of shift has to be an integer if we know we aren't doing list << elem or list <<= elem
+      if (!expr.left.type.is(LIST,ANY)) {
+        castToIntOrLong(INT, expr.right.location);
+      }
     }
     else {
       convertTo(expr.type, expr.right, true, expr.right.location);
@@ -1260,8 +1273,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(2);
       box();  // Box rhs so we can invoke our method
       loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
+      loadConst(expr.originalOperator != null && expr.originalOperator.getChars().endsWith("="));
       loadLocation(expr.operator);
-      invokeMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, boolean.class, String.class, int.class);
       return null;
     }
 
@@ -3817,6 +3831,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         default:           methodName = "getValue";          break;
       }
       invokeMethod(jacsal.runtime.HeapLocal.class, methodName);
+      if (varDecl.type.is(INSTANCE)) {
+        checkCast(varDecl.type);
+      }
       return;
     }
 

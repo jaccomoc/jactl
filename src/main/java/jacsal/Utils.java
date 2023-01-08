@@ -59,8 +59,11 @@ public class Utils {
   public static final String IT_VAR          = "it";       // Name of implicit arg for closures
   public static final String CAPTURE_VAR     = "$@";       // Name of internal array for capture values of a regex
   public static final String THIS_VAR        = "this";
-  public static final String SUPER_VAR  = "super";
+  public static final String SUPER_VAR       = "super";
+  public static final String TO_STRING       = "toString";
   public static final int DEFAULT_SCALE = 20;
+
+  public static final Object[] EMPTY_OBJ_ARR = new Object[0];
 
   /**
    * Get the name of the static field that will contain the handle for a given method

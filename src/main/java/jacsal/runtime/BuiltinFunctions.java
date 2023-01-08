@@ -49,6 +49,7 @@ public class BuiltinFunctions {
       registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));
       registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
       registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
+      registerMethod("remove", "mapRemove", MAP, false, 1, List.of(0));
       registerMethod("reverse", "iteratorReverse", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
       registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(0,2));
@@ -396,8 +397,7 @@ public class BuiltinFunctions {
       return c.getResult();
     }
     try {
-      var context = JacsalContext.create().replMode(true).build();
-      var script = Compiler.compileScript(code, context, bindings);
+      var script = RuntimeUtils.compileScript(code, bindings);
       return script.apply(bindings);
     }
     catch (Continuation cont) {
@@ -467,6 +467,16 @@ public class BuiltinFunctions {
       // Fall through
     }
     throw new RuntimeError("Argument to toString() must be a positive integer", source, offset);
+  }
+
+  // = remove
+
+  public static Object mapRemove(Map map, String field) {
+    return map.remove(field);
+  }
+  public static Object mapRemoveWrapper(Map map, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, STRING,1, source, offset);
+    return mapRemove(map, (String)args[0]);
   }
 
   // = size
