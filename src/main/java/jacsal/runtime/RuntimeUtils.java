@@ -1655,7 +1655,7 @@ public class RuntimeUtils {
   private static Object castTo(Class clss, Object value, String source, int offset) {
     FieldType type = classToType.get(clss);
     if (type == null) {
-      if (clss.isAssignableFrom(value.getClass())) {
+      if (value == null || clss.isAssignableFrom(value.getClass())) {
         return value;
       }
     }

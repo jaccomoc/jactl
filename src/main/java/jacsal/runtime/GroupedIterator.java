@@ -29,7 +29,9 @@ public class GroupedIterator implements Iterator {
 
   public static Object hasNext$c(GroupedIterator iter, Continuation c) {
     iter.haveNext = true;
-    return c.getResult();
+    boolean result = (boolean)c.getResult();
+    iter.finished = !result;
+    return result;
   }
 
   @Override public boolean hasNext() {

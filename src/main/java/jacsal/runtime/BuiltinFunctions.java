@@ -17,7 +17,6 @@
 package jacsal.runtime;
 
 import jacsal.*;
-import jacsal.Compiler;
 import org.objectweb.asm.Type;
 
 import java.io.BufferedReader;
@@ -64,6 +63,7 @@ public class BuiltinFunctions {
       registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
       registerMethod("sort", "iteratorSort", ITERATOR, true, 0, List.of(0,1));
       registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("mapWithIndex", "iteratorMapWithIndex", ITERATOR, true, 0, List.of(0,1));
       registerMethod("flatMap", "iteratorFlatMap", ITERATOR, true, 0, List.of(0,1));
       registerMethod("grouped", "iteratorGrouped", ITERATOR, true, 1, List.of(0));
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
@@ -85,12 +85,13 @@ public class BuiltinFunctions {
 
       // Global functions
       registerGlobalFunction("timeStamp", "timeStamp", false, 0);
+      registerGlobalFunction("nanoTime", "nanoTime", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
       registerGlobalFunction("sleep", "sleep", false, 1);
       registerGlobalFunction("nextLine", "nextLine", false, 0);
       registerGlobalFunction("stream", "stream", true, 1, List.of(0));
       registerGlobalFunction("abs", "abs", false, 1);
-      registerGlobalFunction("eval", "eval", false, 2);
+      registerGlobalFunction("eval", "eval", false, 1);
 
       initialised = true;
     }
@@ -326,6 +327,13 @@ public class BuiltinFunctions {
     return System.currentTimeMillis();
   }
 
+  // = nanoTime
+  public static long nanoTime() { return System.nanoTime(); }
+  public static Object nanoTimeWrapper(Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, null,0, source, offset);
+    return System.nanoTime();
+  }
+
   // = sprintf
   public static String sprintf(String source, int offset, String format, Object... args) {
     try {
@@ -397,23 +405,26 @@ public class BuiltinFunctions {
       return c.getResult();
     }
     try {
-      var script = RuntimeUtils.compileScript(code, bindings);
-      return script.apply(bindings);
+      var script = RuntimeUtils.compileScript(code, Collections.EMPTY_MAP);
+      var result = script.apply(bindings == null ? new LinkedHashMap() : bindings);
+      return result;
     }
     catch (Continuation cont) {
       throw new Continuation(cont, evalHandle, 0, null, null);
     }
     catch (JacsalError e) {
-      bindings.put(Utils.EVAL_ERROR, e.toString());
+      if (bindings != null) {
+        bindings.put(Utils.EVAL_ERROR, e.toString());
+      }
       return null;
     }
   }
   public static Object evalWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 2, STRING,2, source, offset);
-    if (!(args[1] instanceof Map)) {
+    args = validateArgCount(args, 1, STRING,2, source, offset);
+    if (args.length > 1 && !(args[1] instanceof Map)) {
       throw new RuntimeError("Argument of type " + RuntimeUtils.className(args[1]) + " cannot be converted to Map", source, offset);
     }
-    return eval(null, (String)args[0], (Map)args[1]);
+    return eval(null, (String)args[0], args.length > 1 ? (Map)args[1] : null);
   }
   private static MethodHandle evalHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "eval$c", Object.class, Continuation.class);
   public static Object eval$c(Continuation c) {
@@ -571,7 +582,10 @@ public class BuiltinFunctions {
 
   public static Iterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
-    return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+    if (count >= 0) {
+      return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+    }
+    return new SkipIterator(iter, source, offset, -count);
   }
 
   private static MethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
@@ -597,7 +611,10 @@ public class BuiltinFunctions {
 
   public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int count) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
-    return new FilterIterator(iter, source, offset, limitHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+    if (count >= 0) {
+      return new FilterIterator(iter, source, offset, limitHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+    }
+    return new LimitIterator(iter, source, offset, -count);
   }
 
   private static MethodHandle limitHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "isUnderLimit",
@@ -650,6 +667,25 @@ public class BuiltinFunctions {
     args = validateArgCount(args, 0, FUNCTION,1, source, offset);
     try {
       return iteratorMap(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
+    }
+  }
+
+  ////////////////////////////////
+
+  // = mapWithIndex
+
+  public static Iterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+    Iterator iter = RuntimeUtils.createIterator(iterable);
+    return new MapIterator(iter, source, offset, closure, true);
+  }
+
+  public static Object iteratorMapWithIndexWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, FUNCTION,1, source, offset);
+    try {
+      return iteratorMapWithIndex(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);

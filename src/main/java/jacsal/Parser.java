@@ -524,9 +524,7 @@ public class Parser {
   private Stmt.If ifStmt() {
     Token ifToken = previous();
     expect(LEFT_PAREN);
-    Expr cond      = condition();
-    matchAny(EOL);
-    expect(RIGHT_PAREN);
+    Expr cond      = condition(true, RIGHT_PAREN);
     Stmt trueStmt  = statement();
     Stmt falseStmt = null;
     if (lookahead(() -> matchAny(EOL) || true, () -> matchAny(ELSE))) {
@@ -544,9 +542,7 @@ public class Parser {
   private Stmt.While whileStmt() {
     Token whileToken = previous();
     expect(LEFT_PAREN);
-    Expr cond      = condition();
-    matchAny(EOL);
-    expect(RIGHT_PAREN);
+    Expr cond      = condition(false, RIGHT_PAREN);
     Stmt.While whileStmt = new Stmt.While(whileToken, cond);
     whileStmt.body = statement();
     return whileStmt;
@@ -569,8 +565,7 @@ public class Parser {
     if (!previous().is(SEMICOLON)) {
       expect(SEMICOLON);
     }
-    Expr cond           = condition();
-    expect(SEMICOLON);
+    Expr cond           = condition(false, SEMICOLON);
     Stmt update         = commaSeparatedStatements();
     Token rightParen = expect(RIGHT_PAREN);
 
@@ -745,8 +740,15 @@ public class Parser {
    *# condition -> expression ;
    * Used for situations where we need a boolean condition.
    */
-  private Expr condition() {
-    return expression(true);
+  private Expr condition(boolean mandatory, TokenType endOfCond) {
+    if (!mandatory) {
+      if (matchAnyIgnoreEOL(endOfCond)) {
+        return new Expr.Literal(new Token(TRUE, peek()).setValue(true));
+      }
+    }
+    Expr expr = expression(true);
+    expect(endOfCond);
+    return expr;
   }
 
   /**

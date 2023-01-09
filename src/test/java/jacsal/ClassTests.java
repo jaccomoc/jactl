@@ -1325,4 +1325,8 @@ public class ClassTests extends BaseTest {
     test("class X{int i=1}; def x = new X(); [i:1] !== x", true);
   }
 
+  @Test public void nullFieldSetting() {
+    test("class X { X next }; def x = new X(null); new X(x).next = null", null);
+    test("class X { X next }; def x = new X(null); [new X(x),new X(x)].each{ it.next = null }", null);
+  }
 }

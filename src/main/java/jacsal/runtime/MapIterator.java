@@ -18,6 +18,7 @@ package jacsal.runtime;
 
 import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Iterator that wraps another iterator and transforms the elements returned by the wrapped iterator based on
@@ -31,12 +32,19 @@ class MapIterator implements Iterator {
   String       source;
   int          offset;
   MethodHandle closure;
+  boolean      withIndex;
+  int          index = 0;
 
   MapIterator(Iterator iter, String source, int offset, MethodHandle closure) {
-    this.iter = iter;
-    this.source = source;
-    this.offset = offset;
-    this.closure = closure;
+    this(iter, source, offset, closure, false);
+  }
+
+  MapIterator(Iterator iter, String source, int offset, MethodHandle closure, boolean withIndex) {
+    this.iter      = iter;
+    this.source    = source;
+    this.offset    = offset;
+    this.closure   = closure;
+    this.withIndex = withIndex;
   }
 
   private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(MapIterator.class, "hasNext$c", Object.class, MapIterator.class, Continuation.class);
@@ -80,6 +88,9 @@ class MapIterator implements Iterator {
       }
       if (location == 2) {
         elem = RuntimeUtils.mapEntryToList(elem);
+        if (withIndex) {
+          elem = List.of(elem, index++);
+        }
         return closure == null ? elem : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
       }
       else {

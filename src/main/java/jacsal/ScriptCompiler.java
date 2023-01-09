@@ -72,8 +72,12 @@ public class ScriptCompiler extends ClassCompiler {
       boolean      isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
       MethodHandle mh         = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACSAL_SCRIPT_MAIN, methodType);
       return map -> {
-        RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
-        RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
+        if (map.containsKey(Utils.JACSAL_GLOBALS_OUTPUT)) {
+          RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
+        }
+        if (map.containsKey(Utils.JACSAL_GLOBALS_INPUT)) {
+          RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
+        }
         try {
           Object instance = compiledClass.getDeclaredConstructor().newInstance();
           Object result = isAsync ? mh.invoke(instance, (Continuation) null, map)

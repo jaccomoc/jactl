@@ -3854,6 +3854,7 @@ class CompilerTest extends BaseTest {
     test("int i = 1; while (false) i++; i", 1);
     test("int i = 1; while (false) ;", null);
     test("int i = 1; while (++i < 10); i", 10);
+    test("int i = 1; while() { break if i > 4; i++ }; i", 5);
   }
 
   @Test public void forLoops() {
@@ -3862,6 +3863,10 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; for (int i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 100);
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 120);
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) { sum += i + j; def i = 3; i++ }; sum", 120);
+    test("int sum = 0; for (int i = 0; ;) { break if i > 5; i++; sum += i }; sum", 21);
+    test("int sum = 0; for (int i = 0; true;) { break if i > 5; i++; sum += i }; sum", 21);
+    test("int sum = 0; for (int i = 0; true; true) { break if i > 5; i++; sum += i }; sum", 21);
+    test("int sum = 0; int i = 0; for (;;) { break if i > 5; i++; sum += i }; sum", 21);
   }
 
   @Test public void breakContinue() {
@@ -4440,6 +4445,17 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }", Map.of("1",1,"22",4,"333",9,"4444",16));
   }
 
+  @Test public void mapWithIndex() {
+    test("[].mapWithIndex{ it[0] + it[1] }", List.of());
+    test("def x = []; x.mapWithIndex{ it[0] + it[1] }", List.of());
+    test("def x = [:]; x.mapWithIndex{ it[0] + it[1] }", List.of());
+    test("[1,2,3].mapWithIndex{ it[0] + it[1] }.sum()", 9);
+    test("[1,2,3].mapWithIndex()", List.of(List.of(1,0),List.of(2,1),List.of(3,2)));
+    test("def x = [1,2,3]; x.mapWithIndex{ it[0] + it[1] }.sum()", 9);
+    test("def x = [a:1,b:2]; x.mapWithIndex{ it,i -> it[0] + it[1] + i }", List.of("a10","b21"));
+    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f{ it,i -> it[0] + it[1] + i }", List.of("a10","b21"));
+  }
+
   @Test public void collectionMap() {
     test("[].map()", List.of());
     test("def f = [].map; f()", List.of());
@@ -4573,7 +4589,6 @@ class CompilerTest extends BaseTest {
 
   @Test public void skipLimit() {
     test("[1,2,3].skip(1)", List.of(2, 3));
-    test("[1,2,3].skip(-1)", List.of(1, 2, 3));
     test("[1,2,3].skip(0)", List.of(1, 2, 3));
     test("[1,2,3].skip(3)", List.of());
     test("[1,2,3].skip(4)", List.of());
@@ -4584,7 +4599,6 @@ class CompilerTest extends BaseTest {
     test("'abc'.skip(2).join()", "c");
     test("[a:1,b:2,c:3].skip(1) as Map", Map.of("b", 2, "c", 3));
     test("def x = [1,2,3]; x.skip(1)", List.of(2, 3));
-    test("def x = [1,2,3]; x.skip(-1)", List.of(1, 2, 3));
     test("def x = [1,2,3]; x.skip(0)", List.of(1, 2, 3));
     test("def x = [1,2,3]; x.skip(3)", List.of());
     test("def x = [1,2,3]; x.skip(4)", List.of());
@@ -4597,9 +4611,23 @@ class CompilerTest extends BaseTest {
     test("def x = 'abc'; x.skip(2).join()", "c");
     test("def x = [a:1,b:2,c:3]; x.skip(1) as Map", Map.of("b", 2, "c", 3));
     test("def x = [a:1,b:2,c:3]; def f = x.skip; f(1) as Map", Map.of("b", 2, "c", 3));
+    test("[].skip(-1)", List.of());
+    test("[1,2,3].skip(-1)", List.of(3));
+    test("[1,2,3].skip(-2)", List.of(2,3));
+    test("[1,2,3].skip(-3)", List.of(1,2,3));
+    test("[1,2,3].skip(-4)", List.of(1,2,3));
+    test("[1,2,3,4,5,6].skip(-2)", List.of(5,6));
+    test("[1,2,3,4,5,6].map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.skip(-2)", List.of(4,6));
+    test("def x = []; x.skip(-1)", List.of());
+    test("def x = [1,2,3]; x.skip(-1)", List.of(3));
+    test("def x = [1,2,3]; x.skip(-2)", List.of(2,3));
+    test("def x = [1,2,3]; x.skip(-3)", List.of(1,2,3));
+    test("def x = [1,2,3]; x.skip(-4)", List.of(1,2,3));
+    test("def x = [1,2,3,4,5,6]; x.skip(-2)", List.of(5,6));
+    test("def x = [1,2,3,4,5,6].map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}; x.skip(-2)", List.of(4,6));
+    test("def x = [1,2,3,4,5,6]; def f = x.map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.skip; f(-2)", List.of(4,6));
 
     test("[1,2,3].limit(1)", List.of(1));
-    test("[1,2,3].limit(-1)", List.of());
     test("[1,2,3].limit(0)", List.of());
     test("[1,2,3].limit(3)", List.of(1, 2, 3));
     test("[1,2,3].limit(4)", List.of(1, 2, 3));
@@ -4612,7 +4640,6 @@ class CompilerTest extends BaseTest {
     test("'abc'.limit(2).join()", "ab");
     test("[a:1,b:2,c:3].limit(2) as Map", Map.of("a", 1, "b", 2));
     test("def x = [1,2,3]; x.limit(1)", List.of(1));
-    test("def x = [1,2,3]; x.limit(-1)", List.of());
     test("def x = [1,2,3]; x.limit(0)", List.of());
     test("def x = [1,2,3]; x.limit(3)", List.of(1, 2, 3));
     test("def x = [1,2,3]; x.limit(4)", List.of(1, 2, 3));
@@ -4625,6 +4652,21 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3]; def f = x.map{sleep(0,it)+sleep(0,it)}.limit; f(2).map{it*it}", List.of(4, 16));
     test("def x = 'abc'; x.limit(2).join()", "ab");
     test("def x = [a:1,b:2,c:3]; x.limit(2) as Map", Map.of("a", 1, "b", 2));
+    test("[].limit(-1)", List.of());
+    test("[1,2,3].limit(-1)", List.of(1,2));
+    test("[1,2,3].limit(-2)", List.of(1));
+    test("[1,2,3].limit(-3)", List.of());
+    test("[1,2,3].limit(-4)", List.of());
+    test("[1,2,3,4,5,6].limit(-2)", List.of(1,2,3,4));
+    test("[1,2,3,4,5,6].map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.limit(-2)", List.of(2));
+    test("def x = []; x.limit(-1)", List.of());
+    test("def x = [1,2,3]; x.limit(-1)", List.of(1,2));
+    test("def x = [1,2,3]; x.limit(-2)", List.of(1));
+    test("def x = [1,2,3]; x.limit(-3)", List.of());
+    test("def x = [1,2,3]; x.limit(-4)", List.of());
+    test("def x = [1,2,3,4,5,6]; x.limit(-2)", List.of(1,2,3,4));
+    test("def x = [1,2,3,4,5,6].map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}; x.limit(-2)", List.of(2));
+    test("def x = [1,2,3,4,5,6]; def f = x.map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.limit; f(-2)", List.of(2));
   }
 
   @Test public void collectionSort() {
@@ -4794,6 +4836,8 @@ class CompilerTest extends BaseTest {
     test("List x = ['a','b']; x <<= [1] << 2; x", List.of("a","b",List.of(1,2)));
     test("def x = ['a','b']; def y = [1] << 2; x <<= y", List.of("a","b",List.of(1,2)));
     test("def x = ['a','b']; def y = [1] << 2; x <<= y; x", List.of("a","b",List.of(1,2)));
+    test("[1,2] << [a:1]", List.of(1,2,Map.of("a",1)));
+    test("[1,2].flatMap{ [it,it] } << [a:1]", List.of(1,1,2,2,Map.of("a",1)));
   }
 
   @Test public void mapAdd() {
@@ -4902,6 +4946,7 @@ class CompilerTest extends BaseTest {
 
   @Test public void eval() {
     test("eval('1',[:])", 1);
+    test("eval('1')", 1);
     test("eval('x + 1',[x:3])", 4);
     test("eval('x + 1L',[x:3])", 4L);
     test("eval('x + 1',[x:3L])", 4L);
@@ -4911,6 +4956,8 @@ class CompilerTest extends BaseTest {
     test("def vars = [:]; eval('''def x = 'abc'; output = x.size()''',vars); vars.output", 3);
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[:])", 10);
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[:])", 10);
+    test("['[1,2]','[3]'].map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
+    test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
   }
 
   @Test public void asyncFunctions() {
@@ -5186,6 +5233,9 @@ class CompilerTest extends BaseTest {
     replTest.accept("nextLine() == 'x' && nextLine() == null", "x",true, "");
     replTest.accept("while (it = nextLine()) println it", "x",null, "x\n");
     replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n",null, "x\ny\n\nz\n");
+    replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", List.of(List.of(1,2), List.of(3)), "");
+    replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/f }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
+                    "[1,2]\n[3]\n\n", List.of(3), "");
   }
 
   @Test public void stream() {
@@ -5204,6 +5254,7 @@ class CompilerTest extends BaseTest {
     test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3,4)));
     test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3)));
     test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
+    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/f }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
   }
 
   @Test public void fib() {
