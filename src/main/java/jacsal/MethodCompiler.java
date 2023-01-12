@@ -949,13 +949,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    //= Map + map
-    if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
+    //= Map +/- map
+    if (expr.operator.is(PLUS,MINUS) && expr.type.is(MAP)) {
       compile(expr.left);
       compile(expr.right);
       expect(2);
-      loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
-      invokeMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
+      loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL,MINUS_EQUAL));
+      if (expr.operator.is(PLUS)) {
+        invokeMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
+      }
+      else {
+        loadLocation(expr.operator);
+        invokeMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
+      }
       return null;
     }
 

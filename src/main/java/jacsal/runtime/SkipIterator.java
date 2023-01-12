@@ -26,16 +26,12 @@ import java.util.Iterator;
  */
 public class SkipIterator implements Iterator {
   Iterator               iter;
-  String                 source;
-  int                    offset;
   int                    count;
   CircularBuffer<Object> buffer;
   boolean                reachedEnd = false;
 
-  SkipIterator(Iterator iter, String source, int offset, int count) {
+  SkipIterator(Iterator iter, int count) {
     this.iter = iter;
-    this.source = source;
-    this.offset = offset;
     this.count  = count;
     this.buffer = new CircularBuffer<>(count);
   }

@@ -58,6 +58,7 @@ public class BuiltinFunctions {
       registerMethod("sum", "iteratorSum", ITERATOR, true, 0, List.of(0));
       registerMethod("skip", "iteratorSkip", ITERATOR, true, 1, List.of(0));
       registerMethod("limit", "iteratorLimit", ITERATOR, true, 1, List.of(0));
+      registerMethod("unique", "iteratorUnique", ITERATOR, true, 0, List.of(0));
       registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
       registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
       registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
@@ -67,6 +68,8 @@ public class BuiltinFunctions {
       registerMethod("flatMap", "iteratorFlatMap", ITERATOR, true, 0, List.of(0,1));
       registerMethod("grouped", "iteratorGrouped", ITERATOR, true, 1, List.of(0));
       registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
+      registerMethod("subList", "listSubList", LIST, true, 1);
+      registerMethod("subList", "iteratorSubList", ITERATOR, true, 1);
 
       // String methods
       registerMethod("lines", "stringLines", STRING, false);
@@ -533,6 +536,64 @@ public class BuiltinFunctions {
 
   ////////////////////////////////
 
+  // = sublist
+  public static List listSubList(List list, String source, int offset, int start, int end) {
+    try {
+      return list.subList(start, end);
+    }
+    catch (Exception e) {
+      throw new RuntimeError("SubList error", source, offset, e);
+    }
+  }
+  public static Object listSubListWrapper(List list, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, LIST, 2, source, offset);
+    int begin = -1;
+    if (!(args[0] instanceof Number)) {
+      throw new RuntimeError("First argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+    }
+    begin = ((Number)args[0]).intValue();
+    try {
+      if (args.length > 1) {
+        if (!(args[1] instanceof Number)) {
+          throw new RuntimeError("Second argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+        }
+        int end = ((Number) args[1]).intValue();
+        return list.subList(begin, end);
+      }
+      else {
+        return list.subList(begin, list.size());
+      }
+    }
+    catch (Exception e) {
+      throw new RuntimeError("SubList error", source, offset, e);
+    }
+  }
+
+  public static List iteratorSubList(Object iterable, Continuation c, String source, int offset, int start, int end) {
+    source = c == null ? source : (String)c.localObjects[0];
+    offset = c == null ? offset : (int)c.localPrimitives[0];
+    start  = c == null ? start  : (int)c.localPrimitives[1];
+    end    = c == null ? end    : (int)c.localPrimitives[2];
+    try {
+      List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
+                            : (List) c.getResult();
+      return listSubList(list, source, offset, start, end);
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, iteratorSubListHandle.bindTo(iterable), 0, new long[]{offset, start,end}, new Object[]{source});
+    }
+  }
+  private static MethodHandle iteratorSubListHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSubList$c", Object.class, Object.class, Continuation.class);
+  public static Object iteratorSubList$c(Object iterable, Continuation c) {
+    return iteratorSubList(iterable, c, null, 0, 0, 0);
+  }
+  public static Object iteratorSubListWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, ITERATOR,2, source, offset);
+    return iteratorSize(iterable, c);
+  }
+
+  ////////////////////////////////
+
   // = filter
 
   public static Iterator iteratorFilter(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
@@ -578,6 +639,19 @@ public class BuiltinFunctions {
 
   ////////////////////////////////
 
+  // = unique
+
+  public static Iterator iteratorUnique(Object iterable, Continuation c, String source, int offset) {
+    Iterator iter = RuntimeUtils.createIterator(iterable);
+    return new UniqueIterator(iter);
+  }
+  public static Object iteratorUniqueWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, null, 0, source, offset);
+    return iteratorUnique(iterable, c, source, offset);
+  }
+
+  ////////////////////////////////
+
   // = skip
 
   public static Iterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
@@ -585,7 +659,7 @@ public class BuiltinFunctions {
     if (count >= 0) {
       return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new AtomicInteger(0)));
     }
-    return new SkipIterator(iter, source, offset, -count);
+    return new SkipIterator(iter, -count);
   }
 
   private static MethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
@@ -614,7 +688,7 @@ public class BuiltinFunctions {
     if (count >= 0) {
       return new FilterIterator(iter, source, offset, limitHandle.bindTo(count).bindTo(new AtomicInteger(0)));
     }
-    return new LimitIterator(iter, source, offset, -count);
+    return new LimitIterator(iter, -count);
   }
 
   private static MethodHandle limitHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "isUnderLimit",
@@ -1170,7 +1244,7 @@ public class BuiltinFunctions {
       if (location == 2) {
         if (closure == null) {
           try {
-            result.sort(null);
+            result.sort((a,b) -> RuntimeUtils.compareTo(a,b,source,offset));
             return result;
           }
           catch (Throwable t) {

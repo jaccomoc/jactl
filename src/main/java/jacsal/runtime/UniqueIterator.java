@@ -19,24 +19,20 @@ package jacsal.runtime;
 import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
-/**
- * Async iterator that supports limit(n) where n < 0 which means discard last n.
- */
-public class LimitIterator implements Iterator {
-  Iterator               iter;
-  int                    count;
-  CircularBuffer<Object> buffer;
-  boolean                reachedEnd = false;
+public class UniqueIterator implements Iterator {
+  Iterator iter;
+  Object   current    = null;
+  boolean  reachedEnd = false;
+  boolean  hasValue   = false;
+  boolean  first      = true;   // True until we have found first value
 
-  LimitIterator(Iterator iter, int count) {
+  UniqueIterator(Iterator iter) {
     this.iter = iter;
-    this.count  = count;
-    this.buffer = new CircularBuffer<>(count + 1);
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "hasNext$c", Object.class, LimitIterator.class, Continuation.class);
+  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(UniqueIterator.class, "hasNext$c", Object.class, UniqueIterator.class, Continuation.class);
 
-  public static Object hasNext$c(LimitIterator iter, Continuation c) {
+  public static Object hasNext$c(UniqueIterator iter, Continuation c) {
     return iter.doHasNext(c);
   }
 
@@ -47,14 +43,19 @@ public class LimitIterator implements Iterator {
 
   private boolean doHasNext(Continuation c) {
     if (reachedEnd) {
-      return false;
+      return hasValue;
     }
-    // We can return elements once buffer is full
-    boolean hasNext  = false;
-    Object  elem     = null;
-    int     location = c == null ? 0 : c.methodLocation;
-    while (!reachedEnd && buffer.free() > 0) {
+    if (hasValue) {
+      return true;
+    }
+    int location = c == null ? 0 : c.methodLocation;
+    // Keep going until we get a value different to current one
+    boolean hasNext = false;
+    Object  nextElem = null;
+    while (!reachedEnd && !hasValue) {
       try {
+        // Use state machine in case iter.hasNext() or iter.next() throws Continuation
+        // Even states are sync case and odd states are where we return after continuing.
         switch (location) {
           case 0:
             hasNext = iter.hasNext();
@@ -69,17 +70,24 @@ public class LimitIterator implements Iterator {
               reachedEnd = true;
             }
             else {
-              elem = iter.next();
+              nextElem = iter.next();
               location = 4;
             }
             break;
           case 3:
-            elem = c.getResult();
+            nextElem = c.getResult();
             location = 4;
             break;
           case 4:
-            buffer.add(elem);
-            location = 0;
+            if (first || !RuntimeUtils.equals(current, nextElem)) {
+              current = nextElem;
+              first = false;
+              hasValue = true;
+            }
+            else {
+              // Next element same as current so keep trying
+              location = 0;
+            }
             break;
         }
       }
@@ -87,17 +95,15 @@ public class LimitIterator implements Iterator {
         throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
       }
     }
-    // Either we have reachedEnd of underlying iterator or we have a full buffer
-    return !reachedEnd;
+    return hasValue;
   }
 
   @Override
   public Object next() {
-    // Assume that hasNext() has already been called so no need for async handling
-    if (buffer.free() > 0) {
-      throw new IllegalStateException("next() called before hasNext()");
+    if (!hasValue) {
+      throw new IllegalStateException("Internal error: next() called before hasNext()");
     }
-    return buffer.remove();
+    hasValue = false;
+    return current;
   }
-
 }

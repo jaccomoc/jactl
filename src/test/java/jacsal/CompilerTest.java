@@ -40,6 +40,10 @@ class CompilerTest extends BaseTest {
     test("[1,2,3].map{\n // Strip '#' comments\nit}", List.of(1,2,3));
   }
 
+  @Test public void testStuff() {
+    test("0b101", 5);
+  }
+
   @Test public void literals() {
     test("42", 42);
     test("0", 0);
@@ -73,6 +77,23 @@ class CompilerTest extends BaseTest {
     test("true", true);
     test("false", false);
     test("null", null);
+    testError("0b", "missing digits");
+    testError("0B", "missing digits");
+    testError("0b1234", "unexpected token");
+    test("0b101", 5);
+    test("0B101", 5);
+    test("0b1000L", 8L);
+    test("0b10101010101010101010101010101010101010101010101010L", 0b10101010101010101010101010101010101010101010101010L);
+    test("0B10101010101010101010101010101010101010101010101010L", 0b10101010101010101010101010101010101010101010101010L);
+    testError("0B10101010101010101010101010101010101010101010101010", "too large");
+    testError("0B10101010101010101010101010101010101010101010101010101010101010101010101010101010101010L", "too large");
+    testError("0x", "missing digits");
+    testError("0X", "missing digits");
+    testError("0xg1234", "missing digits");
+    test("0xabcdef", 0xabcdef);
+    test("0XABCDEF", 0xabcdef);
+    testError("0xAbCdEf1234", "too large");
+    test("0xAbCdEf1234L", 0xabcdef1234L);
   }
 
   @Test public void booleanConversion() {
@@ -2024,6 +2045,9 @@ class CompilerTest extends BaseTest {
     test("def x = 'aa'; 'abcaa' =~ /\\$x/", false);
     test("def x = 'aa'; 'abc$x' =~ /\\$x/", true);
     test("def x = 'aa'; 'abc$x' =~ /\\$x$/", true);
+
+    test("['a','b','c'].map{/(.)/f\n[name:$1]\n }.map{it.name}", List.of("a","b","c"));
+    test("def x = ['a','b','c'].map{/(.)/f\n[name:$1]\n }.map{it.name}; x", List.of("a","b","c"));
   }
 
   @Test public void regexCaptureVars() {
@@ -4669,6 +4693,21 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3,4,5,6]; def f = x.map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.limit; f(-2)", List.of(2));
   }
 
+  @Test public void unique() {
+    test("[].unique()", List.of());
+    test("def x = []; x.unique()", List.of());
+    test("[1].unique()", List.of(1));
+    test("[1,1].unique()", List.of(1));
+    test("[2,2,1,1,2].unique()", List.of(2,1,2));
+    test("def x = [1]; x.unique()", List.of(1));
+    test("def x = [1,1]; x.unique()", List.of(1));
+    test("def x = [2,2,1,1,2]; x.unique()", List.of(2,1,2));
+    test("def x = [2,2,1,1,2]; def f = x.unique; f()", List.of(2,1,2));
+    test("[[a:1],[b:2],[b:2],[a:1]].unique()", List.of(Map.of("a",1),Map.of("b",2),Map.of("a",1)));
+    test("[[a:1],[b:2],[b:2],[a:1]].unique()", List.of(Map.of("a",1),Map.of("b",2),Map.of("a",1)));
+    test("[a:1,b:2].unique().collectEntries()", Map.of("a",1,"b",2));
+  }
+
   @Test public void collectionSort() {
     test("[].sort()", List.of());
     test("[].sort{it[1] <=> it[0]}", List.of());
@@ -4697,6 +4736,8 @@ class CompilerTest extends BaseTest {
     test("'afedcba'.sort{a,b -> a <=> b}.join()", "aabcdef");
     test("'afedcba'.sort{a,b -> b <=> a}.join()", "fedcbaa");
     test("''.sort{a,b -> b <=> a}.join()", "");
+    testError("[[a:1],[b:2]].sort()", "cannot compare objects of type map");
+    testError("[[1],[2]].sort()", "cannot compare objects of type list");
   }
 
   @Test public void largeSort() {
@@ -4840,6 +4881,19 @@ class CompilerTest extends BaseTest {
     test("[1,2].flatMap{ [it,it] } << [a:1]", List.of(1,1,2,2,Map.of("a",1)));
   }
 
+  @Test public void subList() {
+    test("[].subList(0)", List.of());
+    test("[1,2,3].subList(1,2)", List.of(2));
+    test("[1,2,3].subList(1,3)", List.of(2,3));
+    testError("[1,2,3].subList(1,-1)", "illegalargument");
+    test("def x = []; x.subList(0)", List.of());
+    test("def x = [1,2,3]; x.subList(1,2)", List.of(2));
+    test("def x = [1,2,3]; x.subList(1,3)", List.of(2,3));
+    test("def x = [1,2,3]; def f = x.subList; f(1,3)", List.of(2,3));
+    test("[1,2,3].map{it}.subList(1,3)", List.of(2,3));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.subList(1,3)", List.of(2,3));
+  }
+
   @Test public void mapAdd() {
     test("[:] + [:]", Map.of());
     test("def x = [:]; x + x", Map.of());
@@ -4858,8 +4912,8 @@ class CompilerTest extends BaseTest {
     test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x", Map.of("a",2,"b",2,"c",3));
     test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x; x", Map.of("a",2,"b",2,"c",3));
     test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x; x", Map.of("a",2,"b",2,"c",3));
-    testError("var x = [a:1,b:2]; x -= 1; x", "non-numeric operand");
-    testError("def x = [a:1,b:2]; x -= 1; x", "non-numeric operand");
+    testError("var x = [a:1,b:2]; x -= 1; x", "cannot subtract int from map");
+    testError("def x = [a:1,b:2]; x -= 1; x", "cannot subtract");
     testError("var x = [a:1,b:2]; x++", "unary operator '++' cannot be applied to type map");
     testError("def x = [a:1,b:2]; x++", "non-numeric operand");
     testError("var x = [a:1,b:2]; ++x", "operator '++' cannot be applied to type map");
@@ -4868,6 +4922,55 @@ class CompilerTest extends BaseTest {
     testError("def x = [a:1,b:2]; x--", "non-numeric operand");
     testError("var x = [a:1,b:2]; --x", "operator '--' cannot be applied to type map");
     testError("def x = [a:1,b:2]; --x", "non-numeric operand");
+    testError("[:] + [1,2,3]", "cannot add list");
+    testError("def x = [:]; def y = [1,2,3]; x + y", "cannot add list");
+  }
+
+  @Test public void mapSubtract() {
+    test("[:] - [:]", Map.of());
+    test("[a:1] - [:]", Map.of("a",1));
+    test("[:] - [a:1]", Map.of());
+    test("[a:1,b:2,c:[a:1]] - [c:1]", Map.of("a",1,"b",2));
+    test("Map x = [:]; x - [:]", Map.of());
+    test("Map x = [a:1]; x - [:]", Map.of("a",1));
+    test("Map x = [:]; x - [a:1]", Map.of());
+    test("Map x = [a:1,b:2,c:[a:1]]; x - [c:1]", Map.of("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x -= [c:1]; x", Map.of("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x - [c:1] - [b:4]", Map.of("a",1));
+    test("def x = [:]; x - [:]", Map.of());
+    test("def x = [a:1]; x - [:]", Map.of("a",1));
+    test("def x = [:]; x - [a:1]", Map.of());
+    test("def x = [a:1,b:2,c:[a:1]]; x - [c:1]", Map.of("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; x - [c:1] - [b:4]", Map.of("a",1));
+    test("def x = [:]; def y = [:]; x - y", Map.of());
+    test("def x = [a:1]; def y = [:]; x - y", Map.of("a",1));
+    test("def x = [:]; def y = [a:1]; x - y", Map.of());
+    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x - y", Map.of("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x = x - y; x - [b:4]", Map.of("a",1));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x -= y; x - [b:4]", Map.of("a",1));
+    test("[:] - []", Map.of());
+    test("[a:1] - []", Map.of("a",1));
+    test("[:] - ['a']", Map.of());
+    test("[a:1,b:2,c:[a:1]] - ['c']", Map.of("a",1,"b",2));
+    test("Map x = [:]; x - []", Map.of());
+    test("Map x = [a:1]; x - []", Map.of("a",1));
+    test("Map x = [:]; x - ['a']", Map.of());
+    test("Map x = [a:1,b:2,c:[a:1]]; x - ['c']", Map.of("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x -= ['c']; x", Map.of("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x - ['c'] - [b:4]", Map.of("a",1));
+    test("def x = [:]; x - []", Map.of());
+    test("def x = [a:1]; x - []", Map.of("a",1));
+    test("def x = [:]; x - ['a']", Map.of());
+    test("def x = [a:1,b:2,c:[a:1]]; x - ['c']", Map.of("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; x - ['c'] - [b:4]", Map.of("a",1));
+    test("def x = [:]; def y = []; x - y", Map.of());
+    test("def x = [a:1]; def y = []; x - y", Map.of("a",1));
+    test("def x = [:]; def y = ['a']; x - y", Map.of());
+    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x - y", Map.of("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x = x - y; x - [b:4]", Map.of("a",1));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x -= y; x - [b:4]", Map.of("a",1));
+    testError("[a:1] - 1", "cannot subtract");
+    testError("def x = [a:1]; x - 1", "cannot subtract");
   }
 
   @Test public void mapRemove() {

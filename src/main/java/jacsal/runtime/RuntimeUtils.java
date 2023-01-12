@@ -202,6 +202,16 @@ public class RuntimeUtils {
     return result;
   }
 
+  public static boolean equals(Object obj1, Object obj2) {
+    if (obj1 == null && obj2 == null) {
+      return true;
+    }
+    if (obj1 == null || obj2 == null) {
+      return false;
+    }
+    return obj1.equals(obj2);
+  }
+
   public static int compareTo(Object obj1, Object obj2, String source, int offset) {
     if (obj1 == null && obj2 == null) {
       return 0;
@@ -290,11 +300,17 @@ public class RuntimeUtils {
       return listAdd((List) left, right, originalOperator == PLUS_EQUAL);
     }
 
-    if (left instanceof Map && right instanceof Map) {
-      if (operator != PLUS) {
+    if (left instanceof Map) {
+      if (operator != PLUS && operator != MINUS) {
         throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
       }
-      return mapAdd((Map) left, (Map) right, originalOperator == PLUS_EQUAL);
+      if (operator == PLUS) {
+        if (!(right instanceof Map)) {
+          throw new RuntimeError("Cannot add " + className(right) + " to Map", source, offset);
+        }
+        return mapAdd((Map) left, (Map) right, originalOperator == PLUS_EQUAL);
+      }
+      return mapSubtract((Map)left, right, originalOperator == MINUS_EQUAL, source, offset);
     }
 
     // All other operations expect numbers so check we have numbers
@@ -403,6 +419,9 @@ public class RuntimeUtils {
   }
 
   public static Object minus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (left instanceof Map) {
+      return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
+    }
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, source, offset);
     }
@@ -947,6 +966,19 @@ public class RuntimeUtils {
     Map result = isPlusEqual ? map1 : new LinkedHashMap(map1);
     result.putAll(map2);
     return result;
+  }
+
+  public static Map mapSubtract(Map map1, Object obj2, boolean isMinusEqual, String source, int offset) {
+    Map result = isMinusEqual ? map1 : new LinkedHashMap(map1);
+    if (obj2 instanceof Map) {
+      ((Map)obj2).keySet().forEach(result::remove);
+      return result;
+    }
+    if (obj2 instanceof List) {
+      ((List)obj2).forEach(result::remove);
+      return result;
+    }
+    throw new RuntimeError("Cannot subtract object of type " + className(obj2) + " from Map", source, offset);
   }
 
   /**

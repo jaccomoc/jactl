@@ -407,27 +407,32 @@ public class JacsalType {
     }
 
     if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
-      if (type1.is(ANY,STRING) && type2.is(ANY,STRING))          { return BOOLEAN;   }
+      if (type1.is(ANY,STRING) && type2.is(ANY,STRING))           { return BOOLEAN;   }
       throw new CompileError("Cannot do regex match on types " + type1 + " and " + type2, operator);
     }
 
-    if (operator.is(PLUS) && type1.is(ANY))                      { return ANY;       }
-    if (operator.is(PLUS) && type1.is(STRING))                   { return STRING;    }
-    if (operator.is(PLUS) && type1.is(LIST))                     { return LIST;      }
-    if (operator.is(PLUS) && type1.is(MAP) && type2.is(MAP,ANY)) { return MAP;       }
+    if (operator.is(PLUS,MINUS) && type1.is(ANY))                 { return ANY;       }
+    if (operator.is(PLUS) && type1.is(STRING))                    { return STRING;    }
+    if (operator.is(PLUS) && type1.is(LIST))                      { return LIST;      }
+    if (operator.is(PLUS) && type1.is(MAP) && type2.is(MAP,ANY))  { return MAP;       }
+    if (operator.is(MINUS) && type1.is(MAP) && type2.is(MAP,LIST,ANY)) { return MAP; }
+    if (operator.is(PLUS,MINUS) && type1.is(MAP)) {
+      throw new CompileError("Cannot " + (operator.is(PLUS) ? "add" : "subtract") + " " + type2
+                             + (operator.is(PLUS)?" to ":" from ") + "Map", operator);
+    }
 
     if (operator.is(STAR) && type1.is(STRING) &&
-        (type2.isNumeric() || type2.is(ANY)))                    { return STRING;    }
+        (type2.isNumeric() || type2.is(ANY)))                     { return STRING;    }
 
     if (operator.is(LEFT_SQUARE,QUESTION_SQUARE) &&
-        type1.is(STRING))                                        { return STRING;    }
+        type1.is(STRING))                                         { return STRING;    }
 
     if (operator.is(EQUAL,QUESTION_COLON,QUESTION)) {
       if (!type2.isConvertibleTo(type1)) {
         throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
       if (operator.is(QUESTION)) {
-        if (type1.is(ANY) || type2.is(ANY))                     { return ANY; }
+        if (type1.is(ANY) || type2.is(ANY))                       { return ANY; }
         JacsalType result = resultType(type1, type2);
         if (result != null) {
           return result;

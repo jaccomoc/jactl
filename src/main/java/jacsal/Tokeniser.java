@@ -486,16 +486,30 @@ public class Tokeniser {
      return stringState.size() == 0 || stringState.peek().allowNewLines;
   }
 
+  private boolean isDigit(int c, int base) {
+    switch (base) {
+      case 2:  return c == '0' || c == '1';
+      case 10: return Character.isDigit(c);
+      case 16: return Character.isDigit(c) || "abcdefABCDEF".indexOf(c) != -1;
+    }
+    throw new IllegalStateException("Internal error: unexpected base " + base);
+  }
+
   private Token parseNumber(Token token, int remaining) {
-    int i = 1;
-    while (i < remaining && Character.isDigit(charAt(i))) { i++; }
+    // Check for binary or hex number
+    int base = charsAtEquals(0,"0b", "0B")  ? 2  :
+               charsAtEquals(0, "0x", "0X") ? 16 :
+               /* default */ 10;
+
+    int i = base == 10 ? 1 : 2;
+    while (i < remaining && isDigit(charAt(i), base)) { i++; }
 
     // Check for double/decimal number but first check for special case where previous token
     // was a '.' to allow for numbers to be fields in a dotted path. E.g. a.1.2.b
     // In this case we don't want to return 1.2 as the number but 1 followed by '.' followed by 2.
     // If previous token was not a '.' then if following char is a '.' we know we have a decimal
     // number.
-    boolean decimal = (previousToken == null || previousToken.isNot(DOT)) &&
+    boolean decimal = base == 10 && (previousToken == null || previousToken.isNot(DOT)) &&
                       i + 1 < remaining && charAt(i) == '.' && Character.isDigit(charAt(i + 1));
 
     if (decimal) {
@@ -521,11 +535,14 @@ public class Tokeniser {
     }
     advance(i);
     token.setLength(numberLength);
-    String value = token.getStringValue();
+    String value = token.getStringValue().substring(base == 10 ? 0 : 2);
+    if (value.isEmpty()) {
+      throw new CompileError("Missing digits for numeric literal", token);
+    }
     switch (type) {
       case INTEGER_CONST: {
         try {
-          token.setValue(Integer.parseInt(value));
+          token.setValue(Integer.parseInt(value, base));
         }
         catch (NumberFormatException e) {
           throw new CompileError("Number too large for integer constant", token);
@@ -534,7 +551,7 @@ public class Tokeniser {
       }
       case LONG_CONST: {
         try {
-          token.setValue(Long.parseLong(value));
+          token.setValue(Long.parseLong(value, base));
         }
         catch (NumberFormatException e) {
           throw new CompileError("Number too large for long constant", token);
@@ -560,6 +577,15 @@ public class Tokeniser {
    */
   private int charAt(int lookahead) {
     return source.charAt(offset + lookahead);
+  }
+
+  private boolean charsAtEquals(int lookahead, String... value) {
+    for (String str: value) {
+      if (charsAtEquals(lookahead, str.length(), str)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private boolean charsAtEquals(int lookahead, int length, String value) {

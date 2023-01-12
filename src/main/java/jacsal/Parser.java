@@ -235,6 +235,8 @@ public class Parser {
   }
 
   private Stmt.Block block(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
+    boolean currentIgnoreEol = ignoreEol;
+    ignoreEol = false;
     Stmt.Stmts stmts = new Stmt.Stmts();
     Stmt.Block block = new Stmt.Block(openBlock, stmts);
     pushBlock(block);
@@ -245,6 +247,7 @@ public class Parser {
     }
     finally {
       popBlock();
+      ignoreEol = currentIgnoreEol;
     }
   }
 
@@ -1516,11 +1519,11 @@ public class Parser {
    * start an expression and we are not already in a nested expression of some sort.
    */
   boolean matchOp(List<TokenType> types) {
-    if (!tokeniser.peek().is(EOL)) {
+    if (!peekIsEOL()) {
       return matchAny(types);
     }
     for (TokenType type: types) {
-      if (exprStartingOps.contains(type) ? matchAny(type) : matchAnyIgnoreEOL(type)) {
+      if (!ignoreEol && exprStartingOps.contains(type) ? matchAnyNoEOL(type) : matchAnyIgnoreEOL(type)) {
         return true;
       }
     }
@@ -1727,6 +1730,10 @@ public class Parser {
     return token;
   }
 
+  private Token peekNoEOL() {
+    return tokeniser.peek();
+  }
+
   private boolean peekIsEOL() {
     return tokeniser.peek().is(EOL);
   }
@@ -1765,14 +1772,7 @@ public class Parser {
     if (ignoreEol) {
       return matchAnyIgnoreEOL(types);
     }
-
-    for (TokenType type : types) {
-      if (peek().is(type)) {
-        advance();
-        return true;
-      }
-    }
-    return false;
+    return matchAnyNoEOL(types);
   }
 
   /**
@@ -1781,6 +1781,20 @@ public class Parser {
    */
   private boolean matchAnyIgnoreEOL(List<TokenType> types) {
     return matchAnyIgnoreEOL(types.toArray(TokenType[]::new));
+  }
+
+  private boolean matchAnyNoEOL(TokenType... types) {
+    return matchAnyNoEOL(Arrays.asList(types));
+  }
+
+  private boolean matchAnyNoEOL(List<TokenType> types) {
+    for (TokenType type : types) {
+      if (peekNoEOL().is(type)) {
+        advance();
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
