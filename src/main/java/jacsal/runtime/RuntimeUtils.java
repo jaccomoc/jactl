@@ -2203,4 +2203,8 @@ public class RuntimeUtils {
     }
     return script;
   }
+
+  public static boolean die(String msg, String source, int offset) {
+    throw new RuntimeError("Die: " + msg, source, offset);
+  }
 }

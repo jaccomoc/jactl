@@ -406,6 +406,11 @@ class Expr {
     boolean newLine;    // Whether to print newline
   }
 
+  class Die extends Expr {
+    Token dieToken;
+    Expr  expr;
+  }
+
   /**
    * Used to turn a list of statements into an expression so that we can support "do {...}":
    *   x < max or do { x++; y-- } and return x + y;

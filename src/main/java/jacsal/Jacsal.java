@@ -88,7 +88,7 @@ public class Jacsal {
 
     try {
       var context = JacsalContext.create()
-                                 .replMode(true)
+                                 .replMode(argMap.containsKey('e'))
                                  .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
                                  .printLoop(argMap.containsKey('p'))
                                  .nonPrintLoop(argMap.containsKey('n'))

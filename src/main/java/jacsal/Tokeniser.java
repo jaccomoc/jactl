@@ -376,6 +376,7 @@ public class Tokeniser {
           // so we don't advance past the '$'.
           if (!Character.isDigit(nextChar)) {
             advance(1);  // Skip '$'
+            remaining--;
           }
           token = parseIdentifier(createToken(), remaining);
           if (keyWords.contains(token.getChars())) {

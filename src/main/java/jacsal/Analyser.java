@@ -419,6 +419,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitDie(Expr.Die expr) {
+    analyse(expr.expr);
+    freeLocals(1);
+    return null;
+  }
+
   @Override public Void visitBlock(Expr.Block expr) {
     analyse(expr.block);
     return null;

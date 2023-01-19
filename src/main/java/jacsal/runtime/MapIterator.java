@@ -17,8 +17,8 @@
 package jacsal.runtime;
 
 import java.lang.invoke.MethodHandle;
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
 /**
  * Iterator that wraps another iterator and transforms the elements returned by the wrapped iterator based on
@@ -89,7 +89,10 @@ class MapIterator implements Iterator {
       if (location == 2) {
         elem = RuntimeUtils.mapEntryToList(elem);
         if (withIndex) {
-          elem = List.of(elem, index++);
+          var elemList = new ArrayList<>();
+          elemList.add(elem);
+          elemList.add(index++);
+          elem = elemList;
         }
         return closure == null ? elem : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
       }

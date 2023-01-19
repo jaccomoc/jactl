@@ -40,10 +40,6 @@ class CompilerTest extends BaseTest {
     test("[1,2,3].map{\n // Strip '#' comments\nit}", List.of(1,2,3));
   }
 
-  @Test public void testStuff() {
-    test("0b101", 5);
-  }
-
   @Test public void literals() {
     test("42", 42);
     test("0", 0);
@@ -2650,6 +2646,8 @@ class CompilerTest extends BaseTest {
     testError("def m = [:]; m.a?.?['b']", "unexpected token '?['");
     test("Map m; sleep(0,m).a.b = 1", 1);
     test("Map m; sleep(0,m).(sleep(0,'a')).b = 1", 1);
+    test("def x; (x?:[:]).a = 2", 2);
+    test("Map x; (x?:[:]).a = 2", 2);
   }
 
   @Test public void conditionalAssignment() {
@@ -3917,6 +3915,7 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and continue; sum += i }; sum", 15);
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and sleep(0,continue); sum += i }; sum", 15);
     test("def f(x){x}; int sum = 0; double i = 0; while (i++ < 10) { i > 5 and f(continue); sum += i }; sum", 15);
+    test("def s=[1]; while (s.size())\n{\nfalse and continue\n(0 + (2*3) - 10 < s.size()) and s.remove(0) and continue\n}\ns", List.of());
   }
 
   @Test public void simpleFunctions() {
@@ -4264,6 +4263,7 @@ class CompilerTest extends BaseTest {
     test("def f(x,y={8}) { def g() { y() }; g() }; f(3)", 8);
     test("def f(x,y=++x) { def g() { sleep(0,y)+x }; g() }; f(3)", 8);
     test("def f(x,y=++x) { def g() { sleep(0,y)+sleep(0,x) }; g() }; f(3)", 8);
+    test("def i = 0; def f(x){ x == 1 ? ++i * x : ++i * f(x-1) }; f(3) + i", 9);
   }
 
   @Test public void closurePassingSyntax() {
@@ -4335,6 +4335,7 @@ class CompilerTest extends BaseTest {
     test("abs(-1L)", 1L);
     test("def f = abs; f(-1L)", 1L);
     testError("abs('abc')", "cannot convert argument");
+    testError("def f = abs; f('abc')", "must be number");
     test("def x = -0; abs(x)", 0);
     test("def x = 0; abs(x)", 0);
     test("def x = -1; abs(x)", 1);
@@ -4376,6 +4377,7 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; def x = 3; x.each{ x=7,y=2 -> sum += x+y }; sum", 9);
     test("int sum = 0; def x = 3; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
     test("int sum = 0; def x = 3.4; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
+    test("def x = 3\n[[1],[2]].size()", 2);
   }
 
   @Test public void mapEach() {
@@ -4470,6 +4472,11 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void mapWithIndex() {
+    test("[null].map{it}", Collections.singletonList(null));
+    var list = new ArrayList<>();
+    list.add(null);
+    list.add(0);
+    test("[null].mapWithIndex{it}", List.of(list));
     test("[].mapWithIndex{ it[0] + it[1] }", List.of());
     test("def x = []; x.mapWithIndex{ it[0] + it[1] }", List.of());
     test("def x = [:]; x.mapWithIndex{ it[0] + it[1] }", List.of());
@@ -4992,6 +4999,41 @@ class CompilerTest extends BaseTest {
     test("def m = [a:1,b:2]; def f = m.remove; f('c'); m", Map.of("a",1,"b",2));
   }
 
+  @Test public void listRemove() {
+    testError("List m = null; m.remove(0)", "null object");
+    testError("def m = null; m.remove(0)", "null value");
+    testError("[].remove(0)", "too large");
+    testError("def x = []; x.remove(0)", "too large");
+    test("[2].remove(0)", 2);
+    test("[2].remove(-1)", 2);
+    testError("[2].remove(-2)", "out of bounds");
+    test("def x = [2]; x.remove(0)", 2);
+    test("def x = [2]; x.remove(0); x", List.of());
+    test("[1,2,3].remove(1)", 2);
+    test("def x = [1,2,3]; x.remove(0)", 1);
+    test("def x = [1,2,3]; x.remove(0); x", List.of(2,3));
+    test("def x = [1,2,3]; x.remove(1)", 2);
+    test("def x = [1,2,3]; x.remove(1); x", List.of(1,3));
+    test("def x = [1,2,3]; x.remove(2)", 3);
+    test("def x = [1,2,3]; x.remove(2); x", List.of(1,2));
+    test("def x = [1,2,3]; x.remove(-3)", 1);
+    test("def x = [1,2,3]; x.remove(-3); x", List.of(2,3));
+    test("def x = [1,2,3]; x.remove(-2)", 2);
+    test("def x = [1,2,3]; x.remove(-2); x", List.of(1,3));
+    test("def x = [1,2,3]; x.remove(-1)", 3);
+    test("def x = [1,2,3]; x.remove(-1); x", List.of(1,2));
+    test("def x = [1,2,3]; def f = x.remove; f(-1); x", List.of(1,2));
+    testError("[1,2,3].map{it}.remove(0)", "no such method");
+    test("[1,null,2].remove(1)", null);
+    test("[1,null,2].remove(1)", null);
+    test("[1,null,2].remove(1)", null);
+    test("def x = [1,null,2]; x.remove(1)", null);
+    test("def x = [1,null,2]; x.remove(1); x", List.of(1,2));
+    test("def x = [1,null,2]; x.remove(2)", 2);
+    test("def x = [1,null,2]; x.remove(2); x.size()", 2);
+    test("def x = [1,null,2]; x.remove(2); x[1]", null);
+  }
+
   @Test public void andOrNot() {
     test("not true", false);
     test("not false", true);
@@ -5045,6 +5087,10 @@ class CompilerTest extends BaseTest {
     testError("sprintf('%zs%d','x','y')", "bad format string");
     testError("sprintf()", "missing mandatory arguments");
     testError("def f = sprintf; f()", "missing mandatory arguments");
+  }
+
+  @Test public void die() {
+    testError("die \"ab${2+3}\"", "Die: ab5");
   }
 
   @Test public void eval() {
@@ -5280,9 +5326,10 @@ class CompilerTest extends BaseTest {
     test("def f(x\n,\ny\n)\n{\nx\n+\ny\n}\nf(1,2)", 3);
     testError("4\n/2", "unexpected end of file in string");
     test("4\n-3*2", -6);
-    test("int\ni\n=\n3\n", 3);
-    test("int\ni\n=\n1,\nj\n=\n2\n,k\ni+j", 3);
-    test("for\n(\nint\ni\n=\n4-\n3\n,\nj\n=\n4/\n2\n;\ni\n<\n10\n;\ni++\n)\n;", null);
+    testError("int\ni\n=\n3\n", "unexpected token '='");
+    test("int\ni =\n3\n", 3);
+    test("int\ni =\n1,\nj =\n2,\nk\ni+j", 3);
+    test("for\n(\nint\ni =\n4-\n3,\nj =\n4/\n2\n;\ni\n<\n10\n;\ni++\n)\n;", null);
     test("def x = [1,2]; if\n(\nx\n[\n0\n]\n)\n4", 4);
     test("def x = [1,2]; def i = 0; while\n(\nx\n[\n0\n]\n>\n10\n||\ni++\n<2\n)\nx[\n2\n]\n=\n7\nx[2]", 7);
   }

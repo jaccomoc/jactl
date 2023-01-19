@@ -569,6 +569,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // Do some level of validation
         if (expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE)) {
           expr.type = getFieldType(expr.left, expr.operator, expr.right, false);
+          if (expr.operator.is(QUESTION_DOT,QUESTION_SQUARE)) {
+            expr.type = expr.type.boxed();         // since with ?. and ?[ we could get null
+          }
           // Field access if we have an instance and if field is not a function since some functions might be
           // static functions or builtin functions which aren't fields from a GETFIELD point of view.
           expr.isFieldAccess = expr.left.type.is(INSTANCE) && expr.right instanceof Expr.Literal && !expr.type.is(FUNCTION);
@@ -1111,6 +1114,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override
   public JacsalType visitReturn(Expr.Return returnExpr) {
     resolve(returnExpr.expr);
+    resolve(returnExpr.expr.type);
+    resolve(returnExpr.returnType);
     returnExpr.returnType = currentFunction().returnType;
     returnExpr.funDecl = currentFunction();
     if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
@@ -1136,6 +1141,11 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public JacsalType visitPrint(Expr.Print printExpr) {
     resolve(printExpr.expr);
     return printExpr.type = BOOLEAN;
+  }
+
+  @Override public JacsalType visitDie(Expr.Die expr) {
+    resolve(expr.expr);
+    return expr.type = BOOLEAN;
   }
 
   @Override public JacsalType visitClosure(Expr.Closure expr) {

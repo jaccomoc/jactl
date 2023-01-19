@@ -1009,7 +1009,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void newlinesInClassDecl() {
-    test("class\nX\n{\nint\ni\n=\n1\ndef\nf(\n)\n{\ni\n+\ni\n}\n}\nnew\nX\n(\n)\n.\ni", 1);
+    test("class\nX\n{\nint\ni=\n1\ndef\nf(\n)\n{\ni\n+\ni\n}\n}\nnew\nX\n(\n)\n.\ni", 1);
   }
 
   @Test public void nestedFunctionsWithinClasses() {
@@ -1328,5 +1328,21 @@ public class ClassTests extends BaseTest {
   @Test public void nullFieldSetting() {
     test("class X { X next }; def x = new X(null); new X(x).next = null", null);
     test("class X { X next }; def x = new X(null); [new X(x),new X(x)].each{ it.next = null }", null);
+  }
+
+  @Test public void forwardReferenceFunction() {
+    test("class X{int i=3}; def f(){g()}; X g(){ new X() }; f().i", 3);
+    test("class X{int i=3}; X f(){g()}; def g(){ new X() }; f().i", 3);
+    test("class X{int i=3}; X f(){g()}; X g(){ new X() }; f().i", 3);
+    test("class X{int i=3}; X f(){g(new X())}; X g(X x){ x }; f().i", 3);
+  }
+
+  @Test public void nullPointers() {
+    test("class X{ int i = 3 }; X x = null; x?.i", null);
+    test("class X{ int i = 3 }; X x = null; x?['i']", null);
+    test("class X{ int i = 3 }; X x = null; (x?:new X()).i = 4", 4);
+    test("class X{ int i = 3 }; X x = null; (x?:new X())['i'] = 4", 4);
+    test("class X{ int i = 3; Y y = null }; class Y{int i=4}; X x = null; (x?:new X())?.y?.i", null);
+    test("class X{ int i = 3; Y y = null }; class Y{int i=4}; X x = null; (x?:new X())?.y?.i = 5", 5);
   }
 }

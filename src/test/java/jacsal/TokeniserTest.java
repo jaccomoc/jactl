@@ -146,6 +146,7 @@ class TokeniserTest {
     doTest.accept("break", BREAK);
     doTest.accept("BEGIN", BEGIN);
     doTest.accept("END", END);
+    doTest.accept("die", DIE);
   }
 
   @Test public void eolToken() {

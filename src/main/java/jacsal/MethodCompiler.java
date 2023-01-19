@@ -1770,6 +1770,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitDie(Expr.Die expr) {
+    compile(expr.expr);
+    convertToString();
+    loadLocation(expr.dieToken);
+    invokeMethod(RuntimeUtils.class, "die", String.class, String.class, int.class);
+    return null;
+  }
+
   @Override public Void visitBlock(Expr.Block expr) {
     compile(expr.block);
     loadConst(true);
@@ -1938,14 +1946,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Expr.Binary leftMost = nodes.get(nodes.size() - 1);
     // For left most field compile parent and save its value in case we need it once null value found
     compile(leftMost.left);
-    if (leftMost.left.couldBeNull) {
+    if (leftMost.left.couldBeNull && !leftMost.operator.is(QUESTION_DOT,QUESTION_SQUARE)) {
       throwIfNull("Trying to access field/element of null object", leftMost.operator);
     }
     boolean checkForNull = false;
     var     lastNode     = leftMost;
     for (ListIterator<Expr.Binary> iter = nodes.listIterator(nodes.size()); iter.hasPrevious(); ) {
       var    node = iter.previous();
-      if (checkForNull) {
+      if (checkForNull && !node.operator.is(QUESTION_DOT,QUESTION_SQUARE)) {
         throwIfNull("Trying to access field/element of null object" +
                     (lastNode.createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
                     node.operator);
@@ -1987,7 +1995,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                });
       }
       else {
-        loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
+        // If using ?. then only load field if parent not null
+        if (node.operator.is(QUESTION_DOT,QUESTION_SQUARE)) {
+          emitIf(false, IfTest.IS_NOTNULL,
+                 () -> dupVal(),
+                 () -> {
+                   loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);
+                   box();
+                 },
+                 () -> checkCast(fieldType.boxed()));
+        }
+        else {
+          loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
+        }
       }
       lastNode = node;
     }
@@ -2142,7 +2162,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   enum IfTest {
     // NOTE: opCode is op code for false test
     IS_TRUE(IFEQ),
-    IS_NULL(IFNONNULL);
+    IS_NULL(IFNONNULL),
+    IS_NOTNULL(IFNULL);
     final int opCode; IfTest(int opCode) { this.opCode = opCode; }
   }
   private void emitIf(boolean isAsync, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {

@@ -611,6 +611,18 @@ abstract class Expr {
     @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
   }
 
+  static class Die extends Expr {
+    Token dieToken;
+    Expr  expr;
+    Die(Token dieToken, Expr expr) {
+      this.dieToken = dieToken;
+      this.expr = expr;
+      this.location = dieToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitDie(this); }
+    @Override public String toString() { return "Die[" + "dieToken=" + dieToken + ", " + "expr=" + expr + "]"; }
+  }
+
   /**
    * Used to turn a list of statements into an expression so that we can support "do {...}":
    *   x < max or do { x++; y-- } and return x + y;
@@ -869,6 +881,7 @@ abstract class Expr {
     T visitBreak(Break expr);
     T visitContinue(Continue expr);
     T visitPrint(Print expr);
+    T visitDie(Die expr);
     T visitBlock(Block expr);
     T visitTypeExpr(TypeExpr expr);
     T visitArrayLength(ArrayLength expr);

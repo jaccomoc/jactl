@@ -168,6 +168,11 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     return expr;
   }
 
+  @Override public Expr visitDie(Expr.Die expr) {
+    expr.expr = decorate(expr.expr);
+    return null;
+  }
+
   @Override public Expr visitBlock(Expr.Block expr) {
     decorate(expr.block);
     return expr;

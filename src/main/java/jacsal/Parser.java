@@ -471,7 +471,7 @@ public class Parser {
    *       a list of VarDecls if multiple variables declared.
    */
   private Stmt varDecl(boolean inClassDecl) {
-    return (Stmt)ignoreNewLines(() -> doVarDecl(inClassDecl));
+    return doVarDecl(inClassDecl);
   }
 
   private Stmt doVarDecl(boolean inClassDecl) {
@@ -733,7 +733,7 @@ public class Parser {
     );
 
   // Binary operators which can also sometimes be the start of an expression. We need to know
-  // when we checking if an expression continues on the next line whether the next operator
+  // when we are checking if an expression continues on the next line whether the next operator
   // should be treated as part of the current expression or the start of a new one.
   // NOTE: we include '/' and '/=' since they could indicate start of a regex.
   //       '-' is also included since it can be the start of a negative number
@@ -806,6 +806,7 @@ public class Parser {
       matchAny(EOL);
       if (matchAny(RETURN))        { expr = returnExpr();                  } else
       if (matchAny(PRINT,PRINTLN)) { expr = printExpr();                   } else
+      if (matchAny(DIE))           { expr = dieExpr();                     } else
       if (matchAny(BREAK))         { expr = new Expr.Break(previous());    } else
       if (matchAny(CONTINUE))      { expr = new Expr.Continue(previous()); }
       else {
@@ -1498,6 +1499,16 @@ public class Parser {
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, printToken).setValue(""))
                                     : parseExpression();
     return new Expr.Print(printToken, expr, printToken.is(PRINTLN));
+  }
+
+  /**
+   *# dieExpr -> die expr ?;
+   */
+  private Expr.Die dieExpr() {
+    Token dieToken = previous();
+    Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, dieToken).setValue(""))
+                                    : parseExpression();
+    return new Expr.Die(dieToken, expr);
   }
 
   /////////////////////////////////////////////////

@@ -148,6 +148,7 @@ public enum TokenType {
   PRINTLN("println"),
   BEGIN("BEGIN"),
   END("END"),
+  DIE("die"),
 
   //= Special
   EOL(),            // End of line
