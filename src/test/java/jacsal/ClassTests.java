@@ -927,6 +927,8 @@ public class ClassTests extends BaseTest {
     test("class X { def toString() { 'xxx' } }; new X().toString()", "xxx");
     test("class X { def toString() { 'xxx' } }; def x = [new X()]; x.toString()", "[xxx]");
     testError("class X { int i=3; def toString(x) { x + 'xxx' } }; def x = [new X()]; x.toString()", "toString() cannot have mandatory parameters");
+    test("def x = [:]; x.x = x; x.toString()", "[x:<CIRCULAR_REF>]");
+    test("def a = [1,2,3]; [a:a,b:a].toString()", "[a:[1, 2, 3], b:[1, 2, 3]]");
   }
 
   @Test public void closedOverParams() {

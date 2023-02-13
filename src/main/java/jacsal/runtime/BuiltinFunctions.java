@@ -50,6 +50,7 @@ public class BuiltinFunctions {
       registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
       registerMethod("remove", "mapRemove", MAP, false, 1, List.of(0));
       registerMethod("remove", "listRemove", LIST, true, 1, List.of(0));
+      registerMethod("add", "listAdd", LIST, true, 1, List.of(0));
       registerMethod("reverse", "iteratorReverse", ITERATOR, false, 0, List.of(0));
       registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
       registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(0,2));
@@ -538,6 +539,34 @@ public class BuiltinFunctions {
     }
     catch (ClassCastException e) {
       throw new RuntimeError("Argument to List remove() must be an integer not " + RuntimeUtils.className(args[0]), source, offset);
+    }
+  }
+
+  // = add
+
+  public static List listAdd(List list, String source, int offset, int index, Object elem) {
+    if (index < 0) {
+      index += list.size();
+    }
+    if (index < 0) {
+      throw new RuntimeError("Index out of bounds: negative index (" + (index-list.size()) + ") resolves to location before start of list", source, offset);
+    }
+    if (index > list.size()) {
+      throw new RuntimeError("Index out of bounds:  (" + index + " is too large)", source, offset);
+    }
+    list.add(index, elem);
+    return list;
+  }
+  public static Object listAddWrapper(List list, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, LIST,2, source, offset);
+    try {
+      if (args.length == 2) {
+        return listAdd(list, source, offset, (int) args[0], args[1]);
+      }
+      return listAdd(list, source, offset, list.size(), args[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Index argument to List add() must be an integer not " + RuntimeUtils.className(args[0]), source, offset);
     }
   }
 
@@ -1531,7 +1560,7 @@ public class BuiltinFunctions {
     try {
       if (args.length > 1) {
         if (!(args[1] instanceof Number)) {
-          throw new RuntimeError("Second argument to substring must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+          throw new RuntimeError("Second argument to substring must be a number not '" + RuntimeUtils.className(args[1]) + "'", source, offset);
         }
         int end = ((Number) args[1]).intValue();
         return str.substring(begin, end);

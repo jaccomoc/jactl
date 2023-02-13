@@ -413,7 +413,7 @@ public class JacsalType {
 
     if (operator.is(PLUS,MINUS) && type1.is(ANY))                 { return ANY;       }
     if (operator.is(PLUS) && type1.is(STRING))                    { return STRING;    }
-    if (operator.is(PLUS) && type1.is(LIST))                      { return LIST;      }
+    if (operator.is(PLUS) && type1.is(LIST,ITERATOR))             { return LIST;      }
     if (operator.is(PLUS) && type1.is(MAP) && type2.is(MAP,ANY))  { return MAP;       }
     if (operator.is(MINUS) && type1.is(MAP) && type2.is(MAP,LIST,ANY)) { return MAP; }
     if (operator.is(PLUS,MINUS) && type1.is(MAP)) {

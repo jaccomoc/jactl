@@ -826,16 +826,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(loop);         // :loop
     mv.visitJumpInsn(IFEQ, done);
     pop();
-    loadLocal(matcherVar);
-    loadLocal(sbVar);
     compile(expr.replace);
     castToString(expr.replace.location);
+    loadLocal(matcherVar);
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
+    swap();
+    loadLocal(sbVar);
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
+    swap();
     invokeMethod(Matcher.class, "appendReplacement", StringBuilder.class, String.class);
     popVal();    // Returns the Matcher which we already have
 
     // If in loop
     if (globalModifier) {
       loadLocal(matcherVar);
+      mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
       invokeMethod(Matcher.class, "find");
       pop();
       mv.visitJumpInsn(GOTO, loop);
@@ -843,11 +848,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     mv.visitLabel(done);      // :done
     loadLocal(matcherVar);
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
     loadLocal(sbVar);
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
     invokeMethod(Matcher.class, "appendTail", StringBuilder.class);
     popVal();   // Returns the StringBuilder
 
     loadLocal(sbVar);
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
     invokeMethod(StringBuilder.class, "toString");
 
     stack.freeSlot(matcherVar);

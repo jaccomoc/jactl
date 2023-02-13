@@ -1058,84 +1058,89 @@ public class RuntimeUtils {
     if (obj == null) {
       return "null";
     }
-    if (obj instanceof List) {
-      StringBuilder sb = new StringBuilder();
-      sb.append('[');
-      List list = (List) obj;
-      for (int i = 0; i < list.size(); i++) {
-        if (i > 0) {
-          sb.append(", ");
+    try {
+      if (obj instanceof List) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        List list = (List) obj;
+        for (int i = 0; i < list.size(); i++) {
+          if (i > 0) {
+            sb.append(", ");
+          }
+          sb.append(toQuotedString(list.get(i), previousObjects, "", 0));
         }
-        sb.append(toQuotedString(list.get(i), previousObjects, "", 0));
+        sb.append(']');
+        return sb.toString();
       }
-      sb.append(']');
-      return sb.toString();
-    }
 
-    if (obj instanceof JacsalObject) {
-      JacsalObject jobj = (JacsalObject)obj;
-      Object toString = jobj._$j$getFieldsAndMethods().get(Utils.TO_STRING);
-      if (toString instanceof MethodHandle) {
-        MethodHandle mh = (MethodHandle)toString;
-        if (mh.type().parameterCount() == 5) {
+      if (obj instanceof JacsalObject) {
+        JacsalObject jobj = (JacsalObject)obj;
+        Object toString = jobj._$j$getFieldsAndMethods().get(Utils.TO_STRING);
+        if (toString instanceof MethodHandle) {
+          MethodHandle mh = (MethodHandle)toString;
+          if (mh.type().parameterCount() == 5) {
+            try {
+              Object result = mh.invoke(obj, (Continuation)null, null, 0, Utils.EMPTY_OBJ_ARR);
+              return result == null ? "null" : result.toString();
+            }
+            catch (RuntimeError e) {
+              throw e;
+            }
+            catch (Throwable e) {
+              throw new IllegalStateException("Unexpected error in toString(): " + e, e);
+            }
+          }
+        }
+      }
+
+      if (obj instanceof JacsalObject || obj instanceof Map) {
+        boolean       isMap = obj instanceof Map;
+        StringBuilder sb    = new StringBuilder();
+        sb.append('[');
+        var iterator = isMap ? ((Map<String, Object>) obj).entrySet().iterator()
+                             : ((JacsalObject) obj)._$j$getFieldsAndMethods()
+                                                   .entrySet()
+                                                   .stream()
+                                                   .filter(entry -> entry.getValue() instanceof Field)
+                                                   .iterator();
+        boolean first = true;
+        while (iterator.hasNext()) {
+          if (!first) {
+            sb.append(", ");
+          }
+          else {
+            first = false;
+          }
+          var entry = iterator.next();
           try {
-            Object result = mh.invoke(obj, (Continuation)null, null, 0, Utils.EMPTY_OBJ_ARR);
-            return result == null ? "null" : result.toString();
+            Object value = entry.getValue();
+            if (!isMap) {
+              value = ((Field) entry.getValue()).get(obj);
+            }
+            if (indent > 0) {
+              sb.append('\n').append(prefix).append(" ".repeat(indent));
+            }
+            sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + " ".repeat(indent), indent));
           }
-          catch (RuntimeError e) {
-            throw e;
-          }
-          catch (Throwable e) {
-            throw new IllegalStateException("Unexpected error in toString(): " + e, e);
+          catch (IllegalAccessException e) {
+            throw new IllegalStateException("Internal error: problem accessing field '" + entry.getKey() + "': " + e, e);
           }
         }
+        if (first) {
+          // Empty map
+          sb.append(':');
+        }
+        if (indent > 0) {
+          sb.append('\n').append(prefix);
+        }
+        sb.append(']');
+        return sb.toString();
       }
+      return obj.toString();
     }
-
-    if (obj instanceof JacsalObject || obj instanceof Map) {
-      boolean       isMap = obj instanceof Map;
-      StringBuilder sb    = new StringBuilder();
-      sb.append('[');
-      var iterator = isMap ? ((Map<String, Object>) obj).entrySet().iterator()
-                           : ((JacsalObject) obj)._$j$getFieldsAndMethods()
-                                                 .entrySet()
-                                                 .stream()
-                                                 .filter(entry -> entry.getValue() instanceof Field)
-                                                 .iterator();
-      boolean first = true;
-      while (iterator.hasNext()) {
-        if (!first) {
-          sb.append(", ");
-        }
-        else {
-          first = false;
-        }
-        var entry = iterator.next();
-        try {
-          Object value = entry.getValue();
-          if (!isMap) {
-            value = ((Field) entry.getValue()).get(obj);
-          }
-          if (indent > 0) {
-            sb.append('\n').append(prefix).append(" ".repeat(indent));
-          }
-          sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + " ".repeat(indent), indent));
-        }
-        catch (IllegalAccessException e) {
-          throw new IllegalStateException("Internal error: problem accessing field '" + entry.getKey() + "': " + e, e);
-        }
-      }
-      if (first) {
-        // Empty map
-        sb.append(':');
-      }
-      if (indent > 0) {
-        sb.append('\n').append(prefix);
-      }
-      sb.append(']');
-      return sb.toString();
+    finally {
+      previousObjects.remove(System.identityHashCode(obj));
     }
-    return obj.toString();
   }
 
   /**
@@ -2004,7 +2009,7 @@ public class RuntimeUtils {
   public static Object mapEntryToList(Object elem) {
     if (elem instanceof Map.Entry) {
       var entry = (Map.Entry) elem;
-      elem = List.of(entry.getKey(), entry.getValue());
+      elem = Arrays.asList(entry.getKey(), entry.getValue());
     }
     return elem;
   }

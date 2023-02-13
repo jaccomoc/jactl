@@ -29,10 +29,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CompilerTest extends BaseTest {
 
-  public static Object timestamp(String source, int offset, Object args) {
-    return System.currentTimeMillis();
-  }
-
   @Test public void comments() {
     test("  // Strip '#' comments\n1", 1);
     test("[1,2,3].map{it}", List.of(1,2,3));
@@ -2146,6 +2142,7 @@ class CompilerTest extends BaseTest {
     test("def a = 'a'; def it = 'abc'; s/([a-z])/\\$a\\$1/g", "$a$1$a$1$a$1");
     test("def it = 'abc'; s/([a-z])/\\$1\\$1/g", "$1$1$1$1$1$1");
     test("def it = 'abc'; s/([a-z])/\\$1\\$1${$1 + $1}/g", "$1$1aa$1$1bb$1$1cc");
+    testError("def root = 'abc'; def m=[:]; root =~ s/abc/\"${m{'abc'}}\"/\n", "object of type map");
   }
 
   @Test public void doBlock() {
@@ -2451,6 +2448,8 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3]; ''+x", "[1, 2, 3]");
     test("def x = []; ''+x", "[]");
     test("def x = [1,[2,3]]; ''+x", "[1, [2, 3]]");
+    test("def x = []; x[2] = 2; x[0] == null && x[1] == null && x[2] == 2", true);
+    test("def x = []; x[2] = 2; x.filter{!it}.size()", 2);
   }
 
   @Test public void mapLiterals() {
@@ -4399,6 +4398,8 @@ class CompilerTest extends BaseTest {
     test("def result = ''; def x = [a:1,b:2]; def f = x.each; f{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
     test("3.map{ it+1 }", List.of(1,2,3));
     test("(-3).map{ it+1 }", List.of());
+    test("[a:'abc'].each{ it[1] =~ s/b/x/ }", null);
+    test("[a:1].each{ it[1] = 2 }", null);
   }
 
   @Test public void listCollect() {
@@ -4858,6 +4859,7 @@ class CompilerTest extends BaseTest {
     test("def x = ['a','b']; x += x; x", List.of("a","b","a","b"));
     test("var x = ['a','b']; x += 1; x", List.of("a","b",1));
     test("def x = ['a','b']; x += 1; x", List.of("a","b",1));
+    test("'abc'.map{it} + 'd'", List.of("a","b","c","d"));
     testError("var x = ['a','b']; x -= 1; x", "non-numeric operand");
     testError("def x = ['a','b']; x -= 1; x", "non-numeric operand");
     testError("var x = ['a','b']; x++", "unary operator '++' cannot be applied to type list");
@@ -4886,6 +4888,20 @@ class CompilerTest extends BaseTest {
     test("def x = ['a','b']; def y = [1] << 2; x <<= y; x", List.of("a","b",List.of(1,2)));
     test("[1,2] << [a:1]", List.of(1,2,Map.of("a",1)));
     test("[1,2].flatMap{ [it,it] } << [a:1]", List.of(1,1,2,2,Map.of("a",1)));
+  }
+
+  @Test public void listAddAtIndex() {
+    test("[].add(0,1)", List.of(1));
+    test("[].add(0,1).add(0,2)", List.of(2,1));
+    test("[].add(0,1).add(0,2).add(2,3)", List.of(2,1,3));
+    test("[].add(0,1).add(0,2).add(2,3).add(-1,4)", List.of(2,1,4,3));
+    test("[].add(0,1).add(0,2).add(2,3).add(4)", List.of(2,1,3,4));
+    test("def x = []; x.add(0,1)", List.of(1));
+    test("def x = [].add(0,1); x.add(0,2)", List.of(2,1));
+    test("def x = []; x.add(0,1).add(0,2).add(2,3)", List.of(2,1,3));
+    test("def x = [].add(0,1).add(0,2).add(2,3); x.add(-1,4)", List.of(2,1,4,3));
+    test("def x = [].add(0,1).add(0,2).add(2,3); x.add(4)", List.of(2,1,3,4));
+    test("def x = [2,1,3]; x.add(4)", List.of(2,1,3,4));
   }
 
   @Test public void subList() {
@@ -5272,7 +5288,6 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void globals() {
-    //test("timestamp() > 0", true);
     JacsalContext jacsalContext = JacsalContext.create()
                                                .evaluateConstExprs(true)
                                                .replMode(true)
