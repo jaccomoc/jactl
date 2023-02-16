@@ -24,13 +24,11 @@ import org.objectweb.asm.util.TraceClassVisitor;
 
 import java.io.PrintWriter;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -264,8 +262,8 @@ public class ClassCompiler {
 
       // Get all parameter types
       List<Class> paramTypes = new ArrayList<>();
-      if (wrapper.heapLocalParams.size() > 0) {
-        paramTypes.addAll(Collections.nCopies(wrapper.heapLocalParams.size(), jacsal.runtime.HeapLocal.class));
+      if (wrapper.heapLocals.size() > 0) {
+        paramTypes.addAll(Collections.nCopies(wrapper.heapLocals.size(), jacsal.runtime.HeapLocal.class));
       }
       // Wrapper method always has a Continuation argument even if it doesn't need it since when invoking through
       // a MethodHandle we have no way of knowing whether it needs a Continuation or not
@@ -399,7 +397,7 @@ public class ClassCompiler {
     int continuationSlot = slot++;
 
     // Generate code for loading saved parameter values back onto stack
-    int numHeapLocals = funDecl.heapLocalParams.size();
+    int numHeapLocals = funDecl.heapLocals.size();
     for (int i = 0; i < numHeapLocals; i++, slot++) {
       Utils.loadStoredValue(mv, slot, HEAPLOCAL, () -> Utils.loadContinuationArray(mv, continuationSlot, HEAPLOCAL));
     }

@@ -278,6 +278,7 @@ class Expr {
 
     FunctionDescriptor @functionDescriptor;
     Expr.VarDecl       @varDecl;            // For the variable that we will create to hold our MethodHandle
+    Expr.FunDecl       @owner;              // If we are nested inside another function then this the enclosing function
 
     boolean            @isWrapper;   // Whether this is the wrapper function or the real one
     Expr.FunDecl       @wrapper;     // The wrapper method that handles var arg and named arg invocations
@@ -294,7 +295,8 @@ class Expr {
     Deque<Stmt.Block> @blocks = new ArrayDeque<>();
 
     // Which heap locals from our parent we need passed in to us
-    LinkedHashMap<String,Expr.VarDecl> @heapLocalParams = new LinkedHashMap<>();
+    LinkedHashMap<String,Expr.VarDecl>       @heapLocalsByName = new LinkedHashMap<>();
+    LinkedHashMap<Expr.VarDecl,Expr.VarDecl> @heapLocals       = new LinkedHashMap<>();
 
     // Remember earliest (in the code) forward reference to us so we can make sure that
     // no variables we close over are declared after that reference

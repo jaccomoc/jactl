@@ -1038,12 +1038,12 @@ public class ClassTests extends BaseTest {
     test("class A { def f() { int x = 1; [{ it + x++}, {it - x++}]}}; def x = new A().f(); x[0](5) + x[0](5) + x[1](0) + x[1](0)", 6);
     test("class A { def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; new A().f(2)", 5);
     test("class A { def f(x=1,g=f,y=x) { if (x == 1) 1 else x + g(x-1) + y }}; new A().f(4)", 19);
-    testError("class A { def a() { def x=1; def f(x){def ff() {g(x)}; ff()}; def g(a){x+a}; f(2) } }; new A().a()", "requires passing closed over variable x");
+    test("class A { def a() { def x=1; def f(x){def ff() {g(x)}; ff()}; def g(a){x+a}; f(2) } }; new A().a()", 3);
 
     test("class A { def func() { def g(x){x}; def f() { def a = g; a(3) }; f()}}; new A().func()", 3);
     test("class A { def func() { def g(x){x}; def f(x){def a = g; x == 1 ? 1 : x+a(x-1)}; f(2)}}; new A().func()", 3);
     test("class A { def func() { def g(x){x}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)}}; new A().func()", 3);
-    testError("class A { def func() { def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)}}; new A().func()", "closed over variable h");
+    testError("class A { def func() { def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)}}; new A().func()", "closes over variable h");
     testError("class A { def func() { def f() { def a = g; a() }; def g(){4}; f()}}; new A().func()", "closes over variable g that has not yet been initialised");
     testError("class A { def func() { def f() { def a = g; def b=y; a()+b() }; def y(){2}; def g(){4}; f()}}; new A().func()", "closes over variables g,y that have not yet been initialised");
     test("class A { def func() { def x = 'x'; def f() { x += 'abc' }; f(); x}}; new A().func()", "xabc");
@@ -1074,7 +1074,7 @@ public class ClassTests extends BaseTest {
     test("class A { static def func() { def g(x){x}; def f() { def a = g; a(3) }; f()}}; A.func()", 3);
     test("class A { static def func() { def g(x){x}; def f(x){def a = g; x == 1 ? 1 : x+a(x-1)}; f(2)}}; A.func()", 3);
     test("class A { static def func() { def g(x){x}; def f(x,a=g){x == 1 ? 1 : x+a(x-1)}; f(2)}}; A.func()", 3);
-    testError("class A { static def func() { def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)}}; A.func()", "closed over variable h");
+    testError("class A { static def func() { def g(x){f(x)}; var h=g; def f(x,a=h){x == 1 ? 1 : x+a(x-1)}; f(2)}}; A.func()", "closes over variable h");
     testError("class A { static def func() { def f() { def a = g; a() }; def g(){4}; f()}}; A.func()", "closes over variable g that has not yet been initialised");
     testError("class A { static def func() { def f() { def a = g; def b=y; a()+b() }; def y(){2}; def g(){4}; f()}}; A.func()", "closes over variables g,y that have not yet been initialised");
     test("class A { static def func() { def x = 'x'; def f() { x += 'abc' }; f(); x}}; A.func()", "xabc");

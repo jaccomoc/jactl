@@ -929,6 +929,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       resolve(expr.varDecl);
     }
     Expr.FunDecl parent = currentFunction();
+    expr.owner = parent;
     getFunctions().push(expr);
     try {
       resolve(expr.returnType);
@@ -951,7 +952,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // immediate parent. That way each parent will know how to copy the heap var from its own
         // parameter list (or its actual variable decl) into the appropriate arg for invoking the
         // nested function.
-        expr.heapLocalParams.forEach((name, varDecl) -> addHeapLocalToParents(name, varDecl));
+        expr.heapLocalsByName.forEach((name, varDecl) -> addHeapLocalToParents(name, varDecl));
       }
     }
   }
@@ -1167,7 +1168,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       error("Null value for Function", expr.token);
     }
 
-    final var currentFunction = currentFunction();
     expr.type = ANY;
     if (expr.callee.isFunctionCall()) {
       // Special case where we know the function directly and get its return type
@@ -1453,7 +1453,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     for (Iterator<Expr.FunDecl> iter = getFunctions().iterator(); iter.hasNext(); ) {
       // If parent already has this var as a parameter then point child to this and return
       Expr.FunDecl funDecl       = iter.next();
-      Expr.VarDecl parentVarDecl = funDecl.heapLocalParams.get(name);
+      Expr.VarDecl parentVarDecl = funDecl.heapLocalsByName.get(name);
       if (parentVarDecl != null) {
         childVarDecl.parentVarDecl = parentVarDecl;
         return;
@@ -1468,46 +1468,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
       // Otherwise build a new VarDecl for an intermediate value and make it a parameter
       // of the current function by adding to its heapLocal Parameters
-      parentVarDecl = createVarDecl(name, varDecl, funDecl);
+      parentVarDecl = Utils.createVarDecl(name, varDecl, funDecl);
+      funDecl.heapLocalsByName.put(name, parentVarDecl);
       childVarDecl.parentVarDecl = parentVarDecl;
 
       // Now parent becomes the child for the next iteration
       childVarDecl = parentVarDecl;
     }
     throw new IllegalStateException("Internal error: couldn't find owner of variable " + varDecl.name.getStringValue());
-  }
-
-  private Expr.VarDecl createVarDecl(String name, Expr.VarDecl varDecl, Expr.FunDecl funDecl) {
-    Expr.VarDecl newVarDecl    = new Expr.VarDecl(varDecl.name, null);
-    newVarDecl.type            = varDecl.type.boxed();
-    newVarDecl.owner           = varDecl.owner;
-    newVarDecl.isHeapLocal     = true;
-//    newVarDecl.isPassedAsHeapLocal = true;
-    newVarDecl.isParam         = true;
-    newVarDecl.originalVarDecl = varDecl.originalVarDecl;
-
-    // We need to check for scenarios where the current function has been used as a forward
-    // reference at some point in the code but between the point of the reference and the
-    // declaration of our function there is a variable declared that we know close over.
-    // Since that variable didn't exist when the original forward reference was made we
-    // have to disallow such forward references.
-    // E.g.:
-    //   def f(x){g(x)}; def v = ... ; def g(x) { v + x }
-    // Since g uses v and v does not exist when f invokes g we have to throw an error.
-    // To detect such references we remember the earlies reference and check that the
-    // variable we are now closing over was not declared after that reference.
-    // NOTE: even if v were another function we still need to disallow this since the
-    // MethodHandle for v won't exist at the time that g is invoked.
-    if (funDecl.earliestForwardReference != null) {
-      if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
-        error("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +
-                               varDecl.name.getStringValue() + " not yet declared at time of reference",
-                               funDecl.earliestForwardReference);
-      }
-    }
-
-    funDecl.heapLocalParams.put(name, newVarDecl);
-    return newVarDecl;
   }
 
   private static Object incOrDec(boolean isInc, JacsalType type, Object val) {
@@ -1531,7 +1499,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return whileStmt;
   }
 
-  private void error(String msg, Token location) {
+  static private void error(String msg, Token location) {
     throw new CompileError(msg, location);
   }
 
@@ -1745,8 +1713,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       name = Utils.CAPTURE_VAR;
     }
 
-    var currentFunction  = currentFunction();
-
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
     FUNC_LOOP:
@@ -1801,7 +1767,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // Track earliest reference to detect where forward referenced function closes over
         // vars not yet declared at time of reference
         Token reference = varDecl.funDecl.earliestForwardReference;
-        if (reference == null || isEarlier(location, reference)) {
+        if (reference == null || Utils.isEarlier(location, reference)) {
           varDecl.funDecl.earliestForwardReference = location;
         }
       }
@@ -1850,14 +1816,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       Expr.FunDecl currentFunc = currentFunction();
 
       // Check if we already have it in our list of heapLocal Params
-      if (currentFunc.heapLocalParams.containsKey(name)) {
-        return currentFunc.heapLocalParams.get(name);
+      if (currentFunc.heapLocalsByName.containsKey(name)) {
+        return currentFunc.heapLocalsByName.get(name);
       }
 
       // Add this var to our list of heap vars we need passed in to us.
       // Construct a new VarDecl since we will have our own slot that is local
       // to this function and add it the heapLocal Params of the currentFunc
-      Expr.VarDecl newVarDecl = createVarDecl(name, varDecl, currentFunc);
+      var newVarDecl = Utils.createVarDecl(name, varDecl, currentFunc);
+      currentFunc.heapLocalsByName.put(name, newVarDecl);
       newVarDecl.originalVarDecl = varDecl;
 
       return newVarDecl;
@@ -2500,15 +2467,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     varDecl.declExpr.type            = param.type;
     varDecl.declExpr.isField         = ownerFunDecl.isInitMethod();
     return varDecl;
-  }
-
-  /**
-   * Return true if t1 is earlier (in the _same_ code) then t2.
-   * Return false if t1 is not earlier or if code is not the same.
-   */
-  boolean isEarlier(Token t1, Token t2) {
-    if (!t1.getSource().equals(t2.getSource())) { return false; }
-    return t1.getOffset() < t2.getOffset();
   }
 
   private Stmt.Return returnStmt(Token token, JacsalType type) {

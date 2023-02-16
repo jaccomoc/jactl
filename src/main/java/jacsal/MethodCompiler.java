@@ -205,7 +205,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Allocate slots for heap local vars passed to us as implicit parameters from
     // parent function
-    methodFunDecl.heapLocalParams.forEach((name, varDecl) -> defineVar(varDecl));
+    methodFunDecl.heapLocals.values().forEach(varDecl -> defineVar(varDecl));
 
     // If async or wrapper then allocate slot for the Continuation
     if (methodFunDecl.isWrapper || methodFunDecl.functionDescriptor.isAsync) {
@@ -1723,7 +1723,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Load HeapLocals that the function needs. Note that its parent is us so we are
     // loading values from our own local slots that are needed by the function.
-    expr.funDecl.heapLocalParams.values().forEach(p -> loadLocal(p.parentVarDecl.slot));
+    expr.funDecl.heapLocals.values().forEach(p -> loadLocal(p.parentVarDecl.slot));
 
     if (expr.funDecl.functionDescriptor.isAsync) {
       loadNullContinuation();
@@ -2293,11 +2293,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // them every time
 
     // First check that we don't have forward references to variables that have not yet been initialised
-    var badVars = wrapperFunDecl.heapLocalParams.values()
-                                                .stream()
-                                                .filter(p -> p.parentVarDecl.slot == -1)
-                                                .map(p -> p.name.getStringValue())
-                                                .collect(Collectors.toList());
+    var badVars = wrapperFunDecl.heapLocals.values()
+                                           .stream()
+                                           .filter(p -> p.parentVarDecl.slot == -1)
+                                           .map(p -> p.name.getStringValue())
+                                           .collect(Collectors.toList());
 
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
@@ -2306,7 +2306,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
     }
 
-    wrapperFunDecl.heapLocalParams.values().forEach(p -> {
+    wrapperFunDecl.heapLocals.values().forEach(p -> {
       // Load HeapLocal  (not the value contained in it) from _our_ copy of this
       // var (p.varDecl.slot not p.slot)
       loadLocal(p.parentVarDecl.slot);
@@ -2357,7 +2357,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private static List<JacsalType> methodParamTypes(Expr.FunDecl funDecl) {
     // We include a HeapLocal object for each heap var param that the function needs
     // before adding a type for each actual parameter.
-    var params = Collections.nCopies(funDecl.heapLocalParams.size(), HEAPLOCAL).stream();
+    var params = Collections.nCopies(funDecl.heapLocals.size(), HEAPLOCAL).stream();
     // Add Continuation after HeapLocals for async functions and for wrappers
     if (funDecl.functionDescriptor.isAsync || funDecl.isWrapper) {
       params = Stream.concat(params, Stream.of(CONTINUATION));
@@ -3481,35 +3481,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeUserFunction(Expr.Call expr, Expr.FunDecl funDecl, FunctionDescriptor func) {
     // We invoke wrapper if we don't have enough args since it will fill in missing
     // values for optional parameters
-    boolean invokeWrapper = expr.args.size() != func.paramTypes.size() || Utils.isNamedArgs(expr.args) || !expr.validateArgsAtCompileTime;
+    boolean invokeWrapper = Utils.isInvokeWrapper(expr, func);
 
     // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
-    var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocalParams : funDecl.heapLocalParams).values();
+    var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocals : funDecl.heapLocals).values();
 
     // Get varDecl for location of HeapLocal that we need for the function we are invoking
-    // If we don't have the variable then null will be used for the varDecl
     Function<Expr.VarDecl,Pair<String,Expr.VarDecl>> getVarDecl = p -> {
       String name = p.name.getStringValue();
-      if (p.owner == methodFunDecl) return new Pair(name, p.originalVarDecl);
-      Expr.VarDecl varDecl = methodFunDecl.heapLocalParams.get(p.name.getStringValue());
-      // If not there or if is a different var (with same name)
-      varDecl = varDecl == null || varDecl.originalVarDecl != p.originalVarDecl ? null : varDecl;
-      return new Pair(name,varDecl);
+      return p.owner == methodFunDecl ? new Pair(name, p.originalVarDecl)
+                                      : new Pair(name, methodFunDecl.heapLocals.get(p.originalVarDecl));
     };
 
     var varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
 
     // Make sure either we have variable already in our heap local params or we are the function where
-    // the heap local param we need was declared. Look for params we cannot pass in:
+    // the heap local param we need was declared.
     var badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
       throw new CompileError("Invocation of " + funDecl.nameToken.getStringValue() +
-                             " requires passing closed over variable" + (plural?"s ":" ") +
+                             " requires forward reference to closed over variable" + (plural?"s ":" ") +
                              String.join(",", badVars.toArray(String[]::new)) +
                              (plural ? " that have" : " that has") +
-                             " not been closed over by current " +
-                             (methodFunDecl.isClosure() ? "closure" : "function " + methodFunDecl.nameToken.getStringValue()),
+                             " not yet been initialised",
                              expr.location);
     }
 

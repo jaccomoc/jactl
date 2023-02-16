@@ -556,4 +556,59 @@ public class Utils {
     result.put('@', List.of(Arrays.copyOfRange(args, i, args.length)));     // List of arguments
     return result;
   }
+
+
+  /**
+   * Create a new VarDecl that is a copy of the supplied value. This is to allow us to
+   * create intermediate HeapLocal VarDecls when passing values down a chain of callers
+   * to a callee that needs the value.
+   * @param name     the variable name
+   * @param varDecl  the original VarDecl
+   * @param funDecl  the function to whose HeapLocals we add the VarDecl
+   * @return the new VarDecl
+   */
+  public static Expr.VarDecl createVarDecl(String name, Expr.VarDecl varDecl, Expr.FunDecl funDecl) {
+    Expr.VarDecl newVarDecl    = new Expr.VarDecl(varDecl.name, null);
+    newVarDecl.type            = varDecl.type.boxed();
+    newVarDecl.owner           = varDecl.owner;
+    newVarDecl.isHeapLocal     = true;
+    newVarDecl.isParam         = true;
+    newVarDecl.originalVarDecl = varDecl.originalVarDecl;
+
+    // We need to check for scenarios where the current function has been used as a forward
+    // reference at some point in the code but between the point of the reference and the
+    // declaration of our function there is a variable declared that we know close over.
+    // Since that variable didn't exist when the original forward reference was made we
+    // have to disallow such forward references.
+    // E.g.:
+    //   def f(x){g(x)}; def v = ... ; def g(x) { v + x }
+    // Since g uses v and v does not exist when f invokes g we have to throw an error.
+    // To detect such references we remember the earlies reference and check that the
+    // variable we are now closing over was not declared after that reference.
+    // NOTE: even if v were another function we still need to disallow this since the
+    // MethodHandle for v won't exist at the time that g is invoked.
+    if (funDecl.earliestForwardReference != null) {
+      if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
+        throw new CompileError("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +
+              varDecl.name.getStringValue() + " not yet declared at time of reference",
+              funDecl.earliestForwardReference);
+      }
+    }
+
+    funDecl.heapLocals.put(varDecl.originalVarDecl == null ? varDecl : varDecl.originalVarDecl, newVarDecl);
+    return newVarDecl;
+  }
+
+  /**
+   * Return true if t1 is earlier (in the _same_ code) then t2.
+   * Return false if t1 is not earlier or if code is not the same.
+   */
+  static public boolean isEarlier(Token t1, Token t2) {
+    if (!t1.getSource().equals(t2.getSource())) { return false; }
+    return t1.getOffset() < t2.getOffset();
+  }
+
+  public static boolean isInvokeWrapper(Expr.Call expr, FunctionDescriptor func) {
+    return expr.args.size() != func.paramTypes.size() || isNamedArgs(expr.args) || !expr.validateArgsAtCompileTime;
+  }
 }

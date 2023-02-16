@@ -23,4 +23,7 @@ public class Pair<X,Y> {
     this.first = first;
     this.second = second;
   }
+  static <X,Y> Pair<X,Y> create(X first, Y second) {
+    return new Pair(first, second);
+  }
 }

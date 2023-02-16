@@ -46,7 +46,7 @@ import static jacsal.JacsalType.INSTANCE;
  *   these local variables in the Continuation object for later restoration after resume.
  * </li>
  * <li>
- *   Counting how many local slots and maximum stack size is needed per method. This
+ *   NOT USED: Counting how many local slots and maximum stack size is needed per method. This
  *   allows us to work out how big an array we need for storing the local values if/when
  *   we suspend and we need to save our state. Note: we just track the expression results
  *   and local vars and then allow a "safety margin" of (at the moment) 10 additional values
@@ -76,7 +76,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private final Deque<Stmt.ClassDecl>   classStack        = new ArrayDeque<>();
 
-  private final Map<Expr.FunDecl,List<Pair<Expr,FunctionDescriptor>>> callDependencies = new HashMap<>();
+  private final Map<Expr.FunDecl,List<Pair<Expr,FunctionDescriptor>>> asyncCallDependencies     = new HashMap<>();
 
   private final JacsalContext context;
 
@@ -93,7 +93,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     isFirstPass = true;
     analyse(classDecl);
 
-    resolveDependencies();
+    resolveAsyncDependencies();
 
     isFirstPass = false;
     analyse(classDecl);
@@ -160,6 +160,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitCall(Expr.Call expr) {
     analyse(expr.callee);
     expr.args.forEach(this::analyse);
+    var funDecl  = getFunDecl(expr.callee);
     var function = getFunction(expr.callee);
 
     if (function != null) {
@@ -168,13 +169,16 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // Forward reference to a function so we don't yet know if it will be async or not.
         // Add ourselves to dependency map so we can be re-analysed at the end when we will
         // hopefully know whether callee is async or not.
-        addCallDependency(currentFunction(), expr, function);
+        addAsyncCallDependency(currentFunction(), expr, function);
       }
       else {
         // If function we are invoking is async then we are async
         if (isAsync(function, null, expr.args)) {
           async(expr);
         }
+      }
+      if (!function.isBuiltin) {
+        resolveHeapLocals(currentFunction(), Utils.isInvokeWrapper(expr, function) ? funDecl.wrapper : funDecl);
       }
     }
     else {
@@ -192,7 +196,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.methodDescriptor != null) {
       if (expr.methodDescriptor.isAsync == null) {
         assert isFirstPass;
-        addCallDependency(currentFunction(), expr, expr.methodDescriptor);
+        addAsyncCallDependency(currentFunction(), expr, expr.methodDescriptor);
       }
       else {
         // If we are invoking a method that is marked as async then we need to mark ourselves as async
@@ -596,7 +600,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       if (classDescriptor.getInitMethod().isAsync == null) {
         assert isFirstPass;
-        addCallDependency(currentFunction(), expr, classDescriptor.getInitMethod());
+        addAsyncCallDependency(currentFunction(), expr, classDescriptor.getInitMethod());
       }
       else
       if (classDescriptor.getInitMethod().isAsync) {
@@ -735,24 +739,58 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return false;
   }
 
-  private void addCallDependency(Expr.FunDecl caller, Expr callSite, FunctionDescriptor callee) {
-    var callees = callDependencies.get(caller);
-    if (callees == null) {
-      callees = new ArrayList<>();
-      callDependencies.put(caller, callees);
-    }
-    callees.add(new Pair(callSite, callee));
+  private void resolveHeapLocals(Expr.FunDecl caller, Expr.FunDecl callee) {
+    // Find heapLocals that are not in the caller scope or in caller heapLocals
+    // and add them to caller's heapLocals (and to its parent etc) until we get to
+    // place where variable actually resides.
+    callee.heapLocals.entrySet()
+                     .stream()
+                     .filter(entry -> !isOwnerOrHeapLocal(caller, entry.getValue()))
+                     .forEach(entry -> {
+                       Expr.VarDecl varDecl = entry.getValue();
+                       String       name    = varDecl.name.getStringValue();
+                       var childDecl= Utils.createVarDecl(name, varDecl, caller);
+                       var funDecl = caller.owner;
+                       for (; !isOwnerOrHeapLocal(funDecl, varDecl); funDecl = funDecl.owner) {
+                         var parentDecl = Utils.createVarDecl(name, varDecl, funDecl);
+                         childDecl.parentVarDecl = parentDecl;
+                         childDecl = parentDecl;
+                       }
+                       if (funDecl == varDecl.owner) {
+                         childDecl.parentVarDecl = varDecl.originalVarDecl;
+                       }
+                       else {
+                         childDecl.parentVarDecl = funDecl.heapLocals.get(varDecl.originalVarDecl);
+                       }
+                     });
   }
 
-  private void resolveDependencies() {
+  private boolean isOwnerOrHeapLocal(Expr.FunDecl funDecl, Expr.VarDecl varDecl) {
+    if (funDecl == null) throw new IllegalStateException("Internal error: could not find owner function for " + varDecl.name.getStringValue());
+    if (varDecl.owner == funDecl) {
+      return true;
+    }
+    return funDecl.heapLocals.containsKey(varDecl.originalVarDecl);
+  }
+
+  private void addAsyncCallDependency(Expr.FunDecl caller, Expr callSite, FunctionDescriptor callee) {
+    var callees = asyncCallDependencies.get(caller);
+    if (callees == null) {
+      callees = new ArrayList<>();
+      asyncCallDependencies.put(caller, callees);
+    }
+    callees.add(Pair.create(callSite, callee));
+  }
+
+  private void resolveAsyncDependencies() {
     // If we still have call sites where we don't know if function was async or not due to forward references
     // we now need to work them out. We keep looping and marking functions and call sites as async until there
     // are no more do to. At this point the call dependencies should only refer to other functions in the
     // dependency map so if none of them have yet been marked async then none of them are async.
     while (true) {
       boolean resolvedAsyncCall = false;
-      for (var caller : callDependencies.keySet()) {
-        var callSites    = callDependencies.get(caller);
+      for (var caller : asyncCallDependencies.keySet()) {
+        var callSites    = asyncCallDependencies.get(caller);
         var newCallSites = new ArrayList<Pair<Expr,FunctionDescriptor>>();
         for (var call: callSites) {
           var callSite = call.first;
@@ -769,7 +807,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             newCallSites.add(call);
           }
         }
-        callDependencies.put(caller, newCallSites);
+        asyncCallDependencies.put(caller, newCallSites);
       }
       // If no more async calls resolved then we know that all the rest are sync so nothing more to do
       if (!resolvedAsyncCall) {
@@ -778,7 +816,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     // Mark all remaining functions as not async
-    for (var callSites: callDependencies.values()) {
+    for (var callSites: asyncCallDependencies.values()) {
       for (var callSite: callSites) {
         callSite.second.isAsync = false;
       }
