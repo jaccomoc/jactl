@@ -374,8 +374,7 @@ public class BuiltinFunctions {
         throw Continuation.create(() -> readLine(input));
       }
     }
-    catch (IOException ignored) {
-    }
+    catch (IOException ignored) {}
     if (result == null) {
       RuntimeState.setInput(null);
     }
@@ -388,7 +387,16 @@ public class BuiltinFunctions {
 
   private static String readLine(BufferedReader input) {
     try {
-      return input.readLine();
+      String line = input.readLine();
+      if (line != null) {
+        input.mark(1);
+        boolean eof = input.read() == -1;
+        input.reset();
+        if (line.isEmpty() && eof) {
+          return null;
+        }
+      }
+      return line;
     }
     catch (IOException e) {
       return null;
