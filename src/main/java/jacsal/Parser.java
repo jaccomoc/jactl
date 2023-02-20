@@ -726,7 +726,7 @@ public class Parser {
       new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
       new Pair(true, List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
       new Pair(true, List.of(MINUS, PLUS)),
-      new Pair(true, List.of(STAR, SLASH, PERCENT)),
+      new Pair(true, List.of(STAR, SLASH, PERCENT, MOD)),
       //      List.of(STAR_STAR)
       new Pair(true, unaryOps),
       new Pair(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE, NEW))

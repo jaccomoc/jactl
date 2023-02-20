@@ -149,6 +149,7 @@ public enum TokenType {
   BEGIN("BEGIN"),
   END("END"),
   DIE("die"),
+  MOD("mod"),
 
   //= Special
   EOL(),            // End of line
@@ -183,6 +184,7 @@ public enum TokenType {
       case STAR:
       case SLASH:
       case PERCENT:
+      case MOD:
         return true;
       default:
         return false;

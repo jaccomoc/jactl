@@ -48,6 +48,7 @@ public class RuntimeUtils {
   public static final String COMPARE       = "<=>";
   public static final String SLASH         = "/";
   public static final String PERCENT       = "%";
+  public static final String MOD           = "mod";
   public static final String PLUS_EQUAL    = "+=";
   public static final String MINUS_EQUAL   = "-=";
   public static final String STAR_EQUAL    = "*=";
@@ -118,6 +119,7 @@ public class RuntimeUtils {
       case STAR:                return STAR;
       case SLASH:               return SLASH;
       case PERCENT:             return PERCENT;
+      case MOD:                 return MOD;
       case COMPARE:             return COMPARE;
       case PLUS_EQUAL:          return PLUS_EQUAL;
       case MINUS_EQUAL:         return MINUS_EQUAL;
@@ -163,6 +165,19 @@ public class RuntimeUtils {
       case PERCENT:
         try {
           result = left.remainder(right);
+        }
+        catch (ArithmeticException e) {
+          if (e.getMessage().startsWith("Division by zero")) {
+            throw new RuntimeError("Divide by zero error", source, offset);
+          }
+          else {
+            throw new RuntimeError("Decimal error: " + e.getMessage(), source, offset);
+          }
+        }
+        break;
+      case MOD:
+        try {
+          result = (left.remainder(right).add(right)).remainder(right);
         }
         catch (ArithmeticException e) {
           if (e.getMessage().startsWith("Division by zero")) {
@@ -528,6 +543,47 @@ public class RuntimeUtils {
     int rhs = (int) right;
     try {
       return lhs % rhs;
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
+  }
+
+  public static Object modulus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+    if (!(left instanceof Number)) {
+      throwOperandError(left, true, operator, source, offset);
+    }
+    if (!(right instanceof Number)) {
+      throwOperandError(right, false, operator, source, offset);
+    }
+
+    // Must be numeric so convert to appropriate type and perform operation
+    if (left instanceof BigDecimal || right instanceof BigDecimal) {
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+    }
+
+    if (left instanceof Double || right instanceof Double) {
+      double lhs = ((Number) left).doubleValue();
+      double rhs = ((Number) right).doubleValue();
+      return ((lhs % rhs)+rhs) % rhs;
+    }
+
+    if (left instanceof Long || right instanceof Long) {
+      long lhs = ((Number) left).longValue();
+      long rhs = ((Number) right).longValue();
+      try {
+        return ((lhs % rhs)+rhs) % rhs;
+      }
+      catch (ArithmeticException e) {
+        throw new RuntimeError("Divide by zero", source, offset);
+      }
+    }
+
+    // Must be integers
+    int lhs = (int) left;
+    int rhs = (int) right;
+    try {
+      return ((lhs % rhs)+rhs) % rhs;
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);

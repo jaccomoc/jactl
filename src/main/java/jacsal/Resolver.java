@@ -1382,13 +1382,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case INT: {
         int left  = Utils.toInt(leftValue);
         int right = Utils.toInt(rightValue);
-        throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
+        throwIf(expr.operator.is(SLASH,PERCENT,MOD) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
           case PLUS:                expr.constValue = left + right;   break;
           case MINUS:               expr.constValue = left - right;   break;
           case STAR:                expr.constValue = left * right;   break;
           case SLASH:               expr.constValue = left / right;   break;
           case PERCENT:             expr.constValue = left % right;   break;
+          case MOD:                 expr.constValue = ((left % right)+right) % right;   break;
           case AMPERSAND:           expr.constValue = left & right;   break;
           case PIPE:                expr.constValue = left | right;   break;
           case ACCENT:              expr.constValue = left ^ right;   break;
@@ -1402,13 +1403,14 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case LONG: {
         long left  = Utils.toLong(leftValue);
         long right = Utils.toLong(rightValue);
-        throwIf(expr.operator.is(SLASH,PERCENT) && right == 0, "Divide by zero error", expr.right.location);
+        throwIf(expr.operator.is(SLASH,PERCENT,MOD) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
           case PLUS:                expr.constValue = left + right;        break;
           case MINUS:               expr.constValue = left - right;        break;
           case STAR:                expr.constValue = left * right;        break;
           case SLASH:               expr.constValue = left / right;        break;
           case PERCENT:             expr.constValue = left % right;        break;
+          case MOD:                 expr.constValue = ((left % right)+right) % right;   break;
           case AMPERSAND:           expr.constValue = left & right;        break;
           case PIPE:                expr.constValue = left | right;        break;
           case ACCENT:              expr.constValue = left ^ right;        break;
@@ -1423,11 +1425,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         double left  = Utils.toDouble(leftValue);
         double right = Utils.toDouble(rightValue);
         switch (expr.operator.getType()) {
-          case PLUS:    expr.constValue = left + right; break;
-          case MINUS:   expr.constValue = left - right; break;
-          case STAR:    expr.constValue = left * right; break;
-          case SLASH:   expr.constValue = left / right; break;
-          case PERCENT: expr.constValue = left % right; break;
+          case PLUS:    expr.constValue = left + right;                     break;
+          case MINUS:   expr.constValue = left - right;                     break;
+          case STAR:    expr.constValue = left * right;                     break;
+          case SLASH:   expr.constValue = left / right;                     break;
+          case PERCENT: expr.constValue = left % right;                     break;
+          case MOD:     expr.constValue = ((left % right)+right) % right;   break;
           default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
         }
         break;
@@ -1435,7 +1438,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       case DECIMAL: {
         BigDecimal left  = Utils.toDecimal(leftValue);
         BigDecimal right = Utils.toDecimal(rightValue);
-        throwIf(expr.operator.is(SLASH,PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
+        throwIf(expr.operator.is(SLASH,PERCENT,MOD) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
         expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jacsalContext.maxScale,
                                                               expr.operator.getSource(), expr.operator.getOffset());
         break;

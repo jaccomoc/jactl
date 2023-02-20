@@ -748,12 +748,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT };
+  private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT, MOD };
   private static Map<TokenType,String> methodNames = Map.of(PLUS,    "plus",
                                                             MINUS,   "minus",
                                                             STAR,    "multiply",
                                                             SLASH,   "divide",
-                                                            PERCENT, "remainder");
+                                                            PERCENT, "remainder",
+                                                            MOD,     "modulus");
 
   @Override public Void visitRegexMatch(Expr.RegexMatch expr) {
     if (expr.string == null) {
@@ -865,17 +866,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // Map of which opcode to use for common binary operations based on type
   private static final Map<TokenType,List<Object>> opCodesByOperator = Utils.mapOf(
-    PLUS,                List.of(IADD,  LADD,  DADD, RuntimeUtils.PLUS),
-    MINUS,               List.of(ISUB,  LSUB,  DSUB, RuntimeUtils.MINUS),
-    STAR,                List.of(IMUL,  LMUL,  DMUL, RuntimeUtils.STAR),
-    SLASH,               List.of(IDIV,  LDIV,  DDIV, RuntimeUtils.SLASH),
-    PERCENT,             List.of(IREM,  LREM,  DREM, RuntimeUtils.PERCENT),
-    AMPERSAND,           List.of(IAND,  LAND,  -1,   -1),
-    PIPE,                List.of(IOR,   LOR,   -1,   -1),
-    ACCENT,              List.of(IXOR,  LXOR,  -1,   -1),
-    DOUBLE_LESS_THAN,    List.of(ISHL,  LSHL,  -1,   -1),
-    DOUBLE_GREATER_THAN, List.of(ISHR,  LSHR,  -1,   -1),
-    TRIPLE_GREATER_THAN, List.of(IUSHR, LUSHR, -1,   -1)
+    PLUS,                List.of(List.of(IADD),   List.of(LADD),  List.of(DADD), RuntimeUtils.PLUS),
+    MINUS,               List.of(List.of(ISUB),   List.of(LSUB),  List.of(DSUB), RuntimeUtils.MINUS),
+    STAR,                List.of(List.of(IMUL),   List.of(LMUL),  List.of(DMUL), RuntimeUtils.STAR),
+    SLASH,               List.of(List.of(IDIV),   List.of(LDIV),  List.of(DDIV), RuntimeUtils.SLASH),
+    PERCENT,             List.of(List.of(IREM),   List.of(LREM),  List.of(DREM), RuntimeUtils.PERCENT),
+    AMPERSAND,           List.of(List.of(IAND),   List.of(LAND),  List.of(),     List.of()),
+    PIPE,                List.of(List.of(IOR),    List.of(LOR),   List.of(),     List.of()),
+    ACCENT,              List.of(List.of(IXOR),   List.of(LXOR),  List.of(),     List.of()),
+    DOUBLE_LESS_THAN,    List.of(List.of(ISHL),   List.of(LSHL),  List.of(),     List.of()),
+    DOUBLE_GREATER_THAN, List.of(List.of(ISHR),   List.of(LSHR),  List.of(),     List.of()),
+    TRIPLE_GREATER_THAN, List.of(List.of(IUSHR),  List.of(LUSHR), List.of(),     List.of()),
+    MOD,                 List.of(List.of(DUP_X1,  IREM,  SWAP,          DUP_X1,  IADD, SWAP,          IREM),
+                                 List.of(DUP2_X2, LREM,  DUP2_X2, POP2, DUP2_X2, LADD, DUP2_X2, POP2, LREM),
+                                 List.of(DUP2_X2, DREM,  DUP2_X2, POP2, DUP2_X2, DADD, DUP2_X2, POP2, DREM),
+                                 RuntimeUtils.MOD)
   );
   private static final int intIdx = 0;
   private static final int longIdx = 1;
@@ -1303,9 +1308,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       int index = expr.type.isBoxedOrUnboxed(INT)  ? intIdx :
                   expr.type.isBoxedOrUnboxed(LONG) ? longIdx
                                                    : doubleIdx;
-      int opCode = (int)opCodes.get(index);
+      List<Integer> ops = (List<Integer>) opCodes.get(index);
       // Check for divide by zero or remainder 0 if int/long (double returns NaN or INFINITY)
-      if (expr.operator.is(SLASH,PERCENT) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
+      if (expr.operator.is(SLASH,PERCENT,MOD) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
         _dupVal();
         Label nonZero = new Label();
         if (expr.type.isBoxedOrUnboxed(LONG)) {
@@ -1317,7 +1322,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         throwError("Divide by zero error", expr.operator);
         mv.visitLabel(nonZero);
       }
-      mv.visitInsn(opCode);
+      ops.forEach(op -> mv.visitInsn(op));
       pop(2);
       push(expr.type);
     }
