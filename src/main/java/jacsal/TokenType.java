@@ -50,6 +50,7 @@ public enum TokenType {
   DOUBLE_QUOTE("\""),
 
   //= Double char tokens
+  PERCENT_PERCENT("%%"),
   BANG_EQUAL("!="),
   EQUAL_EQUAL("=="),
   LESS_THAN_EQUAL("<="),
@@ -79,6 +80,7 @@ public enum TokenType {
   QUESTION_SQUARE("?["),
 
   //= Triple char tokens
+  PERCENT_PERCENT_EQUAL("%%="),
   TRIPLE_GREATER_THAN(">>>"),
   DOUBLE_LESS_THAN_EQUAL("<<="),
   DOUBLE_GREATER_THAN_EQUAL(">>="),
@@ -149,7 +151,6 @@ public enum TokenType {
   BEGIN("BEGIN"),
   END("END"),
   DIE("die"),
-  MOD("mod"),
 
   //= Special
   EOL(),            // End of line
@@ -184,7 +185,7 @@ public enum TokenType {
       case STAR:
       case SLASH:
       case PERCENT:
-      case MOD:
+      case PERCENT_PERCENT:
         return true;
       default:
         return false;
@@ -198,9 +199,9 @@ public enum TokenType {
    * @return true if operator is an assignment operator
    */
   boolean isAssignmentLike() {
-    return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
-                   DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
-                   PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL);
+    return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL,
+                   PLUS_EQUAL, MINUS_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL,
+                   TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL, PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL);
   }
 
   boolean isBooleanOperator() {

@@ -713,7 +713,7 @@ public class Parser {
       //      new Pair(true, List.of(AND)),
       //      new Pair(true, List.of(NOT)),
 
-      new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
+      new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
       /* STAR_STAR_EQUAL, */ DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
          PIPE_EQUAL, ACCENT_EQUAL)),
       new Pair(true, List.of(QUESTION, QUESTION_COLON)),
@@ -726,7 +726,7 @@ public class Parser {
       new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
       new Pair(true, List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
       new Pair(true, List.of(MINUS, PLUS)),
-      new Pair(true, List.of(STAR, SLASH, PERCENT, MOD)),
+      new Pair(true, List.of(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
       //      List.of(STAR_STAR)
       new Pair(true, unaryOps),
       new Pair(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE, NEW))
@@ -2131,6 +2131,7 @@ public class Parser {
                 STAR_EQUAL,                STAR,
                 SLASH_EQUAL,               SLASH,
                 PERCENT_EQUAL,             PERCENT,
+                PERCENT_PERCENT_EQUAL,     PERCENT_PERCENT,
                 AMPERSAND_EQUAL,           AMPERSAND,
                 PIPE_EQUAL,                PIPE,
                 ACCENT_EQUAL,              ACCENT,

@@ -147,7 +147,8 @@ class TokeniserTest {
     doTest.accept("BEGIN", BEGIN);
     doTest.accept("END", END);
     doTest.accept("die", DIE);
-    doTest.accept("mod", MOD);
+    doTest.accept("%%", PERCENT_PERCENT);
+    doTest.accept("%%=", PERCENT_PERCENT_EQUAL);
   }
 
   @Test public void eolToken() {

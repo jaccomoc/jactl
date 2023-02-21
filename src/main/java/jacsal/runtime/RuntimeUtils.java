@@ -31,7 +31,6 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,20 +39,21 @@ import java.util.stream.Collectors;
 
 public class RuntimeUtils {
 
-  public static final String PLUS_PLUS     = "++";
-  public static final String MINUS_MINUS   = "--";
-  public static final String PLUS          = "+";
-  public static final String MINUS         = "-";
-  public static final String STAR          = "*";
-  public static final String COMPARE       = "<=>";
-  public static final String SLASH         = "/";
-  public static final String PERCENT       = "%";
-  public static final String MOD           = "mod";
-  public static final String PLUS_EQUAL    = "+=";
-  public static final String MINUS_EQUAL   = "-=";
-  public static final String STAR_EQUAL    = "*=";
-  public static final String SLASH_EQUAL   = "/=";
-  public static final String PERCENT_EQUAL = "%=";
+  public static final String PLUS_PLUS             = "++";
+  public static final String MINUS_MINUS           = "--";
+  public static final String PLUS                  = "+";
+  public static final String MINUS                 = "-";
+  public static final String STAR                  = "*";
+  public static final String COMPARE               = "<=>";
+  public static final String SLASH                 = "/";
+  public static final String PERCENT               = "%";
+  public static final String PERCENT_PERCENT       = "%%";
+  public static final String PLUS_EQUAL            = "+=";
+  public static final String MINUS_EQUAL           = "-=";
+  public static final String STAR_EQUAL            = "*=";
+  public static final String SLASH_EQUAL           = "/=";
+  public static final String PERCENT_EQUAL         = "%=";
+  public static final String PERCENT_PERCENT_EQUAL = "%%=";
 
   public static final String BANG_EQUAL         = "!=";
   public static final String EQUAL_EQUAL        = "==";
@@ -112,39 +112,40 @@ public class RuntimeUtils {
       return null;
     }
     switch (op) {
-      case PLUS_PLUS:           return PLUS_PLUS;
-      case MINUS_MINUS:         return MINUS_MINUS;
-      case PLUS:                return PLUS;
-      case MINUS:               return MINUS;
-      case STAR:                return STAR;
-      case SLASH:               return SLASH;
-      case PERCENT:             return PERCENT;
-      case MOD:                 return MOD;
-      case COMPARE:             return COMPARE;
-      case PLUS_EQUAL:          return PLUS_EQUAL;
-      case MINUS_EQUAL:         return MINUS_EQUAL;
-      case STAR_EQUAL:          return STAR_EQUAL;
-      case SLASH_EQUAL:         return SLASH_EQUAL;
-      case PERCENT_EQUAL:       return PERCENT_EQUAL;
-      case BANG_EQUAL:          return BANG_EQUAL;
-      case EQUAL_EQUAL:         return EQUAL_EQUAL;
-      case BANG_EQUAL_EQUAL:    return BANG_EQUAL_EQUAL;
-      case TRIPLE_EQUAL:        return TRIPLE_EQUAL;
-      case LESS_THAN:           return LESS_THAN;
-      case LESS_THAN_EQUAL:     return LESS_THAN_EQUAL;
-      case GREATER_THAN:        return GREATER_THAN;
-      case GREATER_THAN_EQUAL:  return GREATER_THAN_EQUAL;
-      case IN:                  return IN;
-      case BANG_IN:             return BANG_IN;
-      case INSTANCE_OF:         return INSTANCE_OF;
-      case BANG_INSTANCE_OF:    return BANG_INSTANCE_OF;
-      case AMPERSAND:           return AMPERSAND;
-      case PIPE:                return PIPE;
-      case ACCENT:              return ACCENT;
-      case GRAVE:               return GRAVE;
-      case DOUBLE_LESS_THAN:    return DOUBLE_LESS_THAN;
-      case DOUBLE_GREATER_THAN: return DOUBLE_GREATER_THAN;
-      case TRIPLE_GREATER_THAN: return TRIPLE_GREATER_THAN;
+      case PLUS_PLUS:             return PLUS_PLUS;
+      case MINUS_MINUS:           return MINUS_MINUS;
+      case PLUS:                  return PLUS;
+      case MINUS:                 return MINUS;
+      case STAR:                  return STAR;
+      case SLASH:                 return SLASH;
+      case PERCENT:               return PERCENT;
+      case PERCENT_PERCENT:       return PERCENT_PERCENT;
+      case COMPARE:               return COMPARE;
+      case PLUS_EQUAL:            return PLUS_EQUAL;
+      case MINUS_EQUAL:           return MINUS_EQUAL;
+      case STAR_EQUAL:            return STAR_EQUAL;
+      case SLASH_EQUAL:           return SLASH_EQUAL;
+      case PERCENT_EQUAL:         return PERCENT_EQUAL;
+      case PERCENT_PERCENT_EQUAL: return PERCENT_PERCENT_EQUAL;
+      case BANG_EQUAL:            return BANG_EQUAL;
+      case EQUAL_EQUAL:           return EQUAL_EQUAL;
+      case BANG_EQUAL_EQUAL:      return BANG_EQUAL_EQUAL;
+      case TRIPLE_EQUAL:          return TRIPLE_EQUAL;
+      case LESS_THAN:             return LESS_THAN;
+      case LESS_THAN_EQUAL:       return LESS_THAN_EQUAL;
+      case GREATER_THAN:          return GREATER_THAN;
+      case GREATER_THAN_EQUAL:    return GREATER_THAN_EQUAL;
+      case IN:                    return IN;
+      case BANG_IN:               return BANG_IN;
+      case INSTANCE_OF:           return INSTANCE_OF;
+      case BANG_INSTANCE_OF:      return BANG_INSTANCE_OF;
+      case AMPERSAND:             return AMPERSAND;
+      case PIPE:                  return PIPE;
+      case ACCENT:                return ACCENT;
+      case GRAVE:                 return GRAVE;
+      case DOUBLE_LESS_THAN:      return DOUBLE_LESS_THAN;
+      case DOUBLE_GREATER_THAN:   return DOUBLE_GREATER_THAN;
+      case TRIPLE_GREATER_THAN:   return TRIPLE_GREATER_THAN;
       default:
         throw new IllegalStateException("Internal error: operator " + op + " not supported");
     }
@@ -162,7 +163,7 @@ public class RuntimeUtils {
       case STAR:
         result = left.multiply(right);
         break;
-      case PERCENT:
+      case PERCENT_PERCENT:
         try {
           result = left.remainder(right);
         }
@@ -175,7 +176,7 @@ public class RuntimeUtils {
           }
         }
         break;
-      case MOD:
+      case PERCENT:
         try {
           result = (left.remainder(right).add(right)).remainder(right);
         }
@@ -549,7 +550,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object modulus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object modulo(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, source, offset);
     }
