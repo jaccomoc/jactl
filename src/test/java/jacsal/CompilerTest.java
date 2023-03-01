@@ -50,7 +50,8 @@ class CompilerTest extends BaseTest {
     test(Short.toString(Short.MAX_VALUE), (int) Short.MAX_VALUE);
     test(Integer.toString(Short.MAX_VALUE + 1), (int) Short.MAX_VALUE + 1);
     test(Integer.toString(Integer.MAX_VALUE), Integer.MAX_VALUE);
-    testError("" + (Integer.MAX_VALUE + 1L), "number too large");
+    test("" + 0xFFFFFFFF, -1);
+    testError("" + (0xFFFFFFFFL + 1L), "number too large");
     test("" + ((long) Integer.MAX_VALUE + 1L) + "L", (long) Integer.MAX_VALUE + 1L);
     test("1D", 1D);
     test("1.0D", 1.0D);
@@ -78,14 +79,20 @@ class CompilerTest extends BaseTest {
     test("0b10101010101010101010101010101010101010101010101010L", 0b10101010101010101010101010101010101010101010101010L);
     test("0B10101010101010101010101010101010101010101010101010L", 0b10101010101010101010101010101010101010101010101010L);
     testError("0B10101010101010101010101010101010101010101010101010", "too large");
-    testError("0B10101010101010101010101010101010101010101010101010101010101010101010101010101010101010L", "too large");
+    test("0B1010101010101010101010101010101010101010101010101010101010101010L", -6148914691236517206L);
+    testError("0B10101010101010101010101010101010101010101010101010101010101010100L", "too large");
     testError("0x", "missing digits");
     testError("0X", "missing digits");
     testError("0xg1234", "missing digits");
     test("0xabcdef", 0xabcdef);
     test("0XABCDEF", 0xabcdef);
     testError("0xAbCdEf1234", "too large");
+    test("0xAbCdEf1234567890L", 0xAbCdEf1234567890L);
+    test("" + 0xAbCdEf1234567890L + "L", 0xAbCdEf1234567890L);
+    testError("0xAbCdEf12345678901L", "too large");
     test("0xAbCdEf1234L", 0xabcdef1234L);
+    test("18446744073709551615L", -1L);
+    testError("18446744073709551616L", "too large");
   }
 
   @Test public void booleanConversion() {

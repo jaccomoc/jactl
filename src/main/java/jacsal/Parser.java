@@ -1024,7 +1024,7 @@ public class Parser {
   }
 
   private boolean isPlusMinusNumber() {
-    return lookahead(() -> matchAny(PLUS, MINUS) && matchAny(INTEGER_CONST, DECIMAL_CONST, DOUBLE_CONST));
+    return lookahead(() -> matchAny(PLUS, MINUS) && matchAny(INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
   }
 
   /**
@@ -1142,7 +1142,7 @@ public class Parser {
 
   private Expr.Literal getPlusMinusNumber() {
     Token sign = expect(PLUS,MINUS);
-    Token num  = expect(INTEGER_CONST,DOUBLE_CONST,DECIMAL_CONST);
+    Token num  = expect(INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
     if (sign.is(MINUS)) {
       num.setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
     }

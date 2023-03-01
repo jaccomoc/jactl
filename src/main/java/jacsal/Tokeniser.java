@@ -543,7 +543,7 @@ public class Tokeniser {
     switch (type) {
       case INTEGER_CONST: {
         try {
-          token.setValue(Integer.parseInt(value, base));
+          token.setValue(Integer.parseUnsignedInt(value, base));
         }
         catch (NumberFormatException e) {
           throw new CompileError("Number too large for integer constant", token);
@@ -552,7 +552,7 @@ public class Tokeniser {
       }
       case LONG_CONST: {
         try {
-          token.setValue(Long.parseLong(value, base));
+          token.setValue(Long.parseUnsignedLong(value, base));
         }
         catch (NumberFormatException e) {
           throw new CompileError("Number too large for long constant", token);

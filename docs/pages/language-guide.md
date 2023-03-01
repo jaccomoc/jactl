@@ -1092,18 +1092,38 @@ are the same and 1 if they are different:
 6
 ```
 
-The `~` is a prefix operator and does a bitwise _not_ of the following expression so the result for each bit is the
+The `~` is a prefix operator and does a bitwise _not_ of the expression that follows so the result for each bit is the
 opposite of the bit value in the expression:
 ```groovy
 > ~5
 -6
-> ~0b101    // result will be 0b11111111111111111111111111111001
+> ~0b00000101    // result will be 0b11111111111111111111111111111001 which is -6
+-6
 ```
 
-, `&` does a binary _and_, `^` is a binary _xor_, and `~`
-
-
 ## Shift Operators
+
+The shift operators `<<`, `>>`, `>>>` work at the bit level and shift bits of a number by the given number of positions.
+
+The `<<` operator shifts the bits to the left meaning that the number gets bigger since we are multiplying by powers of 2.
+For example, shifting left by 1 bit will multiply the number by 2, shifting left by 2 will multiply by 4, etc.
+
+For example:
+```groovy
+> 5 << 1          // 0b0101 << 1 --> 0b1010 which is 10
+10
+> 5 << 4          // same as multiplying by 16
+80
+```
+
+The '>>' and '>>>' operators shift the bits to the right.
+The difference between the two is how negative numbers are treated.
+The `>>` operator preserves the sign bit (the top most bit) so if it is 1 it remains 1 and 1 is shifted right each time
+from this top bit position.
+The '>>>' operator treats the top bit like any other bit and shifts in 0s to replace the top bits when the bits are
+shifted right.
+
+For example, 
 
 ## Modulo `%` and Remainder `%%` operators
 
