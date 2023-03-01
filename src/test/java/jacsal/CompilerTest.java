@@ -5700,17 +5700,14 @@ class CompilerTest extends BaseTest {
     testError("'az'.asNum()", "invalid character for number with radix 10");
     testError("''.asNum()", "empty string cannot be converted");
     test("'1'.asNum()", 1L);
-    test("'-1'.asNum()", -1L);
     test("'0'.asNum()", 0L);
-    test("'-0'.asNum()", 0L);
     test("'10'.asNum(2)", 2L);
     test("'aa'.asNum(16)", 0xaaL);
-    test("'-aa'.asNum(16)", -0xaaL);
     test("'abcdef'.asNum(16)", 0xABCDEFL);
     test("'7abcdef012345678'.asNum(16)", 0x7abcdef012345678L);
     test("def s = '7abcdef012345678'; s.asNum(16)", 0x7abcdef012345678L);
     test("def s = '7abcdef012345678'; def f = s.asNum; f(16)", 0x7abcdef012345678L);
-    testError("'ABCDEF0123456789'.asNum(16)", "number is too large");
+    testError("'AABCDEF0123456789'.asNum(16)", "number is too large");
   }
 
   @Test public void toBase() {
@@ -5723,6 +5720,11 @@ class CompilerTest extends BaseTest {
     test("0xAbCdEf012345L.toBase(16)", "ABCDEF012345");
     test("def x = 0xAbCdEf012345L; x.toBase(16)", "ABCDEF012345");
     test("def x = 0xAbCdEf012345L; def f = x.toBase; f(16)", "ABCDEF012345");
+    test("-6.toBase(16)", "FFFFFFFA");
+    test("def x = -6; x.toBase(16)", "FFFFFFFA");
+    test("def x = -6; def f = x.toBase; f(16)", "FFFFFFFA");
+    test("def x = -6L; def f = x.toBase; f(16)", "FFFFFFFFFFFFFFFA");
+    test("def x = -6L; def f = x.toBase; f(16).asNum(16)", -6L);
   }
 
   @Test public void asyncFunctions() {

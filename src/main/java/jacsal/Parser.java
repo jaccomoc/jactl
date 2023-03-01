@@ -976,7 +976,12 @@ public class Parser {
       expr = new Expr.Cast(typeToken, castType, unary);
     }
     else
-    if (matchAny(unaryOps)) {
+    if (!isPlusMinusNumber() && matchAny(unaryOps)) {
+      // Ignore +number or -number where we want to parse as a number rather than as a unary expression
+      // This is to allow us to invoke methods on negative numbers (e.g. -6.toBase(2)) which wouldn't
+      // work normally since "." has higher precedence than "-". We will ignore here and deal with this
+      // in primary().
+
       Token operator = previous();
       Expr unary = unary(precedenceLevel);
       if (operator.is(PLUS_PLUS,MINUS_MINUS) &&
@@ -1016,6 +1021,10 @@ public class Parser {
       }
     }
     return expr;
+  }
+
+  private boolean isPlusMinusNumber() {
+    return lookahead(() -> matchAny(PLUS, MINUS) && matchAny(INTEGER_CONST, DECIMAL_CONST, DOUBLE_CONST));
   }
 
   /**
@@ -1088,7 +1097,9 @@ public class Parser {
   }
 
   /**
-   *# primary -> INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST | STRING_CONST | "true" | "false" | "null"
+   *# primary -> (("+" | "-")? INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST)
+   *#          | STRING_CONST
+   *#          | "true" | "false" | "null"
    *#          | exprString
    *#          | (IDENTIFIER | classPath)
    *#          | listOrMapLiteral
@@ -1106,6 +1117,7 @@ public class Parser {
     };
 
     matchAny(EOL);
+    if (isPlusMinusNumber())                               { return getPlusMinusNumber();                 }
     if (matchAny(INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
                  STRING_CONST, TRUE, FALSE, NULL))         { return new Expr.Literal(previous());         }
@@ -1126,6 +1138,15 @@ public class Parser {
       return new Expr.Literal(new Token(STRING_CONST, advance()).setValue(previous().getChars()));
     }
     return unexpected("Expected start of expression");
+  }
+
+  private Expr.Literal getPlusMinusNumber() {
+    Token sign = expect(PLUS,MINUS);
+    Token num  = expect(INTEGER_CONST,DOUBLE_CONST,DECIMAL_CONST);
+    if (sign.is(MINUS)) {
+      num.setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
+    }
+    return new Expr.Literal(num);
   }
 
   /**

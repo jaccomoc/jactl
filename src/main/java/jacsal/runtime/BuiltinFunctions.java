@@ -518,7 +518,7 @@ public class BuiltinFunctions {
       throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
     }
     int radix = ((Number) args[0]).intValue();
-    return longToBase(num, radix);
+    return intToBase(num, radix);
   }
 
   // = toString
@@ -1613,7 +1613,7 @@ public class BuiltinFunctions {
     if (radix > Character.MAX_RADIX) { throw new RuntimeError("Radix was " + radix + " but must be no more than " + Character.MAX_RADIX, source, offset); }
     if (str.isEmpty())               { throw new RuntimeError("Empty string cannot be converted to a number", source, offset); }
     try {
-      return Long.parseLong(str, radix);
+      return Long.parseUnsignedLong(str, radix);
     }
     catch (NumberFormatException e) {
       throw new RuntimeError("Input '" + str + "': invalid character for number with radix " + radix + " or number is too large", source, offset);
