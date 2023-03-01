@@ -42,7 +42,7 @@ public class JacsalContext {
   boolean printLoop          = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
   boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
 
-  int     maxScale           = Utils.DEFAULT_SCALE;
+  int     minScale           = Utils.DEFAULT_MIN_SCALE;
 
   // In repl mode top level vars are stored in the globals map and their type
   // is tracked here. We also allow redefinitions of existing vars. We don't
@@ -79,7 +79,7 @@ public class JacsalContext {
 
 //  public JacsalContext eventLoopThreads(int threads)     { this.eventLoopThreads   = threads; return this; }
   public JacsalContext replMode(boolean mode)            { this.replMode           = mode;    return this; }
-  public JacsalContext maxScale(int scale)               { this.maxScale           = scale;   return this; }
+  public JacsalContext minScale(int scale)               { this.minScale           = scale;   return this; }
   public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
   public JacsalContext debug(int value)                  { this.debugLevel         = value;   return this; }
   public JacsalContext printSize(boolean value)          { this.printSize          = value;   return this; }

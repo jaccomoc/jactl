@@ -29,6 +29,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.function.Function;
@@ -151,7 +152,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int maxScale, String source, int offset) {
+  public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int minScale, String source, int offset) {
     BigDecimal result;
     switch (operator) {
       case PLUS:
@@ -190,18 +191,15 @@ public class RuntimeUtils {
         }
         break;
       case SLASH:
-        result = decimalDivide(left, right, maxScale, source, offset);
+        result = decimalDivide(left, right, minScale, source, offset);
         break;
       default:
         throw new IllegalStateException("Internal error: operator " + operator + " not supported for decimals");
     }
-    if (result.scale() > maxScale) {
-      result = result.setScale(maxScale, RoundingMode.HALF_EVEN);
-    }
     return result;
   }
 
-  public static BigDecimal decimalDivide(BigDecimal left, BigDecimal right, int maxScale, String source, int offset) {
+  public static BigDecimal decimalDivide(BigDecimal left, BigDecimal right, int minScale, String source, int offset) {
     BigDecimal result;
     try {
       result = left.divide(right);
@@ -211,8 +209,11 @@ public class RuntimeUtils {
         throw new RuntimeError("Divide by zero error", source, offset);
       }
 
-      // Result is non-terminating so try again with restricted scale
-      result = left.divide(right, maxScale, RoundingMode.HALF_EVEN);
+      // Result is non-terminating so try again with restricted scale and precision
+      int precision = Math.max(left.precision(), right.precision()) + minScale;
+      result = left.divide(right, new MathContext(precision));
+      int scale = Math.max(Math.max(left.scale(), right.scale()), minScale);
+      result = result.scale() > scale ? result.setScale(scale, RoundingMode.HALF_UP) : result;
       result = result.stripTrailingZeros();
     }
     return result;
@@ -272,12 +273,12 @@ public class RuntimeUtils {
    * @param operator         operator (as a String)
    * @param originalOperator original operator (as a String) (will be -- or ++ if inc/dec turned into binaryOp or null
    *                         otherwise)
-   * @param maxScale         maximum scale for BigDecimal operations
+   * @param minScale         maximum scale for BigDecimal operations
    * @param source           source code
    * @param offset           offset into source code of operator
    * @return result of operation
    */
-  public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (left == null) {
       throwOperandError(left, true, operator, source, offset);
     }
@@ -346,7 +347,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -367,9 +368,9 @@ public class RuntimeUtils {
     return lhs + rhs;
   }
 
-  public static Object plus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object plus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (left == DEFAULT_VALUE || !(left instanceof Number)) {
-      return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
+      return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
     }
 
     if (!(right instanceof Number)) {
@@ -378,7 +379,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -399,9 +400,9 @@ public class RuntimeUtils {
     return lhs + rhs;
   }
 
-  public static Object multiply(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (isString(left)) {
-      return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
+      return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
     }
 
     if (!(left instanceof Number)) {
@@ -413,7 +414,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -434,9 +435,9 @@ public class RuntimeUtils {
     return lhs * rhs;
   }
 
-  public static Object minus(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (left instanceof Map) {
-      return binaryOp(left, right, operator, originalOperator, maxScale, source, offset);
+      return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
     }
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, source, offset);
@@ -447,7 +448,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -468,7 +469,7 @@ public class RuntimeUtils {
     return lhs - rhs;
   }
 
-  public static Object divide(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object divide(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, source, offset);
     }
@@ -478,7 +479,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -509,7 +510,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object remainder(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object remainder(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, source, offset);
     }
@@ -519,7 +520,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -550,7 +551,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object modulo(Object left, Object right, String operator, String originalOperator, int maxScale, String source, int offset) {
+  public static Object modulo(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, source, offset);
     }
@@ -560,7 +561,7 @@ public class RuntimeUtils {
 
     // Must be numeric so convert to appropriate type and perform operation
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, maxScale, source, offset);
+      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
     if (left instanceof Double || right instanceof Double) {
@@ -1193,6 +1194,16 @@ public class RuntimeUtils {
         sb.append(']');
         return sb.toString();
       }
+
+      if (obj instanceof BigDecimal) {
+        return ((BigDecimal)obj).toPlainString();
+      }
+
+      if (obj instanceof MethodHandle) {
+        return "Function@" + System.identityHashCode(obj);
+      }
+
+      // All other types use default toString()
       return obj.toString();
     }
     finally {

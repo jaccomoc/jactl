@@ -7,7 +7,7 @@ title: Jacsal Language Guide
 The easiest way to start learning about the Jacsal language is to use the REPL (read-evaluate-print-loop) that comes
 with Jacsal:
 
-```sh
+```shell
 $ java -cp jacsal-repl-1.0.jar jacsal.Repl
 Jacsal version 0.90
 > 
@@ -34,20 +34,48 @@ x is not less than 4
 >
 ```
 
+# Command Line Scripts
+
+Jacsal scripts can also be invoked from the command line:
+```shell
+$ java -jar jacsal-1.0.jar
+Usage: jacsal [switches] [programFile] [inputFile]* [--] [arguments]*
+         -p           : run in a print loop reading input from stdin or files
+         -n           : run in a loop but don't print each line
+         -e script    : script string is interpreted as jacsal code (programFile not used)
+         -V var=value : initialise jacsal variable before running script
+         -d           : debug: output generated code
+         -h           : print this help
+```
+
+Using the _-e_ option allows you to supply the script on the comand line itself:
+```shell
+$ java -jar jacsal-1.0.jar -e '3 * 14'
+12
+```
+
+If you have a Jacsal script in a file called `myscript.jacsal` then you can the script like this:
+```shell
+$ java -jar jacsal-1.0.jar myscript.jacsal
+```
+
+See [Command Line Invocation](/pages/language-guide/#commandline) for more details about how to invoke scripts
+from the command line.
+
 # Statement Termination: Newlines and Semicolons
 
-Jacsal syntax borrows from Java, Groovy, and Perl and so while Java and Perl both require a semicolon to terminate
+Jacsal syntax borrows heavily from Java, Groovy, and Perl and so while Java and Perl both require a semicolon to terminate
 simple statements, Jacsal adopts the Groovy approach where semicolons are optional.
-The only time a semicolon is really required is if more than one statement appears on the same line where they are
-used as a statement separator:
+The only time a semicolon is required as a statement separator is if more than one statement appears on the
+same line:
 ```groovy
-> int x = 1; println 'x = ' + x; if (x == 2) println 'x is 2'
+> int x = 1; println 'x = ' + x; println 'x is 2' if x == 2
 x = 1
 ```
 
 The Jacsal compiler, when it encounters a newline, will try to see if the current expression or statement continues
 on the next line.
-Sometimes it is ambiguous whether the newline terminates the current statement or not and in these
+Sometimes it can be ambiguous whether the newline terminates the current statement or not and in these
 situations, Jacsal will treat the newline is a terminator. For example, consider this:
 ```groovy
 def x = [1,2,3]
@@ -74,9 +102,9 @@ will be interpreted as `x[0]`.
 
 # Comments
 
-Comments in Jacsal are denoted using either line comments where `//` is used to begin a comment that extends to the end
-of the line or with a pair of `/*` and `*/` that delimit a comment that can be either embeeded within a single line
-or span multiple lines:
+Comments in Jacsal are the same as for Java and Groovy and are denoted using either line comment form, where `//` is
+used to begin a comment that extends to the end of the line, or with a pair of `/*` and `*/` that delimit a comment that
+can be either embeeded within a single line or span multiple lines:
 ```groovy
 > int x = 3         // define a new variable x
 3
@@ -94,7 +122,7 @@ A variable in Jacsal is a symbol that is used to refer to a value. Variables are
 by their name and an optional expression to use as an initial value for the variable. If no initialization expression
 is given then the default value for that type is assigned.
 
-After declaration, variables can have new value assigned to them as long as the new value is compatible with the type
+After declaration, variables can have new values assigned to them as long as the new value is compatible with the type
 that was specified for the variable at declaration time. Variables can be used in expressions at which point their
 current value is retrieved and used within that expression:
 ```groovy
@@ -117,19 +145,19 @@ valid identifier.
 Variable names cannot clash with any built-in language [keywords](/pages/language-guide/#keywords):
 ```groovy
 > int for = 3
-Unexpected token 'for': Expecting IDENTIFIER @ line 1, column 5
+Unexpected token 'for': Expecting identifier @ line 1, column 5
 int for = 3
     ^
 ```
 
 > Since class names in Jacsal must start with a capital letter it is good practice not
-> to start variable names with a captial letter in order to make your code easier to read.
+> to start variable names with a capital letter in order to make your code easier to read.
 
 > Unlike Java, the dollar sign `$` is not a valid character for a variable name in Jacsal.
 
 While most of the examples presented here have single character variable names, in general, your code should use
 names that are more meaningful. It is recommended that when a variable name consists of more than one word that
-so-called _camel case_ is used to indicate the word boundaries by capitalizing the first letter of following words.
+_camel case_ is used to indicate the word boundaries by capitalizing the first letter of following words.
 For example:
 * firstName
 * accountNumber
@@ -140,14 +168,17 @@ For example:
 
 The following table list the reserved keywords used by Jacsal:
 
-| Decimal | List | Map | String | and |
-| as | boolean | break | class | continue |
-| def | do | double | else | extends |
-| false | for | if | implements | import |
-| in | instanceof | int | interface | long |
-| not | null | or | print | println |
-| return | true | unless | var | void |
-| while | | | | |
+| Key Words |         |     |         |       |
+|-----------|---------|-----|---------|-------|
+| BEGIN     | Decimal | END | List    | Map   |
+| String    | and     | as  | boolean | break |
+| class     | continue | def | die | do |
+| double    | else | extends | false | for |
+| if        | implements | import | in | instanceof |
+| int       | interface | long | new | not |
+| null      | or | package | print | println |
+| return    | static | true | unless | var |
+| void      | while | | | |
 
 # Types
 
@@ -190,8 +221,8 @@ some place
 
 ## Dynamic/Weak Typing
 
-While Jacsal supports the used of specific types when declaring variables and functions, Jacsal can also be used as
-a weakly or dynamically typed language (also known as "duck typing"). The keyword `def` is used to define variables and
+While Jacsal supports the use of specific types when declaring variables and functions, Jacsal can also be used as
+a weakly or dynamically typed language (also known as _duck typing_). The keyword `def` is used to define variables and
 functions in situations where the type may not be known up front or where the variable will contain values of different
 types at different points in time:
 ```groovy
@@ -231,7 +262,7 @@ Function@45822040
 
 Jacsal supports two types of integers: `int` and `long`.
 
-As with Java, 32 bit integers are represented by `int` while `long` is used for 64 bit integers.
+As with Java, 32-bit integers are represented by `int` while `long` is used for 64-bit integers.
 
 The range of values are as follows:
 
@@ -241,7 +272,7 @@ The range of values are as follows:
 | `long` | -9223372036854775808 | 9223372036854775807 | 
 
 To force a literal value to be a `long` rather than an `int` append `L` to the number:
-```groovysh
+```groovy
 > 9223372036854775807
 Error at line 1, column 1: Integer literal too large for int
 9223372036854775807
@@ -252,15 +283,11 @@ Error at line 1, column 1: Integer literal too large for int
 
 ### Floating Point
 
-In Jacsal, by default, floating point numbers are represented by the `Decimal` type and numeric literals that have a decimal point
-will be interpreted as Decimal numbers.
+In Jacsal, by default, floating point numbers are represented by the `Decimal` type and numeric literals that have
+a decimal point will be interpreted as Decimal numbers.
 
-Decimal numbers are represented internally using the Java `BigDecimal` class. This means that we avoid the problems
-of trying to store base 10 numbers inexactly using a binary floating point representation and makes Jacsal a language
-suitable for manipulating monetary values.
-
-> The maximum number of decimal places that Jacsal will keep for `BigDecimal` values is
-> configurable and defaults to `20`. See [JacsalContext](jacsal_context) for more details.
+Decimal numbers are represented internally using the Java `BigDecimal` class. This avoids the problems
+of trying to store base 10 numbers inexactly using a binary floating point representation.
 
 Jacsal also offers the ability to use native floating point numbers by using the type `double` (which corresponds to
 the Java type `double`) for situations where preformance is more important than having exact values.
@@ -268,6 +295,14 @@ When using doubles, constants of type `double` should use the `D` suffix to prev
 as Decimal constants and to avoid unnecessary overhead:
 ```groovy
 > double d = amount * 1.5D
+```
+
+To illustrate how Decimal values and double values behave differently, consider the following example:
+```groovy
+> 12.12D + 12.11D     // floating point double values give approximate value
+24.229999999999997
+> 12.12 + 12.11       // Decimal values give exact value
+24.23
 ```
 
 ## Strings
@@ -304,8 +339,8 @@ escape sequences are supported:
 
 For example:
 ```groovy
-> 'a\\b\tc\td\ne'
-a\b     c       d
+> 'a\\b\t\'c\'\td\ne'
+a\b	'c'	d
 e
 ```
 
@@ -346,7 +381,7 @@ Strings can be concatenated using `+`:
 > 'abc' + 'def'
 abcdef
 ```
-If two objects are added using `+` and the left hand side of the `+` is a string then the other is converted to a
+If two objects are added using `+` and the left-hand side of the `+` is a string then the other is converted to a
 string before concatenation takes place:
 ```groovy
 > 'abc' + 1 + 2
@@ -356,6 +391,18 @@ The `*` operator can be used to repeat multiple instances of a string:
 ```groovy
 > 'abc' * 3
 abcabcabc
+```
+
+The `in` and `!in` operators can be used to check for substrings within a string:
+```groovy
+> 'x' in 'xyz'
+true
+> 'bc' in 'abcd'
+true
+> 'xy' in 'abc'
+false
+> 'ab' !in 'xyz'
+true
 ```
 
 ### Expression Strings
@@ -384,7 +431,7 @@ Here are 3 copies of xyz: xyzxyzxyz
 ```
 You can, of course, have further nested interpolated strings within the expression itself:
 ```groovy
-> "This is a ${'con' + "tr${'i' * (3*6 % 17) + 'v'}e" + 'd'} example"
+> "This is a ${((int)'a'+2).asChar() + 'on' + "tr${'i' * (3*6 % 17) + 118.asChar()}e" + 'd'} example"
 This is a contrived example
 ```
 As with standard single quoted strings, multi-line interpolated strings are supported with the use of triple double
@@ -400,7 +447,7 @@ This is a multi-line
 interpolated string
 ```
 
-While it is good practice to include simple expressions within a `${}` section of an expression string,
+While it is good practice to use only simple expressions within a `${}` section of an expression string,
 it is actually possible for the code block within the `${}` to contain multiple statements.
 If the embeded expression contains multiple statements then the value of the last statement is used as the value
 to be inserted into the string:
@@ -409,22 +456,28 @@ to be inserted into the string:
 First 5 pyramid numbers: 1, 5, 14, 30, 55
 ```
 
-You can use `return` statements to return a value to be used from anywhere within
-the block of statements.
+You can use `return` statements from anywhere within the block of statements to return the value to be used
+for the embedded expression.
 The `return` just returns a value from the embedded expression; it does not cause a return
 to occur in the surrounding function where the expression string resides.
-
+For example:
+```groovy
+> def x = 3; "x is ${return 'odd' if x % 2 == 1; return 'even' if x % 2 == 0}"
+x is odd
+```
 
 ### Regex Strings
 
 In order to better support regular expressions, regex strings can be delimited with `/` and are multi-line strings
-where standard backslash escaping for `\n`, `\r`, etc is not performed. Backslashes can be used to escape `/`, `$`,
+where standard backslash escaping for `\n`, `\r`, etc. is not performed. Backslashes can be used to escape `/`, `$`,
 and any other regex specific characters such as `[`, `{`, `(` etc. to treat those characters as normal and not have
 them be interpreted as regex syntax:
 ```groovy
-> def x = 'abc.d[123]'
+> String x = 'abc.d[123]'
 abc[123]
-> x =~ /c\.d\[12[0-9]]/
+> String pattern = /c\.d\[12[0-9]]/
+c\.d\[12[0-9]]
+> x =~ pattern     // check if x matches pattern using =~ regex operator
 true
 ```
 
@@ -437,14 +490,22 @@ abc.d[123]
 true
 ```
 
-> Note that an empty regex string `//` is treated as the start of a line comment so is not supported.
+Regex strings also support multiple lines:
+```groovy
+> def p = /this is
+  a multi-line regex string/
+this is
+a multi-line regex string
+```
+
+> Note that an empty regex string `//` is not supported since this is treated as the start of a line comment.
 
 ## Lists
 
 A Jacsal `List` represents a list of values of any type. Lists can have a mixture of types within them. Lists are
 created using the `[]` syntax where the elements are a list of comma separated values:
 ```groovy
-> []
+> []            // empty list
 []        
 > [1,2,3]
 [1, 2, 3]
@@ -473,7 +534,7 @@ Lists can be added together:
 > [1,2] + [2,3,4]
 [1, 2, 2, 3, 4]
 ```
-Note how `2` now appears twice. Lists keep track of all elements, whether duplicated or not.
+Note how `2` now appears twice: lists keep track of all elements, whether duplicated or not.
 
 Single elements can be added to a list:
 ```groovy
@@ -489,8 +550,45 @@ e
 ['a', 'b', 'c', 'd', 'e', 'f']
 ```
 
-There is also the `in` operator that allows you to check whether an element already exists in a list and `!in` which
-checks that an element is not in a list:
+Consider this example:
+```groovy
+> def x = [3]
+[3]
+> [1,2] + x
+[1, 2, 3]
+```
+We are adding two lists so the result is the list of all the elements but what if we wanted to add `x` itself to the
+list and we didn't know whether `x` was itself a list or any other type?
+We could do this:
+```groovy
+> [1,2] + [x]
+[1, 2, [3]]
+```
+Another way to force the value of `x` to be added to the list is to use the `<<` operator:
+```groovy
+> [1,2] << x
+[1, 2, [3]]
+```
+The `<<` operator does not care whether the item being added is a list or not - it treats all items the same and adds
+appends them to the list.
+
+There are also corresponding `+=` and `<<=` operators for appending to an existing list:
+```groovy
+> def y = [1,2]
+[1, 2]
+> y += 3
+[1, 2, 3]
+> y
+[1, 2, 3]
+> y <<= ['a']
+[1, 2, 3, ['a']]
+> y
+[1, 2, 3, ['a']]
+```
+Note that both `+=` and `<<=` append to the existing list rather than creating a new list.
+
+The `in` operator allows you to check whether an element already exists in a list and there is also `!in` which
+checks for an element not being in a list:
 ```groovy
 > def x = ['a', 'b']
 ['a', 'b']
@@ -502,7 +600,7 @@ true
 false
 ```
 > The `in` and `!in` operators will search the list from the beginning of the list to try to
-> find the element so they are not very efficient once the list reaches any significant size. You might want to rethink
+> find the element, so they are not very efficient once the list reaches any significant size. You might want to rethink
 > your use of data structure if you are using `in` or `!in` on lists with more than a few elements.
 
 You can retrieve invidual elements of a list using subscript notation where the index of the element  is enclosed
@@ -510,7 +608,7 @@ in `[]` immediately after the list and indexes start at `0` (so the first elemen
 ```groovy
 > def x = ['value1', 2, ['a', 'b']]
 ['value1', 2, ['a', 'b']]
-> x[0]
+> x[0] 
 value1
 > x[1]
 2
@@ -582,13 +680,22 @@ As with lists, you can add maps together:
 > [a:1,b:2] + [c:3,d:4]
 [a:1, b:2, c:3, d:4]
 ```
-If the second map has a key that matches a key in the first list then it is assumed that the key should be updated
-with the new value:
+If the second map has a key that matches a key in the first list then its value is used in the resulting map:
 ```groovy
 > [a:1,b:2] + [b:4]
 [a:1, b:4]
 ```
-Keys in the left-hand map value that don't exist in the right-hand map have their values left untouched.
+Keys in the left-hand map value that don't exist in the right-hand map have their values taken from the left-hand map.
+
+The `+=` operator adds the values to an existing map rather than creating a new map:
+```groovy
+> def x = [a:1,b:2]
+[a:1, b:2]
+> x += [c:3,a:2]
+[a:2, b:2, c:3]
+> x
+[a:2, b:2, c:3]
+```
 
 ### JSON Syntax
 Jacsal also supports JSON-like syntax for maps. This makes it handy if you want to cut-and-paste some JSON into your
@@ -702,15 +809,16 @@ abc
 
 ### Auto-Creation
 
-The field access mechanism can also be used to automatically create missing maps or lists, based on the context, when used on the left hand side of an assignment.
+The field access mechanism can also be used to automatically create missing maps or lists, based on the context,
+when used on the left-hand side of an assignment.
 
 Imagine that we need to execute something like this:
 ```groovy
 > x.a.b.c.d = 1
 1
 ```
-If at the point in the script we don't actually know whether all of the intermediate fields have been created then
-we would need to implement this like this:
+If we don't actually know whether all the intermediate fields have been created then we would need to implement
+something like this:
 ```groovy
 > if (x == null) { x = [:] }
 [:]
@@ -725,7 +833,17 @@ we would need to implement this like this:
 > x
 [a:[b:[c:[d:1]]]]
 ```
-With Jacsal these intermediate fields will be automatically created if they don't exist. Jacsal will not automatically create the top level variable, however, if it does not yet have a value:
+With Jacsal these intermediate fields will be automatically created if they don't exist so we only need write
+the last line of script:
+```groovy
+> x.a.b.c.d = 1
+1
+> x
+[a:[b:[c:[d:1]]]]
+```
+
+Note that Jacsal will not automatically create a value for the top level variable, however, if it does not yet
+have a value. In this case, for example:
 ```groovy
 > def x
 > x.a.b.c.d = 1
@@ -733,7 +851,8 @@ Null value for Map/List during field access @ line 1, column 2
 x.a.b.c.d.e = 1
  ^
 ```
-If part of the context of the field assignment looks like a list rather an a map then a list will be
+
+If part of the context of the field assignment looks like a List rather than a Map then a List will be
 created as required:
 ```groovy
 > def x = [:]
@@ -744,10 +863,11 @@ created as required:
 > x
 [a:[b:[[c:[d:1]], [c:[d:2]]]]]
 ```
+Note that in this case `x.a.b` is an embedded List, not a Map.
 
-While normally access to fields of a Map can also be done via subscript notation, if the field does not exist then
+Normally access to fields of a Map can also be done via subscript notation but if the field does not exist then
 Jacsal will assume that access via subscript notation implies that an empty List should be created if the field is
-missing rather than a Map:
+missing, rather than a Map:
 ```groovy
 > def x = [:]
 [:]
@@ -757,22 +877,32 @@ x.a['b'] = 1
    ^
 ```
 
-# in Operator
+### in and !in Operators
 
-The `in` operator can be used to check for existent of an element in a List or Map and can also be used to check for
-a string being a substring of another string.
+The `in` and `!in` operators can be used to check for existent of a key in a Map:
 ```groovy
-
+> def x = [a:1, b:2]
+[a:1, b:2]
+> 'a' in x
+true
+> 'x' in x
+false
+> 'ab' !in x
+true
 ```
+
+# Boolean Operators
+
+
 
 # Truthiness
 
 In Jacsal we often want to know whether an expression is `true` or not. The _truthiness_ of an expression is used to
 determine which branch of an `if` statement to evaluate, or whether a `for` loop or a `while` loop should continue
 or not, for example. In any situation where a boolean `true` or `false` is expected we need to evaluate the given
-expression to determine wether it is true or not.
+expression to determine whether it is true or not.
 
-Obviously, if the expression is a simple boolean or boolean value then there it is obvious how to intepret the value:
+Obviously, if the expression is a simple boolean or boolean value then there is no issue with how to intepret the value:
 `true` is true, and `false` is false.
 
 Other types of expressions can also be evalauted in a boolean context and return `true` or `false`.
@@ -784,11 +914,314 @@ The rules are:
 * Empty list or empty map is `false`
 * All other values are `true` 
 
+For example:
+```groovy
+> [] && true
+false
+> [[]] && true
+true
+> [:] && true
+false
+> [false] && true
+true
+> [a:1] && true
+true
+> '' && true
+false
+> 'abc' && true
+true
+> 1 && true
+true
+> 0 && true
+false
+> null && true
+false
+```
 
-# Field Paths
+# Expressions and Operators
 
-Use of strings/expressions as field names
+## Operator Precedence
 
+Jacsal supports the following operators. Operators are shown in increasing precedence order and operators of the same
+precedence are shown with the same precedence value:
+
+| Precedence Level |            Operator            | Description                                           |
+|:----------------:|:------------------------------:|:------------------------------------------------------|
+|        1         |              `or`              | Logical or                                            |
+|        2         |             `and`              | Logical and                                           |
+|        3         |             `not`              | Logical not                                           |
+|        4         |              `=`               | Assignment                                            |
+|                  |              `?=`              | Conditional assignment                                |
+|                  | `+=` `-=` `*=` `/=` `%=` `%%=` | Arithmetic assignment operators                       |
+|                  |       `<<=` `>>=` `>>>=`       | Shift assignment operators                            |
+|                  |      `&=` `&#124;=` `^=`       | Bitwise assignment operators                          |
+|        5         |             `? :`              | Ternary conditional opeartor                          |
+|                  |              `?:`              | Default value operator                                |
+|        6         |         `&#124;&#124;`         | Boolean or                                            |
+ |        7         |              `&&`              | Boolean and                                           |
+ |        8         |            `&#124;`            | Bitwise or                                            |
+|        9         |              `^`               | Bitwise xor                                           |
+|        10        |              `&`               | Bitwise and                                           |
+|        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                     |
+|                  |             `<=>`              | Comparison operator                                   |
+|                  |           `=~` `!~`            | Regex compare and regex not compare                   |
+ |        12        |       `<` `<=` `>` `>=`        | Less than and greater than operators                  |
+|                  |   `instanceof` `!instanceof`   | Instance of and not instance of operators             |
+ |                  |           `in` `!in`           | In and not in operators                               |
+|                  |              `as`              | Conversion operator                                   |
+|        13        |        `<<` `>>` `>>>`         | Shift operators                                       |
+|        14        |            `+` `-`             | Addition and subtraction                              |
+|        15        |            `*` `/`             | Multiplication and division operators                 |
+|                  |            `%` `%%`            | Modulo and remainder operators                        |
+|        16        |              `~`               | Bitwise negate                                        |
+|                  |              `!`               | Boolean not                                           |
+|                  |           `++` `--`            | Prefix and postfix increment/decrement operators      |
+|                  |            `+` `-`             | Prefix minus and plus operators                       |
+|                  |            `(type)`            | Type cast                                             |
+|        17        |            `.` `?.`            | Field access and conditional field access             |
+|                  |          `[ ]` `?[ ]`          | Map/List/String element access and conditional access |
+|                  |              `()`              | Function/method invocation                            |
+|                  |              `{}`              | Function/method invocation (closure passing syntax)   |
+|                  |             `new`              | New instance operator                                 |
+
+When evaluating expressions in Jacsal operators with higher precedence are evaluated before operators with lower
+preedence.
+For example in the following expression the multiplicaton is evaluated before the addition or subtraction because
+it has higher precedence than addition or substraction:
+```groovy
+> 3 + 2 * 4 - 1
+10
+```
+Bracketing can be used to force the order of evaluation of sub-expressions where necessary:
+```groovy
+> (3 + 2) * (4 - 1)
+15
+```
+
+## Assignment and Conditional Assignment
+
+Variables can have values assigned to them using the `=` operator:
+```groovy
+> def x = 1
+1
+> x = 2
+2
+```
+
+Since an assignment is an expression and has a value (the value being assigned) it is possible to use an assignment
+within another expression:
+```groovy
+> def x = 1
+1
+> def y = x = 3
+3
+> x
+3
+> y
+3
+> y = (x = 4) + 2
+6
+> x
+4
+```
+Conditional assignment uses the `?=` operator and means that the assignment only occurs if the expression on the right
+hand side is non-null.
+So `x ?= y` means `x` will be assigned the value of `y` only if `y` is not null:
+```groovy
+> def x = 1
+1
+> def y          // no initialiser so y will be null
+> x ?= y
+> x              // x still has its original value since y was null
+1
+```
+
+## Basic Arithmetic Operators
+
+The standard arithmetic operators `+`, `-`, `*`, `/` are supported for addition, subtraction, multiplication, and
+division:
+```groovy
+> 3 * 4 + 6 / 2 + 5 - 10
+10
+```
+Remember that `*` and `/` have higher precedence and are evaluated before any addition or subtraction. 
+
+## Prefix `+` and `-`
+
+The `+` and `-` operators can also be used as prefix operators:
+```groovy
+> -(3 - 4)
+1
+> +(3 - 4)
+-1
+```
+The `-` prefix operator negates the value following expression while the `+` prefix operator does nothing but exists
+to correspond to the `-` case so that things like `-3` and `+3` can both be written.
+
+## Bitwise Operators
+
+The bitwise operators are `|`, `&`, `^`, and `~`.
+
+The `|` operator performs a binary _or_ at the bit level.
+For each _bit_ of the left-hand and right-hand side the corresponding _bit_ in the result will be 1 if the _bit_ in
+either the left-hand side or right-hand side was 1.
+
+For example, `5 | 3` is the same in binary as `0b101 | 0b011` which at the bit level results in `0b111` which is 7:
+```groovy
+> 5 | 3
+7
+> 0b101 | 0b011     // result will be 0b111
+7
+```
+
+The `&` operator does an _and_ of each bit and the resulting bit is 1 only if both left-hand side and right-hand side
+bit values were 1:
+```groovy
+> 5 & 3
+1
+> 0b101 & 0b011    // result is 0b001
+1
+```
+
+The `^` operator is an _xor_ and the result for each bit value is 0 if both left-hand side and right-hand side bit values
+are the same and 1 if they are different:
+```groovy
+> 5 ^ 3
+6
+> 0b101 ^ 0b011     // result is 0b110
+6
+```
+
+The `~` is a prefix operator and does a bitwise _not_ of the following expression so the result for each bit is the
+opposite of the bit value in the expression:
+```groovy
+> ~5
+-6
+> ~0b101    // result will be 0b11111111111111111111111111111001
+```
+
+, `&` does a binary _and_, `^` is a binary _xor_, and `~`
+
+
+## Shift Operators
+
+## Modulo `%` and Remainder `%%` operators
+
+In addition to the basic four operators, Jacsal also has `%` (modulo) and `%%` (remainder) operators.
+Both operators perform similar functions in that they calculate the "remainder" after dividing by some number.
+The difference comes from how they treat negative numbers.
+
+The remainder operator `%%` works exactly the same way as the Java remainder operator (which in Java is represented
+by a single `%` rather than the `%%` in Jacsal):
+> `x %% y` is defined as being `x - (int)(x/y) * y`
+
+The problem is if `x` is less than `0` then the result will also be less than 0:
+```groovy
+> -5 %% 3
+-2
+```
+
+When doing modulo arithmetic you usually want (in my opinion) values to only be between `0` and `y - 1` when evaluating
+something modulo `y` (where `y` is postive) and between `0` and `-(y - 1)` if `y` is negative.
+
+Jacsal, therefore, the definition of `%` is:
+> `x % y` is defined as `((x %% y) + y) %% y`
+
+This means that in Jacsal `%` returns only postive values if the right-hand side is positive and only negative values
+if the right-hand side is negative.
+Jacsal retains `%%` for scenarios where you want compatibility with how Java does things or for when you know that
+the left-hand side will always be positive and you care about performance (since `%%` compiles to a single JVM
+instruction while `%` is several instructions).
+
+## Increment/Decrement Operators
+
+Jacsal offers increment `++` and decrement `--` operators that increment or decrement a value by `1`.
+Both prefix and postfix versions of these operators exist.
+In prefix form the result is the result after applying the increment or decrement while in postfix form the value
+is the value before the increment or decrement occurs.
+
+For example:
+```groovy
+> def x = 1
+1
+> x++    // increment x but return value of x before increment
+1
+> x
+2
+> ++x    // increment x and return new value
+3
+> x
+3
+> --x    // decrement x and return new value
+2
+> x--    // decrement x but return old value
+2
+> x
+1
+```
+
+If the expression is not an actual variable or field that can be incremented then there is nothing to increment or
+decrement but in the prefix case the value returned is as though the value had been incremented or decremented:
+```groovy
+> 3++
+3
+> ++3
+4
+> --(4 * 5)
+19
+> (4 * 5)--
+20
+```
+
+# 
+
+# Logical/Boolean Operators
+
+
+
+# Conditional Operator
+
+# Default Value Operator
+
+# Bitwise Operators
+
+## Other Assignment Operators
+
+Many operators also have assignment versions that perform the operation and then assign the result to the
+left-hand side.
+The corresponding assignment operator is the original operator followed immediately (no spaces) by the `=` sign.
+For example, the assignment operator for `+` is `+=`.
+An expression such as `x += 5` is just shorthand for `x = x + 5`.
+
+The full list of assignment operators is:
+
+> `+=` `-=` `*=` `/=` `%=` `%%=` `<<=` `>>=` `>>>=` `&=` `&#124;=` `^=`  
+
+For example:
+```groovy
+> def x = 5
+5
+> x += 2 * x
+15
+> x
+15
+> x /= 3
+5
+> x %= 3
+2
+> x <<= 4
+32
+> x |= 15
+47
+```
+
+# If Statements
+
+# If/unless Statements
+
+# While Loops
+
+# For Loops
 
 
 # Functions
@@ -812,10 +1245,8 @@ The difference between function and closure is that functions can make forward r
 # Collections
 {: #collections}
 
-
-# Keywords
-{: #keywords}
-
+# Command Line Invocation
+{: #commandline}
 
 # TODO
 * multi-value return from functions
@@ -823,5 +1254,15 @@ The difference between function and closure is that functions can make forward r
 * passing list as list of args
 * lazy vs non-lazy iteration (Java vs Groovy)
 ** force non-lazy by using collect()
-* no static state in classes and no static initialiser blocks either (for same reason)
+* Classes
+** no static state in classes and no static initialiser blocks either (for same reason)
+* and/or/not
+* do{}
+* if/unless single statements
+* regex match/substitute
+** use with implicit it
+** capture vars
+* implicit it
+* builtin functions
+* functions as values
 * 

@@ -394,7 +394,9 @@ public class Parser {
       else {
         type(false);
       }
-      expect(IDENTIFIER);
+      if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeywordIgnoreEOL()) {
+        return false;
+      }
       expect(LEFT_PAREN);
       return true;
     });
@@ -461,7 +463,8 @@ public class Parser {
   }
 
   private boolean isVarDecl() {
-    return lookahead(() -> matchAny(typesAndVar) || className() != null, () -> matchAnyIgnoreEOL(IDENTIFIER));
+    return lookahead(() -> matchAny(typesAndVar) || className() != null,
+                     () -> matchAnyIgnoreEOL(IDENTIFIER) || matchKeywordIgnoreEOL());
   }
 
   /**
@@ -1185,7 +1188,7 @@ public class Parser {
   private List<Expr> className() {
     List<Expr> className = new ArrayList<>();
 
-    // Check for lowercase name to decide whether to get a classPath or an IDENTIFIER
+    // Check for lowercase name to check if we have a package name in which case we look for a classpath
     Token next = peek();
     if (next.is(IDENTIFIER) && Utils.isLowerCase(next.getStringValue())) {
       Expr classPath = classPath();
@@ -1196,9 +1199,14 @@ public class Parser {
     }
 
     if (className.size() == 0) {
-      className.add(new Expr.Identifier(expect(IDENTIFIER)));
+      Token identifier = expect(IDENTIFIER);
+      if (!Utils.isValidClassName(identifier.getStringValue())) {
+        unexpected("Expected valid class name");
+      }
+      className.add(new Expr.Identifier(identifier));
     }
 
+    // We have already parsed package name if any so now match nested class names X.Y.Z
     while (matchAny(DOT)) {
       Token identifier = expect(IDENTIFIER);
       String name = identifier.getStringValue();
@@ -1840,6 +1848,29 @@ public class Parser {
     return false;
   }
 
+  private boolean matchKeywordIgnoreEOL() {
+    // Remember current tokens in case we need to rewind
+    Token previous = previous();
+    Token current  = tokeniser.peek();
+
+    boolean eolConsumed = false;
+    if (current.is(EOL)) {
+      advance();
+      eolConsumed = true;
+    }
+
+    if (peek().isKeyword()) {
+      advance();
+      return true;
+    }
+
+    // No match so rewind if necessary
+    if (eolConsumed) {
+      tokeniser.rewind(previous, current);
+    }
+    return false;
+  }
+
   /**
    * Provide lookahead by remembering current token and state then checking that the list
    * of lambdas all return true. Each lambda should check for a token or invoke one of the
@@ -1903,8 +1934,8 @@ public class Parser {
     if (peek().getType().is(EOF)) {
       throw new EOFError("Unexpected EOF: " + msg, peek());
     }
-    final var chars = peekIsEOL() ? "EOL" : peek().getChars();
-    error("Unexpected token '" + chars + "': " + msg);
+    final var chars = peekIsEOL() ? "EOL" : "'" + peek().getChars() + "'";
+    error("Unexpected token " + chars + ": " + msg);
     return null;
   }
 
@@ -1926,7 +1957,8 @@ public class Parser {
                        .collect(Collectors.joining(", ")));
     }
     else {
-      unexpected("Expecting '" + types[0].toString() + "'");
+      var expected = types[0].is(IDENTIFIER) ? "identifier" : "'" + types[0] + "'";
+      unexpected("Expecting " + expected);
     }
     return null;
   }

@@ -81,9 +81,14 @@ public class BuiltinFunctions {
       registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
       registerMethod("substring", "stringSubstring", STRING, true, 1);
       registerMethod("split", "stringSplit", STRING, true, 0);
+      registerMethod("asNum", "stringAsNum", STRING, true, 0);
 
       // int methods
       registerMethod("asChar", "intAsChar", INT, false, 0);
+      registerMethod("toBase", "intToBase", INT, false, 1);
+
+      // long methods
+      registerMethod("toBase", "longToBase", LONG, false, 1);
 
       // Object methods
       registerMethod("toString", "objectToString", ANY, false, 0);
@@ -494,6 +499,26 @@ public class BuiltinFunctions {
   public static Object intAsCharWrapper(Integer obj, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, null,0, source, offset);
     return String.valueOf((char)(int)obj);
+  }
+
+  // = toBase
+  public static String longToBase(long num, int radix) { return Long.toUnsignedString(num, radix).toUpperCase(); }
+  public static Object longToBaseWrapper(Long num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, LONG, 1, source, offset);
+    if (!(args[0] instanceof Number)) {
+      throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+    }
+    int radix = ((Number) args[0]).intValue();
+    return longToBase(num, radix);
+  }
+  public static String intToBase(int num, int radix) { return Integer.toUnsignedString(num, radix).toUpperCase(); }
+  public static Object intToBaseWrapper(Integer num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, INT, 1, source, offset);
+    if (!(args[0] instanceof Number)) {
+      throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+    }
+    int radix = ((Number) args[0]).intValue();
+    return longToBase(num, radix);
   }
 
   // = toString
@@ -1176,7 +1201,7 @@ public class BuiltinFunctions {
                               }
                               if (value instanceof Double)                           { value = BigDecimal.valueOf((double)value); }
                               if (value instanceof Integer || value instanceof Long) { value = BigDecimal.valueOf(((Number)value).longValue()); }
-                              return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(counter[0]), Utils.DEFAULT_SCALE, source, offset);
+                              return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(counter[0]), Utils.DEFAULT_MIN_SCALE, source, offset);
                             },
                             c);
   }
@@ -1580,6 +1605,30 @@ public class BuiltinFunctions {
     catch (Exception e) {
       throw new RuntimeError("Substring error", source, offset, e);
     }
+  }
+
+  // = asNum
+  public static long stringAsNum(String str, String source, int offset, int radix) {
+    if (radix < Character.MIN_RADIX) { throw new RuntimeError("Radix was " + radix + " but must be at least " + Character.MIN_RADIX, source, offset); }
+    if (radix > Character.MAX_RADIX) { throw new RuntimeError("Radix was " + radix + " but must be no more than " + Character.MAX_RADIX, source, offset); }
+    if (str.isEmpty())               { throw new RuntimeError("Empty string cannot be converted to a number", source, offset); }
+    try {
+      return Long.parseLong(str, radix);
+    }
+    catch (NumberFormatException e) {
+      throw new RuntimeError("Input '" + str + "': invalid character for number with radix " + radix + " or number is too large", source, offset);
+    }
+  }
+  public static Object stringAsNumWrapper(String str, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, STRING, 1, source, offset);
+    int radix = 10;
+    if (args.length > 0) {
+      if (!(args[0] instanceof Number)) {
+        throw new RuntimeError("Argument to asNum must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+      }
+      radix = ((Number) args[0]).intValue();
+    }
+    return stringAsNum(str, source, offset, radix);
   }
 
   // = split

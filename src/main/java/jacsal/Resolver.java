@@ -1439,7 +1439,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         BigDecimal left  = Utils.toDecimal(leftValue);
         BigDecimal right = Utils.toDecimal(rightValue);
         throwIf(expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
-        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jacsalContext.maxScale,
+        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jacsalContext.minScale,
                                                               expr.operator.getSource(), expr.operator.getOffset());
         break;
       }

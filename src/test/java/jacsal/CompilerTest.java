@@ -176,10 +176,6 @@ class CompilerTest extends BaseTest {
     test("null || false", false);
   }
 
-  @Test public void testStuff() {
-    test("-8.0 %% 5.0", "#-3.0");
-  }
-
   @Test public void simpleConstExpressions() {
     testError("1 + true", "non-numeric operand for right-hand side");
     testError("false + 1", "non-numeric operand for left-hand side");
@@ -296,7 +292,7 @@ class CompilerTest extends BaseTest {
     test("1.0 - -2.0", "#3.0");
     test("2.0 * 3.0", "#6.00");
     test("6.0 / 3.0", "#2");
-    test("6.0 / 7.0", "#0.85714285714285714286");
+    test("6.0 / 7.0", "#0.8571428571");
     test("8.0 %% 5.0", "#3.0");
     test("-8.0 %% 5.0", "#-3.0");
     test("8.0 % 5.0", "#3.0");
@@ -690,10 +686,10 @@ class CompilerTest extends BaseTest {
     test("def x = 6.0; def y = 3.0; x / y", "#2");
     test("Decimal x = 6.0; def y = 3.0; x / y", "#2");
     test("def x = 6.0; Decimal y = 3.0; x / y", "#2");
-    test("Decimal x = 6.0; Decimal y = 7.0; x / y", "#0.85714285714285714286");
-    test("def x = 6.0; def y = 7.0; x / y", "#0.85714285714285714286");
-    test("Decimal x = 6.0; def y = 7.0; x / y", "#0.85714285714285714286");
-    test("def x = 6.0; Decimal y = 7.0; x / y", "#0.85714285714285714286");
+    test("Decimal x = 6.0; Decimal y = 7.0; x / y", "#0.8571428571");
+    test("def x = 6.0; def y = 7.0; x / y", "#0.8571428571");
+    test("Decimal x = 6.0; def y = 7.0; x / y", "#0.8571428571");
+    test("def x = 6.0; Decimal y = 7.0; x / y", "#0.8571428571");
     test("Decimal x = 8.0; Decimal y = 5.0; x %% y", "#3.0");
     test("def x = 8.0; def y = 5.0; x %% y", "#3.0");
     test("Decimal x = 8.0; def y = 5.0; x %% y", "#3.0");
@@ -1808,9 +1804,9 @@ class CompilerTest extends BaseTest {
     test("def x = 6.0; x / 3.0", "#2");
     test("def x =  3.0; 6.0 / x", "#2");
     test("def x = 6.0; def y = 3.0; x / y", "#2");
-    test("def x = 6.0; x / 7.0", "#0.85714285714285714286");
-    test("def x =  7.0; 6.0 / x", "#0.85714285714285714286");
-    test("def x = 6.0; def y = 7.0; x / y", "#0.85714285714285714286");
+    test("def x = 6.0; x / 7.0", "#0.8571428571");
+    test("def x =  7.0; 6.0 / x", "#0.8571428571");
+    test("def x = 6.0; def y = 7.0; x / y", "#0.8571428571");
     test("def x = 8.0; x %% 5.0", "#3.0");
     test("def x =  5.0; 8.0 %% x", "#3.0");
     test("def x = 8.0; def y = 5.0; x %% y", "#3.0");
@@ -2503,6 +2499,7 @@ class CompilerTest extends BaseTest {
     test("def it = 'xx'; \"${it += 'yy'; return it}\"; it", "xxyy");
     test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
     test("\"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }\"", "5 pyramid numbers: 1, 5, 14, 30, 55");
+    test("def p(x){x*x}; \"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }: ${p(3)}\"", "5 pyramid numbers: 1, 5, 14, 30, 55: 9");
     test("['a','b'].map{\"\"\"\"$it=\" + $it\"\"\" }.join(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
   }
 
@@ -4168,7 +4165,7 @@ class CompilerTest extends BaseTest {
     testError("def x = { it }; (double)x", "cannot be cast");
     testError("def x = { it }; (Decimal)x", "cannot be cast");
     testError("def x = { it }; (String)x", "cannot convert");
-    test("def x = { it }; '' + x", "MethodHandle(Continuation,String,int,Object[])Object");
+    test("def x = { it }; ('' + x) =~ /Function@\\d+/", true);
     testError("def x(){ 1 }; (int)x", "cannot cast from");
     testError("def x(){ 1 }; (long)x", "cannot cast from");
     testError("def x(){ 1 }; (double)x", "cannot cast from");
@@ -4265,13 +4262,13 @@ class CompilerTest extends BaseTest {
     testError("def x = { it }; x as long", "cannot coerce");
     testError("def x = { it }; x as double", "cannot coerce");
     testError("def x = { it }; x as Decimal", "cannot coerce");
-    test("def x = { it }; x as String", "MethodHandle(Continuation,String,int,Object[])Object");
+    test("def x = { it }; (x as String) =~ /Function@(\\d+)/", true);
     testError("def x(){ 1 }; x as int", "cannot coerce");
     testError("def x(){ 1 }; x as long", "cannot coerce");
     testError("def x(){ 1 }; x as double", "cannot coerce");
     testError("def x(){ 1 }; x as Decimal", "cannot coerce");
 
-    test("def x(){ 1 }; x as String", "MethodHandle(Continuation,String,int,Object[])Object");
+    test("def x(){ 1 }; (x as String) =~ /Function@(\\d+)/", true);
 
     test("1 as int", 1);
     test("int x = 1; x as int", 1);
@@ -5656,6 +5653,7 @@ class CompilerTest extends BaseTest {
     test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
     test("def x = 0; for (int i = 0; i < 10; i++) { i < 5 and do { x += i } and continue; x++ }; x", 15);
     test("int f() { true and return 1; return 0 }; f()", 1);
+    testError("superFields and print 'xxx'", "reference to unknown variable");
   }
 
   @Test public void builtinFunctions() {
@@ -5694,6 +5692,37 @@ class CompilerTest extends BaseTest {
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[:])", 10);
     test("['[1,2]','[3]'].map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
     test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
+  }
+
+  @Test public void asNum() {
+    testError("'1'.asNum(1)", "radix was 1 but must be at least 2");
+    testError("'1'.asNum(37)", "radix was 37 but must be no more than 36");
+    testError("'az'.asNum()", "invalid character for number with radix 10");
+    testError("''.asNum()", "empty string cannot be converted");
+    test("'1'.asNum()", 1L);
+    test("'-1'.asNum()", -1L);
+    test("'0'.asNum()", 0L);
+    test("'-0'.asNum()", 0L);
+    test("'10'.asNum(2)", 2L);
+    test("'aa'.asNum(16)", 0xaaL);
+    test("'-aa'.asNum(16)", -0xaaL);
+    test("'abcdef'.asNum(16)", 0xABCDEFL);
+    test("'7abcdef012345678'.asNum(16)", 0x7abcdef012345678L);
+    test("def s = '7abcdef012345678'; s.asNum(16)", 0x7abcdef012345678L);
+    test("def s = '7abcdef012345678'; def f = s.asNum; f(16)", 0x7abcdef012345678L);
+    testError("'ABCDEF0123456789'.asNum(16)", "number is too large");
+  }
+
+  @Test public void toBase() {
+    test("1L.toBase(10)", "1");
+    test("1.toBase(10)", "1");
+    testError("1.0.toBase(10)", "no such method");
+    testError("1.0D.toBase(10)", "no such method");
+    test("0b1010101.toBase(2)", "1010101");
+    test("0b1010101.toBase(16)", "55");
+    test("0xAbCdEf012345L.toBase(16)", "ABCDEF012345");
+    test("def x = 0xAbCdEf012345L; x.toBase(16)", "ABCDEF012345");
+    test("def x = 0xAbCdEf012345L; def f = x.toBase; f(16)", "ABCDEF012345");
   }
 
   @Test public void asyncFunctions() {
@@ -5853,9 +5882,14 @@ class CompilerTest extends BaseTest {
     test("def x = 1.0; x.toString()", "1.0");
     test("def x = 12345678901234L; x.toString()", "12345678901234");
     test("def x = ''; [a:1].each{ x += it.toString() }; x", "['a', 1]");
-    test("def f(x) {x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object[])Object");
-    test("def f = { x -> x*x}; f.toString()", "MethodHandle(Continuation,String,int,Object[])Object");
+    test("def f(x) {x*x}; f.toString() =~ /Function@(\\d+)/", true);
+    test("def f = { x -> x*x}; f.toString() =~ /Function@(\\d+)/", true);
     test("def x = 'abc'; def f = x.toString; f()", "abc");
+  }
+
+  @Test public void keywordAsIdentifier() {
+    testError("int for = 3", "expecting identifier");
+    testError("int for(x){x}", "expecting identifier");
   }
 
   @Test public void globals() {

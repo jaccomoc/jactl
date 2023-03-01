@@ -897,7 +897,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(2);
       loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
       loadConst(expr.originalOperator == null ? null : RuntimeUtils.getOperatorType(expr.originalOperator.getType()));
-      loadConst(classCompiler.context.maxScale);
+      loadConst(classCompiler.context.minScale);
       loadLocation(expr.operator);
       String methodName = methodNames.get(expr.operator.getType());
       check(methodName != null, "unsupported operator type " + expr.operator.getChars());
@@ -1330,7 +1330,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.type.is(DECIMAL)) {
       expect(2);
       loadConst(opCodes.get(decimalIdx));
-      loadConst(classCompiler.context.maxScale);
+      loadConst(classCompiler.context.minScale);
       loadConst(expr.operator.getSource());
       loadConst(expr.operator.getOffset());
       invokeMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
@@ -3120,7 +3120,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Invoke binary + or - as needed
       loadConst(RuntimeUtils.getOperatorType(isInc ? PLUS : MINUS));
       loadConst(RuntimeUtils.getOperatorType(operator.getType()));
-      loadConst(classCompiler.context.maxScale);
+      loadConst(classCompiler.context.minScale);
       loadConst(classCompiler.source);
       loadConst(operator.getOffset());
       invokeMethod(RuntimeUtils.class, isInc ? "plus" : "minus", Object.class, Object.class, String.class, String.class, Integer.TYPE, String.class, Integer.TYPE);

@@ -52,7 +52,7 @@ Languange features offered by Jacsal:
 * Regex matching syntax
 * Regex capture variables
 
-## Never Blocks
+## Non-Blocking
 
 Jacsal never blocks the execution thread on which a script is running. This is to support execution in reactive or event
 loop based applications.
@@ -61,18 +61,28 @@ Blocking operations in Jacsal can only occur when invoking a blocking/asynchrono
 function, the script will be suspended and when the blocking function completes, the script execution state is resumed
 from the point at which it was suspended. This is done via an internal _continuation_ mechanism.
 
-Script writers can write their code as though it never blocks and do not have to be concerned about which functions are
-aysnchronous and which are synchronous.
+Script writers can write their code as though it blocks and do not have to be concerned about which functions are
+aysnchronous and which are synchronous or have to jump through the normal asynchronous programming hoops with use of
+callbacks to continue when a long-running operation completes.
+
+When a blocking operation is invoked, Jacsal creates a Continuation object that captures the state of the running
+script such as the value of all local variables and the current call stack. When the long-running operation
+completes, the script state is restored and the script continues from where it left off.
 
 ## Compiles to Bytecode
 
-Jacsal compiles to bytecode and is able to take advantage of all of the benefits that the JVM hotspot compiler offers
+Jacsal compiles to bytecode and is thus able to take advantage of the benefits that the JVM hotspot compiler offers
 in terms of performance.
 
 ## Command-line REPL
 
 Jacsal comes with a REPL (read-evaluate-print-loop) that enables you to play with the language and try out code
 interactively.
+
+## Command Line Scripting
+
+As well as being able to use Jacsal as a scripting language for Java-based applications, Jacsal can also be invoked
+from the command line to run standalone scripts. 
 
 ## Where should I go next?
 
