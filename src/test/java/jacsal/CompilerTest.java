@@ -5702,9 +5702,9 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void asNum() {
-    testError("'1'.asNum(1)", "radix was 1 but must be at least 2");
-    testError("'1'.asNum(37)", "radix was 37 but must be no more than 36");
-    testError("'az'.asNum()", "invalid character for number with radix 10");
+    testError("'1'.asNum(1)", "base was 1 but must be at least 2");
+    testError("'1'.asNum(37)", "base was 37 but must be no more than 36");
+    testError("'az'.asNum()", "invalid character for number with base 10");
     testError("''.asNum()", "empty string cannot be converted");
     test("'1'.asNum()", 1L);
     test("'0'.asNum()", 0L);

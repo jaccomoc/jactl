@@ -134,6 +134,8 @@ abstract class Stmt {
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor classDescriptor;
+
+    public boolean isScriptClass() { return scriptMain != null; }
     ClassDecl(Token name, String packageName, Token baseClassToken, JacsalType baseClass, boolean isInterface) {
       this.name = name;
       this.packageName = packageName;

@@ -1271,6 +1271,13 @@ public class ClassTests extends BaseTest {
          "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 12);
   }
 
+  @Test public void replClasses() {
+    replTest(1, "class X{ int i = 1 }; x = new X()", "x.i");
+    replTest(1, "class X{ int i = 1 }", "x = new X()", "x.i");
+    replTest(2, "class X{ int i = 1 }", "class X{ int i = 2 }", "x = new X()", "x.i");
+    replTest(2, "class X{ class Y{int i = 1} }", "class X{ class Y{int i = 2} }", "x = new X.Y()", "x.i");
+  }
+
   @Test public void importStatements() {
     useAsyncDecorator = false;
     packageName = null;

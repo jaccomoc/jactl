@@ -187,7 +187,9 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     var baseClass = classDecl.baseClass != null ? classDecl.baseClass : null;
 
     // NOTE: we only support class declarations at top level of script or directly within another class decl.
-    var outerClass = outerClassDecl == null ? null : outerClassDecl.classDescriptor;
+    // NOTE: When in repl mode we don't nest classes within the script itself since they will
+    //       not then be accessible in subsequent lines being compiled in the repl.
+    var outerClass = outerClassDecl == null || outerClassDecl.isScriptClass() && jacsalContext.replMode ? null : outerClassDecl.classDescriptor;
     var interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
     var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jacsalContext.javaPackage, classDecl.packageName, baseClass, interfaces)
                                              : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jacsalContext.javaPackage, outerClass, baseClass, interfaces);
@@ -222,8 +224,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       previousBaseClass = baseClass.getClassDescriptor().getNamePath();
     }
 
-    // Find our functions and fields and add them to the ClassDescriptor
-    if (classDecl.scriptMain == null) {
+    // Find our functions and fields and add them to the ClassDescriptor if not script class
+    if (!classDecl.isScriptClass()) {
       classDecl.fieldVars.values().forEach(varDecl -> {
         if (varDecl.isField) {
           String fieldName = varDecl.name.getStringValue();
@@ -1647,7 +1649,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       }
       // If not in current hierarchy and in a script then look for a top level class of that name
       if (className == null && isScript) {
-        String topLevelClass = scriptName + '$' + firstClass;
+        String topLevelClass = jacsalContext.replMode ? firstClass : scriptName + '$' + firstClass;
         var topClass = localClasses.get(topLevelClass);
         if (topClass != null) {
           className = topLevelClass + subPath;

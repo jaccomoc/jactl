@@ -112,7 +112,7 @@ public class Compiler {
   }
 
   static void compileClass(String source, JacsalContext jacsalContext, String packageName, Stmt.ClassDecl clss) {
-    var compiler = new ClassCompiler(source, jacsalContext, packageName, clss, clss.name.getStringValue() + ".jacsal");
+    var compiler = new  ClassCompiler(source, jacsalContext, packageName, clss, clss.name.getStringValue() + ".jacsal");
     compiler.compileClass();
   }
 

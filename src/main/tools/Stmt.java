@@ -116,6 +116,8 @@ class Stmt {
     Deque<Expr.FunDecl>      @nestedFunctions = new ArrayDeque<>();
 
     ClassDescriptor @classDescriptor;
+
+    public boolean isScriptClass() { return scriptMain != null; }
   }
 
   /**

@@ -503,23 +503,23 @@ public class BuiltinFunctions {
   }
 
   // = toBase
-  public static String longToBase(long num, int radix) { return Long.toUnsignedString(num, radix).toUpperCase(); }
+  public static String longToBase(long num, int base) { return Long.toUnsignedString(num, base).toUpperCase(); }
   public static Object longToBaseWrapper(Long num, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, LONG, 1, source, offset);
     if (!(args[0] instanceof Number)) {
       throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
     }
-    int radix = ((Number) args[0]).intValue();
-    return longToBase(num, radix);
+    int base = ((Number) args[0]).intValue();
+    return longToBase(num, base);
   }
-  public static String intToBase(int num, int radix) { return Integer.toUnsignedString(num, radix).toUpperCase(); }
+  public static String intToBase(int num, int base) { return Integer.toUnsignedString(num, base).toUpperCase(); }
   public static Object intToBaseWrapper(Integer num, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, INT, 1, source, offset);
     if (!(args[0] instanceof Number)) {
       throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
     }
-    int radix = ((Number) args[0]).intValue();
-    return intToBase(num, radix);
+    int base = ((Number) args[0]).intValue();
+    return intToBase(num, base);
   }
 
   // = toString
@@ -1609,27 +1609,27 @@ public class BuiltinFunctions {
   }
 
   // = asNum
-  public static long stringAsNum(String str, String source, int offset, int radix) {
-    if (radix < Character.MIN_RADIX) { throw new RuntimeError("Radix was " + radix + " but must be at least " + Character.MIN_RADIX, source, offset); }
-    if (radix > Character.MAX_RADIX) { throw new RuntimeError("Radix was " + radix + " but must be no more than " + Character.MAX_RADIX, source, offset); }
+  public static long stringAsNum(String str, String source, int offset, int base) {
+    if (base < Character.MIN_RADIX) { throw new RuntimeError("Base was " + base + " but must be at least " + Character.MIN_RADIX, source, offset); }
+    if (base > Character.MAX_RADIX) { throw new RuntimeError("Base was " + base + " but must be no more than " + Character.MAX_RADIX, source, offset); }
     if (str.isEmpty())               { throw new RuntimeError("Empty string cannot be converted to a number", source, offset); }
     try {
-      return Long.parseUnsignedLong(str, radix);
+      return Long.parseUnsignedLong(str, base);
     }
     catch (NumberFormatException e) {
-      throw new RuntimeError("Input '" + str + "': invalid character for number with radix " + radix + " or number is too large", source, offset);
+      throw new RuntimeError("Input '" + str + "': invalid character for number with base " + base + " or number is too large", source, offset);
     }
   }
   public static Object stringAsNumWrapper(String str, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, STRING, 1, source, offset);
-    int radix = 10;
+    int base = 10;
     if (args.length > 0) {
       if (!(args[0] instanceof Number)) {
         throw new RuntimeError("Argument to asNum must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
       }
-      radix = ((Number) args[0]).intValue();
+      base = ((Number) args[0]).intValue();
     }
-    return stringAsNum(str, source, offset, radix);
+    return stringAsNum(str, source, offset, base);
   }
 
   // = split

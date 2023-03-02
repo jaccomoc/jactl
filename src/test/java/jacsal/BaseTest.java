@@ -165,6 +165,37 @@ public class BaseTest {
     doTestError(List.of(), code, true, true, expectedError);
   }
 
+  protected void replTest(Object expected, String... code) {
+    if (expected instanceof String && ((String) expected).startsWith("#")) {
+      expected = new BigDecimal(((String) expected).substring(1));
+    }
+    try {
+      JacsalContext jacsalContext = JacsalContext.create()
+                                                 .evaluateConstExprs(true)
+                                                 .replMode(true)
+                                                 .debug(debugLevel)
+                                                 .build();
+
+      var    bindings = createGlobals();
+      Object result[] = new Object[1];
+      Arrays.stream(code).forEach(scriptCode -> {
+        var compiled = compileScript(scriptCode, jacsalContext, "Script" + scriptNum++, packageName, false, bindings);
+        result[0]    = Compiler.runSync(compiled, bindings);
+      });
+      if (expected instanceof Object[]) {
+        assertTrue(result[0] instanceof Object[]);
+        assertTrue(Arrays.equals((Object[]) expected, (Object[]) result[0]));
+      }
+      else {
+        assertEquals(expected, result[0]);
+      }
+    }
+    catch (Exception e) {
+      fail(e);
+      e.printStackTrace();
+    }
+  }
+
   private void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
     try {
       JacsalContext jacsalContext = JacsalContext.create()
