@@ -1144,7 +1144,7 @@ public class Parser {
     Token sign = expect(PLUS,MINUS);
     Token num  = expect(INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
     if (sign.is(MINUS)) {
-      num.setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
+      num = new Token(num.getType(), num).setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
     }
     return new Expr.Literal(num);
   }
