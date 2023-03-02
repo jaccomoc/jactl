@@ -428,8 +428,9 @@ public class BuiltinFunctions {
       return c.getResult();
     }
     try {
-      var script = RuntimeUtils.compileScript(code, Collections.EMPTY_MAP);
-      var result = script.apply(bindings == null ? new LinkedHashMap() : bindings);
+      bindings = bindings == null ? new LinkedHashMap() : bindings;
+      var script = RuntimeUtils.compileScript(code, bindings);
+      var result = script.apply(bindings);
       return result;
     }
     catch (Continuation cont) {

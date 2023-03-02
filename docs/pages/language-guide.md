@@ -963,7 +963,7 @@ precedence are shown with the same precedence value:
 |        9         |              `^`               | Bitwise xor                                           |
 |        10        |              `&`               | Bitwise and                                           |
 |        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                     |
-|                  |             `<=>`              | Comparison operator                                   |
+|                  |             `<=>`              | Compator operator                                     |
 |                  |           `=~` `!~`            | Regex compare and regex not compare                   |
  |        12        |       `<` `<=` `>` `>=`        | Less than and greater than operators                  |
 |                  |   `instanceof` `!instanceof`   | Instance of and not instance of operators             |
@@ -1118,12 +1118,22 @@ For example:
 
 The '>>' and '>>>' operators shift the bits to the right.
 The difference between the two is how negative numbers are treated.
-The `>>` operator preserves the sign bit (the top most bit) so if it is 1 it remains 1 and 1 is shifted right each time
-from this top bit position.
+The `>>` operator is a signed shift right and preserves the sign bit (the top most bit) so if it is 1 it remains 1 and
+1 is shifted right each time from this top bit position.
 The '>>>' operator treats the top bit like any other bit and shifts in 0s to replace the top bits when the bits are
 shifted right.
 
-For example, 
+For example:
+```groovy
+> def x = 0b11111111000011110000111100001111 >> 16     // shift right 16 but shift in 1s at left since -ve
+-241
+> x.toBase(2)
+11111111111111111111111100001111
+> x = 0b11111111000011110000111100001111 >>> 16        // shift right 16 but shift in 0s at left
+65295
+> x.toBase(2)                                          // note that leading 0s not shown
+1111111100001111
+```
 
 ## Modulo `%` and Remainder `%%` operators
 
@@ -1193,17 +1203,170 @@ decrement but in the prefix case the value returned is as though the value had b
 20
 ```
 
-# 
+## Comparison Operators
 
-# Logical/Boolean Operators
+The following table shows the operators that can be used to compare two values:
 
+| Operator | Description                                                                                  |
+|:--------:|:---------------------------------------------------------------------------------------------|
+|   `==`   | Equality: evaluates to true if the values are value-wise equal                               |
+|   `!=`   | Inequality: evaluates to true if the values are not equal                                    |
+|  `===`   | Identity: evaluates to true if the object on both sides is the same object                   |
+|  `!==`   | Non-Identity: evaluates to true if the objects are not the same object                       |
+|   `<`    | Less-than: true if left-hand side is less than right-hand side                               |
+|   `<=`   | Less-than-or-equal-to: true if left-hand side is less than or equal to right-hand side       |
+|   `>`    | Greater-than: true if left-hand side is greater than right-hand side                         |
+|   `>=`   | Greater-than-or-equal-to: true if left-hand side is greater than or equal to right-hand side |
 
+The `<`, `<=`, `>`, `>=` operators can be used to compare any two numbers to check which is bigger than the other and
+can also be used to compare strings.
 
-# Conditional Operator
+For strings, the lexographic order of the strings determines which one is less than the other.
+String comparison is done character by character.
+If all characters are equal at the point at which one string ends then the shorter string is less than the other one.
+For example:
+```groovy
+> 'a' < 'ab'
+true
+> 'abcde' < 'xyz'
+true
+```
 
-# Default Value Operator
+The difference between `==` and `===` (and `!=` and `!==`) is that `==` compares values.
+This makes a difference when comparing Lists and Maps (and class instances).
+The `==` operator will compare the values of all elements and fields to see if the values are equivalent.
+The `===` operator, on the other hand, is solely interested in knowing if the two Lists (or Maps, or objects) are the
+same object or not.
+For example:
+```groovy
+> def x = [1, [2,3]]
+[1, [2, 3]]
+> def y = [1, [2,3]]
+[1, [2, 3]]
+> x == y           // values are the same
+true
+> x === y          // objects are not the same
+false
+> x !== y
+true
+> x = y
+[1, [2, 3]]
+> x === y
+true
+> x !== y
+false
+```
 
-# Bitwise Operators
+## Comparator Operator
+
+The `<=>` comparator operator evaluates to -1 if the left-hand side is less than the right-hand side, 0 if the two
+values are equal, and 1 if the left-hand side is greater than the right-hand side:
+```groovy
+> 1 <=> 2
+-1
+> 2.3 <=> 2.3
+0
+> 4 <=> 3
+1
+> 'abc' <=> 'ab'
+1
+> 'a' <=> 'ab'
+-1
+```
+
+The operator can be particularly useful when sorting lists as the `sort` method takes as an argument a function
+that needs to return -1, 0, or 1 based on the comparison of any two elements in the list:
+```groovy
+> def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+[[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+> employees.sort{ a,b -> a.salary <=> b.salary }      // sort by salary increasing
+[[name:'Joe', salary:1500], [name:'Frank', salary:2000], [name:'Daisy', salary:3000]]
+> employees.sort{ a,b -> b.salary <=> a.salary }      // sort by salary decreasing
+[[name:'Daisy', salary:3000], [name:'Frank', salary:2000], [name:'Joe', salary:1500]]
+```
+
+## Logical/Boolean Operators
+
+There are two sets of logical or boolean operators:
+1. `&&`, `||`, `!`, and
+2. `and`, `or`, `not`
+
+For both `&&` and `and` the result is true if both sides are true:
+```groovy
+> 3.5 > 2 && 'abc' == 'ab' + 'c'
+true
+> 5 == 3 + 2 and 7 < 10
+true
+> 5 == 3 + 2 and 7 > 10
+false
+```
+
+With the `||` and `or` operators the result is true if either side evaluates to true:
+```groovy
+> 5 == 3 + 2 || 7 > 10
+true
+> 5 < 4 or 7 < 10
+true
+```
+
+The `!` and `not` operators negate the result of the following boolean expression:
+```groovy
+> ! 5 == 3 + 2
+false
+> not 5 < 4
+true
+```
+
+The difference between the two sets of operators is that the operators `and`, `or`, and `not` have very low precedence;
+even lower than the assignment operators.
+This makes it possible to write things like this somewhat contrived example:
+```groovy
+> def x = 7
+7
+> def y = 8
+8        
+> x == 7 and y = x + (y % 13)       // assign new value to y if x == 7
+true
+> y
+15
+```
+
+In this case, there are obviously other ways to achieve the same thing (such as an if statement) but there are
+occasions where having these low-precedence versions of the boolean operators is useful.
+It comes down to personal preference whether and when to use them.
+
+## Conditional Operator
+
+The conditional operator allows you to embed an `if` statement inside an expression.
+It takes the form:
+> condition `?` valueIfTrue `:` valueIfFalse
+
+The condition expression is evaluated and if it evaluates to `true` then the result of the entire expression
+is the value of the second expression (valueIfTrue).
+If the condition is false then the result is the third expression (valueIfFalse).
+
+For example:
+```groovy
+> def x = 7
+7
+> def y = x % 2 == 1 ? 'odd' : 'even'
+odd
+> def z = y.size() > 3 ? x+y.size() : x - y.size()
+4
+```
+
+## Default Value Operator
+
+The default value operator `?:` evaluates to the left-hand side if the left-hand side is not null and evaluates to
+the right-hand side if the left-hand side is null.
+It allows you to specify a default value in case an expression evaluates to null:
+```groovy
+> def x
+> def y = x ?: 7
+7
+> y ?: 8
+7
+```
 
 ## Other Assignment Operators
 
@@ -1234,6 +1397,14 @@ For example:
 > x |= 15
 47
 ```
+
+## Instance Of
+
+## In Operator
+
+## As Operator
+
+## Regex Operators
 
 # If Statements
 
@@ -1276,7 +1447,7 @@ The difference between function and closure is that functions can make forward r
 ** force non-lazy by using collect()
 * Classes
 ** no static state in classes and no static initialiser blocks either (for same reason)
-* and/or/not
+** casting
 * do{}
 * if/unless single statements
 * regex match/substitute

@@ -121,7 +121,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     this.globals        = globals == null ? Map.of() : globals;
     this.globals.keySet().forEach(name -> {
       if (!jacsalContext.globalVars.containsKey(name)) {
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
+        //Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
+        Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY);
         jacsalContext.globalVars.put(name, varDecl);
       }
     });
@@ -989,10 +990,19 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitVarAssign(Expr.VarAssign expr) {
-    expr.type = resolve(expr.identifierExpr);
     if (expr.identifierExpr.isSuper()) {
       error("Cannot assign to 'super'", expr.identifierExpr.location);
     }
+    if (jacsalContext.replMode && isScriptScope()) {
+      // In repl mode if variable doesn't exist yet we create it when first assigned to
+      Token  identifier = expr.identifierExpr.identifier;
+      String name       = identifier.getStringValue();
+      if (lookup(name, identifier, false, true) == null) {
+        var varDecl = createGlobalVarDecl(name, ANY);
+        jacsalContext.globalVars.put(name, varDecl);
+      }
+    }
+    expr.type = resolve(expr.identifierExpr);
     if (expr.type.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
       error("Cannot assign to function", expr.identifierExpr.location);
     }
@@ -1430,7 +1440,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           case STAR:            expr.constValue = left * right;                     break;
           case SLASH:           expr.constValue = left / right;                     break;
           case PERCENT_PERCENT: expr.constValue = left % right;                     break;
-          case PERCENT:         expr.constValue = ((left % right) + right) % right;   break;
+          case PERCENT:         expr.constValue = ((left % right) + right) % right; break;
           default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
         }
         break;
@@ -1856,11 +1866,6 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     // access to "this" for the script itself which we don't have.
     var global = jacsalContext.globalVars.get(name);
     if (isScriptScope()) {
-      if (jacsalContext.replMode && global == null) {
-        // Allow reference to a global to auto-create it in repl mode
-        global = createGlobalVarDecl(name, ANY);
-        jacsalContext.globalVars.put(name, global);
-      }
       return global;
     }
     if (global != null) {

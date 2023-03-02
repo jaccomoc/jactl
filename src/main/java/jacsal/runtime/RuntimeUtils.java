@@ -2271,7 +2271,7 @@ public class RuntimeUtils {
     var script = evalScriptCache.get(code);
     if (script == null) {
       var context = JacsalContext.create().replMode(true).build();
-      script = Compiler.compileScript(code, context, Map.of());
+      script = Compiler.compileScript(code, context, bindings);
       evalScriptCache.put(code, script);
     }
     return script;

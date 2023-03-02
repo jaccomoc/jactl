@@ -161,6 +161,10 @@ public class BaseTest {
     //    doTestError(code, false, true, expectedError);
   }
 
+  protected void replError(String code, String expectedError) {
+    doTestError(List.of(), code, true, true, expectedError);
+  }
+
   private void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
     try {
       JacsalContext jacsalContext = JacsalContext.create()

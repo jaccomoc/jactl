@@ -6024,6 +6024,13 @@ class CompilerTest extends BaseTest {
     replTest.accept("stream(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
   }
 
+  @Test public void globalVars() {
+    replError("x", "unknown variable 'x'");
+    replTest.accept("x = 1", "", 1, "");
+    replTest.accept("x = 1; x", "", 1, "");
+    replTest.accept("x = x", "", null, "");
+  }
+
   @Test public void grouped() {
     test("[].grouped(2)", List.of());
     test("[1,2].grouped(2)", List.of(List.of(1,2)));
