@@ -619,6 +619,23 @@ b
 ```
 Note how the last example retrieves an element from the list nested within `x`.
 
+As well as using `[]` to access individual elements, you can also use `?[]` as a null-safe way of retrieving elements.
+The difference is that if the list is null, instead of getting a null error (when using `[]`) you will get null as the
+value:
+```groovy
+> def x = [1,2,3]
+[1, 2, 3]
+> x?[1]
+2
+> x = null
+> x[1]
+Null value for parent during field access @ line 1, column 3
+x[1]
+  ^
+> x?[1] == null
+true
+```
+
 You can also assign to elements of a list using the subscript notation. You can even assign to an element beyond the
 current size of the list which will fill any gaps with `null`:
 ```groovy
@@ -755,6 +772,24 @@ c
 > x."$y".e
 5
 ```
+
+As well as `.` you can use the `?.` operator for null-safe field access.
+The difference being that if the map was null and you try to retrieve a field with `.` you will get a null error
+but when using `?.` the value returned will be null.
+This makes it easy to retrieve nested fields without having to check at each level if the value is null:
+```groovy
+> def x = [:]
+[:]
+> x.a.b
+Null value for parent during field access @ line 1, column 5
+x.a.b
+    ^
+> x.a?.b == null
+true
+> x?.a?.b?.c == null
+true
+```
+
 As well as retrieving the value for an entry in a map, the field access notation can also be used to add a field or
 update the value of a field within the map:
 ```groovy
@@ -795,6 +830,10 @@ c
 > x[y]
 [d:4, e:5]
 ```
+
+There is also the `?[]` null-safe access as well if you don't know whether the map is null and don't want to
+check beforehand.
+
 As with the field notation access, new fields can be added and values for existing ones can be updated:
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
@@ -945,44 +984,44 @@ false
 Jacsal supports the following operators. Operators are shown in increasing precedence order and operators of the same
 precedence are shown with the same precedence value:
 
-| Precedence Level |            Operator            | Description                                           |
-|:----------------:|:------------------------------:|:------------------------------------------------------|
-|        1         |              `or`              | Logical or                                            |
-|        2         |             `and`              | Logical and                                           |
-|        3         |             `not`              | Logical not                                           |
-|        4         |              `=`               | Assignment                                            |
-|                  |              `?=`              | Conditional assignment                                |
-|                  | `+=` `-=` `*=` `/=` `%=` `%%=` | Arithmetic assignment operators                       |
-|                  |       `<<=` `>>=` `>>>=`       | Shift assignment operators                            |
-|                  |      `&=` `&#124;=` `^=`       | Bitwise assignment operators                          |
-|        5         |             `? :`              | Ternary conditional opeartor                          |
-|                  |              `?:`              | Default value operator                                |
-|        6         |         `&#124;&#124;`         | Boolean or                                            |
- |        7         |              `&&`              | Boolean and                                           |
- |        8         |            `&#124;`            | Bitwise or                                            |
-|        9         |              `^`               | Bitwise xor                                           |
-|        10        |              `&`               | Bitwise and                                           |
-|        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                     |
-|                  |             `<=>`              | Compator operator                                     |
-|                  |           `=~` `!~`            | Regex compare and regex not compare                   |
- |        12        |       `<` `<=` `>` `>=`        | Less than and greater than operators                  |
-|                  |   `instanceof` `!instanceof`   | Instance of and not instance of operators             |
- |                  |           `in` `!in`           | In and not in operators                               |
-|                  |              `as`              | Conversion operator                                   |
-|        13        |        `<<` `>>` `>>>`         | Shift operators                                       |
-|        14        |            `+` `-`             | Addition and subtraction                              |
-|        15        |            `*` `/`             | Multiplication and division operators                 |
-|                  |            `%` `%%`            | Modulo and remainder operators                        |
-|        16        |              `~`               | Bitwise negate                                        |
-|                  |              `!`               | Boolean not                                           |
-|                  |           `++` `--`            | Prefix and postfix increment/decrement operators      |
-|                  |            `+` `-`             | Prefix minus and plus operators                       |
-|                  |            `(type)`            | Type cast                                             |
-|        17        |            `.` `?.`            | Field access and conditional field access             |
-|                  |          `[ ]` `?[ ]`          | Map/List/String element access and conditional access |
-|                  |              `()`              | Function/method invocation                            |
-|                  |              `{}`              | Function/method invocation (closure passing syntax)   |
-|                  |             `new`              | New instance operator                                 |
+| Precedence Level |            Operator            | Description                                         |
+|:----------------:|:------------------------------:|:----------------------------------------------------|
+|        1         |              `or`              | Logical or                                          |
+|        2         |             `and`              | Logical and                                         |
+|        3         |             `not`              | Logical not                                         |
+|        4         |              `=`               | Assignment                                          |
+|                  |              `?=`              | Conditional assignment                              |
+|                  | `+=` `-=` `*=` `/=` `%=` `%%=` | Arithmetic assignment operators                     |
+|                  |       `<<=` `>>=` `>>>=`       | Shift assignment operators                          |
+|                  |      `&=` `&#124;=` `^=`       | Bitwise assignment operators                        |
+|        5         |             `? :`              | Ternary conditional opeartor                        |
+|                  |              `?:`              | Default value operator                              |
+|        6         |         `&#124;&#124;`         | Boolean or                                          |
+ |        7         |              `&&`              | Boolean and                                         |
+ |        8         |            `&#124;`            | Bitwise or                                          |
+|        9         |              `^`               | Bitwise xor                                         |
+|        10        |              `&`               | Bitwise and                                         |
+|        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                   |
+|                  |             `<=>`              | Compator operator                                   |
+|                  |           `=~` `!~`            | Regex compare and regex not compare                 |
+ |        12        |       `<` `<=` `>` `>=`        | Less than and greater than operators                |
+|                  |   `instanceof` `!instanceof`   | Instance of and not instance of operators           |
+ |                  |           `in` `!in`           | In and not in operators                             |
+|                  |              `as`              | Conversion operator                                 |
+|        13        |        `<<` `>>` `>>>`         | Shift operators                                     |
+|        14        |            `+` `-`             | Addition and subtraction                            |
+|        15        |            `*` `/`             | Multiplication and division operators               |
+|                  |            `%` `%%`            | Modulo and remainder operators                      |
+|        16        |              `~`               | Bitwise negate                                      |
+|                  |              `!`               | Boolean not                                         |
+|                  |           `++` `--`            | Prefix and postfix increment/decrement operators    |
+|                  |            `+` `-`             | Prefix minus and plus operators                     |
+|                  |            `(type)`            | Type cast                                           |
+|        17        |            `.` `?.`            | Field access and null-safe field access             |
+|                  |          `[ ]` `?[ ]`          | Map/List/String element access and null-safe access |
+|                  |              `()`              | Function/method invocation                          |
+|                  |              `{}`              | Function/method invocation (closure passing syntax) |
+|                  |             `new`              | New instance operator                               |
 
 When evaluating expressions in Jacsal operators with higher precedence are evaluated before operators with lower
 preedence.
@@ -1400,11 +1439,256 @@ For example:
 
 ## Instance Of
 
-## In Operator
+The `instanceof` and `!instanceof` operators allow you to check if an object is an instance (or not an instance) of a
+specific type.
+The type can be a builtin type like `int`, `String`, `List`, etc. or can be a user defined class:
+```groovy
+> def x = 1
+1
+> x instanceof int
+true
+> x !instanceof String
+true
+> x = [a:1, b:[c:[1,2,3]]]
+[a:1, b:[c:[1, 2, 3]]]
+> x.b instanceof Map
+true
+> x.b.c instanceof List
+true
+> class X { int i = 1 }
+> x = new X()
+[i:1]
+> x instanceof X
+true
+```
+
+## Type Casts
+
+In Java, type casting is done for two reasons:
+1. You are passed an object of some generic type but you know it is actually a sepcific type and you want to treat it as that specific type (to invoke a method on it, for example), or
+2. You need to convert a primitive number type to another number type (for example, converting a long value to an int)
+ 
+In Jacsal there is less need to cast for the first reason since if the object supports the method you can always invoke
+that method even if the reference to the object is a `def` type.
+The reason why you may still wish to cast to the specific type in this case is for readability to make it clear what type
+is expected at that point in the code or for performance reasons since after the value has been cast to the desired
+type the compiler then can use a more efficient means of invoking methods and other operations on the object.
+
+A type cast is done by prefixing `(type)` to an expression where _type_ is the type to cast to. Type can be any builtin
+type or any user defined class.
+
+For example we could check the type of `x` before invoking the List method `sum()` on it:
+```groovy
+> def x = [1,2,3]
+[1, 2, 3]
+> def sum = x instanceof List ? ((List)x).sum() : 0
+6
+```
+Whereas in Java the cast would be required, since Jacsal supports dynamic typing, the cast in this case is not
+necessary (but might make the execution slightly faster).
+
+The other use for casts is to convert primitive number types to one another.
+For example, you can use casts to convert a double or decimal value to its corresponding integer representation 
+(discarding anything after the decimal point):
+```groovy
+> def hoursOwed = 175.15
+175.15
+> def hoursPerDay = 7.5
+7.5
+> def daysOwed = (int)(hoursOwed / hoursPerDay)
+23
+```
+
+The other special case for cast is to cast a character to an integer value to get its Unicode value.
+Remember that characters in Jacsal are just single character strings so if you cast a single character string to
+`int` you will get is Unicode value:
+```groovy
+> (int)'A'
+65
+```
 
 ## As Operator
 
-## Regex Operators
+The `as` operator is used to convert values from one type to another (where such a conversion is possible).
+The operator is an infix operator where the left-hand side is the expression to be converted and the right-hand side
+is the type to conver to.
+It is similar to a type cast and can be used to do that same thing in some circumstances:
+```groovy
+> (int)3.6
+3
+> 3.6 as int
+3
+```
+
+You can use `as` to convert a string representation of a number into the number:
+```groovy
+> '123' as int
+123
+> '123.4' as Decimal
+123.4
+```
+
+You can use it to convert anything to a string:
+```groovy
+> 123 as String
+123
+> [1,2,3] as String
+[1, 2, 3]
+```
+
+Of course, you can do the same thing with the builtin `toString()` method as well:
+```groovy
+> 123.toString()
+123
+> [1,2,3].toString()
+[1, 2, 3]
+```
+
+The `as` operator can convert between Lists and Maps (as long as such a conversion makes sense):
+```groovy
+> [a:1,b:2] as List
+[['a', 1], ['b', 2]]
+> [['x',3],['y',4]] as Map
+[x:3, y:4]
+```
+
+It is also possible to use `as` to convert between objects of user defined classes and Maps (see section on Classes):
+```groovy
+> class Point{ int x; int y }
+> def x = [x:3, y:4] as Point
+[x:3, y:4]
+> x instanceof Point
+true
+> x as Map
+[x:3, y:4]
+```
+
+## In Operator
+
+The `in` and `!in` operators are used to test if an object exists or not within a list of values.
+For example:
+```groovy
+> def country = 'France'
+France
+> country in ['Germany', 'Italy', 'France']
+true
+> def myCountries = ['Germany', 'Italy', 'France']
+['Germany', 'Italy', 'France']
+> country !in myCountries
+false
+```
+
+This operator works by iterating through the list and comparing each value until it finds a match so if the list of values is particularly
+large then this will not be very efficient.
+
+The `in` and `!in` operators also work on Maps and allow you to check if a key exists in the Map:
+```groovy
+> def m = [abc:1, xyz:2]
+[abc:1, xyz:2]
+> 'abc' in m
+true
+> 'xyz' !in m
+false
+```
+
+## Field Access Operators
+
+The `.` `?.` `[]` and `?[]` operators are used for accessing fields of Maps and class objects while the `[]` and `?[]`
+are also used to access elements of Lists.
+The `?` form of the operators will return null instead of producing an error if the List/Map/object is null.
+
+For example:
+```groovy
+> Point p = new Point(x:1, y:2)
+[x:1, y:2]
+> p.x
+1
+> p['x']
+1
+> p = null
+> p?.x == null
+true
+> p?['x'] == null
+true
+> [abc:1].('a'+'bc')
+1
+> [abc:1]?.('a'+'bc')
+1
+> [abc:1]?.x?.y?.z == null
+true
+```
+
+# Regular Expressions
+
+## Regex Matching
+
+Jacsal provides two operators for doing regular expression (regex) find and regex subsitutions.
+The `=~` operator is used for matching a string against a regex pattern.
+It does the equivalent of Java's `Matcher.find()` to check if a substring matches the given pattern.
+The regex pattern syntax is the same as that used by the Pattern class in Java so for detail information about how to
+use regular expressions and what is supported see the Javadoc for the Pattern class.
+
+Some examples:
+```groovy
+> 'abc' =~ 'b'
+true
+> 'This should match' =~ '[A-Z][a-z]+ sho.l[a-f]'
+true
+```
+
+Regular expression patterns are usually expressed in regex strings to cut down on the number of backslashes needed:
+```groovy
+> '24 Mar 2014' =~ /\d\d\s+[A-Z][a-z]*\s+\d{4}/
+true
+```
+
+The `!~` operator tests that the string does not match the pattern:
+```groovy
+> '24 Mar 2014' !~ /\d\d\s+[A-Z][a-z]*\s+\d{4}/
+false
+```
+
+## Modifiers
+
+When using a regex string (a string delimited with `/`) you can append modifiers to the regex pattern to control the
+behaviour of the pattern match.
+For example by appending `i` you can make the pattern match case-insensitive:
+```groovy
+> 'This is a sentence.' =~ /this/
+false
+> 'This is a sentence.' =~ /this/i
+true
+```
+
+More than on modifier can be appended and the order of the modifiers is unimportant.
+The supported modifiers are:
+
+| Modifier | Description                                                                                                                                                               |
+|:--------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|    i     | Pattern match will be case-insensitive.                                                                                                                                   |
+|    m     | Multi-line mode: this makes `^` and `$` match beginning and endings of lines rather than beginning and ending of entire string.                                           |
+|    s     | Dot-all mode: makes `.` match line terminator (by default `.` won't match end-of-line characters).                                                                        |
+|    g     | Global find: remembers where previous pattern occurred and starts next find from previous location. This can be used to find all occurences of a pattern within a string. |
+|    f     | Find: this forces the regex string to be interpreted as a regex find for implicit matching (see below).                                                                   |
+
+The `g` modifier for global find can be used to iterate over a string, finding all instances of a given pattern within
+the string:
+```groovy
+> def str = 'this example text is not complex'
+This Example text is not complex
+> int i = 0
+0
+> while (str =~ /ex/ig) { i++ }
+> i
+3
+```
+
+## Capture Variables
+
+## Regex Substitution
+
+## Implicit Variable
+
 
 # If Statements
 

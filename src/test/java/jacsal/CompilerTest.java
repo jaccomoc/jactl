@@ -2652,8 +2652,9 @@ class CompilerTest extends BaseTest {
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([a-z])./g && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
     test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
-
     test("def it = 'abcd'; def x = ''; /([a-z])/f and x += $1; /([a-z])/f and x += $1; x", "aa");
+    test("def it = 'abcd'; def x = ''; /([a-z])/gf and x += $1; /([a-z])/gf and x += $1; x", "ab");
+    test("def it = 'abcd'; def x = ''; while (/([a-z])/gf) { x += $1 }; while (/([A-Z])/ig) { x += $1 }; x", "abcdabcd");
   }
 
   @Test public void regexSubstitute() {

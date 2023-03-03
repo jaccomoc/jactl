@@ -938,7 +938,6 @@ public class RuntimeUtils {
           return regexMatcher.matched = matcher.find();
         }
         // Same string but regex has changed
-        int pos = matcher.end();
         regexMatcher.matcher = matcher = getMatcher(str, regex, modifiers, source, offset);
         return regexMatcher.matched = matcher.find();
       }
