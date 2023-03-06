@@ -25,10 +25,10 @@ def baseClasses = [:]
 
 source.lines().each{
   // Strip '#' comments
-  return if /^#/f
+  return if /^#/r
   s/ *#.*$//
 
-  /^package /f and do {
+  /^package /r and do {
     println it
     println """
 ////////////////////////////////////////////////////////////////////
@@ -39,24 +39,24 @@ source.lines().each{
     return
   }
 
-  /^class +([A-Z][a-z]*)/f and rootClass = $1 and do {
+  /^class +([A-Z][a-z]*)/r and rootClass = $1 and do {
     println "abstract $it\n"
     println "  abstract <T> T accept(Visitor<T> visitor);\n"
   } and return
 
-  /^}/f and do {
+  /^}/r and do {
     print "\n  interface Visitor<T> {\n"
     types.each{ print "    T visit$it($it ${rootClass.toLowerCase(1)});\n" }
     print "  }\n"
     println it
   } and return
 
-  /^ +}/f and inClass and do {
+  /^ +}/r and inClass and do {
     def constructorFields = []
     def superFields = []
     if (extendsClass != rootClass) {
       if (!baseClasses[extendsClass]) {
-        def forwardRefence = source.lines().filter{ /^ +(abstract)? *class *$extendsClass/f }.size() > 0
+        def forwardRefence = source.lines().filter{ /^ +(abstract)? *class *$extendsClass/r }.size() > 0
         println "Error: ${forwardRefence ? "Forward reference to" : "Unknown"} base class $extendsClass"
         return        // Need to have proper way to generate an error
       }
@@ -92,11 +92,11 @@ source.lines().each{
     println it
   } and return
 
-  inClass and /([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/f  and fields += [[$2, $1]]
-  inClass and /([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)/f and attributes += $2
+  inClass and /([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/r  and fields += [[$2, $1]]
+  inClass and /([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)/r and attributes += $2
   s/@//
 
-  /class (.*) extends +(\w*)/f and do {
+  /class (.*) extends +(\w*)/r and do {
     inClass = true
     className = $1
     extendsClass = $2

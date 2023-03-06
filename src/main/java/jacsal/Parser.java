@@ -918,7 +918,7 @@ public class Parser {
         }
 
         // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
-        // by default we need to strip off the "it =~" and replace with current one
+        // by default, we need to strip off the "it =~" and replace with current one
         if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
           if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
             if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
@@ -1101,6 +1101,7 @@ public class Parser {
    *#          | STRING_CONST
    *#          | "true" | "false" | "null"
    *#          | exprString
+   *#          | regexSubstitute
    *#          | (IDENTIFIER | classPath)
    *#          | listOrMapLiteral
    *#          | "(" expression ")"
@@ -1440,8 +1441,8 @@ public class Parser {
     final var operator    = new Token(EQUAL_GRAVE, start);
     final var modifiers   = previous().getStringValue();
     final var regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace, isComplexReplacement);
-    // Modifier 'f' forces the substitute to be a value and not override the original variable
-    if (modifiers.indexOf('f') != -1) {
+    // Modifier 'r' forces the substitute to be a value and not override the original variable
+    if (modifiers.indexOf('r') != -1) {
       return regexSubst;
     }
     else {

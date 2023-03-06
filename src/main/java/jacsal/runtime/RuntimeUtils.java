@@ -923,7 +923,7 @@ public class RuntimeUtils {
   }
 
   /**
-   * We are doing a "find" rather than a "match" if the global modifier is set and the source string is unnchanged. In
+   * We are doing a "find" rather than a "match" if the global modifier is set and the source string is unchanged. In
    * this case we continue the searching from the last unmatched char in the source string. If the source string has
    * changed then we revert to a "match". We update the Matcher in the RegexMatcher object if the Matcher changes.
    *
@@ -935,7 +935,11 @@ public class RuntimeUtils {
       if (regexMatcher.str == str) {
         Matcher matcher = regexMatcher.matcher;
         if (regex.equals(matcher.pattern().pattern())) {
-          return regexMatcher.matched = matcher.find();
+          regexMatcher.matched = matcher.find();
+          if (!regexMatcher.matched) {
+            matcher.reset();
+          }
+          return regexMatcher.matched;
         }
         // Same string but regex has changed
         regexMatcher.matcher = matcher = getMatcher(str, regex, modifiers, source, offset);

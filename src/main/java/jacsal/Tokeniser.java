@@ -85,7 +85,7 @@ public class Tokeniser {
   }
 
   // Valid modifiers that can come immediately after trailing '/' of a regex
-  private static final String REGEX_MODIFIERS = "fgims";
+  private static final String REGEX_MODIFIERS = "rgims";
 
   /**
    * Constructor

@@ -2571,26 +2571,26 @@ class CompilerTest extends BaseTest {
     test("def x = 'ab\\nc'; def y = /\nc$/; x =~ y", true);
     test("def x = 'ab\\nc\\n'; def y = /\nc\\z/; x =~ y", false);
     test("def x = 'ab\\nc\\n'; def y = /\nc$.*/; x =~ y", true);
-    test("def it = 'xyyz'; /yy/f and it = 'baa'; /aa$/f and return 'xxx'", "xxx");
+    test("def it = 'xyyz'; /yy/r and it = 'baa'; /aa$/r and return 'xxx'", "xxx");
     test("def it = 'xyz'; String x = /x/; x", "x");
     test("def it = 'xyz'; def x = /x/; x == 'x'", true);
-    test("def it = 'xyz'; def x = /x/f; x", true);
-    testError("def x = /x/f; x", "no 'it' variable");
+    test("def it = 'xyz'; def x = /x/r; x", true);
+    testError("def x = /x/r; x", "no 'it' variable");
     testError("def it = 'xyz'; boolean x = /x/; x", "cannot convert");
-    test("def it = 'xyz'; boolean x = /x/f; x", true);
-    test("def it = 'xyz'; boolean x = /a/f; x", false);
+    test("def it = 'xyz'; boolean x = /x/r; x", true);
+    test("def it = 'xyz'; boolean x = /a/r; x", false);
     test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and !(str =~ /abc/) and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and !/abc/f and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and x = \"$3$2$1\"; x", "zyx");
-    test("def it = 'xyz'; def x; !/(x)(y)(z)/f or x = \"$3$2$1\"; x", "zyx");
-    test("def it = 'xyz'; def x = /x/f; { x ? 'match' : 'nomatch' }()", "match");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/r and !/abc/r and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/r and x = \"$3$2$1\"; x", "zyx");
+    test("def it = 'xyz'; def x; !/(x)(y)(z)/r or x = \"$3$2$1\"; x", "zyx");
+    test("def it = 'xyz'; def x = /x/r; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /x/; { x == 'x' ? 'match' : 'nomatch' }()", "match");
-    test("def it = 'xyz'; def x = /x/f; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
+    test("def it = 'xyz'; def x = /x/r; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
     test("def it = 'xyz'; def x = /X/i; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /X/i; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
-    test("['abc','xzt','sas',''].map{/a/f ? true : false}", List.of(true,false,true,false));
-    test("['abc','xzt','sas',''].map{ if (/a/f) true else false}", List.of(true,false,true,false));
-    test("['abc','xzt','sas',''].map{ /a/f and return true; false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{/a/r ? true : false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ if (/a/r) true else false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ /a/r and return true; false}", List.of(true,false,true,false));
 
     testError("def it = 'abc'; def x; /a/ and x = 'x'; x", "regex string used in boolean context");
     testError("def it = 'abc'; def x; /a/ ? true : false", "regex string used in boolean context");
@@ -2607,8 +2607,8 @@ class CompilerTest extends BaseTest {
     test("def x = 'aa'; 'abc$x' =~ /\\$x/", true);
     test("def x = 'aa'; 'abc$x' =~ /\\$x$/", true);
 
-    test("['a','b','c'].map{/(.)/f\n[name:$1]\n }.map{it.name}", List.of("a","b","c"));
-    test("def x = ['a','b','c'].map{/(.)/f\n[name:$1]\n }.map{it.name}; x", List.of("a","b","c"));
+    test("['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}", List.of("a","b","c"));
+    test("def x = ['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}; x", List.of("a","b","c"));
   }
 
   @Test public void regexCaptureVars() {
@@ -2618,7 +2618,7 @@ class CompilerTest extends BaseTest {
     testError("def x; x =~ /abc/", "null string");
     test("'abcaaxy' =~ /(a+)/", true);
     test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
-    test("def it = 'bcaaxy'; /(a+)/f and return $1", "aa");
+    test("def it = 'bcaaxy'; /(a+)/r and return $1", "aa");
     test("def x = 'abcaaxy'; x =~ /(a+)/", true);
     test("def x = 'bcaaxy'; x =~ /(a+)/ and return $1", "aa");
     test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/ and x += $2; x", "aac");
@@ -2630,14 +2630,14 @@ class CompilerTest extends BaseTest {
     test("'abc' =~ /a(bc)/; $0 + $1", "abcbc");
     test("'abc' =~ /a(bc)/; $2", null);
     test("'abc' =~ /a(bc)/ and 'xyz' =~ /(y)/; $1", "y");
-    test("def it = 'abc'; /a/f; $0", "a");
-    test("def it = 'abc'; /a(bc)/f; $0 + $1", "abcbc");
-    test("def it = 'abc'; /a(bc)/f; $2", null);
+    test("def it = 'abc'; /a/r; $0", "a");
+    test("def it = 'abc'; /a(bc)/r; $0 + $1", "abcbc");
+    test("def it = 'abc'; /a(bc)/r; $2", null);
     test("def str = 'xyz'; def x; str =~ /(x)(y)(z)/ and str =~ /x/ and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and /x/f and x = \"$3$2$1\"; x", "nullnullnull");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\" }(); x", "zyx");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x", "zyxb");
-    test("def it = 'xyz'; def x; /(x)(y)(z)/f and { x = \"$3$2$1\"; /a(b)/f and x += $1 }('abc'); x += $3; x", "zyxbz");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/r and /x/r and x = \"$3$2$1\"; x", "nullnullnull");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/r and { x = \"$3$2$1\" }(); x", "zyx");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/r and { x = \"$3$2$1\"; /a(b)/r and x += $1 }('abc'); x", "zyxb");
+    test("def it = 'xyz'; def x; /(x)(y)(z)/r and { x = \"$3$2$1\"; /a(b)/r and x += $1 }('abc'); x += $3; x", "zyxbz");
     test("def it = 'xyz'; def x; it =~ sleep(0,/(x)(y)(z)/) and { x = \"$3$2$1\" }(); x", "zyx");
   }
 
@@ -2652,9 +2652,13 @@ class CompilerTest extends BaseTest {
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([a-z])./g && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
     test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
-    test("def it = 'abcd'; def x = ''; /([a-z])/f and x += $1; /([a-z])/f and x += $1; x", "aa");
-    test("def it = 'abcd'; def x = ''; /([a-z])/gf and x += $1; /([a-z])/gf and x += $1; x", "ab");
-    test("def it = 'abcd'; def x = ''; while (/([a-z])/gf) { x += $1 }; while (/([A-Z])/ig) { x += $1 }; x", "abcdabcd");
+    test("def it = 'abcd'; def x = ''; /([a-z])/r and x += $1; /([a-z])/r and x += $1; x", "aa");
+    test("def it = 'abcd'; def x = ''; /([a-z])/gr and x += $1; /([a-z])/gr and x += $1; x", "ab");
+    test("def it = 'abcd'; def x = ''; while (/([a-z])/gr) { x += $1 }; while (/([A-Z])/ig) { x += $1 }; x", "abcdabcd");
+    test("'abc' =~ /c/g; 'abc' =~ /a/g", true);
+//    test("def s = 'abc'; s =~ /a/g or die; s =~ /c/g or die; s =~ /b/g", false);
+//    test("def s = 'abc'; s =~ /a/g or die; s =~ /c/g or die; s =~ /a/g", false);
+//    test("def s = 'abc'; s =~ /a/g or die; s =~ /c/g or die; s =~ /a/g; s =~ /a/g", true);
   }
 
   @Test public void regexSubstitute() {
@@ -2669,8 +2673,8 @@ class CompilerTest extends BaseTest {
     test("String x = 'abaac'; x =~ s/a/x/g", "xbxxc");
     test("String x = 'abaac'; x =~ s/a/x/g; x", "xbxxc");
     test("def x = [a:'abaac']; x.a =~ s/a/x/g", "xbxxc");
-    test("def x = [a:'abaac']; x.a =~ s/a/x/fg", "xbxxc");
-    test("def x = [a:'abaac']; x.a =~ s/a/x/fg; x.a", "abaac");
+    test("def x = [a:'abaac']; x.a =~ s/a/x/rg", "xbxxc");
+    test("def x = [a:'abaac']; x.a =~ s/a/x/rg; x.a", "abaac");
     test("def x = [a:'abaac']; x.a =~ s/a/x/g; x.a", "xbxxc");
     testError("def x = [a:'abc']; (x.a + 'xyz') =~ s/a/x/; x.a", "invalid lvalue");
     test("def it = 'abaac'; s/a//g", "bc");
@@ -2679,12 +2683,12 @@ class CompilerTest extends BaseTest {
     test("def it = 'abaac'; s///g; it", "abaac");
     test("def it = 'abaac'; s//a/g", "aaabaaaaaca");
     test("def it = 'abaac'; s//a/g; it", "aaabaaaaaca");
-    test("def it = 'ab\\ncd'; /b$/mf", true);
-    test("def it = 'ab\\n#d'; /b$\\n#/mf", true);
-    test("def it = 'ab\\ncd'; /b\\$\\nc/mf", false);
-    test("def it = 'ab\\ncd'; /b$.c/smf", true);
-    test("def it = 'ab\\ncd'; /b\\$.c/smf", false);
-    test("def it = 'ab\\ncd'; /b.c/smf", true);
+    test("def it = 'ab\\ncd'; /b$/mr", true);
+    test("def it = 'ab\\n#d'; /b$\\n#/mr", true);
+    test("def it = 'ab\\ncd'; /b\\$\\nc/mr", false);
+    test("def it = 'ab\\ncd'; /b$.c/smr", true);
+    test("def it = 'ab\\ncd'; /b\\$.c/smr", false);
+    test("def it = 'ab\\ncd'; /b.c/smr", true);
   }
 
   @Test public void regexSubstituteExprString() {
@@ -2694,12 +2698,12 @@ class CompilerTest extends BaseTest {
     test("def x = 'abaAc'; x =~ s/(A)/x$1/i; x", "xabaAc");
     test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/i; ", "xabaAc");
     test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/i; x.a", "xabaAc");
-    test("def it = 'abaAc'; s/(A)/x$1/fi; ", "xabaAc");
-    test("def it = 'abaAc'; s/(A)/x$1/fi; it", "abaAc");
-    test("def x = 'abaAc'; x =~ s/(A)/x$1/fi; ", "xabaAc");
-    test("def x = 'abaAc'; x =~ s/(A)/x$1/fi; x", "abaAc");
-    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/fi; ", "xabaAc");
-    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/fi; x.a", "abaAc");
+    test("def it = 'abaAc'; s/(A)/x$1/ri; ", "xabaAc");
+    test("def it = 'abaAc'; s/(A)/x$1/ri; it", "abaAc");
+    test("def x = 'abaAc'; x =~ s/(A)/x$1/ri; ", "xabaAc");
+    test("def x = 'abaAc'; x =~ s/(A)/x$1/ri; x", "abaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/ri; ", "xabaAc");
+    test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/ri; x.a", "abaAc");
     test("def x = [a:'abaAc']; x.a =~ s/(A)/x$1/ig; x.a", "xabxaxAc");
     test("def y = 'y'; def x = [a:'abaAc']; x.a =~ s/(A)/x$1$y/ig; x.a", "xaybxayxAyc");
     test("def x = 'abcdefghijklmn'; x =~ s/(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/x$10$11/ig", "xjkmn");
@@ -2719,8 +2723,8 @@ class CompilerTest extends BaseTest {
     test("true and do { true } and return true", true);
     test("true and do { for(int i=0;i<10;i++); false } and return true", true);
     test("true and do { for(int i=0;i<10;i++); return false } and return true", false);
-    test("def it = 'abc'; /ab/f and do { /c/f and return false } and return true", false);
-    test("def x; def it = 'abc'; /ab/f and do { it = 'xyz'; x = 'x' } and return \"$it$x\"", "xyzx");
+    test("def it = 'abc'; /ab/r and do { /c/r and return false } and return true", false);
+    test("def x; def it = 'abc'; /ab/r and do { it = 'xyz'; x = 'x' } and return \"$it$x\"", "xyzx");
   }
 
   @Test public void filter() {
@@ -2990,8 +2994,8 @@ class CompilerTest extends BaseTest {
     test("def x = ['x','y',1]; x.join(', ')", "x, y, 1");
     test("def x = [x:1,y:2]; x.join(',')", "['x', 1],['y', 2]");
     test("def x = [[x:1],[y:2]]; x.join(', ')", "[x:1], [y:2]");
-    test("['x','y','1','2','a'].filter{ /[a-z]/f }.join(',')", "x,y,a");
-    test("def x = ['x','y','1','2','a']; x.filter{ /[a-z]/f }.join(',')", "x,y,a");
+    test("['x','y','1','2','a'].filter{ /[a-z]/r }.join(',')", "x,y,a");
+    test("def x = ['x','y','1','2','a']; x.filter{ /[a-z]/r }.join(',')", "x,y,a");
     test("['a','b'].map{sleep(0,it)+sleep(0,it)}.join(':')", "aa:bb");
   }
 
@@ -3384,7 +3388,7 @@ class CompilerTest extends BaseTest {
     test("def x; x ?= 1 if true", 1);
     test("int x; for (int i=0; i < 10; i++) { continue if i > 5; x += i }; x", 15);
     test("int x; for (int i=0; i < 10; i++) { break unless i < 5; x += i }; x", 10);
-    test("def it = 'abc'; return if /x/f; s/b/x/g;", "axc");
+    test("def it = 'abc'; return if /x/r; s/b/x/g;", "axc");
     test("return if true; 1", null);
     test("return if false; 1", 1);
     test("return unless true; 1", 1);
@@ -5657,8 +5661,8 @@ class CompilerTest extends BaseTest {
     test("def x = 1; true and x = 2; x", 2);
     test("def x = 1; x = 2 and true", true);
     test("def x = 1; x = 2 and true; x", 2);
-    test("def it = 'abc'; /a/f ? true : false", true);
-    test("def it = 'abc'; def x; /a/f and x = 'xxx'; x", "xxx");
+    test("def it = 'abc'; /a/r ? true : false", true);
+    test("def it = 'abc'; def x; /a/r and x = 'xxx'; x", "xxx");
     test("def x = 0; for (int i = 0; i < 10; i++) { i < 5 and do { x += i } and continue; x++ }; x", 15);
     test("int f() { true and return 1; return 0 }; f()", 1);
     testError("superFields and print 'xxx'", "reference to unknown variable");
@@ -6014,7 +6018,7 @@ class CompilerTest extends BaseTest {
     replTest.accept("while (it = nextLine()) println it", "x",null, "x\n");
     replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n",null, "x\ny\n\nz\n");
     replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", List.of(List.of(1,2), List.of(3)), "");
-    replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/f }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
+    replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
                     "[1,2]\n[3]\n\n", List.of(3), "");
   }
 
@@ -6041,7 +6045,7 @@ class CompilerTest extends BaseTest {
     test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3,4)));
     test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3)));
     test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
-    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/f }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
+    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
   }
 
   @Test public void fib() {

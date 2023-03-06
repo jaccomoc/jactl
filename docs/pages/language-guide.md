@@ -1674,16 +1674,46 @@ The supported modifiers are:
 The `g` modifier for global find can be used to iterate over a string, finding all instances of a given pattern within
 the string:
 ```groovy
-> def str = 'this example text is not complex'
-This Example text is not complex
+> def str = 'This Example Text Is Not Complex'
+This Example Text Is Not Complex
 > int i = 0
 0
-> while (str =~ /ex/ig) { i++ }
+> while (str =~ /Ex/ig) { i++ }   // count how often pattern matches
 > i
 3
 ```
 
+The `g` modifier is more useful when used with capture variables as described in the next section.
+
 ## Capture Variables
+
+With regex patterns you can provide capture groups using `(` and `)`.
+These groupings then create _capture_ _variables_ `$1` `$2` etc. for each of the capture groups that correspond
+to the characters in the source string that match that part of the pattern.
+There is also a `$0` variable that captures the portion of the source string that matches the entire pattern.
+For example:
+```groovy
+> def str = 'This Example Text Is Not Complex'
+This Example Text Is Not Complex
+> str =~ /p.*(.ex.).*(N[a-z].)/
+true
+> $1
+Text
+> $2
+Not
+> $0
+ple Text Is Not
+```
+
+Note that if there are nested groups the capture variables count based on the number of `(` so far encountered
+irrespective of the nesting.
+
+You can use `\` to escape the `(` and `)` characters if you want to match against those characters.
+
+Using capture variables with the `g` global modifier allows you to extract parts of a string:
+```shell
+> 
+```
 
 ## Regex Substitution
 
