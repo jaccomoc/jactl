@@ -17,6 +17,7 @@
 package jacsal;
 
 import jacsal.runtime.*;
+import jdk.jshell.execution.Util;
 import org.objectweb.asm.Type;
 
 import java.lang.reflect.Method;
@@ -105,6 +106,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   private final Map<String,ClassDescriptor> imports      = new HashMap<>();
   private final Map<String,ClassDescriptor> localClasses = new HashMap<>();
+
+  private boolean isWhileCondition = false;        // true while resolving while condition
 
   private int lastLineNumber = -1;
 
@@ -468,13 +471,15 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitWhile(Stmt.While stmt) {
-    resolve(stmt.condition);
-    resolve(stmt.updates);
-
     // We need to keep track of what the current while loop is so that break/continue
     // statements within body of the loop can find the right Stmt.While object
     Stmt.While oldWhileStmt = currentFunction().currentWhileLoop;
     currentFunction().currentWhileLoop = stmt;
+
+    isWhileCondition = true;
+    resolve(stmt.condition);
+    isWhileCondition = false;
+    resolve(stmt.updates);
 
     resolve(stmt.body);
 
@@ -517,12 +522,28 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return expr.type = expr.pattern.type;
     }
 
+    Expr.VarDecl captureArrVar = getVars(false).get(Utils.CAPTURE_VAR);
+
+    // If regex match with 'g' global modifier then make sure we are in condition of a while
+    // loop (which also covers for loops). Also make sure that there are no other regex matches
+    // in the condition since we rely on keeping state in the capture array variable and if it
+    // is being used by another regex match then we will have problems.
+    boolean globalMatch = !expr.isSubstitute && expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
+    if (globalMatch) {
+      if (!isWhileCondition) {
+        throw new CompileError("Cannot use '" + Utils.REGEX_GLOBAL + "' modifier outside of condition for while/for loop",
+                               expr.pattern.location);
+      }
+      if (currentWhileLoop(expr.pattern.location).globalRegexMatches++ > 0) {
+        throw new CompileError("Regex match with global modifier can only occur once within while/for condition", expr.pattern.location);
+      }
+    }
+
     // Check to see if we already have a capture array variable in the current scope. If we already
-    // have one then we will reuse it. Otherwise we will create a new one. Note that we don't want
+    // have one then we will reuse it. Otherwise, we will create a new one. Note that we don't want
     // to use one that we have closed over for our own capture vars since this will break code in
     // the parent scope that the closed over capture var belongs to if it relies on the capture vars
     // still being as they were when the nested function/closure was invoked.
-    Expr.VarDecl captureArrVar = getVars(false).get(Utils.CAPTURE_VAR);
     if (captureArrVar == null) {
       final var captureArrName = expr.operator.newIdent(Utils.CAPTURE_VAR);
       // Allocate our capture array var if we don't already have one in scope

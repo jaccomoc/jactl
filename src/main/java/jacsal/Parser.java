@@ -545,13 +545,13 @@ public class Parser {
   /**
    *# whileStmt -> "while" "(" expression ")" statement ;
    */
-  private Stmt.While whileStmt() {
+  private Stmt whileStmt() {
     Token whileToken = previous();
     expect(LEFT_PAREN);
-    Expr cond      = condition(false, RIGHT_PAREN);
-    Stmt.While whileStmt = new Stmt.While(whileToken, cond);
+    var cond       = condition(false, RIGHT_PAREN);
+    var whileStmt  = new Stmt.While(whileToken, cond);
     whileStmt.body = statement();
-    return whileStmt;
+    return stmtBlock(whileToken, whileStmt);
   }
 
   /**
@@ -571,8 +571,8 @@ public class Parser {
     if (!previous().is(SEMICOLON)) {
       expect(SEMICOLON);
     }
-    Expr cond           = condition(false, SEMICOLON);
-    Stmt update         = commaSeparatedStatements();
+    Expr cond        = condition(false, SEMICOLON);
+    Stmt update      = commaSeparatedStatements();
     Token rightParen = expect(RIGHT_PAREN);
 
     Stmt.While whileStmt = new Stmt.While(forToken, cond);
@@ -1442,7 +1442,7 @@ public class Parser {
     final var modifiers   = previous().getStringValue();
     final var regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace, isComplexReplacement);
     // Modifier 'r' forces the substitute to be a value and not override the original variable
-    if (modifiers.indexOf('r') != -1) {
+    if (modifiers.indexOf(Utils.REGEX_NON_DESTRUCTIVE) != -1) {
       return regexSubst;
     }
     else {

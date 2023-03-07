@@ -762,8 +762,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    boolean globalModifier = expr.modifiers.indexOf('g') != -1;
-    String modifiers = expr.modifiers.replaceAll("[rg]", "");
+    boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
+    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + "]", "");
+
     loadVar(expr.captureArrVarDecl);
     compile(expr.string);
     castToString(expr.string.location);
@@ -782,8 +783,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
-    boolean globalModifier = expr.modifiers.indexOf('g') != -1;
-    String modifiers = expr.modifiers.replaceAll("[rg]", "");
+    boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
+    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + "]", "");
 
     compile(expr.string);
     castToString(expr.string.location);

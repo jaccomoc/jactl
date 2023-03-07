@@ -208,10 +208,11 @@ abstract class Stmt {
     Token whileToken;
     Expr  condition;
     Stmt  body;
-    Stmt  updates;       // used for For loops
-    Label endLoopLabel;  // where to jump to on break stmt
-    Label continueLabel; // where to jump to on a continue stmt
-    int   stackDepth;    // depth of stack where while loop is (used by continue/break)
+    Stmt  updates;            // used for For loops
+    Label endLoopLabel;       // where to jump to on break stmt
+    Label continueLabel;      // where to jump to on a continue stmt
+    int   stackDepth;         // depth of stack where while loop is (used by continue/break)
+    int   globalRegexMatches; // count of number of /xxx/g in while condition
     While(Token whileToken, Expr condition) {
       this.whileToken = whileToken;
       this.condition = condition;

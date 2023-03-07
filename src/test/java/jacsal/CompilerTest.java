@@ -2642,23 +2642,25 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void regexGlobalMatch() {
-    test("String x = 'abc'; def y = ''; x =~ /([a-z])/g and y += $1; x =~ /([a-z])/g and y += $1; y", "ab");
-    test("def x = 'abc'; def y = ''; x =~ /([a-z])/g and y += $1; x =~ /([a-z])/g and y += $1; y", "ab");
-    test("def it = 'abc'; def y = ''; /([a-z])/g and y += $1; /([a-z])/g and y += $1; y", "ab");
-    test("def it = 'ab'; def y = ''; /([a-z])/g and y += $1; /([a-z])/g and y += $1; /([a-z])/g and y = 'fail'; y", "ab");
-    test("def it = 'abc'; def y = ''; while (/([a-z])/g) { y += $1 }; y += $1", "abcnull");
-    testError("def it = 'abc'; def y = ''; for (int i = 0; /${''}/g && i < 10; i++) { y += $1 }; y += $1", "no regex match");
+    testError("String x = 'abc'; def y = ''; x =~ /([a-z])/g and y += $1; x =~ /([a-z])/g and y += $1; y", "cannot use 'g' modifier");
+    test("String x = 'abc'; def y = ''; while (x =~ /([a-z])/g) { y += $1 }; y", "abc");
+    testError("String x = 'abc'; def y = ''; while (y =~ /^$|a$/g && x =~ /([a-z])/g) { y += $1 }; y", "can only occur once");
+    testError("def it = 'abc'; def y = ''; while (y =~ /^$|a$/g && /([a-z])/g) { y += $1 }; y", "can only occur once");
+    testError("def it = 'abc'; def y = ''; while (/^$|a$/g && /([a-z])/g) { y += $1 }; y", "can only occur once");
+    test("String x = 'abc'; def y = ''; while (y =~ /^$|a$/ && x =~ /([a-z])/g) { y += $1 }; y", "ab");
+    test("String x = 'abc'; def y = 0; while (y.toString() =~ /[0-2]/ && x =~ /([a-z])/g && y.toString() !~ /x/) { y++ }; y", 3);
+    test("def it = 'abc'; def y = ''; while (/([a-z])/g) { y += $1 }; y", "abc");
+    test("def it = 'abc'; def y = ''; while (y =~ /^$|a$/ && /([a-z])/g) { y += $1 }; y", "ab");
+    test("def it = 'abc'; def y = 0; while (y.toString() =~ /[0-2]/ && /([a-z])/g && y.toString() !~ /x/) { y++ }; y", 3);
+
+    testError("def it = 'abc'; def y = ''; while (/([a-z])/g) { y += $1 }; y += $1", "in scope where no regex match has occurred");
+    testError("def it = 'abc'; def y = ''; for (int i = 0; /${''}/g && i < 10; i++) { y += $1 }; y += $1", "in scope where no regex match has occurred");
     test("def it = 'abc'; def y = ''; for (int i = 0; /${''}/g && i < 3; i++) { y += $1 }; y", "nullnullnull");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([a-z])./g && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def y = ''; for (int i = 0; /([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
     test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
-    test("def it = 'abcd'; def x = ''; /([a-z])/r and x += $1; /([a-z])/r and x += $1; x", "aa");
-    test("def it = 'abcd'; def x = ''; /([a-z])/gr and x += $1; /([a-z])/gr and x += $1; x", "ab");
     test("def it = 'abcd'; def x = ''; while (/([a-z])/gr) { x += $1 }; while (/([A-Z])/ig) { x += $1 }; x", "abcdabcd");
-    test("'abc' =~ /c/g; 'abc' =~ /a/g", true);
-//    test("def s = 'abc'; s =~ /a/g or die; s =~ /c/g or die; s =~ /b/g", false);
-//    test("def s = 'abc'; s =~ /a/g or die; s =~ /c/g or die; s =~ /a/g", false);
-//    test("def s = 'abc'; s =~ /a/g or die; s =~ /c/g or die; s =~ /a/g; s =~ /a/g", true);
+    test("def it = 'abc'; def x = ''; while (/([a-z])/gr) { x += $1; while (/([A-Z])/ig) { x += $1 } }; x", "aabcbabccabc");
   }
 
   @Test public void regexSubstitute() {

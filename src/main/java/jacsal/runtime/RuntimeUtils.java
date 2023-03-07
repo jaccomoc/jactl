@@ -896,13 +896,13 @@ public class RuntimeUtils {
         int flags = 0;
         for (int i = 0; i < modifiers.length(); i++) {
           switch (modifiers.charAt(i)) {
-            case 'i':
+            case Utils.REGEX_CASE_INSENSITIVE:
               flags += Pattern.CASE_INSENSITIVE;
               break;
-            case 'm':
+            case Utils.REGEX_MULTI_LINE_MODE:
               flags += Pattern.MULTILINE;
               break;
-            case 's':
+            case Utils.REGEX_DOTALL_MODE:
               flags += Pattern.DOTALL;
               break;
             default:
@@ -932,22 +932,22 @@ public class RuntimeUtils {
   public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, boolean globalModifier, String modifiers, String source, int offset) {
     if (globalModifier) {
       // Check to see if the Matcher has the same source string (note we use == not .equals())
-      if (regexMatcher.str == str) {
-        Matcher matcher = regexMatcher.matcher;
-        if (regex.equals(matcher.pattern().pattern())) {
-          regexMatcher.matched = matcher.find();
-          if (!regexMatcher.matched) {
-            matcher.reset();
-          }
-          return regexMatcher.matched;
-        }
-        // Same string but regex has changed
-        regexMatcher.matcher = matcher = getMatcher(str, regex, modifiers, source, offset);
-        return regexMatcher.matched = matcher.find();
+      if (regexMatcher.str != str || !regex.equals(regexMatcher.matcher.pattern().pattern())) {
+        regexMatcher.matcher = getMatcher(str, regex, modifiers, source, offset);
       }
+      var matcher = regexMatcher.matcher;
+      regexMatcher.matched = matcher.find(regexMatcher.lastPos);
+      if (!regexMatcher.matched) {
+        matcher.reset();
+        regexMatcher.lastPos = 0;
+      }
+      else {
+        regexMatcher.lastPos = matcher.end();
+      }
+      return regexMatcher.matched;
     }
 
-    // Different string or no global modifier so start again from scratch
+    // No global modifier so start from scratch and leave lastPos untouched
     Matcher matcher = getMatcher(str, regex, modifiers, source, offset);
     regexMatcher.matcher = matcher;
     regexMatcher.str = str;

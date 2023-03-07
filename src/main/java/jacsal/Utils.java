@@ -63,6 +63,12 @@ public class Utils {
   public static final String TO_STRING         = "toString";
   public static final int    DEFAULT_MIN_SCALE = 10;
 
+  public static final char   REGEX_GLOBAL           = 'g';
+  public static final char   REGEX_CASE_INSENSITIVE = 'i';
+  public static final char   REGEX_DOTALL_MODE      = 's';
+  public static final char   REGEX_MULTI_LINE_MODE  = 'm';
+  public static final char   REGEX_NON_DESTRUCTIVE  = 'r';
+
   public static final Object[] EMPTY_OBJ_ARR = new Object[0];
 
   /**

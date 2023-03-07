@@ -466,9 +466,9 @@ For example:
 x is odd
 ```
 
-### Regex Strings
+### Pattern Strings
 
-In order to better support regular expressions, regex strings can be delimited with `/` and are multi-line strings
+In order to better support regular expressions, pattern strings can be delimited with `/` and are multi-line strings
 where standard backslash escaping for `\n`, `\r`, etc. is not performed. Backslashes can be used to escape `/`, `$`,
 and any other regex specific characters such as `[`, `{`, `(` etc. to treat those characters as normal and not have
 them be interpreted as regex syntax:
@@ -481,7 +481,7 @@ c\.d\[12[0-9]]
 true
 ```
 
-Regex strings are also expression strings and thus support embedded expressions within `${}` sections of the regex
+Pattern strings are also expression strings and thus support embedded expressions within `${}` sections of the regex
 string:
 ```groovy
 > def x = 'abc.d[123]'
@@ -490,7 +490,7 @@ abc.d[123]
 true
 ```
 
-Regex strings also support multiple lines:
+Pattern strings also support multiple lines:
 ```groovy
 > def p = /this is
   a multi-line regex string/
@@ -498,7 +498,7 @@ this is
 a multi-line regex string
 ```
 
-> Note that an empty regex string `//` is not supported since this is treated as the start of a line comment.
+> Note that an empty pattern string `//` is not supported since this is treated as the start of a line comment.
 
 ## Lists
 
@@ -1636,9 +1636,12 @@ true
 true
 ```
 
-Regular expression patterns are usually expressed in regex strings to cut down on the number of backslashes needed:
+Regular expression patterns are usually expressed in pattern strings to cut down on the number of backslashes needed.
+For example `/\d\d\s+[A-Z][a-z]*\s+\d{4}/` is easier to read and write than `'\\d\\d\\s+[A-Z][a-z]*\\s+\\d{4}'`:
 ```groovy
-> '24 Mar 2014' =~ /\d\d\s+[A-Z][a-z]*\s+\d{4}/
+> '24 Mar 2014' =~ '\\d\\d\\s+[A-Z][a-z]*\\s+\\d{4}'   // pattern written as standard string
+true
+> '24 Mar 2014' =~ /\d\d\s+[A-Z][a-z]*\s+\d{4}/        // same pattern written as pattern string
 true
 ```
 
@@ -1663,13 +1666,13 @@ true
 More than on modifier can be appended and the order of the modifiers is unimportant.
 The supported modifiers are:
 
-| Modifier | Description                                                                                                                                                               |
-|:--------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|    i     | Pattern match will be case-insensitive.                                                                                                                                   |
-|    m     | Multi-line mode: this makes `^` and `$` match beginning and endings of lines rather than beginning and ending of entire string.                                           |
-|    s     | Dot-all mode: makes `.` match line terminator (by default `.` won't match end-of-line characters).                                                                        |
-|    g     | Global find: remembers where previous pattern occurred and starts next find from previous location. This can be used to find all occurences of a pattern within a string. |
-|    f     | Find: this forces the regex string to be interpreted as a regex find for implicit matching (see below).                                                                   |
+| Modifier | Description                                                                                                                                                                      |
+|:--------:|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|    i     | Pattern match will be case-insensitive.                                                                                                                                          |
+|    m     | Multi-line mode: this makes `^` and `$` match beginning and endings of lines rather than beginning and ending of entire string.                                                  |
+|    s     | Dot-all mode: makes `.` match line terminator (by default `.` won't match end-of-line characters).                                                                               |
+|    g     | Global find: remembers where previous pattern occurred and starts next find from previous location. This can be used to find all occurences of a pattern within a string.        |
+|    r     | Regex match: this forces the pattern string to be interpreted as a regex match for implicit matching (see below). For substitutions this makes the substitution non-destructive. |
 
 The `g` modifier for global find can be used to iterate over a string, finding all instances of a given pattern within
 the string:
@@ -1717,8 +1720,13 @@ Using capture variables with the `g` global modifier allows you to extract parts
 
 ## Regex Substitution
 
+`r` means non-destructive ...
+
 ## Implicit Variable
 
+## Split Method
+
+Passing modifiers to `split()` ...
 
 # If Statements
 

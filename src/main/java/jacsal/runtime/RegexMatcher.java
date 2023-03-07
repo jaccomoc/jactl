@@ -27,4 +27,5 @@ public class RegexMatcher {
   public  Matcher    matcher;
   public  String     str;          // String to match against
   public  boolean    matched;      // Result of last match
+  public  int        lastPos;      // For global matches remembers where last match finished
 }
