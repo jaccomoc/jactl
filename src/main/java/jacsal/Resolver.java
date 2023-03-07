@@ -1943,8 +1943,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       return stmt;
     }
 
-    if (stmt instanceof Stmt.Block) {
-      List<Stmt> stmts = ((Stmt.Block) stmt).stmts.stmts;
+    if (stmt instanceof Stmt.Block || stmt instanceof Stmt.Stmts) {
+      List<Stmt> stmts = stmt instanceof Stmt.Block ? ((Stmt.Block) stmt).stmts.stmts : ((Stmt.Stmts) stmt).stmts;
       if (stmts.size() == 0) {
         if (returnType.isPrimitive()) {
           error("Implicit return of null for not compatible with return type of " + returnType, stmt.location);

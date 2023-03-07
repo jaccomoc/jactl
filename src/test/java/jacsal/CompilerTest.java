@@ -1038,6 +1038,7 @@ class CompilerTest extends BaseTest {
     test("var v = 1D; v", 1D);
     test("Decimal v = 1; v", "#1");
     test("var v = 1.0; v", "#1.0");
+    test("def x = 'abc', y = 'xyz'", "xyz");
   }
 
   @Test public void multipleVarDecls() {

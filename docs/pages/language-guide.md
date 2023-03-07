@@ -1875,7 +1875,9 @@ s/MY/a random/ig
 
 ## Split Method
 
-The `split()` method operates on strings to split them based on a supplied regex pattern:
+The `split()` method is another place where regex patterns are used.
+Split operates on strings to split them into their constituent parts where the separator is based on a supplied
+regex pattern:
 ```groovy
 > '1, 2,3,  4'.split(/\s*,\s*/)    // split on comma ignoring whitespace
 ['1', '2', '3', '4']
@@ -1885,8 +1887,8 @@ is encountered.
 
 Unlike regex matches and substitutions, modifiers are optionally passed as the second argument to the method:
 ```groovy
-> '1abc2Bad3Dead'.split(/[a-z]+/,'i')
-['1', '2', '3', '']
+'1abc2Bad3Dead'.split(/[a-d]+/,'i')
+['1', '2', '3', 'e', '']
 ```
 
 Note that if the pattern occurs at the end of the string (as in the example) then an empty string will be created as
@@ -1900,14 +1902,80 @@ The order of the modifiers is unimportant.
 The only modifiers supported for `split` are `i` (case-insensitive), `s` (dot matches line terminators), and
 `m` (multi-line mode).)
 
-# If Statements
+# If/Else Statements
 
-# If/unless Statements
+Jacsal `if` statements work in the same way as Java and Groovy `if` statements.
+The syntax is: 
+> `if (<cond>) <trueStmts> [ else <falseStmts> ]`
+
+The `<cond>` condition will be evalauted as `true` or `false` based on the [truthiness](#Truthiness) of the expression.
+If it evaluates to `true` then the `<trueStmts>` will be executed.
+If it evaulates to `false` then the `<falseStmts>` will be executed if the `else` clause has been provided.
+
+The `<trueStmts>` and `<falseStmts>` are either single statements or blocks of multiple statements wrapped in `{}`.
+
+For example:
+```groovy
+> def x = 'Fred Smith'
+'Fred Smith'
+> if (x =~ /^[A-Z][a-z]*\s+[A-Z][a-z]*$/ and x.size() > 3) println "Valid name: $x"
+Valid name: Fred Smith
+```
+
+Since the Jacsal REPL will execute code as soon as a valid statement is parsed, it is difficult to show some multi-line
+examples by capturing REPL interactions so here is an example Jacsal script showing a multi-line `if/else`: 
+```groovy
+def x = 'abc'
+if (x.size() > 3) {
+ x = x.substring(0,3)
+}
+else {
+ x = x * 2
+}
+
+println x             // should print: abcabc
+```
+
+It is possible to string multiple `if/else` statements together:
+```groovy
+def x = 'abc'
+if (x.size() > 3) {
+ x = x.substring(0,3)
+}
+else
+if (x.size() == 3) {
+  x = x * 2
+}
+else {
+ die "Unexpected size for $x: ${x.size()}"
+}
+```
+
+# If/Unless Statements
+
+In addition to the `if/else` statements, Jacsal supports single statement `if` and `unless` statements where the
+test for the condition comes at the end of the statement rather than the beginning.
+The syntax is:
+> `<statment> if <cond>`
+
+There is no need for `()` brackets around the `<cond>` expression.
+For example:
+```groovy
+> def x = 'abc'; def y = 'xyz'
+xyz
+> x = x * 2 and y = "Y:$x" if x.size() < 4
+abcabc
+> x
+abcabc
+```
+
+
 
 # While Loops
 
 # For Loops
 
+# Do statements
 
 # Functions
 
