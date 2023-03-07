@@ -2719,6 +2719,10 @@ class CompilerTest extends BaseTest {
     test("def it = 'abc'; s/([a-z])/\\$1\\$1/g", "$1$1$1$1$1$1");
     test("def it = 'abc'; s/([a-z])/\\$1\\$1${$1 + $1}/g", "$1$1aa$1$1bb$1$1cc");
     testError("def root = 'abc'; def m=[:]; root =~ s/abc/\"${m{'abc'}}\"/\n", "object of type map");
+    test("def x = 'This SentenCe has Capital letTErs'; x =~ s/([A-Z][a-z])/${$1 =~ /^((.*))$/; $2.toLowerCase()}/g; x", "this sentence has capital letTers");
+    test("def x = 'This'; x =~ s/[a-z]/${1+2}/g; x = 'This'; x =~ s/[a-z]/${1+2}/rg; x = 'This'; x =~ s/[a-z]/${1+2}/g; x", "T333");
+    test("'This SentenCe has Capital letTErs' =~ s/([A-Z][a-z])/${$1 =~ /^((.*))$/; $2.toLowerCase()}/rg", "this sentence has capital letTers");
+    test("'This' =~ s/[a-z]/${1+2}/rg; 'This' =~ s/[a-z]/${1+2}/rg; 'This' =~ s/[a-z]/${1+2}/rg", "T333");
   }
 
   @Test public void doBlock() {

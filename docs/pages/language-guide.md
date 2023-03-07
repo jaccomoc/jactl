@@ -1686,6 +1686,35 @@ This Example Text Is Not Complex
 3
 ```
 
+Note that the 'g' modifier on a regex match is only supported within the condition of a while or for statement.
+If you try to use it in any other context you will get an error:
+```groovy
+> def x = 'abc'
+abc
+> x =~ /ab/g
+Cannot use 'g' modifier outside of condition for while/for loop @ line 1, column 6
+x =~ /ab/g
+^
+```
+
+The other limitation is that only one occurrence of a pattern with a 'g' modifier can appear within
+the condition expression.
+Other regex matches can be present in the condition expression as long as they don't use the 'g' global modifier:
+```groovy
+> def x = 'abc'; def y = 'xyz'; def i = 0
+0
+> while (x =~ /[a-c]/g && y =~ /[x-z]/g) { i++ }
+Regex match with global modifier can only occur once within while/for condition @ line 1, column 30
+while (x =~ /[a-c]/g && y =~ /[x-z]/g) { i++ }
+        ^
+> while (x =~ /[a-c]/g && y =~ /[x-z]/) { i++ }
+> i
+3
+```
+
+These limitations are due to what makes sense in terms of the capture variable values and due to the way in which
+Jacsal saves the state of the match to remember where to continue from the next time.
+
 The `g` modifier is more useful when used with capture variables as described in the next section.
 
 ## Capture Variables
@@ -1708,25 +1737,168 @@ Not
 ple Text Is Not
 ```
 
-Note that if there are nested groups the capture variables count based on the number of `(` so far encountered
+Note that if there are nested groups the capture variables numbering is based on the number of `(` so far encountered
 irrespective of the nesting.
 
 You can use `\` to escape the `(` and `)` characters if you want to match against those characters.
 
-Using capture variables with the `g` global modifier allows you to extract parts of a string:
+Using capture variables with the `g` global modifier allows you to extract all parts of a string that match:
 ```shell
-> 
+> def data = 'AAPL=$151.03, MSFT=$255.29, GOOG=$94.02'
+AAPL=$151.03, MSFT=$255.29, GOOG=$94.02
+> def stocks = [:]
+[:]
+> while (data =~ /(\w*)=\$(\d+.\d+)/g) { stocks[$1] = $2 as Decimal }
+> stocks
+[AAPL:151.03, MSFT:255.29, GOOG:94.02]
 ```
 
 ## Regex Substitution
 
-`r` means non-destructive ...
+Jacsal supports regex substitution where substrings in the source string that match the given pattern are replaced
+with a supplied substitution string.
+The same regex match operator `=~` is used but the right-hand side now has the form `s/pattern/subst/mods` where
+`pattern` is the regex pattern, `subst` is the substitution string, and `mods` are the optional modifiers:
+```groovy
+> def x = 'This is the original string'
+This is the original string
+> x =~ s/the/not an/
+This is not an original string
+> x
+This is not an original string
+```
+Notice that the value on the left-hand side is modified so this form cannot be applied to string literals since they
+cannot be modified:
+```groovy
+> 'this is the string' =~ s/the/not a/
+Invalid left-hand side for '=~' operator (invalid lvalue) @ line 1, column 2
+'this is the string' =~ s/the/not a/
+ ^
+```
 
-## Implicit Variable
+If you want to perform the substitution and get the new string value without altering the left-hand side then use
+the `r` modifier to perform a non-destructive replacement:
+```groovy
+> 'this is the string' =~ s/the/not a/r
+this is not a string
+```
+
+The other modifiers supported work the same way as for a regex match (see above): `i` forces the match to be case-insensitve,
+`m` is for multi-line mode, `s` allows `.` to match line terminators, and `g` changes all occurrences of the pattern
+in the string.
+
+For example, to change all upper case letters to `xxx`:
+```groovy
+>  'This SentenCe has Capital letTErs' =~ s/[A-Z]/xxx/rg
+xxxhis xxxentenxxxe has xxxapital letxxxxxxrs
+```
+
+Both the pattern and the substitution strings are expression strings so expressions are allowed within the strings:
+```groovy
+> def x = 'A-Z'; def y = 'y'
+y
+> 'This SentenCe has Capital letTers' =~ s/[$x]/${y * 3}/rg
+yyyhis yyyentenyyye has yyyapital letyyyers
+```
+
+Furthermore, capture variables are supported in the substitution string to allow expressions using parts of the
+source string.
+For example to append the size of each word to each word in a sentence:
+```groovy
+> 'This SentenCe has Capital letTers' =~ s/\b(\w+)\b/$1[${$1.size()}]/rg
+This[4] SentenCe[8] has[3] Capital[7] letTers[7]
+```
+
+## Implicit Matching and Substitution
+
+For both regex matches and regex subsitutions, if no left-hand side is given, Jacsal will assume that the match or
+the substitution should be done against the default `it` variable.
+This variable is the default variable passed in to _closures_ (see later) when no variable name is specified.
+
+The following example takes some input, splits it into lines, and then uses `filter` with a regex to filter the lines
+that match `/Evac.*Pause/` and then uses `map` to perform a regex substitute to transform these lines into a different
+form: 
+```groovy
+> def data = '''[251.993s][info][gc] GC(281) Pause Young (Normal) (G1 Evacuation Pause) 2486M->35M(4096M) 6.630ms
+  [252.576s][info][gc] GC(282) Pause Young (Concurrent Start) (Metadata GC Threshold) 1584M->34M(4096M) 10.571ms
+  [252.576s][info][gc] GC(283) Concurrent Cycle
+  [252.632s][info][gc] GC(283) Pause Remark 48M->38M(4096M) 49.430ms
+  [252.636s][info][gc] GC(283) Pause Cleanup 45M->45M(4096M) 0.065ms
+  [252.638s][info][gc] GC(283) Concurrent Cycle 62.091ms
+  [253.537s][info][gc] GC(284) Pause Young (Normal) (G1 Evacuation Pause) 2476M->25M(4096M) 5.818ms
+  [254.453s][info][gc] GC(285) Pause Young (Normal) (G1 Evacuation Pause) 2475M->31M(4096M) 6.040ms
+  [255.358s][info][gc] GC(286) Pause Young (Normal) (G1 Evacuation Pause) 2475M->31M(4096M) 5.070ms
+  [256.272s][info][gc] GC(287) Pause Young (Normal) (G1 Evacuation Pause) 2477M->34M(4096M) 5.024ms'''
+> data.lines().filter{ /Evac.*Pause/r }.map{ s/^\[([0-9.]+)s\].* ([0-9.]*)ms$/At $1s: Pause $2ms/ }.each{ println it }
+At 251.993s: Pause 6.630ms
+At 253.537s: Pause 5.818ms
+At 254.453s: Pause 6.040ms
+At 255.358s: Pause 5.070ms
+At 256.272s: Pause 5.024ms
+```
+
+See later sections on _closures_, and _collections_, for a description of how the methods like `filter()` and `map()`
+and `each()` work with closures and with the implicit `it` variable.
+
+You can, of cource, define your own `it` variable and have it automatically matched against:
+```groovy
+> def it = 'my value for my xplictily defined it variable'
+my value for my explictily defined it variable
+> /MY/i        // same as writing it =~ /MY/i
+true
+> s/MY/a random/ig
+a random value for a random explictily defined it variable
+> it
+a random value for a random explictily defined it variable
+```
+
+Note, for matching, there needs to be a modifier since a regex pattern string delimited by `/` with no modifiers is
+treated as a string in Jacsal.
+To force the regex pattern to do a match against the `it` variable add a modifier.
+The `r` modifier can be used to force a regex match if no other modifier makes sense:
+```groovy
+> def it = 'abc'
+abc
+> /a/             // just a string
+a
+> /a/r            // force a regex match
+true
+```
+
+If there is no `it` variable in the current scope you will get an error:
+```groovy
+> s/MY/a random/ig
+Reference to unknown variable 'it' @ line 1, column 1
+s/MY/a random/ig
+^
+```
 
 ## Split Method
 
-Passing modifiers to `split()` ...
+The `split()` method operates on strings to split them based on a supplied regex pattern:
+```groovy
+> '1, 2,3,  4'.split(/\s*,\s*/)    // split on comma ignoring whitespace
+['1', '2', '3', '4']
+```
+The result of the split invocation is a list of the substrings formed by splitting the string whenever the pattern
+is encountered.
+
+Unlike regex matches and substitutions, modifiers are optionally passed as the second argument to the method:
+```groovy
+> '1abc2Bad3Dead'.split(/[a-z]+/,'i')
+['1', '2', '3', '']
+```
+
+Note that if the pattern occurs at the end of the string (as in the example) then an empty string will be created as
+the last element in the resulting list.
+Similarly, if the pattern occurs at the start of the string, an empty string will be the first element in the result
+list.
+
+If more than one modifier is needed then they are passed as a string (e.g. `'ism'` or `'ms'`, etc.).
+The order of the modifiers is unimportant.
+
+The only modifiers supported for `split` are `i` (case-insensitive), `s` (dot matches line terminators), and
+`m` (multi-line mode).)
 
 # If Statements
 

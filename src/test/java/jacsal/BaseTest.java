@@ -98,6 +98,7 @@ public class BaseTest {
               expr instanceof Expr.TypeExpr || expr instanceof Expr.FunDecl ||
               expr instanceof Expr.MapLiteral && ((Expr.MapLiteral)expr).isNamedArgs ||
               expr instanceof Expr.Binary && ((Expr.Binary)expr).createIfMissing ||
+              expr instanceof Expr.RegexSubst ||
               expr instanceof Expr.InvokeNew ||
               expr instanceof Expr.ClassPath) {
             return expr;

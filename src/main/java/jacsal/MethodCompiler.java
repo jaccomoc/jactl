@@ -814,7 +814,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Setup our Matcher and get first result
     expect(3);
-    loadConst(globalModifier);
+    loadConst(false);
     loadConst(modifiers);
     loadLocation(expr.operator);
     invokeMethod(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
