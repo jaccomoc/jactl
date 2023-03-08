@@ -472,7 +472,7 @@ public class Parser {
 
   private boolean isVarDecl() {
     return lookahead(() -> matchAny(typesAndVar) || className() != null,
-                     () -> matchAnyIgnoreEOL(IDENTIFIER) || matchKeywordIgnoreEOL());
+                     () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER) || matchKeywordIgnoreEOL());
   }
 
   /**
@@ -1757,12 +1757,12 @@ public class Parser {
     // a Map literal using '{' and '}' and a statement block or a closure.
     return lookahead(() -> {
                        if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
-                       var open = previous();
+                       var close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
                        return matchAnyIgnoreEOL(COLON) ||
                               mapKey() != null &&
                               matchAnyIgnoreEOL(COLON) &&
                               expression() != null &&
-                              matchAnyIgnoreEOL(COMMA,open.getType()); });
+                              matchAnyIgnoreEOL(COMMA,close); });
  }
 
   /////////////////////////////////////////////////
@@ -1912,6 +1912,19 @@ public class Parser {
       tokeniser.rewind(previous, current);
     }
     return false;
+  }
+
+  /**
+   * Return true if next token is an illegal token
+   */
+  boolean matchError() {
+    try {
+      peek();
+      return false;
+    }
+    catch (CompileError error) {
+      return true;
+    }
   }
 
   /**

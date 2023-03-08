@@ -396,6 +396,9 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void simpleVariableArithmetic() {
+    testError("int _ = 1", "invalid value for identifier");
+    test("int a = 1", 1);
+    test("int _1 = 1", 1);
     test("List x = [[1,2],[3,4]]; def h = x[1][0]\nh", 3);
     test("def x = [[1,2],[3,4]]; def h = x[1][0]\nh", 3);
     testError("int x = 1; boolean b = true; x + b", "non-numeric operand for right-hand side");

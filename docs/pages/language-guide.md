@@ -2003,8 +2003,31 @@ die if sum != 10
 ## Break and Continue
 
 Like Java, `break` can be used to exit the while loop at any point and `continue` can be used to goto the next
-iteration of the loop before the current iteration has completed.
+iteration of the loop before the current iteration has completed:
+```groovy
+int sum = 0
+int i = 0
+while (i < 10) {
+  sum += i
+  break if sum >= 20    // exit loop once sum is >= 20
+  i++
+}
 
+die unless sum == 21 && i == 6 
+```
+
+Another example using `continue`:
+```groovy
+int sum = 0
+int i = 0
+while (i < 100) {
+  i++
+  continue unless i % 3 == 0     // only interested in numbers that are multiples of 3   
+  sum += i
+}
+
+die unless sum == 1683
+```
 
 # For Loops
 
@@ -2027,9 +2050,12 @@ an iteration of the loop completes.
 
 The canonical example of a `for` loop is to loop a given number of times:
 ```groovy
+int result
 for (int i = 0; i < 10; i++) {
-  println i if i % 3 == 0
+  result += i if i % 3 == 0
 }
+
+die unless result == 18
 ```
 
 Here is an example with multiple initialisers and updates:
@@ -2040,6 +2066,53 @@ for (int i = 0, j = 0; i < 10 && j < 10; i++, j += 2) {
 }
 die unless result == 30 
 ```
+
+As for `while` statements, a `for` loop supports `break` to exit the loop and `continue` to continue with the next
+iteration.
+When `continue` is used the `<update>` statements are executed before the condition is re-evaluated.
+
+Note that any or all of the `<init>` `<cond>` and `<update>` sections of the `for` loop can be empty:
+```groovy
+int i = 0, sum = 0
+for(; i++ < 10; ) {    // empty initialiser and update section
+ sum += i
+}
+die unless sum == 55 
+```
+
+If all sections are empty then it is the same as using `while (true)` and will iterate until a `break` statement
+exits the loop:
+```groovy
+int i = 0, sum = 0
+for (;;) {
+ sum += ++i
+ break if i >= 10
+}
+die unless sum == 55 
+```
+
+# Labels for While/For Statements
+
+With `while` or `for` loops you can always break out of or continue the current loop using `break` or `continue`.
+Jacasal also allows you to break out of or continue an outer loop by labelling the loops and using the label in the
+`break` or `continue`.
+
+Labels are a valid name followed by `:` and can be attached to a `while` or `for` statement if they occur immediately
+before the loop:
+```groovy
+int sum = 0
+OUTER: for (int i = 0; i < 10; i++) {
+  int j = 0
+  INNER: while (true) {
+    sum += ++j
+    continue OUTER if j > i
+    break    OUTER if sum > 30 
+  }
+}
+die unless sum == 36 
+```
+
+Label names are any valid identifier (letter or underscore )
 
 # Do statements
 

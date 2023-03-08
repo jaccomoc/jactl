@@ -452,7 +452,7 @@ public class Tokeniser {
       throw new CompileError("Unexpected character '" + (char)startChar + "': expecting start of identifier", token);
     }
 
-    // Search for first char the is not a valid identifier char
+    // Search for first char that is not a valid identifier char
     int i = 1;
     for (; i < remaining; i++) {
       final var c = charAt(i);
@@ -470,6 +470,10 @@ public class Tokeniser {
       if (i > 6) {
         throw new CompileError("Capture variable name too large", token);
       }
+    }
+
+    if (startChar == '_' && i == 1) {
+      throw new CompileError("Invalid value for identifier", token);
     }
 
     advance(i);
