@@ -1755,9 +1755,15 @@ public class Parser {
   private boolean isMapLiteral() {
     // Check for start of a Map literal. We need to lookahead to know the difference between
     // a Map literal using '{' and '}' and a statement block or a closure.
-    return lookahead(() -> matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE), () -> matchAnyIgnoreEOL(COLON)) ||
-           lookahead(() -> matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE), () -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON));
-  }
+    return lookahead(() -> {
+                       if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
+                       var open = previous();
+                       return matchAnyIgnoreEOL(COLON) ||
+                              mapKey() != null &&
+                              matchAnyIgnoreEOL(COLON) &&
+                              expression() != null &&
+                              matchAnyIgnoreEOL(COMMA,open.getType()); });
+ }
 
   /////////////////////////////////////////////////
 

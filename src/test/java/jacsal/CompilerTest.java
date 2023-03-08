@@ -4499,10 +4499,19 @@ class CompilerTest extends BaseTest {
     test("def f(x){x}; int sum = 0; double i = 0; while (i++ < 10) { i > 5 and f(continue); sum += i }; sum", 15);
     test("def s=[1]; while (s.size())\n{\nfalse and continue\n(0 + (2*3) - 10 < s.size()) and s.remove(0) and continue\n}\ns", List.of());
     test("int i = 0; int sum = 0; while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
+    test("if (true) { LABEL: while(false){}; 17 }", 17);
+    testError("def x = 0; if (true) { LABEL: x++; while(false){}; 17 }", "labels can only be applied to for/while");
+    test("int i = 0; int sum = 0; while (i < 10) { XXX: while(false){}; int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
     test("int i = 0; int sum = 0; OUTER: while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; i++; continue OUTER }; i++ }; sum", 9);
     test("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
     testError("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum", "could not find enclosing for/while");
     testError("int i = 0; int sum = 0; OUTER: while (i < 15) { int j = 0; LABEL: while (j < i) { break XXX if i >= 10; sum++; j++; continue LABEL }; i++ }; sum", "could not find enclosing for/while");
+    test("int sum = 0; LABEL: for (int i=0; i < 10; i++) { sum += i }; sum", 45);
+    test("int sum = 0; for (int i=0; i < 10; ) { LABEL: for (int j = 0; j < i; ) { sum++; j++; continue LABEL }; i++ }; sum", 45);
+    test("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue OUTER }; i++ }; sum", 9);
+    test("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
+    testError("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue XXX }; i++ }; sum", "could not find enclosing for/while");
+    testError("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum",  "could not find enclosing for/while");
     testError("LABEL: println 'xxx'", "labels can only be applied to for/while");
     testError("LABEL\n: while (false) {}; 1", "unexpected token ':'");
   }
