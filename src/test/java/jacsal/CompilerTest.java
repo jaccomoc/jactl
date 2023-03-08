@@ -4571,6 +4571,9 @@ class CompilerTest extends BaseTest {
 
     test("def f(x) { if (x == 1) 1 else x + f(x-1) }; f(4)", 10);
     test("def f() { int i = 1; return {++i}}; def x=f(); def y=f(); [x()+x()+x(),y()]", List.of(9,2));
+    test("String f(x) { x.toString() }; f(1)", "1");
+    test("List f(x) { [x] }; f(1)", List.of(1));
+    test("Map f(x) { [x:x] }; f(1)", Map.of("x",1));
   }
 
   @Test public void functionsAsValues() {

@@ -2337,6 +2337,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case STRING:
       case ANY:
       case INSTANCE:
+      case LIST:
+      case MAP:
         mv.visitInsn(ARETURN);
         break;
       default: throw new IllegalStateException("Unexpected type " + returnType);
@@ -3083,6 +3085,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         incOrDecValue(isInc, amount, operator);
         storeVar(varDecl);
         break;
+      case MAP:   // Only get here if rhs is const but Map literals are not const at the moment so this shouldn't happen
       default:
         throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
     }

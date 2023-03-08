@@ -150,9 +150,11 @@ int for = 3
     ^
 ```
 
+> **Note**
 > Since class names in Jacsal must start with a capital letter it is good practice not
 > to start variable names with a capital letter in order to make your code easier to read.
 
+> **Note**
 > Unlike Java, the dollar sign `$` is not a valid character for a variable name in Jacsal.
 
 While most of the examples presented here have single character variable names, in general, your code should use
@@ -599,6 +601,8 @@ true
 > 'a' !in x
 false
 ```
+
+> **Note**
 > The `in` and `!in` operators will search the list from the beginning of the list to try to
 > find the element, so they are not very efficient once the list reaches any significant size. You might want to rethink
 > your use of data structure if you are using `in` or `!in` on lists with more than a few elements.
@@ -929,10 +933,6 @@ false
 > 'ab' !in x
 true
 ```
-
-# Boolean Operators
-
-
 
 # Truthiness
 
@@ -2112,31 +2112,122 @@ OUTER: for (int i = 0; i < 10; i++) {
 die unless sum == 36 
 ```
 
-Label names are any valid identifier (letter or underscore )
+Label names are any valid identifier (any combination of letters, digits, and underscore as long as first character
+is not a digit and identifier is not a single underscore).
+Label names can be the same as other variable names (although not recommended practice).
 
-# Do statements
+# Do Expression
+
+Jacsal has a `do` expression that allows you to execute a block of statements where normally an expression would be
+expected.
+For example:
+```groovy
+def commands = ['right 5', 'up 7', 'left 2', 'up 3', 'right 4']
+int x, y, distance
+commands.each{
+  /up (\d*)/r    and do { y += $1 as int; distance += $1 as int }
+  /down (\d*)/r  and do { y -= $1 as int; distance += $1 as int }
+  /right (\d*)/r and do { x += $1 as int; distance += $1 as int }
+  /left (\d*)/r  and do { x -= $1 as int; distance += $1 as int }
+}
+
+die unless [x, y, distance] == [7, 10, 21] 
+```
+
+A `do` expression always returns `true` so it can be chained with other boolean expressions:
+```groovy
+def x = 1
+def found = false
+while (true) {
+  x == 1 and do { found = true; x++ } and break
+}
+```
+
+You can comnbine `do` with `if/unless`:
+```groovy
+do { found = true; println "Found multiple of 17: $x" } if x % 17 == 0
+```
+
+> **Note**
+> `do/while` statements like those in Java are not currently supported in Jacsal.
 
 # Print Statements
 
+Jacsal has `print` and `println` statements for printing a string.
+`println` will print the string followed by a new-line.
+
+For example:
+```groovy
+> for (int i = 1; i <= 5; i++) { println "$i squared is ${i*i}" }
+1 squared is 1
+2 squared is 4
+3 squared is 9
+4 squared is 16
+5 squared is 25
+```
+
+The output will, by default, be printed to `System.out` (standard out) but can be directed elsewhere (for example
+to a diagnostics log file).
+See [Integration Guide](integration-guide.md) for more details.
+
 # Die Statements
+
+The `die` statement allows you to instantly exit a Jacsal script with an optional error message.
+It should be used only in situations where something unexpected has occurred and it makes no sense to continue.
 
 # Functions
 
+Jacsal supports functions that take arguments and return a result.
+Functions always return a result (even if it is just `null`) - there is no concept of `void` functions in Jacsal.
+
+Jacsal supports the Java syntax for creating a function (although Java doesn't really have functions as everything
+has to be a method).
+For example this code is valid Jacsal and valid Java:
 ```groovy
-> def f(x) { x + x }
-asdasd
-> f(2)
-4
-> f('abc')
-'abcabc'
+// Recursive implementation for fibonacci numbers
+int fib(int n) { 
+  return n <= 2 ? 1 : fib(n - 1) + fib(n - 2); 
+}
+die unless fib(20) == 6765
 ```
 
-Of course, whether that behaviour is considered a feature or a bug is a matter of personal choice. You can always specify a type to make it clear what was intended:
+In Jacsal the return value of a function is the result of the last statement in the function so `return` is optional
+if you are returning at the end of the function anyway.
+Sometimes it makes it clearer what is going on and if you need to return a value from the middle of the function
+it is obviously still useful.
+
+Parameter types are optional (default type will be `def` meaning any type if not specified) and `def` can be used
+as the return type for the function as well.
+
+So with `return` and paramter type not needed and with semi-colon statement terminators being optional, the function
+above could be rewritten in Jacsal as:
 ```groovy
-> int f(int x) { x + x }
+def fib(n) { n <= 2 ? 1 : fib(n - 1) + fib(n - 2) }
+
+die unless fib(20) == 6765
 ```
 
-The difference between function and closure is that functions can make forward references to functions not yet declared.
+Functions can take multiple parameters:
+```groovy
+List joinStrings(List left, List right, String separator) {
+  int  count  = left.size() > right.size() ? left.size() : right.size() 
+  List result = []
+  for (int i = 0; i < count; i++) {
+    result <<= (left[i] ?: '') + separator + (right[i] ?: '')
+  }
+  return result
+}
+```
+
+* returning multiple values
+* Functions can be declared anywhere and close over variables just like closures do
+  * declared inside another function
+  * declared inside an inner loop
+* default values for parameters
+* named parameters
+* functions as values
+* The difference between function and closure is that functions can make forward references to functions not yet declared.
+* invocation using list
 
 # Collections
 {: #collections}
