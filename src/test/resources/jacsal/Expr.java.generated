@@ -404,8 +404,10 @@ abstract class Expr {
     boolean        isScriptMain = false; // Whether this is the funDecl for the script main function
     Stmt.ClassDecl classDecl = null;     // For init methods this is our ClassDecl
     int            closureCount = 0;
-    Stmt.While     currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
     boolean        isCompiled = false;
+
+    // Nested while loops. Used by Resolver to find target of break/continue stmts.
+    Deque<Stmt.While> whileLoops = new ArrayDeque<>();
 
     // Stack of blocks used during Resolver phase to track variables and which scope they
     // are declared in and used during Parser phase to track function declarations so we
@@ -576,13 +578,15 @@ abstract class Expr {
    */
   static class Break extends Expr {
     Token breakToken;
+    Token label;
     Stmt.While whileLoop;
-    Break(Token breakToken) {
+    Break(Token breakToken, Token label) {
       this.breakToken = breakToken;
+      this.label = label;
       this.location = breakToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
-    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + "]"; }
+    @Override public String toString() { return "Break[" + "breakToken=" + breakToken + ", " + "label=" + label + "]"; }
   }
 
   /**
@@ -590,13 +594,15 @@ abstract class Expr {
    */
   static class Continue extends Expr{
     Token continueToken;
+    Token label;
     Stmt.While whileLoop;
-    Continue(Token continueToken) {
+    Continue(Token continueToken, Token label) {
       this.continueToken = continueToken;
+      this.label = label;
       this.location = continueToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
-    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + "]"; }
+    @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + ", " + "label=" + label + "]"; }
   }
 
   static class Print extends Expr {

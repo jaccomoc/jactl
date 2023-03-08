@@ -1961,21 +1961,91 @@ The syntax is:
 There is no need for `()` brackets around the `<cond>` expression.
 For example:
 ```groovy
-> def x = 'abc'; def y = 'xyz'
+> def x = 'abc', y = 'xyz'
 xyz
 > x = x * 2 and y = "Y:$x" if x.size() < 4
-abcabc
+true
 > x
 abcabc
+> y
+Y:abcabc
 ```
 
-
+As well as supporting tests with `if`, Jacsal supports using `unless` which just inverts the test.
+The statement is executed unless the given condition is true:
+```groovy
+> def x = 'abc'
+xyz
+> x = 'xxx' unless x.size() == 3
+> x
+abc
+> die "x has invalid value: $x" unless x.size() == 3
+```
 
 # While Loops
 
+Jacsal `while` loops work like Java and Groovy:
+> `while (<cond>) <statement>`
+
+The `<statement>` can be a single statement or a block of statements wrapped in `{}`.
+The statement or block of statements is repeatedly executed while the condition is `true`.
+
+For example:
+```groovy
+int i = 0, sum = 0
+while (i < 5) {
+  sum += i
+  i++
+}
+die if sum != 10
+```
+
+## Break and Continue
+
+Like Java, `break` can be used to exit the while loop at any point and `continue` can be used to goto the next
+iteration of the loop before the current iteration has completed.
+
+
 # For Loops
 
+A `for` loop is similar to a `while` loop in that it executes a block of statements while a given condition is met.
+It additionally has some initialisation that is run before the loop and some statements that are run for every loop
+iteration.
+The syntax is:
+> `for (<init>; <cond>; <update>) <statement>`
+
+The `<statement` can be a single statement or a block of statements surrounded by `{}`.
+
+The `<init>` initialiser is a single declaration which can declare a list of variables of the same type with
+(optionally) initial values supplied.
+
+The `<cond>` is a condition that is evaulated for [truthiness](#Truthiness) each time to determine if the loop
+should execute.
+
+The `<update>` is a comma separated list of (usually) assignment-like expressions that are evaluated each time
+an iteration of the loop completes.
+
+The canonical example of a `for` loop is to loop a given number of times:
+```groovy
+for (int i = 0; i < 10; i++) {
+  println i if i % 3 == 0
+}
+```
+
+Here is an example with multiple initialisers and updates:
+```groovy
+int result = 0
+for (int i = 0, j = 0; i < 10 && j < 10; i++, j += 2) {
+ result += i + j
+}
+die unless result == 30 
+```
+
 # Do statements
+
+# Print Statements
+
+# Die Statements
 
 # Functions
 
@@ -2016,6 +2086,6 @@ The difference between function and closure is that functions can make forward r
 ** use with implicit it
 ** capture vars
 * implicit it
-* builtin functions
+* builtin functions and methods
 * functions as values
 * 

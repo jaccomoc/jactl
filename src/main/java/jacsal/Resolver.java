@@ -17,7 +17,6 @@
 package jacsal;
 
 import jacsal.runtime.*;
-import jdk.jshell.execution.Util;
 import org.objectweb.asm.Type;
 
 import java.lang.reflect.Method;
@@ -473,8 +472,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   @Override public Void visitWhile(Stmt.While stmt) {
     // We need to keep track of what the current while loop is so that break/continue
     // statements within body of the loop can find the right Stmt.While object
-    Stmt.While oldWhileStmt = currentFunction().currentWhileLoop;
-    currentFunction().currentWhileLoop = stmt;
+    currentFunction().whileLoops.push(stmt);
 
     isWhileCondition = true;
     resolve(stmt.condition);
@@ -483,7 +481,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
     resolve(stmt.body);
 
-    currentFunction().currentWhileLoop = oldWhileStmt;   // Restore old one
+    currentFunction().whileLoops.pop();
     return null;
   }
 
@@ -534,7 +532,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         throw new CompileError("Cannot use '" + Utils.REGEX_GLOBAL + "' modifier outside of condition for while/for loop",
                                expr.pattern.location);
       }
-      if (currentWhileLoop(expr.pattern.location).globalRegexMatches++ > 0) {
+      if (findWhileLoop(expr.pattern.location, null).globalRegexMatches++ > 0) {
         throw new CompileError("Regex match with global modifier can only occur once within while/for condition", expr.pattern.location);
       }
     }
@@ -1163,12 +1161,12 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   }
 
   @Override public JacsalType visitBreak(Expr.Break expr) {
-    expr.whileLoop = currentWhileLoop(expr.breakToken);
+    expr.whileLoop = findWhileLoop(expr.breakToken, expr.label);
     return expr.type = BOOLEAN;
   }
 
   @Override public JacsalType visitContinue(Expr.Continue expr) {
-    expr.whileLoop = currentWhileLoop(expr.continueToken);
+    expr.whileLoop = findWhileLoop(expr.continueToken, expr.label);
     return expr.type = BOOLEAN;
   }
 
@@ -1527,12 +1525,21 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   /////////////////////////
 
-  private Stmt.While currentWhileLoop(Token token) {
-    Stmt.While whileStmt = currentFunction().currentWhileLoop;
-    if (whileStmt == null) {
+  private Stmt.While findWhileLoop(Token token, Token label) {
+    var whileLoops = currentFunction().whileLoops;
+    if (whileLoops.size() == 0) {
       error(token.getChars() + " must be within a while/for loop", token);
     }
-    return whileStmt;
+    if (label == null) {
+      return whileLoops.peek();
+    }
+    for (var whileStmt: whileLoops) {
+      if (whileStmt.label.getStringValue().equals(label.getStringValue())) {
+        return whileStmt;
+      }
+    }
+    error("Could not find enclosing for/while statement with label " + label.getStringValue(), label);
+    return null;
   }
 
   static private void error(String msg, Token location) {

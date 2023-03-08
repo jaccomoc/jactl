@@ -157,6 +157,7 @@ class Stmt {
   class While extends Stmt {
     Token whileToken;
     Expr  condition;
+    Token label;
     Stmt  @body;
     Stmt  @updates;            // used for For loops
     Label @endLoopLabel;       // where to jump to on break stmt

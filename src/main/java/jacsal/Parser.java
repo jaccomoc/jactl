@@ -158,7 +158,7 @@ public class Parser {
                                                                           new Expr.Identifier(whileToken.newIdent("nextLine")),
                                                                           List.of())),
                                          new Token(BANG_EQUAL, whileToken),
-                                         new Expr.Literal(new Token(NULL, whileToken).setValue(null))));
+                                         new Expr.Literal(new Token(NULL, whileToken).setValue(null))), null);
         if (context.printLoop()) {
           Expr.Print println = new Expr.Print(whileToken, new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)), true);
           println.isResultUsed = false;
@@ -331,11 +331,19 @@ public class Parser {
         return exprStmt();
       }
     }
-    if (isAtScriptTopLevel() && matchAny(BEGIN,END)) { return beginEndBlock();    }
-    if (matchAny(IF))                                { return ifStmt();           }
-    if (matchAny(WHILE))                             { return whileStmt();        }
-    if (matchAny(FOR))                               { return forStmt();          }
-    if (peek().is(SEMICOLON))                        { return null;               }
+    if (isAtScriptTopLevel() && matchAny(BEGIN,END))  { return beginEndBlock();          }
+    if (matchAny(IF))                                 { return ifStmt();                 }
+    if (matchAny(WHILE))                              { return whileStmt(null);  }
+    if (matchAny(FOR))                                { return forStmt(null);    }
+    if (peek().is(SEMICOLON))                         { return null;                     }
+    // Check for LABEL: while/for
+    if (peek().is(IDENTIFIER) && lookaheadNoEOL(IDENTIFIER, COLON)) {
+      Token label = expect(IDENTIFIER);
+      expect(COLON);
+      if (matchAnyIgnoreEOL(WHILE))                   { return whileStmt(label);         }
+      if (matchAnyIgnoreEOL(FOR))                     { return forStmt(label);           }
+      unexpected("Labels can only be applied to for/while statements");
+    }
 
     Stmt.ExprStmt stmt = exprStmt();
     // We need to check if exprStmt was a parameterless closure and if so convert back into
@@ -543,13 +551,13 @@ public class Parser {
   }
 
   /**
-   *# whileStmt -> "while" "(" expression ")" statement ;
+   *# whileStmt -> (IDENTIFIER ":" ) ? "while" "(" expression ")" statement ;
    */
-  private Stmt whileStmt() {
+  private Stmt whileStmt(Token label) {
     Token whileToken = previous();
     expect(LEFT_PAREN);
     var cond       = condition(false, RIGHT_PAREN);
-    var whileStmt  = new Stmt.While(whileToken, cond);
+    var whileStmt  = new Stmt.While(whileToken, cond, label);
     whileStmt.body = statement();
     return stmtBlock(whileToken, whileStmt);
   }
@@ -557,7 +565,7 @@ public class Parser {
   /**
    *# forStmt -> "for" "(" declaration ";" expression ";" commaSeparatedStatements ")" statement ;
    */
-  private Stmt forStmt() {
+  private Stmt forStmt(Token label) {
     Token forToken = previous();
     expect(LEFT_PAREN);
     matchAny(EOL);
@@ -575,7 +583,7 @@ public class Parser {
     Stmt update      = commaSeparatedStatements();
     Token rightParen = expect(RIGHT_PAREN);
 
-    Stmt.While whileStmt = new Stmt.While(forToken, cond);
+    Stmt.While whileStmt = new Stmt.While(forToken, cond, label);
     whileStmt.updates = update;
     whileStmt.body = statement();
 
@@ -807,11 +815,18 @@ public class Parser {
     }
     else {
       matchAny(EOL);
-      if (matchAny(RETURN))        { expr = returnExpr();                  } else
-      if (matchAny(PRINT,PRINTLN)) { expr = printExpr();                   } else
-      if (matchAny(DIE))           { expr = dieExpr();                     } else
-      if (matchAny(BREAK))         { expr = new Expr.Break(previous());    } else
-      if (matchAny(CONTINUE))      { expr = new Expr.Continue(previous()); }
+      if (matchAny(RETURN))         { expr = returnExpr();                  } else
+      if (matchAny(PRINT,PRINTLN))  { expr = printExpr();                   } else
+      if (matchAny(DIE))            { expr = dieExpr();                     } else
+      if (matchAny(BREAK,CONTINUE)) {
+        Token type  = previous();
+        Token label = null;
+        if (peekNoEOL().is(IDENTIFIER)) {
+          label = expect(IDENTIFIER);
+        }
+        expr = type.is(BREAK) ? new Expr.Break(type, label)
+                              : new Expr.Continue(type, label);
+      }
       else {
         expr = parseExpression();
       }
@@ -1944,6 +1959,21 @@ public class Parser {
       lookaheadCount--;
       ignoreEol = currentIgnoreEol;
     }
+  }
+
+  /**
+   * Lookahead to check if next tokens match given types in order.
+   * @types  the sequence of types to match against
+   */
+  private boolean lookaheadNoEOL(TokenType... types) {
+    return lookahead(() -> {
+      for (TokenType type: types) {
+        if (!matchAnyNoEOL(type)) {
+          return false;
+        }
+      }
+      return true;
+    });
   }
 
   /////////////////////////////////////

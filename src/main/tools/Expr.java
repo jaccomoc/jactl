@@ -286,8 +286,10 @@ class Expr {
     boolean        @isScriptMain = false; // Whether this is the funDecl for the script main function
     Stmt.ClassDecl @classDecl = null;     // For init methods this is our ClassDecl
     int            @closureCount = 0;
-    Stmt.While     @currentWhileLoop;     // Used by Resolver to find target of break/continue stmts
     boolean        @isCompiled = false;
+
+    // Nested while loops. Used by Resolver to find target of break/continue stmts.
+    Deque<Stmt.While> whileLoops = new ArrayDeque<>();
 
     // Stack of blocks used during Resolver phase to track variables and which scope they
     // are declared in and used during Parser phase to track function declarations so we
@@ -391,6 +393,7 @@ class Expr {
    */
   class Break extends Expr {
     Token breakToken;
+    Token label;
     Stmt.While @whileLoop;
   }
 
@@ -399,6 +402,7 @@ class Expr {
    */
   class Continue extends Expr{
     Token continueToken;
+    Token label;
     Stmt.While @whileLoop;
   }
 

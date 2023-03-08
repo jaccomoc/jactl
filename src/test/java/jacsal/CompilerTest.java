@@ -4451,12 +4451,14 @@ class CompilerTest extends BaseTest {
     test("int i = 0; while (i < 10) i++; i", 10);
     test("int i = 0; int sum = 0; while (i < 10) sum += i++; sum", 45);
     test("int i = 0; int sum = 0; while (i < 10) { sum += i; i++ }; sum", 45);
+    test("int i = 0; int sum = 0; while (i < 10) { int j = 0; while (j < i) { sum++; j++ }; i++ }; sum", 45);
     test("int i = 0; int sum = 0; while (i < 10) i++", null);
     testError("while (false) i++;", "unknown variable 'i'");
     test("int i = 1; while (false) i++; i", 1);
     test("int i = 1; while (false) ;", null);
     test("int i = 1; while (++i < 10); i", 10);
     test("int i = 1; while() { break if i > 4; i++ }; i", 5);
+    testError("LABEL: int i = 1", "labels can only be applied to for/while");
   }
 
   @Test public void forLoops() {
@@ -4496,6 +4498,13 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and sleep(0,continue); sum += i }; sum", 15);
     test("def f(x){x}; int sum = 0; double i = 0; while (i++ < 10) { i > 5 and f(continue); sum += i }; sum", 15);
     test("def s=[1]; while (s.size())\n{\nfalse and continue\n(0 + (2*3) - 10 < s.size()) and s.remove(0) and continue\n}\ns", List.of());
+    test("int i = 0; int sum = 0; while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
+    test("int i = 0; int sum = 0; OUTER: while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; i++; continue OUTER }; i++ }; sum", 9);
+    test("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
+    testError("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum", "could not find enclosing for/while");
+    testError("int i = 0; int sum = 0; OUTER: while (i < 15) { int j = 0; LABEL: while (j < i) { break XXX if i >= 10; sum++; j++; continue LABEL }; i++ }; sum", "could not find enclosing for/while");
+    testError("LABEL: println 'xxx'", "labels can only be applied to for/while");
+    testError("LABEL\n: while (false) {}; 1", "unexpected token ':'");
   }
 
   @Test public void simpleFunctions() {

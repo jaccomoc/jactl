@@ -207,19 +207,21 @@ abstract class Stmt {
   static class While extends Stmt {
     Token whileToken;
     Expr  condition;
+    Token label;
     Stmt  body;
     Stmt  updates;            // used for For loops
     Label endLoopLabel;       // where to jump to on break stmt
     Label continueLabel;      // where to jump to on a continue stmt
     int   stackDepth;         // depth of stack where while loop is (used by continue/break)
     int   globalRegexMatches; // count of number of /xxx/g in while condition
-    While(Token whileToken, Expr condition) {
+    While(Token whileToken, Expr condition, Token label) {
       this.whileToken = whileToken;
       this.condition = condition;
+      this.label = label;
       this.location = whileToken;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
-    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + "]"; }
+    @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + ", " + "label=" + label + "]"; }
   }
 
   /**
