@@ -94,7 +94,7 @@ public class BuiltinFunctions {
       registerMethod("toString", "objectToString", ANY, false, 0);
 
       // Global functions
-      registerGlobalFunction("timeStamp", "timeStamp", false, 0);
+      registerGlobalFunction("timestamp", "timestamp", false, 0);
       registerGlobalFunction("nanoTime", "nanoTime", false, 0);
       registerGlobalFunction("sprintf", "sprintf", true, 1);
       registerGlobalFunction("sleep", "sleep", false, 1);
@@ -331,8 +331,8 @@ public class BuiltinFunctions {
   }
 
   // = timestamp
-  public static long timeStamp() { return System.currentTimeMillis(); }
-  public static Object timeStampWrapper(Continuation c, String source, int offset, Object[] args) {
+  public static long timestamp() { return System.currentTimeMillis(); }
+  public static Object timestampWrapper(Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 0, null,0, source, offset);
     return System.currentTimeMillis();
   }

@@ -2184,7 +2184,7 @@ Jacsal supports the Java syntax for creating a function (although Java doesn't r
 has to be a method).
 For example this code is valid Jacsal and valid Java:
 ```groovy
-// Recursive implementation for fibonacci numbers
+// Recursive implementation for Fibonacci numbers
 int fib(int n) { 
   return n <= 2 ? 1 : fib(n - 1) + fib(n - 2); 
 }
@@ -2207,7 +2207,9 @@ def fib(n) { n <= 2 ? 1 : fib(n - 1) + fib(n - 2) }
 die unless fib(20) == 6765
 ```
 
-Functions can take multiple parameters:
+Functions can take multiple parameters. Here is a function that joins pairs of strings in two lists with a given
+separator and returns a list of the joined strings.
+If one of the lists is shorter than the other then it uses an empty string for the missing elements:
 ```groovy
 List joinStrings(List left, List right, String separator) {
   int  count  = left.size() > right.size() ? left.size() : right.size() 
@@ -2217,23 +2219,307 @@ List joinStrings(List left, List right, String separator) {
   }
   return result
 }
+
+die unless joinStrings(['a','b','c'],['AA','BB'],':') == ['a:AA', 'b:BB', 'c:']
 ```
 
-* returning multiple values
-* Functions can be declared anywhere and close over variables just like closures do
-  * declared inside another function
-  * declared inside an inner loop
-* default values for parameters
-* named parameters
-* functions as values
+After reading the [section](#collections) on collections and functional programming you will see that this could
+have been written more succinctly as:
+```groovy
+List joinStrings(List left, List right, String separator) {
+  [left.size(), right.size()].max().map{ (left[it] ?: '') + separator + (right[it] ?: '') }
+}
+
+die unless joinStrings(['a','b','c'],['AA','BB'],':') == ['a:AA', 'b:BB', 'c:']
+```
+
+## Default Parameter Values
+
+You can supply default values for parameters in situations where having a default value makes sense.
+For example we could default the separator to `':'` in the function above:
+```groovy
+List joinStrings(List left, List right, String separator = ':') {
+  [left.size(), right.size()].max().map{ (left[it] ?: '') + separator + (right[it] ?: '') }
+}
+
+die unless joinStrings(['a','b','c'],['AA','BB']) == ['a:AA', 'b:BB', 'c:']
+```
+
+Now we can leave out the third parameter because when not present it will be set to `':'`.
+
+Default values can still be supplied even if the type is not given:
+```groovy
+def joinStrings(left, right, separator = ':') {
+  [left.size(), right.size()].max().map{ (left[it] ?: '') + separator + (right[it] ?: '') }
+}
+
+die unless joinStrings(['a','b','c'],['AA','BB']) == ['a:AA', 'b:BB', 'c:']
+```
+
+If a default value is supplied then it is possible to define the parameter as a `var` parameter in which case it will
+get its type from the type of the initialiser (as for variable declarations).
+For example:
+```groovy
+def joinStrings(List left, var right = [], var separator = ':') {
+  [left.size(), right.size()].max().map{ (left[it] ?: '') + separator + (right[it] ?: '') }
+}
+
+die unless joinStrings(['a','b','c'],['AA','BB']) == ['a:AA', 'b:BB', 'c:']
+die unless joinStrings(['a','b']) == ['a:', 'b:']
+```
+
+It is also possible for the parameter default values to use values from other parameter values as long as they refer
+only to earlier parameters:
+```groovy
+def joinStrings(List left, var right = left, var separator = ':') {
+  [left.size(), right.size()].max().map{ (left[it] ?: '') + separator + (right[it] ?: '') }
+}
+
+die unless joinStrings(['a','b']) == ['a:a', 'b:b']
+```
+
+## Named Argument Invocation
+
+It is possible to invoke functions using named arguments where the names and the argument values are given
+as a list of colon separated pairs:
+```groovy
+def joinStrings(List left, var right = left, var separator = ':') {
+  [left.size(), right.size()].max().map{ (left[it] ?: '') + separator + (right[it] ?: '') }
+}
+
+// Argument order is unimportant when using named args
+die unless joinStrings(separator:'=', left:['a','b'], right:['A','B']) == ['a=A', 'b=B']
+```
+
+## Declaration Scope
+
+Functions can be declared wherever it makes sense based on where they need to be invoked from.
+Their visibility is based on the current scope in which they are declared, just like any variable.
+
+For example, in the following script we define the function within the `for` loop where it is needed.
+The function cannot be invoked from outside this `for` loop:
+```groov
+def getFactorials(n) {
+  def result = []
+  for (int i = 1; i <= n; i++) { 
+    def fact(n) { n == 1 ? 1 : n * fact(n - 1) }
+    result <<= fact(i)
+  }
+  return result
+}
+
+die unless getFactorials(10) == [1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800]
+```
+
+Again, this could be written more simply like this:
+```groovy
+def factorials(n) {
+  def fact(n) { n == 1 ? 1 : n * fact(n - 1) }
+  n.map{ fact(it+1) }
+}
+
+die unless factorials(10) == [1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800]
+```
+
+## Functions as Values
+
+A function declaration can be treated as a value and assigned to other variables, passed as an argument to another
+function, or returned as a value from a function.
+For example:
+```groovy
+def fact(n) { n == 1 ? 1 : n * fact(n - 1) }
+def g = fact          // simple assignment
+
+die unless g(5) == 120
+```
+
+Another example showing functions being passed to another function that returns yet another function that composes
+the two original functions:
+```groovy
+def compose(f, g) { def composed(x){ f(g(x)) }; return composed }
+def sqr(x) { x * x }
+def twice(x) { x + x }
+
+def func = compose(sqr, twice)   // create new function that invokes sqr with result of twice
+
+die unless func(3) == 36         // should be sqr(twice(3))
+```
+
+While you can assign functions to other variables, the function variable itself (the name of the function) cannot be
+assigned to.
+
+## Invocation With List of Arguments
+
+Functions can be invoked with a single list supplying the argument values for the function (in the declared order).
+
+For example:
+```groovy
+def f(a,b,c) { a + b + c }
+def x = [1, 2, 3]
+def y = ['x','abc','123']
+
+die unless f(x) == 6
+die unless f(y) == 'xabc123'   // since parameters are untyped we can pass strings and get string concatenation 
+```
+
+# Closures
+
+Closures in Jacsal are modelled after the closure syntax of Groovy.
+Closures are similar to functions in that they take one or more parameters and return a result.
+They are decalred with slightly different syntax:
+```groovy
+def sqr = { int x -> return x * x }        // Assign closure to sqr
+
+die unless sqr(4) == 16
+```
+
+The syntax of a closure is an open brace `{` and then a list of parameters declarations followed by `->` and then
+the actual code followed by a closing `}`.
+
+Multiple parameters can be declared:
+```groovy
+def f = { String str, int x -> 
+  String result
+  for (int i = 0; i < x; i++) {
+    result += str
+  }
+  return result
+}
+
+die unless f('ab', 3) == 'ababab'
+die unless 'ab' * 3   == 'ababab'   // much simpler way of achieving the same thing
+```
+
+As for functions, the type is optional and default values can be supplied:
+```groovy
+def f = { str, x = 2 -> str * x } 
+
+die unless f('ab', 3) == 'ababab'
+die unless f('ab') == 'abab'
+```
+
+## Implicit `it` Parameter
+
+It is common enough for a closure to have a single argument and Jacsal follows the Groovy convention of creating an
+implicit `it` parameter if there is no `->` at the start of the closure:
+```groovy
+def f = { it * it }
+
+die unless f(3) == 9
+```
+
+## No Parameter Closures
+
+If you want a closure that has no arguments use the `->` and don't list any parameters:
+```groovy
+def f = { -> "The current timestamp is ${timestamp()}" }
+
+die unless f() =~ /The current timestamp is/
+```
+
+## Closure Passing Syntax
+
+Closures can be passed as values like functions:
+```groovy
+def ntimes(n, f) {
+  for (int i = 0; i < n; i++) {
+    f(i)
+  }
+}
+def clos = { x -> println x }
+
+ntimes(5, clos)   // this will result in 0, 1, 2, 3, 4 being printed
+```
+
+It is possible to pass the closure itself directly to the function without having to store it in an intermediate
+variable:
+```groovy
+def ntimes(n, f) {
+  for (int i = 0; i < n; i++) {
+    f(i)
+  }
+}
+
+ntimes(5, { println it })     // use implicit it variable this time
+```
+
+If the last argument to a function is a closure then it can appear directly after the closing `)`:
+```groovy
+def ntimes(n, f) {
+  for (int i = 0; i < n; i++) {
+    f(i)
+  }
+}
+
+ntimes(5){ println it }
+```
+
+There is a builtin methods on Lists, Maps, Strings, and numbers called `each`, `map`, etc. that takes a single argument
+which is a closure.
+For numbers, the `each` method iterates `n` times and passes each value from `0` to `n-1` to the closure.
+For example:
+```groovy
+> 5.each({ x -> println x })
+0
+1
+2
+3
+4
+```
+
+If the only argument being passed is a closure then the brackets are optional so this can be written like so:
+```groovy
+5.each{ x -> println x }
+```
+
+And since we can use the implicit `it` variable it can also be written like this:
+```groovy
+5.each{ println it }
+```
+
+Similarly, there is a `map` method on numbers (and Lists, Maps, and Strings) which maps the parameter value passed in
+to another value calculated by the closure and returns that:
+```groovy
+> 5.map{
+    it++
+    it * it      // last expression in closure/function is return value
+  }
+[1, 4, 9, 16, 25]
+```
+
+Here is another example where we create a function for timing the execution of a passed in closure and get it to time
+how long it takes to calculate the first 40 Fibonacci numbers.
+(Note that the recursive Fibonacci function is a very inefficient way of calculating Fibonacci numbers - it is just used
+as an example of something that will take some time to run.)
+```groovy
+def timeIt(f) {
+  def start = timestamp()
+  def result = f()
+  println "Duration: ${timestamp() - start}ms,  result = $result"
+}
+
+// How long to calculate first 40 Fibonacci numbers
+timeIt{
+ int fib(int n) { n <= 2 ? 1 : fib(n-1) + fib(n-2) }
+ 40.map{ fib(it+1) }
+}
+
+// On my laptop this gives output of:
+// Duration: 488ms,  result = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610,
+// 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811,
+// 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465, 14930352, 24157817, 39088169,
+// 63245986, 102334155]
+```
+
 * The difference between function and closure is that functions can make forward references to functions not yet declared.
-* invocation using list
+
+## Closing Over Variables
 
 # Collections
-{: #collections}
+
+* passing values as list or separate parameters depending on closure declaration (e.g. for [a:1].map{ k,v -> })
 
 # Command Line Invocation
-{: #commandline}
 
 # TODO
 * multi-value return from functions

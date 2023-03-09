@@ -5700,8 +5700,8 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void builtinFunctions() {
-    test("timeStamp() > 50*356*86400*1000", true); // more than 50 yrs since epoch started in 1970
-    test("def f = timeStamp; f() > 0", true);
+    test("timestamp() > 50*356*86400*1000", true); // more than 50 yrs since epoch started in 1970
+    test("def f = timestamp; f() > 0", true);
     test("sprintf('x')", "x");
     test("sprintf('x')", "x");
     test("sprintf('%s','x')", "x");
