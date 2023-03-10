@@ -6099,27 +6099,77 @@ class CompilerTest extends BaseTest {
     testError("-1.0.sqrt()", "square root of negative number");
     testError("-1.0D.sqrt()", "square root of negative number");
     testError("-1L.sqrt()", "square root of negative number");
+    test("def x = 4; x.sqrt()", 2);
+    test("def x = (123456789L*123456789L); x.sqrt()", 123456789);
+    test("def x = (12345678901.0*12345678901.0); x.sqrt()", "#12345678901.0");
+    test("def x = (0.1234D*0.1234D); x.sqrt()", 0.1234D);
+    testError("def x = -1; x.sqrt()", "square root of negative number");
+    testError("def x = -1.0; x.sqrt()", "square root of negative number");
+    testError("def x = -1.0D; x.sqrt()", "square root of negative number");
+    testError("def x = -1L; x.sqrt()", "square root of negative number");
+  }
+
+  @Test public void sqr() {
+    test("2.sqr().sqrt()", 2);
+    test("123456789L.sqr().sqrt()", 123456789);
+    test("12345678901.0.sqr().sqrt()", "#12345678901.0");
+    test("0.1234D.sqr().sqrt()", 0.1234D);
+    test("-1.sqr()", 1);
+    test("-4.sqr()", 16);
+    test("def x = 4; x.sqr()", 16);
+    test("def x = -4; x.sqr()", 16);
+    test("def x = 4L; x.sqr()", 16L);
+    test("def x = -4L; x.sqr()", 16L);
+    test("def x = 4.01; x.sqr()", "#16.0801");
+    test("def x = -4.01; x.sqr()", "#16.0801");
+    test("def x = 4.0D; x.sqr()", 16D);
+    test("def x = -4.0D; x.sqr()", 16D);
+    test("def x = 123456789L; x.sqr()", 123456789L*123456789L);
+    test("def x = 123456789.0; x.sqr()", "#" + 123456789L*123456789L + ".00");
+    test("def x = 0.1234D; x.sqr()", 0.1234D * 0.1234D);
   }
 
   @Test public void pow() {
+    test("4.pow(0)", 1);
     test("4.pow(0.5)", 2);
     test("4.pow(3)", 64);
     test("16.pow(-0.5)", 0.25);
     test("-4.pow(-1)", -0.25);
+    test("4L.pow(0)", 1);
     test("4L.pow(0.5)", 2);
     test("4L.pow(3)", 64);
     test("16L.pow(-0.5)", 0.25);
     test("-4L.pow(-1)", -0.25);
     test("4.0.pow(0.5)", 2);
-    test("4.0.pow(3)", 64);
+    test("4.0.pow(3)", "#64.000");
     test("16.0.pow(-0.5)", 0.25);
+    test("-4.0.pow(0)", "#1");
     test("-4.0.pow(-1)", -0.25);
+    test("0.0D.pow(0)", 1);
     test("4.0D.pow(0.5)", 2);
     test("4.0D.pow(3)", 64);
     test("16.0D.pow(-0.5)", 0.25);
     test("-4.0D.pow(-1)", -0.25);
     test("(1234567890.0*1234567890.0).pow(0.5)", 1234567890);
     test("(1234567890L*1234567890L).pow(0.5)", 1234567890);
+    test("def x = 4; x.pow(0.5)", 2);
+    test("def x = 4; x.pow(3)", 64);
+    test("def x = 16; x.pow(-0.5)", 0.25);
+    test("def x = -4; x.pow(-1)", -0.25);
+    test("def x = 4L; x.pow(0.5)", 2);
+    test("def x = 4L; x.pow(3)", 64);
+    test("def x = 16L; x.pow(-0.5)", 0.25);
+    test("def x = -4L; x.pow(-1)", -0.25);
+    test("def x = 4.0; x.pow(0.5)", 2);
+    test("def x = 4.0; x.pow(3)", "#64.000");
+    test("def x = 16.0; x.pow(-0.5)", 0.25);
+    test("def x = -4.0; x.pow(-1)", -0.25);
+    test("def x = 4.0D; x.pow(0.5)", 2);
+    test("def x = 4.0D; x.pow(3)", 64);
+    test("def x = 16.0D; x.pow(-0.5)", 0.25);
+    test("def x = -4.0D; x.pow(-1)", -0.25);
+    test("def x = (1234567890.0*1234567890.0); x.pow(0.5)", 1234567890);
+    test("def x = (1234567890L*1234567890L); x.pow(0.5)", 1234567890);
     testError("-4.pow(0.5)", "illegal request");
     testError("-4.pow(-0.5)", "illegal request");
     testError("-4.0.pow(0.5)", "illegal request");

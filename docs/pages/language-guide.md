@@ -3122,14 +3122,15 @@ class Point {
   int x
   int y
  
-  static def distance(Point p1, Point p2) {
-    
+  def distance(Point p) {
+   ((x-p.x)*(x-p.x) + (y-p.y)*(y-p.y)).sqrt()
   }
 }
 
-def p1 = new Point(1,2)
-def p2 = new Point(3,4)
+def start = new Point(1,2)
+def end   = new Point(7,9)
 
+start.distance(end)
 ```
 
 * Separate compilation vs in-script

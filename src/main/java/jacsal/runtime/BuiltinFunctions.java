@@ -97,6 +97,7 @@ public class BuiltinFunctions {
       // Number methods
       registerMethod("pow", "numberPow", NUMBER, true, 1);
       registerMethod("sqrt", "numberSqrt", NUMBER, true, 0);
+      registerMethod("sqr", "numberSqr", NUMBER, true, 0);
 
       // Global functions
       registerGlobalFunction("timestamp", "timestamp", false, 0);
@@ -550,9 +551,29 @@ public class BuiltinFunctions {
     return numberSqrt(num, source, offset);
   }
 
+  // = sqr
+  public static Number numberSqr(Number num, String source, int offset) {
+    if (num instanceof Integer)    { int n    = (int)num;     return n * n; }
+    if (num instanceof Long)       { long n   = (long)num;    return n * n; }
+    if (num instanceof Double)     { double n = (double)num;  return n * n; }
+    if (num instanceof BigDecimal) { return ((BigDecimal)num).pow(2); }
+    throw new IllegalStateException("Internal error: unexpected type " + RuntimeUtils.className(num));
+  }
+  public static Object numberSqrWrapper(Number num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, NUMBER, 0, source, offset);
+    return numberSqr(num, source, offset);
+  }
+
   // = pow
   public static Number numberPow(Number num, String source, int offset, Number power) {
-    double powerDouble = power.doubleValue();
+    if (num instanceof BigDecimal && power instanceof Integer && (int)power >= 0) {
+      try {
+        return ((BigDecimal)num).pow((int)power);
+      }
+      catch (Exception e) {
+        throw new RuntimeError("Illegal request: raising " + num + " to " + power, source, offset);
+      }
+    }
     double result = Math.pow(num.doubleValue(), power.doubleValue());
     if (Double.isNaN(result)) {
       throw new RuntimeError("Illegal request: raising " + num + " to " + power, source, offset);
