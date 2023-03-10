@@ -6077,6 +6077,9 @@ class CompilerTest extends BaseTest {
 
   @Test public void grouped() {
     test("[].grouped(2)", List.of());
+    test("[a:1,b:2,c:3,d:4].grouped(2)", List.of(List.of(List.of("a",1),List.of("b",2)),List.of(List.of("c",3),List.of("d",4))));
+    test("[1,2].grouped(0)", List.of(1,2));
+    test("[1,2].grouped(1)", List.of(List.of(1),List.of(2)));
     test("[1,2].grouped(2)", List.of(List.of(1,2)));
     test("[1].grouped(2)", List.of(List.of(1)));
     test("[1,2,3,4].grouped(2)", List.of(List.of(1,2),List.of(3,4)));

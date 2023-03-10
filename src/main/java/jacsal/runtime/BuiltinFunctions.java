@@ -817,11 +817,11 @@ public class BuiltinFunctions {
 
   public static Iterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
-    if (size == 1) {
+    if (size == 0) {
       return iter;
     }
-    if (size <= 0) {
-      throw new RuntimeError("Value for grouped() must be > 0 (was " + size + ")", source, offset);
+    if (size < 0) {
+      throw new RuntimeError("Value for grouped() must be >= 0 (was " + size + ")", source, offset);
     }
     return new GroupedIterator(iter, source, offset, size);
   }

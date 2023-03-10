@@ -2869,25 +2869,30 @@ In Jacsal, if a collection method results in another list of values then most me
 list unless they are the last method in the invocation chain.
 Consider this code:
 ```groovy
-int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
-def values = 1000.map{ fib(it+1) }.filter{ it & 1 }.filter{ it % 3 == 0 }.limit(40)
+long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+def values = 1000.map{ fib(it+1) }.filter{ it & 1 }.filter{ it % 3 == 0 }.limit(5)
 ```
 
-The output of the `map()` method is another list of transformed values which then passes to `filter()` which outputs
-another list that is then finally filtered again by another `filter()` method call.
+The code tries to calculate the first 1000 Fibonacci numers and then filter them for odd multiples of 3
+limiting the result to the first 5 such numbers found.
+
+As you can see, the output of the first `map()` method is another list of transformed values (in this case the actual
+Fibonacci numbers) which then passes this list to `filter()` which outputs another list of only the odd numbers.
+This list is then filtered again by another `filter()` method call to get a list of multiples of 3 and then finally
+this is passed to `limit()` to limit output to the first 5 elements.
+
 None of these lists is actually created until the last result when it is needed in order to be stored into the `values`
 variable.
+In fact, we don't calculate the first 1000 Fibonacci numbers (which would take a prohibitively long time using the
+inefficient algorithm we have implemented here). We only calculate as many as are needed to get the first 5 odd
+multiples of 3.
 
 Jacsal uses _lazy_ evaluation to avoid creating unnecessary List objects for intermediate results.
 You can think of the chain of method calls acting as a conveyor belt where each element flows through each method
 before the next element is processed.
 
-This lazy evaluation mechanism is different to how the Groovy collection methods work and explains why in Jacsal the
-naming for the methods more closely follows the Java naming for stream methods since Jacsal iteration works more
-like sequential streams than like Groovy.
-Groovy takes the approach that side effects are common enough that it is better to create a new collection each time
-to ensure that the behaviour of the side effects acts like one would expect.
-
+This works well, and is obviously much more efficient than creating the intermediate lists, but if you use side effects
+in your closures then you need to be aware of how this way of executing the methods works.
 Consider this code:
 ```groovy
 > int i = 0
@@ -2898,20 +2903,12 @@ Consider this code:
 
 As you can see, the value of `i` is incremented as each element is completely processed by all methods in the
 call chain and so the second element of each pair is `1`, `2`, and `3`.
+This may not be what was intended.
+It might be intended that the final value of `i` (`3` in this case) is the second value of each sub-list as
+though the first `map()` call had finished to completion before the second `map()` call was invoked.
 
-Now consider the same code in Groovy using Groovy's `collect()` method which is equivalent to Jacsal's `map()`:
-```groovy
-groovy:000> i = 0
-===> 0
-groovy:000> ['a','b','c'].collect{ it + ++i }.collect{ [it, i] }
-===> [[a1, 3], [b2, 3], [c3, 3]]
-```
-
-Notice that the value for `i` added by the second `collect()` call is `3` for all elements.
-This is because Groovy creates a new list each time `collect()` is invoked.
-
-In Jacsal, if you need it to work more like Groovy because of side effects then you can use the `collect()` method to
-force a list to be created wherever needed:
+If you would like to force the creation of these intermediate lists in order then you can use the `collect()` method
+to force a list to be created wherever needed:
 ```groovy
 > int i = 0
 0
@@ -2925,6 +2922,18 @@ In Jacsal, the `collect()` also takes an optional closure like the Groovy form a
 0
 > ['a','b','c'].collect{ it + ++i }.collect{ [it, i] }
 [['a1', 3], ['b2', 3], ['c3', 3]]
+```
+
+Note that in Java, when using streams, it is necessary to invoke `collect()` to convert the final stream of 
+values back into a list.
+In Jacsal, this is not necessary since this will automatically be done when the last method in the chain has
+finished.
+So in Jacsal these two expressions are equivalent:
+```groovy
+> [1,2,3].map{ it * it }.collect()
+[1, 4, 9]
+> [1,2,3].map{ it * it }
+[1, 4, 9]
 ```
 
 ## grouped()

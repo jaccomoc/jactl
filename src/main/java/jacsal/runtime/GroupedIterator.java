@@ -81,8 +81,9 @@ public class GroupedIterator implements Iterator {
             elem     = iter.next();
             location = 4;
             break;
-          case 3:  elem = c.getResult();              location = 4; break;
+          case 3:  elem = c.getResult();                 location = 4; break;
           case 4:
+            elem = RuntimeUtils.mapEntryToList(elem);
             group = group == null ? new ArrayList<>(size) : group;
             group.add(elem);
             location = 0;
