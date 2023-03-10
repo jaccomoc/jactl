@@ -2511,31 +2511,577 @@ timeIt{
 // 63245986, 102334155]
 ```
 
-* The difference between function and closure is that functions can make forward references to functions not yet declared.
+## Functions vs Closures
+
+Consider the following:
+```groovy
+def f(x) { x + x }
+def c  = { x -> x + x }
+```
+
+The function `f` and the closure assigned to `c` both do the same thing so what are the differences between a function
+and a closure?
+
+In the example above `c` is just a variable and can have other values assigned to it whereas `f` cannot be assigned to
+since it is a function.
+In fact, `c` is not a closure but happens to have a closure as its value until it is assigned a different value.
+
+Closures have an implicit parameter `it` decalared for them if they don't define any expicit parameters.
+This is not the case for functions. 
+
+Functions can be invoked before they are declared (as long as they are in the same scope):
+```groovy
+int i = f(3)    // forward reference
+
+def f(x) { x + x }
+```
+
+Since closures are anonymous values that can be assigned to variables the variable cannot be referenced before it
+is declared and so it is not possible to invoke a closure via a forward reference.
+
+Functions support recursion.
+A function can invoke itself while a closure cannot refer to the variable to which it is being assigned if the
+closure is the initialiser for the variable:
+```groovy
+def f(x) { x == 1 ? 1 : x + f(x - 1) }
+
+def c = { it == 1 ? 1 : it + c(it - 1) }   // error: Variable initialisation cannot refer to itself
+```
+
+The closure could have been split into a declaration and an assignment to allow the recursion:
+```groovy
+def c
+c = { it == 1 ? 1 : it + c(it - 1) }
+```
+
+This is not recommended, however, since there is no guarantee that `c` won't be reassigned later in the code.
+
+Since functions support forward references it is possible to have mutually recursive functions (where each function
+invokes the other one):
+```groovy
+def f(x) { x == 1 ? 1 : x + g(x - 1) }
+def g(x) { x == 1 ? 1 : x * f(x - 1) }
+```
 
 ## Closing Over Variables
 
-# Collections
+Both functions and closures can "close over" variables in outer scopes, which just means that they have access to
+these variables and can read and/or modify these variables.
+Closures are similar to lambda functions in Java but whereas lambda functions can only close over `final` or effectively
+final variables and cannot modify the values of these variables, closures and functions in Jacsal can access variables
+whether they are effectively final or not and can modify their values.
+In Java, lambda functions are closing over the value of the variable rather than the variable itself which is why the
+variable needs to be effectively final and why the lambda function is not able to modify the variable's value.
 
-* passing values as list or separate parameters depending on closure declaration (e.g. for [a:1].map{ k,v -> })
+Here is an example of a Jacsal closure that access a variable in an outer scope:
+```groovy
+def countThings(x) {
+  int count = 0
+  if (x instanceof List) {
+    x.each{ count++ if /thing/i }     // increment count in outer scope
+  }
+  return count
+}
+```
+
+> Note that this just an example.
+> In reality this code should just be something like `x.filter{ /thing/i }.size()`.
+
+Now consider the following code:
+```groovy
+def counter() {
+ int count = 0
+ return { -> ++count }
+}
+
+def x = counter()
+def y = counter()
+
+println x()
+println x()
+println y()
+```
+The output from this script will be:
+```groovy
+1
+2
+1
+```
+The reason that the call to `y()` returns a value of `1` and not `3` is because each time `counter()` is invoked it
+returns a new closure that is bound to a brand new `counter` variable.
+Even though once `counter()` returns, the `counter` variable is no longer in scope and would normally be discarded,
+in this case the closure, having closed over it, retains a binding to it, and it lives on as long as the closure
+remains in existence.
+So in this case `x` and `y` are two different instances of the closure which each have their own `counter` variable.
+
+> **Note**
+> In functional programming, side effects such as modifying variables outside the scope of the closure are 
+> generally frowned upon since pure functions don't modify state, they just return values.
+
+# Collection Methods
+
+Jacsal has a number of builtin methods that operate on collections and things that can be iterated over.
+In Jacsal this means Lists, Maps, Strings, and numbers.
+
+## each()
+
+Consider this code that iterates over the elements of a List:
+```groovy
+def list = [1, 2, 3, 4, 5]
+for (int i = 0; i < list.size(); i++) {
+ println list[i]
+}
+```
+
+Aside from the annoying boilerplate code that has to be written each time to do this iteration, it also makes it easier
+to introduce bugs if the iteration code is not done correctly.
+To achieve the same thing using a more Functional Programming style:
+```groovy
+def list = [1, 2, 3, 4, 5]
+list.each{ println it }
+```
+We take the code that was in the `for` loop and pass it as a closure to the `each()` List method.
+This method iterates over the list and passes each element into the closure.
+This makes the code more concise, easier to understand, and less error-prone to write.
+
+In general, when explicitly iterating over a collection of some sort, consider whether there is a better
+way to achieve the same thing using the builtin collection methods.
+
+## map()
+
+Another important collection method is `map()` which, like `each()`, iterates and passes each element to the given
+closure. The difference is that the closure passed to `map()` is expected to return a value so the result of using
+`map()` on a list is another list with these new values:
+```groovy
+> [1,2,3,4].map{ it * it }
+[1, 4, 9, 16]
+```
+
+The method is called `map` because it maps one set of values to another set of values.
+
+Since the output of map is another list we can chain them together:
+```groovy
+> [1,2,3,4].map{ it * it }.map{ it + it }.each{ println it }
+2
+8
+18
+32
+```
+
+## Map Iteration and collectEntries()
+
+As well as applying to Lists, these methods can also be applied to Map objects.
+For Maps, each element passed into the closure is a two-element list consisting of the key and the value:
+```groovy
+> [a:1, b:2, c:3].each{ println "Key=${it[0]}, value=${it[1]}" }
+Key=a, value=1
+Key=b, value=2
+Key=c, value=3
+```
+
+For closures passed to methods that act on Maps you can choose to pass a closure with a single parameter as shown
+or provide a closure that takes two parameters.
+If you provide a closure that takes two parameters then the first parameter will be set to the key and the second
+parameter will be the value:
+```groovy
+> [a:1, b:2, c:3].each{ k, v -> println "Key=$k, value=$v" }
+Key=a, value=1
+Key=b, value=2
+Key=c, value=3
+```
+
+To convert a list of key/value pairs back into a Map you can use the `collectEntries()` method:
+```groovy
+> [a:1, b:2, c:3].map{ k, v -> [k, v + v] }.collectEntries()
+[a:2, b:4, c:6]
+```
+
+The `collectEntries()` method takes an optional closure to apply to each element before adding to the Map so the
+above can also be written as this:
+```groovy
+> [a:1, b:2, c:3].collectEntries{ k, v -> [k, v + v] }
+[a:2, b:4, c:6]
+```
+
+The closure passed to `collectEntries()` must return a two-element list with the first element being a String which
+becomes the key in the Map and the second element being the value for that key.
+
+If there are multiple entries with the same key then the value for the last element in the list with that key will
+become the value in the Map.
+
+## String Iteration and join()
+
+Strings can also be iterated over in which case the elements are the characters of the string.
+(Remember that a character is just a single-character string.)
+For example:
+```groovy
+> 'abc'.each{ println it }
+a
+b
+c
+> 'abc'.map{ it + it.toUpperCase() }
+['aA', 'bB', 'cC']
+```
+
+To turn a list of characters (actually a list of strings) back into a string use the `join()` method which takes an
+optional argument which is the separator to use when joining the multiple strings together:
+```groovy
+> 'abc'.map{ it + it.toUpperCase() }.join()
+aAbBcC
+> 'abc'.map{ it + it.toUpperCase() }.join(':')
+aA:bB:cC
+```
+
+## Number Iteration
+
+Numbers can also be "iterated" over.
+In this case the number acts as the number of times to iterate with the values of the iteration being the numbers
+from `0` until one less than the number.
+If the number is not an integer then the fractional part is ignored for the purpose of working out how many iterations
+to do.
+For example:
+```groovy
+> 5.each{ println it }
+0
+1
+2
+3
+4
+> 10.5.map{ it + 1 }.map{ it * it }
+[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+```
+
+## filter()
+
+The `filter()` method can be used to retain only elements that match a given condition.
+It is passed a closure that should evaluate to `true` if the element should be retained or `false` if the element
+should be discarded.
+The [truthiness](#Truthiness) of the result is used to determine whether the result is `true` or not.
+
+For example, to find which of the first 40 Fibonacci numbers are odd multiples of 3:  
+```groovy
+> int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+Function@124888672
+> 40.map{ fib(it+1) }.filter{ it & 1 }.filter{ it % 3 == 0 }
+[3, 21, 987, 6765, 317811, 2178309, 102334155]
+```
+
+## mapWithIndex()
+
+The `mapWithIndex()` method works like the `map()` method except that as well as passing in the element to the
+closure it will also pass in the index.
+For a closure with a single argument you get a two-element list where the first entry is the list element and the
+second is the index:
+```groovy
+> ['a', 'b', 'c'].mapWithIndex{ "Element ${it[1]} is ${it[0]}" }
+['Element 0 is a', 'Element 1 is b', 'Element 2 is c']
+```
+
+If you give it a closure that takes two arguments then the first argument will be the list element and the second
+one will be the index:
+```groovy
+> ['a', 'b', 'c'].mapWithIndex{ v, idx -> "Element $idx is $v" }
+['Element 0 is a', 'Element 1 is b', 'Element 2 is c']
+```
+
+## flatMap()
+
+The `flatMap()` method is similar to the `map()` method in that it is expected that each element is transformed into
+a new value by the given closure:
+```groovy
+> ['a', 'b', 'c'].flatMap{ it.toUpperCase() }
+['A', 'B', 'C']
+```
+
+The difference with `flatMap()` is that if the closure returns a List rather than an individual value, the elements
+of that list will be added to the result:
+```groovy
+> ['a', 'b', 'c'].flatMap{ [it, it.toUpperCase()] }
+['a', 'A', 'b', 'B', 'c', 'C']
+```
+
+The other difference is that a `null` value as the result of the closure will mean that nothing is added to the result
+for that input element:
+```groovy
+> ['a', 'b', 'c'].flatMap{ it == 'b' ? null : [it, it.toUpperCase()] }
+['a', 'A', 'c', 'C']
+```
+
+If you have a list of lists, then `flatMap()` without any closure will flatten the list of lists into a single list.
+It is same as though the closure `{ it }` was passed in :
+```groovy
+> [[1,2], [3,4], [5,6]].flatMap()
+[1, 2, 3, 4, 5, 6]
+> [[1,2], [3,4], [5,6]].flatMap{ it }
+[1, 2, 3, 4, 5, 6]
+```
+
+Note that only one level of flattening will result:
+```groovy
+> [[1,2], [3,4], [5,[6,7,8]]].flatMap()
+[1, 2, 3, 4, 5, [6, 7, 8]]
+```
+
+## Lazy Evaluation, Side Effects, and collect()
+
+In Jacsal if a collection method results in another list of values then (apart from `collect()` and `collectEntries()`)
+the methods don't actually generate the list until needed.
+Consider this code:
+```groovy
+int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+def values = 40.map{ fib(it+1) }.filter{ it & 1 }.filter{ it % 3 == 0 }
+```
+
+The output of the `map()` method is another list of transformed values which then passes to `filter()` which outputs
+another list that is then finally filtered again by another `filter()` method call.
+None of these lists is actually created until the last result when it is needed in order to be stored into the `values`
+variable.
+
+Jacsal uses _lazy_ evaluation to avoid creating unnecessary List objects for intermediate results.
+You can think of the chain of method calls acting as a conveyor belt where each element flows through each method
+before the next element is processed.
+
+This lazy evaluation mechanism is different to how the Groovy collection methods work and explains why in Jacsal the
+naming for the methods more closely follows the Java naming for stream methods since Jacsal iteration works more
+like sequential streams than like Groovy.
+Groovy takes the approach that side effects are common enough that it is better to create a new collection each time
+to ensure that the behaviour of the side effects acts like one would expect.
+
+Consider this code:
+```groovy
+> int i = 0
+0
+> ['a','b','c'].map{ it + ++i }.map{ [it, i] }
+[['a1', 1], ['b2', 2], ['c3', 3]]
+```
+
+As you can see, the value of `i` is incremented as each element is completely processed by all methods in the
+call chain and so the second element of each pair is `1`, `2`, and `3`.
+
+Now consider the same code in Groovy using Groovy's `collect()` method which is equivalent to Jacsal's `map()`:
+```groovy
+groovy:000> i = 0
+===> 0
+groovy:000> ['a','b','c'].collect{ it + ++i }.collect{ [it, i] }
+===> [[a1, 3], [b2, 3], [c3, 3]]
+```
+
+Notice that the value for `i` added by the second `collect()` call is `3` for all elements.
+This is because Groovy creates a new list each time `collect()` is invoked.
+
+In Jacsal, if you need it to work more like Groovy because of side effects then you can use the `collect()` method to
+force a list to be created wherever needed:
+```groovy
+> int i = 0
+0
+> ['a','b','c'].map{ it + ++i }.collect().map{ [it, i] }.collect()
+[['a1', 3], ['b2', 3], ['c3', 3]]
+```
+
+In Jacsal, the `collect()` also takes an optional closure like the Groovy form and so it is better to just write:
+```groovy
+> int i = 0
+0
+> ['a','b','c'].collect{ it + ++i }.collect{ [it, i] }
+[['a1', 3], ['b2', 3], ['c3', 3]]
+```
+
+## skip() and limit()
+
+If you know that you are not interested in the first `n` elements or are only interested in the first `n` elements
+of the result you can use `skip()` and `limit()` to skip elements and limit the result.
+
+For example:
+```groovy
+> 26.map{ (int)'a' + it }.map{ it.asChar() }.skip(10).limit(5)
+['k', 'l', 'm', 'n', 'o']
+```
+
+You can use negative numbers for offset relative to the end of the list.
+So `skip(-2)` means skip until there are only two elements left:
+```groovy
+> [1,2,3,4,5].skip(-2)
+[4, 5]
+```
+
+`limit(-3)` means discard the last 3 elements:
+```groovy
+> [1,2,3,4,5].limit(-3)
+[1, 2]
+```
+
+## grouped()
+
+The `grouped()` method groups elements into sub-lists.
+So `grouped(2)` will create a list of pairs of elements from the source list, while `grouped(3)` would split the list
+into a list of three-element sub-lists.
+
+For example:
+```groovy
+> ['a','b','c','d','e'].grouped(2)
+[['a', 'b'], ['c', 'd'], ['e']]
+> ['a','b','c','d','e'].grouped(3)
+[['a', 'b', 'c'], ['d', 'e']]
+```
+
+If there are not enough elements to complete the last sub-list then the last sub-list will just have whatever elements
+there are leftover.
+
+## sort()
+
+The `sort()` method will sort a list of elements.
+With no argument it will sort based on natural sort order if one exists:
+```groovy
+> [3, 4, -1, 1, 10, 5].sort()
+[-1, 1, 3, 4, 5, 10]
+> ['this', 'is', 'a', 'list', 'of', 'words'].sort()
+['a', 'is', 'list', 'of', 'this', 'words']
+```
+
+If elements have not natural ordering then you will get an error:
+```groovy
+> [[1,2,3],[1,2]].sort()
+Unexpected error: Cannot compare objects of type List and List @ line 1, column 17
+[[1,2,3],[1,2]].sort()
+                ^ (RuntimeError) @ line 1, column 17
+[[1,2,3],[1,2]].sort()
+                ^
+> [1,'a'].sort()
+Unexpected error: Cannot compare objects of type String and int @ line 1, column 9
+[1,'a'].sort()
+        ^ (RuntimeError) @ line 1, column 9
+[1,'a'].sort()
+        ^
+```
+
+You can pass a closure to the `sort()` method that will be passed two elements and needs to return a negative number
+(e.g. `-1`) if the first element is smaller than the second one, `0` if they are the same, or a positive number
+(e.g. `1`) if the first element is bigger than the second one:
+```groovy
+> ['this', 'is', 'a', 'list', 'of', 'words'].sort{ it[0] < it[1] ? -1 : it[0] == it[1] ? 0 : 1 }
+['a', 'is', 'list', 'of', 'this', 'words']
+```
+
+If the closure accepts two arguments then this can be written as:
+```groovy
+> ['this', 'is', 'a', 'list', 'of', 'words'].sort{ a,b -> a < b ? -1 : a == b ? 0 : 1 }
+['a', 'is', 'list', 'of', 'this', 'words']
+```
+
+This can be made more concise by using the comparator operator `<=>` which will return `-1`, `0`, or `1` if the
+left-hand side is less than, equal, or greater than the right-hand side:
+```groovy
+> ['this', 'is', 'a', 'list', 'of', 'words'].sort{ a,b -> a <=> b }
+['a', 'is', 'list', 'of', 'this', 'words']
+```
+
+If you want to reverse the sort order you can swap the left-hand and right-hand sides:
+```groovy
+> ['this', 'is', 'a', 'list', 'of', 'words'].sort{ a,b -> b <=> a }
+['words', 'this', 'of', 'list', 'is', 'a']
+```
+
+Since you can sort based on arbitrary criteria, you can sort arbitrary objects:
+```groovy
+> def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+[[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+> employees.sort{ a,b -> a.salary <=> b.salary }      // sort by salary increasing
+[[name:'Joe', salary:1500], [name:'Frank', salary:2000], [name:'Daisy', salary:3000]]
+```
+
+## unique()
+
+The `unique()` method allows you to eliminate duplicate elements in a list.
+It works like the Unix `uniq` command in that it only considers elements next to each other in the list to determine
+what is unique.
+
+For example: 
+```groovy
+> ['a','a','b','c','c','c','a'].unique()
+['a', 'b', 'c', 'a']
+```
+
+Note that `'a'` still occurs twice since only runs of the same value were eliminated.
+
+If you want to eliminate all duplicates regardless of where they are in the list then sort the list first:
+```groovy
+> ['a','a','b','c','c','c','a'].sort().unique()
+['a', 'b', 'c']
+```
+
+## reduce()
+
+The `reduce()` method will iterate over a list and invoke a given closure on each element.
+In addition to passing in the element to the closure, `reduce()` passes in the previous value that the
+closure returned for the previous element so the closure can calculate the new value based on the previous
+value and the current element.
+
+The final result is whatever the closure returns when passed in the final element and the previous calculated value.
+
+Here is an example of how to use `reduce()` to calculate the sum of the elements in a list (of course, using `sum()`
+is simpler but this is an example):
+```groovy
+> [3, 4, -1, 1, 10, 5].reduce(0){ prev, it -> prev + it }
+22
+```
+
+Note that `reduce()` takes two arguments: the initial value to pass in, and the closure.
+The closure can have one or two parameters.
+If it has one parameter it is passed a list of two values with the first being the previous value calculated (or the
+initial value) and the second being the current element of the list.
+If it takes two parameters then the first one is the previous value and second one is the element. 
+
+Here is another example where we want to count the letter frequency in some text and print out the top 5 letters.
+We use reduce to build a Map keyed on the letter with the value being the number of occurrences:
+```groovy
+> def text = 'this is some example text to use to count letter frequency'
+this is some example text to use to count letter frequency
+> text.filter{ it != ' ' }.reduce([:]){ m, letter -> m[letter]++; m }.sort{ a,b -> b[1] <=> a[1] }.limit(5)
+[['e', 9], ['t', 8], ['s', 4], ['o', 4], ['u', 3]]
+```
+
+## min() and max()
+
+You can use `min()` and `max()` to find the minimum or maximum element from a list:
+```groovy
+> [3, 4, -1, 1, 10, 5].min()
+-1
+> [3, 4, -1, 1, 10, 5].max()
+10
+> ['this', 'is', 'a', 'list', 'of', 'words'].min()
+a
+> ['this', 'is', 'a', 'list', 'of', 'words'].max()
+words
+```
+
+If you want to be able to decide what comparison to use to decide which element is the one that is the smallest or
+the biggest, you can pass a closure that returns something that can be compared.
+For example, to find the employee with the smallest or biggest salary:
+```groovy
+> def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+[[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+> employees.min{ it.salary }
+[name:'Joe', salary:1500]
+> employees.max{ it.salary }
+[name:'Daisy', salary:3000]
+```
+
+## avg() and sum()
+
+The `avg()` and `sum()` methods only work on lists of numbers and return the average or the sum of the values in the
+list:
+```groovy
+> [3, 4, -1, 1, 10, 5].sum()
+22
+> [3, 4, -1, 1, 10, 5].avg()
+3.6666666667
+```
+
+
 
 # Command Line Invocation
 
 # TODO
-* multi-value return from functions
-* named arg passing
-* passing list as list of args
-* lazy vs non-lazy iteration (Java vs Groovy)
-** force non-lazy by using collect()
 * Classes
 ** no static state in classes and no static initialiser blocks either (for same reason)
-** casting
-* do{}
-* if/unless single statements
-* regex match/substitute
-** use with implicit it
-** capture vars
-* implicit it
 * builtin functions and methods
-* functions as values
-* 

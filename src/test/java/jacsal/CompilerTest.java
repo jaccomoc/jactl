@@ -2740,6 +2740,8 @@ class CompilerTest extends BaseTest {
   @Test public void filter() {
     test("[].filter{it>1}", List.of());
     test("[].filter()", List.of());
+    test("[1,'',2].filter{it}", List.of(1,2));
+    test("[1,'',2].filter()", List.of(1,2));
     test("[:].filter()", List.of());
     test("def x = []; x.filter{it>1}", List.of());
     test("def x = []; x.filter()", List.of());

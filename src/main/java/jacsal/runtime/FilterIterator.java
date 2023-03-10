@@ -103,7 +103,8 @@ class FilterIterator implements Iterator {
             break;
           case 4:
             elem = RuntimeUtils.mapEntryToList(elem);
-            filterCond = closure == null ? true : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
+            filterCond = closure == null ? RuntimeUtils.isTruth(elem, false)
+                                         : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
             location = 6;
             break;
           case 5:
