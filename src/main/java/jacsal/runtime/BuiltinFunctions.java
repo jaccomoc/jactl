@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
@@ -92,6 +93,10 @@ public class BuiltinFunctions {
 
       // Object methods
       registerMethod("toString", "objectToString", ANY, false, 0);
+
+      // Number methods
+      registerMethod("pow", "numberPow", NUMBER, true, 1);
+      registerMethod("sqrt", "numberSqrt", NUMBER, true, 0);
 
       // Global functions
       registerGlobalFunction("timestamp", "timestamp", false, 0);
@@ -520,6 +525,55 @@ public class BuiltinFunctions {
     }
     int base = ((Number) args[0]).intValue();
     return intToBase(num, base);
+  }
+
+  // = sqrt
+  public static Number numberSqrt(Number num, String source, int offset) {
+    if (num.doubleValue() < 0) {
+      throw new RuntimeError("Attempt to take square root of negative number: " + num, source, offset);
+    }
+    if (num instanceof BigDecimal) {
+      return ((BigDecimal)num).sqrt(MathContext.DECIMAL64);
+    }
+    double result = Math.sqrt(num.doubleValue());
+    long   longResult = (long) result;
+    if ((double)longResult == result) {
+      if ((long)(int)longResult == longResult) {
+        return (int)longResult;
+      }
+      return longResult;
+    }
+    return result;
+  }
+  public static Object numberSqrtWrapper(Number num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, NUMBER, 0, source, offset);
+    return numberSqrt(num, source, offset);
+  }
+
+  // = pow
+  public static Number numberPow(Number num, String source, int offset, Number power) {
+    double powerDouble = power.doubleValue();
+    double result = Math.pow(num.doubleValue(), power.doubleValue());
+    if (Double.isNaN(result)) {
+      throw new RuntimeError("Illegal request: raising " + num + " to " + power, source, offset);
+    }
+    long   longResult = (long) result;
+    if ((double)longResult == result) {
+      if ((long)(int)longResult == longResult) {
+        return (int)longResult;
+      }
+      return longResult;
+    }
+    return result;
+  }
+  public static Object numberPowWrapper(Number num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 1, NUMBER, 1, source, offset);
+    try {
+      return numberPow(num, source, offset, (Number)args[0]);
+    }
+    catch (ClassCastException e) {
+      throw new RuntimeError("Value for power must be numeric not " + RuntimeUtils.className(args[0]), source, offset);
+    }
   }
 
   // = toString

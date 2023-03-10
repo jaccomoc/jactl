@@ -31,7 +31,7 @@ public class JacsalContext {
   private static int blockingThreads  = Runtime.getRuntime().availableProcessors() * 4;
 
   // Make static for the moment to avoid creating too many threads during unit test executions
-  private static ExecutorService eventLoop = Executors.newFixedThreadPool(eventLoopThreads);
+  private static ExecutorService eventLoop        = Executors.newFixedThreadPool(eventLoopThreads);
   private static ExecutorService blockingExecutor = Executors.newFixedThreadPool(blockingThreads);
 
 

@@ -45,6 +45,7 @@ import static jacsal.JacsalType.LIST;
 import static jacsal.JacsalType.LONG;
 import static jacsal.JacsalType.LONG_ARR;
 import static jacsal.JacsalType.MAP;
+import static jacsal.JacsalType.NUMBER;
 import static jacsal.JacsalType.OBJECT_ARR;
 import static jacsal.JacsalType.STRING;
 import static jacsal.JacsalType.STRING_ARR;
@@ -1608,7 +1609,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            }
                            if (method.isBuiltin) {
                              // If we are calling a "method" that is ANY but we have a primitive then we need to box it
-                             if (method.firstArgtype.is(ANY)) {
+                             if (method.firstArgtype.is(ANY,NUMBER)) {
                                box();
                              }
                            }

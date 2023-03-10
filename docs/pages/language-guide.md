@@ -2953,6 +2953,15 @@ For example:
 If there are not enough elements to complete the last sub-list then the last sub-list will just have whatever elements
 there are leftover.
 
+Note that `grouped(0)` returns the list of elements unchanged and `grouped(1)` will create a list of single element
+sub-lists:
+```groovy
+> [1,2,3].grouped(0)
+[1, 2, 3]
+> [1,2,3].grouped(1)
+[[1], [2], [3]]
+```
+
 ## sort()
 
 The `sort()` method will sort a list of elements.
@@ -3039,13 +3048,13 @@ If you want to eliminate all duplicates regardless of where they are in the list
 
 The `reduce()` method will iterate over a list and invoke a given closure on each element.
 In addition to passing in the element to the closure, `reduce()` passes in the previous value that the
-closure returned for the previous element so the closure can calculate the new value based on the previous
+closure returned for the previous element so that the closure can calculate the new value based on the previous
 value and the current element.
 
 The final result is whatever the closure returns when passed in the final element and the previous calculated value.
 
 Here is an example of how to use `reduce()` to calculate the sum of the elements in a list (of course, using `sum()`
-is simpler but this is an example):
+is simpler but this is just an example):
 ```groovy
 > [3, 4, -1, 1, 10, 5].reduce(0){ prev, it -> prev + it }
 22
@@ -3102,6 +3111,46 @@ list:
 > [3, 4, -1, 1, 10, 5].avg()
 3.6666666667
 ```
+
+# Classes
+
+Like Java, Jacsal supports user defined classes and uses a syntax that (mostly) follows that of Java.
+
+Here is an example of a Jacsal script that declares and uses a class called Point:
+```groovy
+class Point {
+  int x
+  int y
+ 
+  static def distance(Point p1, Point p2) {
+    
+  }
+}
+
+def p1 = new Point(1,2)
+def p2 = new Point(3,4)
+
+```
+
+* Separate compilation vs in-script
+* Scoping (where can be declared)
+* Import and import as
+* no static data
+* no interfaces
+* no abstract classes
+* no generics
+* constructors: mandatory vs optional args, named args
+* no user-defined constructors
+* toString()
+* conversion to/from maps
+* nested classes but no non-static inner classes
+* packages
+
+# Builtin Functions and Methods
+
+## Functions
+
+There are a handful of 
 
 
 

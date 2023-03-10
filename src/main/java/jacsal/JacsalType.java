@@ -652,6 +652,7 @@ public class JacsalType {
       case ITERATOR:      return Iterator.class;
       case MATCHER:       return RegexMatcher.class;
       case CONTINUATION:  return Continuation.class;
+      case NUMBER:        return Number.class;
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }

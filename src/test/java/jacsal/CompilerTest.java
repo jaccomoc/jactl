@@ -6090,6 +6090,43 @@ class CompilerTest extends BaseTest {
     replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
   }
 
+  @Test public void sqrt() {
+    test("4.sqrt()", 2);
+    test("(123456789L*123456789L).sqrt()", 123456789);
+    test("(12345678901.0*12345678901.0).sqrt()", "#12345678901.0");
+    test("(0.1234D*0.1234D).sqrt()", 0.1234D);
+    testError("-1.sqrt()", "square root of negative number");
+    testError("-1.0.sqrt()", "square root of negative number");
+    testError("-1.0D.sqrt()", "square root of negative number");
+    testError("-1L.sqrt()", "square root of negative number");
+  }
+
+  @Test public void pow() {
+    test("4.pow(0.5)", 2);
+    test("4.pow(3)", 64);
+    test("16.pow(-0.5)", 0.25);
+    test("-4.pow(-1)", -0.25);
+    test("4L.pow(0.5)", 2);
+    test("4L.pow(3)", 64);
+    test("16L.pow(-0.5)", 0.25);
+    test("-4L.pow(-1)", -0.25);
+    test("4.0.pow(0.5)", 2);
+    test("4.0.pow(3)", 64);
+    test("16.0.pow(-0.5)", 0.25);
+    test("-4.0.pow(-1)", -0.25);
+    test("4.0D.pow(0.5)", 2);
+    test("4.0D.pow(3)", 64);
+    test("16.0D.pow(-0.5)", 0.25);
+    test("-4.0D.pow(-1)", -0.25);
+    test("(1234567890.0*1234567890.0).pow(0.5)", 1234567890);
+    test("(1234567890L*1234567890L).pow(0.5)", 1234567890);
+    testError("-4.pow(0.5)", "illegal request");
+    testError("-4.pow(-0.5)", "illegal request");
+    testError("-4.0.pow(0.5)", "illegal request");
+    testError("-4.0D.pow(0.5)", "illegal request");
+    testError("-4L.pow(0.5)", "illegal request");
+  }
+
   @Test public void fib() {
     final String fibDef = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
     final String fibInt = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";

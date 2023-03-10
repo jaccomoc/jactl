@@ -98,6 +98,11 @@ public class Functions {
         match = functions.stream().filter(f -> f.type == ITERATOR).findFirst();
       }
     }
+    if (match.isEmpty()) {
+      if (type.is(INT,LONG,DOUBLE,DECIMAL)) {
+        match = functions.stream().filter(f -> f.type == NUMBER).findFirst();
+      }
+    }
     // Final check is for ANY
     if (match.isEmpty()) {
       match = functions.stream().filter(f -> f.type.is(ANY)).findFirst();
