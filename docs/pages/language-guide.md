@@ -2766,6 +2766,14 @@ Function@124888672
 [3, 21, 987, 6765, 317811, 2178309, 102334155]
 ```
 
+`filter()` without any argument will test each element for truthiness, so it is equivalent to `filter{ it }`:
+```groovy
+> ['a', 0, 1, '', 2, null, [], false, 3].filter()
+['a', 1, 2, 3]
+> ['a', 0, 1, '', 2, null, [], false, 3].filter{ it }
+['a', 1, 2, 3]
+```
+
 ## mapWithIndex()
 
 The `mapWithIndex()` method works like the `map()` method except that as well as passing in the element to the
@@ -2777,11 +2785,20 @@ second is the index:
 ['Element 0 is a', 'Element 1 is b', 'Element 2 is c']
 ```
 
+Note that indexes start at 0 and go up to one less than the list size.
+
 If you give it a closure that takes two arguments then the first argument will be the list element and the second
 one will be the index:
 ```groovy
 > ['a', 'b', 'c'].mapWithIndex{ v, idx -> "Element $idx is $v" }
 ['Element 0 is a', 'Element 1 is b', 'Element 2 is c']
+```
+
+Without any closure passed to it `mapWithIndex()` creates a two-element list for each element with the first value
+being the list element and the second being the index:
+```groovy
+> ['a','b','c'].mapWithIndex()
+[['a', 0], ['b', 1], ['c', 2]]
 ```
 
 ## flatMap()
@@ -2822,14 +2839,38 @@ Note that only one level of flattening will result:
 [1, 2, 3, 4, 5, [6, 7, 8]]
 ```
 
+## skip() and limit()
+
+If you know that you are not interested in the first `n` elements or are only interested in the first `n` elements
+of the result you can use `skip()` and `limit()` to skip elements and limit the result.
+
+For example:
+```groovy
+> 26.map{ (int)'a' + it }.map{ it.asChar() }.skip(10).limit(5)
+['k', 'l', 'm', 'n', 'o']
+```
+
+You can use negative numbers for offset relative to the end of the list.
+So `skip(-2)` means skip until there are only two elements left:
+```groovy
+> [1,2,3,4,5].skip(-2)
+[4, 5]
+```
+
+`limit(-3)` means discard the last 3 elements:
+```groovy
+> [1,2,3,4,5].limit(-3)
+[1, 2]
+```
+
 ## Lazy Evaluation, Side Effects, and collect()
 
-In Jacsal if a collection method results in another list of values then (apart from `collect()` and `collectEntries()`)
-the methods don't actually generate the list until needed.
+In Jacsal, if a collection method results in another list of values then most methods don't actually generate the
+list unless they are the last method in the invocation chain.
 Consider this code:
 ```groovy
 int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
-def values = 40.map{ fib(it+1) }.filter{ it & 1 }.filter{ it % 3 == 0 }
+def values = 1000.map{ fib(it+1) }.filter{ it & 1 }.filter{ it % 3 == 0 }.limit(40)
 ```
 
 The output of the `map()` method is another list of transformed values which then passes to `filter()` which outputs
@@ -2884,30 +2925,6 @@ In Jacsal, the `collect()` also takes an optional closure like the Groovy form a
 0
 > ['a','b','c'].collect{ it + ++i }.collect{ [it, i] }
 [['a1', 3], ['b2', 3], ['c3', 3]]
-```
-
-## skip() and limit()
-
-If you know that you are not interested in the first `n` elements or are only interested in the first `n` elements
-of the result you can use `skip()` and `limit()` to skip elements and limit the result.
-
-For example:
-```groovy
-> 26.map{ (int)'a' + it }.map{ it.asChar() }.skip(10).limit(5)
-['k', 'l', 'm', 'n', 'o']
-```
-
-You can use negative numbers for offset relative to the end of the list.
-So `skip(-2)` means skip until there are only two elements left:
-```groovy
-> [1,2,3,4,5].skip(-2)
-[4, 5]
-```
-
-`limit(-3)` means discard the last 3 elements:
-```groovy
-> [1,2,3,4,5].limit(-3)
-[1, 2]
 ```
 
 ## grouped()

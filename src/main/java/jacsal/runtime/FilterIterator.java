@@ -18,6 +18,7 @@ package jacsal.runtime;
 
 import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
+import java.util.function.Supplier;
 
 /**
  * Iterator for the filter method. It takes the supplied iterator and wraps it in an iterator that only returns

@@ -794,21 +794,13 @@ public class BuiltinFunctions {
 
   // = limit
 
-  public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int count) {
+  public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int limit) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
-    if (count >= 0) {
-      return new FilterIterator(iter, source, offset, limitHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+    if (limit >= 0) {
+      return new LimitIterator(iter, limit);
     }
-    return new LimitIterator(iter, -count);
+    return new NegativeLimitIterator(iter, -limit);
   }
-
-  private static MethodHandle limitHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "isUnderLimit",
-                                                                      Object.class, Integer.class, AtomicInteger.class,
-                                                                      Continuation.class, String.class, int.class, Object[].class);
-  public static Object isUnderLimit(Integer limit, AtomicInteger index, Continuation ignore1, String ignore2, int ignore3, Object[] ignore4) {
-    return index.getAndIncrement() < limit;
-  }
-
   public static Object iteratorLimitWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, ITERATOR, 1, source, offset);
     try {

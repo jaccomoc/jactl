@@ -20,18 +20,17 @@ import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
- * Async iterator that supports limit(n) where n < 0 which means discard last n.
+ * Async iterator to support iterator.limit(n) where n >= 0
  */
 public class LimitIterator implements Iterator {
-  Iterator               iter;
-  int                    count;
-  CircularBuffer<Object> buffer;
-  boolean                reachedEnd = false;
+  Iterator iter;
+  boolean  reachedEnd = false;
+  int      limit;
+  int      count = 0;
 
-  LimitIterator(Iterator iter, int count) {
+  LimitIterator(Iterator iter, int limit) {
     this.iter = iter;
-    this.count  = count;
-    this.buffer = new CircularBuffer<>(count + 1);
+    this.limit = limit;
   }
 
   private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "hasNext$c", Object.class, LimitIterator.class, Continuation.class);
@@ -42,62 +41,79 @@ public class LimitIterator implements Iterator {
 
   @Override
   public boolean hasNext() {
+    if (reachedEnd || count >= limit) {
+      return false;
+    }
     return doHasNext(null);
   }
 
   private boolean doHasNext(Continuation c) {
-    if (reachedEnd) {
-      return false;
-    }
-    // We can return elements once buffer is full
     boolean hasNext  = false;
-    Object  elem     = null;
     int     location = c == null ? 0 : c.methodLocation;
-    while (!reachedEnd && buffer.free() > 0) {
-      try {
+    try {
+      while (true) {
         switch (location) {
           case 0:
             hasNext = iter.hasNext();
             location = 2;
             break;
           case 1:
-            hasNext = (boolean)c.getResult();
+            hasNext = (boolean) c.getResult();
             location = 2;
             break;
           case 2:
             if (!hasNext) {
               reachedEnd = true;
+              return false;
             }
-            else {
-              elem = iter.next();
-              location = 4;
-            }
-            break;
-          case 3:
-            elem = c.getResult();
-            location = 4;
-            break;
-          case 4:
-            buffer.add(elem);
-            location = 0;
-            break;
+            return true;
         }
       }
-      catch (Continuation cont) {
-        throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
-      }
     }
-    // Either we have reachedEnd of underlying iterator or we have a full buffer
-    return !reachedEnd;
+    catch (Continuation cont) {
+      throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
+    }
+  }
+
+  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "next$c", Object.class, LimitIterator.class, Continuation.class);
+
+  public static Object next$c(LimitIterator iter, Continuation c) {
+    return iter.doNext(c);
   }
 
   @Override
   public Object next() {
-    // Assume that hasNext() has already been called so no need for async handling
-    if (buffer.free() > 0) {
-      throw new IllegalStateException("next() called before hasNext()");
+    if (reachedEnd || count >= limit) {
+      throw new IllegalStateException("next() called after end reached");
     }
-    return buffer.remove();
+    return doNext(null);
   }
 
+  private Object doNext(Continuation c) {
+    int location = c == null ? 0 : c.methodLocation;
+    try {
+      Object elem = null;
+      while (true) {
+        switch (location) {
+          case 0: {
+            elem = iter.next();
+            location = 2;
+            break;
+          }
+          case 1: {
+            elem = c.getResult();
+            location = 2;
+            break;
+          }
+          case 2: {
+            count++;
+            return elem;
+          }
+        }
+      }
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, nextHandle.bindTo(this), location + 1, null, null);
+    }
+  }
 }

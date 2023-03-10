@@ -5312,6 +5312,12 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3,4,5,6]; x.limit(-2)", List.of(1,2,3,4));
     test("def x = [1,2,3,4,5,6].map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}; x.limit(-2)", List.of(2));
     test("def x = [1,2,3,4,5,6]; def f = x.map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.limit; f(-2)", List.of(2));
+
+    // Async mode fails because we wrap each method invocation with a sleep which means that the
+    // map() call is forced to generate entire list before passing to limit()
+    doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.limit(2); i", 2);
+    doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.map{ sleep(0, sleep(0,it)) }.limit(2); i", 2);
+    doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.filter{ sleep(0,it) }.map{ sleep(0, sleep(0,it)) }.limit(2); i", 2);
   }
 
   @Test public void unique() {
