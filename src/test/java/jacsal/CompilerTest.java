@@ -6092,9 +6092,12 @@ class CompilerTest extends BaseTest {
 
   @Test public void sqrt() {
     test("4.sqrt()", 2);
+    test("4.sqrt() + 4.sqrt()", 4);
     test("(123456789L*123456789L).sqrt()", 123456789);
     test("(12345678901.0*12345678901.0).sqrt()", "#12345678901.0");
+    test("def f = (12345678901.0*12345678901.0).sqrt; f()", "#12345678901.0");
     test("(0.1234D*0.1234D).sqrt()", 0.1234D);
+    test("def f = (0.1234D*0.1234D).sqrt; f()", 0.1234D);
     testError("-1.sqrt()", "square root of negative number");
     testError("-1.0.sqrt()", "square root of negative number");
     testError("-1.0D.sqrt()", "square root of negative number");
@@ -6103,6 +6106,7 @@ class CompilerTest extends BaseTest {
     test("def x = (123456789L*123456789L); x.sqrt()", 123456789);
     test("def x = (12345678901.0*12345678901.0); x.sqrt()", "#12345678901.0");
     test("def x = (0.1234D*0.1234D); x.sqrt()", 0.1234D);
+    test("def x = (0.1234D*0.1234D); def f = x.sqrt; f()", 0.1234D);
     testError("def x = -1; x.sqrt()", "square root of negative number");
     testError("def x = -1.0; x.sqrt()", "square root of negative number");
     testError("def x = -1.0D; x.sqrt()", "square root of negative number");
@@ -6111,11 +6115,15 @@ class CompilerTest extends BaseTest {
 
   @Test public void sqr() {
     test("2.sqr().sqrt()", 2);
+    test("2.sqr() + 2.sqr()", 8);
     test("123456789L.sqr().sqrt()", 123456789);
     test("12345678901.0.sqr().sqrt()", "#12345678901.0");
     test("0.1234D.sqr().sqrt()", 0.1234D);
     test("-1.sqr()", 1);
+    test("def f = -1.sqr; f()", 1);
     test("-4.sqr()", 16);
+    test("-4L.sqr()", 16L);
+    test("def f = -4L.sqr; f()", 16L);
     test("def x = 4; x.sqr()", 16);
     test("def x = -4; x.sqr()", 16);
     test("def x = 4L; x.sqr()", 16L);
@@ -6123,10 +6131,12 @@ class CompilerTest extends BaseTest {
     test("def x = 4.01; x.sqr()", "#16.0801");
     test("def x = -4.01; x.sqr()", "#16.0801");
     test("def x = 4.0D; x.sqr()", 16D);
+    test("def x = 4.0D; def f = x.sqr; f()", 16D);
     test("def x = -4.0D; x.sqr()", 16D);
     test("def x = 123456789L; x.sqr()", 123456789L*123456789L);
     test("def x = 123456789.0; x.sqr()", "#" + 123456789L*123456789L + ".00");
     test("def x = 0.1234D; x.sqr()", 0.1234D * 0.1234D);
+    test("def f = 0.1234D.sqr; f()", 0.1234D * 0.1234D);
   }
 
   @Test public void pow() {
@@ -6134,10 +6144,12 @@ class CompilerTest extends BaseTest {
     test("4.pow(0.5)", 2);
     test("4.pow(3)", 64);
     test("16.pow(-0.5)", 0.25);
+    test("def f = 16.pow; f(-0.5)", 0.25);
     test("-4.pow(-1)", -0.25);
     test("4L.pow(0)", 1);
     test("4L.pow(0.5)", 2);
     test("4L.pow(3)", 64);
+    test("def f = 4L.pow; f(3)", 64);
     test("16L.pow(-0.5)", 0.25);
     test("-4L.pow(-1)", -0.25);
     test("4.0.pow(0.5)", 2);
@@ -6148,7 +6160,9 @@ class CompilerTest extends BaseTest {
     test("0.0D.pow(0)", 1);
     test("4.0D.pow(0.5)", 2);
     test("4.0D.pow(3)", 64);
+    test("4.0D.pow(3) + 4.0D.pow(3)", 128);
     test("16.0D.pow(-0.5)", 0.25);
+    test("def f = 16.0D.pow; f(-0.5)", 0.25);
     test("-4.0D.pow(-1)", -0.25);
     test("(1234567890.0*1234567890.0).pow(0.5)", 1234567890);
     test("(1234567890L*1234567890L).pow(0.5)", 1234567890);
@@ -6159,6 +6173,7 @@ class CompilerTest extends BaseTest {
     test("def x = 4L; x.pow(0.5)", 2);
     test("def x = 4L; x.pow(3)", 64);
     test("def x = 16L; x.pow(-0.5)", 0.25);
+    test("def x = 16L; def f = x.pow; f(-0.5)", 0.25);
     test("def x = -4L; x.pow(-1)", -0.25);
     test("def x = 4.0; x.pow(0.5)", 2);
     test("def x = 4.0; x.pow(3)", "#64.000");

@@ -87,17 +87,24 @@ public class BuiltinFunctions {
       // int methods
       registerMethod("asChar", "intAsChar", INT, false, 0);
       registerMethod("toBase", "intToBase", INT, false, 1);
+      registerMethod("sqr", "intSqr", INT, true, 0);
 
       // long methods
       registerMethod("toBase", "longToBase", LONG, false, 1);
+      registerMethod("sqr", "longSqr", LONG, true, 0);
 
-      // Object methods
-      registerMethod("toString", "objectToString", ANY, false, 0);
+      // double methods
+      registerMethod("sqr", "doubleSqr", DOUBLE, true, 0);
+
+      // decimal methods
+      registerMethod("sqr", "decimalSqr", DECIMAL, true, 0);
 
       // Number methods
       registerMethod("pow", "numberPow", NUMBER, true, 1);
       registerMethod("sqrt", "numberSqrt", NUMBER, true, 0);
-      registerMethod("sqr", "numberSqr", NUMBER, true, 0);
+
+      // Object methods
+      registerMethod("toString", "objectToString", ANY, false, 0);
 
       // Global functions
       registerGlobalFunction("timestamp", "timestamp", false, 0);
@@ -529,7 +536,7 @@ public class BuiltinFunctions {
   }
 
   // = sqrt
-  public static Number numberSqrt(Number num, String source, int offset) {
+  public static Object numberSqrt(Number num, String source, int offset) {
     if (num.doubleValue() < 0) {
       throw new RuntimeError("Attempt to take square root of negative number: " + num, source, offset);
     }
@@ -552,20 +559,29 @@ public class BuiltinFunctions {
   }
 
   // = sqr
-  public static Number numberSqr(Number num, String source, int offset) {
-    if (num instanceof Integer)    { int n    = (int)num;     return n * n; }
-    if (num instanceof Long)       { long n   = (long)num;    return n * n; }
-    if (num instanceof Double)     { double n = (double)num;  return n * n; }
-    if (num instanceof BigDecimal) { return ((BigDecimal)num).pow(2); }
-    throw new IllegalStateException("Internal error: unexpected type " + RuntimeUtils.className(num));
+  public static int intSqr(int num, String source, int offset) { return num * num; }
+  public static Object intSqrWrapper(Integer num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, INT, 0, source, offset);
+    return num * num;
   }
-  public static Object numberSqrWrapper(Number num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, NUMBER, 0, source, offset);
-    return numberSqr(num, source, offset);
+  public static long longSqr(long num, String source, int offset) { return num * num; }
+  public static Object longSqrWrapper(Long num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, LONG, 0, source, offset);
+    return num * num;
+  }
+  public static double doubleSqr(double num, String source, int offset) { return num * num; }
+  public static Object doubleSqrWrapper(Double num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, DOUBLE, 0, source, offset);
+    return num * num;
+  }
+  public static BigDecimal decimalSqr(BigDecimal num, String source, int offset) { return num.pow(2); }
+  public static Object decimalSqrWrapper(BigDecimal num, Continuation c, String source, int offset, Object[] args) {
+    args = validateArgCount(args, 0, INT, 0, source, offset);
+    return num.pow(2);
   }
 
   // = pow
-  public static Number numberPow(Number num, String source, int offset, Number power) {
+  public static Object numberPow(Number num, String source, int offset, Number power) {
     if (num instanceof BigDecimal && power instanceof Integer && (int)power >= 0) {
       try {
         return ((BigDecimal)num).pow((int)power);

@@ -3123,7 +3123,7 @@ class Point {
   int y
  
   def distance(Point p) {
-   ((x-p.x)*(x-p.x) + (y-p.y)*(y-p.y)).sqrt()
+   ((x-p.x).sqr() + (y-p.y).sqr()).sqrt()
   }
 }
 
