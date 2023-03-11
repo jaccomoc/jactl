@@ -3114,36 +3114,406 @@ list:
 
 # Classes
 
-Like Java, Jacsal supports user defined classes and uses a syntax that (mostly) follows that of Java.
+Like Java, Jacsal supports user defined classes but in a more simplified form.
+Jacsal uses a syntax that (mostly) follows that of Java.
 
-Here is an example of a Jacsal script that declares and uses a class called Point:
+Classes provide a way to encapsulate state with fields, and behaviour with methods. 
+
+Here is an example of a simple class:
 ```groovy
 class Point {
   int x
   int y
- 
-  def distance(Point p) {
-   ((x-p.x).sqr() + (y-p.y).sqr()).sqrt()
-  }
 }
-
-def start = new Point(1,2)
-def end   = new Point(7,9)
-
-start.distance(end)
 ```
 
+The class declares two fields `x` and `y` of type `int`.
+
+If we enter the above class into the REPL we can then instantiate instances of the class:
+```groovy
+> class Point {
+    int x
+    int y
+  }
+> def point = new Point(1,2)
+[x:1, y:2]
+```
+
+Note that in Jacsal, you do not write explicit constructors for classes.
+To instantiate a class you use the `new` operator followed by the class name and then a list of arguments that become
+the values for the mandatory fields of the class (in the order in which the fields are declared).
+
+Notice that by default, the value of the object when printed by the REPL is shown as though the object were a Map of
+field values.
+
+## Field Access
+
+To access the fields of the class object you use `.` or `?.` just as for Maps:
+```groovy
+> point.x
+1
+> point.y
+2
+```
+
+You can use expressions that evaluate to the field name:
+```groovy
+> point.('xyz'[0])
+1
+> point."${('x' + 'y').skip(1)[0]}"
+2
+```
+
+You can also use '[]' and '?[]' to access the fields:
+```groovy
+> point['x']
+1
+> point['y']
+2
+```
+
+It is recommended to use '.' and '?.' with explicit names rather than expressions where possible as this is a
+more efficient access mechanism.
+
+## Class Name as Type
+
+When declaring a variable to contain a class instance you can make the variable strongly typed if you want.
+If you then try to assign something else to the variable that is not a Point you will get an error:
+```groovy
+> Point point = new Point(3,4)
+[x:3, y:4]
+> point = new Point(5,5)
+[x:5, y:5]
+> point = 'abc'
+Cannot convert from type of right hand side (String) to Instance<Point> @ line 1, column 7
+point = 'abc'
+        ^
+```
+
+You can use the class name wherever a type would normally be expected such as for parameter types and return types
+of functions:
+```groovy
+> Point midPoint(Point p1, Point p2) {
+    new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+  }
+Function@375457936
+> midPoint(new Point(1,2), new Point(4,4))
+[x:2, y:3]
+```
+
+## Field Initialisers and Mandatory Fields
+
+Like variables, fields can be declared with initialisers:
+```groovy
+> class Point {
+ int x = 0
+ int y = 0
+}
+> def point = new Point()
+[x:0, y:0]
+```
+
+Fields without intialisers are mandatory and a value must be supplied when instantiating instances with `new`:
+```groovy
+> class Point {
+    int x
+    int y = 0
+  }
+> new Point()
+Missing mandatory field: x @ line 1, column 10
+new Point()
+         ^
+```
+
+Only values for mandatory fields can be supplied this way:
+```groovy
+> new Point(1,2)
+Too many arguments for constructor (passed 2 but there is only 1 mandatory field) @ line 1, column 10
+new Point(1,2)
+         ^
+> new Point(1)
+[x:1, y:0]
+```
+
+Initialisers can use values from other fields:
+```groovy
+> class Point {
+ int x
+ int y = x
+}
+> new Point(3)
+[x:3, y:3]
+```
+
+Note that if a field ininitialiser refers to a prior field it will use the value that the field has been assigned
+but if it refers to a later field, since that field has not yet been initialised, it will just get whatever the
+default value is for the type of field:
+```groovy
+> class Point {
+    int x = y
+    int y
+  }
+> new Point(7)
+[x:0, y:7]
+```
+
+## Named Argument Passing for `new`
+
+To set values for non-mandatory fields you can use the named argument way of invoking `new` which allows you set
+the values of any fields (as long as all mandatory fields are given a value):
+```groovy
+> class Point {
+    int x
+    int y = 0
+  }
+> new Point(x:3, y:4)
+[x:3, y:4]
+> new Point(x:4)
+[x:4, y:0]
+```
+
+## Converting between Maps and Class Instances
+
+As shown, instances, when printed out look like Maps and passing named arguments to `new` is like constructing a
+Map literal.
+
+Jacsal also supports constructing instances by coercing a Map using the `as` operator:
+```groovy
+> Point p = [x:3, y:5] as Point
+[x:3, y:5]
+```
+
+You can also convert the other way and take a class instance and coerce it to a Map:
+```groovy
+> Map m = p as Map
+[x:3, y:5]
+```
+
+When constructing an instance this way, you need to supply values for all mandatory fields but can leave out values
+for the non-mandatory fields:
+```groovy
+> [y:5] as Point
+Missing value for mandatory field 'x' @ line 1, column 7
+[y:5] as Point
+      ^
+> [x:6] as Point
+[x:6, y:0]
+```
+
+## Field Types
+
+We have shown, so far, only examples of fields with type `int` but, as for variables and function parameters,
+fields can have any type:
+```groovy
+> class X {
+    int i = 0, j = i
+    String str = 'a string'
+    long longField = i * j
+    var decimalField = 3.5
+    double d = 1.23D
+    def closure = { it * it }
+  }
+> new X()
+[i:0, j:0, str:'a string', longField:0, decimalField:3.5, d:1.23, closure:Function@33533830]
+```
+
+Classes can even have fields of the same type as the class they are embedded in:
+```groovy
+> class Tree {
+    Tree left  = null
+    Tree right = null
+    def        data
+  }
+> 
+```
+
+## Methods
+
+We have seen classes with fields but classes are more than just a data structure for grouping related pieces of
+data.
+Classes can also have methods defined for them:
+```groovy
+> class Point { int x,y }
+> class Rect {
+    Point p1, p2
+
+    int area() { abs(p1.x - p2.x) * abs(p1.y - p2.y) }
+
+    boolean contains(Point p) {
+      p.x >= [p1.x, p2.x].min() && p.x <= [p1.x, p2.x].max() &&
+      p.y >= [p1.y, p2.y].min() && p.y <= [p1.y, p2.y].max()
+    }
+  }
+```
+
+Methods are accessed the same way as fields and then invoked using `()` just as for functions:
+```groovy
+> Rect rect = new Rect(new Point(3,4), new Point(7,8))
+[p1:[x:3, y:4], p2:[x:7, y:8]]
+> rect.area()
+16
+> rect.contains(new Point(0,2))
+false
+> rect.contains(new Point(5,6))
+true
+```
+
+Since methods can be accessed like they are fields you can use `?.` and `[]` and `?[]` to access them:
+```groovy
+> rect?."${'contains'}"(new Point(5,6))
+true
+> rect['are' + 'a']()
+16
+```
+
+## Static Methods
+
+The methods we saw previously were methods that are instance methods and apply to an instance of a class.
+Jacsal also supports methods that are defined as `static` which are class methods rather than instance methods.
+Instead of invoking these methods via a class instance, they are invoked using the classname itself and are
+not associated with any specific instance of the class.
+
+For example:
+```groovy
+> class Point { 
+    int x, y
+ 
+    static Point midPoint(Point p1, Point p2) {
+      new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+    }
+  }
+> def mid = Point.midPoint(new Point(1,2), new Point(3,4))
+[x:2, y:3]
+```
+
+If you try to access an instance field from within a static method you will get a compile error:
+```groovy
+> class X { 
+    int i = 0
+    static def staticMethod() { i++ }
+  }
+Reference to field in static function @ line 3, column 33
+static def staticMethod() { i++ }
+                            ^
+```
+
+As well as using the classname with the method invocation, you can invoke static methods through a class instance:
+```groovy
+> Point p = new Point(15,16)
+[x:15, y:16]
+> p.midPoint(new Point(1,2), new Point(3,4))
+[x:2, y:3]
+```
+
+Invoking a static method via an instance works even if the type of the variable is not known at compile time:
+```groovy
+> def x = new Point(10,11)
+[x:10, y:11]
+> x.midPoint(new Point(1,2), new Point(3,4))
+[x:2, y:3]
+```
+
+## No Static Fields
+
+In Jacsal, there is no support for static fields.
+This differs from Java and Groovy which support static fields that exist at the class level rather than the class
+instance level.
+
+The reason that Jacsal has this restriction is to do with the intended use of the language.
+The language is intended to be used in event driven/reactive programming applications to provide a way for
+customers of these applications to provide their own extensions and customisations.
+
+Jacsal scripts are intended to be run in a distributed multithreaded application where multiple threads in multiple
+application instances can be running the same script at the same time.
+It makes no sense in such a scenario to have class level fields since they would not be global fields but would 
+be per application instance.
+So rather than offering the illusion of global state, Jacsal has taken the decision to not offer this feature at all.
+
+If global state is really required then it is up to the application to provide its own functions for its Jacsal
+scripts to use that can update/read some global state, potentially in a database, or in a distributed in-memory
+key/value store of some sort.
+
+## Methods as Values
+
+Like normal functions, methods can be assigned as values to variables and passed as values to other function/methods:
+```groovy
+> class Point {
+    int x, y
+
+    static Point midPoint(Point p1, Point p2) {
+      new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+    }
+  }
+> class Rect {
+    Point p1, p2
+
+    int area() { abs(p1.x - p2.x) * abs(p1.y - p2.y) }
+  }
+```
+
+We can get the value of the `midPoint` static method and invoke it through a different variable:
+```groovy
+> def mp = Point.midPoint
+Function@438589491
+> mp(new Point(1,2), new Point(3,4))
+[x:2, y:3]
+```
+
+If we try to get the `area` instance method of the `Rect` class the same way we get this error:
+```groovy
+> def a = Rect.area
+Static access to non-static method 'area' for class Class<Rect> @ line 1, column 14
+def a = Rect.area
+             ^
+```
+
+We need to access it through an instance:
+```groovy
+> def rect = new Rect(new Point(1,2), new Point(3,4))
+[p1:[x:1, y:2], p2:[x:3, y:4]]
+> def area = rect.area
+Function@597307515
+> area()
+4
+```
+
+Note what happens if we now change the value of the `rect` variable:
+```groovy
+> rect = new Rect(new Point(2,3), new Point(10,12))
+[p1:[x:2, y:3], p2:[x:10, y:12]]
+> rect.area()
+72
+> area()
+4
+```
+
+The `area` variable points to the `area()` method bound to the original instance so even if `rect` gets a new value
+`area` is still bound to the old value.
+
+## Base Classes
+
+Like Java, Jacsal supports the concept of a class extending another class (the base class or parent class):
+```groovy
+> class Point { int x,y }
+> class Shape { 
+    Point 
+    
+  }
+```
+
+
+* extends
+* duck typing
+* passing methods as values
+* super
 * Separate compilation vs in-script
 * Scoping (where can be declared)
 * Import and import as
-* no static data
 * no interfaces
 * no abstract classes
 * no generics
-* constructors: mandatory vs optional args, named args
-* no user-defined constructors
+* no private/public etc
 * toString()
-* conversion to/from maps
 * nested classes but no non-static inner classes
 * packages
 

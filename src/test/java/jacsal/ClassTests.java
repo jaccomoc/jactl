@@ -1098,6 +1098,10 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void baseClasses() {
+    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new Y().x", 2);
+    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new X().x", 1);
+    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(); x.x", 2);
+    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(); x.f()", 2);
     testError("class X { int f(){1} }; class Y extends X { long f(){1} }; new Y().f()", "'long' not compatible");
     test("class X { int i = 3 }; class Y extends X { int j = 1 }; Y y = new Y(); y.i + y.j", 4);
     testError("class X { int i = 3 }; class Y extends X { int i = 1 }; Y y = new Y(); y.i + y.j", "field 'i' clashes");

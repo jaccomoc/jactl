@@ -495,6 +495,19 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInvokeInit(Expr.InvokeInit expr) {
     expr.args.forEach(this::analyse);
+
+    FunctionDescriptor initMethod = expr.classDescriptor.getInitMethod();
+    if (initMethod.isAsync == null) {
+      assert isFirstPass;
+      addAsyncCallDependency(currentFunction(), expr, initMethod);
+    }
+    else {
+      // If initMethod is async then we need to mark ourselves as async
+      if (isAsync(initMethod, null, expr.args)) {
+        async(expr);
+      }
+    }
+
     freeLocals(expr.args.size());
     return null;
   }
