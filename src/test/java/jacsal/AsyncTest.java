@@ -121,6 +121,8 @@ public class AsyncTest {
 
     async("class X { Y y = null; def f(x){ y = new Y(sleep(0,x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
     async("class X { Y y = null; def f(x){ y = sleep(0,new Y(x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
+    async("class X { int i = sleep(0,1) }; new X().i", 1);
+    sync("class X { int i = 1 }; new X().i", 1);
   }
 
   @Test public void builtinFunctions() {

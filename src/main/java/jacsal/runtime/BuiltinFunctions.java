@@ -88,16 +88,20 @@ public class BuiltinFunctions {
       registerMethod("asChar", "intAsChar", INT, false, 0);
       registerMethod("toBase", "intToBase", INT, false, 1);
       registerMethod("sqr", "intSqr", INT, true, 0);
+      registerMethod("abs", "intAbs", INT, false, 0);
 
       // long methods
       registerMethod("toBase", "longToBase", LONG, false, 1);
       registerMethod("sqr", "longSqr", LONG, true, 0);
+      registerMethod("abs", "longAbs", LONG, false, 0);
 
       // double methods
       registerMethod("sqr", "doubleSqr", DOUBLE, true, 0);
+      registerMethod("abs", "doubleAbs", DOUBLE, false, 0);
 
       // decimal methods
       registerMethod("sqr", "decimalSqr", DECIMAL, true, 0);
+      registerMethod("abs", "decimalAbs", DECIMAL, false, 0);
 
       // Number methods
       registerMethod("pow", "numberPow", NUMBER, true, 1);
@@ -113,7 +117,6 @@ public class BuiltinFunctions {
       registerGlobalFunction("sleep", "sleep", false, 1);
       registerGlobalFunction("nextLine", "nextLine", false, 0);
       registerGlobalFunction("stream", "stream", true, 1, List.of(0));
-      registerGlobalFunction("abs", "abs", false, 1);
       registerGlobalFunction("eval", "eval", false, 1);
 
       initialised = true;
@@ -479,29 +482,25 @@ public class BuiltinFunctions {
   }
 
   // = abs
-  public static Object abs(Number num) {
-    if (num instanceof BigDecimal) {
-      return ((BigDecimal)num).abs();
-    }
-    if (num instanceof Double) {
-      double d = (double)num;
-      return d < 0 ? -d : d;
-    }
-    if (num instanceof Long) {
-      long n = (long)num;
-      return n < 0 ? -n : n;
-    }
-    int n = (int)num;
+  public static int intAbs(int n)                   { return n < 0 ? -n : n; }
+  public static long longAbs(long n)                { return n < 0 ? -n : n; }
+  public static double doubleAbs(double n)          { return n < 0 ? -n : n; }
+  public static BigDecimal decimalAbs(BigDecimal n) { return n.abs(); }
+  public static Object intAbsWrapper(Integer n, Continuation c, String source, int offset, Object[] args) {
+    validateArgCount(args, 0, INT,0, source, offset);
     return n < 0 ? -n : n;
   }
-  public static Object absWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, null,1, source, offset);
-    try {
-      return abs((Number)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to abs() must be number not " + RuntimeUtils.className(args[0]), source, offset);
-    }
+  public static Object longAbsWrapper(Long n, Continuation c, String source, int offset, Object[] args) {
+    validateArgCount(args, 0, LONG,0, source, offset);
+    return n < 0 ? -n : n;
+  }
+  public static Object doubleAbsWrapper(Double n, Continuation c, String source, int offset, Object[] args) {
+    validateArgCount(args, 0, DOUBLE,0, source, offset);
+    return n < 0 ? -n : n;
+  }
+  public static Object decimalAbsWrapper(BigDecimal n, Continuation c, String source, int offset, Object[] args) {
+    validateArgCount(args, 0, DOUBLE,0, source, offset);
+    return n.abs();
   }
 
   /////////////////////////////////////

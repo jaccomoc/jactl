@@ -3327,17 +3327,17 @@ Classes can even have fields of the same type as the class they are embedded in:
 > 
 ```
 
-## Methods
+## Instance Methods
 
 We have seen classes with fields but classes are more than just a data structure for grouping related pieces of
 data.
-Classes can also have methods defined for them:
+Classes can also have instance methods defined for them:
 ```groovy
 > class Point { int x,y }
 > class Rect {
     Point p1, p2
 
-    int area() { abs(p1.x - p2.x) * abs(p1.y - p2.y) }
+    int area() { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
 
     boolean contains(Point p) {
       p.x >= [p1.x, p2.x].min() && p.x <= [p1.x, p2.x].max() &&
@@ -3345,6 +3345,9 @@ Classes can also have methods defined for them:
     }
   }
 ```
+
+Instance methods are associated with an instance of the class and reference to the fields within a method
+access the fields of that instance.
 
 Methods are accessed the same way as fields and then invoked using `()` just as for functions:
 ```groovy
@@ -3364,6 +3367,37 @@ Since methods can be accessed like they are fields you can use `?.` and `[]` and
 true
 > rect['are' + 'a']()
 16
+```
+
+## This
+
+Within instance methods instance fields are accessed by referring directly to their names:
+```groovy
+> class X { 
+    int i = 3
+    int f() { i }       // return the value of the i field
+  }
+> new X().f()
+3
+```
+
+There is an implicit variable `this` for the instance that can also be used to refer to the fields.
+This is handy if there are local variables or parameters that have the same name as on of the fields:
+```groovy
+> class X {
+    int i = 3
+    int add(int i) { this.i + i }   // Add this.i to the parameter i
+  }
+> new X().add(4)
+7
+```
+
+You need to use `this` in situations where you want to pass a reference to the current instance to another function
+or method:
+```groovy
+> class X { int i = 3; def doSomething(closure) { closure(this) } }
+> new X().doSomething{ println it }
+[i:3]
 ```
 
 ## Static Methods
@@ -3447,7 +3481,7 @@ Like normal functions, methods can be assigned as values to variables and passed
 > class Rect {
     Point p1, p2
 
-    int area() { abs(p1.x - p2.x) * abs(p1.y - p2.y) }
+    int area() { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
   }
 ```
 
@@ -3490,32 +3524,203 @@ Note what happens if we now change the value of the `rect` variable:
 The `area` variable points to the `area()` method bound to the original instance so even if `rect` gets a new value
 `area` is still bound to the old value.
 
-## Base Classes
+## Inner Classes
 
-Like Java, Jacsal supports the concept of a class extending another class (the base class or parent class):
+Inner classes can be defined within a class if desired:
 ```groovy
-> class Point { int x,y }
-> class Shape { 
-    Point 
-    
+> class Shapes {
+    class Point  { def x,y }
+    class Rect   { 
+      Point p1, p2
+      def area()   { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
+      def centre() { new Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2) }
+    }
+    class Circle { 
+      Point centrePoint
+      def radius
+      def area() { radius * radius * 3.1415926536 }
+      def centre() { centre }
+    }
+
+    List shapes = []
+ 
+    Rect   createRect(x1,y1,x2,y2) {
+      def rect = new Rect(new Point(x1,y1),new Point(x2,y2))
+      shapes <<= rect
+      return rect
+    }
+    Circle createCircle(x,y,radius) {
+      def circ = new Circle(new Point(x,y),radius)
+      shapes <<= circ
+      return circ
+    }
+ 
+    def areas()   { shapes.map{ it.area() }   }
+    def centres() { shapes.map{ it.centre() } }
   }
+> def shapes = new Shapes()
+[shapes:[]]
+> shapes.createRect(1,2,5,6)
+[p1:[x:1, y:2], p2:[x:5, y:6]]
+> shapes.createCircle(3,4,5)
+[centrePoint:[x:3, y:4], radius:5]
+> shapes.areas()
+[16, 78.5398163400] 
 ```
 
+You can access the inner classes from outside their outer class by fully qualifying them with the outer
+class name:
+```groovy
+> new Shapes.Circle(new Shapes.Point(3,4), 12).area()
+452.3893421184
+```
 
-* extends
-* duck typing
-* passing methods as values
-* super
-* Separate compilation vs in-script
-* Scoping (where can be declared)
-* Import and import as
-* no interfaces
-* no abstract classes
-* no generics
-* no private/public etc
-* toString()
-* nested classes but no non-static inner classes
-* packages
+You can, of course, also nest inner classes within inner classes:
+```groovy
+> class X{ class Y { class Z { int i = 1 } } }
+> new X.Y.Z().i
+1
+```
+
+Note that Jacsal inner classes are always "static inner classes" in Java terminology.
+This means that instances of inner classes are not implicitly bound to an instance of an outer class. 
+There is no way in Jacsal to declare a non-static inner class.
+
+## toString()
+
+When converting a class instance to a string for the purposes of printing them or because they are being coerced
+into a string use `as` then the output is shown as though the instance were a Map:
+```groovy
+> class X { int i,j }
+> def x = new X(3,4)
+[i:3, j:4]
+> x as String
+[i:3, j:4]
+```
+
+When printing a class instance, Jacsal will first check to see if there is a `toString()` method defined or not
+before using the default string conversion.
+If `toString()` has been defined then this will be used instead so this is how you can customise the way in which
+class instances for a given class should be converted into strings:
+```groovy
+> class X { int i,j; def toString() { "i=$i, j=$j" } }
+> new X(3,4)
+i=3, j=4
+```
+
+The `toString()` method must have no mandatory arguments and must have a return type of `String` or `def`.
+
+## Duck Typing
+
+Jacsal allows you to use strong typing, where fields, variables, and parameters are given an expicit type, or dynamic
+typing where fields, variables, and parameters can be defined as `def` which allows them to hold values of any type.
+
+If you use strong typing then in most cases the Jacsal compiler can determine at compile time what method is being
+invoked and can do complile time checking of argument count and argument types.
+
+Dynamic typing (or weak typing) means that the method invocation can only be checked at runtime and a runtime error
+will be produced if the method doesn't exist or the argument types don't match.
+This is also known as "duck typing" which means that we don't actually care if the object is a duck, we only want to
+know that it "talks like a duck" in that it has a method of the given name we are looking for. 
+
+For example the function `func()` doesn't care what type of object it is given as long as there is a method called
+`f()` it can invoke on it:
+```groovy
+> class X { def f() { 'invoked X.f()' } }
+> class Y { def f() { 'invoked Y.f()' } }
+> def func(x) { x.f() }
+Function@2130192211
+> func(new X())
+invoked X.f()
+> func(new Y())
+invoked Y.f()
+```
+
+Jacsal does not take any position on whether strong typing or weak typing is more superior.
+It is up to you as the developer to decide what makes sense or what feels more natural.
+
+## Packages
+
+Related classes can be grouped together into packages.
+When using the Jacsal REPL all classes are put into the top level package and there is no way to specify any other
+package.
+Packages are useful when integrating Jacsal scripts into a Java application.
+
+A package can be thought of like a library.
+They allow a set of customisation classes to be grouped together into a library that can then be used by other
+Jacsal scripts.
+
+See the [Integration Guide](integration-guide.md) for more information about how packages work when compiling
+Jacsal scripts and classes in your Java application.
+
+When compiling Jacsal classes and scripts the first line of the file can contain a package statement which specifies
+what package the script or class should be compiled into:
+```groovy
+package a.b.c
+
+class X {
+  int i,j
+ 
+  class Y {
+    static def someMethod() { 'some string' }
+  }
+}
+```
+
+The package name that come after the `package` keyword must be a dot separated list of lowercase names.
+The package name can be a single name such as `util` or can be list like `xyz.util.messaging`.
+
+The packages form a tree where a package `a.b.c` is contained with the package `a.b` which is inside `a`.
+Classes can exist at any level of the tree, not just at the most nested levels.
+
+## Fully Qualified Class Names and Import
+
+When using packages, classes in the same package can be accessed directly via their name.
+If a class exists in a different package then you can refer to the class using its fully qualified name which is
+the package name followed by a `.` and then the classname.
+
+For example if there is a class `X` in package `a.b.c` then you access the class using `a.b.c.X`.
+For example:
+```groovy
+new a.b.c.X(1,2)
+```
+
+If there is a nested class `Y` in side the class `X` then it can be accessed as `a.b.c.X.Y`.
+For example, to access a static method of class `Y` you would use this:
+```groovy
+a.b.c.X.Y.someMethod()
+```
+
+To save having to continually type the full package name each time you use a class from another package you can
+use `import` to import the class definition into the current Jacsal script or class file:
+```groovy
+package x.y.z
+
+import a.b.c.X
+
+def x = new X(1,2)
+X.Y.someMethod()     // Inner classes can now be accessed directly as X.xxx
+```
+
+You can also use `import as` to import the class and give it an alias.
+If you have a long class name you might want to use it with a different alias within the current file:
+```groovy
+package x.y.z
+
+import a.b.c.MyLongNamedClass as MLNC
+
+def x = new MLNC()
+```
+
+Using `import as` is also useful if you have classes of the same name in different packages that you need
+access to.
+
+## Scoping
+
+Unlike functions which can be declared in any scope and then have visibility within that scope, classes can only
+be declared in two places:
+1. Top level of a script or class file, or
+2. As an inner class within another class declaration.
 
 # Builtin Functions and Methods
 

@@ -64,8 +64,8 @@ abstract class Expr {
   boolean isResultUsed = true;
 
   // Marker interface to indicate whether MethodCompiler visitor for that element type
-  // handles leaving result or not (based on isResultUsed flag) or whether result management
-  // needs to be done for it.
+  // handles leaving result on stack or not (based on isResultUsed flag) or whether
+  // result management needs to be done for it.
   interface ManagesResult {}
 
   // Whether expression is a direct function call (and not a closure)

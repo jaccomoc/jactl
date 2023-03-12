@@ -716,7 +716,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         // default to ANY and figure it out at runtime
         return ANY;
       }
-      error("Invalid object type (" + parent.type + ") for field access", accessOperator);
+      error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
     }
     return null;
   }

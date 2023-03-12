@@ -4935,31 +4935,31 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void abs() {
-    test("abs(0)", 0);
-    test("abs(-0)", 0);
-    test("abs(-1)", 1);
-    test("abs(1)", 1);
-    test("abs(1.0)", "#1.0");
-    test("abs(-1.0)", "#1.0");
-    test("abs(1.0D)", 1.0D);
-    test("abs(-1.0D)", 1.0D);
-    test("abs(1L)", 1L);
-    test("abs(-1L)", 1L);
-    test("def f = abs; f(-1L)", 1L);
-    testError("abs('abc')", "cannot convert argument");
-    testError("def f = abs; f('abc')", "must be number");
-    test("def x = -0; abs(x)", 0);
-    test("def x = 0; abs(x)", 0);
-    test("def x = -1; abs(x)", 1);
-    test("def x = 1; abs(x)", 1);
-    test("def x = 1.0; abs(x)", "#1.0");
-    test("def x = -1.0; abs(x)", "#1.0");
-    test("def x = 1.0D; abs(x)", 1.0D);
-    test("def x = -1.0D; abs(x)", 1.0D);
-    test("def x = 1L; abs(x)", 1L);
-    test("def x = -1L; abs(x)", 1L);
-    test("def f = abs; def x = -1L; f(x)", 1L);
-    testError("def x = 'abc'; abs(x)", "cannot be cast to Number");
+    test("0.abs()", 0);
+    test("-0.abs()", 0);
+    test("-1.abs()", 1);
+    test("1.abs()", 1);
+    test("1.0.abs()", "#1.0");
+    test("-1.0.abs()", "#1.0");
+    test("1.0D.abs()", 1.0D);
+    test("-1.0D.abs()", 1.0D);
+    test("1L.abs()", 1L);
+    test("-1L.abs()", 1L);
+    test("def f = -1L.abs; f()", 1L);
+    testError("'abc'.abs()", "no such method");
+    testError("def f = 'abc'.abs; f()", "no matching method");
+    test("def x = -0; x.abs()", 0);
+    test("def x = 0; x.abs()", 0);
+    test("def x = -1; x.abs()", 1);
+    test("def x = 1; x.abs()", 1);
+    test("def x = 1.0; x.abs()", "#1.0");
+    test("def x = -1.0; x.abs()", "#1.0");
+    test("def x = 1.0D; x.abs()", 1.0D);
+    test("def x = -1.0D; x.abs()", 1.0D);
+    test("def x = 1L; x.abs()", 1L);
+    test("def x = -1L; x.abs()", 1L);
+    test("def x = -1L; def f = x.abs; f()", 1L);
+    testError("def x = 'abc'; x.abs()", "no such method");
   }
 
   @Test public void listEach() {
