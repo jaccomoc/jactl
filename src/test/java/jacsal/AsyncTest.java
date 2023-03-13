@@ -163,5 +163,7 @@ public class AsyncTest {
     async("def f = nextLine; stream(f)", "1\n2\n3", List.of("1","2","3"));
     async("def f = null; f = nextLine; stream(f)", "1\n2\n3", List.of("1","2","3"));
     sync("def i = 0; stream{ i++ < 3 ? i : null }", List.of(1,2,3));
+    async("eval('1 + 2')", 3);
+    async("eval('sleep(0,3) + sleep(0,2)') + sleep(0,-3) + sleep(0,2)", 4);
   }
 }

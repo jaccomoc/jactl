@@ -93,12 +93,19 @@ public class Jacsal {
                                  .printLoop(argMap.containsKey('p'))
                                  .nonPrintLoop(argMap.containsKey('n'))
                                  .build();
-      var result = Compiler.run(script, context, globals);
-
-      // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
-      if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
-        System.out.println(result);
+      Object result = null;
+      try {
+        result = Compiler.run(script, context, globals);
+        // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
+        if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
+          System.out.println(result);
+        }
       }
+      catch (Throwable e) {
+        e.printStackTrace();
+        System.exit(1);
+      }
+
       System.exit(0);
     }
     catch (CompileError e) {

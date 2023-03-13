@@ -408,15 +408,13 @@ public class BuiltinFunctions {
 
   private static String readLine(BufferedReader input) {
     try {
-      String line = input.readLine();
-      if (line != null) {
-        input.mark(1);
-        boolean eof = input.read() == -1;
-        input.reset();
-        if (line.isEmpty() && eof) {
-          return null;
-        }
+      input.mark(1);
+      boolean eof = input.read() == -1;
+      if (eof) {
+        return null;
       }
+      input.reset();
+      String line = input.readLine();
       return line;
     }
     catch (IOException e) {
@@ -676,7 +674,7 @@ public class BuiltinFunctions {
       throw new RuntimeError("Index out of bounds: negative index (" + (index-list.size()) + ") resolves to location before start of list", source, offset);
     }
     if (index > list.size()) {
-      throw new RuntimeError("Index out of bounds:  (" + index + " is too large)", source, offset);
+      throw new RuntimeError("Index out of bounds: (" + index + " is too large)", source, offset);
     }
     list.add(index, elem);
     return list;

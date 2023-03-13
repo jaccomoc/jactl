@@ -5905,6 +5905,11 @@ class CompilerTest extends BaseTest {
     testError("def f(x){sleep(0,null) as int}; [1].map(f)", "null value cannot be coerced to int");
   }
 
+  @Test public void asyncErrorPropagation() {
+    testError("def f(m) { m.y.z == 1 ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "null value for parent");
+    testError("def f(m) { m.x == ('x'+m.x) as Decimal ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "string value is not a valid decimalx");
+  }
+
   @Test public void toStringTest() {
     testError("null.toString()", "tried to invoke method on null");
     test("1.toString()", "1");

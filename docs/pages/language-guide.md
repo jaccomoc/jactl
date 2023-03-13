@@ -59,7 +59,7 @@ If you have a Jacsal script in a file called `myscript.jacsal` then you can the 
 $ java -jar jacsal-1.0.jar myscript.jacsal
 ```
 
-See [Command Line Invocation](/pages/language-guide/#commandline) for more details about how to invoke scripts
+See [Command Line Invocation](#commandline) for more details about how to invoke scripts
 from the command line.
 
 # Statement Termination: Newlines and Semicolons
@@ -1902,6 +1902,64 @@ The order of the modifiers is unimportant.
 The only modifiers supported for `split` are `i` (case-insensitive), `s` (dot matches line terminators), and
 `m` (multi-line mode).)
 
+# Eval Function
+
+The `eval()` function can be used to evaluate arbitrary Jacsal code.
+It takes the string passed to it and compiles and runs it.
+The return value is the value of the last expression in the script:
+```groovy
+> eval('def f(n) { n == 1 ? 1 : n * f(n-1)}; f(5)')
+120
+```
+
+You can return any type of value including a function or closure:
+```groovy
+> def f = eval('def f(n) { n == 1 ? 1 : n * f(n-1)}')
+Function@1894369629
+> f(5)
+120
+```
+
+You can pass an optional Map to the function if you want to prepopulate the values of some variables:
+```groovy
+> eval('def f(n) { n == 1 ? 1 : n * f(n-1)}; f(x)', [x:6])
+720
+```
+
+You can also use the Map as a way to capture additional output from the script.
+Top level variables in the script will become entries in the Map:
+```groovy
+> def vars = [x:6]
+[x:6]
+> eval('def f(n) { n == 1 ? 1 : n * f(n-1)}; def first10 = 10.map{ f(it+1) }; f(x)', vars)
+720
+> vars
+[x:6, f:Function@445918232, first10:[1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800]]
+```
+
+Since it is compiled there could be compile errors that prevent the script running.
+In this case the return value will be null:
+```groovy
+> def vars = [x:6]
+[x:6]        
+> def result = eval('def f(n) { : n == 1 ? 1 : n * f(n-1)}; def first10 = 10.map{ f(it+1) }; f(x)', vars)
+> result == null
+true
+```
+
+If you passed in a Map then the `$error` entry in the Map will hold the compile error:
+```groovy
+> vars.'$error'
+jacsal.CompileError: Unexpected token ':': Expected start of expression @ line 1, column 12
+def f(n) { : n == 1 ? 1 : n * f(n-1)}; def first10 = 10.map{ f(it+1) }; f(x)
+           ^
+```
+
+Note that this is not the most efficient way to run Jacsal code since it has to compile the code before it can run
+it, so if it is to be used it should be used judiciously.
+
+
+
 # If/Else Statements
 
 Jacsal `if` statements work in the same way as Java and Groovy `if` statements.
@@ -3044,6 +3102,16 @@ If you want to eliminate all duplicates regardless of where they are in the list
 ['a', 'b', 'c']
 ```
 
+## reverse()
+
+The `reverse()` method will reverse the order of the elements being iterated over:
+```groovy
+> [1, 2, 3].reverse()
+[3, 2, 1]
+> 10.map{ it+1 }.map{ it*it }.reverse()
+[100, 81, 64, 49, 36, 25, 16, 9, 4, 1]
+```
+
 ## reduce()
 
 The `reduce()` method will iterate over a list and invoke a given closure on each element.
@@ -3319,13 +3387,46 @@ fields can have any type:
 
 Classes can even have fields of the same type as the class they are embedded in:
 ```groovy
-> class Tree {
-    Tree left  = null
-    Tree right = null
-    def        data
-  }
-> 
+class Tree {
+  Tree left  = null
+  Tree right = null
+  def        data
+}
 ```
+
+## Auto-Creation
+
+Just as for Maps, Jacsal supports "auto-creation" of fields when a field reference appears as a left-hand side of an
+assignment like operator such as `=`, `?=`, `+=`, `-=`, etc., as long as the types of the fields are types that can
+be created with no arguments.
+In other words, the types must not have any mandatory fields.
+
+For example:
+```groovy
+> class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3 }
+> def x = new X()
+[y:null]
+> x.y.z.i = 4
+4
+> x
+[y:[z:[i:4]]]
+```
+
+By assigning a value to `x.y.z.i` we automatically created the missing values for `x.y` and `x.y.z` since they
+were types that could be auto-created.
+
+If a type has a mandatory field then the auto-create will fail:
+```groovy
+> class X { Y y = null }; class Y { int j; Z z = null }; class Z { int i = 3 }
+> def x = new X()
+[y:null]
+> x.y.z.i = 4
+Cannot auto-create instance of type Class<Y> as there are mandatory fields @ line 1, column 3
+x.y.z.i = 4
+        ^
+```
+
+
 
 ## Instance Methods
 
@@ -3333,7 +3434,7 @@ We have seen classes with fields but classes are more than just a data structure
 data.
 Classes can also have instance methods defined for them:
 ```groovy
-> class Point { int x,y }
+> class Point { int x,y }class Point { int x,y }
 > class Rect {
     Point p1, p2
 
@@ -3539,7 +3640,7 @@ Inner classes can be defined within a class if desired:
       Point centrePoint
       def radius
       def area() { radius * radius * 3.1415926536 }
-      def centre() { centre }
+      def centre() { centrePoint }
     }
 
     List shapes = []
@@ -3565,7 +3666,9 @@ Inner classes can be defined within a class if desired:
 > shapes.createCircle(3,4,5)
 [centrePoint:[x:3, y:4], radius:5]
 > shapes.areas()
-[16, 78.5398163400] 
+[16, 78.5398163400]
+> shapes.centres()
+[[x:3, y:4], [x:3, y:4]]
 ```
 
 You can access the inner classes from outside their outer class by fully qualifying them with the outer
@@ -3722,12 +3825,330 @@ be declared in two places:
 1. Top level of a script or class file, or
 2. As an inner class within another class declaration.
 
-# Builtin Functions and Methods
+# Builtin Global Functions
 
-## Functions
+There are a handful of global functions.
 
-There are a handful of 
+## timestamp() and nanoTime()
 
+The `timestamp()` function returns the current epoch time in milliseconds.
+It is equivalent to Java's `System.currentTimeMillis()`:
+```groovy
+> timestamp()
+1678632694373
+```
+
+The `nanoTime()` function returns the value of the system timer in nanoseconds.
+It is equivalent in Java to `System.nanoTime()`.
+It is a number that can be used for timing but has no correlation with system or wall-clock time.
+It has no value except within the currently running Java Virtual Machine instance, so it cannot be compared
+to values from other processes even ones running on the same machine.
+
+For example:
+```groovy
+> long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+Function@1000966072
+> def time(closure) {
+    def start  = nanoTime()
+    def result = closure()
+    println "Result: $result, duration: ${nanoTime() - start} nanoseconds" 
+  }
+Function@2050339061
+> time{ fib(40) }
+Result: 102334155, duration: 199072125 nanoseconds
+```
+
+## sprintf()
+
+You can use `sprintf` to format strings.
+It takes a format string as its first argument and then a list of arguments that are formatted according to the
+format string.
+
+The format string uses `%s` for formatting strings, `%f` for floating point numbers, `%d` for integer amounts, and
+so forth.
+Between the `%` and the letter indicating the type can be numbers controlling the width and whether the field is
+left-aligned or right-aligned as well as number of decimal points for floating point numbers.
+It uses Java's `String.format()` function so for a full description of how the format string works see
+the Javadoc for `String.format()`.
+
+Here is an example:
+```groovy
+> def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+[[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
+> println sprintf('%-10s %-10s   %s', 'Name', 'Salary', 'Hourly Rate'); employees.each{
+    println sprintf('%-10s $%-10d  $%.2f', it.name, it.salary, it.salary / 4.333333 / 37.5)
+  }
+Name       Salary       Hourly Rate
+Frank      $2000        $12.31
+Daisy      $3000        $18.46
+Joe        $1500        $9.23
+```
+
+## sleep()
+
+The `sleep()` function will pause execution of the script until the given delay time has expired.
+The argument to `sleep()` is the number of milliseconds to pause for.
+
+For example:
+```groovy
+> sleep(500)
+```
+
+Note that the script is suspended during this pause time and resumed once the time period has expired.
+The event loop thread on which the script is executing does not block.
+The REPL waits for the entire script to complete so in the REPL the next prompt won't show until the sleep
+has completed.
+
+There is a second optional argument which is the value returned by `sleep()` once it has finished.
+This is mainly just used for internal testing of Jacsal for testing the suspending and resuming works correctly:
+```groovy
+> sleep(500, 3) + sleep(500, 2)
+5
+> sleep(500, 'ab') + sleep(500, 'c')
+abc
+```
+
+## eval()
+
+The [Eval Function](#Eval Function) section describes how this function works.
+
+## nextLine()
+
+When running Jacsal scripts from the [command line](#command-line-invocation) this function reads the next line from
+the input.
+
+When [integrated](integration-guide.md) into a Java application, this function will read the next line from the input that the application
+provides to the script.
+This is one way to pass information to a script.
+
+If reading the next line of input would block then the script is suspended and resumed when the next line becomes
+available.
+
+The function will return `null` when there are no more lines to read.
+
+For example here is a command line script that assumes each line is a number and adds them all together and
+prints out the result:
+```groovy
+def n, sum = 0
+while ((n = nextLine()) != null) {
+  sum += n as Decimal
+}
+println sum
+```
+
+## stream()
+
+The `stream()` function takes a closure/function as argument and produces a stream of values by continually
+invoking the closure/function until it returns `null`.
+These values can then be iterated over using any of the collection methods discussed previously.
+
+For example, here is a complicated way to print the numbers 0 to 4:
+```groovy
+> def i = 0
+0
+> def incrementer = { -> i < 5 ? i++ : null }
+Function@1787189503
+> stream(incrementer).each{ println it }
+0
+1
+2
+3
+4
+```
+
+Since the `nextLine()` function returns `null` when it has reached the end of the input, you can use `stream()`
+in conjunction with `nextLine()` to iterate over the input lines:
+```groovy
+def next = { -> nextLine() }
+stream(next).map{ it as Decimal }.sum()
+```
+
+This is the same as:
+```groovy
+stream{ nextLine() }.map{ it as Decimal }.sum()
+```
+
+Functions can be passed as values and are themselves callable, so you can pass the function directly as an
+argument:
+```groovy
+stream(nextLine).map{ it as Decimal }.sum()
+```
+
+To read all lines into a list:
+```groovy
+def lines = stream(nextLine)
+```
+
+# Builtin Methods
+
+## Common Methods for Collections
+
+In the section on [Collection Methods](#collection-methods) we have covered all the methods that work on any type
+of collection such as Lists, Maps, and Strings (as well on numbers when they act as a stream of integers):
+
+| Method             | Description                                                     |
+|:-------------------|:----------------------------------------------------------------|
+| `each()`           | Apply closure to each element                                   |
+| `map()`            | Map value of each element to a new value                        |
+| `mapWithIndex()`   | Map value and index of each element to a new value              |
+| `flatMap()`        | Map element to a new value, flattening if new value is a list   |
+| `filter()`         | Filter elements that match given criteria                       |
+| `collect()`        | Collect values into a new List                                  |
+| `collectEntries()` | Collect values into a new Map                                   |
+| `skip()`           | Skip first n elements                                           |
+| `limit()`          | Limit to first n elements                                       |
+| `unique()`         | Remove sequences of duplicate elements                          |
+| `join()`           | Join elements into a string with given separator                |
+| `sort()`           | Sort elements based on given sort order                         |
+| `reverse()`        | Reverse order of elements                                       |
+| `grouped()`        | Group elements into sub-lists of given size                     |
+| `reduce()`         | Apply given function to reduce list of elements to single value |
+| `min()`            | Find minimum value                                              |
+| `max()`            | Find maximum value                                              |
+| `sum()`            | Calculate sum of values                                         |
+| `avg()`            | Calculate average of values                                     |
+| `size()`           | Number of elements in the list                                  |
+
+Following sections will list the other methods for these types as well as methods for other types.
+
+## List Methods
+
+### size()
+
+The `size()` method returns the number of elements in a List, including any elements that are `null`:
+```groovy
+> [1, 'a', null, [1,2,3], null].size()
+5
+```
+
+## add()
+
+The `add()` method has two forms.
+It can be used to add an element to the end of an existing list if passed in a single argument, or if passed two
+arguments, the first argument is the position in the list where the element should be inserted.
+
+The single argument form of `add()` works like the `<<=` operator:
+```groovy
+> def x = [1,2,3]
+[1, 2, 3]
+> x.add(4)
+[1, 2, 3, 4]
+> x
+[1, 2, 3, 4]
+> x <<= 5
+[1, 2, 3, 4, 5]
+> x
+[1, 2, 3, 4, 5]
+```
+
+With two arguments, `add()` will insert the given value into the position given by the first argument (with `0` being
+the first position in the list):
+```groovy
+>  def x = ['a', 'b', 'c']
+['a', 'b', 'c']
+> x.add(0,'z')
+['z', 'a', 'b', 'c']
+> x.add(1, 'y')
+['z', 'y', 'a', 'b', 'c']
+> x
+['z', 'y', 'a', 'b', 'c']
+```
+
+If you add an element to a position equal to the size of the list, then the list is expanded to include this additional
+value:
+```groovy
+> def x = ['a', 'b', 'c']
+['a', 'b', 'c']
+> x.add(3, 'z')
+['a', 'b', 'c', 'z']
+```
+
+If you add an element beyond the size of the list, then you will get an error:
+```groovy
+> def x = ['a', 'b', 'c']
+['a', 'b', 'c']
+> x.add(10, 'z')
+Index out of bounds: (10 is too large) @ line 1, column 3
+x.add(10, 'z')
+  ^
+```
+
+Note that `x.add(3, 'z')` is different to `x[3] = 'z'`:
+```groovy
+> def x = ['a', 'b', 'c', 'd']
+['a', 'b', 'c', 'd']
+> x.add(3, 'z')
+['a', 'b', 'c', 'z', 'd']
+> def x = ['a', 'b', 'c', 'd']
+['a', 'b', 'c', 'd']
+> x[3] = 'z'
+z
+> x
+['a', 'b', 'c', 'z']
+```
+
+The `add()` method inserts into the list whereas `[]` replaces what was at the position with the new value.
+
+## remove()
+
+The `remove()` method removes the element at the given position from the list:
+```groovy
+> def x = ['a', 'b', 'c', 'd']
+['a', 'b', 'c', 'd']
+> x.remove(3)
+d
+> x
+['a', 'b', 'c'] 
+```
+
+The value returned from `remove()` is the value of the element that was removed.
+
+## subList()
+
+      registerMethod("subList", "listSubList", LIST, true, 1);
+
+      registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));
+      registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
+      registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
+      registerMethod("remove", "mapRemove", MAP, false, 1, List.of(0));
+
+      // String methods
+      registerMethod("lines", "stringLines", STRING, false);
+      registerMethod("length", "stringLength", STRING, false);
+      registerMethod("size", "stringLength", STRING, false);
+      registerMethod("toLowerCase", "stringToLowerCase", STRING, false, 0);
+      registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
+      registerMethod("substring", "stringSubstring", STRING, true, 1);
+      registerMethod("split", "stringSplit", STRING, true, 0);
+      registerMethod("asNum", "stringAsNum", STRING, true, 0);
+
+      // int methods
+      registerMethod("asChar", "intAsChar", INT, false, 0);
+      registerMethod("toBase", "intToBase", INT, false, 1);
+      registerMethod("sqr", "intSqr", INT, true, 0);
+      registerMethod("abs", "intAbs", INT, false, 0);
+
+      // long methods
+      registerMethod("toBase", "longToBase", LONG, false, 1);
+      registerMethod("sqr", "longSqr", LONG, true, 0);
+      registerMethod("abs", "longAbs", LONG, false, 0);
+
+      // double methods
+      registerMethod("sqr", "doubleSqr", DOUBLE, true, 0);
+      registerMethod("abs", "doubleAbs", DOUBLE, false, 0);
+
+      // decimal methods
+      registerMethod("sqr", "decimalSqr", DECIMAL, true, 0);
+      registerMethod("abs", "decimalAbs", DECIMAL, false, 0);
+
+      // Number methods
+      registerMethod("pow", "numberPow", NUMBER, true, 1);
+      registerMethod("sqrt", "numberSqrt", NUMBER, true, 0);
+
+      // Object methods
+      registerMethod("toString", "objectToString", ANY, false, 0);
+
+      // Global functions
 
 
 # Command Line Invocation
