@@ -4309,38 +4309,85 @@ The `toBase()` method converts an `int` or `long` to its character representatio
 1234
 ```
 
+Bases between 2 and 36 are supported:
+```groovy
+> 1234567879.toBase(37)
+Base must be between 2 and 36 @ line 1, column 12
+1234567879.toBase(37)
+           ^
+```
 
+### abs()
 
-     registerMethod("toBase", "intToBase", INT, false, 1);
-      registerMethod("sqr", "intSqr", INT, true, 0);
-      registerMethod("abs", "intAbs", INT, false, 0);
+The `abs()` method returns the absolute value of the number:
+```groovy
+> -15.abs()
+15
+> def distance(x1, x2) { (x1 - x2).abs() }
+Function@1987169128
+> distance(11, 121)
+110
+```
 
-      // long methods
-      registerMethod("toBase", "longToBase", LONG, false, 1);
-      registerMethod("sqr", "longSqr", LONG, true, 0);
-      registerMethod("abs", "longAbs", LONG, false, 0);
+### sqr()
 
-      // double methods
-      registerMethod("sqr", "doubleSqr", DOUBLE, true, 0);
-      registerMethod("abs", "doubleAbs", DOUBLE, false, 0);
+The `sqr()` method returns the square of the given number:
+```groovy
+> -1234.56.sqr()
+1524138.3936
+```
 
-      // decimal methods
-      registerMethod("sqr", "decimalSqr", DECIMAL, true, 0);
-      registerMethod("abs", "decimalAbs", DECIMAL, false, 0);
+### sqrt()
 
-      // Number methods
-      registerMethod("pow", "numberPow", NUMBER, true, 1);
-      registerMethod("sqrt", "numberSqrt", NUMBER, true, 0);
+The `sqrt()` method returns the square root of the number:
+```groovy
+> def x = 1234.5678.sqrt()
+35.13641700572214
+```
 
-      // Object methods
-      registerMethod("toString", "objectToString", ANY, false, 0);
+### pow()
 
-      // Global functions
+The `pow()` method allows you to calculate one number raised to the power of another.
+For example, to calculate the cube of a number:
+```groovy
+> def x = 123
+123
+> x.pow(3)   // cube of x
+1860867
+```
 
+The value of the exponent passed to `pow()` can be fractional and can be negative:
+```groovy
+> 16.pow(0.5)    // another way to get square root
+4
+> 16.pow(-1.5)
+0.015625
+```
 
-# Command Line Invocation
+## Object Methods
 
-# TODO
-* Classes
-** no static state in classes and no static initialiser blocks either (for same reason)
-* builtin functions and methods
+The only method that applies to objects of all types is the `toString()` method.
+If passed no argument it prints the string representation of the object:
+```groovy
+> 1234.toString()
+1234
+> def x = [a:1, b:[c:3,d:[1,2,3]]]
+[a:1, b:[c:3, d:[1, 2, 3]]]
+> x.toString()
+[a:1, b:[c:3, d:[1, 2, 3]]]
+```
+
+If an optional indent amount is passed to it then it will do a pretty-print of complex objects such as Maps, Lists,
+and class instances:
+```groovy
+> def x = [a:1, b:[c:3,d:[1,2,3]]]
+[a:1, b:[c:3, d:[1, 2, 3]]]
+> x.toString(2)
+[
+  a:1,
+  b:[
+    c:3,
+    d:[1, 2, 3]
+  ]
+]
+```
