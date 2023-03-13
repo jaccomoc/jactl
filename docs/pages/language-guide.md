@@ -4021,7 +4021,7 @@ The `size()` method returns the number of elements in a List, including any elem
 5
 ```
 
-## add()
+### add()
 
 The `add()` method has two forms.
 It can be used to add an element to the end of an existing list if passed in a single argument, or if passed two
@@ -4089,7 +4089,7 @@ z
 
 The `add()` method inserts into the list whereas `[]` replaces what was at the position with the new value.
 
-## remove()
+### remove()
 
 The `remove()` method removes the element at the given position from the list:
 ```groovy
@@ -4103,7 +4103,7 @@ d
 
 The value returned from `remove()` is the value of the element that was removed.
 
-## subList()
+### subList()
 
 The `subList()` method returns a sub-list of the list it is applied to.
 It can have one or two arguments.
@@ -4129,26 +4129,189 @@ This means that to extract a sub-list of length `n` at index `i` you would use `
 [2, 3]
 ```
 
-      registerMethod("subList", "listSubList", LIST, true, 1);
+Since Maps, Strings, and numbers can be iterated over, `subList()` can also be applied those types of objects as well:
+```groovy
+> 'abcdef'.subList(2,4)
+['c', 'd']
+> [a:1,b:2,c:3].subList(2)
+[['c', 3]]
+> [a:1,b:2,c:3].subList(1,3)
+[['b', 2], ['c', 3]]
+> 10.subList(5,8)
+[5, 6, 7]
+```
 
-      registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));
-      registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
-      registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
-      registerMethod("remove", "mapRemove", MAP, false, 1, List.of(0));
+## Map Methods
 
-      // String methods
-      registerMethod("lines", "stringLines", STRING, false);
-      registerMethod("length", "stringLength", STRING, false);
-      registerMethod("size", "stringLength", STRING, false);
-      registerMethod("toLowerCase", "stringToLowerCase", STRING, false, 0);
-      registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
-      registerMethod("substring", "stringSubstring", STRING, true, 1);
-      registerMethod("split", "stringSplit", STRING, true, 0);
-      registerMethod("asNum", "stringAsNum", STRING, true, 0);
+### size()
 
-      // int methods
-      registerMethod("asChar", "intAsChar", INT, false, 0);
-      registerMethod("toBase", "intToBase", INT, false, 1);
+The `size()` method returns the number of entries in the Map:
+```groovy
+> ['a':1, 'b':2, 'c':3].size()
+3
+```
+
+### remove()
+
+The `remove()` method removes the entry with the given key from the Map and returns the value for that key:
+```groovy
+> def x = ['a':1, 'b':2, 'c':3]
+[a:1, b:2, c:3]
+> x.remove('b')
+2
+> x
+[a:1, c:3]
+```
+
+If there is no such entry that matches the key, `remove()` will return `null`:
+```groovy
+> def x = ['a':1, 'b':2, 'c':3]
+[a:1, b:2, c:3]
+> x.remove('z') == null
+true
+> x
+[a:1, b:2, c:3]
+```
+
+## String Methods
+
+## size() and length()
+
+Jacsal supports the use of both `size()` and `length()` for getting the length of a string.
+`length()` is supported in order to make it easier for Java progammers who are used to using `length()`
+while `size()` is supported for consitency in naming across Lists, Maps, and Strings:
+```groovy
+> 'abcde'.size()
+5
+> 'abcde'.length()
+5
+```
+
+## lines()
+
+The `lines()` method splits the string into a list of strings, one per line in the source string:
+```groovy
+> def data = '''multi-line
+  string
+  on
+  four lines'''
+multi-line
+string
+on
+four lines
+> data.lines()
+['multi-line', 'string', 'on ', 'four lines']
+> ''.lines()
+['']
+```
+
+## toUpperCase() and toLowerCase()
+
+These methods turn a string into all upper case or all lower case:
+```groovy
+> 'abc'.toUpperCase()
+ABC
+> 'A String With Capitals'.toLowerCase()
+a string with capitals
+```
+
+## substring()
+
+The `substring()` method allows you to extract a substring starting at a given index.
+Like `subList()` it has a single argument version that returns the remaining string from the given index, and a two
+argument version that gives the two indexes that bound the substring.
+
+The single argument version work like this:
+```groovy
+> 'abcdef'.substring(3)
+def
+> 'abcdef'.substring(0)
+abcdef
+```
+
+The two argument version extracts the substring starting at the first index until one less than the value of the second
+index.
+This means that to extract `n` chars at index `i` you use `substring(i, i + n)`:
+```groovy
+> 'abcde'.substring(2,4)
+cd
+```
+
+## split()
+
+The `split()` method splits a string based on a separator specified by a regex with optional modifiers.
+See the previous section on the [Split Method](#split-method) for more information.
+
+## asNum()
+
+The `asNum()` method parses a string of digits and returns their numeric value.
+It takes an optional argument which is the base (or radix) for the number being parsed.
+
+For example:
+```groovy
+> '1234'.asNum()
+1234
+> 'ff14'.asNum(16)
+65300
+> '101011100110'.asNum(2)
+2790
+```
+
+A base of up to 36 is supported:
+```groovy
+> 'abzyAj13'.asNum(36)
+809760160983
+> 'abzyAj13'.asNum(37)
+Base was 37 but must be no more than 36 @ line 1, column 12
+'abzyAj13'.asNum(37)
+           ^
+```
+
+Both lowercase and uppercase letters are supported for bases greater than 10:
+```groovy
+> 'abcdef99'.asNum(16)
+2882400153
+> 'ABCDEF99'.asNum(16)
+2882400153
+```
+
+## Int Methods
+
+### asChar()
+
+The `asChar()` method converts a Unicode value back into its corresponding character (which is a single-character
+string in Jacsal):
+
+```groovy
+> 0x41.asChar()
+A
+```
+
+To convert from a character to its Unicode value, cast the single-character string to `int`:
+```groovy
+> (int)'Z'
+90
+> 90.asChar()
+Z
+```
+
+## Numeric Methods
+
+Apart from `toBase()`, these methods apply to all number types (`int`, `long`, `double`, and `Decimal`).
+
+### toBase()
+
+The `toBase()` method converts an `int` or `long` to its character representation in the specified base:
+```groovy
+> 1234.toBase(16)
+4D2
+> '4D2'.asNum(16)
+1234
+```
+
+
+
+     registerMethod("toBase", "intToBase", INT, false, 1);
       registerMethod("sqr", "intSqr", INT, true, 0);
       registerMethod("abs", "intAbs", INT, false, 0);
 

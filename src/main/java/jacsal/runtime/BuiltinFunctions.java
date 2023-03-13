@@ -86,12 +86,12 @@ public class BuiltinFunctions {
 
       // int methods
       registerMethod("asChar", "intAsChar", INT, false, 0);
-      registerMethod("toBase", "intToBase", INT, false, 1);
+      registerMethod("toBase", "intToBase", INT, true, 1);
       registerMethod("sqr", "intSqr", INT, true, 0);
       registerMethod("abs", "intAbs", INT, false, 0);
 
       // long methods
-      registerMethod("toBase", "longToBase", LONG, false, 1);
+      registerMethod("toBase", "longToBase", LONG, true, 1);
       registerMethod("sqr", "longSqr", LONG, true, 0);
       registerMethod("abs", "longAbs", LONG, false, 0);
 
@@ -513,23 +513,33 @@ public class BuiltinFunctions {
   }
 
   // = toBase
-  public static String longToBase(long num, int base) { return Long.toUnsignedString(num, base).toUpperCase(); }
+  public static String longToBase(long num, String source, int offset, int base) {
+    if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
+      throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
+    }
+    return Long.toUnsignedString(num, base).toUpperCase();
+  }
   public static Object longToBaseWrapper(Long num, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, LONG, 1, source, offset);
     if (!(args[0] instanceof Number)) {
       throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
     }
     int base = ((Number) args[0]).intValue();
-    return longToBase(num, base);
+    return longToBase(num, source, offset, base);
   }
-  public static String intToBase(int num, int base) { return Integer.toUnsignedString(num, base).toUpperCase(); }
+  public static String intToBase(int num, String source, int offset, int base) {
+    if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
+      throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
+    }
+    return Integer.toUnsignedString(num, base).toUpperCase();
+  }
   public static Object intToBaseWrapper(Integer num, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, INT, 1, source, offset);
     if (!(args[0] instanceof Number)) {
       throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
     }
     int base = ((Number) args[0]).intValue();
-    return intToBase(num, base);
+    return intToBase(num, source, offset, base);
   }
 
   // = sqrt

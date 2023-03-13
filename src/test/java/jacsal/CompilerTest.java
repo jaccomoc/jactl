@@ -5822,6 +5822,12 @@ class CompilerTest extends BaseTest {
     test("def x = -6; def f = x.toBase; f(16)", "FFFFFFFA");
     test("def x = -6L; def f = x.toBase; f(16)", "FFFFFFFFFFFFFFFA");
     test("def x = -6L; def f = x.toBase; f(16).asNum(16)", -6L);
+    test("123456789.toBase(36)", "21I3V9");
+    testError("123456789.toBase(37)", "base must be between 2 and 36");
+    testError("123456789.toBase(1)", "base must be between 2 and 36");
+    test("123456789L.toBase(36)", "21I3V9");
+    testError("123456789L.toBase(37)", "base must be between 2 and 36");
+    testError("123456789L.toBase(1)", "base must be between 2 and 36");
   }
 
   @Test public void asyncFunctions() {
@@ -5953,7 +5959,7 @@ class CompilerTest extends BaseTest {
 
   @Test public void asyncErrorPropagation() {
     testError("def f(m) { m.y.z == 1 ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "null value for parent");
-    testError("def f(m) { m.x == ('x'+m.x) as Decimal ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "string value is not a valid decimalx");
+    testError("def f(m) { m.x == ('x'+m.x) as Decimal ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "string value is not a valid decimal");
   }
 
   @Test public void toStringTest() {
