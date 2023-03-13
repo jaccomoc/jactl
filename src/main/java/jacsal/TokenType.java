@@ -151,6 +151,8 @@ public enum TokenType {
   BEGIN("BEGIN"),
   END("END"),
   DIE("die"),
+  FINAL("final"),
+  SEALED("sealed"),
 
   //= Special
   EOL(),            // End of line

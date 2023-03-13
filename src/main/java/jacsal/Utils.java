@@ -362,7 +362,7 @@ public class Utils {
     return result;
   }
 
-  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic, boolean isInitMethod) {
+  public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic, boolean isInitMethod, boolean isFinal) {
     Expr.FunDecl funDecl = new Expr.FunDecl(start, nameToken, returnType, params);
 
     // Build a FunctionDescriptor to unify Jacsal functions with builtin functions
@@ -380,6 +380,7 @@ public class Utils {
     descriptor.paramNames = params.stream().map(p -> p.declExpr.name.getStringValue()).collect(Collectors.toList());
     descriptor.paramTypes = params.stream().map(p -> p.declExpr.type).collect(Collectors.toList());
     descriptor.isInitMethod = isInitMethod;
+    descriptor.isFinal = isFinal;
     funDecl.functionDescriptor = descriptor;
     funDecl.isResultUsed = false;
     funDecl.type = FUNCTION;
@@ -452,7 +453,9 @@ public class Utils {
 
     // We create the instance and then invoke _$j$init on it
     var invokeNew  = new Expr.InvokeNew(newToken, className);
-    return new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACSAL_INIT, newToken, args);
+    var invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACSAL_INIT, newToken, args);
+    invokeInit.couldBeNull = false;
+    return invokeInit;
   }
 
   public static Stmt.VarDecl createParam(Token name, JacsalType type, Expr initialiser) {

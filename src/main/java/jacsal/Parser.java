@@ -125,7 +125,7 @@ public class Parser {
     declExpr.isParam = true;
     declExpr.isResultUsed = false;
     Stmt.VarDecl globals  = new Stmt.VarDecl(new Token(MAP, start), declExpr);
-    Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true, false);
+    Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true, false, false);
     Stmt.ClassDecl scriptClass = classes.peek();
     scriptClass.scriptMain = funDecl;
     List<Stmt> scriptStmts = scriptClass.scriptMain.declExpr.block.stmts.stmts;
@@ -399,6 +399,9 @@ public class Parser {
       if (inClassDecl && matchAny(STATIC)) {
         return true;           // "static" can only appear for function declarations
       }
+      if (inClassDecl && matchAny(FINAL)) {
+        return true;           // "final" can only appear for function declarations
+      }
       else {
         type(false);
       }
@@ -415,6 +418,7 @@ public class Parser {
    */
   private Stmt.FunDecl funDecl(boolean inClassDecl) {
     boolean isStatic = inClassDecl && matchAny(STATIC);
+    boolean isFinal  = inClassDecl && !isStatic && matchAny(FINAL);
     Token start = peek();
     JacsalType returnType = type(false);
     Token      name       = expect(IDENTIFIER);
@@ -430,7 +434,7 @@ public class Parser {
     matchAny(EOL);
     expect(LEFT_BRACE);
     matchAny(EOL);
-    Stmt.FunDecl funDecl = parseFunDecl(start, name, returnType, parameters, RIGHT_BRACE, false, isStatic);
+    Stmt.FunDecl funDecl = parseFunDecl(start, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
     Utils.createVariableForFunction(funDecl);
     funDecl.declExpr.varDecl.isField = inClassDecl;
     return funDecl;
@@ -1521,7 +1525,7 @@ public class Parser {
       noParamsDefined = true;
       parameters = List.of(createItParam(openBrace));
     }
-    Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false, false);
+    Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false, false, true);
     funDecl.declExpr.isResultUsed = true;
     return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
   }
@@ -1714,9 +1718,9 @@ public class Parser {
                                     List<Stmt.VarDecl> params,
                                     TokenType endToken,
                                     boolean isScriptMain,
-                                    boolean isStatic) {
+                                    boolean isStatic, boolean isFinal) {
     params.forEach(p -> p.declExpr.isExplicitParam = true);
-    Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic, false);
+    Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic, false, isFinal);
     params.forEach(p -> p.declExpr.owner = funDecl);
     Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(start, funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
@@ -1746,7 +1750,7 @@ public class Parser {
   }
 
   private Stmt.FunDecl convertBlockToFunction(Token name, Stmt.Block block, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
-    Expr.FunDecl funDecl = Utils.createFunDecl(name, name, returnType, params, isStatic, false);
+    Expr.FunDecl funDecl = Utils.createFunDecl(name, name, returnType, params, isStatic, false, false);
     insertStmtsInto(params, block);
     funDecl.block = block;
     return new Stmt.FunDecl(name, funDecl);

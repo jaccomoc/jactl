@@ -37,6 +37,7 @@ public class FunctionDescriptor {
   public boolean          isStatic = false;          // Whether method itself is static or not
   public boolean          isInitMethod = false;
   public boolean          isWrapper = false;
+  public boolean          isFinal = false;
 
   // Used by builtin functions:
   public boolean          needsLocation;

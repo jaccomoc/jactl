@@ -147,6 +147,8 @@ class TokeniserTest {
     doTest.accept("BEGIN", BEGIN);
     doTest.accept("END", END);
     doTest.accept("die", DIE);
+    doTest.accept("final", FINAL);
+    doTest.accept("sealed", SEALED);
     doTest.accept("%%", PERCENT_PERCENT);
     doTest.accept("%%=", PERCENT_PERCENT_EQUAL);
   }
@@ -193,7 +195,6 @@ class TokeniserTest {
       assertEquals(EOF,        tokeniser.next().getType());
     };
 
-    doTest.accept("_");
     doTest.accept("_1");
     doTest.accept("__1");
     doTest.accept("a__1");

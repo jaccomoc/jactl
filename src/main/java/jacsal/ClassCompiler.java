@@ -355,8 +355,12 @@ public class ClassCompiler {
   }
 
   protected void doCompileMethod(Expr.FunDecl method, String methodName, boolean isScriptMain) {
+    // Wrapper methods can't be final
+    assert !method.functionDescriptor.isFinal || !method.isWrapper;
+
     // Parameter types: heapLocals + params
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + (method.isStatic() ? ACC_STATIC : 0), methodName,
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC | (method.isStatic() ? ACC_STATIC : 0) | (method.functionDescriptor.isFinal ? ACC_FINAL : 0),
+                                      methodName,
                                       MethodCompiler.getMethodDescriptor(method),
                                       null, null);
     mv.visitCode();

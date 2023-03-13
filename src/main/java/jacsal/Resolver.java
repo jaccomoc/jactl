@@ -255,18 +255,23 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         }
         // Make sure that if overriding a base class method we have same signature (including param names)
         var baseClass = classDescriptor.getBaseClass();
+        var method = baseClass != null ? baseClass.getMethod(methodName) : null;
         if (baseClass != null) {
-          var method = baseClass.getMethod(methodName);
           if (method != null) {
-            validateSignatures(funDecl, method);
+            validateSignatures(funDecl, baseClass, method);
           }
         }
-        // We have to treat all instance methods as async since we might later be overridden by a child class that
-        // is async and we need the signatures to match (i.e. passing in of continuation).
-        // Furthermore, callers may not know what type of subclass an object is and whether its implementation of
-        // the method is async or not so we have to assume always that a call to an instance method is async.
+        // Instance method
         if (!funDecl.isStatic()) {
-          functionDescriptor.isAsync = true;
+          // We have to treat all non-final instance methods as async since we might later be overridden by a
+          // child class that is async and we need the signatures to match (i.e. passing in of continuation).
+          // Furthermore, callers may not know what type of subclass an object is and whether its implementation of
+          // the method is async or not so we have to assume always that a call to a non-final instance method is async.
+          // If a method is final and it does not override a method that is async then we will mark it async (during
+          // Analyser phase) only if it invokes something that is async.
+          if (!functionDescriptor.isFinal || baseClass != null && method != null && method.isAsync) {
+            functionDescriptor.isAsync = true;
+          }
         }
       });
       classDecl.methods = Utils.concat(initMethod, classDecl.methods);
@@ -341,7 +346,10 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private void validateSignatures(Expr.FunDecl funDecl, FunctionDescriptor baseMethod) {
+  private void validateSignatures(Expr.FunDecl funDecl, ClassDescriptor baseClass, FunctionDescriptor baseMethod) {
+    if (baseMethod.isFinal) {
+      error("Method " + baseMethod.name + "() is final in base class " + baseClass.getClassName() + " and cannot be overridden", funDecl.location);
+    }
     resolve(funDecl.returnType);
     resolve(baseMethod.returnType);
     if (funDecl.returnType.getType() != baseMethod.returnType.getType() ||
@@ -2101,7 +2109,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                                       identToken.apply(Utils.wrapperName(funDecl.functionDescriptor.implementingMethod)),
                                                       ANY,    // wrapper always returns Object
                                                       wrapperParams,
-                                                      funDecl.isStatic(), false);
+                                                      funDecl.isStatic(), false, false);
     wrapperFunDecl.functionDescriptor.isWrapper = true;
     Stmt.Stmts stmts = new Stmt.Stmts();
     List<Stmt> stmtList = stmts.stmts;
@@ -2304,7 +2312,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
                                                         .collect(Collectors.toList());
     JacsalType   classType     = createClass(classDescriptor);
     Token        initNameToken = token.newIdent(Utils.JACSAL_INIT);
-    Expr.FunDecl initFunc      = Utils.createFunDecl(token, initNameToken, classType.createInstance(), mandatoryParams, false, true);
+    Expr.FunDecl initFunc      = Utils.createFunDecl(token, initNameToken, classType.createInstance(), mandatoryParams, false, true, false);
     Stmt.Stmts initStmts       = new Stmt.Stmts();
     initFunc.block             = new Stmt.Block(token, initStmts);
 
@@ -2390,7 +2398,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     Expr.FunDecl initWrapper  = Utils.createFunDecl(classDecl.name, classDecl.name.newIdent(Utils.wrapperName(Utils.JACSAL_INIT)),
                                                     ANY,   /* wrappers always return Object */
                                                     List.of(sourceParam,offsetParam,objectArrParam),
-                                                    false, true);
+                                                    false, true, false);
     initWrapper.functionDescriptor.isWrapper = true;
     initWrapper.isWrapper     = true;
     Stmt.Stmts wrapperSmts    = new Stmt.Stmts();

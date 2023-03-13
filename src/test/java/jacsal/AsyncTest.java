@@ -119,6 +119,18 @@ public class AsyncTest {
     // Call to f() is async since one day another class may override with async version
     async("class X { Y y = null; def f(x){ y = new Y(x) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
 
+    // Call to f() is sync since it is final and doesn't call anything async
+    sync("class X { Y y = null; final def f(x){ y = new Y(x) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
+
+    async("class X { Y y = null; final def f(x){ y = new Y(sleep(0,x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
+
+    // Async because X.f() is async since it is not final
+    async("class X { def f(){1} }; class Y extends X { final def f(){ 3 } }; new Y().f()", 3);
+
+    sync("class X { }; class Y extends X { final def f(){ 3 } }; new Y().f()", 3);
+    async("class X { }; class Y extends X { final def f(){ 3 } }; new Y().\"${'f'}\"()", 3);
+    async("class X { }; class Y extends X { final def f(){ 3 } }; def x = new Y(); x.f()", 3);
+
     async("class X { Y y = null; def f(x){ y = new Y(sleep(0,x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
     async("class X { Y y = null; def f(x){ y = sleep(0,new Y(x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
     async("class X { int i = sleep(0,1) }; new X().i", 1);

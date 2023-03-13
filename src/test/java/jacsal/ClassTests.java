@@ -1134,6 +1134,15 @@ public class ClassTests extends BaseTest {
     testError("class X extends X{}; new X()", "class cannot extend itself");
   }
 
+  @Test public void finalMethods() {
+    testError("class X{ static final def f(){1} }", "unexpected token 'final'");
+    testError("class X{ final static def f(){1} }", "unexpected token 'static'");
+    testError("class X{ final def f(){1} }; class Y extends X { def f(){2} }", "method f() is final");
+    testError("class X{ final def f(){1} }; class Y extends X { }; class Z extends Y { def f(){2} }", "method f() is final");
+    test("class X{ def f(){1} }; class Y extends X { final def f(){2} }; new Y().f()", 2);
+    testError("class X{ }; class Y extends X { final def f(){1} }; class Z extends Y { def f(){2} }", "method f() is final");
+  }
+
   @Test public void superReferences() {
     testError("class X { def f(){super.f()} }; X x = new X(); x.f()", "does not extend any base class");
     testError("class X {}; class Y extends X { def f(){super.f()} }; Y y = new Y(); y.f()", "no such method/field 'f'");

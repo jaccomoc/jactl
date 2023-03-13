@@ -166,21 +166,21 @@ For example:
 * emailAddress
 
 # Keywords
-{: #keywords}
 
 The following table list the reserved keywords used by Jacsal:
 
-| Key Words |         |     |         |       |
-|-----------|---------|-----|---------|-------|
-| BEGIN     | Decimal | END | List    | Map   |
-| String    | and     | as  | boolean | break |
-| class     | continue | def | die | do |
-| double    | else | extends | false | for |
-| if        | implements | import | in | instanceof |
-| int       | interface | long | new | not |
-| null      | or | package | print | println |
-| return    | static | true | unless | var |
-| void      | while | | | |
+| Key Words  |          |             |          |             |
+|------------|----------|-------------|----------|-------------|
+| BEGIN      | Decimal  | END         | List     | Map         |
+| String     | and      | as          | boolean  | break       |
+| class      | continue | def         | die      | do          |
+| double     | else     | extends     | false    | final       |
+| for        | if       | implements  | import   | in          |
+| instanceof | int      | interface   | long     | new         |
+| not        | null     | or          | package  | print       |
+| println    | return   | sealed      | static   | true        |
+| unless     | var      | void        | while    |             |
+
 
 # Types
 
@@ -199,7 +199,7 @@ The standard types are:
 | int      | Integers (32 bit)          | `0`           | `0`, `1`, `-99`                |
 | long     | Large integers (64 bit)    | `0L`          | `0L`, `99999999999L`           |
 | double   | Floating point numbers     | `0D`          | `0.01D`, `1.234D`, `-99.99D`   |
-| Decimal  | Decimal numbers            | '0'           | `0.0`, `0.2345`, `1244.35`     |
+| Decimal  | Decimal numbers            | `0`           | `0.0`, `0.2345`, `1244.35`     |
 | String   | Strings                    | `''`          | `'abc'`, `'some string value'`, `"y=${x * 4}"`, `/^x?[0-9]*$/` |
 | List     | Used for lists of values   | `[]`          | `[1,2,3]`, `['a',[1,2,3],'c']` |
 | Map      | Map of key/value pairs     | `[:]`         | `[a:1]`, `[x:1, y:[1,2,3], z:[a:1,b:2]]`, `{d:2,e:5}` |
@@ -3499,6 +3499,24 @@ or method:
 > class X { int i = 3; def doSomething(closure) { closure(this) } }
 > new X().doSomething{ println it }
 [i:3]
+```
+
+## Final Methods
+
+Instance methods can be marked as `final` which means that they cannot be overridden by a child class.
+In addition, in situations where we know the type of the object and we know that the method is final, there
+are optimisations that the compiler can make if it can also determine that the invocation cannot invoke something 
+that will suspend due to an asynchronous function being invoked.
+
+There are also optimisations that the Java Virtual Machine can do when invoking `final` methods.
+
+Here is an example of the use of `final`:
+```groovy
+> class X { final def func() { 'final function' } }
+> class Y extends X { def func() { 'trying to override final function' } }
+Method func() is final in base class X and cannot be overridden @ line 1, column 21
+class Y extends X { def func() { 'trying to override final function' } }
+                    ^
 ```
 
 ## Static Methods
