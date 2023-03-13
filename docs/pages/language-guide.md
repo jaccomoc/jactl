@@ -4105,6 +4105,30 @@ The value returned from `remove()` is the value of the element that was removed.
 
 ## subList()
 
+The `subList()` method returns a sub-list of the list it is applied to.
+It can have one or two arguments.
+
+With one argument it returns the sub-list from the given position until the end of the list:
+```groovy
+> [1, 2, 3, 4].subList(2)
+[3, 4]
+> ['a', 'b', 'c'].subList(1)
+['b', 'c']
+```
+
+A value of `0`, therefore, returns a copy of the original list:
+```groovy
+> ['a', 'b', 'c'].subList(0)
+['a', 'b', 'c']
+```
+
+With two arguments, the first argument is the start index, and the second is one more than the end index.
+This means that to extract a sub-list of length `n` at index `i` you would use `subList(i, i + n)`:
+```groovy
+> [1, 2, 3, 4].subList(1,3)   // extract subList of length 2 at index 1
+[2, 3]
+```
+
       registerMethod("subList", "listSubList", LIST, true, 1);
 
       registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));

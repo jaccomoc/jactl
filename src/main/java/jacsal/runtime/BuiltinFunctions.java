@@ -776,7 +776,7 @@ public class BuiltinFunctions {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
                             : (List) c.getResult();
-      return listSubList(list, source, offset, start, end);
+      return listSubList(list, source, offset, start, end == Integer.MIN_VALUE ? list.size() : end);
     }
     catch (Continuation cont) {
       throw new Continuation(cont, iteratorSubListHandle.bindTo(iterable), 0, new long[]{offset, start,end}, new Object[]{source});
@@ -788,7 +788,26 @@ public class BuiltinFunctions {
   }
   public static Object iteratorSubListWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
     args = validateArgCount(args, 1, ITERATOR,2, source, offset);
-    return iteratorSize(iterable, c);
+    int begin = -1;
+    if (!(args[0] instanceof Number)) {
+      throw new RuntimeError("First argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+    }
+    begin = ((Number)args[0]).intValue();
+    try {
+      if (args.length > 1) {
+        if (!(args[1] instanceof Number)) {
+          throw new RuntimeError("Second argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
+        }
+        int end = ((Number) args[1]).intValue();
+        return iteratorSubList(iterable, c, source, offset, begin, end);
+      }
+      else {
+        return iteratorSubList(iterable, c, source, offset, begin, Integer.MIN_VALUE);
+      }
+    }
+    catch (Exception e) {
+      throw new RuntimeError("SubList error", source, offset, e);
+    }
   }
 
   ////////////////////////////////
