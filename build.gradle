@@ -17,6 +17,8 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.0'
+    id 'java'
 }
 
 group 'jacsal'
@@ -57,5 +59,21 @@ jar {
 
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+shadowJar {
+    relocate 'org.objectweb.asm', 'jacsal.ow2.asm'
+    archiveClassifier.set('lib')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        mavenLocal()
     }
 }

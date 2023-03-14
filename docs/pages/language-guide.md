@@ -48,9 +48,9 @@ Usage: jacsal [switches] [programFile] [inputFile]* [--] [arguments]*
          -h           : print this help
 ```
 
-Using the _-e_ option allows you to supply the script on the comand line itself:
+Using the `-e` option allows you to supply the script on the comand line itself:
 ```shell
-$ java -jar jacsal-1.0.jar -e '3 * 14'
+$ java -jar jacsal-1.0.jar -e '3 * 4'
 12
 ```
 
@@ -59,7 +59,7 @@ If you have a Jacsal script in a file called `myscript.jacsal` then you can the 
 $ java -jar jacsal-1.0.jar myscript.jacsal
 ```
 
-See [Command Line Invocation](#commandline) for more details about how to invoke scripts
+See [Command Line Scripts](command-line-scripts.md) for more details about how to invoke scripts
 from the command line.
 
 # Statement Termination: Newlines and Semicolons
@@ -3932,7 +3932,7 @@ The [Eval Function](#Eval Function) section describes how this function works.
 
 ## nextLine()
 
-When running Jacsal scripts from the [command line](#command-line-invocation) this function reads the next line from
+When running Jacsal scripts from the [command line](#command-line-scripts) this function reads the next line from
 the input.
 
 When [integrated](integration-guide.md) into a Java application, this function will read the next line from the input that the application
