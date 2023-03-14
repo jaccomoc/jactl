@@ -62,6 +62,8 @@ public class JacsalContext {
   Set<String>                 packages    = new HashSet<>();
   Map<String,ClassDescriptor> classLookup = new HashMap<>();  // Keyed on internal name
 
+  DynamicClassLoader          classLoader = new DynamicClassLoader();
+
   ///////////////////////////////
 
   public static JacsalContext create() {
@@ -72,7 +74,12 @@ public class JacsalContext {
 
   Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replaceAll("/", ".");
-    var clss = new DynamicClassLoader().defineClass(className, bytes);
+    if (classLoader.getClass(className) != null) {
+      // Redefining existing class so create a new ClassLoader. This allows already defined classes that
+      // want to refer to the old version of the class to continue working.
+      classLoader = new DynamicClassLoader(classLoader);
+    }
+    var clss = classLoader.defineClass(className, bytes);
     addClass(descriptor);
     return clss;
   }
@@ -136,12 +143,28 @@ public class JacsalContext {
     classLookup.put(descriptor.getInternalName(), descriptor);
   }
 
-  private Map<String,Class<?>> classes = new HashMap<>();
 
   private class DynamicClassLoader extends ClassLoader {
+    private Map<String,Class<?>> classes  = new HashMap<>();
+    private DynamicClassLoader   previous = null;
+
+    DynamicClassLoader() {}
+
+    DynamicClassLoader(DynamicClassLoader prev) {
+      this.previous = prev;
+    }
+
+    Class<?> getClass(String name) {
+      Class<?> clss = classes.get(name);
+      if (clss == null && previous != null) {
+        clss = previous.getClass(name);
+      }
+      return clss;
+    }
+
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
-      Class<?> clss = classes.get(name);
+      Class<?> clss = getClass(name);
       if (clss != null) {
         return clss;
       }

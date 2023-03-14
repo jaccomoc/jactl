@@ -1233,6 +1233,10 @@ public class ClassTests extends BaseTest {
                  "class Y extends X{def f(){2 + super.f()}}",
                  "class X extends Y{def f(){3}}"),
          "def x = new Y(); ((X)x).f() + ((Y)x).f() + x.f()", "cannot be cast");
+    test(List.of("class X { def f() { 'old X' } }",
+                 "class Y extends X {}",
+                 "class X { def f() { 'new X' } }"),
+         "new Y().f()", "old X");
   }
 
   @Test public void packages() {

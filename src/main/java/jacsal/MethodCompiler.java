@@ -1593,13 +1593,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
       boolean invokeSpecial = expr.parent.isSuper();
 
+      var methodClass = method.isStatic ? method.implementingClass : expr.parent.type.getInternalName();
+
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
       // (and method allows optional args) then invoke wrapper which will worry about filling
       // missing values.
       if (expr.args.size() == method.paramCount && !Utils.isNamedArgs(expr.args) && expr.validateArgsAtCompileTime) {
         // We can invoke the method directly as we have exact number of args required
-        // TODO: handle var args when we get a builtin method that needs it
         invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            // Get the instance
@@ -1631,7 +1632,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
                            }
                          },
-                         () -> invokeUserMethod(method.isStatic, invokeSpecial, method.implementingClass, method.implementingMethod,
+                         () -> invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.implementingMethod,
                                                 expr.type, methodParamTypes(method)));
       }
       else {
@@ -1657,7 +1658,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (method.isBuiltin && !method.isGlobalFunction) {
                              paramTypes = Utils.concat(method.firstArgtype, paramTypes);
                            }
-                           invokeUserMethod(method.isStatic, invokeSpecial, method.implementingClass, method.wrapperMethod, ANY, paramTypes);
+                           invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
                            // Convert Object returned by wrapper back into return type of the function
                            checkCast(method.returnType);
                            if (method.returnType.isPrimitive()) {
