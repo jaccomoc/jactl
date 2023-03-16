@@ -94,8 +94,8 @@ $ jacsal -e '3 + 4'
 7
 ```
 
-If the script itself already invokes `print` or `println` then it assumed that the script wants to control its output
-and the default printing of the final expression is supressed:
+If the script itself already invokes `print` or `println` then it assumes that the script wants to control its output
+and the default printing of the final expression is suppressed:
 ```shell
 $ jacsal -e 'println "Result is ${3 + 4}"'
 Result is 7
@@ -120,9 +120,9 @@ to a script.
 
 ## The `-v` Option
 
-The `-v` option is to show errors with verbose output.
-This means that the error stack trace is shown as well as the error.
-Normally only the error message is shown.
+The `-v` option is used when there are errors to show more verbose output.
+This means that the error stack trace will be shown along with the error where as
+normally only the error message is shown.
 
 ## The `-d` Option
 
@@ -206,7 +206,8 @@ Since the `-` file name was the second one in the list the `stdin` input was add
 
 The `-p` option causes the script to be wrapped in the following code:
 ```groovy
-stream(nextLine).each{
+def it
+while ((it = nextLine()) != null) {
   ...      // your script inserted here
   
   println it
@@ -216,7 +217,7 @@ stream(nextLine).each{
 This means that the `it` variable will iterate over the lines of the input (whether `stdin` or files listed on command
 line).
 
-For example, given the files we saw in the previous section called `some_file` and `another_file` we can do this to
+For example, given the files we saw in the previous section called `some_file` and `another_file`, we can do this to
 prepend the length to every line:
 ```shell
 $ jacsal -p -e 's/^/${it.length()}: /' some_file another_file
@@ -230,16 +231,40 @@ $ jacsal -p -e 's/^/${it.length()}: /' some_file another_file
 This works because `s/^/${it.length()}: /` by default operates on the `it` variable and so it modifies `it` which is
 then automatically printed by the implicit `println it` in the wrapping code.
 
-Note that when there are multiple options, they can be joined together unless they take an argument so
+Note that when there are multiple options, they can be joined together (unless they take an argument) so
 `-p -e 's/^/${it.length()}: /'` can also be written `-pe 's/^/${it.length()}: /'` since `-p` doesn't take an
 argument.
 
 If you don't want to automatically print every line then the `-n` has the same behaviour except that it doesn't
-automatically print the line each time:
+automatically print the line each time, so in order to print only lines that match some regex we could do this:
 ```shell
 $ jacsal -ne '/ s.*file/r and println it' some_file another_file
 This is the second line in the same file
 this is some text in another file
+```
+
+To print lines that do not match a regex, this would work:
+```shell
+$ jacsal -ne '/ s.*file/r or println it' some_file another_file
+This is the first line in a file
+This is the third line
+and this is another line in that file
+```
+
+Or another way to print lines that don't match:
+```shell
+$ jacsal -ne 'println it unless / s.*file/r' some_file another_file
+This is the first line in a file
+This is the third line
+and this is another line in that file
+```
+
+And yet another way:
+```shell
+$ jacsal -ne '!/ s.*file/r and println it' some_file another_file
+This is the first line in a file
+This is the third line
+and this is another line in that file
 ```
 
 Note that these options can also be used when the script is in a separate file rather than on the command line.
@@ -261,6 +286,19 @@ i:4 h:3 s:2 t:2 e:2 T:1 r:1 d:1 l:1 n:1
 t:4 i:4 e:4 s:3 h:2 o:2 n:2 m:1 x:1 a:1 r:1 f:1 l:1
 i:5 n:4 t:4 a:3 h:3 e:3 s:2 l:2 d:1 o:1 r:1 f:1
 ```
+
+Since the script is wrapped in a `while` loop, it is possible for the script to use `continue` and `break` where
+it makes sense to control the behaviour of the loop:
+
+```shell
+$ jacsal -pe '/second/r and continue; s/This is//' some_file another_file
+ the first line in a file
+ the third line
+this is some text in another file
+and this is another line in that file
+```
+
+Note in this example how the `continue` skips the processing and the printing if the input line matches `/second/`.
 
 ## `BEGIN` and `END` Sections
 
@@ -305,7 +343,7 @@ i:5 n:4 t:4 a:3 h:3 e:3 s:2 l:2 d:1 o:1 r:1 f:1
 Totals: i:24 e:18 s:14 t:14 h:13 n:12 l:8 a:6 f:5 r:4 o:4 T:3 d:3 m:2 c:1 x:1
 ```
 
-Note that when using `-p` and `-n` global variables do not have to be declared before they can be used.
+Note that when using `-p` and `-n`, global variables do not have to be declared before they can be used.
 Normally we would declare the `freq` variable in the `BEGIN` section like this:
 ```groovy
 BEGIN {
@@ -313,10 +351,10 @@ BEGIN {
 }
 ```
 
-If we do that, the scope of `freq` is the block within which it is declared, so it would not be visible outside
+If we do that, however, the scope of `freq` is the block within which it is declared, so it would not be visible outside
 the `BEGIN` block.
 
-That is why, when running with `-p` and `-n` options global variables do not need to be declared:
+That is why, when running with `-p` and `-n` options, global variables do not need to be declared:
 assigning to a global variable will cause it to be created.
 
 ## Passing Arguments to Script
@@ -329,8 +367,10 @@ access.
 
 For example:
 ```shell
-jacsal -e 'args.each{ println "arg: $it" }' -- some additional args
+$ jacsal -e 'args.each{ println "arg: $it" }' -- some -e additional -x args
 arg: some
+arg: -e
 arg: additional
+arg: -x
 arg: args
 ```
