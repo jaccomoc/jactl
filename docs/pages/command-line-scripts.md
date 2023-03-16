@@ -1,0 +1,336 @@
+# Command Line Scripts
+
+Jacsal scripts can be run from the shell command line and can be used in situations where you might normally
+use Unix utilities such as `sed` or `awk` and even some situations where you might have used `perl` in the past.
+
+The Jacsal JAR file, when run using `java -jar` will compile and run a given script.
+
+## Command Line Arguments
+
+If you run the JAR file without any arguments it prints this help text:
+```shell
+$ java -jar jacsal-1.0.jar
+Usage: jacsal [options] [programFile] [inputFile]* [--] [arguments]*
+         -p           : run in a print loop reading input from stdin or files
+         -n           : run in a loop but don't print each line
+         -e script    : script string is interpreted as jacsal code (programFile not used)
+         -v           : show verbose errors (give stack trace)
+         -V var=value : initialise jacsal variable before running script
+         -d           : debug: output generated code
+         -h           : print this help
+
+Exception in thread "main" java.lang.IllegalArgumentException: Missing '-e' option and no programFile specified
+	at jacsal.Jacsal.main(Jacsal.java:52)
+```
+
+## Jacsal Shell Script
+
+It is recommended that you create a shell script for invoking Jacsal called `jacsal` to save having to type the
+`java -jar <path_to>/jacsal-1.0.jar` every time.
+
+For a shell compatible with `bash` you can create a shell script like the following called `jacsal` and add it to
+a directory in your execution path:
+```shell
+#!/bin/bash
+java -jar <path_to>/jacsal-1.0.jar "$@"
+```
+
+Note that the `/bin/bash` should be the location of your shell and `<path_to>` should be replaced with the location
+of the `jacsal-1.0.jar` file.
+
+We will assume from now on that you have such a shell script and will use `jacsal` in place of `java -jar jacsal-1.0.jar`. 
+
+## Running Scripts
+
+To run a file containing a Jacsal script just pass the file name directly to the `jacsal` command.
+For example, assume there is a file `myscript.jacsal` containing this:
+```groovy
+def fact(x) { x <= 1 ? 1 : x * fact(x - 1) }
+
+10.map{ it + 1 }
+  .map{ [it, fact(it)] }
+  .each{ n,fact -> println "Factorial of $n is $fact" }
+```
+
+To run this script:
+```shell
+$ jacsal myscript.jacsal
+Factorial of 1 is 1
+Factorial of 2 is 2
+Factorial of 3 is 6
+Factorial of 4 is 24
+Factorial of 5 is 120
+Factorial of 6 is 720
+Factorial of 7 is 5040
+Factorial of 8 is 40320
+Factorial of 9 is 362880
+Factorial of 10 is 3628800
+```
+
+## The `-e` Option
+
+The `-e` option allows you to run some Jacsal code entered directly on the command line:
+```shell
+$ jacsal -e '10.map{ it + 1 }.sum()'
+55
+```
+
+Note that `-e` only accepts a single argument so you should wrap the code in `'` single quotes so that the shell
+won't split the code into multiple arguments when a space is encountered.
+
+If you want to be able to use single quotes in your script then in `bash`, if the first quote is prefixed by `$`, you
+are then allowed to use `\` to escape other characters within the single quotes (including single quotes):
+```shell
+$ jacsal -e $'10.map{ (int)\'a\' + it }.map{ it.asChar() }.join()'
+abcdefghij
+```
+
+## Printing Result
+
+By default, when not using the `-p` or `-n` options (see below), Jacsal will output the value of the final expression
+in the Jacsal script or command line script:
+```shell
+$ jacsal -e '3 + 4'
+7
+```
+
+If the script itself already invokes `print` or `println` then it assumed that the script wants to control its output
+and the default printing of the final expression is supressed:
+```shell
+$ jacsal -e 'println "Result is ${3 + 4}"'
+Result is 7
+```
+
+## The `-V` Option
+
+The `-V` option allows you to define a variable and a string value for that variable that the script can access:
+```shell
+$ jacsal -V n=10 -e '(n as int).map{ (it+1).sqr() }'
+[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+```
+
+The option can be used multiple times:
+```shell
+$ jacsal -V n=10 -V power=3 -e '(n as int).map{ (it+1).pow(power as int) }'
+[1, 8, 27, 64, 125, 216, 343, 512, 729, 1000]
+```
+
+See [Passing Arguments to Script](#passing-arguments-to-script) for another way to pass in values from the command line
+to a script.
+
+## The `-v` Option
+
+The `-v` option is to show errors with verbose output.
+This means that the error stack trace is shown as well as the error.
+Normally only the error message is shown.
+
+## The `-d` Option
+
+The `-d` option is the debug option to print out the generated code.
+If given twice it outputs even more detail.
+
+This option should only be used when reporting problems.
+
+## Input
+
+The Jacsal scripts can read from `stdin` using `nextLine()`.
+Assume there is a file called `some_file` with this content:
+```shell
+This is the first line in a file
+This is the second line in the same file
+This is the third line
+```
+
+Then, to prepend the line length to each line we can `cat` the file to our jacsal script:
+```shell
+$ cat some_file | jacsal -e 'def line; while ((line = nextLine()) != null) { println "${line.size()}: $line" }'
+32: This is the first line in a file
+40: This is the second line in the same file
+22: This is the third line
+```
+
+This could also be written more idiomatically as:
+```shell
+$ cat some_file | jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }'
+32: This is the first line in a file
+40: This is the second line in the same file
+22: This is the third line
+```
+
+Jacsal supports a list of files being passed to it on the command line so this achieves the same thing:
+```shell
+$ jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file
+32: This is the first line in a file
+40: This is the second line in the same file
+22: This is the third line
+```
+
+Multiple file names can be listed and the script will concatenate the multiple files into one stream of input.
+Assume that there is another file called `another_file` with this content:
+```shell
+this is some text in another file
+and this is another line in that file
+```
+
+Then if we pass both file names to the script we will have this output:
+```shell
+$ jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file another_file
+32: This is the first line in a file
+40: This is the second line in the same file
+22: This is the third line
+33: this is some text in another file
+37: and this is another line in that file
+```
+
+When file names are passed to the script, the `stdin` input is not read.
+If you want to include `stdin` in the input processed by the script you use a single hyphen `-` as the file name.
+For example:
+```shell
+$ jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file - another_file
+32: This is the first line in a file
+40: This is the second line in the same file
+22: This is the third line
+text typed in at the terminal
+29: text typed in at the terminal
+and more text
+13: and more text
+33: this is some text in another file
+37: and this is another line in that file
+```
+
+Note that lines not starting with a number were typed in at the terminal and so form the input for `stdin`.
+To terminate the `stdin` input `<ctrl-D>` was used.
+Since the `-` file name was the second one in the list the `stdin` input was added between the two files.
+
+## The `-p` and `-n` Options
+
+The `-p` option causes the script to be wrapped in the following code:
+```groovy
+stream(nextLine).each{
+  ...      // your script inserted here
+  
+  println it
+}
+```
+
+This means that the `it` variable will iterate over the lines of the input (whether `stdin` or files listed on command
+line).
+
+For example, given the files we saw in the previous section called `some_file` and `another_file` we can do this to
+prepend the length to every line:
+```shell
+$ jacsal -p -e 's/^/${it.length()}: /' some_file another_file
+32: This is the first line in a file
+40: This is the second line in the same file
+22: This is the third line
+33: this is some text in another file
+37: and this is another line in that file
+```
+
+This works because `s/^/${it.length()}: /` by default operates on the `it` variable and so it modifies `it` which is
+then automatically printed by the implicit `println it` in the wrapping code.
+
+Note that when there are multiple options, they can be joined together unless they take an argument so
+`-p -e 's/^/${it.length()}: /'` can also be written `-pe 's/^/${it.length()}: /'` since `-p` doesn't take an
+argument.
+
+If you don't want to automatically print every line then the `-n` has the same behaviour except that it doesn't
+automatically print the line each time:
+```shell
+$ jacsal -ne '/ s.*file/r and println it' some_file another_file
+This is the second line in the same file
+this is some text in another file
+```
+
+Note that these options can also be used when the script is in a separate file rather than on the command line.
+So imagine we have a script called `freq.jacsal` that counts letter frequency for a line:
+```groovy
+println it.filter{ it != " " }
+          .reduce([:]){ m,c -> m[c]++; m }
+          .sort{ a,b -> b[1] <=> a[1] }
+          .map{ c,freq -> "$c:$freq" }
+          .join(" ")
+```
+
+To run this over all lines of our input files we do this:
+```shell
+$ jacsal -n freq.jacsal some_file another_file
+i:6 s:3 e:3 h:2 t:2 f:2 l:2 n:2 T:1 r:1 a:1
+e:6 i:5 s:4 h:3 n:3 t:2 l:2 T:1 c:1 o:1 d:1 a:1 m:1 f:1
+i:4 h:3 s:2 t:2 e:2 T:1 r:1 d:1 l:1 n:1
+t:4 i:4 e:4 s:3 h:2 o:2 n:2 m:1 x:1 a:1 r:1 f:1 l:1
+i:5 n:4 t:4 a:3 h:3 e:3 s:2 l:2 d:1 o:1 r:1 f:1
+```
+
+## `BEGIN` and `END` Sections
+
+When running with the `-p` or `-n` options you might want to do some initialisation at the very beginning or print
+out a result at the very end of the input.
+
+You can use a `BEGIN` section to perform any up-front initialisation before any input is processed and an `END`
+section to perform any work after the input has all been processed.
+
+Here is an example where we modify the `freq.jacsal` script to add a `BEGIN` section to initialise a Map that will
+keep letter frequencies across all lines, and an `END` section to print the results at the end:
+```groovy
+BEGIN {
+  freq = [:]
+}
+
+println it.filter{ it != " " }
+          .reduce([:]){ m,c ->
+            m[c]++
+            freq[c]++     // update global frequency count
+            m
+          }
+          .sort{ a,b -> b[1] <=> a[1] }
+          .map{ c,freq -> "$c:$freq" }
+          .join(" ")
+
+END {
+  println "\nTotals: " + freq.sort{ a,b -> b[1] <=> a[1] }
+                             .map{ c,freq -> "$c:$freq" }
+                             .join(" ")
+}
+```
+Then when we run it:
+```shell
+$ jacsal -n freq.jacsal some_file another_file
+i:6 s:3 e:3 h:2 t:2 f:2 l:2 n:2 T:1 r:1 a:1
+e:6 i:5 s:4 h:3 n:3 t:2 l:2 T:1 c:1 o:1 d:1 a:1 m:1 f:1
+i:4 h:3 s:2 t:2 e:2 T:1 r:1 d:1 l:1 n:1
+t:4 i:4 e:4 s:3 h:2 o:2 n:2 m:1 x:1 a:1 r:1 f:1 l:1
+i:5 n:4 t:4 a:3 h:3 e:3 s:2 l:2 d:1 o:1 r:1 f:1
+
+Totals: i:24 e:18 s:14 t:14 h:13 n:12 l:8 a:6 f:5 r:4 o:4 T:3 d:3 m:2 c:1 x:1
+```
+
+Note that when using `-p` and `-n` global variables do not have to be declared before they can be used.
+Normally we would declare the `freq` variable in the `BEGIN` section like this:
+```groovy
+BEGIN {
+  def freq = [:]
+}
+```
+
+If we do that, the scope of `freq` is the block within which it is declared, so it would not be visible outside
+the `BEGIN` block.
+
+That is why, when running with `-p` and `-n` options global variables do not need to be declared:
+assigning to a global variable will cause it to be created.
+
+## Passing Arguments to Script
+
+As well as passing in variables using the `-V` option, you can additionally pass in arguments for a script at the
+command line by using `--` (double hyphen) and then listing the arguments.
+The `--` tells Jacsal that there are no more options for Jacsal itself (including no more file names) and that
+all arguments after the `--` should be passed as an array in a variable called `args` that the script can then
+access.
+
+For example:
+```shell
+jacsal -e 'args.each{ println "arg: $it" }' -- some additional args
+arg: some
+arg: additional
+arg: args
+```

@@ -506,10 +506,7 @@ public class Utils {
     List<String> files = new ArrayList<>();
     int i;
     ARGS: for (i = 0; i < args.length; i++) {
-      if (args[i].startsWith("-")) {
-        if (args[i].length() == 1) {
-          error.accept("Encountered option flag '-' with no option");
-        }
+      if (args[i].startsWith("-") && args[i].length() > 1) {
         for (int j = 1; j < args[i].length(); j++) {
           char opt = args[i].charAt(j);
           if (opt == 'h') {

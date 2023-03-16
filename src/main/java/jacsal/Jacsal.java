@@ -17,12 +17,10 @@
 
 package jacsal;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,14 +30,15 @@ import java.util.stream.Stream;
 
 public class Jacsal {
   public static void main(String[] args) throws IOException {
-    String usage = "Usage: jacsal [switches] [programFile] [inputFile]* [--] [arguments]* \n" +
+    String usage = "Usage: jacsal [options] [programFile] [inputFile]* [--] [arguments]* \n" +
                    "         -p           : run in a print loop reading input from stdin or files\n" +
                    "         -n           : run in a loop but don't print each line\n" +
                    "         -e script    : script string is interpreted as jacsal code (programFile not used)\n" +
+                   "         -v           : show verbose errors (give stack trace)\n" +
                    "         -V var=value : initialise jacsal variable before running script\n" +
                    "         -d           : debug: output generated code\n" +
                    "         -h           : print this help\n";
-    var argMap = Utils.parseArgs(args, "d*pne:V:*",
+    var argMap = Utils.parseArgs(args, "d*vpne:V:*",
                                  usage);
     var files     = (List<String>) argMap.get('*');
     var arguments = (List<String>) argMap.get('@');
@@ -55,10 +54,6 @@ public class Jacsal {
       String file = files.remove(0);
       script = Files.readString(Path.of(file));
     }
-    if (files.size() > 0 && !argMap.containsKey('p') && !argMap.containsKey('n')) {
-      // If no '-p' or '-n' then "files" are just arguments to our script
-      arguments = Stream.concat(files.stream(), arguments.stream()).collect(Collectors.toList());
-    }
     Map<String,Object> globals   = new HashMap<>();
     if (argMap.containsKey('V')) {
       List<String> variables = (List<String>) argMap.get('V');
@@ -71,48 +66,50 @@ public class Jacsal {
       });
     }
 
-    globals.put("args", arguments);
-    globals.put("input", new BufferedReader(new InputStreamReader(System.in)));
-    boolean[] printInvoked = new boolean[]{ false };
-    globals.put("output", new PrintStream(System.out) {
-      @Override public void print(String s) {
-        super.print(s);
-        printInvoked[0] = true;
-      }
-
-      @Override public void println(String x) {
-        super.println(x);
-        super.flush();
-        printInvoked[0] = true;
-      }
-    });
-
     try {
+      globals.put("args", arguments);
+      List<InputStream> fileStreams = files.stream().map(Jacsal::getFileStream).collect(Collectors.toList());
+      var inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
+                                               : System.in;
+      globals.put("input", new BufferedReader(new InputStreamReader(inputStream)));
+      boolean[] printInvoked = new boolean[]{ false };
+      globals.put("output", new PrintStream(System.out) {
+        @Override public void print(String s) {
+          super.print(s);
+          printInvoked[0] = true;
+        }
+
+        @Override public void println(String x) {
+          super.println(x);
+          super.flush();
+          printInvoked[0] = true;
+        }
+      });
+
       var context = JacsalContext.create()
-                                 .replMode(argMap.containsKey('e'))
+                                 .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
                                  .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
                                  .printLoop(argMap.containsKey('p'))
                                  .nonPrintLoop(argMap.containsKey('n'))
                                  .build();
       Object result = null;
-      try {
-        result = Compiler.run(script, context, globals);
-        // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
-        if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
-          System.out.println(result);
-        }
+      result = Compiler.run(script, context, globals);
+      // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
+      if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
+        System.out.println(result);
       }
-      catch (Throwable e) {
-        e.printStackTrace();
-        System.exit(1);
-      }
-
-      System.exit(0);
     }
-    catch (CompileError e) {
-      System.err.println(e);
+    catch (Throwable e) {
+      if (argMap.containsKey('v')) {
+        e.printStackTrace();
+      }
+      else {
+        System.err.println(e.getMessage());
+      }
       System.exit(1);
     }
+
+    System.exit(0);
   }
 
   private static void validateName(String name) {
@@ -128,6 +125,17 @@ public class Jacsal {
       if (!Character.isJavaIdentifierPart(c) || c == '$') {
         throw new IllegalArgumentException("Variable name cannot contain '" + c + "'");
       }
+    }
+  }
+
+  private static InputStream getFileStream(String name) {
+    try {
+      return name.equals("-") ? System.in : new FileInputStream(name);
+    }
+    catch (FileNotFoundException e) {
+      System.err.println("Error reading " + name + ": " + e.getMessage());
+      System.exit(1);
+      return null;
     }
   }
 }

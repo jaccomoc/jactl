@@ -409,14 +409,7 @@ public class BuiltinFunctions {
 
   private static String readLine(BufferedReader input) {
     try {
-      input.mark(1);
-      boolean eof = input.read() == -1;
-      if (eof) {
-        return null;
-      }
-      input.reset();
-      String line = input.readLine();
-      return line;
+      return input.readLine();
     }
     catch (IOException e) {
       return null;
