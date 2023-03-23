@@ -367,10 +367,7 @@ access.
 
 For example:
 ```shell
-$ jacsal -e 'args.each{ println "arg: $it" }' -- some -e additional -x args
-arg: some
-arg: -e
+$ jacsal -e 'args.each{ println "arg: $it" }' -- additional args 
 arg: additional
-arg: -x
 arg: args
 ```

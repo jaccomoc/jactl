@@ -48,7 +48,7 @@ public class ScriptCompiler extends ClassCompiler {
         future.complete(scriptMain.apply(map));
       }
       catch (Continuation c) {
-        blockingWork(future, c);
+        asyncWork(future, c);
       }
       catch (JacsalError | IllegalStateException | IllegalArgumentException e) {
         future.complete(e);
@@ -101,26 +101,22 @@ public class ScriptCompiler extends ClassCompiler {
     }
   }
 
-  private void blockingWork(CompletableFuture<Object> future, Continuation c) {
+  private void asyncWork(CompletableFuture<Object> future, Continuation c) {
     // Need to execute async task on some sort of blocking work scheduler and then reschedule
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
     // the same thread as we are on).
-    Object executionContext = context.getThreadContext();
-    context.scheduleBlocking(() -> {
-      final var asyncTask   = c.getAsyncTask();
-      Object    asyncResult = asyncTask.execute();
-      context.scheduleEvent(executionContext, () -> resumeContinuation(future, asyncResult, asyncTask));
-    });
+    final var asyncTask = c.getAsyncTask();
+    asyncTask.execute(context, result -> resumeContinuation(future, result, asyncTask.getContinuation()));
   }
 
-  private void resumeContinuation(CompletableFuture<Object> future, Object asyncResult, AsyncTask asyncTask) {
+  private void resumeContinuation(CompletableFuture<Object> future, Object asyncResult, Continuation cont) {
     try {
-      Object result = asyncTask.resumeContinuation(asyncResult);
+      Object result = cont.continueExecution(asyncResult);
       // We finally get the real result out of the script execution
       future.complete(result);
     }
     catch (Continuation c) {
-      blockingWork(future, c);
+      asyncWork(future, c);
     }
     catch (Throwable t) {
       future.complete(t);

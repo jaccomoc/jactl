@@ -29,6 +29,7 @@ import java.math.MathContext;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -326,9 +327,8 @@ public class BuiltinFunctions {
   // = sleep
   public static Object sleep(Continuation c, long timeMs, Object result) {
     if (timeMs >=0) {
-      throw Continuation.create(() -> {
-        doSleep(timeMs);
-        return result;
+      throw Continuation.createNonBlocking((JacsalContext context, Consumer<Object> resumer) -> {
+        context.schedule(() -> resumer.accept(result), timeMs);
       });
     }
     return result;
@@ -393,7 +393,7 @@ public class BuiltinFunctions {
       }
       else {
         // Might block so schedule blocking operation and suspend
-        throw Continuation.create(() -> readLine(input));
+        throw Continuation.createBlocking(() -> readLine(input));
       }
     }
     catch (IOException ignored) {}

@@ -17,25 +17,24 @@
 
 package jacsal.runtime;
 
-import java.util.function.Supplier;
+import jacsal.JacsalContext;
 
-public class AsyncTask {
-  private Supplier<Object> asyncWork;      // the blocking async work
+import java.util.function.Consumer;
+
+/**
+ * Async task that will run in background (either on a blocking thread or as an async operation
+ * like sending/receiving message).
+ */
+public abstract class AsyncTask {
   private Continuation     continuation;   // the continuation to invoke once work has completed
-
-  public AsyncTask(Supplier<Object> asyncWork) {
-    this.asyncWork = asyncWork;
-  }
 
   public void setContinuation(Continuation continuation) {
     this.continuation = continuation;
   }
 
-  public Object execute() {
-    return asyncWork.get();
+  public Continuation getContinuation() {
+    return continuation;
   }
 
-  public Object resumeContinuation(Object result) {
-    return continuation.continueExecution(result);
-  }
+  public abstract void execute(JacsalContext context, Consumer<Object> resume);
 }

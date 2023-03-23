@@ -17,7 +17,11 @@
 
 package jacsal.runtime;
 
+import jacsal.JacsalContext;
+
 import java.lang.invoke.MethodHandle;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class Continuation extends RuntimeException {
@@ -38,26 +42,32 @@ public class Continuation extends RuntimeException {
   }
 
   /**
-   * Create a continuation for the async task. When the task completes it will invoke this continuation to continue from
-   * where we left off. If there are multiple stack frames whose state we need to capture we will create a new
-   * continuation for each frame.
-   *
+   * Create a continuation for a blocking async task. When the task completes it will invoke this continuation
+   * to continue from where we left off. If there are multiple stack frames whose state we need to capture we
+   * will create a new continuation for each frame.
    * @param asyncWork
    * @return
    */
-  public static Continuation create(Supplier<Object> asyncWork) {
-    AsyncTask    task         = new AsyncTask(asyncWork);
-    Continuation continuation = new Continuation(task);
+  public static Continuation createBlocking(Supplier<Object> asyncWork) {
+    BlockingAsyncTask task         = new BlockingAsyncTask(asyncWork);
+    Continuation      continuation = new Continuation(task);
     task.setContinuation(continuation);
     return continuation;
   }
 
-  /**
+  public static Continuation createNonBlocking(BiConsumer<JacsalContext, Consumer<Object>> asyncWork) {
+    NonBlockingAsyncTask task         = new NonBlockingAsyncTask(asyncWork);
+    Continuation         continuation = new Continuation(task);
+    task.setContinuation(continuation);
+    return continuation;
+  }
+
+                                         /**
    * Chained continuation. When capturing continuation for each frame we copy the asyncTask from the previous
    * Continuation object to the new one so that when we finally get to the last frame and return to the caller we have
    * access to the asyncTask and can invoke the blocking task on a blocking work scheduler of some sort once the entire
    * Continuation state has been captured. The reason for doing it this way is to make sure that we don't execute the
-   * blocking code before we have finished capturing our state. Otherwise the blocking code might finish first and try
+   * blocking code before we have finished capturing our state. Otherwise, the blocking code might finish first and try
    * to start continuing before we have finished capturing our state.
    *
    * @param continuation    the previous continuation in our chain (the one from our called child)

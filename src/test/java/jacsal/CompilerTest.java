@@ -5833,6 +5833,8 @@ class CompilerTest extends BaseTest {
 
   @Test public void asyncFunctions() {
     useAsyncDecorator = false;
+//    test("def start = timestamp(); sleep(100,2); def dur = timestamp() - start; dur >= 100 && dur < 120", true);
+//    test("def start = timestamp(); sleep(1,2); def dur = timestamp() - start; dur >= 1 && dur <= 20", true);
     test("sleep(1,2)", 2);
     test("sleep(1,2L)", 2L);
     test("sleep(1,2D)", 2D);

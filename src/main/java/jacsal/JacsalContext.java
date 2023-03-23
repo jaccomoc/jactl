@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class JacsalContext {
 
@@ -32,9 +34,9 @@ public class JacsalContext {
   private static int blockingThreads  = Runtime.getRuntime().availableProcessors() * 4;
 
   // Make static for the moment to avoid creating too many threads during unit test executions
-  private static ExecutorService eventLoop        = Executors.newFixedThreadPool(eventLoopThreads);
-  private static ExecutorService blockingExecutor = Executors.newFixedThreadPool(blockingThreads);
-
+  private static ExecutorService eventLoop             = Executors.newFixedThreadPool(eventLoopThreads);
+  private static ExecutorService blockingExecutor      = Executors.newFixedThreadPool(blockingThreads);
+  private static ScheduledExecutorService timerService = Executors.newSingleThreadScheduledExecutor();
 
   private boolean initialised = false;
 
@@ -135,6 +137,11 @@ public class JacsalContext {
     }
     blockingExecutor.submit(blocking);
   }
+
+  public void schedule(Runnable runnable, long timeMs) {
+    timerService.schedule(runnable, timeMs, TimeUnit.MILLISECONDS);
+  }
+
 
   //////////////////////////////////
 
