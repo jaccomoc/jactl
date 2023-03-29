@@ -22,13 +22,16 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
-  private   static int scriptNum = 1;
+  private   static int         scriptNum = 1;
   protected int                debugLevel  = 0;
   protected String             packageName = Utils.DEFAULT_JACSAL_PKG;
   protected Map<String,Object> globals     = new HashMap<String,Object>();
@@ -62,7 +65,7 @@ public class BaseTest {
 
       classCode.forEach(code -> compileClass(code, jacsalContext, packageName, testAsync));
 
-      var    compiled = compileScript(scriptCode, jacsalContext, "Script" + scriptNum++, packageName, testAsync, bindings);
+      var    compiled = compileScript(scriptCode, jacsalContext, packageName, testAsync, bindings);
 
       Object result   = Compiler.runSync(compiled, bindings);
       if (expected instanceof Object[]) {
@@ -80,19 +83,27 @@ public class BaseTest {
   }
 
   public void compileClass(String source, JacsalContext jacsalContext, String packageName, boolean testAsync) {
-    doCompile(false, source, jacsalContext, null, packageName, testAsync, null);
+    doCompile(false, source, jacsalContext, packageName, testAsync, null);
   }
 
-  public Function<Map<String, Object>,Future<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
-    return doCompile(true, source, jacsalContext, className, packageName, testAsync, bindings);
+  public BiConsumer<Map<String, Object>,Consumer<Object>> compileScript(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    return doCompile(true, source, jacsalContext, packageName, testAsync, bindings);
   }
 
-  public Function<Map<String, Object>,Future<Object>> doCompile(boolean isScript, String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  public BiConsumer<Map<String, Object>, Consumer<Object>> doCompile(boolean isScript, String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+    if (!testAsync) {
+      if (isScript) {
+        return Compiler.compileScript(source, jacsalContext, packageName, bindings);
+      }
+      Compiler.compileClass(source, jacsalContext, packageName);
+      return null;
+    }
+
+    String className = "Script" + scriptNum++;
     var parser = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var code   = isScript ? parser.parseScript(className) : parser.parseClass();
-    if (testAsync) {
-      var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
-                                             : new ExprDecorator(
+    var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
+                                           : new ExprDecorator(
         expr -> {
           assert expr != null;
           if (expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
@@ -112,15 +123,13 @@ public class BaseTest {
           expr.isResultUsed = true;
           return newExpr;
         });
-      exprDecorator.decorate(code);
-    }
+    exprDecorator.decorate(code);
     var resolver = new Resolver(jacsalContext, bindings);
     resolver.resolveScript(code);
     var analyser = new Analyser(jacsalContext);
-    //analyser.testAsync = testAsync;
     analyser.analyseClass(code);
     if (isScript) {
-      return Compiler.compileWithFuture(source, jacsalContext, code);
+      return Compiler.compileWithCompletion(source, jacsalContext, code);
     }
     Compiler.compileClass(source, jacsalContext, packageName, code);
     return null;
@@ -181,7 +190,7 @@ public class BaseTest {
       var    bindings = createGlobals();
       Object result[] = new Object[1];
       Arrays.stream(code).forEach(scriptCode -> {
-        var compiled = compileScript(scriptCode, jacsalContext, "Script" + scriptNum++, packageName, false, bindings);
+        var compiled = compileScript(scriptCode, jacsalContext, packageName, false, bindings);
         result[0]    = Compiler.runSync(compiled, bindings);
       });
       if (expected instanceof Object[]) {
@@ -224,13 +233,13 @@ public class BaseTest {
     return map;
   }
 
-  protected Function<Map<String, Object>, Future<Object>> compile(String code) {
+  protected BiConsumer<Map<String, Object>,Consumer<Object>> compile(String code) {
     JacsalContext jacsalContext = JacsalContext.create()
                                                .evaluateConstExprs(true)
                                                .replMode(true)
                                                .debug(0)
                                                .build();
     Map<String, Object> globals = new HashMap<>();
-    return Compiler.compileScriptWithFuture(code, jacsalContext, globals);
+    return Compiler.compileScript(code, jacsalContext, globals);
   }
 }

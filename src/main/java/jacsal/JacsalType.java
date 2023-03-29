@@ -499,13 +499,13 @@ public class JacsalType {
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
       return otherType.getClassDescriptor().isAssignableFrom(this.getClassDescriptor());
     }
-    if (is(CLASS) || otherType.is(CLASS))                 { return false; }
-    if (isBoxedOrUnboxed(otherType))                      { return true; }
-    if (is(ANY) || otherType.is(ANY))                     { return true; }
-    if (isNumeric() && otherType.isNumeric())             { return true; }
-    if (is(MAP) && otherType.is(INSTANCE))                { return true; }
-    if (is(MAP,INSTANCE) && otherType.is(MAP,INSTANCE))   { return true; }
-    if (is(LIST,ITERATOR) && otherType.is(LIST,ITERATOR)) { return true; }
+    if (is(CLASS) || otherType.is(CLASS))                                       { return false; }
+    if (isBoxedOrUnboxed(otherType))                                            { return true; }
+    if (is(ANY) || otherType.is(ANY))                                           { return true; }
+    if (isNumeric() && otherType.isNumeric())                                   { return true; }
+    if (is(MAP) && otherType.is(INSTANCE))                                      { return true; }
+    if (is(MAP,INSTANCE) && otherType.is(MAP,INSTANCE))                         { return true; }
+    if (is(LIST,ITERATOR,OBJECT_ARR) && otherType.is(LIST,ITERATOR,OBJECT_ARR)) { return true; }
     return false;
   }
 

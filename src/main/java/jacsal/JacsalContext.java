@@ -23,22 +23,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class JacsalContext {
 
-  private static int eventLoopThreads = Runtime.getRuntime().availableProcessors();
-  private static int blockingThreads  = Runtime.getRuntime().availableProcessors() * 4;
-
-  // Make static for the moment to avoid creating too many threads during unit test executions
-  private static ExecutorService eventLoop             = Executors.newFixedThreadPool(eventLoopThreads);
-  private static ExecutorService blockingExecutor      = Executors.newFixedThreadPool(blockingThreads);
-  private static ScheduledExecutorService timerService = Executors.newSingleThreadScheduledExecutor();
-
   private boolean initialised = false;
+
+  JacsalEnv executionEnv     = null;
 
   boolean printSize          = false;
   boolean evaluateConstExprs = true;
@@ -87,7 +78,6 @@ public class JacsalContext {
     return clss;
   }
 
-//  public JacsalContext eventLoopThreads(int threads)     { this.eventLoopThreads   = threads; return this; }
   public JacsalContext replMode(boolean mode)            { this.replMode           = mode;    return this; }
   public JacsalContext minScale(int scale)               { this.minScale           = scale;   return this; }
   public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
@@ -96,9 +86,13 @@ public class JacsalContext {
   public JacsalContext javaPackage(String pkg)           { this.javaPackage        = pkg;     return this; }
   public JacsalContext printLoop(boolean value)          { this.printLoop          = value;   return this; }
   public JacsalContext nonPrintLoop(boolean value)       { this.nonPrintLoop       = value;   return this; }
+  public JacsalContext environment(JacsalEnv env)        { this.executionEnv       = env;     return this; }
 
   public JacsalContext build() {
     initialised = true;
+    if (executionEnv == null) {
+      executionEnv = new DefaultEnv();
+    }
     return this;
   }
 
@@ -122,26 +116,29 @@ public class JacsalContext {
     return classLookup.get(internalName);
   }
 
-  public Object getThreadContext() { return null; }
+  public Object getThreadContext() { return executionEnv.getThreadContext(); }
 
   public void scheduleEvent(Object threadContext, Runnable event) {
     if (!initialised) {
       throw new IllegalStateException("JacsalContext not initialised. build() has not been invoked.");
     }
-    eventLoop.submit(event);
+    executionEnv.scheduleEvent(threadContext, event);
+  }
+
+  public void scheduleEvent(Runnable runnable, long timeMs) {
+    executionEnv.scheduleEvent(runnable, timeMs);
+  }
+
+  public void scheduleEvent(Object threadContext, Runnable runnable, long timeMs) {
+    executionEnv.scheduleEvent(threadContext, runnable, timeMs);
   }
 
   public void scheduleBlocking(Runnable blocking) {
     if (!initialised) {
       throw new IllegalStateException("JacsalContext not initialised. build() has not been invoked.");
     }
-    blockingExecutor.submit(blocking);
+    executionEnv.scheduleBlocking(blocking);
   }
-
-  public void schedule(Runnable runnable, long timeMs) {
-    timerService.schedule(runnable, timeMs, TimeUnit.MILLISECONDS);
-  }
-
 
   //////////////////////////////////
 

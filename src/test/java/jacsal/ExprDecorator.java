@@ -25,7 +25,7 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   Function<Expr,Expr> decorator;
 
-  ExprDecorator(Function<Expr,Expr> decorator) {
+  public ExprDecorator(Function<Expr,Expr> decorator) {
     this.decorator = decorator;
   }
 

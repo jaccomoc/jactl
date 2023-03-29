@@ -22,6 +22,7 @@ import jacsal.JacsalType;
 import java.lang.invoke.MethodHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import static jacsal.JacsalType.*;
 
@@ -39,8 +40,8 @@ public class Functions {
    * Register a method of a class. This can be used to register methods on
    * classes that don't normally have methods (e.g. numbers).
    */
-  static void registerMethod(FunctionDescriptor descriptor) {
-    var functions = methods.computeIfAbsent(descriptor.name, k -> new ArrayList<>());
+  static void registerMethod(String name, FunctionDescriptor descriptor) {
+    var functions = methods.computeIfAbsent(name, k -> new ArrayList<>());
     functions.add(descriptor);
   }
 
@@ -66,17 +67,11 @@ public class Functions {
    */
   static MethodHandle lookupWrapper(Object parent, String methodName) {
     Class parentClass = parent instanceof Iterator ? Iterator.class : parent.getClass();
-    var classLookup = classes.get(parentClass);
-    if (classLookup == null) {
-      classLookup = new ClassLookup();
-      classes.put(parentClass, classLookup);
-    }
-    FunctionDescriptor function = classLookup.methods.get(methodName);
-    if (function == null) {
+    var classLookup = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
+    var function    = classLookup.methods.computeIfAbsent(methodName, name -> {
       JacsalType parentType = JacsalType.typeOf(parent);
-      function = findMatching(parentType, methodName);
-      classLookup.methods.put(methodName, function);
-    }
+      return findMatching(parentType, name);
+    });
 
     if (function == NO_SUCH_METHOD) {
       return null;

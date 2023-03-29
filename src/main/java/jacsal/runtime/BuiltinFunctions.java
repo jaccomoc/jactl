@@ -23,7 +23,11 @@ import org.objectweb.asm.Type;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
@@ -31,7 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
 
@@ -47,79 +50,184 @@ public class BuiltinFunctions {
   public static void registerBuiltinFunctions() {
     if (!initialised) {
       // Collection methods
-      registerMethod("size", "listSize", LIST, false, 0, List.of(0));
-      registerMethod("size", "objArrSize", OBJECT_ARR, false, 0, List.of(0));
-      registerMethod("size", "mapSize", MAP, false, 0, List.of(0));
-      registerMethod("size", "iteratorSize", ITERATOR, false, 0, List.of(0));
-      registerMethod("remove", "mapRemove", MAP, false, 1, List.of(0));
-      registerMethod("remove", "listRemove", LIST, true, 1, List.of(0));
-      registerMethod("add", "listAdd", LIST, true, 1, List.of(0));
-      registerMethod("reverse", "iteratorReverse", ITERATOR, false, 0, List.of(0));
-      registerMethod("each", "iteratorEach", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("reduce", "iteratorReduce", ITERATOR, true, 2, List.of(0,2));
-      registerMethod("min", "iteratorMin", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("max", "iteratorMax", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("avg", "iteratorAvg", ITERATOR, true, 0, List.of(0));
-      registerMethod("sum", "iteratorSum", ITERATOR, true, 0, List.of(0));
-      registerMethod("skip", "iteratorSkip", ITERATOR, true, 1, List.of(0));
-      registerMethod("limit", "iteratorLimit", ITERATOR, true, 1, List.of(0));
-      registerMethod("unique", "iteratorUnique", ITERATOR, true, 0, List.of(0));
-      registerMethod("collect", "iteratorCollect", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("collectEntries", "iteratorCollectEntries", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("join", "iteratorJoin", ITERATOR, true, 0, List.of(0));
-      registerMethod("sort", "iteratorSort", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("map", "iteratorMap", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("mapWithIndex", "iteratorMapWithIndex", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("flatMap", "iteratorFlatMap", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("grouped", "iteratorGrouped", ITERATOR, true, 1, List.of(0));
-      registerMethod("filter", "iteratorFilter", ITERATOR, true, 0, List.of(0,1));
-      registerMethod("subList", "listSubList", LIST, true, 1);
-      registerMethod("subList", "iteratorSubList", ITERATOR, true, 1);
+      registerFunction(new JacsalFunction(LIST).name("size").impl(BuiltinFunctions.class, "listSize"));
+      registerFunction(new JacsalFunction(OBJECT_ARR).name("size").impl(BuiltinFunctions.class, "objArrSize"));
+      registerFunction(new JacsalFunction(MAP).name("size").impl(BuiltinFunctions.class, "mapSize"));
+      registerFunction(new JacsalFunction(ITERATOR).name("size").asyncInstance(true).impl(BuiltinFunctions.class, "iteratorSize"));
+
+      registerFunction(new JacsalFunction(MAP).name("remove").param("key").impl(BuiltinFunctions.class, "mapRemove"));
+      registerFunction(new JacsalFunction(LIST).name("remove").param("index").impl(BuiltinFunctions.class, "listRemove"));
+      registerFunction(new JacsalFunction(LIST).name("add").param("element").impl(BuiltinFunctions.class, "listAdd"));
+      registerFunction(new JacsalFunction(LIST).name("addAt")
+                                               .param("index")
+                                               .param("element")
+                                               .impl(BuiltinFunctions.class, "listAddAt"));
+
+      registerFunction(new JacsalFunction(ITERATOR).name("reverse")
+                                                   .asyncInstance(true)
+                                                   .impl(BuiltinFunctions.class, "iteratorReverse"));
+      registerFunction(new JacsalFunction(ITERATOR).name("each")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("action", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorEach"));
+      registerFunction(new JacsalFunction(ITERATOR).name("reduce")
+                                                   .asyncInstance(true)
+                                                   .param("initial")
+                                                   .asyncParam("accumulator")
+                                                   .impl(BuiltinFunctions.class, "iteratorReduce"));
+      registerFunction(new JacsalFunction(ITERATOR).name("min")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("closure", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorMin"));
+      registerFunction(new JacsalFunction(ITERATOR).name("max")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("closure", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorMax"));
+      registerFunction(new JacsalFunction(ITERATOR).name("avg")
+                                                   .asyncInstance(true)
+                                                   .impl(BuiltinFunctions.class, "iteratorAvg"));
+      registerFunction(new JacsalFunction(ITERATOR).name("sum")
+                                                   .asyncInstance(true)
+                                                   .impl(BuiltinFunctions.class, "iteratorSum"));
+      registerFunction(new JacsalFunction(ITERATOR).name("skip")
+                                                   .asyncInstance(true)
+                                                   .param("count")
+                                                   .impl(BuiltinFunctions.class, "iteratorSkip"));
+      registerFunction(new JacsalFunction(ITERATOR).name("limit")
+                                                   .asyncInstance(true)
+                                                   .param("count")
+                                                   .impl(BuiltinFunctions.class, "iteratorLimit"));
+      registerFunction(new JacsalFunction(ITERATOR).name("unique")
+                                                   .asyncInstance(true)
+                                                   .impl(BuiltinFunctions.class, "iteratorUnique"));
+      registerFunction(new JacsalFunction(ITERATOR).name("collect")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("mapper", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorCollect"));
+      registerFunction(new JacsalFunction(ITERATOR).name("collectEntries")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("mapper", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorCollectEntries"));
+      registerFunction(new JacsalFunction(ITERATOR).name("map")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("mapper", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorMap"));
+      registerFunction(new JacsalFunction(ITERATOR).name("mapWithIndex")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("mapper", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorMapWithIndex"));
+      registerFunction(new JacsalFunction(ITERATOR).name("flatMap")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("mapper", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorFlatMap"));
+      registerFunction(new JacsalFunction(ITERATOR).name("join")
+                                                   .asyncInstance(true)
+                                                   .param("separator", "")
+                                                   .impl(BuiltinFunctions.class, "iteratorJoin"));
+      registerFunction(new JacsalFunction(ITERATOR).name("sort")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("comparator", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorSort"));
+      registerFunction(new JacsalFunction(ITERATOR).name("grouped")
+                                                   .asyncInstance(true)
+                                                   .param("size")
+                                                   .impl(BuiltinFunctions.class, "iteratorGrouped"));
+      registerFunction(new JacsalFunction(ITERATOR).name("filter")
+                                                   .asyncInstance(true)
+                                                   .asyncParam("predicate", null)
+                                                   .impl(BuiltinFunctions.class, "iteratorFilter"));
+      registerFunction(new JacsalFunction(ITERATOR).name("subList")
+                                                   .asyncInstance(true)
+                                                   .param("start")
+                                                   .param("end", Integer.MAX_VALUE)
+                                                   .impl(BuiltinFunctions.class, "iteratorSubList"));
+
+      registerFunction(new JacsalFunction(LIST).name("subList")
+                                               .param("start")
+                                               .param("end", Integer.MAX_VALUE)
+                                               .impl(BuiltinFunctions.class, "listSubList"));
+
 
       // String methods
-      registerMethod("lines", "stringLines", STRING, false);
-      registerMethod("length", "stringLength", STRING, false);
-      registerMethod("size", "stringLength", STRING, false);
-      registerMethod("toLowerCase", "stringToLowerCase", STRING, false, 0);
-      registerMethod("toUpperCase", "stringToUpperCase", STRING, false, 0);
-      registerMethod("substring", "stringSubstring", STRING, true, 1);
-      registerMethod("split", "stringSplit", STRING, true, 0);
-      registerMethod("asNum", "stringAsNum", STRING, true, 0);
+      registerFunction(new JacsalFunction(STRING).name("lines") .impl(BuiltinFunctions.class, "stringLines"));
+      registerFunction(new JacsalFunction(STRING).name("size")
+                                                 .alias("length")
+                                                 .impl(BuiltinFunctions.class, "stringLength"));
+      registerFunction(new JacsalFunction(STRING).name("toLowerCase")
+                                                 .param("count", Integer.MAX_VALUE)
+                                                 .impl(BuiltinFunctions.class, "stringToLowerCase"));
+      registerFunction(new JacsalFunction(STRING).name("toUpperCase")
+                                                 .param("count", Integer.MAX_VALUE)
+                                                 .impl(BuiltinFunctions.class, "stringToUpperCase"));
+      registerFunction(new JacsalFunction(STRING).name("substring")
+                                                 .param("start")
+                                                 .param("end", Integer.MAX_VALUE)
+                                                 .impl(BuiltinFunctions.class, "stringSubstring"));
+      registerFunction(new JacsalFunction(STRING).name("split")
+                                                 .param("regex", null)
+                                                 .param("modifiers", "")
+                                                 .impl(BuiltinFunctions.class, "stringSplit"));
+      registerFunction(new JacsalFunction(STRING).name("asNum")
+                                                 .param("base", 10)
+                                                 .impl(BuiltinFunctions.class, "stringAsNum"));
 
       // int methods
-      registerMethod("asChar", "intAsChar", INT, false, 0);
-      registerMethod("toBase", "intToBase", INT, true, 1);
-      registerMethod("sqr", "intSqr", INT, true, 0);
-      registerMethod("abs", "intAbs", INT, false, 0);
+      registerFunction(new JacsalFunction(INT).name("asChar").impl(BuiltinFunctions.class, "intAsChar"));
+      registerFunction(new JacsalFunction(INT).name("sqr")   .impl(BuiltinFunctions.class, "intSqr"));
+      registerFunction(new JacsalFunction(INT).name("abs")   .impl(BuiltinFunctions.class, "intAbs"));
+      registerFunction(new JacsalFunction(INT).name("toBase")
+                                              .param("base")
+                                              .impl(BuiltinFunctions.class, "intToBase"));
 
       // long methods
-      registerMethod("toBase", "longToBase", LONG, true, 1);
-      registerMethod("sqr", "longSqr", LONG, true, 0);
-      registerMethod("abs", "longAbs", LONG, false, 0);
+      registerFunction(new JacsalFunction(LONG).name("sqr").impl(BuiltinFunctions.class, "longSqr"));
+      registerFunction(new JacsalFunction(LONG).name("abs").impl(BuiltinFunctions.class, "longAbs"));
+      registerFunction(new JacsalFunction(LONG).name("toBase")
+                                              .param("base")
+                                              .impl(BuiltinFunctions.class, "longToBase"));
 
       // double methods
-      registerMethod("sqr", "doubleSqr", DOUBLE, true, 0);
-      registerMethod("abs", "doubleAbs", DOUBLE, false, 0);
+      registerFunction(new JacsalFunction(DOUBLE).name("sqr").impl(BuiltinFunctions.class, "doubleSqr"));
+      registerFunction(new JacsalFunction(DOUBLE).name("abs").impl(BuiltinFunctions.class, "doubleAbs"));
 
       // decimal methods
-      registerMethod("sqr", "decimalSqr", DECIMAL, true, 0);
-      registerMethod("abs", "decimalAbs", DECIMAL, false, 0);
+      registerFunction(new JacsalFunction(DECIMAL).name("sqr").impl(BuiltinFunctions.class, "decimalSqr"));
+      registerFunction(new JacsalFunction(DECIMAL).name("abs").impl(BuiltinFunctions.class, "decimalAbs"));
 
       // Number methods
-      registerMethod("pow", "numberPow", NUMBER, true, 1);
-      registerMethod("sqrt", "numberSqrt", NUMBER, true, 0);
+      registerFunction(new JacsalFunction(NUMBER).name("pow")
+                                                 .param("power")
+                                                 .impl(BuiltinFunctions.class, "numberPow"));
+      registerFunction(new JacsalFunction(NUMBER).name("sqrt").impl(BuiltinFunctions.class, "numberSqrt"));
 
       // Object methods
-      registerMethod("toString", "objectToString", ANY, false, 0);
+      registerFunction(new JacsalFunction(ANY).name("toString")
+                                              .param("indent", 0)
+                                              .impl(BuiltinFunctions.class, "objectToString"));
 
       // Global functions
-      registerGlobalFunction("timestamp", "timestamp", false, 0);
-      registerGlobalFunction("nanoTime", "nanoTime", false, 0);
-      registerGlobalFunction("sprintf", "sprintf", true, 1);
-      registerGlobalFunction("sleep", "sleep", false, 1);
-      registerGlobalFunction("nextLine", "nextLine", false, 0);
-      registerGlobalFunction("stream", "stream", true, 1, List.of(0));
-      registerGlobalFunction("eval", "eval", false, 1);
+      registerFunction(new JacsalFunction().name("timestamp").impl(BuiltinFunctions.class, "timestamp", "timestampData"));
+      registerFunction(new JacsalFunction().name("nanoTime").impl(BuiltinFunctions.class, "nanoTime", "nanoTimeData"));
+      registerFunction(new JacsalFunction().name("nextLine").impl(BuiltinFunctions.class, "nextLine", "nextLineData"));
+
+      registerFunction(new JacsalFunction().name("sprintf")
+                                           .param("format")
+                                           .param("args", new Object[0])
+                                           .impl(BuiltinFunctions.class, "sprintf", "sprintfData"));
+
+      registerFunction(new JacsalFunction().name("sleep")
+                                           .param("timeMs")
+                                           .param("data", new Object[0])
+                                           .impl(BuiltinFunctions.class, "sleep", "sleepData"));
+
+      registerFunction(new JacsalFunction().name("stream")
+                                           .asyncParam("closure")
+                                           .impl(BuiltinFunctions.class, "stream", "streamData"));
+
+      registerFunction(new JacsalFunction().name("eval")
+                                           .param("script")
+                                           .param("vars", null)
+                                           .impl(BuiltinFunctions.class, "eval", "evalData"));
 
       initialised = true;
     }
@@ -132,7 +240,7 @@ public class BuiltinFunctions {
   public static MethodHandle lookupMethodHandle(String name) {
     FunctionDescriptor descriptor = globalFunctions.get(name);
     if (descriptor == null) {
-      throw new IllegalStateException("Internal error: attept to get MethodHandle to unknown builtin function " + name);
+      throw new IllegalStateException("Internal error: attempt to get MethodHandle to unknown builtin function " + name);
     }
     return descriptor.wrapperHandle;
   }
@@ -143,180 +251,84 @@ public class BuiltinFunctions {
 
   ///////////////////////////////////////////////////
 
-  private static void registerGlobalFunction(String name, String methodName, boolean needsLocation, int mandatoryArgCount) {
-    var descriptor = getFunctionDescriptor(name, methodName,null, needsLocation, mandatoryArgCount);
-    globalFunctions.put(name, descriptor);
-  }
-
-  private static void registerGlobalFunction(String name, String methodName, boolean needsLocation, int mandatoryArgCount,
-                                             List<Integer> asyncArgs) {
-    var descriptor = getFunctionDescriptor(name, methodName,null, needsLocation, mandatoryArgCount);
-    descriptor.asyncArgs = asyncArgs;
-    globalFunctions.put(name, descriptor);
-  }
-
-  private static void registerMethod(String name, String methodName, JacsalType objType, boolean needsLocation) {
-    registerMethod(name, methodName, objType, needsLocation, -1);
-  }
-
-  private static void registerMethod(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
-    registerMethod(name, methodName, objType, needsLocation, mandatoryArgCount, List.of());
+  private static void registerFunction(JacsalFunction function) {
+    function.init();
+    var descriptor = getFunctionDescriptor(function);
+    if (function.isMethod()) {
+      function.aliases.forEach(alias -> Functions.registerMethod(alias, descriptor));
+    }
+    else {
+      function.aliases.forEach(alias -> globalFunctions.put(alias, descriptor));
+    }
   }
 
   /**
-   * <p>Register builtin method for given object type. We lookup the given static method on this class (BuiltinFunctions)
-   * and use that as the implementation for the method. We assume another method with "Wrapper" appeneded to the name
-   * exists and will use that method when method is invoked from places where we need to dynamically lookup the method
-   * or when the number of arguments does not match (i.e. some optional args not supplied).</p>
-   * <p>The object type specifies the type of Jacsal objects for which we want the method to apply. If null is passed as
-   * a value we derive the type from the type of the first argument of the static method. We allow a different type to
-   * be supplied to support scenarios where we want a method to work for Iterator types (List, Map, Iterator, Object[])
-   * and for which not natural super class exists. In this case the type of the first argument is Object but the objType
-   * parameter will be JacsalType.ITERATOR .</p>
-   * <p>Methods are flagged as async if arg1 (the arg after the 0th arg which is the object on which the method applies)
-   * has type Continuation. This means that when invoking the method we need to generate the scaffolding that allows
-   * Continuations to be thrown and caught and capture state. As well as flagging the method as async or not we allow
-   * a list of argument numbers to be passed in for situations where the invocation is only async if one of the given
-   * arguments itself is async.</p>
-   * <p>For example,
-   * <pre>  x.map{ ... }</pre>
-   * is only async if the closure passed in is itself async. However, if the calls are chained:
-   * <pre>  x.map{ ... }.filter{ ... }</pre>
-   * then the collection methods (map, filter, each,
-   * collect, etc) are async if either the closure passed in is async or if any of the preceding calls in the chain
-   * were async.
-   * <p>Since the preceding call is the object on which the current method is being applied, we can think of such a chain
-   * of method calls like this:</p>
-   * <pre>  filter(map(x, {...}), {...})</pre>
-   * <p>So, the call is async if arg0 is async or if arg1 is async. This means that for filter, map, etc. we pass in
-   * List.of(0,1) to indicate that if arg0 or arg1 is async then the method call is async.</p>
-   * @param name                the name that the method will have in Jacsal
-   * @param methodName          the name of the static method in this class that provides the implementation
-   * @param objType             the Jacsal type for which the method applies
-   * @param needsLocation       true if we need to pass the location (source + offset) at invocation time (for runtime errors)
-   * @param mandatoryArgCount   how many args are mandatory
-   * @param asyncArgs           List of int values specifying which arguments contribute to async behaviour
+   * Generate FunctionDescriptor for global function/method
    */
-  private static void registerMethod(String name, String methodName, JacsalType objType,
-                                     boolean needsLocation, int mandatoryArgCount,
-                                     List<Integer> asyncArgs) {
-    var descriptor = getMethodDescriptor(name, methodName, objType, needsLocation, mandatoryArgCount);
-    descriptor.asyncArgs = asyncArgs;
-    Functions.registerMethod(descriptor);
-  }
+  private static FunctionDescriptor getFunctionDescriptor(JacsalFunction function) {
+    MethodHandle wrapperHandle;
+    try {
+      wrapperHandle =
+        function.isMethod() ? MethodHandles.lookup().findVirtual(JacsalFunction.class, "wrapper",
+                                                                 MethodType.methodType(Object.class,
+                                                                                       Object.class,
+                                                                                       Continuation.class,
+                                                                                       String.class,
+                                                                                       int.class,
+                                                                                       Object[].class))
+                            : MethodHandles.lookup().findVirtual(JacsalFunction.class, "wrapper",
+                                                                 MethodType.methodType(Object.class,
+                                                                                       Continuation.class,
+                                                                                       String.class,
+                                                                                       int.class,
+                                                                                       Object[].class));
+      wrapperHandle = wrapperHandle.bindTo(function);
 
-  /**
-   * Generate FunctionDescriptor for a builtin method
-   */
-  private static FunctionDescriptor getMethodDescriptor(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
-    Method[] methods = BuiltinFunctions.class.getDeclaredMethods();
-    Method   method  = Arrays.stream(methods).filter(m -> m.getName().equals(methodName)).findFirst().orElse(null);
-    if (method == null) {
-      throw new IllegalStateException("Couldn't find method " + methodName + " in BuiltinFunctions");
+      // Store handle in static field we have been given
+      Field field = function.implementingClass.getDeclaredField(function.wrapperHandleField);
+      if (!Modifier.isStatic(field.getModifiers())) {
+        throw new IllegalArgumentException("Field " + function.wrapperHandleField + " in class " +
+                                           function.implementingClass.getName() + " must be static");
+
+      }
+      if (field.get(null) != null) {
+        throw new IllegalArgumentException("Field " + function.wrapperHandleField + " in class " +
+                                           function.implementingClass.getName() + " already has a value");
+      }
+      field.set(null, wrapperHandle);
+    }
+    catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException("Error accessing " + function.wrapperHandleField + " in class " +
+                                         function.implementingClass.getName() + ": " + e.getMessage(), e);
+    }
+    catch (NoSuchMethodException e) {
+      throw new IllegalArgumentException("Error accessing wrapper() in JacsalFunction: " + e.getMessage(), e);
     }
 
-    Class[]    paramClasses = method.getParameterTypes();
-
-    // Sometimes the first arg type is different to the type that the method acts on (e.g. using Object for
-    // methods that act on ITERATOR since ITERATOR means Iterable or Iterator or Object[])
-    JacsalType firstArgType = paramClasses.length > 0 ? JacsalType.typeFromClass(paramClasses[0]) : null;
-    if (objType == null) {
-      objType = firstArgType;
-    }
-
-    JacsalType returnType   = JacsalType.typeFromClass(method.getReturnType());
-    boolean    isAsync      = paramClasses.length > 1 && paramClasses[1].equals(Continuation.class);
-
-    // Reserver params for object plus optionally: Continuation, String source, int offset
-    int reservedParams = 1 + (isAsync ? 1 : 0) + (needsLocation ? 2 : 0);
-    List<JacsalType> paramTypes = Arrays.stream(paramClasses)
-                                        .skip(reservedParams)
-                                        .map(JacsalType::typeFromClass)
-                                        .collect(Collectors.toList());
-
-    var wrapperMethod = methodName + "Wrapper";
-    MethodHandle wrapperHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class,
-                                                           wrapperMethod,
-                                                           Object.class,    // Return type
-                                                           firstArgType.boxed().classFromType(),
-                                                           Continuation.class,
-                                                           String.class,
-                                                           int.class,
-                                                           Object[].class);
-    if (mandatoryArgCount < 0) {
-      mandatoryArgCount = paramTypes.size();
-    }
-    boolean varargs = paramTypes.size() > 0 && paramTypes.get(paramTypes.size() - 1).is(OBJECT_ARR);
-    var descriptor = new FunctionDescriptor(objType,
-                                            firstArgType,
-                                            name,
-                                            returnType,
+    List<JacsalType> paramTypes = function.getParamTypes();
+    boolean varargs = function.isVarArgs();
+    var descriptor = new FunctionDescriptor(function.methodClass,
+                                            function.firstParamType(),
+                                            function.functionName,
+                                            function.getReturnType(),
                                             paramTypes,
                                             varargs,
-                                            mandatoryArgCount,
-                                            Type.getInternalName(BuiltinFunctions.class),
-                                            methodName,
-                                            needsLocation,
-                                            wrapperHandle);
-    descriptor.wrapperMethod = wrapperMethod;
-    descriptor.isBuiltin = true;
-    descriptor.isStatic = true;
-    descriptor.isAsync = isAsync;
-    descriptor.isGlobalFunction = false;
-    return descriptor;
-  }
-
-  /**
-   * Generate FunctionDescriptor for global function
-   */
-  private static FunctionDescriptor getFunctionDescriptor(String name, String methodName, JacsalType objType, boolean needsLocation, int mandatoryArgCount) {
-    Method[] methods = BuiltinFunctions.class.getDeclaredMethods();
-    Method   method  = Arrays.stream(methods).filter(m -> m.getName().equals(methodName)).findFirst().orElse(null);
-    if (method == null) {
-      throw new IllegalStateException("Couldn't find method " + methodName + " in BuiltinFunctions");
-    }
-
-    Class[]    paramClasses = method.getParameterTypes();
-    JacsalType returnType   = JacsalType.typeFromClass(method.getReturnType());
-    boolean    isAsync      = paramClasses.length > 0 && paramClasses[0].equals(Continuation.class);
-
-    int reservedParams = (needsLocation ? 2 : 0) + (isAsync ? 1 : 0);
-    List<JacsalType> paramTypes = Arrays.stream(paramClasses)
-                                        .skip(reservedParams)
-                                        .map(JacsalType::typeFromClass)
-                                        .collect(Collectors.toList());
-
-    var wrapperMethod = methodName + "Wrapper";
-    MethodHandle wrapperHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class,
-                                                           wrapperMethod,
-                                                           Object.class,    // Return type
-                                                           Continuation.class,
-                                                           String.class,
-                                                           int.class,
-                                                           Object[].class);
-
-    if (mandatoryArgCount < 0) {
-      mandatoryArgCount = paramTypes.size();
-    }
-
-    boolean varargs = paramTypes.size() > 0 && paramTypes.get(paramTypes.size() - 1).is(OBJECT_ARR);
-    var descriptor = new FunctionDescriptor(null,
-                                            null,
-                                            name,
-                                            returnType,
-                                            paramTypes,
-                                            varargs,
-                                            mandatoryArgCount,
-                                            Type.getInternalName(BuiltinFunctions.class),
-                                            methodName,
-                                            needsLocation,
+                                            function.mandatoryCount,
+                                            Type.getInternalName(function.implementingClass),
+                                            function.implementingMethod,
+                                            function.needsLocation,
                                             wrapperHandle);
 
-    descriptor.wrapperMethod = wrapperMethod;
-    descriptor.isBuiltin = true;
-    descriptor.isStatic = true;
-    descriptor.isAsync = isAsync;
-    descriptor.isGlobalFunction = true;
+    descriptor.paramNames         = Arrays.asList(function.paramNames);
+    descriptor.mandatoryParams    = function.getMandatoryParams();
+    descriptor.wrapperHandleField = function.wrapperHandleField;
+    descriptor.wrapperMethod      = null;
+    descriptor.isBuiltin          = true;
+    descriptor.isStatic           = true;
+    descriptor.isAsync            = function.isAsync();
+    descriptor.asyncArgs          = Arrays.asList(function.asyncParams);
+    descriptor.isGlobalFunction   = !function.isMethod();
+    descriptor.isVarArgs          = function.isVarArgs;
     return descriptor;
   }
 
@@ -325,43 +337,26 @@ public class BuiltinFunctions {
   /////////////////////////////////////
 
   // = sleep
-  public static Object sleep(Continuation c, long timeMs, Object result) {
+  public static Object sleepData;
+  public static Object sleep(Continuation c, long timeMs, Object data) {
     if (timeMs >=0) {
       throw Continuation.createNonBlocking((JacsalContext context, Consumer<Object> resumer) -> {
-        context.schedule(() -> resumer.accept(result), timeMs);
+        context.scheduleEvent(() -> resumer.accept(data), timeMs);
       });
     }
-    return result;
-  }
-  public static Object sleepWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, null, 2, source, offset);
-    try {
-      sleep(c, ((Number)args[0]).longValue(), args.length == 2 ? args[1] : null);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(args[0]) + " to long", source, offset);
-    }
-    return null;
-  }
-  private static void doSleep(long ms) {
-    try { if (ms > 0) Thread.sleep(ms); } catch (InterruptedException e) {}
+    return data;
   }
 
   // = timestamp
+  public static Object timestampData;
   public static long timestamp() { return System.currentTimeMillis(); }
-  public static Object timestampWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return System.currentTimeMillis();
-  }
 
   // = nanoTime
+  public static Object nanoTimeData;
   public static long nanoTime() { return System.nanoTime(); }
-  public static Object nanoTimeWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return System.nanoTime();
-  }
 
   // = sprintf
+  public static Object sprintfData;
   public static String sprintf(String source, int offset, String format, Object... args) {
     try {
       return String.format(format, args);
@@ -370,17 +365,9 @@ public class BuiltinFunctions {
       throw new RuntimeError("Bad format string", source, offset, e);
     }
   }
-  public static Object sprintfWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, null, -1, source, offset);
-    try {
-      return sprintf(source, offset, (String)args[0], Arrays.copyOfRange(args, 1, args.length));
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert argument of type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
-    }
-  }
 
   // = nextLine()
+  public static Object nextLineData;
   public static String nextLine(Continuation c) {
     var input = RuntimeState.getState().input;
     if (input == null) {
@@ -402,10 +389,6 @@ public class BuiltinFunctions {
     }
     return result;
   }
-  public static Object nextLineWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return nextLine(null);
-  }
 
   private static String readLine(BufferedReader input) {
     try {
@@ -417,20 +400,13 @@ public class BuiltinFunctions {
   }
 
   // = stream
+  public static Object streamData;
   public static Iterator stream(Continuation c, String source, int offset, MethodHandle closure) {
     return new StreamIterator(source, offset, closure);
   }
-  public static Object streamWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, null,1, source, offset);
-    try {
-      return stream(null, source, offset, (MethodHandle)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to stream() must be a function/closure not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
 
   // = eval
+  public static Object evalData;
   public static Object eval(Continuation c, String code, Map bindings) {
     if (c != null) {
       return c.getResult();
@@ -451,92 +427,48 @@ public class BuiltinFunctions {
       return null;
     }
   }
-  public static Object evalWrapper(Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, null,2, source, offset);
-    if (args.length > 1 && !(args[1] instanceof Map)) {
-      throw new RuntimeError("Argument of type " + RuntimeUtils.className(args[1]) + " cannot be converted to Map", source, offset);
-    }
-    try {
-      return eval(null, (String)args[0], args.length > 1 ? (Map)args[1] : null);
-    }
-    catch (ClassCastException e) {
-      if (e.getMessage().contains("to class java.lang.String")) {
-        throw new RuntimeError("First argument to eval() must be a String not " + RuntimeUtils.className(args[0]), source, offset);
-      }
-      else {
-        throw new RuntimeError("Second argument to eval() must be a Map not " + RuntimeUtils.className(args[0]), source, offset);
-      }
-    }
-  }
   private static MethodHandle evalHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "eval$c", Object.class, Continuation.class);
   public static Object eval$c(Continuation c) {
     return eval(c, null, null);
   }
 
   // = abs
+  public static Object intAbsData;
   public static int intAbs(int n)                   { return n < 0 ? -n : n; }
+  public static Object longAbsData;
   public static long longAbs(long n)                { return n < 0 ? -n : n; }
+  public static Object doubleAbsData;
   public static double doubleAbs(double n)          { return n < 0 ? -n : n; }
+  public static Object decimalAbsData;
   public static BigDecimal decimalAbs(BigDecimal n) { return n.abs(); }
-  public static Object intAbsWrapper(Integer n, Continuation c, String source, int offset, Object[] args) {
-    validateArgCount(args, 0, INT,0, source, offset);
-    return n < 0 ? -n : n;
-  }
-  public static Object longAbsWrapper(Long n, Continuation c, String source, int offset, Object[] args) {
-    validateArgCount(args, 0, LONG,0, source, offset);
-    return n < 0 ? -n : n;
-  }
-  public static Object doubleAbsWrapper(Double n, Continuation c, String source, int offset, Object[] args) {
-    validateArgCount(args, 0, DOUBLE,0, source, offset);
-    return n < 0 ? -n : n;
-  }
-  public static Object decimalAbsWrapper(BigDecimal n, Continuation c, String source, int offset, Object[] args) {
-    validateArgCount(args, 0, DOUBLE,0, source, offset);
-    return n.abs();
-  }
 
   /////////////////////////////////////
   // Methods
   /////////////////////////////////////
 
   // = asChar
+  public static Object intAsCharData;
   public static String intAsChar(int c) { return String.valueOf((char)c); }
-  public static Object intAsCharWrapper(Integer obj, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return String.valueOf((char)(int)obj);
-  }
 
   // = toBase
+  public static Object longToBaseData;
   public static String longToBase(long num, String source, int offset, int base) {
     if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
       throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
     }
     return Long.toUnsignedString(num, base).toUpperCase();
   }
-  public static Object longToBaseWrapper(Long num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, LONG, 1, source, offset);
-    if (!(args[0] instanceof Number)) {
-      throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-    }
-    int base = ((Number) args[0]).intValue();
-    return longToBase(num, source, offset, base);
-  }
+
+  public static Object intToBaseData;
   public static String intToBase(int num, String source, int offset, int base) {
     if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
       throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
     }
     return Integer.toUnsignedString(num, base).toUpperCase();
   }
-  public static Object intToBaseWrapper(Integer num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, INT, 1, source, offset);
-    if (!(args[0] instanceof Number)) {
-      throw new RuntimeError("Argument to toBase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-    }
-    int base = ((Number) args[0]).intValue();
-    return intToBase(num, source, offset, base);
-  }
 
   // = sqrt
+  public static Object numberSqrtData;
   public static Object numberSqrt(Number num, String source, int offset) {
     if (num.doubleValue() < 0) {
       throw new RuntimeError("Attempt to take square root of negative number: " + num, source, offset);
@@ -554,34 +486,19 @@ public class BuiltinFunctions {
     }
     return result;
   }
-  public static Object numberSqrtWrapper(Number num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, NUMBER, 0, source, offset);
-    return numberSqrt(num, source, offset);
-  }
 
   // = sqr
+  public static Object intSqrData;
   public static int intSqr(int num, String source, int offset) { return num * num; }
-  public static Object intSqrWrapper(Integer num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, INT, 0, source, offset);
-    return num * num;
-  }
+  public static Object longSqrData;
   public static long longSqr(long num, String source, int offset) { return num * num; }
-  public static Object longSqrWrapper(Long num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, LONG, 0, source, offset);
-    return num * num;
-  }
+  public static Object doubleSqrData;
   public static double doubleSqr(double num, String source, int offset) { return num * num; }
-  public static Object doubleSqrWrapper(Double num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, DOUBLE, 0, source, offset);
-    return num * num;
-  }
+  public static Object decimalSqrData;
   public static BigDecimal decimalSqr(BigDecimal num, String source, int offset) { return num.pow(2); }
-  public static Object decimalSqrWrapper(BigDecimal num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, INT, 0, source, offset);
-    return num.pow(2);
-  }
 
   // = pow
+  public static Object numberPowData;
   public static Object numberPow(Number num, String source, int offset, Number power) {
     if (num instanceof BigDecimal && power instanceof Integer && (int)power >= 0) {
       try {
@@ -604,48 +521,20 @@ public class BuiltinFunctions {
     }
     return result;
   }
-  public static Object numberPowWrapper(Number num, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, NUMBER, 1, source, offset);
-    try {
-      return numberPow(num, source, offset, (Number)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Value for power must be numeric not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
 
   // = toString
 
+  public static Object objectToStringData;
   public static String objectToString(Object obj, int indent) { return RuntimeUtils.toString(obj, indent); }
-  public static Object objectToStringWrapper(Object obj, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null, 1, source, offset);
-    try {
-      int indent = args.length > 0 ? Integer.parseInt(args[0].toString()) : 0;
-      if (indent >= 0) {
-        return RuntimeUtils.toString(obj, indent);
-      }
-    }
-    catch (NumberFormatException e) {
-      // Fall through
-    }
-    throw new RuntimeError("Argument to toString() must be a positive integer", source, offset);
-  }
 
   // = remove
 
+  public static Object mapRemoveData;
   public static Object mapRemove(Map map, String field) {
     return map.remove(field);
   }
-  public static Object mapRemoveWrapper(Map map, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, MAP,1, source, offset);
-    try {
-      return mapRemove(map, (String) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to Map remove() must be a String not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
 
+  public static Object listRemoveData;
   public static Object listRemove(List list, String source, int offset, int index) {
     if (index < 0) {
       index += list.size();
@@ -658,22 +547,23 @@ public class BuiltinFunctions {
     }
     return list.remove(index);
   }
-  public static Object listRemoveWrapper(List list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, LIST,1, source, offset);
-    try {
-      return listRemove(list, source, offset, (int)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to List remove() must be an integer not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
 
   // = add
 
-  public static List listAdd(List list, String source, int offset, int index, Object elem) {
+  public static Object listAddData;
+  public static List listAdd(List list, Object elem) {
+    list.add(elem);
+    return list;
+  }
+
+  // = addAt
+
+  public static Object listAddAtData;
+  public static List listAddAt(List list, String source, int offset, int index, Object elem) {
     if (index < 0) {
       index += list.size();
     }
+
     if (index < 0) {
       throw new RuntimeError("Index out of bounds: negative index (" + (index-list.size()) + ") resolves to location before start of list", source, offset);
     }
@@ -683,41 +573,21 @@ public class BuiltinFunctions {
     list.add(index, elem);
     return list;
   }
-  public static Object listAddWrapper(List list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, LIST,2, source, offset);
-    try {
-      if (args.length == 2) {
-        return listAdd(list, source, offset, (int) args[0], args[1]);
-      }
-      return listAdd(list, source, offset, list.size(), args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Index argument to List add() must be an integer not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
 
   // = size
 
+  public static Object mapSizeData;
   public static int mapSize(Map map) { return map.size(); }
-  public static Object mapSizeWrapper(Map map, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return map.size();
-  }
 
+  public static Object listSizeData;
   public static int listSize(List list) {
     return list.size();
   }
-  public static Object listSizeWrapper(List list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null, 0, source, offset);
-    return list.size();
-  }
 
+  public static Object objArrSizeData;
   public static int objArrSize(Object[] list) { return list.length; }
-  public static Object objArrSizeWrapper(Object[] list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return list.length;
-  }
 
+  public static Object iteratorSizeData;
   public static int iteratorSize(Object iterable, Continuation c) {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
@@ -732,46 +602,24 @@ public class BuiltinFunctions {
   public static Object iteratorSize$c(Object iterable, Continuation c) {
     return iteratorSize(iterable, c);
   }
-  public static Object iteratorSizeWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return iteratorSize(iterable, c);
-  }
 
   ////////////////////////////////
 
   // = sublist
+  public static Object listSubListData;
   public static List listSubList(List list, String source, int offset, int start, int end) {
     try {
+      if (end == Integer.MAX_VALUE) {
+        end = list.size();
+      }
       return list.subList(start, end);
     }
     catch (Exception e) {
       throw new RuntimeError("SubList error", source, offset, e);
     }
   }
-  public static Object listSubListWrapper(List list, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, LIST, 2, source, offset);
-    int begin = -1;
-    if (!(args[0] instanceof Number)) {
-      throw new RuntimeError("First argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-    }
-    begin = ((Number)args[0]).intValue();
-    try {
-      if (args.length > 1) {
-        if (!(args[1] instanceof Number)) {
-          throw new RuntimeError("Second argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-        }
-        int end = ((Number) args[1]).intValue();
-        return list.subList(begin, end);
-      }
-      else {
-        return list.subList(begin, list.size());
-      }
-    }
-    catch (Exception e) {
-      throw new RuntimeError("SubList error", source, offset, e);
-    }
-  }
 
+  public static Object iteratorSubListData;
   public static List iteratorSubList(Object iterable, Continuation c, String source, int offset, int start, int end) {
     source = c == null ? source : (String)c.localObjects[0];
     offset = c == null ? offset : (int)c.localPrimitives[0];
@@ -780,7 +628,7 @@ public class BuiltinFunctions {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
                             : (List) c.getResult();
-      return listSubList(list, source, offset, start, end == Integer.MIN_VALUE ? list.size() : end);
+      return listSubList(list, source, offset, start, end == Integer.MAX_VALUE ? list.size() : end);
     }
     catch (Continuation cont) {
       throw new Continuation(cont, iteratorSubListHandle.bindTo(iterable), 0, new long[]{offset, start,end}, new Object[]{source});
@@ -790,52 +638,22 @@ public class BuiltinFunctions {
   public static Object iteratorSubList$c(Object iterable, Continuation c) {
     return iteratorSubList(iterable, c, null, 0, 0, 0);
   }
-  public static Object iteratorSubListWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, ITERATOR,2, source, offset);
-    int begin = -1;
-    if (!(args[0] instanceof Number)) {
-      throw new RuntimeError("First argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-    }
-    begin = ((Number)args[0]).intValue();
-    try {
-      if (args.length > 1) {
-        if (!(args[1] instanceof Number)) {
-          throw new RuntimeError("Second argument to subList must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-        }
-        int end = ((Number) args[1]).intValue();
-        return iteratorSubList(iterable, c, source, offset, begin, end);
-      }
-      else {
-        return iteratorSubList(iterable, c, source, offset, begin, Integer.MIN_VALUE);
-      }
-    }
-    catch (Exception e) {
-      throw new RuntimeError("SubList error", source, offset, e);
-    }
-  }
 
   ////////////////////////////////
 
   // = filter
 
+  public static Object iteratorFilterData;
   public static Iterator iteratorFilter(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, closure);
-  }
-  public static Object iteratorFilterWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR, 1, source, offset);
-    try {
-      return iteratorFilter(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
   }
 
   ////////////////////////////////
 
   // = reverse
 
+  public static Object iteratorReverseData;
   public static List iteratorReverse(Object iterable, Continuation c) {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
@@ -847,15 +665,11 @@ public class BuiltinFunctions {
       return result;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorSizeHandle.bindTo(iterable), 0, null, null);
+      throw new Continuation(cont, iteratorReverseHandle.bindTo(iterable), 0, null, null);
     }
   }
-  private static MethodHandle iteratorReverseHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSize$c", Object.class, Object.class, Continuation.class);
+  private static MethodHandle iteratorReverseHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReverse$c", Object.class, Object.class, Continuation.class);
   public static Object iteratorReverse$c(Object iterable, Continuation c) {
-    return iteratorReverse(iterable, c);
-  }
-  public static Object iteratorReverseWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
     return iteratorReverse(iterable, c);
   }
 
@@ -863,19 +677,17 @@ public class BuiltinFunctions {
 
   // = unique
 
+  public static Object iteratorUniqueData;
   public static Iterator iteratorUnique(Object iterable, Continuation c, String source, int offset) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new UniqueIterator(iter);
-  }
-  public static Object iteratorUniqueWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null, 0, source, offset);
-    return iteratorUnique(iterable, c, source, offset);
   }
 
   ////////////////////////////////
 
   // = skip
 
+  public static Object iteratorSkipData;
   public static Iterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     if (count >= 0) {
@@ -891,20 +703,11 @@ public class BuiltinFunctions {
     return index.getAndIncrement() >= skipAmount;
   }
 
-  public static Object iteratorSkipWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, ITERATOR, 1, source, offset);
-    try {
-      return iteratorSkip(iterable, c, source, offset, args.length == 0 ? null : (int)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
-  }
-
   ////////////////////////////////
 
   // = limit
 
+  public static Object iteratorLimitData;
   public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int limit) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     if (limit >= 0) {
@@ -912,20 +715,12 @@ public class BuiltinFunctions {
     }
     return new NegativeLimitIterator(iter, -limit);
   }
-  public static Object iteratorLimitWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, ITERATOR, 1, source, offset);
-    try {
-      return iteratorLimit(iterable, c, source, offset, args.length == 0 ? null : (int)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
-  }
 
   ////////////////////////////////
 
   // = grouped
 
+  public static Object iteratorGroupedData;
   public static Iterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     if (size == 0) {
@@ -937,77 +732,41 @@ public class BuiltinFunctions {
     return new GroupedIterator(iter, source, offset, size);
   }
 
-  public static Object iteratorGroupedWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, ITERATOR,1, source, offset);
-    try {
-      return iteratorGrouped(iterable, c, source, offset, (int)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to grouped() must be an integer not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
-
   ////////////////////////////////
 
   // = map
 
+  public static Object iteratorMapData;
   public static Iterator iteratorMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure);
-  }
-
-  public static Object iteratorMapWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorMap(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
   }
 
   ////////////////////////////////
 
   // = mapWithIndex
 
+  public static Object iteratorMapWithIndexData;
   public static Iterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure, true);
-  }
-
-  public static Object iteratorMapWithIndexWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorMapWithIndex(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
   }
 
   ////////////////////////////////
 
   // = flatMap
 
+  public static Object iteratorFlatMapData;
   public static Iterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FlatMapIterator(iter, source, offset, closure);
-  }
-
-  public static Object iteratorFlatMapWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorFlatMap(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
   }
 
   //////////////////////////////////
 
   // = each
 
+  public static Object iteratorEachData;
   public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     return iteratorEach$c(RuntimeUtils.createIterator(iterable), source, offset, closure, null);
   }
@@ -1070,20 +829,12 @@ public class BuiltinFunctions {
   private static MethodHandle iteratorEachHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
                                                                              Object.class, Iterator.class, String.class,
                                                                              Integer.class, MethodHandle.class, Continuation.class);
-  public static Object iteratorEachWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, ITERATOR, 1, source, offset);
-    try {
-      return iteratorEach(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
-  }
 
   ////////////////////////////////
 
   // = collect
 
+  public static Object iteratorCollectData;
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     return iteratorCollect$c(RuntimeUtils.createIterator(iterable), new ArrayList(), (list, elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
   }
@@ -1154,20 +905,12 @@ public class BuiltinFunctions {
                                                                                 Object.class, Iterator.class, Object.class,
                                                                                 BiFunction.class, String.class, Integer.class,
                                                                                 MethodHandle.class, Continuation.class);
-  public static Object iteratorCollectWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR, 1, source, offset);
-    try {
-      return iteratorCollect(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
-  }
 
   /////////////////////////////
 
   // = reduce
 
+  public static Object iteratorReduceData;
   public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, MethodHandle closure) {
     return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, initialValue, (value, elem) -> {
       elem = Arrays.asList(value, elem);
@@ -1250,21 +993,13 @@ public class BuiltinFunctions {
   private static MethodHandle iteratorReduceHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReduce$c",
                                                                                 Object.class, Iterator.class, String.class, Integer.class,
                                                                                 Object.class, BiFunction.class, Function.class, Continuation.class);
-  public static Object iteratorReduceWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 2, ITERATOR, 2, source, offset);
-    try {
-      return iteratorReduce(iterable, c, source, offset, args[0], (MethodHandle) args[1]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[1]) + " to Function", source, offset);
-    }
-  }
 
   /////////////////////////////
 
   // = join
 
-  public static String iteratorJoin(Object iterable, String joinStr, Continuation c, String source, int offset) {
+  public static Object iteratorJoinData;
+  public static String iteratorJoin(Object iterable, Continuation c, String source, int offset, String joinStr) {
     BiFunction<Object,Object,Object> joiner = (str,elem) -> {
       if (str.equals("")) {
         return RuntimeUtils.toString(elem);
@@ -1278,20 +1013,11 @@ public class BuiltinFunctions {
     return (String)iteratorCollect$c(RuntimeUtils.createIterator(iterable), "", joiner, source, offset, null, c);
   }
 
-  public static Object iteratorJoinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorJoin(iterable, args.length == 0 ? null : (String)args[0], c, source, offset);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to String", source, offset);
-    }
-  }
-
   /////////////////////////////
 
   // = avg
 
+  public static Object iteratorAvgData;
   public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
     int[] counter = new int[]{0};
     return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO,
@@ -1309,23 +1035,15 @@ public class BuiltinFunctions {
                             },
                             c);
   }
-  public static Object iteratorAvgWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return iteratorAvg(iterable, c, source, offset);
-  }
 
   // = sum
 
+  public static Object iteratorSumData;
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
     return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, 0,
                             (value,elem) -> addNumbers(value, elem, source, offset),
                             (value) -> value,
                             c);
-  }
-
-  public static Object iteratorSumWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
-    return iteratorSum(iterable, c, source, offset);
   }
 
   private static Object addNumbers(Object valueObj, Object elemObj, String source, int offset) {
@@ -1350,6 +1068,7 @@ public class BuiltinFunctions {
 
   // = min/max
 
+  public static Object iteratorMinData;
   public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, null,
                             (value,elem) -> minMaxInvoker(source, offset, closure, false, value, elem, c),
@@ -1357,30 +1076,12 @@ public class BuiltinFunctions {
                             c);
   }
 
-  public static Object iteratorMinWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorMin(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to min() must be a function/closure not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-  }
-
+  public static Object iteratorMaxData;
   public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, null,
                             (value,elem) -> minMaxInvoker(source, offset, closure, true, value, elem, c),
                             (value) -> value == null ? null : ((Object[])value)[1],
                             c);
-  }
-  public static Object iteratorMaxWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorMax(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle)args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Argument to max() must be a function/closure not " + RuntimeUtils.className(args[0]), source, offset);
-    }
   }
 
   private static final MethodHandle minMaxInvokerHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "minMaxInvoker",
@@ -1426,6 +1127,7 @@ public class BuiltinFunctions {
 
   // = collectEntries
 
+  public static Object iteratorCollectEntriesData;
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     BiFunction<Object,Object,Object> collector = (mapObj,elem) -> {
       RuntimeUtils.addMapEntry((Map) mapObj, elem, source, offset);
@@ -1433,17 +1135,6 @@ public class BuiltinFunctions {
     };
     return iteratorCollect$c(RuntimeUtils.createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
   }
-
-  public static Object iteratorCollectEntriesWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR, 1, source, offset);
-    try {
-      return iteratorCollectEntries(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset);
-    }
-  }
-
 
   /////////////////////////////
 
@@ -1457,6 +1148,7 @@ public class BuiltinFunctions {
     return iteratorSort(iterable, c, source, offset, closure);
   }
 
+  public static Object iteratorSortData;
   public static List iteratorSort(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
     List result = null;
     int location = c == null ? 0 : c.methodLocation;
@@ -1493,16 +1185,6 @@ public class BuiltinFunctions {
                              location + 1, null, null);
     }
   }
-  public static Object iteratorSortWrapper(Object iterable, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, ITERATOR,1, source, offset);
-    try {
-      return iteratorSort(iterable, c, source, offset, args.length == 0 ? null : (MethodHandle) args[0]);
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Cannot convert arg type " + RuntimeUtils.className(args[0]) + " to Function", source, offset, e);
-    }
-  }
-
 
   private static MethodHandle mergeSortHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "mergeSort",
                                                                       Object.class, List.class, MethodHandle.class,
@@ -1619,25 +1301,22 @@ public class BuiltinFunctions {
   //// String methods
 
   // = lines
+  public static Object stringLinesData;
   public static Iterator stringLines(String str) {
-    return RuntimeUtils.lines(str).iterator();
-  }
-  public static Object stringLinesWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null,0, source, offset);
     return RuntimeUtils.lines(str).iterator();
   }
 
   // = length
-  public static int stringLength(String str) {
-    return str.length();
-  }
-  public static Object stringLengthWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, null, 0, source, offset);
-    return ((String)str).length();
-  }
+  public static Object stringLengthData;
+  public static int stringLength(String str) { return str.length();  }
 
   // = toLowerCase
+  public static Object stringToLowerCaseData;
   public static String stringToLowerCase(String str, int length) {
+    if (length < 0) {
+      // Allow offset from end of string
+      length += str.length();
+    }
     if (length < 0 || length >= str.length()) {
       return str.toLowerCase();
     }
@@ -1646,19 +1325,14 @@ public class BuiltinFunctions {
     }
     return str.substring(0, length).toLowerCase() + str.substring(length);
   }
-  public static Object stringToLowerCaseWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, STRING, 1, source, offset);
-    if (args.length > 0) {
-      if (!(args[0] instanceof Number)) {
-        throw new RuntimeError("Argument to toLowerCase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-      }
-      return stringToLowerCase(str, ((Number)args[0]).intValue());
-    }
-    return ((String)str).toLowerCase();
-  }
 
   // = toUpperCase
+  public static Object stringToUpperCaseData;
   public static String stringToUpperCase(String str, int length) {
+    if (length < 0) {
+      // Allow offset from end of string
+      length += str.length();
+    }
     if (length < 0 || length >= str.length()) {
       return str.toUpperCase();
     }
@@ -1667,44 +1341,18 @@ public class BuiltinFunctions {
     }
     return str.substring(0, length).toUpperCase() + str.substring(length);
   }
-  public static Object stringToUpperCaseWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, STRING, 1, source, offset);
-    if (args.length > 0) {
-      if (!(args[0] instanceof Number)) {
-        throw new RuntimeError("Argument to toUpperCase must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-      }
-      return stringToUpperCase(str, ((Number)args[0]).intValue());
-    }
-    return str.toUpperCase();
-  }
 
   // = substring
+  public static Object stringSubstringData;
   public static String stringSubstring(String str, String source, int offset, int start, int end) {
     try {
+      if (end < 0) {
+        end += str.length();
+      }
+      if (end < 0 || end == Integer.MAX_VALUE) {
+        return str.substring(start);
+      }
       return str.substring(start, end);
-    }
-    catch (Exception e) {
-      throw new RuntimeError("Substring error", source, offset, e);
-    }
-  }
-  public static Object stringSubstringWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 1, STRING, 2, source, offset);
-    int begin = -1;
-    if (!(args[0] instanceof Number)) {
-      throw new RuntimeError("First argument to substring must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-    }
-    begin = ((Number)args[0]).intValue();
-    try {
-      if (args.length > 1) {
-        if (!(args[1] instanceof Number)) {
-          throw new RuntimeError("Second argument to substring must be a number not '" + RuntimeUtils.className(args[1]) + "'", source, offset);
-        }
-        int end = ((Number) args[1]).intValue();
-        return str.substring(begin, end);
-      }
-      else {
-        return str.substring(begin);
-      }
     }
     catch (Exception e) {
       throw new RuntimeError("Substring error", source, offset, e);
@@ -1712,6 +1360,7 @@ public class BuiltinFunctions {
   }
 
   // = asNum
+  public static Object stringAsNumData;
   public static long stringAsNum(String str, String source, int offset, int base) {
     if (base < Character.MIN_RADIX) { throw new RuntimeError("Base was " + base + " but must be at least " + Character.MIN_RADIX, source, offset); }
     if (base > Character.MAX_RADIX) { throw new RuntimeError("Base was " + base + " but must be no more than " + Character.MAX_RADIX, source, offset); }
@@ -1723,19 +1372,9 @@ public class BuiltinFunctions {
       throw new RuntimeError("Input '" + str + "': invalid character for number with base " + base + " or number is too large", source, offset);
     }
   }
-  public static Object stringAsNumWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, STRING, 1, source, offset);
-    int base = 10;
-    if (args.length > 0) {
-      if (!(args[0] instanceof Number)) {
-        throw new RuntimeError("Argument to asNum must be a number not '" + RuntimeUtils.className(args[0]) + "'", source, offset);
-      }
-      base = ((Number) args[0]).intValue();
-    }
-    return stringAsNum(str, source, offset, base);
-  }
 
   // = split
+  public static Object stringSplitData;
   public static Iterator stringSplit(String str, String source, int offset, String regex, String modifiers) {
     if (regex == null) {
       return new Iterator() {
@@ -1779,57 +1418,5 @@ public class BuiltinFunctions {
         throw new IllegalStateException("Internal error: split() - no more matches");
       }
     };
-  }
-  public static Object stringSplitWrapper(String str, Continuation c, String source, int offset, Object[] args) {
-    args = validateArgCount(args, 0, STRING, 2, source, offset);
-    String regex;
-    try {
-      regex = args.length == 0 ? null : (String) args[0];
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Regex for split() must be String not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-    String modifiers;
-    try {
-      modifiers = args.length <= 1 ? "" : (String) args[1];
-    }
-    catch (ClassCastException e) {
-      throw new RuntimeError("Modifiers for split() must be String not " + RuntimeUtils.className(args[0]), source, offset);
-    }
-    return stringSplit(str, source, offset, regex, modifiers);
-  }
-
-
-
-  /////////////////////////////
-
-  private static Object[] validateArgCount(Object[] args, int mandatoryCount, JacsalType methodObjType, int paramCount, String source, int offset) {
-    int argCount = args.length;
-
-    // If we have a single arg which is a List and
-    //   - we have no parameters, or
-    //   - we have more than one mandatory parameter, or
-    //   - we have single parameter that is not a List
-    // then
-    //   we treat the List as our args
-    if (argCount == 1 && args[0] instanceof List &&
-        (paramCount == 0 ||
-         !methodObjType.is(LIST,ANY) ||
-         mandatoryCount > 1)) {
-      args = ((List) args[0]).toArray();
-      argCount = args.length;
-    }
-    else if (argCount > 0 && args[0] instanceof NamedArgsMap) {
-      throw new RuntimeError("Named args not supported for built-in functions", source, offset);
-    }
-
-    if (argCount < mandatoryCount) {
-      String atLeast = mandatoryCount == paramCount ? "" : "at least ";
-      throw new RuntimeError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", source, offset);
-    }
-    if (paramCount >= 0 && argCount > paramCount) {
-      throw new RuntimeError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", source, offset);
-    }
-    return args;
   }
 }

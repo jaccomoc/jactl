@@ -717,6 +717,28 @@ The `+=` operator adds the values to an existing map rather than creating a new 
 [a:2, b:2, c:3]
 ```
 
+#### Map Subtraction
+You can subtract from a Map to remove specific keys from the Map (see also [Map.remove()](#Map.remove())).
+To subtract one map from the other:
+```groovy
+> [a:1,b:2,c:3] - [a:3,b:[1,2,3]]
+[c:3]
+```
+This will produce a new Map where the entries in the first Map that match the keys in the second Map have been
+removed.
+
+Keys in the second Map that don't exist in the first Map will have no effect on the result:
+```groovy
+> [a:1,b:2,c:3] - [x:'abc']
+[a:1, b:2, c:3]
+```
+
+You can also subtract a List of values from a Map where the List is treated as a list of keys to be removed:
+```groovy
+> [a:1,b:2,c:3] - ['a','c']
+[b:2]
+```
+
 #### JSON Syntax
 Jacsal also supports JSON-like syntax for maps. This makes it handy if you want to cut-and-paste some JSON into your
 Jacsal script:
@@ -4030,7 +4052,7 @@ Following sections will list the other methods for these types as well as method
 
 ### List Methods
 
-#### size()
+#### List.size()
 
 The `size()` method returns the number of elements in a List, including any elements that are `null`:
 ```groovy
@@ -4038,13 +4060,10 @@ The `size()` method returns the number of elements in a List, including any elem
 5
 ```
 
-#### add()
+#### List.add()
 
-The `add()` method has two forms.
-It can be used to add an element to the end of an existing list if passed in a single argument, or if passed two
-arguments, the first argument is the position in the list where the element should be inserted.
-
-The single argument form of `add()` works like the `<<=` operator:
+The `add()` method will add an element to the end of a list.
+It works like the `<<=` operator:
 ```groovy
 > def x = [1,2,3]
 [1, 2, 3]
@@ -4058,14 +4077,17 @@ The single argument form of `add()` works like the `<<=` operator:
 [1, 2, 3, 4, 5]
 ```
 
-With two arguments, `add()` will insert the given value into the position given by the first argument (with `0` being
+#### List.addAt()
+
+To add an element at a given position in the list you can use the  `addAt()` method.
+This will insert the given value into the position given by the first argument (with `0` being
 the first position in the list):
 ```groovy
 >  def x = ['a', 'b', 'c']
 ['a', 'b', 'c']
-> x.add(0,'z')
+> x.addAt(0,'z')
 ['z', 'a', 'b', 'c']
-> x.add(1, 'y')
+> x.addAt(1, 'y')
 ['z', 'y', 'a', 'b', 'c']
 > x
 ['z', 'y', 'a', 'b', 'c']
@@ -4076,7 +4098,7 @@ value:
 ```groovy
 > def x = ['a', 'b', 'c']
 ['a', 'b', 'c']
-> x.add(3, 'z')
+> x.addAt(3, 'z')
 ['a', 'b', 'c', 'z']
 ```
 
@@ -4084,17 +4106,17 @@ If you add an element beyond the size of the list, then you will get an error:
 ```groovy
 > def x = ['a', 'b', 'c']
 ['a', 'b', 'c']
-> x.add(10, 'z')
+> x.addAt(10, 'z')
 Index out of bounds: (10 is too large) @ line 1, column 3
-x.add(10, 'z')
+x.addAt(10, 'z')
   ^
 ```
 
-Note that `x.add(3, 'z')` is different to `x[3] = 'z'`:
+Note that `x.addAt(3, 'z')` is different to `x[3] = 'z'`:
 ```groovy
 > def x = ['a', 'b', 'c', 'd']
 ['a', 'b', 'c', 'd']
-> x.add(3, 'z')
+> x.addAt(3, 'z')
 ['a', 'b', 'c', 'z', 'd']
 > def x = ['a', 'b', 'c', 'd']
 ['a', 'b', 'c', 'd']
@@ -4104,9 +4126,9 @@ z
 ['a', 'b', 'c', 'z']
 ```
 
-The `add()` method inserts into the list whereas `[]` replaces what was at the position with the new value.
+The `addAt()` method inserts into the list whereas `[]` replaces what was at the position with the new value.
 
-#### remove()
+#### List.remove()
 
 The `remove()` method removes the element at the given position from the list:
 ```groovy
@@ -4120,7 +4142,7 @@ d
 
 The value returned from `remove()` is the value of the element that was removed.
 
-#### subList()
+#### List.subList()
 
 The `subList()` method returns a sub-list of the list it is applied to.
 It can have one or two arguments.
@@ -4160,7 +4182,7 @@ Since Maps, Strings, and numbers can be iterated over, `subList()` can also be a
 
 ### Map Methods
 
-#### size()
+#### Map.size()
 
 The `size()` method returns the number of entries in the Map:
 ```groovy
@@ -4168,7 +4190,7 @@ The `size()` method returns the number of entries in the Map:
 3
 ```
 
-#### remove()
+#### Map.remove()
 
 The `remove()` method removes the entry with the given key from the Map and returns the value for that key:
 ```groovy
@@ -4192,7 +4214,7 @@ true
 
 ### String Methods
 
-### size() and length()
+### String.size() and String.length()
 
 Jacsal supports the use of both `size()` and `length()` for getting the length of a string.
 `length()` is supported in order to make it easier for Java progammers who are used to using `length()`
@@ -4204,7 +4226,7 @@ while `size()` is supported for consitency in naming across Lists, Maps, and Str
 5
 ```
 
-### lines()
+### String.lines()
 
 The `lines()` method splits the string into a list of strings, one per line in the source string:
 ```groovy
@@ -4222,7 +4244,7 @@ four lines
 ['']
 ```
 
-### toUpperCase() and toLowerCase()
+### String.toUpperCase() and String.toLowerCase()
 
 These methods turn a string into all upper case or all lower case:
 ```groovy
@@ -4232,7 +4254,7 @@ ABC
 a string with capitals
 ```
 
-### substring()
+### String.substring()
 
 The `substring()` method allows you to extract a substring starting at a given index.
 Like `subList()` it has a single argument version that returns the remaining string from the given index, and a two
@@ -4254,12 +4276,12 @@ This means that to extract `n` chars at index `i` you use `substring(i, i + n)`:
 cd
 ```
 
-### split()
+### String.split()
 
 The `split()` method splits a string based on a separator specified by a regex with optional modifiers.
 See the previous section on the [Split Method](#split-method) for more information.
 
-### asNum()
+### String.asNum()
 
 The `asNum()` method parses a string of digits and returns their numeric value.
 It takes an optional argument which is the base (or radix) for the number being parsed.
@@ -4294,7 +4316,7 @@ Both lowercase and uppercase letters are supported for bases greater than 10:
 
 ### Int Methods
 
-#### asChar()
+#### int.asChar()
 
 The `asChar()` method converts a Unicode value back into its corresponding character (which is a single-character
 string in Jacsal):
@@ -4316,7 +4338,7 @@ Z
 
 Apart from `toBase()`, these methods apply to all number types (`int`, `long`, `double`, and `Decimal`).
 
-#### toBase()
+#### Number.toBase()
 
 The `toBase()` method converts an `int` or `long` to its character representation in the specified base:
 ```groovy
@@ -4334,7 +4356,7 @@ Base must be between 2 and 36 @ line 1, column 12
            ^
 ```
 
-#### abs()
+#### Number.abs()
 
 The `abs()` method returns the absolute value of the number:
 ```groovy
@@ -4346,7 +4368,7 @@ Function@1987169128
 110
 ```
 
-#### sqr()
+#### Number.sqr()
 
 The `sqr()` method returns the square of the given number:
 ```groovy
@@ -4354,7 +4376,7 @@ The `sqr()` method returns the square of the given number:
 1524138.3936
 ```
 
-#### sqrt()
+#### Number.sqrt()
 
 The `sqrt()` method returns the square root of the number:
 ```groovy
@@ -4362,7 +4384,7 @@ The `sqrt()` method returns the square root of the number:
 35.13641700572214
 ```
 
-#### pow()
+#### Number.pow()
 
 The `pow()` method allows you to calculate one number raised to the power of another.
 For example, to calculate the cube of a number:

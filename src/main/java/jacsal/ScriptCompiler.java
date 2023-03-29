@@ -27,6 +27,8 @@ import java.lang.invoke.MethodType;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
@@ -37,30 +39,34 @@ public class ScriptCompiler extends ClassCompiler {
     super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jacsal");
   }
 
-  public Function<Map<String,Object>, Future<Object>> compileWithFuture() {
+  /**
+   * Return a compiled script that accepts a Map of globals and Consumer which is the completion
+   * code to run once the script has finished (and which will accept the result).
+   * @return the script
+   */
+  BiConsumer<Map<String,Object>,Consumer<Object>> compileWithCompletion() {
     var scriptMain = compile();
 
-    return map -> {
-      var future = new CompletableFuture<>();
+    return (map,completion) -> {
       RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
       RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
       try {
-        future.complete(scriptMain.apply(map));
+        Object result = scriptMain.apply(map);
+        completion.accept(result);
       }
       catch (Continuation c) {
-        asyncWork(future, c);
+        asyncWork(completion, c);
       }
       catch (JacsalError | IllegalStateException | IllegalArgumentException e) {
-        future.complete(e);
+        completion.accept(e);
       }
       catch (Throwable t) {
-        future.complete(new IllegalStateException("Invocation error: " + t, t));
+        completion.accept(new IllegalStateException("Invocation error: " + t, t));
       }
-      return future;
     };
   }
 
-  public Function<Map<String,Object>, Object> compile() {
+  Function<Map<String,Object>, Object> compile() {
     FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACSAL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
     globalVars.visitEnd();
 
@@ -101,25 +107,25 @@ public class ScriptCompiler extends ClassCompiler {
     }
   }
 
-  private void asyncWork(CompletableFuture<Object> future, Continuation c) {
+  private void asyncWork(Consumer<Object> completion, Continuation c) {
     // Need to execute async task on some sort of blocking work scheduler and then reschedule
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
     // the same thread as we are on).
     final var asyncTask = c.getAsyncTask();
-    asyncTask.execute(context, result -> resumeContinuation(future, result, asyncTask.getContinuation()));
+    asyncTask.execute(context, result -> resumeContinuation(completion, result, asyncTask.getContinuation()));
   }
 
-  private void resumeContinuation(CompletableFuture<Object> future, Object asyncResult, Continuation cont) {
+  private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont) {
     try {
       Object result = cont.continueExecution(asyncResult);
       // We finally get the real result out of the script execution
-      future.complete(result);
+      completion.accept(result);
     }
     catch (Continuation c) {
-      asyncWork(future, c);
+      asyncWork(completion, c);
     }
     catch (Throwable t) {
-      future.complete(t);
+      completion.accept(t);
     }
   }
 

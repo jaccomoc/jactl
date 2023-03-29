@@ -31,7 +31,7 @@ repositories {
 sourceSets {
     test {
         resources {
-            srcDirs = ["src/test/resources", "src/main/tools", "src/main/java"]
+            srcDirs = ["src/test/resources", "src/main/tools"] // , "src/main/java"
         }
     }
 }
@@ -43,13 +43,13 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
 
-tasks.withType(JavaCompile) {
-    options.deprecation = true
+tasks.withType(JavaCompile) { options.deprecation = true }
+task testJar(type: Jar) {
+    from sourceSets.test.output
+    archiveClassifier = 'tests'
 }
 
-test {
-    useJUnitPlatform()
-}
+test { useJUnitPlatform() }
 
 jar {
     duplicatesStrategy 'exclude'
@@ -72,8 +72,21 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
         }
+
+        mavenTests(MavenPublication) {
+            groupId project.group
+            artifactId "${project.name}"
+            version project.version
+            artifact testJar
+        }
     }
     repositories {
         mavenLocal()
     }
 }
+
+tasks.generateMetadataFileForMavenJavaPublication.mustRunAfter(testJar)
+//tasks.publishToMavenLocal.dependsOn(build)
+tasks.publishMavenTestsPublicationToMavenLocal.dependsOn(jar)
+tasks.publishMavenTestsPublicationToMavenLocal.dependsOn(shadowJar)
+//tasks.publishToMavenLocal.dependsOn(testJar)

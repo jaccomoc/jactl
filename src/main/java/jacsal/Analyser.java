@@ -675,18 +675,31 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // For methods note that index 0 means the object on whom we are performing the method call so other
     // arguments start at index 1 so args.get(index-1) gets the arg value for that index.
     // For calls to builtin functions arg0 is null and counting is as per args list indexing.
-    Function<Integer, Expr> getArg = i -> {
-      if (arg0 != null) {
-        // Method call
-        if (i == 0) { return arg0; }
-        i--;
-      }
-      return args.size() > i ? args.get(i) : null;
-    };
+    if (Utils.isNamedArgs(args)) {
+      var namedArgs = Utils.getNamedArgs(args);
+      // Lambda to extract ith arg. For methods arg0 is 0th arg and param counting starts at 1:
+      Function<Integer, Expr> getrArg = i -> arg0 != null ? (i == 0 ? arg0 : namedArgs.get(func.paramNames.get(i - 1)))
+                                                          : namedArgs.get(func.paramNames.get(i));
+      return func.asyncArgs.stream()
+                           .map(getrArg)
+                           .anyMatch(this::isAsyncArg);
+    }
+    else {
+      Function<Integer, Expr> getArg = i -> {
+        if (arg0 != null) {
+          // Method call
+          if (i == 0) {
+            return arg0;
+          }
+          i--;
+        }
+        return args.size() > i ? args.get(i) : null;
+      };
 
-    return func.asyncArgs.stream()
-                         .map(getArg)
-                         .anyMatch(this::isAsyncArg);
+      return func.asyncArgs.stream()
+                           .map(getArg)
+                           .anyMatch(this::isAsyncArg);
+    }
   }
 
   private boolean isAsyncArg(Expr arg) {

@@ -18,9 +18,12 @@
 package jacsal;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class Compiler {
@@ -32,48 +35,39 @@ public class Compiler {
   }
 
   static Object run(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String,Object> bindings) {
-    Function<Map<String,Object>,Future<Object>> compiled = compileScriptWithFuture(source, jacsalContext, packageName, testAsync, bindings);
+    var compiled = compileScript(source, jacsalContext, packageName, bindings);
     return runSync(compiled, bindings);
   }
 
   public static Object run(String source, JacsalContext jacsalContext, String packageName, Map<String,Object> bindings) {
-    Function<Map<String,Object>,Future<Object>> compiled = compileScriptWithFuture(source, jacsalContext, packageName, false, bindings);
+    var compiled = compileScript(source, jacsalContext, packageName, bindings);
     return runSync(compiled, bindings);
   }
 
   public static Object run(String source, JacsalContext jacsalContext, Map<String,Object> bindings) {
-    Function<Map<String,Object>,Future<Object>> compiled = compileScriptWithFuture(source, jacsalContext, Utils.DEFAULT_JACSAL_PKG, false, bindings);
+    var compiled = compileScript(source, jacsalContext, bindings);
     return runSync(compiled, bindings);
   }
 
-  public static void compileClass(String source, JacsalContext jacsalContext, String packageName, Map<String, Object> bindings) {
-    compileClass(source, jacsalContext, packageName, false, bindings);
+  public static void compileClass(String source, JacsalContext jacsalContext) {
+    compileClass(source, jacsalContext, null);
   }
 
-  public static void compileClass(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
-    compileClass(source, jacsalContext, null, false, bindings);
-  }
-
-  public static Function<Map<String, Object>,Future<Object>> compileScriptWithFuture(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
-    String className = Utils.JACSAL_SCRIPT_PREFIX + counter.incrementAndGet();
-    return compileScriptWithFuture(source, jacsalContext, className, Utils.DEFAULT_JACSAL_PKG, false, bindings);
-  }
-
-  public static Function<Map<String, Object>,Object> compileScript(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
+  public static BiConsumer<Map<String, Object>,Consumer<Object>> compileScript(String source, JacsalContext jacsalContext, Map<String, Object> bindings) {
     String className = Utils.JACSAL_SCRIPT_PREFIX + counter.incrementAndGet();
     return compileScript(source, jacsalContext, className, Utils.DEFAULT_JACSAL_PKG, false, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compileScriptWithFuture(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  public static BiConsumer<Map<String, Object>, Consumer<Object>> compileScript(String source, JacsalContext jacsalContext, String packageName, Map<String, Object> bindings) {
     String className = Utils.JACSAL_SCRIPT_PREFIX + counter.incrementAndGet();
-    return compileScriptWithFuture(source, jacsalContext, className, packageName, testAsync, bindings);
+    return compileScript(source, jacsalContext, className, packageName, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compileScriptWithFuture(String source, JacsalContext jacsalContext, String className, String packageName, Map<String, Object> bindings) {
-    return compileScriptWithFuture(source, jacsalContext, className, packageName, false, bindings);
+  public static BiConsumer<Map<String, Object>,Consumer<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, Map<String, Object> bindings) {
+    return compileScript(source, jacsalContext, className, packageName, false, bindings);
   }
 
-  public static Function<Map<String, Object>,Future<Object>> compileScriptWithFuture(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  public static BiConsumer<Map<String, Object>, Consumer<Object>> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
     var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var script   = parser.parseScript(className);
     var resolver = new Resolver(jacsalContext, bindings);
@@ -81,35 +75,37 @@ public class Compiler {
     var analyser = new Analyser(jacsalContext);
     analyser.testAsync = testAsync;
     analyser.analyseClass(script);
-    return compileWithFuture(source, jacsalContext, script);
+    return compileWithCompletion(source, jacsalContext, script);
   }
 
-  public static Function<Map<String, Object>,Object> compileScript(String source, JacsalContext jacsalContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  /**
+   * For internal use by eval() function.
+   */
+  public static Function<Map<String, Object>,Object> compileScriptInternal(String source, JacsalContext jacsalContext, String packageName, Map<String, Object> bindings) {
+    String className = Utils.JACSAL_SCRIPT_PREFIX + counter.incrementAndGet();
     var parser   = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var script   = parser.parseScript(className);
     var resolver = new Resolver(jacsalContext, bindings);
     resolver.resolveScript(script);
     var analyser = new Analyser(jacsalContext);
-    analyser.testAsync = testAsync;
     analyser.analyseClass(script);
     var compiler = new ScriptCompiler(source, jacsalContext, script);
     return compiler.compile();
   }
 
-  private static void compileClass(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  public static void compileClass(String source, JacsalContext jacsalContext, String packageName) {
     var parser      = new Parser(new Tokeniser(source), jacsalContext, packageName);
     var scriptClass = parser.parseClass();
-    var resolver = new Resolver(jacsalContext, bindings);
+    var resolver = new Resolver(jacsalContext, Map.of());
     resolver.resolveClass(scriptClass);
     var analyser = new Analyser(jacsalContext);
-    analyser.testAsync = testAsync;
     analyser.analyseClass(scriptClass);
     compileClass(source, jacsalContext, packageName, scriptClass);
   }
 
-  static Function<Map<String,Object>,Future<Object>> compileWithFuture(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
+  static BiConsumer<Map<String,Object>, Consumer<Object>> compileWithCompletion(String source, JacsalContext jacsalContext, Stmt.ClassDecl script) {
     var compiler = new ScriptCompiler(source, jacsalContext, script);
-    return compiler.compileWithFuture();
+    return compiler.compileWithCompletion();
   }
 
   static void compileClass(String source, JacsalContext jacsalContext, String packageName, Stmt.ClassDecl clss) {
@@ -117,8 +113,9 @@ public class Compiler {
     compiler.compileClass();
   }
 
-  public static Object runSync(Function<Map<String,Object>,Future<Object>> script, Map<String,Object> globals) {
-    Future<Object> future = script.apply(globals);
+  public static Object runSync(BiConsumer<Map<String,Object>,Consumer<Object>> script, Map<String,Object> globals) {
+    var future = new CompletableFuture<Object>();
+    script.accept(globals, result -> future.complete(result));
     Object result = null;
     try {
       result = future.get();

@@ -170,6 +170,9 @@ public class AsyncTest {
     sync("[1,2,3].sum()", 6);
     sync("[1,2,3].avg()", "#2");
     async("[1,2,3].map{sleep(0,it)}.sum()", 6);
+    sync("[1,2,3].map{it}.sum()", 6);
+    async("[1,2,3].map{it.size()}.sum()", 6);   // don't know type of it so have to assume async
+    sync("[1,2,3].map{int it -> it.size()}.sum()", 6);
     async("[1,2,3].map{sleep(0,it)}.avg()", "#2");
     async("stream{nextLine()}", "1\n2\n3", List.of("1","2","3"));
     async("stream(nextLine)", "1\n2\n3", List.of("1","2","3"));
@@ -178,5 +181,7 @@ public class AsyncTest {
     sync("def i = 0; stream{ i++ < 3 ? i : null }", List.of(1,2,3));
     async("eval('1 + 2')", 3);
     async("eval('sleep(0,3) + sleep(0,2)') + sleep(0,-3) + sleep(0,2)", 4);
+    sync("[[1,2,3],[1],[2,3]].min(closure:{List it -> it.size()})", List.of(1));
+    async("[[1,2,3],[1],[2,3]].min(closure:{it.size()})", List.of(1));
   }
 }

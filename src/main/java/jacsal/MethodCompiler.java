@@ -1650,6 +1650,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (expr.parent.type.isPrimitive()) {
                              box();
                            }
+                           if (method.wrapperHandleField != null) {
+                             loadClassField(method.implementingClass, method.wrapperHandleField, ANY, true);
+                             checkCast(FUNCTION);
+                             if (!method.isGlobalFunction) {
+                               // Is "method" so bind to parent object
+                               swap();
+                               invokeMethod(MethodHandle.class, "bindTo", Object.class);
+                             }
+                           }
                            loadNullContinuation();
                            loadLocation(expr.methodNameLocation);
                            loadArgsAsObjectArr(expr.args);
@@ -1657,9 +1666,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            var paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
                            if (method.isBuiltin && !method.isGlobalFunction) {
-                             paramTypes = Utils.concat(method.firstArgtype, paramTypes);
+                             paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
                            }
-                           invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
+                           if (method.wrapperMethod != null) {
+                             invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
+                           }
+                           else {
+                             invokeMethodHandle();
+                           }
                            // Convert Object returned by wrapper back into return type of the function
                            checkCast(method.returnType);
                            if (method.returnType.isPrimitive()) {
@@ -2160,6 +2174,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else
     if (!argExpr.type.isConvertibleTo(paramType)) {
+      paramType = paramType.is(OBJECT_ARR) ? LIST : paramType;
       throw new CompileError("Cannot convert argument of type " + argExpr.type + " to parameter type of " + paramType, location);
     }
   }
@@ -3564,31 +3579,42 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
-    // We invoke wrapper if we don't have enough args since it will fill in missing
-    // values for optional parameters. We need last param to be of type Object[] since
-    // this means varArgs.
+    // We invoke wrapper for named args or if we don't have enough args since it will fill
+    // in missing values for optional parameters. We need last param to be of type Object[]
+    // since this means varArgs.
     var     paramTypes = func.paramTypes;
-    boolean varArgs    = paramTypes.size() > 0 && paramTypes.get(paramTypes.size() - 1).is(OBJECT_ARR);
+    boolean varArgs    = func.isVarArgs;
     var nonVarArgCount = varArgs ? paramTypes.size() - 1
                                  : paramTypes.size();
-    boolean invokeWrapper = expr.args.size() < nonVarArgCount;
+    boolean invokeWrapper = Utils.isNamedArgs(expr.args) || expr.args.size() < nonVarArgCount;
 
     if (invokeWrapper) {
       // Add location types to the front
       paramTypes = List.of(CONTINUATION,STRING,INT,OBJECT_ARR);
       List<JacsalType> finalParamTypes = paramTypes;
 
-      invokeMaybeAsync(true, func.returnType, 0, expr.location,
+      invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
                        () -> {
+                         if (func.wrapperHandleField != null) {
+                           loadClassField(func.implementingClass, func.wrapperHandleField, ANY, true);
+                           checkCast(FUNCTION);
+                         }
                          loadNullContinuation();         // Continuation
                          loadLocation(expr.location);
                          loadArgsAsObjectArr(expr.args);
                        },
-                       () -> invokeUserMethod(func.isStatic,
-                                              false, func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
-                                              func.wrapperMethod,
-                                              func.returnType,
-                                              finalParamTypes));
+                       () -> {
+                         if (func.wrapperMethod != null) {
+                           invokeUserMethod(func.isStatic,
+                                            false, func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                                            func.wrapperMethod,
+                                            func.returnType,
+                                            finalParamTypes);
+                         }
+                         else {
+                           invokeMethodHandle();
+                         }
+                       });
     }
     else {
       if (func.needsLocation) {
@@ -3640,7 +3666,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeMethodHandle() {
     expect(5);
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Ljacsal/runtime/Continuation;Ljava/lang/String;I[Ljava/lang/Object;)Ljava/lang/Object;", false);
-    pop(5);   // callee, continuation, source, offset, Object[]
+    pop(5);   // methodHandle, continuation, source, offset, Object[]
     push(ANY);
   }
 

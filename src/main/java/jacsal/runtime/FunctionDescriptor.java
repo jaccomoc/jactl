@@ -35,19 +35,24 @@ public class FunctionDescriptor {
   public int              mandatoryArgCount;
   public String           implementingClass;
   public String           implementingMethod;
-  public boolean          isStatic = false;          // Whether method itself is static or not
-  public boolean          isInitMethod = false;
-  public boolean          isWrapper = false;
-  public boolean          isFinal = false;
+  public boolean          isStatic     = false;     // Whether method itself is static or not
+  public boolean          isInitMethod = false;     // True if this is a user class instance initialiser
+  public boolean          isWrapper    = false;     // True if this is the wrapper func for a user function
+  public boolean          isFinal      = false;     // True if user function is declared as final
+  public boolean          isVarArgs    = false;     // Varargs if last param is Object[]
 
   // Used by builtin functions:
   public boolean          needsLocation;
   public String           wrapperMethod;
   public MethodHandle     wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
+  public String           wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
   public boolean          isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean          isBuiltin;
   public Boolean          isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
-  public List<Integer>    asyncArgs = List.of();     // Async if any of these args are async
+
+  // Async if any of these args are async. If none listed then always async. Counting starts at 0 for the instance
+  // itself (e.g. ITERATOR) and then 1 is the first arg and so on.
+  public List<Integer>    asyncArgs = List.of();
 
   public FunctionDescriptor(String name, JacsalType returnType, int paramCount, int mandatoryArgCount, boolean needsLocation) {
     this.name = name;

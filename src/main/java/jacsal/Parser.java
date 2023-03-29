@@ -111,7 +111,7 @@ public class Parser {
   // = Stmt
 
   private static final TokenType[] types = new TokenType[] { DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST };
-  private static final List<TokenType> typesAndVar = Utils.concat(types, VAR);
+  private static final List<TokenType> typesAndVar = RuntimeUtils.concat(types, VAR);
 
   /**
    *# script -> block;
@@ -745,7 +745,7 @@ public class Parser {
       new Pair(true, List.of(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
       //      List.of(STAR_STAR)
       new Pair(true, unaryOps),
-      new Pair(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE, NEW))
+      new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE, NEW))
     );
 
   // Binary operators which can also sometimes be the start of an expression. We need to know
@@ -2078,8 +2078,8 @@ public class Parser {
     // and invoke it.
     // In order to know whether the field lookup is looking up a field or a method
     // we mark the callee with a flag so we can tell at compile time what type of
-    // look up to do. (Note that if there is not method of that name we then fallback
-    // to looking for a field.)
+    // look up to do. (Note that if there is not a method of that name we then
+    // we fallback to looking for a field.)
     callee.isCallee = true;
 
     // Turn x.a.b(args) into Expr.Call(x.a, b, args) so that we can check at compile

@@ -275,7 +275,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
           }
         }
       });
-      classDecl.methods = Utils.concat(initMethod, classDecl.methods);
+      classDecl.methods = RuntimeUtils.concat(initMethod, classDecl.methods);
 
       // Create varDecl for "this"
       var thisDecl = fieldDecl(classDecl.name, Utils.THIS_VAR, JacsalType.createInstance(classDescriptor));
@@ -2060,7 +2060,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
   private Expr.FunDecl createVarArgWrapper(Expr.FunDecl funDecl) {
     Token startToken = funDecl.startToken;
 
-    /////////////////////////////
+    //-----------------------------------
     // Some helper lambdas...
     Function<TokenType,Token>        token      = type -> new Token(type, startToken);
     Function<String,Token>           identToken = name -> token.apply(IDENTIFIER).setValue(name);
@@ -2090,7 +2090,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
         return new Stmt.VarDecl(nameToken,
                                 declExpr);
       };
-    ///////////////////////////////
+    //-----------------------------------
 
     List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
 
@@ -2145,8 +2145,8 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
     var argCountIs1 = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
 
     // Special case to handle situation where we have List passed as only arg within the Object[].
-    // If there is one parameter or only on mandatory parameter then we pass the list as a single
-    // argument. Otherwise we treat the List as a list of argument values.
+    // If there is one parameter (or one mandatory parameter) then we pass the list as a single argument.
+    // Otherwise, we treat the List as a list of argument values.
     boolean passListAsList = paramCount == 1 || mandatoryCount == 1;
     boolean treatSingleArgListAsArgs = !passListAsList;
     if (treatSingleArgListAsArgs) {

@@ -21,9 +21,11 @@ import jacsal.runtime.FunctionDescriptor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static jacsal.JacsalType.*;
@@ -52,8 +54,8 @@ public class Utils {
   public static final Class JACSAL_LIST_TYPE = ArrayList.class;
 
   public static final String JACSAL_GLOBALS_NAME   = JACSAL_PREFIX + "globals";
-  public static final String JACSAL_GLOBALS_OUTPUT = "output";   // Name of global to use as PrintStream for print/println
-  public static final String JACSAL_GLOBALS_INPUT  = "input";    // Name of global to use when reading from stdin
+  public static final String JACSAL_GLOBALS_OUTPUT = "$output";   // Name of global to use as PrintStream for print/println
+  public static final String JACSAL_GLOBALS_INPUT  = "$input";    // Name of global to use when reading from stdin
 
   public static final String EVAL_ERROR        = "$error";   // Name of output variable containing error (if any) for eval()
 
@@ -346,23 +348,6 @@ public class Utils {
     return 0;
   }
 
-  static List concat(Object... objs) {
-    var result = new ArrayList<>();
-    for (Object obj: objs) {
-      if (obj instanceof List) {
-        result.addAll((List) obj);
-      }
-      else
-      if (obj instanceof Object[]) {
-        result.addAll(Arrays.asList((Object[])obj));
-      }
-      else {
-        result.add(obj);
-      }
-    }
-    return result;
-  }
-
   public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JacsalType returnType, List<Stmt.VarDecl> params, boolean isStatic, boolean isInitMethod, boolean isFinal) {
     Expr.FunDecl funDecl = new Expr.FunDecl(start, nameToken, returnType, params);
 
@@ -437,6 +422,12 @@ public class Utils {
 
   public static boolean isNamedArgs(List<Expr> args) {
     return args.size() == 1 && args.get(0) instanceof Expr.MapLiteral && ((Expr.MapLiteral)args.get(0)).isNamedArgs;
+  }
+
+  public static Map<String,Expr> getNamedArgs(List<Expr> args) {
+    Function<Expr,String> argName    = expr -> ((Expr.Literal)expr).value.getStringValue();
+    var                   mapEntries = ((Expr.MapLiteral) args.get(0)).entries;
+    return mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
   }
 
   public static String plural(String word, int count) {

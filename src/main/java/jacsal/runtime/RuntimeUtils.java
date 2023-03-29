@@ -1737,6 +1737,23 @@ public class RuntimeUtils {
     return null;
   }
 
+  public static List concat(Object... objs) {
+    var result = new ArrayList<>();
+    for (Object obj: objs) {
+      if (obj instanceof List) {
+        result.addAll((List) obj);
+      }
+      else
+      if (obj instanceof Object[]) {
+        result.addAll(Arrays.asList((Object[])obj));
+      }
+      else {
+        result.add(obj);
+      }
+    }
+    return result;
+  }
+
   private enum FieldType {
     BOOLEAN,
     INT,
@@ -2275,7 +2292,7 @@ public class RuntimeUtils {
     var script = evalScriptCache.get(code);
     if (script == null) {
       var context = JacsalContext.create().replMode(true).build();
-      script = Compiler.compileScript(code, context, bindings);
+      script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACSAL_PKG, bindings);
       evalScriptCache.put(code, script);
     }
     return script;
