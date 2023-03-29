@@ -71,9 +71,9 @@ public class Jacsal {
       List<InputStream> fileStreams = files.stream().map(Jacsal::getFileStream).collect(Collectors.toList());
       var inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
                                                : System.in;
-      globals.put("input", new BufferedReader(new InputStreamReader(inputStream)));
+      globals.put(Utils.JACSAL_GLOBALS_INPUT, new BufferedReader(new InputStreamReader(inputStream)));
       boolean[] printInvoked = new boolean[]{ false };
-      globals.put("output", new PrintStream(System.out) {
+      globals.put(Utils.JACSAL_GLOBALS_OUTPUT, new PrintStream(System.out) {
         @Override public void print(String s) {
           super.print(s);
           printInvoked[0] = true;
