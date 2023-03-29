@@ -1529,7 +1529,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Can only call directly if in same class or is static method. Otherwise, we need MethodHandle that
       // was bound to its instance. Functions can be in different classes in repl mode where functions are
       // compiled into separate classes every compile step and then stored in global map.
-      isFunctionCall = functionDescriptor.isStatic || functionDescriptor.implementingClass == null || functionDescriptor.implementingClass.equals(classCompiler.internalName);
+      isFunctionCall = functionDescriptor.isStatic || functionDescriptor.implementingClassName == null || functionDescriptor.implementingClassName.equals(classCompiler.internalName);
     }
     if (isFunctionCall) {
       var callee = (Expr.Identifier)expr.callee;
@@ -1594,7 +1594,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
       boolean invokeSpecial = expr.parent.isSuper();
 
-      var methodClass = method.isStatic ? method.implementingClass : expr.parent.type.getInternalName();
+      var methodClass = method.isStatic ? method.implementingClassName : expr.parent.type.getInternalName();
 
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
@@ -1650,8 +1650,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (expr.parent.type.isPrimitive()) {
                              box();
                            }
-                           if (method.wrapperHandleField != null) {
-                             loadClassField(method.implementingClass, method.wrapperHandleField, ANY, true);
+                           if (method.isBuiltin) {
+                             loadClassField(method.implementingClassName, method.wrapperHandleField, ANY, true);
                              checkCast(FUNCTION);
                              if (!method.isGlobalFunction) {
                                // Is "method" so bind to parent object
@@ -1668,11 +1668,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (method.isBuiltin && !method.isGlobalFunction) {
                              paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
                            }
-                           if (method.wrapperMethod != null) {
-                             invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
+                           if (method.isBuiltin) {
+                             invokeMethodHandle();
                            }
                            else {
-                             invokeMethodHandle();
+                             invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
                            }
                            // Convert Object returned by wrapper back into return type of the function
                            checkCast(method.returnType);
@@ -1953,7 +1953,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        // Note: wrapper always has continuation since when invoking as a handle we have
                        // no idea about whether it is async or not.
                        List<JacsalType> paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
-                       invokeUserMethod(false, false, method.implementingClass, method.wrapperMethod, ANY,
+                       invokeUserMethod(false, false, method.implementingClassName, method.wrapperMethod, ANY,
                                         paramTypes);
                      });
     mv.visitLabel(end);                          // :end
@@ -2085,7 +2085,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       List<String> missingArgs = new ArrayList<>();
-      if (func.paramCount >= 0 && argCount > func.paramCount) {
+      if (!func.isVarArgs && argCount > func.paramCount) {
         if (isInitMethod) {
           throw new CompileError("Too many arguments for constructor (passed " + argCount + " but there " + (func.paramCount==1?"is ":"are ") + (func.paramCount == 0 ? "no": "only " + func.paramCount) + " mandatory "
                                  + Utils.plural("field",func.paramCount) + ")", location);
@@ -3595,26 +3595,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
                        () -> {
-                         if (func.wrapperHandleField != null) {
-                           loadClassField(func.implementingClass, func.wrapperHandleField, ANY, true);
-                           checkCast(FUNCTION);
-                         }
+                         loadClassField(func.implementingClassName, func.wrapperHandleField, ANY, true);
+                         checkCast(FUNCTION);
                          loadNullContinuation();         // Continuation
                          loadLocation(expr.location);
                          loadArgsAsObjectArr(expr.args);
                        },
-                       () -> {
-                         if (func.wrapperMethod != null) {
-                           invokeUserMethod(func.isStatic,
-                                            false, func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
-                                            func.wrapperMethod,
-                                            func.returnType,
-                                            finalParamTypes);
-                         }
-                         else {
-                           invokeMethodHandle();
-                         }
-                       });
+                       () -> invokeMethodHandle());
     }
     else {
       if (func.needsLocation) {
@@ -3653,7 +3640,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        },
                        () -> invokeUserMethod(func.isStatic,
-                                              false, func.implementingClass == null ? classCompiler.internalName : func.implementingClass,
+                                              false, func.implementingClassName == null ? classCompiler.internalName : func.implementingClassName,
                                               func.implementingMethod,
                                               func.returnType,
                                               finalParamTypes));
@@ -3717,7 +3704,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void invokeUserMethod(FunctionDescriptor functionDescriptor, List<JacsalType> paramTypes, boolean isInvokeSpecial) {
     invokeUserMethod(functionDescriptor.isStatic,
-                     isInvokeSpecial, functionDescriptor.implementingClass == null ? classCompiler.internalName : functionDescriptor.implementingClass,
+                     isInvokeSpecial, functionDescriptor.implementingClassName == null ? classCompiler.internalName : functionDescriptor.implementingClassName,
                      functionDescriptor.implementingMethod,
                      functionDescriptor.returnType,
                      paramTypes);

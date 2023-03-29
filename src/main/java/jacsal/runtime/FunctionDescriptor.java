@@ -20,6 +20,7 @@ package jacsal.runtime;
 import jacsal.JacsalType;
 
 import java.lang.invoke.MethodHandle;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -28,14 +29,14 @@ public class FunctionDescriptor {
   public JacsalType       firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
   public String           name;            // Jacsal method/function name
   public JacsalType       returnType;
-  public List<String>     paramNames;
+  public List<String>     paramNames = new ArrayList<>();
   public Set<String>      mandatoryParams;
   public List<JacsalType> paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
-  public String           implementingClass;
+  public String           implementingClassName;
   public String           implementingMethod;
-  public boolean          isStatic     = false;     // Whether method itself is static or not
+  public boolean          isStatic     = false;     // Whether implementation method itself is static or not (for builtins always true)
   public boolean          isInitMethod = false;     // True if this is a user class instance initialiser
   public boolean          isWrapper    = false;     // True if this is the wrapper func for a user function
   public boolean          isFinal      = false;     // True if user function is declared as final
@@ -52,7 +53,7 @@ public class FunctionDescriptor {
 
   // Async if any of these args are async. If none listed then always async. Counting starts at 0 for the instance
   // itself (e.g. ITERATOR) and then 1 is the first arg and so on.
-  public List<Integer>    asyncArgs = List.of();
+  public List<Integer>    asyncArgs = new ArrayList<>();
 
   public FunctionDescriptor(String name, JacsalType returnType, int paramCount, int mandatoryArgCount, boolean needsLocation) {
     this.name = name;
@@ -68,7 +69,7 @@ public class FunctionDescriptor {
     this.type = type;
     this.firstArgtype = firstArgType;
     this.paramTypes = paramTypes;
-    this.implementingClass = implementingClass;
+    this.implementingClassName = implementingClass;
     this.implementingMethod = implementingMethod;
     this.wrapperHandle = wrapperHandle;
   }

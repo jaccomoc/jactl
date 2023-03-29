@@ -906,7 +906,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
 
   @Override public JacsalType visitFunDecl(Expr.FunDecl expr) {
     var implementingClass = classStack.peek().classDescriptor.getInternalName();
-    expr.functionDescriptor.implementingClass  = implementingClass;
+    expr.functionDescriptor.implementingClassName = implementingClass;
 
     // If the script main function
     if (getFunctions().size() == 0) {
@@ -935,7 +935,7 @@ public class Resolver implements Expr.Visitor<JacsalType>, Stmt.Visitor<Void> {
       // Create a wrapper function that takes care of var arg and named argument handling
       expr.wrapper = expr.isInitMethod() ? createInitWrapper(expr) : createVarArgWrapper(expr);
       expr.wrapper.functionDescriptor.implementingMethod = Utils.wrapperName(expr.functionDescriptor.implementingMethod);
-      expr.wrapper.functionDescriptor.implementingClass  = implementingClass;
+      expr.wrapper.functionDescriptor.implementingClassName = implementingClass;
       expr.functionDescriptor.wrapperMethod = expr.wrapper.functionDescriptor.implementingMethod;
 
       // Resolve the wrapper. The wrapper has us as an embedded statement so we will

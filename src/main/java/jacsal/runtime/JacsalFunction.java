@@ -19,8 +19,12 @@ package jacsal.runtime;
 
 import jacsal.JacsalType;
 import jacsal.Utils;
+import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -90,25 +94,19 @@ import java.util.stream.IntStream;
  * </pre>
  */
 
-public class JacsalFunction {
-  JacsalType   methodClass;         // For methods (null for global functions)
-  String       functionName;
-  List<String> aliases = new ArrayList<>();
-  int          mandatoryCount = 0;
+public class JacsalFunction extends FunctionDescriptor {
+  List<String> aliases           = new ArrayList<>();
   Class        implementingClass;
-  String       implementingMethod;
-  String       wrapperHandleField;
   MethodHandle methodHandle;
-  boolean      needsLocation;
   Method       method;
-  int          argCount;       // total args including obj (for methods), and source/offset if needsLocation
-  String[]     paramNames      = new String[0];
-  Object[]     defaultVals     = new Object[0];
-  Integer[]    asyncParams     = new Integer[0];  // Async if any of these args are async
-  boolean      isVarArgs;
-  boolean      isAsync;
-  boolean      isAsyncInstance;       // Actually async if instance is async (e.g. async ITERATOR)
-  int          additionalArgs  = 0;   // needsLocation and methods need more args than just passed in
+
+  // total args including obj (for methods), and source/offset if needsLocation, and Continuation for async funcs
+  int          argCount;
+
+  String[]     paramNamesArr = new String[0];   // Cache of the names as an array for faster runtime access
+  Object[]     defaultVals   = new Object[0];
+  boolean      isAsyncInstance;                 // Actually async if instance is async (e.g. async ITERATOR)
+  int          additionalArgs  = 0;             // needsLocation and methods need more args than just passed in
 
   private static final Object MANDATORY = new Object();
 
@@ -117,7 +115,7 @@ public class JacsalFunction {
    * @param methodClass  the JacsalType that the method is for
    */
   public JacsalFunction(JacsalType methodClass) {
-    this.methodClass = methodClass;
+    this.type = methodClass;
   }
 
   /**
@@ -125,7 +123,7 @@ public class JacsalFunction {
    */
   public JacsalFunction() {}
 
-  public JacsalFunction name(String name)  { functionName = name; return alias(name); }
+  public JacsalFunction name(String name)  { this.name = name; return alias(name); }
   public JacsalFunction alias(String name) { aliases.add(name);   return this;        }
 
   /**
@@ -147,14 +145,14 @@ public class JacsalFunction {
    * @param async         true if argument being async (e.g. async closure) makes this function async
    */
   private JacsalFunction param(String name, Object defaultValue, boolean async) {
-    paramNames  = new ArrayList<>(Arrays.asList(paramNames)){{ add(name); }}.toArray(String[]::new);
+    paramNames.add(name);
     defaultVals = new ArrayList<>(Arrays.asList(defaultVals)){{ add(defaultValue); }}.toArray(Object[]::new);
     // If no optional params then mandatory count must be all existing params
     if (Arrays.stream(defaultVals).allMatch(v -> v == MANDATORY)) {
-      mandatoryCount = defaultVals.length;
+      mandatoryArgCount = defaultVals.length;
     }
     if (async) {
-      asyncParams = new ArrayList<>(Arrays.asList(asyncParams)){{ add(paramNames.length - 1); }}.toArray(Integer[]::new);
+      asyncArgs.add(paramNames.size() - 1);
     }
     return this;
   }
@@ -177,9 +175,10 @@ public class JacsalFunction {
    *                    Field must not have been initialised to anything (other than null).
    */
   public JacsalFunction impl(Class clss, String methodName, String fieldName) {
-    this.implementingClass    = clss;
-    this.implementingMethod   = methodName;
-    this.wrapperHandleField   = fieldName;
+    this.implementingClass     = clss;
+    this.implementingClassName = Type.getInternalName(clss);
+    this.implementingMethod    = methodName;
+    this.wrapperHandleField    = fieldName;
     return this;
   }
 
@@ -190,14 +189,14 @@ public class JacsalFunction {
   public Set<String> getMandatoryParams() {
     return IntStream.range(0, defaultVals.length)
                     .filter(i -> defaultVals[i] == MANDATORY)
-                    .mapToObj(i -> paramNames[i])
+                    .mapToObj(i -> paramNames.get(i))
                     .collect(Collectors.toSet());
   }
 
   ////////////////////////////////////////////////////////
 
   void init() {
-    if (functionName == null) {
+    if (name == null) {
       throw new IllegalArgumentException("Missing name for function");
     }
     this.method               = findMethod(implementingClass, implementingMethod);
@@ -207,33 +206,84 @@ public class JacsalFunction {
     this.isVarArgs            = parameterTypes.length > 0 && parameterTypes[parameterTypes.length - 1].equals(Object[].class);
     this.isAsync = isMethod() ? parameterTypes.length > 1 && parameterTypes[1].equals(Continuation.class)
                               : parameterTypes.length > 0 && parameterTypes[0].equals(Continuation.class);
-    if ((isAsyncInstance || asyncParams.length > 0) && !isAsync) {
-      throw new IllegalArgumentException("Function " + functionName + ": Cannot register function with async params or asyncInstance if function does not have Continuation parameter");
+    if ((isAsyncInstance || asyncArgs.size() > 0) && !isAsync) {
+      throw new IllegalArgumentException("Function " + name + ": Cannot register function with async params or asyncInstance if function does not have Continuation parameter");
     }
     if (isAsync) {
       if (isMethod()) {
         // Bump argument counting for methods as 0 means the instance
-        IntStream.range(0, asyncParams.length).forEach(i -> asyncParams[i]++);
+        IntStream.range(0, asyncArgs.size()).forEach(i -> asyncArgs.set(i, asyncArgs.get(i) + 1));
       }
       if (isAsyncInstance) {
-        asyncParams = new ArrayList<>(Arrays.asList(asyncParams)){{ add(0,0); }}.toArray(Integer[]::new);
+        // Add "0" to indicate that the instance could be async
+        asyncArgs.add(0, 0);
       }
     }
-    additionalArgs            = (isMethod() ? 1 : 0) + (isAsync() ? 1 : 0);
+    additionalArgs = (isMethod() ? 1 : 0) + (isAsync() ? 1 : 0);
     int firstArg = additionalArgs;
 
     // Check if method needs location passed to it
-    if (paramNames.length + additionalArgs + 2 == argCount &&
+    this.paramCount = paramNames.size();
+    if (paramCount + additionalArgs + 2 == argCount &&
         parameterTypes[firstArg].equals(String.class) && parameterTypes[firstArg+1].equals(int.class)) {
       needsLocation = true;
       additionalArgs += 2;
     }
-    if (paramNames.length + additionalArgs != argCount) {
+    if (paramCount + additionalArgs != argCount) {
       throw new IllegalArgumentException("Inconsistent argument count: method " + implementingClass.getName() + "." +
                                          implementingMethod + "() has " + argCount + " args but derived count of "
-                                         + (paramNames.length + additionalArgs) +
+                                         + (paramCount + additionalArgs) +
                                          " from function registration");
     }
+
+    try {
+      wrapperHandle =
+        isMethod() ? MethodHandles.lookup().findVirtual(JacsalFunction.class, "wrapper",
+                                                        MethodType.methodType(Object.class,
+                                                                              Object.class,
+                                                                              Continuation.class,
+                                                                              String.class,
+                                                                              int.class,
+                                                                              Object[].class))
+                            : MethodHandles.lookup().findVirtual(JacsalFunction.class, "wrapper",
+                                                                 MethodType.methodType(Object.class,
+                                                                                       Continuation.class,
+                                                                                       String.class,
+                                                                                       int.class,
+                                                                                       Object[].class));
+      wrapperHandle = wrapperHandle.bindTo(this);
+
+      // Store handle in static field we have been given
+      Field field = implementingClass.getDeclaredField(wrapperHandleField);
+      if (!Modifier.isStatic(field.getModifiers())) {
+        throw new IllegalArgumentException("Field " + wrapperHandleField + " in class " +
+                                           implementingClass.getName() + " must be static");
+
+      }
+      if (field.get(null) != null) {
+        throw new IllegalArgumentException("Field " + wrapperHandleField + " in class " +
+                                           implementingClass.getName() + " already has a value");
+      }
+      field.set(null, wrapperHandle);
+    }
+    catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException("Error accessing " + wrapperHandleField + " in class " +
+                                         implementingClass.getName() + ": " + e.getMessage(), e);
+    }
+    catch (NoSuchMethodException e) {
+      throw new IllegalArgumentException("Error accessing wrapper() in JacsalFunction: " + e.getMessage(), e);
+    }
+
+    this.paramTypes       = getParamTypes();
+    this.firstArgtype     = firstParamType();
+    this.returnType       = getReturnType();
+    this.paramNamesArr    = paramNames.toArray(String[]::new);
+    this.mandatoryParams  = getMandatoryParams();
+    this.wrapperMethod    = null;
+    this.isBuiltin        = true;
+    this.isStatic         = true;   // Builtins are Java static methods even if they might be Jacsal methods
+    this.isAsync          = isAsync();
+    this.isGlobalFunction = !isMethod();
   }
 
   ////////////////////////////////////////////////////////
@@ -262,7 +312,7 @@ public class JacsalFunction {
   }
 
   public boolean isMethod() {
-    return methodClass != null;
+    return type != null;
   }
 
   public JacsalType declaredMethodClass() {
@@ -282,8 +332,8 @@ public class JacsalFunction {
       Map<String,Object> argMap = new LinkedHashMap((Map)args[0]);
       args = new Object[argCount];
       int i = commonArgs(obj, source, offset, args);
-      for (int p = 0; p < paramNames.length; p++) {
-        String paramName = paramNames[p];
+      for (int p = 0; p < paramNamesArr.length; p++) {
+        String paramName = paramNamesArr[p];
         Object value;
         if (argMap.containsKey(paramName)) {
           value = argMap.remove(paramName);
@@ -294,7 +344,7 @@ public class JacsalFunction {
             throw new RuntimeError("Missing value for mandatory parameter '" + paramName + "'", source, offset);
           }
         }
-        if (isVarArgs && p == paramNames.length - 1 && value instanceof List) {
+        if (isVarArgs && p == paramNamesArr.length - 1 && value instanceof List) {
           List vargs = (List)value;
           var newArgs = new Object[argCount + vargs.size() - 1];
           System.arraycopy(args, 0, newArgs, 0, i);
@@ -316,7 +366,7 @@ public class JacsalFunction {
       // mandatory parameter) then we assume list is the value for that parameter. Otherwise, we
       // treat the list as a list of arg values.
       if (args.length == 1 && args[0] instanceof List) {
-        boolean passListAsList = paramNames.length == 1 || mandatoryCount == 1;
+        boolean passListAsList = paramNamesArr.length == 1 || mandatoryArgCount == 1;
         if (!passListAsList) {
           args = ((List) args[0]).toArray();
         }
@@ -348,10 +398,10 @@ public class JacsalFunction {
       throw e;
     }
     catch (ClassCastException e) {
-      throw new RuntimeError("Incompatible argument type for " + functionName + "()", source, offset, e);
+      throw new RuntimeError("Incompatible argument type for " + name + "()", source, offset, e);
     }
     catch (Throwable e) {
-      throw new RuntimeError("Error invoking " + functionName + "()", source, offset, e);
+      throw new RuntimeError("Error invoking " + name + "()", source, offset, e);
     }
   }
 
@@ -375,15 +425,15 @@ public class JacsalFunction {
 
   private void validateArgCount(Object[] args, String source, int offset) {
     int argCount   = args.length;
-    int paramCount = isVarArgs ? -1 : paramNames.length;
+    int paramCount = isVarArgs ? -1 : paramNamesArr.length;
 
     if (argCount > 0 && args[0] instanceof NamedArgsMap) {
       throw new RuntimeError("Named args not supported for built-in functions", source, offset);
     }
 
-    if (argCount < mandatoryCount) {
-      String atLeast = mandatoryCount == paramCount ? "" : "at least ";
-      throw new RuntimeError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryCount + ")", source, offset);
+    if (argCount < mandatoryArgCount) {
+      String atLeast = mandatoryArgCount == paramCount ? "" : "at least ";
+      throw new RuntimeError("Missing mandatory arguments (arg count of " + argCount + " but expected " + atLeast + mandatoryArgCount + ")", source, offset);
     }
     if (paramCount >= 0 && argCount > paramCount) {
       throw new RuntimeError("Too many arguments (passed " + argCount + " but expected only " + paramCount + ")", source, offset);

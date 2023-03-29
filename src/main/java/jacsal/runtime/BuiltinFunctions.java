@@ -26,7 +26,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -253,83 +252,15 @@ public class BuiltinFunctions {
 
   private static void registerFunction(JacsalFunction function) {
     function.init();
-    var descriptor = getFunctionDescriptor(function);
+    if (function.wrapperHandleField == null) {
+      throw new IllegalStateException("Missing value for wrapperHandleField for " + function.name);
+    }
     if (function.isMethod()) {
-      function.aliases.forEach(alias -> Functions.registerMethod(alias, descriptor));
+      function.aliases.forEach(alias -> Functions.registerMethod(alias, function));
     }
     else {
-      function.aliases.forEach(alias -> globalFunctions.put(alias, descriptor));
+      function.aliases.forEach(alias -> globalFunctions.put(alias, function));
     }
-  }
-
-  /**
-   * Generate FunctionDescriptor for global function/method
-   */
-  private static FunctionDescriptor getFunctionDescriptor(JacsalFunction function) {
-    MethodHandle wrapperHandle;
-    try {
-      wrapperHandle =
-        function.isMethod() ? MethodHandles.lookup().findVirtual(JacsalFunction.class, "wrapper",
-                                                                 MethodType.methodType(Object.class,
-                                                                                       Object.class,
-                                                                                       Continuation.class,
-                                                                                       String.class,
-                                                                                       int.class,
-                                                                                       Object[].class))
-                            : MethodHandles.lookup().findVirtual(JacsalFunction.class, "wrapper",
-                                                                 MethodType.methodType(Object.class,
-                                                                                       Continuation.class,
-                                                                                       String.class,
-                                                                                       int.class,
-                                                                                       Object[].class));
-      wrapperHandle = wrapperHandle.bindTo(function);
-
-      // Store handle in static field we have been given
-      Field field = function.implementingClass.getDeclaredField(function.wrapperHandleField);
-      if (!Modifier.isStatic(field.getModifiers())) {
-        throw new IllegalArgumentException("Field " + function.wrapperHandleField + " in class " +
-                                           function.implementingClass.getName() + " must be static");
-
-      }
-      if (field.get(null) != null) {
-        throw new IllegalArgumentException("Field " + function.wrapperHandleField + " in class " +
-                                           function.implementingClass.getName() + " already has a value");
-      }
-      field.set(null, wrapperHandle);
-    }
-    catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new IllegalArgumentException("Error accessing " + function.wrapperHandleField + " in class " +
-                                         function.implementingClass.getName() + ": " + e.getMessage(), e);
-    }
-    catch (NoSuchMethodException e) {
-      throw new IllegalArgumentException("Error accessing wrapper() in JacsalFunction: " + e.getMessage(), e);
-    }
-
-    List<JacsalType> paramTypes = function.getParamTypes();
-    boolean varargs = function.isVarArgs();
-    var descriptor = new FunctionDescriptor(function.methodClass,
-                                            function.firstParamType(),
-                                            function.functionName,
-                                            function.getReturnType(),
-                                            paramTypes,
-                                            varargs,
-                                            function.mandatoryCount,
-                                            Type.getInternalName(function.implementingClass),
-                                            function.implementingMethod,
-                                            function.needsLocation,
-                                            wrapperHandle);
-
-    descriptor.paramNames         = Arrays.asList(function.paramNames);
-    descriptor.mandatoryParams    = function.getMandatoryParams();
-    descriptor.wrapperHandleField = function.wrapperHandleField;
-    descriptor.wrapperMethod      = null;
-    descriptor.isBuiltin          = true;
-    descriptor.isStatic           = true;
-    descriptor.isAsync            = function.isAsync();
-    descriptor.asyncArgs          = Arrays.asList(function.asyncParams);
-    descriptor.isGlobalFunction   = !function.isMethod();
-    descriptor.isVarArgs          = function.isVarArgs;
-    return descriptor;
   }
 
   /////////////////////////////////////
