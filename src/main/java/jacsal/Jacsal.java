@@ -29,6 +29,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Jacsal {
+  public static void init() {
+
+  }
+
   public static void main(String[] args) throws IOException {
     String usage = "Usage: jacsal [options] [programFile] [inputFile]* [--] [arguments]* \n" +
                    "         -p           : run in a print loop reading input from stdin or files\n" +

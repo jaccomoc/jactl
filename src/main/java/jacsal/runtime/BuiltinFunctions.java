@@ -18,15 +18,10 @@
 package jacsal.runtime;
 
 import jacsal.*;
-import org.objectweb.asm.Type;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
@@ -250,7 +245,7 @@ public class BuiltinFunctions {
 
   ///////////////////////////////////////////////////
 
-  private static void registerFunction(JacsalFunction function) {
+  public static void registerFunction(JacsalFunction function) {
     function.init();
     if (function.wrapperHandleField == null) {
       throw new IllegalStateException("Missing value for wrapperHandleField for " + function.name);
@@ -263,6 +258,14 @@ public class BuiltinFunctions {
     }
   }
 
+  public static void deregisterFunction(JacsalType type, String name) {
+    Functions.deregisterMethod(type, name);
+  }
+
+  public static void deregisterFunction(String name) {
+    globalFunctions.remove(name);
+  }
+
   /////////////////////////////////////
   // Global Functions
   /////////////////////////////////////
@@ -271,7 +274,7 @@ public class BuiltinFunctions {
   public static Object sleepData;
   public static Object sleep(Continuation c, long timeMs, Object data) {
     if (timeMs >=0) {
-      throw Continuation.createNonBlocking((JacsalContext context, Consumer<Object> resumer) -> {
+      Continuation.suspendNonBlocking((JacsalContext context, Consumer<Object> resumer) -> {
         context.scheduleEvent(() -> resumer.accept(data), timeMs);
       });
     }
@@ -311,7 +314,7 @@ public class BuiltinFunctions {
       }
       else {
         // Might block so schedule blocking operation and suspend
-        throw Continuation.createBlocking(() -> readLine(input));
+        Continuation.suspendBlocking(() -> readLine(input));
       }
     }
     catch (IOException ignored) {}

@@ -24,13 +24,31 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+/**
+ * Class that captures current execution state and can be "continued" at some point in the future.
+ * When suspending we throw a Continuation object and each caller in the call stack will catch
+ * any Continuation thrown and then create its own Continuation chained to the one caught where
+ * it can store its state. Then the caller throws its new Continuation for its caller to then catch.
+ * <p>
+ * The state at each caller includes the local variable values, a MethodHandle that points to the
+ * method of the caller and an integer that represents a logical location in the method that the
+ * compiler generates for each location where a Continuation could be thrown.
+ * <p>
+ * When continuing we continue from where the first Continuation thrown left off. When that code
+ * finishes, since it no longer has its caller to return to, it returns here, and we find the next
+ * Continuation in the chain and continue it.
+ * <p>
+ * If we need to suspend when in the middle of continuing from a previous suspension then we throw
+ * a new Continuation and chain it to the rest of the Continuation objects in the current chain so
+ * that when it is resumed and returns here we will find the rest of the chain to continue with.
+ */
 public class Continuation extends RuntimeException {
 
   private AsyncTask    asyncTask;          // The blocking task that needs to be done asynchronously
   private Continuation parentContinuation; // Continuation for our parent stack frame
   private MethodHandle methodHandle;       // Handle pointing to continuation wrapper function
   private RuntimeState runtimeState;       // ThreadLocal runtime state that needs to be restored on resumption
-  public  int          methodLocation;     // Location within method where resuumption should continue
+  public  int          methodLocation;     // Location within method where resumption should continue
   public  long[]       localPrimitives;
   public  Object[]     localObjects;
   private Object       result;             // Result of the async call when continuing after suspend
@@ -42,27 +60,42 @@ public class Continuation extends RuntimeException {
   }
 
   /**
-   * Create a continuation for a blocking async task. When the task completes it will invoke this continuation
-   * to continue from where we left off. If there are multiple stack frames whose state we need to capture we
-   * will create a new continuation for each frame.
-   * @param asyncWork
-   * @return
+   * Suspend the current execution and capture our state in a series of chained Continuations and then
+   * schedule the given task on a blocking thread. Once the blocking task has completed the execution
+   * will be resumed from where it left off.
+   * NOTE: this throws a Continuation object which will be caught by our caller who will capture their
+   * state and then throw a new Continuation chained to this one (and so on until we get to the top-most
+   * caller).
+   * @param asyncWork  the work to be run on a blocking thread once we are suspended
+   * @throws Continuation always
    */
-  public static Continuation createBlocking(Supplier<Object> asyncWork) {
+  public static Continuation suspendBlocking(Supplier<Object> asyncWork) {
     BlockingAsyncTask task         = new BlockingAsyncTask(asyncWork);
     Continuation      continuation = new Continuation(task);
     task.setContinuation(continuation);
-    return continuation;
+    throw continuation;
   }
 
-  public static Continuation createNonBlocking(BiConsumer<JacsalContext, Consumer<Object>> asyncWork) {
+  /**
+   * Suspend the current execution and capture our state in a series of chained Continuation objects.
+   * The difference between this call and the suspendBlocking() call is that this call, rather than
+   * scheduling the async work on a blocking thread, instead runs it on the current thread (once the
+   * top-most caller has caught the last Continuation). The idea is that this type of async work will
+   * itself schedule something in the background (like sending a message or setting a timer) and then
+   * return immediately without needing to block on a blocking scheduler thread. Once the result of
+   * the async work has been received (receiving a message or timer expiring) then the execution
+   * is resumed.
+   * @param asyncWork  the taks that will schedule some async work in the background
+   * @throws Continuation always
+   */
+  public static Continuation suspendNonBlocking(BiConsumer<JacsalContext, Consumer<Object>> asyncWork) {
     NonBlockingAsyncTask task         = new NonBlockingAsyncTask(asyncWork);
     Continuation         continuation = new Continuation(task);
     task.setContinuation(continuation);
-    return continuation;
+    throw continuation;
   }
 
-                                         /**
+  /**
    * Chained continuation. When capturing continuation for each frame we copy the asyncTask from the previous
    * Continuation object to the new one so that when we finally get to the last frame and return to the caller we have
    * access to the asyncTask and can invoke the blocking task on a blocking work scheduler of some sort once the entire
@@ -87,6 +120,12 @@ public class Continuation extends RuntimeException {
     this.localObjects = localObjects;
   }
 
+  /**
+   * Resume execution from where we left off, passing in the result of whatever asynchronous operation
+   * has now just completed.
+   * @param result  the result of the async operation that caused us to suspend
+   * @return the result of resuming our execution
+   */
   public Object continueExecution(Object result) {
     // Restore ThreadLocal state
     RuntimeState.setState(runtimeState);
@@ -96,6 +135,12 @@ public class Continuation extends RuntimeException {
     return parentContinuation.doContinue(result);
   }
 
+  /**
+   * Invoke the Continuations in the chain, one by one, passing the result of each one to the next
+   * one in the chain until there are no more, or we are suspended again.
+   * @param result  the result from our async operation
+   * @return the result from the final Continuation being resumed
+   */
   private Object doContinue(Object result) {
     for (Continuation c = this; c != null; c = c.parentContinuation) {
       try {

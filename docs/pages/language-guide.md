@@ -149,11 +149,11 @@ int for = 3
     ^
 ```
 
-> **Note**
+> **Note**<br/>
 > Since class names in Jacsal must start with a capital letter it is good practice not
 > to start variable names with a capital letter in order to make your code easier to read.
 
-> **Note**
+> **Note**<br/>
 > Unlike Java, the dollar sign `$` is not a valid character for a variable name in Jacsal.
 
 While most of the examples presented here have single character variable names, in general, your code should use
@@ -601,7 +601,7 @@ true
 false
 ```
 
-> **Note**
+> **Note**<br/>
 > The `in` and `!in` operators will search the list from the beginning of the list to try to
 > find the element, so they are not very efficient once the list reaches any significant size. You might want to rethink
 > your use of data structure if you are using `in` or `!in` on lists with more than a few elements.
@@ -2227,7 +2227,7 @@ You can comnbine `do` with `if/unless`:
 do { found = true; println "Found multiple of 17: $x" } if x % 17 == 0
 ```
 
-> **Note**
+> **Note**<br/>
 > `do/while` statements like those in Java are not currently supported in Jacsal.
 
 ## Print Statements
@@ -2644,13 +2644,13 @@ def g(x) { x == 1 ? 1 : x * f(x - 1) }
 
 ### Closing Over Variables
 
-Both functions and closures can "close over" variables in outer scopes, which just means that they have access to
-these variables and can read and/or modify these variables.
+Both functions and closures can "close over" variables in outer scopes, which means that they have access to
+these variables and can read and/or modify them.
 Closures are similar to lambda functions in Java but whereas lambda functions can only close over `final` or effectively
-final variables and cannot modify the values of these variables, closures and functions in Jacsal can access variables
-whether they are effectively final or not and can modify their values.
-In Java, lambda functions are closing over the value of the variable rather than the variable itself which is why the
-variable needs to be effectively final and why the lambda function is not able to modify the variable's value.
+final variables (and therefore cannot modify the values of these variables), closures and functions in Jacsal can
+access variables whether they are effectively final or not and are able to modify their values.
+(In Java, lambda functions close over the value of the variable rather than the variable itself which is why the
+variable needs to be effectively final and why the lambda function is not able to modify the variable's value).
 
 Here is an example of a Jacsal closure that access a variable in an outer scope:
 ```groovy
@@ -2663,10 +2663,12 @@ def countThings(x) {
 }
 ```
 
-> Note that this just an example.
-> In reality this code should just be something like `x.filter{ /thing/i }.size()`.
+> **Note**<br/>
+> This just an example. A better way to count items matching a regex would be something like:
+> `x.filter{ /thing/i }.size()`
 
-Now consider the following code:
+Now consider the following code where a function returns a closure that closes over a variable `count` which is 
+local to the scope of the function:
 ```groovy
 def counter() {
  int count = 0
@@ -2688,12 +2690,12 @@ The output from this script will be:
 ```
 The reason that the call to `y()` returns a value of `1` and not `3` is because each time `counter()` is invoked it
 returns a new closure that is bound to a brand new `counter` variable.
-Even though once `counter()` returns, the `counter` variable is no longer in scope and would normally be discarded,
+Even though the `counter` variable is no longer in scope once `counter()` returns, and would normally be discarded,
 in this case the closure, having closed over it, retains a binding to it, and it lives on as long as the closure
 remains in existence.
-So in this case `x` and `y` are two different instances of the closure which each have their own `counter` variable.
+In the example, `x` and `y` are two different instances of the closure which each have their own `counter` variable.
 
-> **Note**
+> **Note**<br/>
 > In functional programming, side effects such as modifying variables outside the scope of the closure are 
 > generally frowned upon since pure functions don't modify state, they just return values.
 

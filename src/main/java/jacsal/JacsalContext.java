@@ -27,8 +27,6 @@ import java.util.concurrent.TimeUnit;
 
 public class JacsalContext {
 
-  private boolean initialised = false;
-
   JacsalEnv executionEnv     = null;
 
   boolean printSize          = false;
@@ -60,11 +58,15 @@ public class JacsalContext {
 
   ///////////////////////////////
 
-  public static JacsalContext create() {
-    return new JacsalContext();
+  public static JacsalContextBuilder create() {
+    return new JacsalContext().getJacsalContextBuilder();
   }
 
   private JacsalContext() {}
+
+  private JacsalContextBuilder getJacsalContextBuilder() {
+    return new JacsalContextBuilder();
+  }
 
   Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replaceAll("/", ".");
@@ -78,22 +80,25 @@ public class JacsalContext {
     return clss;
   }
 
-  public JacsalContext replMode(boolean mode)            { this.replMode           = mode;    return this; }
-  public JacsalContext minScale(int scale)               { this.minScale           = scale;   return this; }
-  public JacsalContext evaluateConstExprs(boolean value) { this.evaluateConstExprs = value;   return this; }
-  public JacsalContext debug(int value)                  { this.debugLevel         = value;   return this; }
-  public JacsalContext printSize(boolean value)          { this.printSize          = value;   return this; }
-  public JacsalContext javaPackage(String pkg)           { this.javaPackage        = pkg;     return this; }
-  public JacsalContext printLoop(boolean value)          { this.printLoop          = value;   return this; }
-  public JacsalContext nonPrintLoop(boolean value)       { this.nonPrintLoop       = value;   return this; }
-  public JacsalContext environment(JacsalEnv env)        { this.executionEnv       = env;     return this; }
+  public class JacsalContextBuilder {
+    private JacsalContextBuilder() {}
 
-  public JacsalContext build() {
-    initialised = true;
-    if (executionEnv == null) {
-      executionEnv = new DefaultEnv();
+    public JacsalContextBuilder replMode(boolean mode)            { replMode           = mode;    return this; }
+    public JacsalContextBuilder minScale(int scale)               { minScale           = scale;   return this; }
+    public JacsalContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
+    public JacsalContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
+    public JacsalContextBuilder printSize(boolean value)          { printSize          = value;   return this; }
+    public JacsalContextBuilder javaPackage(String pkg)           { javaPackage        = pkg;     return this; }
+    public JacsalContextBuilder printLoop(boolean value)          { printLoop          = value;   return this; }
+    public JacsalContextBuilder nonPrintLoop(boolean value)       { nonPrintLoop       = value;   return this; }
+    public JacsalContextBuilder environment(JacsalEnv env)        { executionEnv       = env;     return this; }
+
+    public JacsalContext build() {
+      if (executionEnv == null) {
+        executionEnv = new DefaultEnv();
+      }
+      return JacsalContext.this;
     }
-    return this;
   }
 
   //////////////////////////////////
@@ -119,9 +124,6 @@ public class JacsalContext {
   public Object getThreadContext() { return executionEnv.getThreadContext(); }
 
   public void scheduleEvent(Object threadContext, Runnable event) {
-    if (!initialised) {
-      throw new IllegalStateException("JacsalContext not initialised. build() has not been invoked.");
-    }
     executionEnv.scheduleEvent(threadContext, event);
   }
 
@@ -134,9 +136,6 @@ public class JacsalContext {
   }
 
   public void scheduleBlocking(Runnable blocking) {
-    if (!initialised) {
-      throw new IllegalStateException("JacsalContext not initialised. build() has not been invoked.");
-    }
     executionEnv.scheduleBlocking(blocking);
   }
 
@@ -148,12 +147,13 @@ public class JacsalContext {
     classLookup.put(descriptor.getInternalName(), descriptor);
   }
 
-
   private class DynamicClassLoader extends ClassLoader {
     private Map<String,Class<?>> classes  = new HashMap<>();
     private DynamicClassLoader   previous = null;
 
-    DynamicClassLoader() {}
+    DynamicClassLoader() {
+      super(Thread.currentThread().getContextClassLoader());
+    }
 
     DynamicClassLoader(DynamicClassLoader prev) {
       this.previous = prev;

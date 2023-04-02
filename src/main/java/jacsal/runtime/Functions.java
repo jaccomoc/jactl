@@ -45,6 +45,24 @@ public class Functions {
     functions.add(descriptor);
   }
 
+  static void deregisterMethod(JacsalType type, String name) {
+    Class typeClass = type.classFromType();
+    if (classes.containsKey(typeClass)) {
+      classes.get(typeClass).methods.remove(name);
+    }
+    if (methods.containsKey(name)) {
+      for (var iter = methods.get(name).iterator(); iter.hasNext(); ) {
+        var func = iter.next();
+        if (func.name.equals(name)) {
+          iter.remove();
+        }
+      }
+      if (methods.get(name).size() == 0) {
+        methods.remove(name);
+      }
+    }
+  }
+
   /**
    * Lookup method at compile time and return FunctionDescriptor if method exists
    */

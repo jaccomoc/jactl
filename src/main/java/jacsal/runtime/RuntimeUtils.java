@@ -2299,6 +2299,6 @@ public class RuntimeUtils {
   }
 
   public static boolean die(String msg, String source, int offset) {
-    throw new RuntimeError("Die: " + msg, source, offset);
+    throw new DieError(msg, source, offset);
   }
 }

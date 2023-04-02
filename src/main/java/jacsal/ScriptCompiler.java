@@ -44,10 +44,10 @@ public class ScriptCompiler extends ClassCompiler {
    * code to run once the script has finished (and which will accept the result).
    * @return the script
    */
-  BiConsumer<Map<String,Object>,Consumer<Object>> compileWithCompletion() {
+  JacsalScript compileWithCompletion() {
     var scriptMain = compile();
 
-    return (map,completion) -> {
+    return new JacsalScript(context, (map,completion) -> {
       RuntimeState.setOutput(map.get(Utils.JACSAL_GLOBALS_OUTPUT));
       RuntimeState.setInput(map.get(Utils.JACSAL_GLOBALS_INPUT));
       try {
@@ -63,7 +63,7 @@ public class ScriptCompiler extends ClassCompiler {
       catch (Throwable t) {
         completion.accept(new IllegalStateException("Invocation error: " + t, t));
       }
-    };
+    });
   }
 
   Function<Map<String,Object>, Object> compile() {

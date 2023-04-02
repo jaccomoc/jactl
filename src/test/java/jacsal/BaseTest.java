@@ -67,7 +67,7 @@ public class BaseTest {
 
       var    compiled = compileScript(scriptCode, jacsalContext, packageName, testAsync, bindings);
 
-      Object result   = Compiler.runSync(compiled, bindings);
+      Object result   = compiled.runSync(bindings);
       if (expected instanceof Object[]) {
         assertTrue(result instanceof Object[]);
         assertTrue(Arrays.equals((Object[]) expected, (Object[]) result));
@@ -86,11 +86,11 @@ public class BaseTest {
     doCompile(false, source, jacsalContext, packageName, testAsync, null);
   }
 
-  public BiConsumer<Map<String, Object>,Consumer<Object>> compileScript(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  public JacsalScript compileScript(String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
     return doCompile(true, source, jacsalContext, packageName, testAsync, bindings);
   }
 
-  public BiConsumer<Map<String, Object>, Consumer<Object>> doCompile(boolean isScript, String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
+  public JacsalScript doCompile(boolean isScript, String source, JacsalContext jacsalContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
     if (!testAsync) {
       if (isScript) {
         return Compiler.compileScript(source, jacsalContext, packageName, bindings);
@@ -191,7 +191,7 @@ public class BaseTest {
       Object result[] = new Object[1];
       Arrays.stream(code).forEach(scriptCode -> {
         var compiled = compileScript(scriptCode, jacsalContext, packageName, false, bindings);
-        result[0]    = Compiler.runSync(compiled, bindings);
+        result[0]    = compiled.runSync(bindings);
       });
       if (expected instanceof Object[]) {
         assertTrue(result[0] instanceof Object[]);
@@ -233,7 +233,7 @@ public class BaseTest {
     return map;
   }
 
-  protected BiConsumer<Map<String, Object>,Consumer<Object>> compile(String code) {
+  protected JacsalScript compile(String code) {
     JacsalContext jacsalContext = JacsalContext.create()
                                                .evaluateConstExprs(true)
                                                .replMode(true)

@@ -86,7 +86,4 @@ publishing {
 }
 
 tasks.generateMetadataFileForMavenJavaPublication.mustRunAfter(testJar)
-//tasks.publishToMavenLocal.dependsOn(build)
 tasks.publishMavenTestsPublicationToMavenLocal.dependsOn(jar)
-tasks.publishMavenTestsPublicationToMavenLocal.dependsOn(shadowJar)
-//tasks.publishToMavenLocal.dependsOn(testJar)

@@ -371,3 +371,82 @@ $ jacsal -e 'args.each{ println "arg: $it" }' -- additional args
 arg: additional
 arg: args
 ```
+
+## `.jacsalrc` File
+
+At start up time the contents of `~/.jacsalrc` are read.
+This file, if it exists, is itself a Jacsal script and allows you to customise the behaviour of the Jacsal command
+line scripts by setting the values of some global variables.
+This file is also used by the Jacsal REPL.
+
+At the moment, all the variables are to do with allowing you to customise Jacsal by providing your own
+execution environment (for your event-loop specific application environment) and your own functions/methods.
+The values of the following variables can be set:
+
+| Variable            | Type   |    Default Value    | Description                                                                                                                                                                                                                        |
+|:--------------------|:-------|:-------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `environmentClass`  | String | `jacsal.DefaultEnv` | The name of the class which will is used to encapsulate the Jacsal runtime environment. See [Integration Guide](pages/integration-guide) for more details.                                                                         |
+| `extraJars`         | List   |        `[]`         | A list of file names for any additional JARs that should be added to the classpath.                                                                                                                                                |  
+| `functionClasses`   | List   |       `[]`          | A list of classes having a static method called `registerFunctions(JacsalEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jacsal runtime.   |
+
+For example, there is a [jacsal-vertx project](https://github.com/jaccomoc/jacsal-vertx) for use when integrating
+with a [Vert.x](https://vertx.io/) based application.
+It uses a specific `JacsalVertxEnv` environment that delegates event scheduling to Vert.x and provides some 
+Json methods for converting to/from JSON and an example function for sending/receiving JSON messages over HTTP.
+
+Since the `sendReceiveJson()` functions is provided as an example, it lives in the test jar of the jacsal-vertx
+project.
+So to include these additional functions in your Jacsal REPL or Jacsal command line scripts you need to list
+these two jars in the `extraJars` list.
+
+> **Note**<br/>
+> The `jacsal-vertx` test jar is built as an "uber" jar and includes the dependencies it needs (including the
+> Vert.x libraries) so we don't need to separately list the Vert.x jars as well.
+
+To register these additional functions with the Jacsal runtime we need to have created classes that have
+a static method called `registerFunctions(JacsalEnv env)` which do the registration of the functions.
+We then need to tell the runtime the name of these classes so that these static methods can be invoked which
+will in turn register the functions.
+
+For the `jacsal-vertx` library, there are two classes that handle the registration of these functions/methods:
+* `jacsal.vertx.JsonFunctions`
+* `jacsal.vertx.example.VertxFunctions`
+
+We therefore need to list these classes in the `functionClasses` list of our `.jacsalrc` file.
+
+If the jars are located under `~/.m2/repository/jacsal/jacsal-vertx/1.0` then a `.jacsalrc` file that allows
+the Jacsal REPL and the Jacsal commandline script execution to use Vert.x and these new functions would look like this:
+```groovy
+environmentClass = 'jacsal.vertx.JacsalVertxEnv'
+extraJars        = [ '~/.m2/repository/jacsal/jacsal-vertx/1.0/jacsal-vertx-1.0.jar',
+                     '~/.m2/repository/jacsal/jacsal-vertx/1.0/jacsal-vertx-1.0-tests.jar' ]
+functionClasses  = [ 'jacsal.vertx.JsonFunctions',
+                     'jacsal.vertx.example.VertxFunctions' ]
+```
+
+> **Note**<br/>
+> The use of `~` in the file names will be replaced with the location of the current user's home directory.
+
+Since the file is Jacsal code we could also write it like this:
+```groovy
+def VERSION = '1.0'                                                // The jacsal-vertx version to use
+def LIBS    = "~/.m2/repository/jacsal/jacsal-vertx/${VERSION}"    // Location of the jars
+
+// Specify the Vertx environment class to use
+environmentClass = 'jacsal.vertx.JacsalVertxEnv'
+
+// List the extra jacsal-vertx jars
+extraJars        = [ "$LIBS/jacsal-vertx-${VERSION}.jar",
+                     "$LIBS/jacsal-vertx-${VERSION}-tests.jar" ]
+
+// List the function registration classes
+functionClasses  = [ 'jacsal.vertx.JsonFunctions',
+                     'jacsal.vertx.example.VertxFunctions' ]
+```
+
+> **Note**<br/>
+> The extra jars can also be provided via the normal way of specifying in them your Java classpath if you
+> prefer to do it that way.
+
+To integrate with additional libraries, just add the jars to the `extraJars` list and add any function
+registration classes to the `functionClasses` list.

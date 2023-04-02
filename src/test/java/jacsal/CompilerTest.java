@@ -4856,7 +4856,11 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void die() {
-    testError("die \"ab${2+3}\"", "Die: ab5");
+    testError("die \"ab${2+3}\"", "ab5");
+    testError("die if true", "die if true");
+    testError("die if true", "script death");
+    testError("die", "script death");
+    testError("die", "die");
   }
 
   @Test public void asyncFunctions() {
@@ -5251,22 +5255,22 @@ class CompilerTest extends BaseTest {
     var scriptSleepInt = compile(fibIntSleep + "; fib(20)");
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      Compiler.runSync(scriptDef, globals);
+      scriptDef.runSync(globals);
       System.out.println("Def Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      Compiler.runSync(scriptInt, globals);
+      scriptInt.runSync(globals);
       System.out.println("Int Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      Compiler.runSync(scriptSleepDef, globals);
+      scriptSleepDef.runSync(globals);
       System.out.println("sleep Def Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      Compiler.runSync(scriptSleepInt, globals);
+      scriptSleepInt.runSync(globals);
       System.out.println("sleep Int Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
   }
