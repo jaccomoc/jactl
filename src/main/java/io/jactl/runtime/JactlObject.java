@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 James Crawford
+ * Copyright © 2022,2023 James Crawford
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,20 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-rootProject.name = 'jactl'
+package io.jactl.runtime;
 
+import java.lang.invoke.MethodHandle;
+import java.util.Map;
+
+/**
+ * All JactlObjects implement this. It provides runtime access to fields and methods.
+ */
+public interface JactlObject {
+  public Map<String,Object>        _$j$getFieldsAndMethods();
+  public Map<String, MethodHandle> _$j$getStaticMethods();
+
+  public Object _$j$init$$w(Continuation c, String source, int offset, Object[] args);
+}

@@ -21,7 +21,7 @@ plugins {
     id 'java'
 }
 
-group 'jacsal'
+group 'io.jactl'
 version '1.0-SNAPSHOT'
 
 repositories {
@@ -54,7 +54,7 @@ test { useJUnitPlatform() }
 jar {
     duplicatesStrategy 'exclude'
     manifest {
-        attributes "Main-Class": "jacsal.Jacsal"
+        attributes "Main-Class": "io.jactl.Jactl"
     }
 
     from {
@@ -63,7 +63,7 @@ jar {
 }
 
 shadowJar {
-    relocate 'org.objectweb.asm', 'jacsal.ow2.asm'
+    relocate 'org.objectweb.asm', 'jactl.ow2.asm'
     archiveClassifier.set('')
 }
 

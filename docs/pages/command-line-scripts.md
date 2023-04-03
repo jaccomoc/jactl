@@ -1,49 +1,49 @@
 # Command Line Scripts
 
-Jacsal scripts can be run from the shell command line and can be used in situations where you might normally
+Jactl scripts can be run from the shell command line and can be used in situations where you might normally
 use Unix utilities such as `sed` or `awk` and even some situations where you might have used `perl` in the past.
 
-The Jacsal JAR file, when run using `java -jar` will compile and run a given script.
+The Jactl JAR file, when run using `java -jar` will compile and run a given script.
 
 ## Command Line Arguments
 
 If you run the JAR file without any arguments it prints this help text:
 ```shell
-$ java -jar jacsal-1.0.jar
-Usage: jacsal [options] [programFile] [inputFile]* [--] [arguments]*
+$ java -jar jactl-1.0.jar
+Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
          -n           : run in a loop but don't print each line
-         -e script    : script string is interpreted as jacsal code (programFile not used)
+         -e script    : script string is interpreted as jactl code (programFile not used)
          -v           : show verbose errors (give stack trace)
-         -V var=value : initialise jacsal variable before running script
+         -V var=value : initialise jactl variable before running script
          -d           : debug: output generated code
          -h           : print this help
 
 Exception in thread "main" java.lang.IllegalArgumentException: Missing '-e' option and no programFile specified
-	at jacsal.Jacsal.main(Jacsal.java:52)
+	at io.jactl.Jactl.main(Jactl.java:52)
 ```
 
-## Jacsal Shell Script
+## Jactl Shell Script
 
-It is recommended that you create a shell script for invoking Jacsal called `jacsal` to save having to type the
-`java -jar <path_to>/jacsal-1.0.jar` every time.
+It is recommended that you create a shell script for invoking Jactl called `jactl` to save having to type the
+`java -jar <path_to>/jactl-1.0.jar` every time.
 
-For a shell compatible with `bash` you can create a shell script like the following called `jacsal` and add it to
+For a shell compatible with `bash` you can create a shell script like the following called `jactl` and add it to
 a directory in your execution path:
 ```shell
 #!/bin/bash
-java -jar <path_to>/jacsal-1.0.jar "$@"
+java -jar <path_to>/jactl-1.0.jar "$@"
 ```
 
 Note that the `/bin/bash` should be the location of your shell and `<path_to>` should be replaced with the location
-of the `jacsal-1.0.jar` file.
+of the `jactl-1.0.jar` file.
 
-We will assume from now on that you have such a shell script and will use `jacsal` in place of `java -jar jacsal-1.0.jar`. 
+We will assume from now on that you have such a shell script and will use `jactl` in place of `java -jar jactl-1.0.jar`. 
 
 ## Running Scripts
 
-To run a file containing a Jacsal script just pass the file name directly to the `jacsal` command.
-For example, assume there is a file `myscript.jacsal` containing this:
+To run a file containing a Jactl script just pass the file name directly to the `jactl` command.
+For example, assume there is a file `myscript.jactl` containing this:
 ```groovy
 def fact(x) { x <= 1 ? 1 : x * fact(x - 1) }
 
@@ -54,7 +54,7 @@ def fact(x) { x <= 1 ? 1 : x * fact(x - 1) }
 
 To run this script:
 ```shell
-$ jacsal myscript.jacsal
+$ jactl myscript.jactl
 Factorial of 1 is 1
 Factorial of 2 is 2
 Factorial of 3 is 6
@@ -69,9 +69,9 @@ Factorial of 10 is 3628800
 
 ## The `-e` Option
 
-The `-e` option allows you to run some Jacsal code entered directly on the command line:
+The `-e` option allows you to run some Jactl code entered directly on the command line:
 ```shell
-$ jacsal -e '10.map{ it + 1 }.sum()'
+$ jactl -e '10.map{ it + 1 }.sum()'
 55
 ```
 
@@ -81,23 +81,23 @@ won't split the code into multiple arguments when a space is encountered.
 If you want to be able to use single quotes in your script then in `bash`, if the first quote is prefixed by `$`, you
 are then allowed to use `\` to escape other characters within the single quotes (including single quotes):
 ```shell
-$ jacsal -e $'10.map{ (int)\'a\' + it }.map{ it.asChar() }.join()'
+$ jactl -e $'10.map{ (int)\'a\' + it }.map{ it.asChar() }.join()'
 abcdefghij
 ```
 
 ## Printing Result
 
-By default, when not using the `-p` or `-n` options (see below), Jacsal will output the value of the final expression
-in the Jacsal script or command line script:
+By default, when not using the `-p` or `-n` options (see below), Jactl will output the value of the final expression
+in the Jactl script or command line script:
 ```shell
-$ jacsal -e '3 + 4'
+$ jactl -e '3 + 4'
 7
 ```
 
 If the script itself already invokes `print` or `println` then it assumes that the script wants to control its output
 and the default printing of the final expression is suppressed:
 ```shell
-$ jacsal -e 'println "Result is ${3 + 4}"'
+$ jactl -e 'println "Result is ${3 + 4}"'
 Result is 7
 ```
 
@@ -105,13 +105,13 @@ Result is 7
 
 The `-V` option allows you to define a variable and a string value for that variable that the script can access:
 ```shell
-$ jacsal -V n=10 -e '(n as int).map{ (it+1).sqr() }'
+$ jactl -V n=10 -e '(n as int).map{ (it+1).sqr() }'
 [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
 ```
 
 The option can be used multiple times:
 ```shell
-$ jacsal -V n=10 -V power=3 -e '(n as int).map{ (it+1).pow(power as int) }'
+$ jactl -V n=10 -V power=3 -e '(n as int).map{ (it+1).pow(power as int) }'
 [1, 8, 27, 64, 125, 216, 343, 512, 729, 1000]
 ```
 
@@ -133,7 +133,7 @@ This option should only be used when reporting problems.
 
 ## Input
 
-The Jacsal scripts can read from `stdin` using `nextLine()`.
+The Jactl scripts can read from `stdin` using `nextLine()`.
 Assume there is a file called `some_file` with this content:
 ```shell
 This is the first line in a file
@@ -141,9 +141,9 @@ This is the second line in the same file
 This is the third line
 ```
 
-Then, to prepend the line length to each line we can `cat` the file to our jacsal script:
+Then, to prepend the line length to each line we can `cat` the file to our jactl script:
 ```shell
-$ cat some_file | jacsal -e 'def line; while ((line = nextLine()) != null) { println "${line.size()}: $line" }'
+$ cat some_file | jactl -e 'def line; while ((line = nextLine()) != null) { println "${line.size()}: $line" }'
 32: This is the first line in a file
 40: This is the second line in the same file
 22: This is the third line
@@ -151,15 +151,15 @@ $ cat some_file | jacsal -e 'def line; while ((line = nextLine()) != null) { pri
 
 This could also be written more idiomatically as:
 ```shell
-$ cat some_file | jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }'
+$ cat some_file | jactl -e 'stream(nextLine).each{ println "${it.size()}: $it" }'
 32: This is the first line in a file
 40: This is the second line in the same file
 22: This is the third line
 ```
 
-Jacsal supports a list of files being passed to it on the command line so this achieves the same thing:
+Jactl supports a list of files being passed to it on the command line so this achieves the same thing:
 ```shell
-$ jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file
+$ jactl -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file
 32: This is the first line in a file
 40: This is the second line in the same file
 22: This is the third line
@@ -174,7 +174,7 @@ and this is another line in that file
 
 Then if we pass both file names to the script we will have this output:
 ```shell
-$ jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file another_file
+$ jactl -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file another_file
 32: This is the first line in a file
 40: This is the second line in the same file
 22: This is the third line
@@ -186,7 +186,7 @@ When file names are passed to the script, the `stdin` input is not read.
 If you want to include `stdin` in the input processed by the script you use a single hyphen `-` as the file name.
 For example:
 ```shell
-$ jacsal -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file - another_file
+$ jactl -e 'stream(nextLine).each{ println "${it.size()}: $it" }' some_file - another_file
 32: This is the first line in a file
 40: This is the second line in the same file
 22: This is the third line
@@ -220,7 +220,7 @@ line).
 For example, given the files we saw in the previous section called `some_file` and `another_file`, we can do this to
 prepend the length to every line:
 ```shell
-$ jacsal -p -e 's/^/${it.length()}: /' some_file another_file
+$ jactl -p -e 's/^/${it.length()}: /' some_file another_file
 32: This is the first line in a file
 40: This is the second line in the same file
 22: This is the third line
@@ -238,14 +238,14 @@ argument.
 If you don't want to automatically print every line then the `-n` has the same behaviour except that it doesn't
 automatically print the line each time, so in order to print only lines that match some regex we could do this:
 ```shell
-$ jacsal -ne '/ s.*file/r and println it' some_file another_file
+$ jactl -ne '/ s.*file/r and println it' some_file another_file
 This is the second line in the same file
 this is some text in another file
 ```
 
 To print lines that do not match a regex, this would work:
 ```shell
-$ jacsal -ne '/ s.*file/r or println it' some_file another_file
+$ jactl -ne '/ s.*file/r or println it' some_file another_file
 This is the first line in a file
 This is the third line
 and this is another line in that file
@@ -253,7 +253,7 @@ and this is another line in that file
 
 Or another way to print lines that don't match:
 ```shell
-$ jacsal -ne 'println it unless / s.*file/r' some_file another_file
+$ jactl -ne 'println it unless / s.*file/r' some_file another_file
 This is the first line in a file
 This is the third line
 and this is another line in that file
@@ -261,14 +261,14 @@ and this is another line in that file
 
 And yet another way:
 ```shell
-$ jacsal -ne '!/ s.*file/r and println it' some_file another_file
+$ jactl -ne '!/ s.*file/r and println it' some_file another_file
 This is the first line in a file
 This is the third line
 and this is another line in that file
 ```
 
 Note that these options can also be used when the script is in a separate file rather than on the command line.
-So imagine we have a script called `freq.jacsal` that counts letter frequency for a line:
+So imagine we have a script called `freq.jactl` that counts letter frequency for a line:
 ```groovy
 println it.filter{ it != " " }
           .reduce([:]){ m,c -> m[c]++; m }
@@ -279,7 +279,7 @@ println it.filter{ it != " " }
 
 To run this over all lines of our input files we do this:
 ```shell
-$ jacsal -n freq.jacsal some_file another_file
+$ jactl -n freq.jactl some_file another_file
 i:6 s:3 e:3 h:2 t:2 f:2 l:2 n:2 T:1 r:1 a:1
 e:6 i:5 s:4 h:3 n:3 t:2 l:2 T:1 c:1 o:1 d:1 a:1 m:1 f:1
 i:4 h:3 s:2 t:2 e:2 T:1 r:1 d:1 l:1 n:1
@@ -291,7 +291,7 @@ Since the script is wrapped in a `while` loop, it is possible for the script to 
 it makes sense to control the behaviour of the loop:
 
 ```shell
-$ jacsal -pe '/second/r and continue; s/This is//' some_file another_file
+$ jactl -pe '/second/r and continue; s/This is//' some_file another_file
  the first line in a file
  the third line
 this is some text in another file
@@ -308,7 +308,7 @@ out a result at the very end of the input.
 You can use a `BEGIN` section to perform any up-front initialisation before any input is processed and an `END`
 section to perform any work after the input has all been processed.
 
-Here is an example where we modify the `freq.jacsal` script to add a `BEGIN` section to initialise a Map that will
+Here is an example where we modify the `freq.jactl` script to add a `BEGIN` section to initialise a Map that will
 keep letter frequencies across all lines, and an `END` section to print the results at the end:
 ```groovy
 BEGIN {
@@ -333,7 +333,7 @@ END {
 ```
 Then when we run it:
 ```shell
-$ jacsal -n freq.jacsal some_file another_file
+$ jactl -n freq.jactl some_file another_file
 i:6 s:3 e:3 h:2 t:2 f:2 l:2 n:2 T:1 r:1 a:1
 e:6 i:5 s:4 h:3 n:3 t:2 l:2 T:1 c:1 o:1 d:1 a:1 m:1 f:1
 i:4 h:3 s:2 t:2 e:2 T:1 r:1 d:1 l:1 n:1
@@ -361,87 +361,87 @@ assigning to a global variable will cause it to be created.
 
 As well as passing in variables using the `-V` option, you can additionally pass in arguments for a script at the
 command line by using `--` (double hyphen) and then listing the arguments.
-The `--` tells Jacsal that there are no more options for Jacsal itself (including no more file names) and that
+The `--` tells Jactl that there are no more options for Jactl itself (including no more file names) and that
 all arguments after the `--` should be passed as an array in a variable called `args` that the script can then
 access.
 
 For example:
 ```shell
-$ jacsal -e 'args.each{ println "arg: $it" }' -- additional args 
+$ jactl -e 'args.each{ println "arg: $it" }' -- additional args 
 arg: additional
 arg: args
 ```
 
-## `.jacsalrc` File
+## `.jactlrc` File
 
-At start up time the contents of `~/.jacsalrc` are read.
-This file, if it exists, is itself a Jacsal script and allows you to customise the behaviour of the Jacsal command
+At start up time the contents of `~/.jactlrc` are read.
+This file, if it exists, is itself a Jactl script and allows you to customise the behaviour of the Jactl command
 line scripts by setting the values of some global variables.
-This file is also used by the Jacsal REPL.
+This file is also used by the Jactl REPL.
 
-At the moment, all the variables are to do with allowing you to customise Jacsal by providing your own
+At the moment, all the variables are to do with allowing you to customise Jactl by providing your own
 execution environment (for your event-loop specific application environment) and your own functions/methods.
 The values of the following variables can be set:
 
 | Variable            | Type   |    Default Value    | Description                                                                                                                                                                                                                        |
 |:--------------------|:-------|:-------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `environmentClass`  | String | `jacsal.DefaultEnv` | The name of the class which will is used to encapsulate the Jacsal runtime environment. See [Integration Guide](pages/integration-guide) for more details.                                                                         |
+| `environmentClass`  | String | `io.jactl.DefaultEnv` | The name of the class which will is used to encapsulate the Jactl runtime environment. See [Integration Guide](pages/integration-guide) for more details.                                                                         |
 | `extraJars`         | List   |        `[]`         | A list of file names for any additional JARs that should be added to the classpath.                                                                                                                                                |  
-| `functionClasses`   | List   |       `[]`          | A list of classes having a static method called `registerFunctions(JacsalEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jacsal runtime.   |
+| `functionClasses`   | List   |       `[]`          | A list of classes having a static method called `registerFunctions(JactlEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jactl runtime.   |
 
-For example, there is a [jacsal-vertx project](https://github.com/jaccomoc/jacsal-vertx) for use when integrating
+For example, there is a [jactl-vertx project](https://github.com/jaccomoc/jactl-vertx) for use when integrating
 with a [Vert.x](https://vertx.io/) based application.
-It uses a specific `JacsalVertxEnv` environment that delegates event scheduling to Vert.x and provides some 
+It uses a specific `JactlVertxEnv` environment that delegates event scheduling to Vert.x and provides some 
 Json methods for converting to/from JSON and an example function for sending/receiving JSON messages over HTTP.
 
-Since the `sendReceiveJson()` functions is provided as an example, it lives in the test jar of the jacsal-vertx
+Since the `sendReceiveJson()` functions is provided as an example, it lives in the test jar of the jactl-vertx
 project.
-So to include these additional functions in your Jacsal REPL or Jacsal command line scripts you need to list
+So to include these additional functions in your Jactl REPL or Jactl command line scripts you need to list
 these two jars in the `extraJars` list.
 
 > **Note**<br/>
-> The `jacsal-vertx` test jar is built as an "uber" jar and includes the dependencies it needs (including the
+> The `jactl-vertx` test jar is built as an "uber" jar and includes the dependencies it needs (including the
 > Vert.x libraries) so we don't need to separately list the Vert.x jars as well.
 
-To register these additional functions with the Jacsal runtime we need to have created classes that have
-a static method called `registerFunctions(JacsalEnv env)` which do the registration of the functions.
+To register these additional functions with the Jactl runtime we need to have created classes that have
+a static method called `registerFunctions(JactlEnv env)` which do the registration of the functions.
 We then need to tell the runtime the name of these classes so that these static methods can be invoked which
 will in turn register the functions.
 
-For the `jacsal-vertx` library, there are two classes that handle the registration of these functions/methods:
-* `jacsal.vertx.JsonFunctions`
-* `jacsal.vertx.example.VertxFunctions`
+For the `jactl-vertx` library, there are two classes that handle the registration of these functions/methods:
+* `jactl.vertx.JsonFunctions`
+* `jactl.vertx.example.VertxFunctions`
 
-We therefore need to list these classes in the `functionClasses` list of our `.jacsalrc` file.
+We therefore need to list these classes in the `functionClasses` list of our `.jactlrc` file.
 
-If the jars are located under `~/.m2/repository/jacsal/jacsal-vertx/1.0` then a `.jacsalrc` file that allows
-the Jacsal REPL and the Jacsal commandline script execution to use Vert.x and these new functions would look like this:
+If the jars are located under `~/.m2/repository/jactl/jactl-vertx/1.0` then a `.jactlrc` file that allows
+the Jactl REPL and the Jactl commandline script execution to use Vert.x and these new functions would look like this:
 ```groovy
-environmentClass = 'jacsal.vertx.JacsalVertxEnv'
-extraJars        = [ '~/.m2/repository/jacsal/jacsal-vertx/1.0/jacsal-vertx-1.0.jar',
-                     '~/.m2/repository/jacsal/jacsal-vertx/1.0/jacsal-vertx-1.0-tests.jar' ]
-functionClasses  = [ 'jacsal.vertx.JsonFunctions',
-                     'jacsal.vertx.example.VertxFunctions' ]
+environmentClass = 'jactl.vertx.JactlVertxEnv'
+extraJars        = [ '~/.m2/repository/jactl/jactl-vertx/1.0/jactl-vertx-1.0.jar',
+                     '~/.m2/repository/jactl/jactl-vertx/1.0/jactl-vertx-1.0-tests.jar' ]
+functionClasses  = [ 'jactl.vertx.JsonFunctions',
+                     'jactl.vertx.example.VertxFunctions' ]
 ```
 
 > **Note**<br/>
 > The use of `~` in the file names will be replaced with the location of the current user's home directory.
 
-Since the file is Jacsal code we could also write it like this:
+Since the file is Jactl code we could also write it like this:
 ```groovy
-def VERSION = '1.0'                                                // The jacsal-vertx version to use
-def LIBS    = "~/.m2/repository/jacsal/jacsal-vertx/${VERSION}"    // Location of the jars
+def VERSION = '1.0'                                                // The jactl-vertx version to use
+def LIBS    = "~/.m2/repository/jactl/jactl-vertx/${VERSION}"    // Location of the jars
 
 // Specify the Vertx environment class to use
-environmentClass = 'jacsal.vertx.JacsalVertxEnv'
+environmentClass = 'jactl.vertx.JactlVertxEnv'
 
-// List the extra jacsal-vertx jars
-extraJars        = [ "$LIBS/jacsal-vertx-${VERSION}.jar",
-                     "$LIBS/jacsal-vertx-${VERSION}-tests.jar" ]
+// List the extra jactl-vertx jars
+extraJars        = [ "$LIBS/jactl-vertx-${VERSION}.jar",
+                     "$LIBS/jactl-vertx-${VERSION}-tests.jar" ]
 
 // List the function registration classes
-functionClasses  = [ 'jacsal.vertx.JsonFunctions',
-                     'jacsal.vertx.example.VertxFunctions' ]
+functionClasses  = [ 'jactl.vertx.JsonFunctions',
+                     'jactl.vertx.example.VertxFunctions' ]
 ```
 
 > **Note**<br/>

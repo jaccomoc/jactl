@@ -23,10 +23,10 @@
 # remain as is.
 #
 # To generate the code run the GenerateClasses.pl perl script from this directory:
-#  ./GenerateClasses.pl Stmt.java > ../java/jacsal/Stmt.java
+#  ./GenerateClasses.pl Stmt.java > ../java/jactl/Stmt.java
 #
 
-package jacsal;
+package io.jactl;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.LinkedHashMap;
 
-import jacsal.runtime.ClassDescriptor;
+import io.jactl.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 
 /**
@@ -98,7 +98,7 @@ class Stmt {
     Token                name;
     String               packageName;
     Token                baseClassToken;
-    JacsalType           baseClass;
+    JactlType           baseClass;
     boolean              isInterface;
     List<Stmt.Import>    @imports;
     Stmt.Block           @classBlock;

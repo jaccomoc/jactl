@@ -23,21 +23,21 @@
 # remain as is.
 #
 # To generate the code run the GenerateClasses.pl perl script from this directory:
-#  ./GenerateClasses.pl Expr.java > ../java/jacsal/Expr.java
+#  ./GenerateClasses.pl Expr.java > ../java/jactl/Expr.java
 #
 
-package jacsal;
+package io.jactl;
 
 import java.util.*;
 
-import jacsal.Utils;
-import jacsal.runtime.ClassDescriptor;
+import io.jactl.Utils;
+import io.jactl.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
-import jacsal.runtime.FunctionDescriptor;
+import io.jactl.runtime.FunctionDescriptor;
 
-import static jacsal.JacsalType.HEAPLOCAL;
+import static io.jactl.JactlType.HEAPLOCAL;
 
 /**
  * Expr classes for our AST.
@@ -45,7 +45,7 @@ import static jacsal.JacsalType.HEAPLOCAL;
 class Expr {
 
   Token      location;
-  JacsalType type;
+  JactlType type;
   boolean    isResolved = false;
 
   boolean    isConst = false;   // Whether expression consists only of constants
@@ -74,7 +74,7 @@ class Expr {
   public boolean isFunctionCall() {
     if (!(this instanceof Expr.Identifier)) { return false; }
     var ident = (Expr.Identifier)this;
-    return ident.varDecl.type.is(JacsalType.FUNCTION) && ident.varDecl.funDecl != null;
+    return ident.varDecl.type.is(JactlType.FUNCTION) && ident.varDecl.funDecl != null;
   }
 
   // True if expression is a MapLiteral where all keys are string literals
@@ -150,7 +150,7 @@ class Expr {
 
   class Cast extends Expr implements ManagesResult {
     Token       token;
-    JacsalType  castType;
+    JactlType  castType;
     Expr        expr;
   }
 
@@ -183,7 +183,7 @@ class Expr {
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used
     // as the target of another map() call (or call that can operator on an Iterator). Otherwise
-    // we need to convert the Iterator into a List since Iterators don't really exist at the Jacsal
+    // we need to convert the Iterator into a List since Iterators don't really exist at the Jactl
     // language level and are only used as an implementation detail for some iteration methods.
     // E.g.: x.map().map().each()
     // This means that the x.map() can return an iterator that is then used in the next .map() which
@@ -272,7 +272,7 @@ class Expr {
   class FunDecl extends Expr implements ManagesResult {
     Token              startToken;   // Either identifier for function decl or start brace for closure
     Token              nameToken;    // Null for closures and script main
-    JacsalType         returnType;
+    JactlType         returnType;
     List<Stmt.VarDecl> parameters;
     Stmt.Block         @block;
 
@@ -384,7 +384,7 @@ class Expr {
   class Return extends Expr {
     Token      returnToken;
     Expr       expr;
-    JacsalType returnType;      // Return type of the function we are embedded in
+    JactlType returnType;      // Return type of the function we are embedded in
     FunDecl    @funDecl;
   }
 
@@ -431,7 +431,7 @@ class Expr {
    */
   class TypeExpr extends Expr {
     Token      token;
-    JacsalType typeVal;
+    JactlType typeVal;
   }
 
   ////////////////////////////////////////////////////////////////////
@@ -501,7 +501,7 @@ class Expr {
    */
   class InvokeNew extends Expr {
     Token      token;
-    JacsalType className;
+    JactlType className;
   }
 
   /**
@@ -509,12 +509,12 @@ class Expr {
    */
   class DefaultValue extends Expr {
     Token      token;
-    JacsalType varType;
+    JactlType varType;
   }
 
   /**
    * For situations where we know the class name up front and don't want to have to create
-   * a new JacsalType value for it.
+   * a new JactlType value for it.
    */
   class InstanceOf extends Expr {
     Token  token;
@@ -528,7 +528,7 @@ class Expr {
   class CastTo extends Expr {
     Token      token;
     Expr       expr;      // Object being cast
-    JacsalType castType;  // Type to cast to
+    JactlType castType;  // Type to cast to
   }
 
   /**
@@ -538,7 +538,7 @@ class Expr {
    */
   class ConvertTo extends Expr {
     Token      token;
-    JacsalType varType;
+    JactlType varType;
     Expr       expr;
     Expr       source;
     Expr       offset;

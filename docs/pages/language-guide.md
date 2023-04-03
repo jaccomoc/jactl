@@ -1,24 +1,24 @@
-# Jacsal Language Guide
+# Jactl Language Guide
 
 ## The REPL
 
-The easiest way to start learning about the Jacsal language is to use the REPL (read-evaluate-print-loop) that comes
-with Jacsal:
+The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
+with Jactl:
 
 ```shell
-$ java -cp jacsal-repl-1.0.jar jacsal.Repl
-Jacsal version 0.90
+$ java -cp jactl-repl-1.0.jar jactl.Repl
+Jactl version 1.0
 > 
 ```
 
 To exit the REPL use the `:q` command or `ctrl-D`.
 
-Anything that does not start with `:` is interpreted as Jacsal code and is evaluated immediately and the result
+Anything that does not start with `:` is interpreted as Jactl code and is evaluated immediately and the result
 of the evaluation is printed before prompting again (hence the term read-evaluate-print-loop). For each line that 
 is read, if the code does not look like it is complete the REPL will keep reading until it gets a complete
 expression or statement that can be executed:
 ```groovy
-Jacsal version 0.90
+Jactl version 1.0
 > 3 * 4
 12
 > int x = (17 * 13) % 6
@@ -34,28 +34,28 @@ x is not less than 4
 
 ## Command Line Scripts
 
-Jacsal scripts can also be invoked from the command line:
+Jactl scripts can also be invoked from the command line:
 ```shell
-$ java -jar jacsal-1.0.jar
-Usage: jacsal [switches] [programFile] [inputFile]* [--] [arguments]*
+$ java -jar jactl-1.0.jar
+Usage: jactl [switches] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
          -n           : run in a loop but don't print each line
-         -e script    : script string is interpreted as jacsal code (programFile not used)
+         -e script    : script string is interpreted as jactl code (programFile not used)
          -v           : show verbose errors (give stack trace)
-         -V var=value : initialise jacsal variable before running script
+         -V var=value : initialise jactl variable before running script
          -d           : debug: output generated code
          -h           : print this help
 ```
 
 Using the `-e` option allows you to supply the script on the comand line itself:
 ```shell
-$ java -jar jacsal-1.0.jar -e '3 * 4'
+$ java -jar jactl-1.0.jar -e '3 * 4'
 12
 ```
 
-If you have a Jacsal script in a file called `myscript.jacsal` then you can the script like this:
+If you have a Jactl script in a file called `myscript.jactl` then you can the script like this:
 ```shell
-$ java -jar jacsal-1.0.jar myscript.jacsal
+$ java -jar jactl-1.0.jar myscript.jactl
 ```
 
 See [Command Line Scripts](command-line-scripts.md) for more details about how to invoke scripts
@@ -63,8 +63,8 @@ from the command line.
 
 ## Statement Termination: Newlines and Semicolons
 
-Jacsal syntax borrows heavily from Java, Groovy, and Perl and so while Java and Perl both require a semicolon to terminate
-simple statements, Jacsal adopts the Groovy approach where semicolons are optional.
+Jactl syntax borrows heavily from Java, Groovy, and Perl and so while Java and Perl both require a semicolon to terminate
+simple statements, Jactl adopts the Groovy approach where semicolons are optional.
 The only time a semicolon is required as a statement separator is if more than one statement appears on the
 same line:
 ```groovy
@@ -72,10 +72,10 @@ same line:
 x = 1
 ```
 
-The Jacsal compiler, when it encounters a newline, will try to see if the current expression or statement continues
+The Jactl compiler, when it encounters a newline, will try to see if the current expression or statement continues
 on the next line.
 Sometimes it can be ambiguous whether the newline terminates the current statement or not and in these
-situations, Jacsal will treat the newline is a terminator. For example, consider this:
+situations, Jactl will treat the newline is a terminator. For example, consider this:
 ```groovy
 def x = [1,2,3]
 x
@@ -83,10 +83,10 @@ x
 ```
 Since expressions on their own are valid statements, it is not clear whether the last two lines should be interpreted
 as `x[0]` or `x` and another statement `[0]` which is a list containing `0`.
-In this case, Jacsal will compile the code as two separate statements.
+In this case, Jactl will compile the code as two separate statements.
 
 If such a situation occurs within parentheses or where it is clear that the current statement has not finished,
-Jacsal will treat the newline as whitespace. For example:
+Jactl will treat the newline as whitespace. For example:
 ```groovy
 def x = [1,2,3]
 if (
@@ -101,7 +101,7 @@ will be interpreted as `x[0]`.
 
 ## Comments
 
-Comments in Jacsal are the same as for Java and Groovy and are denoted using either line comment form, where `//` is
+Comments in Jactl are the same as for Java and Groovy and are denoted using either line comment form, where `//` is
 used to begin a comment that extends to the end of the line, or with a pair of `/*` and `*/` that delimit a comment that
 can be either embeeded within a single line or span multiple lines:
 ```groovy
@@ -117,7 +117,7 @@ can be either embeeded within a single line or span multiple lines:
 
 ## Variables
 
-A variable in Jacsal is a symbol that is used to refer to a value. Variables are declared by specifying a type followed
+A variable in Jactl is a symbol that is used to refer to a value. Variables are declared by specifying a type followed
 by their name and an optional expression to use as an initial value for the variable. If no initialization expression
 is given then the default value for that type is assigned.
 
@@ -150,11 +150,11 @@ int for = 3
 ```
 
 > **Note**<br/>
-> Since class names in Jacsal must start with a capital letter it is good practice not
+> Since class names in Jactl must start with a capital letter it is good practice not
 > to start variable names with a capital letter in order to make your code easier to read.
 
 > **Note**<br/>
-> Unlike Java, the dollar sign `$` is not a valid character for a variable name in Jacsal.
+> Unlike Java, the dollar sign `$` is not a valid character for a variable name in Jactl.
 
 While most of the examples presented here have single character variable names, in general, your code should use
 names that are more meaningful. It is recommended that when a variable name consists of more than one word that
@@ -166,7 +166,7 @@ For example:
 
 ## Keywords
 
-The following table list the reserved keywords used by Jacsal:
+The following table list the reserved keywords used by Jactl:
 
 | Key Words  |          |             |          |             |
 |------------|----------|-------------|----------|-------------|
@@ -185,7 +185,7 @@ The following table list the reserved keywords used by Jacsal:
 
 ### Standard Types
 
-Jacsal supports a few built-in types as well as the ability to build your own types by creating
+Jactl supports a few built-in types as well as the ability to build your own types by creating
 [Classes](classes).
 
 Types are used when declaring variables, fields of classes, function return types, and function parameter types.
@@ -207,7 +207,7 @@ The standard types are:
 ### Inferred Type
 
 Variables can also be declared using the `var` keyword if an initialiser expression is given.
-Jacsal will then create a variable of the same type as the initialisation expression:
+Jactl will then create a variable of the same type as the initialisation expression:
 
 ```groovy
 > var x = 1       // x will have type int
@@ -222,7 +222,7 @@ some place
 
 ### Dynamic/Weak Typing
 
-While Jacsal supports the use of specific types when declaring variables and functions, Jacsal can also be used as
+While Jactl supports the use of specific types when declaring variables and functions, Jactl can also be used as
 a weakly or dynamically typed language (also known as _duck typing_). The keyword `def` is used to define variables and
 functions in situations where the type may not be known up front or where the variable will contain values of different
 types at different points in time:
@@ -261,7 +261,7 @@ Function@45822040
 
 #### Integers
 
-Jacsal supports two types of integers: `int` and `long`.
+Jactl supports two types of integers: `int` and `long`.
 
 As with Java, 32-bit integers are represented by `int` while `long` is used for 64-bit integers.
 
@@ -284,13 +284,13 @@ Error at line 1, column 1: Integer literal too large for int
 
 #### Floating Point
 
-In Jacsal, by default, floating point numbers are represented by the `Decimal` type and numeric literals that have
+In Jactl, by default, floating point numbers are represented by the `Decimal` type and numeric literals that have
 a decimal point will be interpreted as Decimal numbers.
 
 Decimal numbers are represented internally using the Java `BigDecimal` class. This avoids the problems
 of trying to store base 10 numbers inexactly using a binary floating point representation.
 
-Jacsal also offers the ability to use native floating point numbers by using the type `double` (which corresponds to
+Jactl also offers the ability to use native floating point numbers by using the type `double` (which corresponds to
 the Java type `double`) for situations where preformance is more important than having exact values.
 When using doubles, constants of type `double` should use the `D` suffix to prevent them being interpreted
 as Decimal constants and to avoid unnecessary overhead:
@@ -308,7 +308,7 @@ To illustrate how Decimal values and double values behave differently, consider 
 
 ### Strings
 
-Strings in Jacsal are usually delimited with single quotes:
+Strings in Jactl are usually delimited with single quotes:
 ```groovy
 > 'abc'
 abc
@@ -352,7 +352,7 @@ Subscript notation can be used to access individual characters:
 > 'abc'[0]
 a
 ```
-Note that characters in Jacsal are just strings whose length is 1. Unlike Java, there is no separate `char` type to
+Note that characters in Jactl are just strings whose length is 1. Unlike Java, there is no separate `char` type to
 represent an individual character:
 ```groovy
 > 'abc'[2] == 'c'
@@ -421,7 +421,7 @@ some message
 > "Received message '$msg' from sender"
 Received message 'some message' from sender
 ```
-If the expression is surrounded in `{}` then any arbitrary Jacsal expression can be included:
+If the expression is surrounded in `{}` then any arbitrary Jactl expression can be included:
 ```groovy
 > def str = 'xyz'
 xyz
@@ -503,7 +503,7 @@ a multi-line regex string
 
 ### Lists
 
-A Jacsal `List` represents a list of values of any type. Lists can have a mixture of types within them. Lists are
+A Jactl `List` represents a list of values of any type. Lists can have a mixture of types within them. Lists are
 created using the `[]` syntax where the elements are a list of comma separated values:
 ```groovy
 > []            // empty list
@@ -513,7 +513,7 @@ created using the `[]` syntax where the elements are a list of comma separated v
 > ['value1', 2, ['a','b']]
 ['value1', 2, ['a', 'b']]
 ```
-The elements of a `List` can themseles be a `List` (as shown) or a `Map` or any type supported by Jacsal (including
+The elements of a `List` can themseles be a `List` (as shown) or a `Map` or any type supported by Jactl (including
 instances of user defined classes).
 
 The `size()` function gives you the number of elements in a list. It can be invoked with the list as the argument or
@@ -656,11 +656,11 @@ current size of the list which will fill any gaps with `null`:
 
 ### Maps
 
-A `Map` in Jacsal is used hold a set of key/value pairs and provides efficient lookup of a value based on a given key
+A `Map` in Jactl is used hold a set of key/value pairs and provides efficient lookup of a value based on a given key
 value.
 
-> Unlike Java, Jacsal `Map` objects only support keys which are strings. If you try to use an
-> object that is not a `String` as a key, Jacsal will throw an error.
+> Unlike Java, Jactl `Map` objects only support keys which are strings. If you try to use an
+> object that is not a `String` as a key, Jactl will throw an error.
 
 Maps can be constructed as a list of colon seperated `key:value` pairs:
 ```groovy
@@ -740,8 +740,8 @@ You can also subtract a List of values from a Map where the List is treated as a
 ```
 
 #### JSON Syntax
-Jacsal also supports JSON-like syntax for maps. This makes it handy if you want to cut-and-paste some JSON into your
-Jacsal script:
+Jactl also supports JSON-like syntax for maps. This makes it handy if you want to cut-and-paste some JSON into your
+Jactl script:
 ```groovy
 > {"name":"Fred Smith", "employeeId":1234, "address":{"street":["Apartment 456", "123 High St"], "town":"Freetown"} }
 [name:'Fred Smith', employeeId:1234, address:[street:['Apartment 456', '123 High St'], town:'Freetown']]
@@ -768,8 +768,8 @@ standard compact form but if you specify an indent amount it will provide a more
   phone: '555-555-555'
 ]
 ```
-> The `toString()` Jacsal function outputs values in a form that is legal, executable
-> Jacsal code, which is useful for cut-and-pasting into scripts and when working with the REPL command line.
+> The `toString()` Jactl function outputs values in a form that is legal, executable
+> Jactl code, which is useful for cut-and-pasting into scripts and when working with the REPL command line.
 
 #### Map Field Access
 
@@ -897,7 +897,7 @@ something like this:
 > x
 [a:[b:[c:[d:1]]]]
 ```
-With Jacsal these intermediate fields will be automatically created if they don't exist so we only need write
+With Jactl these intermediate fields will be automatically created if they don't exist so we only need write
 the last line of script:
 ```groovy
 > x.a.b.c.d = 1
@@ -906,7 +906,7 @@ the last line of script:
 [a:[b:[c:[d:1]]]]
 ```
 
-Note that Jacsal will not automatically create a value for the top level variable, however, if it does not yet
+Note that Jactl will not automatically create a value for the top level variable, however, if it does not yet
 have a value. In this case, for example:
 ```groovy
 > def x
@@ -930,7 +930,7 @@ created as required:
 Note that in this case `x.a.b` is an embedded List, not a Map.
 
 Normally access to fields of a Map can also be done via subscript notation but if the field does not exist then
-Jacsal will assume that access via subscript notation implies that an empty List should be created if the field is
+Jactl will assume that access via subscript notation implies that an empty List should be created if the field is
 missing, rather than a Map:
 ```groovy
 > def x = [:]
@@ -957,7 +957,7 @@ true
 
 ## Truthiness
 
-In Jacsal we often want to know whether an expression is `true` or not. The _truthiness_ of an expression is used to
+In Jactl we often want to know whether an expression is `true` or not. The _truthiness_ of an expression is used to
 determine which branch of an `if` statement to evaluate, or whether a `for` loop or a `while` loop should continue
 or not, for example. In any situation where a boolean `true` or `false` is expected we need to evaluate the given
 expression to determine whether it is true or not.
@@ -1002,7 +1002,7 @@ false
 
 ### Operator Precedence
 
-Jacsal supports the following operators. Operators are shown in increasing precedence order and operators of the same
+Jactl supports the following operators. Operators are shown in increasing precedence order and operators of the same
 precedence are shown with the same precedence value:
 
 | Precedence Level |            Operator            | Description                                         |
@@ -1044,7 +1044,7 @@ precedence are shown with the same precedence value:
 |                  |              `{}`              | Function/method invocation (closure passing syntax) |
 |                  |             `new`              | New instance operator                               |
 
-When evaluating expressions in Jacsal operators with higher precedence are evaluated before operators with lower
+When evaluating expressions in Jactl operators with higher precedence are evaluated before operators with lower
 preedence.
 For example in the following expression the multiplicaton is evaluated before the addition or subtraction because
 it has higher precedence than addition or substraction:
@@ -1197,12 +1197,12 @@ For example:
 
 ### Modulo `%` and Remainder `%%` operators
 
-In addition to the basic four operators, Jacsal also has `%` (modulo) and `%%` (remainder) operators.
+In addition to the basic four operators, Jactl also has `%` (modulo) and `%%` (remainder) operators.
 Both operators perform similar functions in that they calculate the "remainder" after dividing by some number.
 The difference comes from how they treat negative numbers.
 
 The remainder operator `%%` works exactly the same way as the Java remainder operator (which in Java is represented
-by a single `%` rather than the `%%` in Jacsal):
+by a single `%` rather than the `%%` in Jactl):
 > `x %% y` is defined as being `x - (int)(x/y) * y`
 
 The problem is if `x` is less than `0` then the result will also be less than 0:
@@ -1214,18 +1214,18 @@ The problem is if `x` is less than `0` then the result will also be less than 0:
 When doing modulo arithmetic you usually want (in my opinion) values to only be between `0` and `y - 1` when evaluating
 something modulo `y` (where `y` is postive) and between `0` and `-(y - 1)` if `y` is negative.
 
-Jacsal, therefore, the definition of `%` is:
+Jactl, therefore, the definition of `%` is:
 > `x % y` is defined as `((x %% y) + y) %% y`
 
-This means that in Jacsal `%` returns only postive values if the right-hand side is positive and only negative values
+This means that in Jactl `%` returns only postive values if the right-hand side is positive and only negative values
 if the right-hand side is negative.
-Jacsal retains `%%` for scenarios where you want compatibility with how Java does things or for when you know that
+Jactl retains `%%` for scenarios where you want compatibility with how Java does things or for when you know that
 the left-hand side will always be positive and you care about performance (since `%%` compiles to a single JVM
 instruction while `%` is several instructions).
 
 ### Increment/Decrement Operators
 
-Jacsal offers increment `++` and decrement `--` operators that increment or decrement a value by `1`.
+Jactl offers increment `++` and decrement `--` operators that increment or decrement a value by `1`.
 Both prefix and postfix versions of these operators exist.
 In prefix form the result is the result after applying the increment or decrement while in postfix form the value
 is the value before the increment or decrement occurs.
@@ -1489,7 +1489,7 @@ In Java, type casting is done for two reasons:
 1. You are passed an object of some generic type but you know it is actually a sepcific type and you want to treat it as that specific type (to invoke a method on it, for example), or
 2. You need to convert a primitive number type to another number type (for example, converting a long value to an int)
  
-In Jacsal there is less need to cast for the first reason since if the object supports the method you can always invoke
+In Jactl there is less need to cast for the first reason since if the object supports the method you can always invoke
 that method even if the reference to the object is a `def` type.
 The reason why you may still wish to cast to the specific type in this case is for readability to make it clear what type
 is expected at that point in the code or for performance reasons since after the value has been cast to the desired
@@ -1505,7 +1505,7 @@ For example we could check the type of `x` before invoking the List method `sum(
 > def sum = x instanceof List ? ((List)x).sum() : 0
 6
 ```
-Whereas in Java the cast would be required, since Jacsal supports dynamic typing, the cast in this case is not
+Whereas in Java the cast would be required, since Jactl supports dynamic typing, the cast in this case is not
 necessary (but might make the execution slightly faster).
 
 The other use for casts is to convert primitive number types to one another.
@@ -1521,7 +1521,7 @@ For example, you can use casts to convert a double or decimal value to its corre
 ```
 
 The other special case for cast is to cast a character to an integer value to get its Unicode value.
-Remember that characters in Jacsal are just single character strings so if you cast a single character string to
+Remember that characters in Jactl are just single character strings so if you cast a single character string to
 `int` you will get is Unicode value:
 ```groovy
 > (int)'A'
@@ -1643,7 +1643,7 @@ true
 
 ### Regex Matching
 
-Jacsal provides two operators for doing regular expression (regex) find and regex subsitutions.
+Jactl provides two operators for doing regular expression (regex) find and regex subsitutions.
 The `=~` operator is used for matching a string against a regex pattern.
 It does the equivalent of Java's `Matcher.find()` to check if a substring matches the given pattern.
 The regex pattern syntax is the same as that used by the Pattern class in Java so for detail information about how to
@@ -1734,7 +1734,7 @@ while (x =~ /[a-c]/g && y =~ /[x-z]/g) { i++ }
 ```
 
 These limitations are due to what makes sense in terms of the capture variable values and due to the way in which
-Jacsal saves the state of the match to remember where to continue from the next time.
+Jactl saves the state of the match to remember where to continue from the next time.
 
 The `g` modifier is more useful when used with capture variables as described in the next section.
 
@@ -1776,7 +1776,7 @@ AAPL=$151.03, MSFT=$255.29, GOOG=$94.02
 
 ### Regex Substitution
 
-Jacsal supports regex substitution where substrings in the source string that match the given pattern are replaced
+Jactl supports regex substitution where substrings in the source string that match the given pattern are replaced
 with a supplied substitution string.
 The same regex match operator `=~` is used but the right-hand side now has the form `s/pattern/subst/mods` where
 `pattern` is the regex pattern, `subst` is the substitution string, and `mods` are the optional modifiers:
@@ -1832,7 +1832,7 @@ This[4] SentenCe[8] has[3] Capital[7] letTers[7]
 
 ### Implicit Matching and Substitution
 
-For both regex matches and regex subsitutions, if no left-hand side is given, Jacsal will assume that the match or
+For both regex matches and regex subsitutions, if no left-hand side is given, Jactl will assume that the match or
 the substitution should be done against the default `it` variable.
 This variable is the default variable passed in to _closures_ (see later) when no variable name is specified.
 
@@ -1874,7 +1874,7 @@ a random value for a random explictily defined it variable
 ```
 
 Note, for matching, there needs to be a modifier since a regex pattern string delimited by `/` with no modifiers is
-treated as a string in Jacsal.
+treated as a string in Jactl.
 To force the regex pattern to do a match against the `it` variable add a modifier.
 The `r` modifier can be used to force a regex match if no other modifier makes sense:
 ```groovy
@@ -1925,7 +1925,7 @@ The only modifiers supported for `split` are `i` (case-insensitive), `s` (dot ma
 
 ## Eval Function
 
-The `eval()` function can be used to evaluate arbitrary Jacsal code.
+The `eval()` function can be used to evaluate arbitrary Jactl code.
 It takes the string passed to it and compiles and runs it.
 The return value is the value of the last expression in the script:
 ```groovy
@@ -1971,19 +1971,19 @@ true
 If you passed in a Map then the `$error` entry in the Map will hold the compile error:
 ```groovy
 > vars.'$error'
-jacsal.CompileError: Unexpected token ':': Expected start of expression @ line 1, column 12
+io.jactl.CompileError: Unexpected token ':': Expected start of expression @ line 1, column 12
 def f(n) { : n == 1 ? 1 : n * f(n-1)}; def first10 = 10.map{ f(it+1) }; f(x)
            ^
 ```
 
-Note that this is not the most efficient way to run Jacsal code since it has to compile the code before it can run
+Note that this is not the most efficient way to run Jactl code since it has to compile the code before it can run
 it, so if it is to be used it should be used judiciously.
 
 
 
 ## If/Else Statements
 
-Jacsal `if` statements work in the same way as Java and Groovy `if` statements.
+Jactl `if` statements work in the same way as Java and Groovy `if` statements.
 The syntax is: 
 > `if (<cond>) <trueStmts> [ else <falseStmts> ]`
 
@@ -2001,8 +2001,8 @@ For example:
 Valid name: Fred Smith
 ```
 
-Since the Jacsal REPL will execute code as soon as a valid statement is parsed, it is difficult to show some multi-line
-examples by capturing REPL interactions so here is an example Jacsal script showing a multi-line `if/else`: 
+Since the Jactl REPL will execute code as soon as a valid statement is parsed, it is difficult to show some multi-line
+examples by capturing REPL interactions so here is an example Jactl script showing a multi-line `if/else`: 
 ```groovy
 def x = 'abc'
 if (x.size() > 3) {
@@ -2032,7 +2032,7 @@ else {
 
 ## If/Unless Statements
 
-In addition to the `if/else` statements, Jacsal supports single statement `if` and `unless` statements where the
+In addition to the `if/else` statements, Jactl supports single statement `if` and `unless` statements where the
 test for the condition comes at the end of the statement rather than the beginning.
 The syntax is:
 > `<statment> if <cond>`
@@ -2050,7 +2050,7 @@ abcabc
 Y:abcabc
 ```
 
-As well as supporting tests with `if`, Jacsal supports using `unless` which just inverts the test.
+As well as supporting tests with `if`, Jactl supports using `unless` which just inverts the test.
 The statement is executed unless the given condition is true:
 ```groovy
 > def x = 'abc'
@@ -2063,7 +2063,7 @@ abc
 
 ## While Loops
 
-Jacsal `while` loops work like Java and Groovy:
+Jactl `while` loops work like Java and Groovy:
 > `while (<cond>) <statement>`
 
 The `<statement>` can be a single statement or a block of statements wrapped in `{}`.
@@ -2197,7 +2197,7 @@ Label names can be the same as other variable names (although not recommended pr
 
 ## Do Expression
 
-Jacsal has a `do` expression that allows you to execute a block of statements where normally an expression would be
+Jactl has a `do` expression that allows you to execute a block of statements where normally an expression would be
 expected.
 For example:
 ```groovy
@@ -2228,11 +2228,11 @@ do { found = true; println "Found multiple of 17: $x" } if x % 17 == 0
 ```
 
 > **Note**<br/>
-> `do/while` statements like those in Java are not currently supported in Jacsal.
+> `do/while` statements like those in Java are not currently supported in Jactl.
 
 ## Print Statements
 
-Jacsal has `print` and `println` statements for printing a string.
+Jactl has `print` and `println` statements for printing a string.
 `println` will print the string followed by a new-line.
 
 For example:
@@ -2251,17 +2251,17 @@ See [Integration Guide](integration-guide.md) for more details.
 
 ## Die Statements
 
-The `die` statement allows you to instantly exit a Jacsal script with an optional error message.
+The `die` statement allows you to instantly exit a Jactl script with an optional error message.
 It should be used only in situations where something unexpected has occurred and it makes no sense to continue.
 
 ## Functions
 
-Jacsal supports functions that take arguments and return a result.
-Functions always return a result (even if it is just `null`) - there is no concept of `void` functions in Jacsal.
+Jactl supports functions that take arguments and return a result.
+Functions always return a result (even if it is just `null`) - there is no concept of `void` functions in Jactl.
 
-Jacsal supports the Java syntax for creating a function (although Java doesn't really have functions as everything
+Jactl supports the Java syntax for creating a function (although Java doesn't really have functions as everything
 has to be a method).
-For example this code is valid Jacsal and valid Java:
+For example this code is valid Jactl and valid Java:
 ```groovy
 // Recursive implementation for Fibonacci numbers
 int fib(int n) { 
@@ -2270,7 +2270,7 @@ int fib(int n) {
 die unless fib(20) == 6765
 ```
 
-In Jacsal the return value of a function is the result of the last statement in the function so `return` is optional
+In Jactl the return value of a function is the result of the last statement in the function so `return` is optional
 if you are returning at the end of the function anyway.
 Sometimes it makes it clearer what is going on and if you need to return a value from the middle of the function
 it is obviously still useful.
@@ -2279,7 +2279,7 @@ Parameter types are optional (default type will be `def` meaning any type if not
 as the return type for the function as well.
 
 So with `return` and paramter type not needed and with semi-colon statement terminators being optional, the function
-above could be rewritten in Jacsal as:
+above could be rewritten in Jactl as:
 ```groovy
 def fib(n) { n <= 2 ? 1 : fib(n - 1) + fib(n - 2) }
 
@@ -2443,7 +2443,7 @@ die unless f(y) == 'xabc123'   // since parameters are untyped we can pass strin
 
 ## Closures
 
-Closures in Jacsal are modelled after the closure syntax of Groovy.
+Closures in Jactl are modelled after the closure syntax of Groovy.
 Closures are similar to functions in that they take one or more parameters and return a result.
 They are decalred with slightly different syntax:
 ```groovy
@@ -2479,7 +2479,7 @@ die unless f('ab') == 'abab'
 
 ### Implicit `it` Parameter
 
-It is common enough for a closure to have a single argument and Jacsal follows the Groovy convention of creating an
+It is common enough for a closure to have a single argument and Jactl follows the Groovy convention of creating an
 implicit `it` parameter if there is no `->` at the start of the closure:
 ```groovy
 def f = { it * it }
@@ -2647,12 +2647,12 @@ def g(x) { x == 1 ? 1 : x * f(x - 1) }
 Both functions and closures can "close over" variables in outer scopes, which means that they have access to
 these variables and can read and/or modify them.
 Closures are similar to lambda functions in Java but whereas lambda functions can only close over `final` or effectively
-final variables (and therefore cannot modify the values of these variables), closures and functions in Jacsal can
+final variables (and therefore cannot modify the values of these variables), closures and functions in Jactl can
 access variables whether they are effectively final or not and are able to modify their values.
 (In Java, lambda functions close over the value of the variable rather than the variable itself which is why the
 variable needs to be effectively final and why the lambda function is not able to modify the variable's value).
 
-Here is an example of a Jacsal closure that access a variable in an outer scope:
+Here is an example of a Jactl closure that access a variable in an outer scope:
 ```groovy
 def countThings(x) {
   int count = 0
@@ -2701,8 +2701,8 @@ In the example, `x` and `y` are two different instances of the closure which eac
 
 ## Collection Methods
 
-Jacsal has a number of builtin methods that operate on collections and things that can be iterated over.
-In Jacsal this means Lists, Maps, Strings, and numbers.
+Jactl has a number of builtin methods that operate on collections and things that can be iterated over.
+In Jactl this means Lists, Maps, Strings, and numbers.
 
 ### each()
 
@@ -2946,7 +2946,7 @@ So `skip(-2)` means skip until there are only two elements left:
 
 ### Lazy Evaluation, Side Effects, and collect()
 
-In Jacsal, if a collection method results in another list of values then most methods don't actually generate the
+In Jactl, if a collection method results in another list of values then most methods don't actually generate the
 list unless they are the last method in the invocation chain.
 Consider this code:
 ```groovy
@@ -2968,7 +2968,7 @@ In fact, we don't calculate the first 1000 Fibonacci numbers (which would take a
 inefficient algorithm we have implemented here). We only calculate as many as are needed to get the first 5 odd
 multiples of 3.
 
-Jacsal uses _lazy_ evaluation to avoid creating unnecessary List objects for intermediate results.
+Jactl uses _lazy_ evaluation to avoid creating unnecessary List objects for intermediate results.
 You can think of the chain of method calls acting as a conveyor belt where each element flows through each method
 before the next element is processed.
 
@@ -2997,7 +2997,7 @@ to force a list to be created wherever needed:
 [['a1', 3], ['b2', 3], ['c3', 3]]
 ```
 
-In Jacsal, the `collect()` also takes an optional closure like the Groovy form and so it is better to just write:
+In Jactl, the `collect()` also takes an optional closure like the Groovy form and so it is better to just write:
 ```groovy
 > int i = 0
 0
@@ -3007,9 +3007,9 @@ In Jacsal, the `collect()` also takes an optional closure like the Groovy form a
 
 Note that in Java, when using streams, it is necessary to invoke `collect()` to convert the final stream of 
 values back into a list.
-In Jacsal, this is not necessary since this will automatically be done when the last method in the chain has
+In Jactl, this is not necessary since this will automatically be done when the last method in the chain has
 finished.
-So in Jacsal these two expressions are equivalent:
+So in Jactl these two expressions are equivalent:
 ```groovy
 > [1,2,3].map{ it * it }.collect()
 [1, 4, 9]
@@ -3205,8 +3205,8 @@ list:
 
 ## Classes
 
-Like Java, Jacsal supports user defined classes but in a more simplified form.
-Jacsal uses a syntax that (mostly) follows that of Java.
+Like Java, Jactl supports user defined classes but in a more simplified form.
+Jactl uses a syntax that (mostly) follows that of Java.
 
 Classes provide a way to encapsulate state with fields, and behaviour with methods. 
 
@@ -3230,7 +3230,7 @@ If we enter the above class into the REPL we can then instantiate instances of t
 [x:1, y:2]
 ```
 
-Note that in Jacsal, you do not write explicit constructors for classes.
+Note that in Jactl, you do not write explicit constructors for classes.
 To instantiate a class you use the `new` operator followed by the class name and then a list of arguments that become
 the values for the mandatory fields of the class (in the order in which the fields are declared).
 
@@ -3368,7 +3368,7 @@ the values of any fields (as long as all mandatory fields are given a value):
 As shown, instances, when printed out look like Maps and passing named arguments to `new` is like constructing a
 Map literal.
 
-Jacsal also supports constructing instances by coercing a Map using the `as` operator:
+Jactl also supports constructing instances by coercing a Map using the `as` operator:
 ```groovy
 > Point p = [x:3, y:5] as Point
 [x:3, y:5]
@@ -3419,7 +3419,7 @@ class Tree {
 
 ### Auto-Creation
 
-Just as for Maps, Jacsal supports "auto-creation" of fields when a field reference appears as a left-hand side of an
+Just as for Maps, Jactl supports "auto-creation" of fields when a field reference appears as a left-hand side of an
 assignment like operator such as `=`, `?=`, `+=`, `-=`, etc., as long as the types of the fields are types that can
 be created with no arguments.
 In other words, the types must not have any mandatory fields.
@@ -3545,7 +3545,7 @@ class Y extends X { def func() { 'trying to override final function' } }
 ### Static Methods
 
 The methods we saw previously were methods that are instance methods and apply to an instance of a class.
-Jacsal also supports methods that are defined as `static` which are class methods rather than instance methods.
+Jactl also supports methods that are defined as `static` which are class methods rather than instance methods.
 Instead of invoking these methods via a class instance, they are invoked using the classname itself and are
 not associated with any specific instance of the class.
 
@@ -3591,21 +3591,21 @@ Invoking a static method via an instance works even if the type of the variable 
 
 ### No Static Fields
 
-In Jacsal, there is no support for static fields.
+In Jactl, there is no support for static fields.
 This differs from Java and Groovy which support static fields that exist at the class level rather than the class
 instance level.
 
-The reason that Jacsal has this restriction is to do with the intended use of the language.
+The reason that Jactl has this restriction is to do with the intended use of the language.
 The language is intended to be used in event driven/reactive programming applications to provide a way for
 customers of these applications to provide their own extensions and customisations.
 
-Jacsal scripts are intended to be run in a distributed multithreaded application where multiple threads in multiple
+Jactl scripts are intended to be run in a distributed multithreaded application where multiple threads in multiple
 application instances can be running the same script at the same time.
 It makes no sense in such a scenario to have class level fields since they would not be global fields but would 
 be per application instance.
-So rather than offering the illusion of global state, Jacsal has taken the decision to not offer this feature at all.
+So rather than offering the illusion of global state, Jactl has taken the decision to not offer this feature at all.
 
-If global state is really required then it is up to the application to provide its own functions for its Jacsal
+If global state is really required then it is up to the application to provide its own functions for its Jactl
 scripts to use that can update/read some global state, potentially in a database, or in a distributed in-memory
 key/value store of some sort.
 
@@ -3726,9 +3726,9 @@ You can, of course, also nest inner classes within inner classes:
 1
 ```
 
-Note that Jacsal inner classes are always "static inner classes" in Java terminology.
+Note that Jactl inner classes are always "static inner classes" in Java terminology.
 This means that instances of inner classes are not implicitly bound to an instance of an outer class. 
-There is no way in Jacsal to declare a non-static inner class.
+There is no way in Jactl to declare a non-static inner class.
 
 ### toString()
 
@@ -3742,7 +3742,7 @@ into a string use `as` then the output is shown as though the instance were a Ma
 [i:3, j:4]
 ```
 
-When printing a class instance, Jacsal will first check to see if there is a `toString()` method defined or not
+When printing a class instance, Jactl will first check to see if there is a `toString()` method defined or not
 before using the default string conversion.
 If `toString()` has been defined then this will be used instead so this is how you can customise the way in which
 class instances for a given class should be converted into strings:
@@ -3756,10 +3756,10 @@ The `toString()` method must have no mandatory arguments and must have a return 
 
 ### Duck Typing
 
-Jacsal allows you to use strong typing, where fields, variables, and parameters are given an expicit type, or dynamic
+Jactl allows you to use strong typing, where fields, variables, and parameters are given an expicit type, or dynamic
 typing where fields, variables, and parameters can be defined as `def` which allows them to hold values of any type.
 
-If you use strong typing then in most cases the Jacsal compiler can determine at compile time what method is being
+If you use strong typing then in most cases the Jactl compiler can determine at compile time what method is being
 invoked and can do complile time checking of argument count and argument types.
 
 Dynamic typing (or weak typing) means that the method invocation can only be checked at runtime and a runtime error
@@ -3780,24 +3780,24 @@ invoked X.f()
 invoked Y.f()
 ```
 
-Jacsal does not take any position on whether strong typing or weak typing is more superior.
+Jactl does not take any position on whether strong typing or weak typing is more superior.
 It is up to you as the developer to decide what makes sense or what feels more natural.
 
 ### Packages
 
 Related classes can be grouped together into packages.
-When using the Jacsal REPL all classes are put into the top level package and there is no way to specify any other
+When using the Jactl REPL all classes are put into the top level package and there is no way to specify any other
 package.
-Packages are useful when integrating Jacsal scripts into a Java application.
+Packages are useful when integrating Jactl scripts into a Java application.
 
 A package can be thought of like a library.
 They allow a set of customisation classes to be grouped together into a library that can then be used by other
-Jacsal scripts.
+Jactl scripts.
 
 See the [Integration Guide](integration-guide.md) for more information about how packages work when compiling
-Jacsal scripts and classes in your Java application.
+Jactl scripts and classes in your Java application.
 
-When compiling Jacsal classes and scripts the first line of the file can contain a package statement which specifies
+When compiling Jactl classes and scripts the first line of the file can contain a package statement which specifies
 what package the script or class should be compiled into:
 ```groovy
 package a.b.c
@@ -3836,7 +3836,7 @@ a.b.c.X.Y.someMethod()
 ```
 
 To save having to continually type the full package name each time you use a class from another package you can
-use `import` to import the class definition into the current Jacsal script or class file:
+use `import` to import the class definition into the current Jactl script or class file:
 ```groovy
 package x.y.z
 
@@ -3941,7 +3941,7 @@ The REPL waits for the entire script to complete so in the REPL the next prompt 
 has completed.
 
 There is a second optional argument which is the value returned by `sleep()` once it has finished.
-This is mainly just used for internal testing of Jacsal for testing the suspending and resuming works correctly:
+This is mainly just used for internal testing of Jactl for testing the suspending and resuming works correctly:
 ```groovy
 > sleep(500, 3) + sleep(500, 2)
 5
@@ -3955,7 +3955,7 @@ The [Eval Function](#Eval Function) section describes how this function works.
 
 ### nextLine()
 
-When running Jacsal scripts from the [command line](#command-line-scripts) this function reads the next line from
+When running Jactl scripts from the [command line](#command-line-scripts) this function reads the next line from
 the input.
 
 When [integrated](integration-guide.md) into a Java application, this function will read the next line from the input that the application
@@ -4218,7 +4218,7 @@ true
 
 ### String.size() and String.length()
 
-Jacsal supports the use of both `size()` and `length()` for getting the length of a string.
+Jactl supports the use of both `size()` and `length()` for getting the length of a string.
 `length()` is supported in order to make it easier for Java progammers who are used to using `length()`
 while `size()` is supported for consitency in naming across Lists, Maps, and Strings:
 ```groovy
@@ -4321,7 +4321,7 @@ Both lowercase and uppercase letters are supported for bases greater than 10:
 #### int.asChar()
 
 The `asChar()` method converts a Unicode value back into its corresponding character (which is a single-character
-string in Jacsal):
+string in Jactl):
 
 ```groovy
 > 0x41.asChar()

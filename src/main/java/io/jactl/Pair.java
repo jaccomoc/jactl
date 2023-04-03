@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 James Crawford
+ * Copyright © 2022,2023 James Crawford
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,19 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-rootProject.name = 'jactl'
+package io.jactl;
 
+public class Pair<X,Y> {
+  final X first;
+  final Y second;
+  public Pair(X first, Y second) {
+    this.first = first;
+    this.second = second;
+  }
+  public static <X,Y> Pair<X,Y> create(X first, Y second) {
+    return new Pair(first, second);
+  }
+}

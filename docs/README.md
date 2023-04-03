@@ -1,2 +1,2 @@
-[Overview](/pages/overview): Overview of Jacsal
-[Language Guide](/pages/language-guide): User Guide for the Jacsal language
+[Overview](/pages/overview): Overview of Jactl
+[Language Guide](/pages/language-guide): User Guide for the Jactl language
