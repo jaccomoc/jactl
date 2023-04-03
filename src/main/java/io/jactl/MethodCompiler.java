@@ -1810,6 +1810,29 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitEval(Expr.Eval expr) {
+    invokeMaybeAsync(true, ANY, 0, expr.location,
+                     () -> {
+                       loadNull(CONTINUATION);
+                       compile(expr.script);
+                       castToString(expr.script.location);
+                       if (expr.globals != null) {
+                         compile(expr.globals);
+                         castToMap(expr.globals.location);
+                       }
+                       else {
+                         loadNull(MAP);
+                       }
+                       // Need to get our JactlContext from our class loader so pass in our class loader
+                       //   this.getClass().getClassLoader();
+                       loadLocal(0);
+                       invokeMethod(Object.class, "getClass");
+                       invokeMethod(Class.class, "getClassLoader");
+                     },
+                     () -> invokeMethod(RuntimeUtils.class, "evalScript", Continuation.class, String.class, Map.class, ClassLoader.class));
+    return null;
+  }
+
   @Override public Void visitBlock(Expr.Block expr) {
     compile(expr.block);
     loadConst(true);

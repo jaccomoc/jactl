@@ -17,10 +17,8 @@
 
 package io.jactl.runtime;
 
+import io.jactl.*;
 import io.jactl.Compiler;
-import io.jactl.JactlContext;
-import io.jactl.TokenType;
-import io.jactl.Utils;
 
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
@@ -2288,10 +2286,35 @@ public class RuntimeUtils {
     return true;
   }
 
-  public static Function<Map<String,Object>,Object> compileScript(String code, Map bindings) {
+  public static Object evalScript(Continuation c, String code, Map bindings, ClassLoader classLoader) {
+    if (c != null) {
+      return c.getResult();
+    }
+    try {
+      bindings = bindings == null ? new LinkedHashMap() : bindings;
+      var script = compileScript(code, bindings, ((JactlContext.DynamicClassLoader)classLoader).getJactlContext());
+      var result = script.apply(bindings);
+      return result;
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, evalHandle, 0, null, null);
+    }
+    catch (JactlError e) {
+      if (bindings != null) {
+        bindings.put(Utils.EVAL_ERROR, e.toString());
+      }
+      return null;
+    }
+  }
+  private static MethodHandle evalHandle = RuntimeUtils.lookupMethod(RuntimeUtils.class, "eval$c", Object.class, Continuation.class);
+  public static Object eval$c(Continuation c) {
+    return evalScript(c, null, null, null);
+  }
+
+
+  private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
     var script = evalScriptCache.get(code);
     if (script == null) {
-      var context = JactlContext.create().replMode(true).build();
       script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACTL_PKG, bindings);
       evalScriptCache.put(code, script);
     }

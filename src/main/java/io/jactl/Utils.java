@@ -609,4 +609,8 @@ public class Utils {
   public static boolean isInvokeWrapper(Expr.Call expr, FunctionDescriptor func) {
     return expr.args.size() != func.paramTypes.size() || isNamedArgs(expr.args) || !expr.validateArgsAtCompileTime;
   }
+
+  public static void setReplMode(JactlContext context) {
+    context.replMode = true;
+  }
 }

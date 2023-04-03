@@ -17,19 +17,107 @@
 
 package io.jactl;
 
+import io.jactl.runtime.RuntimeError;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * <p>The Jactl class is the main entry into running and compiling Jactl scripts.
+ * It provides a main() method for the commandline script execution utility as
+ * well as methods for compiling Jactl scripts for use within a Java application.</p>
+ * <p>For eval() and compileScript() calls that take a Map of global variables,
+ * the values for the variables should be one of the following types:</p>
+ * <ul>
+ *   <li>Boolean</li>
+ *   <li>Integer</li>
+ *   <li>Long</li>
+ *   <li>Double</li>
+ *   <li>BigDecimal</li>
+ *   <li>String</li>
+ *   <li>List</li>
+ *   <li>Map</li>
+ *   <li>null - type of Object with value null</li>
+ * </ul>
+ * <p>Also supported are object instances of Jactl classes that have been returned
+ * from a previous script invocation.</p>
+ */
 public class Jactl {
-  public static void init() {
 
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map)}</p>
+   * @param source  the source code to run
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source) {
+    return eval(source, new LinkedHashMap<String,Object>());
   }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, Map<String,Object> vars) {
+    return Compiler.eval(source, JactlContext.create().build(), vars);
+  }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map, JactlContext)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @param context the JactlContext
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, Map<String,Object> vars, JactlContext context) {
+    return Compiler.eval(source, context, vars);
+  }
+
+  /**
+   * <p>Compile the given Jactl source code into a JactlScript object.</p>
+   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
+   * The value of the globals at compile time is irrelevant.</p>
+   * @param source   the source code
+   * @param globals  Map of global variables the script can reference
+   * @return a JactlScript object that can be invoked
+   * @throws CompileError if error during compile
+   */
+  public static JactlScript compileScript(String source, Map<String, Object> globals) {
+    return Compiler.compileScript(source, JactlContext.create().build(), Utils.DEFAULT_JACTL_PKG, globals);
+  }
+
+  /**
+   * <p>Compile the given Jactl source code into a JactlScript object.</p>
+   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
+   * The value of the globals at compile time is irrelevant.</p>
+   * @param source   the source code
+   * @param globals  Map of global variables the script can reference
+   * @param context  the JactlContext
+   * @return a JactlScript object that can be invoked
+   * @throws CompileError if error during compile
+   */
+  public static JactlScript compileScript(String source, Map<String, Object> globals, JactlContext context) {
+    return Compiler.compileScript(source, context, Utils.DEFAULT_JACTL_PKG, globals);
+  }
+
+
+  ////////////////////////////////////////////
 
   public static void main(String[] args) throws IOException {
     String usage = "Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]* \n" +
@@ -95,7 +183,7 @@ public class Jactl {
                                  .nonPrintLoop(argMap.containsKey('n'))
                                  .build();
       Object result = null;
-      result = Compiler.run(script, context, globals);
+      result = Compiler.eval(script, context, globals);
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
       if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
         System.out.println(result);

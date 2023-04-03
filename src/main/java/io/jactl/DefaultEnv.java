@@ -37,22 +37,22 @@ public class DefaultEnv implements JactlEnv {
   }
 
   @Override
-  public void scheduleEvent(Object threadContext, Runnable runnable, long timeMs) {
+  public void scheduleEvent(Object threadContext, Runnable event, long timeMs) {
     if (timeMs <= 0) {
-      scheduleEvent(threadContext, runnable);
+      scheduleEvent(threadContext, event);
     }
     else {
-      timerService.schedule(runnable, timeMs, TimeUnit.MILLISECONDS);
+      timerService.schedule(event, timeMs, TimeUnit.MILLISECONDS);
     }
   }
 
   @Override
-  public void scheduleEvent(Runnable runnable, long timeMs) {
+  public void scheduleEvent(Runnable event, long timeMs) {
     if (timeMs <= 0) {
-      scheduleEvent(null, runnable);
+      scheduleEvent(null, event);
     }
     else {
-      timerService.schedule(runnable, timeMs, TimeUnit.MILLISECONDS);
+      timerService.schedule(event, timeMs, TimeUnit.MILLISECONDS);
     }
   }
 

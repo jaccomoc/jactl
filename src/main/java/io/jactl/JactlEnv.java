@@ -37,17 +37,17 @@ public interface JactlEnv {
   /**
    * Schedule event on given event-loop thread after given timeout has occurred.
    * @param threadContext  identifies thread on which we want to run the event (null if we don't care)
-   * @param runnable       the event to run
+   * @param event          the event to run
    * @param timeMs         the timeout in milliseconds
    */
-  void scheduleEvent(Object threadContext, Runnable runnable, long timeMs);
+  void scheduleEvent(Object threadContext, Runnable event, long timeMs);
 
   /**
    * Schedule event on current event-loop thread after given timeout has occurred.
-   * @param runnable       the event to run
+   * @param event          the event to run
    * @param timeMs         the timeout in milliseconds
    */
-  void scheduleEvent(Runnable runnable, long timeMs);
+  void scheduleEvent(Runnable event, long timeMs);
 
   /**
    * Schedule a blocking event on a blocking thread. These events are allowed to block since they won't

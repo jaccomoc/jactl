@@ -212,7 +212,7 @@ public class BaseTest {
                                                  .build();
       Map<String, Object> bindings = createGlobals();
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, false));
-      Compiler.run(scriptCode, jactlContext, packageName, bindings);
+      Compiler.eval(scriptCode, jactlContext, packageName, bindings);
       fail("Expected JactlError");
     }
     catch (JactlError e) {

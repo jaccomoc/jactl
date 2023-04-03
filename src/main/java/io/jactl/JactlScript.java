@@ -42,16 +42,20 @@ public class JactlScript {
    * thread depending on whether the script has any asynchronous/blocking function calls.
    * The globals should be a Map of global variable names whose values are simple Java
    * objects.</p>
-   * Supported types for the values are:
+   * <p>Supported types for the values in the Map are:</p>
    * <ul>
-   *   <li>String</li>
+   *   <li>Boolean</li>
    *   <li>Integer</li>
    *   <li>Long</li>
    *   <li>Double</li>
    *   <li>BigDecimal</li>
+   *   <li>String</li>
    *   <li>List</li>
    *   <li>Map</li>
+   *   <li>null - Object with value null</li>
    * </ul>
+   * <p>Also supported are object instances of Jactl classes that have been returned
+   * from a previous script invocation.</p>
    * @param globals     a Map of global variables and their values
    * @param completion  code to be run once script finishes
    */
@@ -59,9 +63,32 @@ public class JactlScript {
     script.accept(globals, completion);
   }
 
+  /**
+   * <p>Run the script with the given global variables and wait for the result.</p>
+   * <p>This will schedule the script invocation on an event-loop (non-blocking)
+   * thread and wait for the script to complete before returning.</p>
+   * <p>This should not be invoked if caller is already on an event-loop thread as
+   * it blocks the current thread until the script completes.</p>
+   * <p>Supported types for the values in the Map are:</p>
+   * <ul>
+   *   <li>Boolean</li>
+   *   <li>Integer</li>
+   *   <li>Long</li>
+   *   <li>Double</li>
+   *   <li>BigDecimal</li>
+   *   <li>String</li>
+   *   <li>List</li>
+   *   <li>Map</li>
+   *   <li>null - Object with value null</li>
+   * </ul>
+   * <p>Also supported are object instances of Jactl classes that have been returned
+   * from a previous script invocation.</p>
+   * @param globals     a Map of global variables and their values
+   * @return the result returned from the script
+   */
   public Object runSync(Map<String,Object> globals) {
     var future = new CompletableFuture<Object>();
-    jactlContext.scheduleEvent(null, () -> run(globals, future::complete));
+    run(globals, future::complete);
     try {
       Object result = future.get();
       if (result instanceof RuntimeException) {

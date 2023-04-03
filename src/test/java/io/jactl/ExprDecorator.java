@@ -187,7 +187,13 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   @Override public Expr visitDie(Expr.Die expr) {
     expr.expr = decorate(expr.expr);
-    return null;
+    return expr;
+  }
+
+  @Override public Expr visitEval(Expr.Eval expr) {
+    expr.script  = decorate(expr.script);
+    expr.globals = decorate(expr.globals);
+    return expr;
   }
 
   @Override public Expr visitBlock(Expr.Block expr) {

@@ -430,6 +430,14 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitEval(Expr.Eval expr) {
+    analyse(expr.script);
+    analyse(expr.globals);
+    freeLocals(expr.globals == null ? 1 : 2);
+    async(expr);
+    return null;
+  }
+
   @Override public Void visitBlock(Expr.Block expr) {
     analyse(expr.block);
     return null;

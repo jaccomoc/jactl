@@ -63,7 +63,7 @@ public class AsyncTest {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String)((String) expected).substring(1)));
     }
-    assertEquals(expected, Compiler.run(source, context, Utils.mapOf(Utils.JACTL_GLOBALS_INPUT, new BufferedReader(new StringReader(input)))));
+    assertEquals(expected, Compiler.eval(source, context, Utils.mapOf(Utils.JACTL_GLOBALS_INPUT, new BufferedReader(new StringReader(input)))));
   }
 
   @Test public void asyncTests() {

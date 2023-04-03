@@ -148,6 +148,7 @@ class TokeniserTest {
     doTest.accept("BEGIN", TokenType.BEGIN);
     doTest.accept("END", TokenType.END);
     doTest.accept("die", TokenType.DIE);
+    doTest.accept("eval", TokenType.EVAL);
     doTest.accept("final", TokenType.FINAL);
     doTest.accept("sealed", TokenType.SEALED);
     doTest.accept("%%", TokenType.PERCENT_PERCENT);

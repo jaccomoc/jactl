@@ -417,6 +417,12 @@ class Expr {
     Expr  expr;
   }
 
+  class Eval extends Expr {
+    Token evalToken;
+    Expr  script;
+    Expr  globals;
+  }
+
   /**
    * Used to turn a list of statements into an expression so that we can support "do {...}":
    *   x < max or do { x++; y-- } and return x + y;

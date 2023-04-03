@@ -1188,6 +1188,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type = BOOLEAN;
   }
 
+  @Override public JactlType visitEval(Expr.Eval expr) {
+    resolve(expr.script);
+    if (!expr.script.type.is(ANY,STRING)) {
+      error("Eval expects a string to evaluate not " + expr.script.type, expr.script.location);
+    }
+    resolve(expr.globals);
+    if (expr.globals != null && !expr.globals.type.is(ANY,MAP)) {
+      error("Global vars for eval must be a Map not " + expr.globals.type, expr.globals.location);
+    }
+    return expr.type = ANY;
+  }
+
   @Override public JactlType visitClosure(Expr.Closure expr) {
     resolve(expr.funDecl);
     return expr.type = FUNCTION;

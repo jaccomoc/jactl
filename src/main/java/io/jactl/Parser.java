@@ -1127,6 +1127,7 @@ public class Parser {
    *#          | "(" expression ")"
    *#          | "do" "{" block "}"
    *#          | "{" closure "}"
+   *#          | evalExpr
    *#          ;
    */
   private Expr primary() {
@@ -1149,6 +1150,7 @@ public class Parser {
     if (matchAny(LEFT_SQUARE))                             { return listLiteral();                        }
     if (matchAny(LEFT_PAREN))                              { return nestedExpression.get();               }
     if (matchAny(LEFT_BRACE))                              { return closure();                            }
+    if (matchAny(EVAL))                                    { return evalExpr();                           }
     if (matchAny(DO)) {
       matchAny(EOL);
       Token leftBrace = expect(LEFT_BRACE);
@@ -1552,13 +1554,28 @@ public class Parser {
   }
 
   /**
-   *# dieExpr -> die expr ?;
+   *# dieExpr -> "die" expr ?;
    */
   private Expr.Die dieExpr() {
     Token dieToken = previous();
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, dieToken).setValue(""))
                                     : parseExpression();
     return new Expr.Die(dieToken, expr);
+  }
+
+  /**
+   *# evalExpr -> "eval" ("(" expr ")" | "(" expr "," expr ")" );
+   */
+  private Expr.Eval evalExpr() {
+    Token evalToken = previous();
+    expect(LEFT_PAREN);
+    Expr script = parseExpression();
+    Expr globals = null;
+    if (matchAny(COMMA)) {
+      globals = parseExpression();
+    }
+    expect(RIGHT_PAREN);
+    return new Expr.Eval(evalToken, script, globals);
   }
 
   /////////////////////////////////////////////////

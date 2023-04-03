@@ -68,7 +68,7 @@ public class JactlOptions {
     }
     try {
       // Run options file as a Jactl script
-      Compiler.run(Files.readString(Path.of(OPTIONS_FILE)), options);
+      Jactl.eval(Files.readString(Path.of(OPTIONS_FILE)), options);
 
       List<String> extraJars = (List<String>) options.get(EXTRA_JARS);
       ClassLoader classLoader = JactlOptions.class.getClassLoader();

@@ -221,11 +221,6 @@ public class BuiltinFunctions {
                                            .asyncParam("closure")
                                            .impl(BuiltinFunctions.class, "stream", "streamData"));
 
-      registerFunction(new JactlFunction().name("eval")
-                                           .param("script")
-                                           .param("vars", null)
-                                           .impl(BuiltinFunctions.class, "eval", "evalData"));
-
       initialised = true;
     }
   }
@@ -276,7 +271,7 @@ public class BuiltinFunctions {
   // = sleep
   public static Object sleepData;
   public static Object sleep(Continuation c, long timeMs, Object data) {
-    if (timeMs >=0) {
+    if (timeMs >= 0) {
       Continuation.suspendNonBlocking((JactlContext context, Consumer<Object> resumer) -> {
         context.scheduleEvent(() -> resumer.accept(data), timeMs);
       });
@@ -340,33 +335,6 @@ public class BuiltinFunctions {
   public static Object streamData;
   public static Iterator stream(Continuation c, String source, int offset, MethodHandle closure) {
     return new StreamIterator(source, offset, closure);
-  }
-
-  // = eval
-  public static Object evalData;
-  public static Object eval(Continuation c, String code, Map bindings) {
-    if (c != null) {
-      return c.getResult();
-    }
-    try {
-      bindings = bindings == null ? new LinkedHashMap() : bindings;
-      var script = RuntimeUtils.compileScript(code, bindings);
-      var result = script.apply(bindings);
-      return result;
-    }
-    catch (Continuation cont) {
-      throw new Continuation(cont, evalHandle, 0, null, null);
-    }
-    catch (JactlError e) {
-      if (bindings != null) {
-        bindings.put(Utils.EVAL_ERROR, e.toString());
-      }
-      return null;
-    }
-  }
-  private static MethodHandle evalHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "eval$c", Object.class, Continuation.class);
-  public static Object eval$c(Continuation c) {
-    return eval(c, null, null);
   }
 
   // = abs

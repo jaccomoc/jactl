@@ -82,15 +82,17 @@ public class JactlContext {
   public class JactlContextBuilder {
     private JactlContextBuilder() {}
 
-    public JactlContextBuilder replMode(boolean mode)            { replMode           = mode;    return this; }
+    public JactlContextBuilder environment(JactlEnv env)         { executionEnv       = env;     return this; }
     public JactlContextBuilder minScale(int scale)               { minScale           = scale;   return this; }
-    public JactlContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
-    public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
-    public JactlContextBuilder printSize(boolean value)          { printSize          = value;   return this; }
     public JactlContextBuilder javaPackage(String pkg)           { javaPackage        = pkg;     return this; }
-    public JactlContextBuilder printLoop(boolean value)          { printLoop          = value;   return this; }
-    public JactlContextBuilder nonPrintLoop(boolean value)       { nonPrintLoop       = value;   return this; }
-    public JactlContextBuilder environment(JactlEnv env)        { executionEnv       = env;     return this; }
+    public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
+
+    // The following are for internal use
+    JactlContextBuilder replMode(boolean mode)            { replMode           = mode;    return this; }
+    JactlContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
+    JactlContextBuilder printLoop(boolean value)          { printLoop          = value;   return this; }
+    JactlContextBuilder nonPrintLoop(boolean value)       { nonPrintLoop       = value;   return this; }
+    JactlContextBuilder printSize(boolean value)          { printSize          = value;   return this; }
 
     public JactlContext build() {
       if (executionEnv == null) {
@@ -146,7 +148,7 @@ public class JactlContext {
     classLookup.put(descriptor.getInternalName(), descriptor);
   }
 
-  private class DynamicClassLoader extends ClassLoader {
+  public class DynamicClassLoader extends ClassLoader {
     private Map<String,Class<?>> classes  = new HashMap<>();
     private DynamicClassLoader   previous = null;
 
@@ -179,6 +181,10 @@ public class JactlContext {
       Class<?> clss = defineClass(name, bytes, 0, bytes.length);
       classes.put(name, clss);
       return clss;
+    }
+
+    public JactlContext getJactlContext() {
+      return JactlContext.this;
     }
   }
 }

@@ -4863,6 +4863,25 @@ class CompilerTest extends BaseTest {
     testError("die", "die");
   }
 
+  @Test public void eval() {
+    test("eval('1',[:])", 1);
+    test("eval('1')", 1);
+    test("eval('x + 1',[x:3])", 4);
+    test("eval('x + 1L',[x:3])", 4L);
+    test("eval('x + 1',[x:3L])", 4L);
+    test("eval('x + 1',[x:3]) + eval('x+3',[x:3])", 10);
+    test("eval('x x + 1',[x:3])", null);
+    test("def vars = [x:3]; eval('x x + 1',vars); vars.'$error' =~ /unexpected token/i", true);
+    test("def vars = [output:null]; eval('''def x = 'abc'; output = x.size()''',vars); vars.output", 3);
+    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[result:null])", 10);
+    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
+    test("['[1,2]','[3]'].map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
+    test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
+    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", List.of(List.of(1,2), List.of(3)));
+    test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
+    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
+  }
+
   @Test public void asyncFunctions() {
     useAsyncDecorator = false;
 //    test("def start = timestamp(); sleep(100,2); def dur = timestamp() - start; dur >= 100 && dur < 120", true);
@@ -4982,7 +5001,7 @@ class CompilerTest extends BaseTest {
                                                .build();
     Map<String,Object> globals = createGlobals();
     BiConsumer<String,Object> runtest = (code,expected) -> {
-      Object result = Compiler.run(code, jactlContext, globals);
+      Object result = Compiler.eval(code, jactlContext, globals);
       assertEquals(expected, result);
     };
 

@@ -25,16 +25,12 @@ public class Compiler {
 
   private static final AtomicInteger counter = new AtomicInteger();
 
-  public static Object run(String source, Map<String,Object> bindings) {
-    return run(source, JactlContext.create().build(), bindings);
-  }
-
-  public static Object run(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
+  public static Object eval(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
     var compiled = compileScript(source, jactlContext, packageName, bindings);
     return compiled.runSync(bindings);
   }
 
-  public static Object run(String source, JactlContext jactlContext, Map<String,Object> bindings) {
+  public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings) {
     var compiled = compileScript(source, jactlContext, bindings);
     return compiled.runSync(bindings);
   }
@@ -45,7 +41,7 @@ public class Compiler {
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, Map<String, Object> bindings) {
     String className = Utils.JACTL_SCRIPT_PREFIX + counter.incrementAndGet();
-    return compileScript(source, jactlContext, className, Utils.DEFAULT_JACTL_PKG, false, bindings);
+    return compileScript(source, jactlContext, className, Utils.DEFAULT_JACTL_PKG, bindings);
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
@@ -54,16 +50,11 @@ public class Compiler {
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
-    return compileScript(source, jactlContext, className, packageName, false, bindings);
-  }
-
-  public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, boolean testAsync, Map<String, Object> bindings) {
     var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);
     var script   = parser.parseScript(className);
     var resolver = new Resolver(jactlContext, bindings);
     resolver.resolveScript(script);
     var analyser = new Analyser(jactlContext);
-    analyser.testAsync = testAsync;
     analyser.analyseClass(script);
     return compileWithCompletion(source, jactlContext, script);
   }
