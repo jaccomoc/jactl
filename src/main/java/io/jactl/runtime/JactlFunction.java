@@ -32,13 +32,15 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Class that captures information about a builtin function or method.
+ * Class that captures information about a builtin function or method and registers it with the Jactl runtime.
  * Example usage for a global function:
  * <pre>
- *   new JactlFunction().name("sprintf")
- *                       .param("format")
- *                       .param("args", new Object[0])
- *                       .impl(BuiltinFunctions.class, "sprintf");
+ *   Jactl.function()
+ *        .name("sprintf")
+ *        .param("format")
+ *        .param("args", new Object[0])
+ *        .impl(BuiltinFunctions.class, "sprintf")
+ *        .register();
  * </pre>
  *
  * For methods, pass the JactlType of the method class to the JactlFunction constructor:
@@ -123,7 +125,11 @@ public class JactlFunction extends FunctionDescriptor {
    */
   public JactlFunction() {}
 
-  public JactlFunction name(String name)  { this.name = name; return alias(name); }
+  public void register() {
+    BuiltinFunctions.registerFunction(this);
+  }
+
+  public JactlFunction name(String name)  { this.name = name;    return alias(name); }
   public JactlFunction alias(String name) { aliases.add(name);   return this;        }
 
   /**

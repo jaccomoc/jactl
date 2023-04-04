@@ -35,10 +35,6 @@ public class Compiler {
     return compiled.runSync(bindings);
   }
 
-  public static void compileClass(String source, JactlContext jactlContext) {
-    compileClass(source, jactlContext, null);
-  }
-
   public static JactlScript compileScript(String source, JactlContext jactlContext, Map<String, Object> bindings) {
     String className = Utils.JACTL_SCRIPT_PREFIX + counter.incrementAndGet();
     return compileScript(source, jactlContext, className, Utils.DEFAULT_JACTL_PKG, bindings);

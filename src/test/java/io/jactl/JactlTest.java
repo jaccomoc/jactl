@@ -69,4 +69,100 @@ class JactlTest {
     globalValues.put("y", 3);
     script.run(globalValues, result -> System.out.println("Result is " + result));
   }
+
+  @Test void simpleContextTest() {
+    JactlContext context = JactlContext.create()
+                                       .build();
+
+    var globals = new HashMap<String,Object>();
+    var script  = Jactl.compileScript("13 * 17", globals, context);
+    script.run(globals, result -> System.out.println("Result: " + result));
+
+    Object result = Jactl.eval("13 * 17", globals, context);
+    assertEquals(221, result);
+  }
+
+  @Test public void scriptPackageName() {
+    JactlContext context = JactlContext.create().build();
+
+    var globals = new HashMap<String,Object>();
+    var script  = Jactl.compileScript("13 * 17", globals, context, "x.y.z");
+    Object[] result = new Object[1];
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+  }
+
+  @Test public void scriptPackageNameWithPkgDecl() {
+    JactlContext context = JactlContext.create().build();
+
+    var globals = new HashMap<String,Object>();
+    var script  = Jactl.compileScript("package x.y.z; 13 * 17", globals, context, "x.y.z");
+    Object[] result = new Object[1];
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+  }
+
+  @Test public void scriptPackageNameWithDifferingPkgDecl() {
+    JactlContext context = JactlContext.create().build();
+
+    var globals = new HashMap<String,Object>();
+    try {
+      Jactl.compileScript("package a.b.c; 13 * 17", globals, context, "x.y.z");
+      fail("Expected compile error");
+    }
+    catch (CompileError e) {
+      assertTrue(e.getMessage().contains("conflicts with package"));
+    }
+  }
+
+  @Test public void compileClass() {
+    var context = JactlContext.create().build();
+    Jactl.compileClass("class Multiplier { int n; def mult(x){ n * x } }", context);
+
+    var globals = new HashMap<String,Object>();
+    var script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
+    Object[] result = new Object[1];
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+  }
+
+  @Test public void compileClassWithPkg() {
+    var context = JactlContext.create().build();
+    Jactl.compileClass("package x.y.z; class Multiplier { int n; def mult(x){ n * x } }", context);
+
+    var globals = new HashMap<String,Object>();
+    var script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context, "x.y.z");
+    Object[] result = new Object[1];
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+  }
+
+  @Test public void classWithPkgVariants() {
+    var context = JactlContext.create().build();
+    Jactl.compileClass("package a.b.c; class Multiplier { int n; def mult(x){ n * x } }", context);
+
+    var globals = new HashMap<String,Object>();
+    var script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
+    Object[] result = new Object[1];
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+
+    // Or import the class
+    script  = Jactl.compileScript("import a.b.c.Multiplier; def x = new Multiplier(13); x.mult(17)", globals, context);
+    result[0] = null;
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+
+    // Or put script in same package
+    script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
+    result[0] = null;
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+
+    // Or pass in package name
+    script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context, "a.b.c");
+    result[0] = null;
+    script.run(globals, res -> result[0] = res);
+    assertEquals(221, result[0]);
+  }
 }

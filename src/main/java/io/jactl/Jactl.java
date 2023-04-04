@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import io.jactl.runtime.BuiltinFunctions;
+import io.jactl.runtime.JactlFunction;
 import io.jactl.runtime.RuntimeError;
 
 import java.io.*;
@@ -116,9 +118,110 @@ public class Jactl {
     return Compiler.compileScript(source, context, Utils.DEFAULT_JACTL_PKG, globals);
   }
 
+  /**
+   * <p>Compile the given Jactl source code into a JactlScript object.</p>
+   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
+   * The value of the globals at compile time is irrelevant.</p>
+   * <p>This method allows explicitly setting the Jactl package which the script lives in.
+   * If script doesn't declare a package or declares a package of same name then the script
+   * will be compiled into the given package. If the script declares a different package name
+   * then this will result in a CompilerError.</p>
+   * @param source   the source code
+   * @param globals  Map of global variables the script can reference
+   * @param context  the JactlContext
+   * @param pkgName  the Jactl package to compile the script into
+   * @return a JactlScript object that can be invoked
+   * @throws CompileError if error during compile
+   */
+  public static JactlScript compileScript(String source, Map<String, Object> globals, JactlContext context, String pkgName) {
+    return Compiler.compileScript(source, context, pkgName, globals);
+  }
+
+  /**
+   * Compile a Jactl class. If no package declaration in the class then class will be
+   * put into the root package.
+   * @param source        the source code for the class declaration
+   * @param jactlContext  the JactlContext
+   * @throws CompileError if error during compile
+   */
+  public static void compileClass(String source, JactlContext jactlContext) {
+    Compiler.compileClass(source, jactlContext, "");
+  }
+
+  /**
+   * Compile a Jactl class.
+   * <p>This method allows explicitly setting the Jactl package which the class will live in.
+   * The pkgName can have one of the following values:</p>
+   * <dl>
+   *   <dt>null</dt><dd>Error if package not specified in class declaration.</dd>
+   *   <dt>""</dt><dd>If package name not declared use "" as package name.</dd>
+   *   <dt>anything else</dt><dd>If package name not declared use this as package name.
+   *   If package declared it must match the given value.</dd>
+   * </dl>
+   * @param source        the source code for the class declaration
+   * @param jactlContext  the JactlContext
+   * @param pkgName       the Jactl package to compile the script into
+   * @throws CompileError if error during compile
+   */
+  public static void compileClass(String source, JactlContext jactlContext, String pkgName) {
+    Compiler.compileClass(source, jactlContext, pkgName);
+  }
+
+  /**
+   * Create a JactlFunction for a global function to be registered.
+   * @return the new JactlFunction object
+   */
+  public static JactlFunction function() {
+    return new JactlFunction();
+  }
+
+  /**
+   * <p>Create a JactlFunction for a method that will be registered.
+   * The type should be one of:</p>
+   * <ul>
+   *   <li>JactlType.ANY</li>
+   *   <li>JactlType.STRING</li>
+   *   <li>JactlType.LIST</li>
+   *   <li>JactlType.MAP</li>
+   *   <li>JactlType.ITERATOR</li>
+   *   <li>JactlType.BOOLEAN</li>
+   *   <li>JactlType.INT</li>
+   *   <li>JactlType.LONG</li>
+   *   <li>JactlType.DOUBLE</li>
+   *   <li>JactlType.DECIMAL</li>
+   *   <li>JactlType.NUMBER</li>
+   * </ul>
+   * @param type  the type for which the method applies
+   * @return the new JactlFunction object
+   */
+  public static JactlFunction method(JactlType type) {
+    return new JactlFunction(type);
+  }
+
+  /**
+   * Deregister a method
+   * @param type   the type which owns the method
+   * @param name   the name of the method
+   */
+  public static void deregister(JactlType type, String name) {
+    BuiltinFunctions.deregisterFunction(type, name);
+  }
+
+  /**
+   * Deregister a global function
+   * @param name  the name of the global function
+   */
+  public static void deregister(String name) {
+    BuiltinFunctions.deregisterFunction(name);
+  }
 
   ////////////////////////////////////////////
 
+  /**
+   * Mainline for running Jactl commandline scripts
+   * @param args   - run with no args to get a summary of usage
+   * @throws IOException if an error occurs
+   */
   public static void main(String[] args) throws IOException {
     String usage = "Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]* \n" +
                    "         -p           : run in a print loop reading input from stdin or files\n" +

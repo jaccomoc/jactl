@@ -193,7 +193,7 @@ public class Parser {
         packagePath.add(expect(IDENTIFIER).getStringValue());
       } while (matchAny(DOT));
       String pkg = String.join(".", packagePath);
-      if (packageName != null && !pkg.equals(packageName)) {
+      if (packageName != null && !packageName.isEmpty() && !pkg.equals(packageName)) {
         throw new CompileError("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
       }
       packageName = pkg;

@@ -32,6 +32,8 @@ x is not less than 4
 >
 ```
 
+See [Jactl REPL](https://github.com/jaccomoc/jactl-repl) for more details on how to run the REPL.
+
 ## Command Line Scripts
 
 Jactl scripts can also be invoked from the command line:

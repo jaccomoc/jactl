@@ -17,10 +17,7 @@
 
 package io.jactl.runtime;
 
-import io.jactl.JactlContext;
-import io.jactl.JactlError;
-import io.jactl.JactlType;
-import io.jactl.Utils;
+import io.jactl.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -47,179 +44,356 @@ public class BuiltinFunctions {
   public static void registerBuiltinFunctions() {
     if (!initialised) {
       // Collection methods
-      registerFunction(new JactlFunction(LIST).name("size").impl(BuiltinFunctions.class, "listSize"));
-      registerFunction(new JactlFunction(OBJECT_ARR).name("size").impl(BuiltinFunctions.class, "objArrSize"));
-      registerFunction(new JactlFunction(MAP).name("size").impl(BuiltinFunctions.class, "mapSize"));
-      registerFunction(new JactlFunction(ITERATOR).name("size").asyncInstance(true).impl(BuiltinFunctions.class, "iteratorSize"));
+      Jactl.method(LIST)
+           .name("size")
+           .impl(BuiltinFunctions.class, "listSize")
+           .register();
 
-      registerFunction(new JactlFunction(MAP).name("remove").param("key").impl(BuiltinFunctions.class, "mapRemove"));
-      registerFunction(new JactlFunction(LIST).name("remove").param("index").impl(BuiltinFunctions.class, "listRemove"));
-      registerFunction(new JactlFunction(LIST).name("add").param("element").impl(BuiltinFunctions.class, "listAdd"));
-      registerFunction(new JactlFunction(LIST).name("addAt")
-                                               .param("index")
-                                               .param("element")
-                                               .impl(BuiltinFunctions.class, "listAddAt"));
+      Jactl.method(OBJECT_ARR)
+           .name("size")
+           .impl(BuiltinFunctions.class, "objArrSize")
+           .register();
 
-      registerFunction(new JactlFunction(ITERATOR).name("reverse")
-                                                   .asyncInstance(true)
-                                                   .impl(BuiltinFunctions.class, "iteratorReverse"));
-      registerFunction(new JactlFunction(ITERATOR).name("each")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("action", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorEach"));
-      registerFunction(new JactlFunction(ITERATOR).name("reduce")
-                                                   .asyncInstance(true)
-                                                   .param("initial")
-                                                   .asyncParam("accumulator")
-                                                   .impl(BuiltinFunctions.class, "iteratorReduce"));
-      registerFunction(new JactlFunction(ITERATOR).name("min")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("closure", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorMin"));
-      registerFunction(new JactlFunction(ITERATOR).name("max")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("closure", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorMax"));
-      registerFunction(new JactlFunction(ITERATOR).name("avg")
-                                                   .asyncInstance(true)
-                                                   .impl(BuiltinFunctions.class, "iteratorAvg"));
-      registerFunction(new JactlFunction(ITERATOR).name("sum")
-                                                   .asyncInstance(true)
-                                                   .impl(BuiltinFunctions.class, "iteratorSum"));
-      registerFunction(new JactlFunction(ITERATOR).name("skip")
-                                                   .asyncInstance(true)
-                                                   .param("count")
-                                                   .impl(BuiltinFunctions.class, "iteratorSkip"));
-      registerFunction(new JactlFunction(ITERATOR).name("limit")
-                                                   .asyncInstance(true)
-                                                   .param("count")
-                                                   .impl(BuiltinFunctions.class, "iteratorLimit"));
-      registerFunction(new JactlFunction(ITERATOR).name("unique")
-                                                   .asyncInstance(true)
-                                                   .impl(BuiltinFunctions.class, "iteratorUnique"));
-      registerFunction(new JactlFunction(ITERATOR).name("collect")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("mapper", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorCollect"));
-      registerFunction(new JactlFunction(ITERATOR).name("collectEntries")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("mapper", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorCollectEntries"));
-      registerFunction(new JactlFunction(ITERATOR).name("map")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("mapper", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorMap"));
-      registerFunction(new JactlFunction(ITERATOR).name("mapWithIndex")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("mapper", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorMapWithIndex"));
-      registerFunction(new JactlFunction(ITERATOR).name("flatMap")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("mapper", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorFlatMap"));
-      registerFunction(new JactlFunction(ITERATOR).name("join")
-                                                   .asyncInstance(true)
-                                                   .param("separator", "")
-                                                   .impl(BuiltinFunctions.class, "iteratorJoin"));
-      registerFunction(new JactlFunction(ITERATOR).name("sort")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("comparator", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorSort"));
-      registerFunction(new JactlFunction(ITERATOR).name("grouped")
-                                                   .asyncInstance(true)
-                                                   .param("size")
-                                                   .impl(BuiltinFunctions.class, "iteratorGrouped"));
-      registerFunction(new JactlFunction(ITERATOR).name("filter")
-                                                   .asyncInstance(true)
-                                                   .asyncParam("predicate", null)
-                                                   .impl(BuiltinFunctions.class, "iteratorFilter"));
-      registerFunction(new JactlFunction(ITERATOR).name("subList")
-                                                   .asyncInstance(true)
-                                                   .param("start")
-                                                   .param("end", Integer.MAX_VALUE)
-                                                   .impl(BuiltinFunctions.class, "iteratorSubList"));
+      Jactl.method(MAP)
+           .name("size")
+           .impl(BuiltinFunctions.class, "mapSize")
+           .register();
 
-      registerFunction(new JactlFunction(LIST).name("subList")
-                                               .param("start")
-                                               .param("end", Integer.MAX_VALUE)
-                                               .impl(BuiltinFunctions.class, "listSubList"));
+      Jactl.method(ITERATOR)
+           .name("size")
+           .asyncInstance(true)
+           .impl(BuiltinFunctions.class, "iteratorSize")
+           .register();
 
+      Jactl.method(MAP)
+           .name("remove")
+           .param("key")
+           .impl(BuiltinFunctions.class, "mapRemove")
+           .register();
+
+      Jactl.method(LIST)
+           .name("remove")
+           .param("index")
+           .impl(BuiltinFunctions.class, "listRemove")
+           .register();
+
+      Jactl.method(LIST)
+           .name("add")
+           .param("element")
+           .impl(BuiltinFunctions.class, "listAdd")
+           .register();
+
+      Jactl.method(LIST)
+           .name("addAt")
+           .param("index")
+           .param("element")
+           .impl(BuiltinFunctions.class, "listAddAt")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("reverse")
+           .asyncInstance(true)
+           .impl(BuiltinFunctions.class, "iteratorReverse")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("each")
+           .asyncInstance(true)
+           .asyncParam("action", null)
+           .impl(BuiltinFunctions.class, "iteratorEach")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("reduce")
+           .asyncInstance(true)
+           .param("initial")
+           .asyncParam("accumulator")
+           .impl(BuiltinFunctions.class, "iteratorReduce")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("min")
+           .asyncInstance(true)
+           .asyncParam("closure", null)
+           .impl(BuiltinFunctions.class, "iteratorMin")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("max")
+           .asyncInstance(true)
+           .asyncParam("closure", null)
+           .impl(BuiltinFunctions.class, "iteratorMax")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("avg")
+           .asyncInstance(true)
+           .impl(BuiltinFunctions.class, "iteratorAvg")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("sum")
+           .asyncInstance(true)
+           .impl(BuiltinFunctions.class, "iteratorSum")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("skip")
+           .asyncInstance(true)
+           .param("count")
+           .impl(BuiltinFunctions.class, "iteratorSkip")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("limit")
+           .asyncInstance(true)
+           .param("count")
+           .impl(BuiltinFunctions.class, "iteratorLimit")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("unique")
+           .asyncInstance(true)
+           .impl(BuiltinFunctions.class, "iteratorUnique")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("collect")
+           .asyncInstance(true)
+           .asyncParam("mapper", null)
+           .impl(BuiltinFunctions.class, "iteratorCollect")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("collectEntries")
+           .asyncInstance(true)
+           .asyncParam("mapper", null)
+           .impl(BuiltinFunctions.class, "iteratorCollectEntries")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("map")
+           .asyncInstance(true)
+           .asyncParam("mapper", null)
+           .impl(BuiltinFunctions.class, "iteratorMap")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("mapWithIndex")
+           .asyncInstance(true)
+           .asyncParam("mapper", null)
+           .impl(BuiltinFunctions.class, "iteratorMapWithIndex")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("flatMap")
+           .asyncInstance(true)
+           .asyncParam("mapper", null)
+           .impl(BuiltinFunctions.class, "iteratorFlatMap")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("join")
+           .asyncInstance(true)
+           .param("separator", "")
+           .impl(BuiltinFunctions.class, "iteratorJoin")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("sort")
+           .asyncInstance(true)
+           .asyncParam("comparator", null)
+           .impl(BuiltinFunctions.class, "iteratorSort")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("grouped")
+           .asyncInstance(true)
+           .param("size")
+           .impl(BuiltinFunctions.class, "iteratorGrouped")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("filter")
+           .asyncInstance(true)
+           .asyncParam("predicate", null)
+           .impl(BuiltinFunctions.class, "iteratorFilter")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("subList")
+           .asyncInstance(true)
+           .param("start")
+           .param("end", Integer.MAX_VALUE)
+           .impl(BuiltinFunctions.class, "iteratorSubList")
+           .register();
+
+      Jactl.method(LIST)
+           .name("subList")
+           .param("start")
+           .param("end", Integer.MAX_VALUE)
+           .impl(BuiltinFunctions.class, "listSubList")
+           .register();
 
       // String methods
-      registerFunction(new JactlFunction(STRING).name("lines") .impl(BuiltinFunctions.class, "stringLines"));
-      registerFunction(new JactlFunction(STRING).name("size")
-                                                 .alias("length")
-                                                 .impl(BuiltinFunctions.class, "stringLength"));
-      registerFunction(new JactlFunction(STRING).name("toLowerCase")
-                                                 .param("count", Integer.MAX_VALUE)
-                                                 .impl(BuiltinFunctions.class, "stringToLowerCase"));
-      registerFunction(new JactlFunction(STRING).name("toUpperCase")
-                                                 .param("count", Integer.MAX_VALUE)
-                                                 .impl(BuiltinFunctions.class, "stringToUpperCase"));
-      registerFunction(new JactlFunction(STRING).name("substring")
-                                                 .param("start")
-                                                 .param("end", Integer.MAX_VALUE)
-                                                 .impl(BuiltinFunctions.class, "stringSubstring"));
-      registerFunction(new JactlFunction(STRING).name("split")
-                                                 .param("regex", null)
-                                                 .param("modifiers", "")
-                                                 .impl(BuiltinFunctions.class, "stringSplit"));
-      registerFunction(new JactlFunction(STRING).name("asNum")
-                                                 .param("base", 10)
-                                                 .impl(BuiltinFunctions.class, "stringAsNum"));
+      Jactl.method(STRING)
+           .name("lines")
+           .impl(BuiltinFunctions.class, "stringLines")
+           .register();
+
+      Jactl.method(STRING)
+           .name("size")
+           .alias("length")
+           .impl(BuiltinFunctions.class, "stringLength")
+           .register();
+
+      Jactl.method(STRING)
+           .name("toLowerCase")
+           .param("count", Integer.MAX_VALUE)
+           .impl(BuiltinFunctions.class, "stringToLowerCase")
+           .register();
+
+      Jactl.method(STRING)
+           .name("toUpperCase")
+           .param("count", Integer.MAX_VALUE)
+           .impl(BuiltinFunctions.class, "stringToUpperCase")
+           .register();
+
+      Jactl.method(STRING)
+           .name("substring")
+           .param("start")
+           .param("end", Integer.MAX_VALUE)
+           .impl(BuiltinFunctions.class, "stringSubstring")
+           .register();
+
+      Jactl.method(STRING)
+           .name("split")
+           .param("regex", null)
+           .param("modifiers", "")
+           .impl(BuiltinFunctions.class, "stringSplit")
+           .register();
+
+      Jactl.method(STRING)
+           .name("asNum")
+           .param("base", 10)
+           .impl(BuiltinFunctions.class, "stringAsNum")
+           .register();
 
       // int methods
-      registerFunction(new JactlFunction(INT).name("asChar").impl(BuiltinFunctions.class, "intAsChar"));
-      registerFunction(new JactlFunction(INT).name("sqr")   .impl(BuiltinFunctions.class, "intSqr"));
-      registerFunction(new JactlFunction(INT).name("abs")   .impl(BuiltinFunctions.class, "intAbs"));
-      registerFunction(new JactlFunction(INT).name("toBase")
-                                              .param("base")
-                                              .impl(BuiltinFunctions.class, "intToBase"));
+      Jactl.method(INT)
+           .name("asChar")
+           .impl(BuiltinFunctions.class, "intAsChar")
+           .register();
+
+      Jactl.method(INT)
+           .name("sqr")
+           .impl(BuiltinFunctions.class, "intSqr")
+           .register();
+
+      Jactl.method(INT)
+           .name("abs")
+           .impl(BuiltinFunctions.class, "intAbs")
+           .register();
+
+      Jactl.method(INT)
+           .name("toBase")
+           .param("base")
+           .impl(BuiltinFunctions.class, "intToBase")
+           .register();
 
       // long methods
-      registerFunction(new JactlFunction(LONG).name("sqr").impl(BuiltinFunctions.class, "longSqr"));
-      registerFunction(new JactlFunction(LONG).name("abs").impl(BuiltinFunctions.class, "longAbs"));
-      registerFunction(new JactlFunction(LONG).name("toBase")
-                                              .param("base")
-                                              .impl(BuiltinFunctions.class, "longToBase"));
+      Jactl.method(LONG)
+           .name("sqr")
+           .impl(BuiltinFunctions.class, "longSqr")
+           .register();
+
+      Jactl.method(LONG)
+           .name("abs")
+           .impl(BuiltinFunctions.class, "longAbs")
+           .register();
+
+      Jactl.method(LONG)
+           .name("toBase")
+           .param("base")
+           .impl(BuiltinFunctions.class, "longToBase")
+           .register();
 
       // double methods
-      registerFunction(new JactlFunction(DOUBLE).name("sqr").impl(BuiltinFunctions.class, "doubleSqr"));
-      registerFunction(new JactlFunction(DOUBLE).name("abs").impl(BuiltinFunctions.class, "doubleAbs"));
+      Jactl.method(DOUBLE)
+           .name("sqr")
+           .impl(BuiltinFunctions.class, "doubleSqr")
+           .register();
+
+      Jactl.method(DOUBLE)
+           .name("abs")
+           .impl(BuiltinFunctions.class, "doubleAbs")
+           .register();
 
       // decimal methods
-      registerFunction(new JactlFunction(DECIMAL).name("sqr").impl(BuiltinFunctions.class, "decimalSqr"));
-      registerFunction(new JactlFunction(DECIMAL).name("abs").impl(BuiltinFunctions.class, "decimalAbs"));
+      Jactl.method(DECIMAL)
+           .name("sqr")
+           .impl(BuiltinFunctions.class, "decimalSqr")
+           .register();
+
+      Jactl.method(DECIMAL)
+           .name("abs")
+           .impl(BuiltinFunctions.class, "decimalAbs")
+           .register();
 
       // Number methods
-      registerFunction(new JactlFunction(NUMBER).name("pow")
-                                                 .param("power")
-                                                 .impl(BuiltinFunctions.class, "numberPow"));
-      registerFunction(new JactlFunction(NUMBER).name("sqrt").impl(BuiltinFunctions.class, "numberSqrt"));
+      Jactl.method(NUMBER)
+           .name("pow")
+           .param("power")
+           .impl(BuiltinFunctions.class, "numberPow")
+           .register();
+
+      Jactl.method(NUMBER)
+           .name("sqrt")
+           .impl(BuiltinFunctions.class, "numberSqrt")
+           .register();
 
       // Object methods
-      registerFunction(new JactlFunction(ANY).name("toString")
-                                              .param("indent", 0)
-                                              .impl(BuiltinFunctions.class, "objectToString"));
+      Jactl.method(ANY)
+           .name("toString")
+           .param("indent", 0)
+           .impl(BuiltinFunctions.class, "objectToString")
+           .register();
 
       // Global functions
-      registerFunction(new JactlFunction().name("timestamp").impl(BuiltinFunctions.class, "timestamp", "timestampData"));
-      registerFunction(new JactlFunction().name("nanoTime").impl(BuiltinFunctions.class, "nanoTime", "nanoTimeData"));
-      registerFunction(new JactlFunction().name("nextLine").impl(BuiltinFunctions.class, "nextLine", "nextLineData"));
+      Jactl.function()
+           .name("timestamp")
+           .impl(BuiltinFunctions.class, "timestamp")
+           .register();
 
-      registerFunction(new JactlFunction().name("sprintf")
-                                           .param("format")
-                                           .param("args", new Object[0])
-                                           .impl(BuiltinFunctions.class, "sprintf", "sprintfData"));
+      Jactl.function()
+           .name("nanoTime")
+           .impl(BuiltinFunctions.class, "nanoTime")
+           .register();
 
-      registerFunction(new JactlFunction().name("sleep")
-                                           .param("timeMs")
-                                           .param("data", new Object[0])
-                                           .impl(BuiltinFunctions.class, "sleep", "sleepData"));
+      Jactl.function()
+           .name("nextLine")
+           .impl(BuiltinFunctions.class, "nextLine")
+           .register();
 
-      registerFunction(new JactlFunction().name("stream")
-                                           .asyncParam("closure")
-                                           .impl(BuiltinFunctions.class, "stream", "streamData"));
+      Jactl.function()
+           .name("sprintf")
+           .param("format")
+           .param("args", new Object[0])
+           .impl(BuiltinFunctions.class, "sprintf")
+           .register();
+
+      Jactl.function()
+           .name("sleep")
+           .param("timeMs")
+           .param("data", new Object[0])
+           .impl(BuiltinFunctions.class, "sleep")
+           .register();
+
+      Jactl.function()
+           .name("stream")
+           .asyncParam("closure")
+           .impl(BuiltinFunctions.class, "stream")
+           .register();
 
       initialised = true;
     }

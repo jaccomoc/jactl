@@ -1265,7 +1265,7 @@ public class ClassTests extends BaseTest {
 
   @Test public void rootPackage() {
     packageName = "";
-    testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "conflicts with package name");
+    testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "unknown variable 'x'");
     test(List.of("class X { static def f(){3}; }"), "new X().f()", 3);
     test(List.of("class X { def f(){3} }"), "new X().f()", 3);
     test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
@@ -1273,10 +1273,19 @@ public class ClassTests extends BaseTest {
     test(List.of("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
   }
 
-  @Test public void noPackage() {
+  @Test public void differentPackage() {
+    packageName = "x.y.z";
+    testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "conflicts with package");
+    test(List.of("class X { static def f(){3}; }"), "new X().f()", 3);
+    test(List.of("class X { def f(){3} }"), "new X().f()", 3);
+    test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+  }
+
+  @Test public void noDefaultPackage() {
     packageName = null;
     testError("def x = 1", "package name not declared");
     testError(List.of("class X{}"), "def x = 1", "package name not declared");
+    test(List.of("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
   }
 
   @Test public void separateClassCompilation() {
