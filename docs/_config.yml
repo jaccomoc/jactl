@@ -24,7 +24,7 @@ description: >-
   A secure scripting language for reactive Java applications with syntax based on the best bits of Groovy and Perl.
 baseurl: "" # the subpath of your site, e.g. /blog
 domain: "jaccomoc.github.io"
-url: "https://jaccomoc.github.io/"
+url: "https://jaccomoc.github.io"
 twitter_username: JactLang
 github_username:  jaccomoc
 
