@@ -1,3 +1,9 @@
+---
+layout: page
+title: "Commandline Scripts"
+permalink: /command-line-scripts
+---
+
 # Command Line Scripts
 
 Jactl scripts can be run from the shell command line and can be used in situations where you might normally

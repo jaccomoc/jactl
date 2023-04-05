@@ -1,4 +1,8 @@
-# Jactl Language Guide
+---
+layout: page
+title: "Jactl Language Guide"
+permalink: /language-guide
+---
 
 ## The REPL
 
