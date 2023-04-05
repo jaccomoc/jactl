@@ -24,7 +24,7 @@ println 'fib(20) = ' + fib(20);
 ```
 
 Jactl adopts a lot of Groovy syntax so semicolons are optional, typing is optional, double-quoted strings
-allow for embedded expressions, and "return" is optional for the last expression of a function so the previous example
+allow for embedded expressions, and `return` is optional for the last expression of a function so the previous example
 could also be written like this:
 
 ```groovy
@@ -123,9 +123,24 @@ To push to your Maven repository you can use `publishToMaven`:
 
 ## Integration
 
-To include the library in your application add the following gradle dependency:
+To use Jactl you will need to add a dependency on the Jactl library.
+
+### Gradle
+
+In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group:'io.jactl', name:'jactl', version:'1.0'
+implementation group: 'io.jactl', name: 'jactl', version: '1.0'
+```
+
+### Maven
+
+In the `dependencies` section of your `pom.xml`:
+```xml
+<dependency>
+ <groupId>io.jactl</groupId>
+ <artifactId>jactl</artifactId>
+ <version>1.0</version>
+</dependency>
 ```
 
 ## Where to Next?
