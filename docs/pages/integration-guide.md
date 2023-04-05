@@ -679,7 +679,7 @@ Our implementation of all this could look like this:
 Some details (such as better error handling) have been left out for brevity.
 To see the full implementation see the [`VertxFunctions` example class](https://github.com/jaccomoc/jactl-vertx/blob/main/src/test/java/io/jactl/vertx/example/VertxFunctions.java).
 
-### Static registerFunctions() Method
+### Integration with REPL and CommandLine Scripts
 
 For ease of integration with the Jactl REPL and Jactl commandline scripts, it is recommended that you have a
 public static function called `registerFunctions(JactlEnv env)` in one of your classes (generally the same one
@@ -804,14 +804,9 @@ class MyFunctions {
   }
  
   public static long measure(String source, int offset, MethodHandle closure) {
-   long start = System.nanoTime();
-   try {
+    long start = System.nanoTime();
     RuntimeUtils.invoke(closure, source, offset);
     return System.nanoTime() - start;
-   }
-   catch (Throwable e) {
-    throw new RuntimeError("Error invoking closure", source, offset, e);
-   }
   }
   public static Object measureData;
 }
@@ -827,10 +822,10 @@ Once we have configured our `.jactlrc` file (see [here](pages/command-line-scrip
 we can include our new function when running the Jactl REPL:
 ```groovy
 $ java -jar jactl-repl-1.0.jar
-> def fib(x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+> long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 Function@1846982837
-> measure{ fib(20) }
-4555625
+> measure{ fib(40) }
+184077675
 ```
 
 As you can see, it returns the number of nanoseconds it took to invoke `fib(20)`.
@@ -945,9 +940,6 @@ class MyFunctions {
     catch(Continuation cont) {
      throw new Continuation(cont, measureResumeHandle, 0, new long[]{ start }, new Object[0]);
     }
-    catch (Throwable e) {
-      throw new RuntimeError("Error invoking closure", source, offset, e);
-    }
   }
   public static Object measureData;
 
@@ -971,16 +963,14 @@ operations:
 ```
 
 To illustrate a slightly more complicated scenario, imagine that we actually want to run the code we are measuring
-multiple times and return an average.
-This means that our resume method needs to re-invoke our original method to avoid code duplication.
+multiple times and return the average.
+To avoid having to duplicate code, our resume method should re-invoke our original method.
 The original method will then check if the `Continuation` argument is null or not to know whether it is the
 original call or a resumption of a previous call.
 
-We can use the `location` parameter to record which iteration we are up to.
-
 In order for the resume method to invoke the original method, it will need to be able to pass in values for
 `source`, `offset`, and `closure`, so we will need to store these as part of our state when throwing a
-`Continuation`.
+`Continuation`, and we will use the `location` parameter to record which iteration we are up to.
 
 Now our code looks like this:
 ```java
@@ -988,13 +978,13 @@ class MyFunctions {
   public static void registerFunctions(JacsalEnv env) {
    Jactl.function()
         .name("measure")
+        .param("count", 1)
         .asyncParam("closure")
-        .param("count", 1)        // default to 1 iteration
         .impl(MyFunctions.class, "measure")
         .register();
   }
 
-  public static long measure(Continuation c, String source, int offset, MethodHandle closure, int count) {
+  public static long measure(Continuation c, String source, int offset, int count, MethodHandle closure) {
     long start = c == null ? System.nanoTime() : c.localPrimitives[2];
     int  i     = c == null ? 0                 : c.methodLocation;
     try {
@@ -1009,18 +999,15 @@ class MyFunctions {
                             new long[]  { offset, count, start },
                             new Object[]{ source, closure });
     }
-    catch (Throwable e) {
-      throw new RuntimeError("Error invoking closure", source, offset, e);
-    }
   }
   public static Object measureData;
 
   public static Object measureResume(Continuation c) {
     var source  = (String)c.localObjects[0];
     var offset  = (int)c.localPrimitives[0];
-    var closure = (MethodHandle)c.localObjects[1];
     var count   = (int)c.localPrimitives[1];
-    return measure(c, source, offset, closure, count);
+    var closure = (MethodHandle)c.localObjects[1];
+    return measure(c, source, offset, count, closure);
   }
 
   private static MethodHandle measureResumeHandle = RuntimeUtils.lookupMethod(MyFunctions.class,
@@ -1029,3 +1016,24 @@ class MyFunctions {
                                                                               Continuation.class);
 }
 ```
+
+Now we invoke our `measure()` function with a count and a closure:
+```groovy
+> long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+Function@1998137093
+> measure(10){ fib(40) }
+184077675
+```
+
+It will also do the right thing if we do some asynchronous operation (like a `sleep()`) inside the closure:
+```groovy
+> measure(10){ sleep(1); fib(40) }
+185705195
+```
+
+## Example Application
+
+In the `jacsal-vertx` project, an example application is provided that listens for JSON based web requests and
+runs a Jactl script based on the URI present in the request.
+
+See [Example Application](https://github.com/jaccomoc/jactl-vertx#example-application) for more details.

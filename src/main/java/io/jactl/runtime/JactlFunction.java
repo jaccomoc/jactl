@@ -45,57 +45,36 @@ import java.util.stream.IntStream;
  *
  * For methods, pass the JactlType of the method class to the JactlFunction constructor:
  * <pre>
- *      new JactlFunction(STRING).name("substring")
- *                                .param("start")
- *                                .param("end", Integer.MAX_VALUE)
- *                                .impl(BuiltinFunctions.class, "stringSubstring"));
+ *   Jactl.method(STRING)
+ *        .name("substring")
+ *        .param("start")
+ *        .param("end", Integer.MAX_VALUE)
+ *        .impl(BuiltinFunctions.class, "stringSubstring")
+ *        .register()
  * </pre>
- * <p>
- * The impl() call specifies the implementing class and the name of the static method within that class that
- * has the implementation to be invoked.
- * In addition, callers must guarantee that a public static field exists in that class of type "Object" that
- * Jactl can use for caching some information that will be used at runtime. By default this field has the same
- * name as the method name specified in impl() but if desired a different name can be supplied as an optional
- * third parameter:
+ * <p>The register() call must be the last call in the chain of calls.</p>
+ * <p>NOTE: the impl() method needs the name of a public static Object field in the same
+ * class that is used to cache some information. By default "Data" is appended to the
+ * method name to get the name of the field. So by default this:</p>
  * <pre>
- *      new JactlFunction(STRING).name("substring")
- *                                .param("start")
- *                                .param("end", Integer.MAX_VALUE)
- *                                .impl(BuiltinFunctions.class, "stringSubstring", "stringSubstringJactlData"));
+ *        .impl(BuiltinFunctions.class, "stringSubstring")
  * </pre>
- * </p>
- * <p>
- * We look up the given static method on the specified implementation class and use that as the implementation for
- * the method/function.
- * <p>For methods, the object type specifies the type of Jactl objects for which we want the method to apply.
- * The first argument of the given static method will be supplied with the instance for which the method should
- * be invoked.
- * We allow a different type to be specified than the actual type of the first argument to support scenarios where
- * we want a method to work for Iterator types (List, Map, Iterator, Object[]) and for which not natural super class
- * exists. In this case the type of the first argument is Object but the objType parameter will be JactlType.ITERATOR.
- * </p>
- * <p>Methods are flagged as async if arg1 (the arg after the 0th arg which is the object on which the method applies)
- * has type Continuation. This means that when invoking the method we need to generate the scaffolding that allows
- * Continuations to be thrown and caught and capture state. As well as flagging the method as async or not we allow
- * a list of argument numbers to be passed in for situations where the invocation is only async if one of the given
- * arguments itself is async.</p>
- * <p>For example,
- * <pre>  x.map{ ... }</pre>
- * is only async if the closure passed in is itself async. However, if the calls are chained:
- * <pre>  x.map{ ... }.filter{ ... }</pre>
- * then the collection methods (map, filter, each, collect, etc) are async if either the closure passed in is async
- * or if any of the preceding calls in the chain were async.
- * <p>Since the preceding call is the object on which the current method is being applied, we can think of such a chain
- * of method calls like this:</p>
- * <pre>  filter(map(x, {...}), {...})</pre>
- * <p>So, the call is async if arg0 is async or if arg1 is async. This means that for filter, map, etc. we specify:
+ * is the same as:
  * <pre>
- *   new JactlFunction(ITERATOR).name(...)
- *                               .asyncInstance(true)       // async if object being acted on is async
- *                               .asyncParam("closure")     // async if closure passed in is async
+ *        .impl(BuiltinFunctions.class, "stringSubstring", "stringSubstringData")
  * </pre>
+ * <p>You can supply a different third argument to impl() if you wish to use a different
+ * field name.</p>
+ * <p>Other method calls that are supported:</p>
+ * <dl>
+ *   <dt>alias(String name)</dt><dd>Allow function/method to be invoked via another name.</dd>
+ *   <dt>asyncParam(String name), asyncParam(String name, Object defaultValue)</dt>
+ *   <dd>Define a parameter that when async itself (e.g. an async closure) makes the function async.</dd>
+ *   <dt>asyncInstance(boolean value)</dt>
+ *   <dd>For methods, if this is true then if the object instance is async, the method is async.</dd>
+ * </dl>
+ * @see <a href="https://github.com/jaccomoc/jactl/blob/master/docs/pages/integration-guide.md">Integration Guide</a>
  */
-
 public class JactlFunction extends FunctionDescriptor {
   List<String> aliases           = new ArrayList<>();
   Class        implementingClass;
