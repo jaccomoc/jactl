@@ -389,11 +389,11 @@ At the moment, all the variables are to do with allowing you to customise Jactl 
 execution environment (for your event-loop specific application environment) and your own functions/methods.
 The values of the following variables can be set:
 
-| Variable            | Type   |    Default Value    | Description                                                                                                                                                                                                                        |
-|:--------------------|:-------|:-------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `environmentClass`  | String | `io.jactl.DefaultEnv` | The name of the class which will is used to encapsulate the Jactl runtime environment. See [Integration Guide](pages/integration-guide) for more details.                                                                         |
-| `extraJars`         | List   |        `[]`         | A list of file names for any additional JARs that should be added to the classpath.                                                                                                                                                |  
-| `functionClasses`   | List   |       `[]`          | A list of classes having a static method called `registerFunctions(JactlEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jactl runtime.   |
+| Variable            | Type   |    Default Value    | Description                                                                                                                                                                                                                    |
+|:--------------------|:-------|:-------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `environmentClass`  | String | `io.jactl.DefaultEnv` | The name of the class which will is used to encapsulate the Jactl runtime environment. See [Integration Guide](integration-guide) for more details.                                                                            |
+| `extraJars`         | List   |        `[]`         | A list of file names for any additional JARs that should be added to the classpath.                                                                                                                                            |  
+| `functionClasses`   | List   |       `[]`          | A list of classes having a static method called `registerFunctions(JactlEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jactl runtime. |
 
 For example, there is a [jactl-vertx project](https://github.com/jaccomoc/jactl-vertx) for use when integrating
 with a [Vert.x](https://vertx.io/) based application.

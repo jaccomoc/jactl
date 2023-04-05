@@ -147,11 +147,11 @@ In the `dependencies` section of your `pom.xml`:
 
 See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL.
 
-The [Jactl Language Guide](pages/language-guide) describes the Jactl Language.
+The [Jactl Language Guide](https://jaccomoc.github.io/jactl/language-guide) describes the Jactl Language.
 
-The [Jactl Commandline Scripts Guide](pages/command-line-scripts) describes how to run Jactl scripts at the commandline.
+The [Jactl Commandline Scripts Guide](https://jaccomoc.github.io/jactl/command-line-scripts) describes how to run Jactl scripts at the commandline.
 
-The [Jactl Integration Guide](pages/integration-guide) describes how to integrate Jactl into an application and how
+The [Jactl Integration Guide](https://jaccomoc.github.io/jactl/integration-guide) describes how to integrate Jactl into an application and how
 to provide additional functions and methods to extend the language.
 
 The [Jactl-Vertx library](https://github.com/jaccomoc/jactl-vertx) provides some basic Vert.x integration capabilities

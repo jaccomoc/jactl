@@ -394,10 +394,10 @@ class provided in the [`jactl-vertx`](https://github.com/jaccomoc/jactl-vertx) p
 ### .jactlrc File
 
 If your environment class as a no-arg constructor, and you want to be able to run your extension functions and methods
-(see below) in the [Jactl REPL](https://github.com/jaccomoc/jactl-repl) or in [commandline](pages/command-line) scripts,
+(see below) in the [Jactl REPL](https://github.com/jaccomoc/jactl-repl) or in [commandline](command-line) scripts,
 then you can configure your `.jactlrc` file with the name of your environment class.
 
-See [`.jactlrc` File](pages/command-line-scripts#.jactlrc-file) for more details.
+See [`.jactlrc` File](command-line-scripts#.jactlrc-file) for more details.
 
 ## Adding New Functions/Methods
 
@@ -709,7 +709,7 @@ class MyFunctions {
 }
 ```
 
-See [here](pages/command-line-scripts#.jactlrc-file) for more details.
+See [here](command-line-scripts#.jactlrc-file) for more details.
 
 ### Async Parameters
 
@@ -822,7 +822,7 @@ the closure/function expects.
 In this case we are assuming a zero-arg closure/function was passed to us so there are no arguments that need to
 be passed in.
 
-Once we have configured our `.jactlrc` file (see [here](pages/command-line-scripts#.jactlrc-file) for details)
+Once we have configured our `.jactlrc` file (see [here](command-line-scripts#.jactlrc-file) for details)
 we can include our new function when running the Jactl REPL:
 ```groovy
 $ java -jar jactl-repl-1.0.jar
