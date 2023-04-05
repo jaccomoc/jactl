@@ -42,9 +42,9 @@ $ java -jar jactl-1.0.jar
 Usage: jactl [switches] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
          -n           : run in a loop but don't print each line
-         -e script    : script string is interpreted as jactl code (programFile not used)
+         -e script    : script string is interpreted as Jactl code (programFile not used)
          -v           : show verbose errors (give stack trace)
-         -V var=value : initialise jactl variable before running script
+         -V var=value : initialise Jactl variable before running script
          -d           : debug: output generated code
          -h           : print this help
 ```

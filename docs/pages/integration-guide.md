@@ -1031,6 +1031,21 @@ It will also do the right thing if we do some asynchronous operation (like a `sl
 185705195
 ```
 
+Of course, it is much easier to write this in Jactl itself since the language already takes care of suspending
+and resuming for you:
+```groovy
+> def measure(n, closure) {
+    def start = nanoTime()
+    n.each{ closure() }
+    (nanoTime() - start) / n
+  }
+Function@1230013344
+> long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+Function@727860268
+> measure(10){ sleep(1); fib(40) }
+185375954
+```
+
 ## Example Application
 
 In the `jacsal-vertx` project, an example application is provided that listens for JSON based web requests and
