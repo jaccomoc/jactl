@@ -17,7 +17,8 @@ running.
 
 ## Some Useful Links
 
-See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL.
+See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL
+which provides a quick, interactive, way to run Jactl code.
 
 The [Jactl Language Guide](https://jaccomoc.github.io/jactl/language-guide) describes the Jactl Language.
 

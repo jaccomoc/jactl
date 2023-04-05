@@ -108,8 +108,8 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 * Regex matching syntax
 * Regex capture variables
 
-Check out the [Jactl docs][jactl-docs] for more info on how to get the most out of Jactl.
+Check out the [Jactl docs website][jactl-docs] for more info on how to get the most out of Jactl.
 File all bugs/feature requests at [Jactl’s GitHub repo][jactl-gh].
 
-[jactl-docs]: https://jacommoc.github.io/jactl/docs
+[jactl-docs]: https://jacommoc.github.io/jactl
 [jactl-gh]:   https://github.com/jaccomoc/jactl

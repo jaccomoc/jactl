@@ -11,7 +11,7 @@ with Jactl.
 It gives you a `> ` prompt where you can enter Jactl code for immediate execution.
 
 ```shell
-$ java -cp jactl-repl-1.0.jar jactl.Repl
+$ java -cp jactl-repl-1.0.0.jar jactl.Repl
 > int x = 3 + 4
 7
 ```
@@ -42,7 +42,7 @@ See [Jactl REPL](https://github.com/jaccomoc/jactl-repl) for more details on how
 
 Jactl scripts can also be invoked from the command line:
 ```shell
-$ java -jar jactl-1.0.jar
+$ java -jar jactl-1.0.0.jar
 Usage: jactl [switches] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
          -n           : run in a loop but don't print each line
@@ -55,13 +55,13 @@ Usage: jactl [switches] [programFile] [inputFile]* [--] [arguments]*
 
 Using the `-e` option allows you to supply the script on the comand line itself:
 ```shell
-$ java -jar jactl-1.0.jar -e '3 * 4'
+$ java -jar jactl-1.0.0.jar -e '3 * 4'
 12
 ```
 
 If you have a Jactl script in a file called `myscript.jactl` then you can the script like this:
 ```shell
-$ java -jar jactl-1.0.jar myscript.jactl
+$ java -jar jactl-1.0.0.jar myscript.jactl
 ```
 
 See [Command Line Scripts](command-line-scripts.md) for more details about how to invoke scripts
