@@ -3625,7 +3625,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          loadLocation(expr.location);
                          loadArgsAsObjectArr(expr.args);
                        },
-                       () -> invokeMethodHandle());
+                       () -> {
+                         invokeMethodHandle();
+                         checkCast(func.returnType.boxed());
+                         if (func.returnType.isPrimitive()) {
+                           unbox();
+                         }
+                       });
     }
     else {
       if (func.needsLocation) {

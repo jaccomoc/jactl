@@ -1,10 +1,10 @@
 title: Jactl Scripting Language
-email: jactlscript@gmail.com
+email: jactl.lang@gmail.com
 description: >- 
   A secure scripting language for reactive Java applications with syntax based on the best bits of 1Groovy and Perl.
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: jactlscript
+twitter_username: JactlLang
 github_username:  jaccomoc
 
 # Build settings

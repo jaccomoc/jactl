@@ -2080,6 +2080,15 @@ public class RuntimeUtils {
     return lookupMethod(RuntimeUtils.class, method, returnType, argTypes);
   }
 
+  /**
+   * Return a MethodHandle that points to the given static method of the given class.
+   * @param clss       the class
+   * @param method     the name of the static method
+   * @param returnType the return type of the method
+   * @param argTypes   the argument types for the method
+   * @return the MethodHandle
+   * @throws IllegalStateException if method does not exist
+   */
   public static MethodHandle lookupMethod(Class clss, String method, Class returnType, Class... argTypes) {
     try {
       return MethodHandles.lookup().findStatic(clss, method, MethodType.methodType(returnType, argTypes));
@@ -2088,6 +2097,32 @@ public class RuntimeUtils {
       throw new IllegalStateException("Error finding method " + method, e);
     }
   }
+
+  /**
+   * <p>Invoke a MethodHandle that points to a closure/function.</p>
+   * <p>NOTE: invoking a closure/function can throw a Continuation if closure/function is async
+   * so you will need to catch the Continuation and rethrow a new one with your captured state
+   * so that you can be resumes at some later point.</p>
+   * @param handle  the MethodHandle
+   * @param source  the source code
+   * @param offset  offset into source where call occurs
+   * @param args    varargs set of arguments for closure/function
+   * @return the result of invoking the closure/function
+   * @throws RuntimeError if error occurs
+   * @throws Continuation if execution state needs to be suspended
+   */
+  public static Object invoke(MethodHandle handle, String source, int offset, Object... args) {
+    try {
+      return (Object)handle.invokeExact((Continuation)null, source, offset, new Object[0]);
+    }
+    catch (RuntimeError|Continuation e) {
+      throw e;
+    }
+    catch (Throwable e) {
+      throw new RuntimeError("Error invoking closure/function", source, offset, e);
+    }
+  }
+
 
   /**
    * If we have a Map.Entry then convert to List so that when passed to a closure

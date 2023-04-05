@@ -107,6 +107,10 @@ public class JactlContext {
   public boolean printLoop()    { return printLoop; }
   public boolean nonPrintLoop() { return nonPrintLoop; }
 
+  public void debugLevel(int level) {
+    this.debugLevel = level;
+  }
+
   public boolean packageExists(String name) {
     return packages.contains(name);
   }

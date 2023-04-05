@@ -17,12 +17,15 @@
 
 package io.jactl;
 
+import io.jactl.runtime.Continuation;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static io.jactl.JactlType.INT;
 
 public class BuiltinFunctionTests extends BaseTest {
   @Test public void filter() {
@@ -1204,4 +1207,38 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = { x -> x*x}; f.toString() =~ /Function@(\\d+)/", true);
     test("def x = 'abc'; def f = x.toString; f()", "abc");
   }
+
+  @Test public void functionWithDefaults() {
+    try {
+      Jactl.function().name("testFunc").param("arg", 10).impl(BuiltinFunctionTests.class, "testFunc").register();
+      test("testFunc(3)", 9);
+      test("testFunc()", 100);
+    }
+    finally {
+      Jactl.deregister("testFunc");
+      testFuncData = null;
+    }
+  }
+
+  @Test public void methodWithDefaults() {
+    try {
+      Jactl.method(INT).name("testMethod").param("arg", 10).impl(BuiltinFunctionTests.class, "testMethod").register();
+      test("3.testMethod(3)", 9);
+      test("3.testMethod()", 30);
+    }
+    finally {
+      Jactl.deregister("testFunc");
+      testFuncData = null;
+    }
+  }
+
+  public static int testFunc(Continuation c, int val) {
+    return val * val;
+  }
+  public static Object testFuncData;
+
+  public static int testMethod(int obj, Continuation c, int val) {
+    return obj * val;
+  }
+  public static Object testMethodData;
 }

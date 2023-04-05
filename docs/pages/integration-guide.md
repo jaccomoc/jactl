@@ -679,6 +679,34 @@ Our implementation of all this could look like this:
 Some details (such as better error handling) have been left out for brevity.
 To see the full implementation see the [`VertxFunctions` example class](https://github.com/jaccomoc/jactl-vertx/blob/main/src/test/java/io/jactl/vertx/example/VertxFunctions.java).
 
+### Static registerFunctions() Method
+
+For ease of integration with the Jactl REPL and Jactl commandline scripts, it is recommended that you have a
+public static function called `registerFunctions(JactlEnv env)` in one of your classes (generally the same one
+where the implementation it) that takes care of registering your functions.
+This allows you to configure the class name in your `.jactlrc` file and have the functions automatically available
+in the REPL and in commandline scripts.
+
+For example:
+```groovy
+class MyFunctions {
+  public static registerFunctions(JactlEnv env) {
+    Jactl.method(JactlType.ANY)
+         .name("toJson")
+         .impl(JsonFunctions.class, "toJson")
+         .register();
+
+   Jactl.method(JactlType.STRING)
+        .name("fromJson")
+        .impl(JsonFunctions.class, "fromJson")
+        .register();
+  }
+  ...
+}
+```
+
+See [here](pages/command-line-scripts#.jactlrc-file) for more details.
+
 ### Async Parameters
 
 Any function or method that suspends the current execution is known as asynchronous.
@@ -764,17 +792,240 @@ when the resumption occurred we already had the result so there was no more proc
 We will now examine how our example `measure()` function might work to see how to handle functions that do need to
 do more processing when they are resumed.
 
-Since the closure being invoked by `measure()` could suspend and wait for some asynchronous operation, `measure()`
-needs to gain control once it completes in order to work out how long it all took.
-The implementation of `measure()` would look like this:
+A naive implementation of `measure()` might look like this:
 ```groovy
 class MyFunctions {
-  public static long measure(Continuation c, String source, int offset, MethodHandle closure) {
-    
+  public static void registerFunctions(JacsalEnv env) {
+    Jactl.function()
+         .name("measure")
+         .param("closure")
+         .impl(MyFunctions.class, "measure")
+         .register();
+  }
+ 
+  public static long measure(String source, int offset, MethodHandle closure) {
+   long start = System.nanoTime();
+   try {
+    RuntimeUtils.invoke(closure, source, offset);
+    return System.nanoTime() - start;
+   }
+   catch (Throwable e) {
+    throw new RuntimeError("Error invoking closure", source, offset, e);
+   }
   }
   public static Object measureData;
 }
 ```
 
+We use the `io.vertx.runtime.RuntimeUtils.invoke()` helper method to invoke the closure.
+It gets passed the MethodHandle, the source and offset, and then a varargs set of any arguments that
+the closure/function expects.
+In this case we are assuming a zero-arg closure/function was passed to us so there are no arguments that need to
+be passed in.
 
-## Static registerFunctions() Method
+Once we have configured our `.jactlrc` file (see [here](pages/command-line-scripts#.jactlrc-file) for details)
+we can include our new function when running the Jactl REPL:
+```groovy
+$ java -jar jactl-repl-1.0.jar
+> def fib(x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+Function@1846982837
+> measure{ fib(20) }
+4555625
+```
+
+As you can see, it returns the number of nanoseconds it took to invoke `fib(20)`.
+
+Since the closure being invoked by `measure()` could suspend and wait for some asynchronous operation, `measure()`
+needs to gain control once it completes in order to work out how long it all took.
+In order to do that, we need to:
+* catch the `Continuation` thrown when the closure suspends itself,
+* create a new `Continuation` chained to the one it caught,
+* pass in a MethodHandle to the new `Continuation` that points to a method that will be invoked when we are resumed,
+* capture any state we need in this new `Continuation` object, and
+* throw the new `Continuation`.
+
+The constructor of a `Continuation` looks like this:
+```java
+public Continuation(Continuation continuation,
+                    MethodHandle methodHandle,
+                    int codeLocation,
+                    long[] localPrimitives,
+                    Object[] localObjects)
+```
+
+The first parameter is the `Continuation` we just caught.
+This allows the `Continuation` objects to be chained together.
+
+The second parameter is a `MethodHandle` that will be invoked when we are resumed.
+It needs to point to a method that takes a single `Continuation` argument and when resumed it will be passed
+the `Continuation` we are constructing and throwing here.
+
+The third parameter is an `int` called `location` which represents a logical location in our method when we
+were suspended.
+It allows us to record where in the method we were when we were suspended in case there are multiple locations
+where this can occur.
+
+The last two parameters are used to capture state.
+One is an array of `long` values, which we can use for storing any primitive values we need, and 
+the one is an array of `Object` values, where we store any non-primitive values we need.
+
+In our case, the only state we need to capture is the start time which is a `long` so our code to catch
+a `Continuation` and then throw a new chained one would look like this:
+```java
+  catch(Continuation cont) {
+    throw new Continuation(cont, measureResumeHandle, 0, new long[]{ start }, new Object[0]);
+  }
+```
+
+We just pass location as a value of 0 for the moment since there is only one place where we can be suspended.
+
+We need a method that can be invoked when we are resumed so that we can create the `MethodHandle`
+called `measureResumeHandle` to pass to the `Continuation`.
+This method must take only a `Continuation` as an argument and must return `Object`.
+
+In our case we want the resumption method to return the duration.
+In order to do that it needs to extract the value for the start time from our saved state in the `Continuation`.
+The `Continuation` has a field called `localPrimitives` for the `long` array and a field called `localObject`
+for the `Object` array that we passed in when we created it.
+
+This means that our resumption method can look like this:
+```java
+  public static Object measureResume(Continuation c) {
+    long start = c.localPrimitives[0];
+    return System.nanoTime() - start;
+  }
+```
+
+To get a `MethodHandle` we can use the utility method `RuntimeUtils.lookupMethod()`.
+This utility method takes a `Class`, the name of the static method, the return type, and then a varargs
+list of argument types.
+
+Rather than invoke this every time it is better to do it once and store it in a static field for when we need it:
+```java
+  private static MethodHandle methodResumeHandle = RuntimeUtils.lookupMethod(MyFunctions.class, 
+                                                                             "measureResume",
+                                                                             Object.class,
+                                                                             Continuation.class);
+```
+
+We now need to make sure to tell Jactl that our function has an argument that makes us async if it is async
+by changing `param()` to `asyncParam()`:
+```java
+   Jactl.function()
+        .name("measure")
+        .asyncParam("closure")
+        .impl(MyFunctions.class, "measure")
+        .register();
+```
+
+We also need to add a `Continuation` parameter to our function since it is now potentially async:
+```java
+  public static long measure(Continuation c, String source, int offset, MethodHandle closure) {
+    ...
+  }
+```
+
+Putting this all together, our class now looks like this:
+```java
+class MyFunctions {
+  public static void registerFunctions(JacsalEnv env) {
+   Jactl.function()
+        .name("measure")
+        .asyncParam("closure")
+        .impl(MyFunctions.class, "measure")
+        .register();
+  }
+
+  public static long measure(Continuation c, String source, int offset, MethodHandle closure) {
+    long start = System.nanoTime();
+    try {
+      RuntimeUtils.invoke(closure, source, offset);
+      return System.nanoTime() - start;
+    }
+    catch(Continuation cont) {
+     throw new Continuation(cont, measureResumeHandle, 0, new long[]{ start }, new Object[0]);
+    }
+    catch (Throwable e) {
+      throw new RuntimeError("Error invoking closure", source, offset, e);
+    }
+  }
+  public static Object measureData;
+
+  public static Object measureResume(Continuation c) {
+    long start = c.localPrimitives[0];
+    return System.nanoTime() - start;
+  }
+
+  private static MethodHandle measureResumeHandle = RuntimeUtils.lookupMethod(MyFunctions.class,
+                                                                              "measureResume",
+                                                                              Object.class,
+                                                                              Continuation.class);
+}
+```
+
+Now we can measure how long it takes (wall clock time) for closure to finish even if they do asynchronous
+operations:
+```groovy
+> measure{ sleep(1000) }
+1001947542
+```
+
+To illustrate a slightly more complicated scenario, imagine that we actually want to run the code we are measuring
+multiple times and return an average.
+This means that our resume method needs to re-invoke our original method to avoid code duplication.
+The original method will then check if the `Continuation` argument is null or not to know whether it is the
+original call or a resumption of a previous call.
+
+We can use the `location` parameter to record which iteration we are up to.
+
+In order for the resume method to invoke the original method, it will need to be able to pass in values for
+`source`, `offset`, and `closure`, so we will need to store these as part of our state when throwing a
+`Continuation`.
+
+Now our code looks like this:
+```java
+class MyFunctions {
+  public static void registerFunctions(JacsalEnv env) {
+   Jactl.function()
+        .name("measure")
+        .asyncParam("closure")
+        .param("count", 1)        // default to 1 iteration
+        .impl(MyFunctions.class, "measure")
+        .register();
+  }
+
+  public static long measure(Continuation c, String source, int offset, MethodHandle closure, int count) {
+    long start = c == null ? System.nanoTime() : c.localPrimitives[2];
+    int  i     = c == null ? 0                 : c.methodLocation;
+    try {
+      for (; i < count; i++) {
+        RuntimeUtils.invoke(closure, source, offset);
+      }
+      return (System.nanoTime() - start) / count;
+    }
+    catch(Continuation cont) {
+     throw new Continuation(cont, measureResumeHandle,
+                            i + 1,                      // location is next loop counter value
+                            new long[]  { offset, count, start },
+                            new Object[]{ source, closure });
+    }
+    catch (Throwable e) {
+      throw new RuntimeError("Error invoking closure", source, offset, e);
+    }
+  }
+  public static Object measureData;
+
+  public static Object measureResume(Continuation c) {
+    var source  = (String)c.localObjects[0];
+    var offset  = (int)c.localPrimitives[0];
+    var closure = (MethodHandle)c.localObjects[1];
+    var count   = (int)c.localPrimitives[1];
+    return measure(c, source, offset, closure, count);
+  }
+
+  private static MethodHandle measureResumeHandle = RuntimeUtils.lookupMethod(MyFunctions.class,
+                                                                              "measureResume",
+                                                                              Object.class,
+                                                                              Continuation.class);
+}
+```
