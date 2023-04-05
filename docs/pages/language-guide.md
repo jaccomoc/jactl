@@ -7,12 +7,13 @@ permalink: /language-guide
 ## The REPL
 
 The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
-with Jactl:
+with Jactl.
+It gives you a `> ` prompt where you can enter Jactl code for immediate execution.
 
 ```shell
 $ java -cp jactl-repl-1.0.jar jactl.Repl
-Jactl version 1.0
-> 
+> int x = 3 + 4
+7
 ```
 
 To exit the REPL use the `:q` command or `ctrl-D`.
@@ -22,7 +23,6 @@ of the evaluation is printed before prompting again (hence the term read-evaluat
 is read, if the code does not look like it is complete the REPL will keep reading until it gets a complete
 expression or statement that can be executed:
 ```groovy
-Jactl version 1.0
 > 3 * 4
 12
 > int x = (17 * 13) % 6

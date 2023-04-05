@@ -18,7 +18,7 @@ If you run the JAR file without any arguments it prints this help text:
 $ java -jar jactl-1.0.jar
 Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
-         -n           : run in a loop but don't print each line
+         -n           : run in a loop but do not print each line
          -e script    : script string is interpreted as jactl code (programFile not used)
          -v           : show verbose errors (give stack trace)
          -V var=value : initialise jactl variable before running script
