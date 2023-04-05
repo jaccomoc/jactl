@@ -1,4 +1,4 @@
-# Jactl Progamming Language
+# Jactl Programming Language
 
 Jactl is a powerful scripting language for the JVM platform whose syntax is a combination of bits
 from Java, Groovy, and Perl.
