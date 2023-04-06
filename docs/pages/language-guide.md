@@ -4,11 +4,38 @@ title: "Jactl Language Guide"
 permalink: /language-guide
 ---
 
+<!-- To generate this list: jactl -pe '/^## /r or continue; s/## //; it = "* [$it](#${it.toLowerCase() =~ s/ /-/gr =~ s/[^\w-]//gr})"' language-guide.md -->
+* [The REPL](#the-repl)
+* [Command Line Scripts](#command-line-scripts)
+* [Statement Termination: Newlines and Semicolons](#statement-termination-newlines-and-semicolons)
+* [Comments](#comments)
+* [Variables](#variables)
+* [Keywords](#keywords)
+* [Types](#types)
+* [Truthiness](#truthiness)
+* [Expressions and Operators](#expressions-and-operators)
+* [Regular Expressions](#regular-expressions)
+* [Eval Statement](#eval-statement)
+* [If/Else Statements](#ifelse-statements)
+* [If/Unless Statements](#ifunless-statements)
+* [While Loops](#while-loops)
+* [For Loops](#for-loops)
+* [Labels for While/For Statements](#labels-for-whilefor-statements)
+* [Do Expression](#do-expression)
+* [Print Statements](#print-statements)
+* [Die Statements](#die-statements)
+* [Functions](#functions)
+* [Closures](#closures)
+* [Collection Methods](#collection-methods)
+* [Classes](#classes)
+* [Builtin Global Functions](#builtin-global-functions)
+* [Builtin Methods](#builtin-methods)
+
 ## The REPL
 
 The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
 with Jactl.
-It gives you a `> ` prompt where you can enter Jactl code for immediate execution.
+It gives you a `>` prompt where you can enter Jactl code for immediate execution.
 
 ```shell
 $ java -cp jactl-repl-1.0.0.jar jactl.Repl
@@ -45,7 +72,7 @@ Jactl scripts can also be invoked from the command line:
 $ java -jar jactl-1.0.0.jar
 Usage: jactl [switches] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
-         -n           : run in a loop but don't print each line
+         -n           : run in a loop without printing each line
          -e script    : script string is interpreted as Jactl code (programFile not used)
          -v           : show verbose errors (give stack trace)
          -V var=value : initialise Jactl variable before running script
@@ -1929,9 +1956,9 @@ The order of the modifiers is unimportant.
 The only modifiers supported for `split` are `i` (case-insensitive), `s` (dot matches line terminators), and
 `m` (multi-line mode).)
 
-## Eval Function
+## Eval Statement
 
-The `eval()` function can be used to evaluate arbitrary Jactl code.
+The `eval()` statement can be used to evaluate arbitrary Jactl code.
 It takes the string passed to it and compiles and runs it.
 The return value is the value of the last expression in the script:
 ```groovy
@@ -1964,7 +1991,7 @@ Top level variables in the script will become entries in the Map:
 [x:6, f:Function@445918232, first10:[1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800]]
 ```
 
-Since it is compiled there could be compile errors that prevent the script running.
+Since it is compiled, there could be compile errors that prevent the script running.
 In this case the return value will be null:
 ```groovy
 > def vars = [x:6]
@@ -1984,8 +2011,6 @@ def f(n) { : n == 1 ? 1 : n * f(n-1)}; def first10 = 10.map{ f(it+1) }; f(x)
 
 Note that this is not the most efficient way to run Jactl code since it has to compile the code before it can run
 it, so if it is to be used it should be used judiciously.
-
-
 
 ## If/Else Statements
 

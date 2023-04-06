@@ -225,7 +225,7 @@ public class Jactl {
   public static void main(String[] args) throws IOException {
     String usage = "Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]* \n" +
                    "         -p           : run in a print loop reading input from stdin or files\n" +
-                   "         -n           : run in a loop but don't print each line\n" +
+                   "         -n           : run in a loop without printing each line\n" +
                    "         -e script    : script string is interpreted as Jactl code (programFile not used)\n" +
                    "         -v           : show verbose errors (give stack trace)\n" +
                    "         -V var=value : initialise Jactl variable before running script\n" +

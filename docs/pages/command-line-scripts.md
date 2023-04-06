@@ -4,7 +4,8 @@ title: "Commandline Scripts"
 permalink: /command-line-scripts
 ---
 
-# Command Line Scripts
+* Table of contents 
+{:toc}
 
 Jactl scripts can be run from the shell command line and can be used in situations where you might normally
 use Unix utilities such as `sed` or `awk` and even some situations where you might have used `perl` in the past.
@@ -73,7 +74,7 @@ Factorial of 9 is 362880
 Factorial of 10 is 3628800
 ```
 
-## The `-e` Option
+## The -e Option
 
 The `-e` option allows you to run some Jactl code entered directly on the command line:
 ```shell
@@ -107,7 +108,7 @@ $ jactl -e 'println "Result is ${3 + 4}"'
 Result is 7
 ```
 
-## The `-V` Option
+## The -V Option
 
 The `-V` option allows you to define a variable and a string value for that variable that the script can access:
 ```shell
@@ -124,13 +125,13 @@ $ jactl -V n=10 -V power=3 -e '(n as int).map{ (it+1).pow(power as int) }'
 See [Passing Arguments to Script](#passing-arguments-to-script) for another way to pass in values from the command line
 to a script.
 
-## The `-v` Option
+## The -v Option
 
 The `-v` option is used when there are errors to show more verbose output.
 This means that the error stack trace will be shown along with the error where as
 normally only the error message is shown.
 
-## The `-d` Option
+## The -d Option
 
 The `-d` option is the debug option to print out the generated code.
 If given twice it outputs even more detail.
@@ -208,7 +209,7 @@ Note that lines not starting with a number were typed in at the terminal and so 
 To terminate the `stdin` input `<ctrl-D>` was used.
 Since the `-` file name was the second one in the list the `stdin` input was added between the two files.
 
-## The `-p` and `-n` Options
+## The -p and -n Options
 
 The `-p` option causes the script to be wrapped in the following code:
 ```groovy
@@ -306,7 +307,7 @@ and this is another line in that file
 
 Note in this example how the `continue` skips the processing and the printing if the input line matches `/second/`.
 
-## `BEGIN` and `END` Sections
+## BEGIN and END Sections
 
 When running with the `-p` or `-n` options you might want to do some initialisation at the very beginning or print
 out a result at the very end of the input.

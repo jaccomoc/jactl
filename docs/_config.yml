@@ -21,8 +21,8 @@
 title: Jactl Programming Language
 email: jactl.lang@gmail.com
 description: >-
-  A secure scripting language for reactive Java applications with syntax based on the best bits of Groovy and Perl.
-baseurl: "/jactl" # the subpath of your site, e.g. /blog
+  A non-blocking, secure scripting language for the JVM platform with syntax based on the best bits of Groovy and Perl.
+baseurl: "/jactl"
 domain: "jaccomoc.github.io"
 url: "https://jaccomoc.github.io"
 twitter_username: JactLang

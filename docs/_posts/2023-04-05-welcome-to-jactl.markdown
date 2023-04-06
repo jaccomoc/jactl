@@ -2,19 +2,16 @@
 layout: post
 title:  "Welcome to Jactl"
 date:   2023-04-05 16:59:11 +1000
-categories: jactl update java programming-language
+categories: blog
+author: "James Crawford"
 ---
 
 Jactl is a new programming language for JVM based applications.
 It provides a secure way for application developers to provide customisation and extension
-capabilities to their users.
+capabilities to their users but can also be used via a REPL and for commandline scripts.
 
 The language has a syntax that borrows heavily from Groovy with a smattering of Perl mixed in
 but is simpler than both of those languages.
-
-It can be run from a REPL and from the commandline for commandline scripts but its main goal is
-to be integrated into Java applications and provide a secure, locked-down, mechanism that
-customers/users can use to customise the application behaviour.
 
 It is especially suited to event-loop/reactive applications due to its builtin suspend/resume
 mechanism based on continuations that ensures it never blocks the execution thread on which it is

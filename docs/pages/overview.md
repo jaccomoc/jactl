@@ -6,9 +6,10 @@ permalink: /overview
 
 Jactl is a powerful scripting language for the JVM platform whose syntax is a combination of bits
 from Java, Groovy, and Perl.
-It can be run from a REPL and from the commandline for commandline scripts but its main goal is
-to be integrated into Java applications and provide a secure, locked-down, mechanism that
-customers/users can use to customise the application behaviour.
+It can be integrated into JVM based applications to provide a secure, locked-down mechanism
+for customers/users to extend and customise application behaviour under the control of
+the application developer.
+It comes with a REPL and can also be used for the commandline scripting.
 
 It is especially suited to event-loop/reactive applications due to its builtin suspend/resume
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
@@ -147,7 +148,7 @@ In the `dependencies` section of your `pom.xml`:
 </dependency>
 ```
 
-## Where to Next?
+## Learn More
 
 See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL.
 
