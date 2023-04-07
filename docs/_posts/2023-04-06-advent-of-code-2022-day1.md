@@ -49,7 +49,7 @@ should be `6500`.
 This was a fairly straightforward problem to solve: 
 ```groovy
 stream(nextLine).join('\n')                                   // Read input and join into one string
-                .split(/^\n/,"m")                             // Split string on empty lines ("m" - multiline mode)
+                .split(/^\n/, 'm')                            // Split string on empty lines ('m' - multiline mode)
                 .map{ it.lines().map{ it as int }.sum() }     // Sum each group
                 .max()                                        // Return maximum value
 ```
@@ -60,7 +60,7 @@ The variation for Part 2 was to return the sum of the values for the three highe
 This was a simple change to sort in descending order, limit to the first three, and sum them:
 ```groovy
 stream(nextLine).join('\n')                                   // Read input and join into one string
-                .split(/^\n/,"m")                             // Split string on empty lines ("m" - multiline mode)
+                .split(/^\n/, 'm')                            // Split string on empty lines ('m' - multiline mode)
                 .map{ it.lines().map{ it as int }.sum() }     // Sum each group
                 .sort{ a,b -> b <=> a }                       // Sort in descending order
                 .limit(3)                                     // Limit to first three

@@ -13,13 +13,6 @@ It is especially suited to event-loop/reactive applications due to its builtin s
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
-It comes with a [Read-Evaluate-Print-Loop (REPL) utility](https://github.com/jaccomoc/jactl-repl)
-for testing out code interactively and can also be used for [command line scripts](command-line-scripts).
-
-To learn how to integrate Jactl into your application see the [Integration Guide](integration-guide).
-
-You can find the source code for Jactl at GitHub: [jactl](https://github.com/jaccomoc/jactl)
-
 # Why?
 
 I wrote Jactl because I wanted a scripting language that Java applications could embed and allow their users
@@ -54,5 +47,41 @@ at some point I had stumbled across a marvellous book called _Crafting Interpret
 and this inspired me to want to write my own compiler.
 I highly recommend the book and there is even a free web version available from the
 [Crafting Interpreters site](https://craftinginterpreters.com/).
+
+# Who is it for?
+
+It is intended to be used in any Java based application where the application developer wants to provide customisation
+capabilities to their users.
+
+It could just be used as a mechanism for reading in a configuration file.
+For example, the Jactl commandline scripts and REPL assume a `.jactlrc` [configuration file](/jactl/command-line-scripts#jactlrc-file)
+which contains Jactl code that is read and executed at startup to set the values of some properties in a Map.
+
+Other uses would be to provide a customisation mechanism for:
+* **Database engine extensions**
+* **Real-time applications**
+* **Backend customisations for complex multi-tenant web applications**
+* **FaaS (Function as a Service)**
+
+  Scripts could act as functions and their secure nature means that many functions can be served from the same process
+  to avoid having to spin up instancesor processes for each function
+
+# Getting Started
+
+You can download the Jactl library and find the source code for Jactl at GitHub: [jactl](https://github.com/jaccomoc/jactl)
+
+The to start playing wth Jactl you can look at running some simple scripts using the [command line scripts](/jactl/command-line-scripts)
+facility.
+
+For testing out code interactively, you can also use the [Read-Evaluate-Print-Loop (REPL) utility](https://github.com/jaccomoc/jactl-repl).
+
+To learn how to integrate Jactl into your application see the [Integration Guide](/jactl/integration-guide).
+
+To integrate Jactl into a [Vert.x](https://vertx.io) based application have a look at the
+[jactl-vertx library](https://github.com/jaccomoc/jactl-vertx).
+
+To learn more about the language itself read the [Language Guide](/jactl/language-guide).
+
+<br/>
 
 _James Crawford_ &nbsp; April 2023
