@@ -1,6 +1,8 @@
 ---
 ---
 
+$content-width: min(50%, 1000px);
+
 @import "minima";
 
 /* Create two equal columns that floats next to each other */
@@ -27,6 +29,7 @@
 }
 
 .page-header {
+  max-width: 100%;
   color: #ffffff;
   text-align: center;
   background-color: #1756ff;

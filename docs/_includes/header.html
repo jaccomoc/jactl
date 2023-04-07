@@ -1,12 +1,13 @@
-<header class="page-header" role="banner">
+<header class="page-header" role="banner" >
 
-  <div class="wrapper">
+  <div class="wrapper" style="max-width:100%;" >
     {%- assign default_paths = site.pages | map: "path" -%}
     {%- assign page_paths = site.header_pages | default: default_paths -%}
     {%- assign titles_size = site.pages | map: 'title' | join: '' | size -%}
 
     {%- if titles_size > 0 -%}
-      <nav class="site-nav">
+    <div style="clear:both;">
+      <nav class="site-nav" >
         <input type="checkbox" id="nav-trigger" class="nav-trigger" />
         <label for="nav-trigger">
           <span class="menu-icon">
@@ -16,7 +17,7 @@
           </span>
         </label>
 
-        <div class="trigger">
+        <div class="trigger" >
           {%- for path in page_paths -%}
             {%- assign my_page = site.pages | where: "path", path | first -%}
             {%- if my_page.title -%}
@@ -26,8 +27,12 @@
         </div>
       </nav>
     {%- endif -%}
+    </div>
 
-    <a style="color:#fff;text-align:center;font-size:250%;"  rel="author" href="{{ "/" | relative_url }}"><b>{{ site.title | escape }}</b></a>
-    <p>&nbsp;</p>
+    <div style="clear:both;" >
+      <a style="color:#fff;text-align:center;font-size:250%;width:100%;"  rel="author" href="{{ "/" | relative_url }}"><b>{{ site.title | escape }}</b></a>
+      <p>&nbsp;</p>
+    </div>
+
   </div>
 </header>
