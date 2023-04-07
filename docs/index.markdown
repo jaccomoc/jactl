@@ -46,6 +46,18 @@ library).
   </div>
 </div>
 
+<div class="row">
+  <div class="column" markdown="1">
+### **REPL and Commandline Scripts**
+As well as being integrated into Java applications, Jactl can run as commandline scripts and has a REPL
+for interactively trying out Jactl code.
+  </div>
+  <div class="column" markdown="1">
+### **Open Source**
+Jactl is open sourced under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+  </div>
+</div>
+
 <br/>
 Jactl is intended to be integrated into Java applications where it provides a secure, locked-down, way for
 customers/users to be able to customise the application behaviour.
@@ -53,9 +65,6 @@ customers/users to be able to customise the application behaviour.
 It is especially suited to event-loop/reactive applications due to its builtin suspend/resume
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
-
-It has a Read-Evaluate-Print-Loop (REPL) for trying out code interactively and can also be used for
-commandline scripts.
 
 ## Example
 
