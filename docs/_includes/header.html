@@ -1,4 +1,4 @@
-<header class="site-header">
+<header class="page-header" role="banner">
 
   <div class="wrapper">
     {%- assign default_paths = site.pages | map: "path" -%}
@@ -20,14 +20,14 @@
           {%- for path in page_paths -%}
             {%- assign my_page = site.pages | where: "path", path | first -%}
             {%- if my_page.title -%}
-            <a class="page-link" href="{{ my_page.url | relative_url }}">{{ my_page.title | escape }}</a>
+            <a class="page-link" style="color:#ddddff;" href="{{ my_page.url | relative_url }}">{{ my_page.title | escape }}</a>
             {%- endif -%}
           {%- endfor -%}
         </div>
       </nav>
     {%- endif -%}
 
-    <a class="site-title" style="color:#222288;" rel="author" href="{{ "/" | relative_url }}"><b>{{ site.title | escape }}</b></a>
-
+    <a style="color:#fff;text-align:center;font-size:250%;"  rel="author" href="{{ "/" | relative_url }}"><b>{{ site.title | escape }}</b></a>
+    <p>&nbsp;</p>
   </div>
 </header>

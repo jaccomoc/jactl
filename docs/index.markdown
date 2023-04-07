@@ -4,14 +4,14 @@ layout: home
 
 <h1 style="text-align:center;color:#2240aa;">A scripting language for Java-based applications</h1>
 
-Jactl is a powerful scripting language for the Java-based applications whose syntax is a combination of bits
-from Java, Groovy, and Perl.
+Jactl is a powerful scripting language for Java-based applications whose syntax is a combination of bits
+borrowed from Java and Groovy, with a smattering of Perl thrown in for good measure.
 
 
 <div class="row">
   <div class="column" markdown="1">
 ### **Familiar Syntax**
-Subset of Java/Groovy syntax with a dash of Perl mixed in.
+Subset of Java/Groovy syntax with a dash of Perl mixed in to ease adoption.
   </div>
   <div class="column" markdown="1">
 ### **Compiles to Java Bytecode**
