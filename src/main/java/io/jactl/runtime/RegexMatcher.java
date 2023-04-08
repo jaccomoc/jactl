@@ -26,7 +26,8 @@ import java.util.regex.Matcher;
  */
 public class RegexMatcher {
   public  Matcher    matcher;
-  public  String     str;          // String to match against
-  public  boolean    matched;      // Result of last match
-  public  int        lastPos;      // For global matches remembers where last match finished
+  public  String     str;            // String to match against
+  public  boolean    matched;        // Result of last match
+  public  int        lastPos;        // For global matches remembers where last match finished
+  public  boolean    captureAsNums;  // Whether to try to parse strings that look like numbers as numbers
 }

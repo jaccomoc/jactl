@@ -18,7 +18,6 @@
 package io.jactl;
 
 import io.jactl.runtime.*;
-import io.jactl.runtime.*;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
@@ -261,10 +260,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throwError("Internal error: Invalid location in continuation", methodFunDecl.location);
     }
 
-//    if (classCompiler.debug()) {
-//      mv.visitEnd();
-//      classCompiler.cv.visitEnd();
-//    }
+    if (classCompiler.debug(2)) {
+      mv.visitEnd();
+      classCompiler.cv.visitEnd();
+    }
     mv.visitMaxs(0, 0);
 
     check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
@@ -342,7 +341,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     compile(stmt.expr);
-    pop();
+    popType();
     return null;
   }
 
@@ -374,7 +373,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     convertToBoolean(false, stmt.condition);
     expect(1);
     mv.visitJumpInsn(IFEQ, stmt.endLoopLabel);
-    pop();
+    popType();
 
     compile(stmt.body);
     if (stmt.updates != null) {
@@ -402,7 +401,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(5);
     mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
-    pop(5);
+    popType(5);
     return null;
   }
 
@@ -468,7 +467,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         compile(expr.initialiser);
         // No need to cast if null
         if (expr.type.isRef() && expr.isNull()) {
-          pop();
+          popType();
           push(expr.type);
         }
         else {
@@ -544,7 +543,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    // we leave null as the result so we need to box so that type of entire expression
                    // is compatible with use of null
                    box();
-                   pop();
+                   popType();
                    push(expr.type);
                  }
                },
@@ -661,7 +660,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  if (expr.isResultUsed) {
                    // Just in case our field is a primitive we need to leave a boxed result on stack
                    // to be compatible with non-assigment case when we leave null on the stack
-                   pop();
+                   popType();
                    push(expr.type);
                    box();
                  }
@@ -766,9 +765,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
-    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + "]", "");
+    boolean captureAsNums  = expr.modifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
+    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS + "]", "");
 
+    // Set captureAsNums flag as necessary
     loadVar(expr.captureArrVarDecl);
+    dupVal();
+    loadConst(captureAsNums);
+    storeClassField(MATCHER.getInternalName(), "captureAsNums", BOOLEAN, false);
+
     compile(expr.string);
     castToString(expr.string.location);
     compile(expr.pattern);
@@ -787,11 +792,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
     boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
-    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + "]", "");
+    boolean captureAsNums  = expr.modifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
+    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS + "]", "");
 
     compile(expr.string);
     castToString(expr.string.location);
     loadVar(expr.captureArrVarDecl);
+
+    // Set captureAsNums flag as necessary
+    dupVal();
+    loadConst(captureAsNums);
+    storeClassField(MATCHER.getInternalName(), "captureAsNums", BOOLEAN, false);
+
     swap();
     compile(expr.pattern);
     castToString(expr.pattern.location);
@@ -817,7 +829,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Setup our Matcher and get first result
     expect(3);
-    loadConst(false);
+    loadConst(false);     // We are taking care of looping for 'g' flag so tell regexFind not to track position
     loadConst(modifiers);
     loadLocation(expr.operator);
     invokeMethod(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
@@ -828,9 +840,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Label done = new Label();
     Label loop = new Label();
-    mv.visitLabel(loop);         // :loop
+
+    // If replace is async then we need to make sure all stack values are stored before
+    // we create loop because invocation will save stack values and next time around the
+    // loop it will try to do it again even though stack values no longer exist.
+    if (expr.replace.isAsync) {
+      // Store stack except for boolean that says whether we matched or not
+      stack.convertStackToLocalsExcept(1);
+    }
     mv.visitJumpInsn(IFEQ, done);
-    pop();
+    popType();
+    mv.visitLabel(loop);         // :loop
     compile(expr.replace);
     castToString(expr.replace.location);
     loadLocal(matcherVar);
@@ -847,8 +867,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadLocal(matcherVar);
       mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
       invokeMethod(Matcher.class, "find");
-      pop();
-      mv.visitJumpInsn(GOTO, loop);
+      mv.visitJumpInsn(IFNE, loop);
+      popType();
     }
 
     mv.visitLabel(done);      // :done
@@ -919,7 +939,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         Label isNotNull = new Label();
         expect(1);
-        pop();
+        popType();
         mv.visitInsn(DUP);
         mv.visitJumpInsn(IFNONNULL, isNotNull);
         mv.visitInsn(POP);
@@ -1131,12 +1151,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         Label end     = new Label();
         expect(1);
         mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
-        pop();
+        popType();
         compile(expr.right);
         convertToBoolean(false, expr.right);
         expect(1);
         mv.visitJumpInsn(IFEQ, isFalse);
-        pop();
+        popType();
         _loadConst(true);
         mv.visitJumpInsn(GOTO, end);
         mv.visitLabel(isFalse);            // :isFalse
@@ -1149,11 +1169,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         Label isTrue = new Label();
         expect(1);
         mv.visitJumpInsn(IFNE, isTrue);
-        pop();
+        popType();
         compile(expr.right);
         convertToBoolean(false, expr.right);
         expect(1);
-        pop();
+        popType();
         mv.visitJumpInsn(IFNE, isTrue);
         _loadConst(false);
         mv.visitJumpInsn(GOTO, end);
@@ -1184,8 +1204,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         expect(2);
         switch (maxType.getType()) {
           case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
-          case DOUBLE:  mv.visitInsn(DCMPL);    pop(2);   push(INT);                           break;
-          case LONG:    mv.visitInsn(LCMP);     pop(2);   push(INT);                           break;
+          case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   push(INT);                           break;
+          case LONG:    mv.visitInsn(LCMP);     popType(2);   push(INT);                           break;
           default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
         }
         return null;
@@ -1246,7 +1266,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       unbox();
       expect(2);
       mv.visitInsn(operandType.is(INT) ? ISUB : operandType.is(LONG) ? LCMP : DCMPL);
-      pop(2);
+      popType(2);
       int opCode = expr.operator.is(EQUAL_EQUAL) ? IFEQ :
                    expr.operator.is(TRIPLE_EQUAL) ? IFEQ :
                    expr.operator.is(BANG_EQUAL) ? IFNE :
@@ -1327,7 +1347,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitLabel(nonZero);
       }
       ops.forEach(op -> mv.visitInsn(op));
-      pop(2);
+      popType(2);
       push(expr.type);
     }
     else
@@ -1491,7 +1511,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         convertToString();
         expect(3);
         mv.visitInsn(AASTORE);
-        pop(3);     // pop types for the String[], index, and the value
+        popType(3);     // pop types for the String[], index, and the value
       }
       loadConst(""); // Join string
       swap();
@@ -1725,7 +1745,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.array);
     expect(1);
     mv.visitInsn(ARRAYLENGTH);
-    pop();
+    popType();
     push(INT);
     return null;
   }
@@ -1735,7 +1755,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.index);
     expect(2);
     mv.visitInsn(AALOAD);
-    pop(2);
+    popType(2);
     push(ANY);
     return null;
   }
@@ -1774,7 +1794,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(returnExpr.expr);
     convertTo(returnExpr.returnType, returnExpr.expr, true, returnExpr.expr.location);
     emitReturn(returnExpr.returnType);
-    pop();
+    popType();
     push(ANY);
     return null;
   }
@@ -1857,7 +1877,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.expr);
     expect(1);
     mv.visitTypeInsn(INSTANCEOF, expr.className);
-    pop();
+    popType();
     push(BOOLEAN);
     return null;
   }
@@ -1915,7 +1935,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                     expect(1);
                                     loadNullContinuation();
                                     invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
-                                    pop();
+                                    popType();
                                     push(ANY);   // Don't know if call occurs so we still have to assume ANY
                                   }),
            null);
@@ -1971,7 +1991,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        loadConst(0);
                        loadLocal(temp);
                        mv.visitInsn(AASTORE);
-                       pop(3);  // arr + index + value
+                       popType(3);  // arr + index + value
                      },
                      () -> {
                        // Note: wrapper always has continuation since when invoking as a handle we have
@@ -2235,7 +2255,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Label ifFalse = new Label();
     expect(1);
     mv.visitJumpInsn(testInstruction.opCode, ifFalse);
-    pop();
+    popType();
 
     // Save stack and locals
     var savedState = stack.copy();
@@ -2443,11 +2463,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     stack.setStackType(type);
   }
 
-  private JactlType pop() {
+  private JactlType popType() {
     return stack.pop();
   }
 
-  private void pop(int count) {
+  private void popType(int count) {
     stack.pop(count);
   }
 
@@ -2458,7 +2478,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     stack.expect(n);
   }
 
-  private void dup() {
+  private void dupType() {
     stack.dup();
   }
 
@@ -2535,7 +2555,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (type.isPrimitive()) {
       expect(1);
       Utils.box(mv, type);
-      pop();
+      popType();
       push(type.boxed());
     }
   }
@@ -2808,7 +2828,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
 
-    pop();
+    popType();
     push(BOOLEAN);
     return null;
   }
@@ -2837,7 +2857,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
       }
     }
-    pop();
+    popType();
     push(INT);
     return null;
   }
@@ -2865,7 +2885,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
       }
     }
-    pop();
+    popType();
     push(LONG);
     return null;
   }
@@ -2893,7 +2913,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
       }
     }
-    pop();
+    popType();
     push(DOUBLE);
     return null;
   }
@@ -2923,7 +2943,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       default:
         throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
-    pop();
+    popType();
     push(DECIMAL);
     return null;
   }
@@ -3100,7 +3120,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     switch (varDecl.type.getType()) {
       case INT:
         if (varDecl.type.isBoxed() || varDecl.isHeapLocal || varDecl.isField || amount == null) {
-          incOrDec.accept(() -> { mv.visitInsn(isInc ? IADD : ISUB); pop(); });
+          incOrDec.accept(() -> { mv.visitInsn(isInc ? IADD : ISUB); popType(); });
         }
         else {
           int intAmt = (int)Utils.convertNumberTo(INT, amount);
@@ -3108,10 +3128,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         break;
       case LONG:
-        incOrDec.accept(() -> { mv.visitInsn(isInc ? LADD : LSUB); pop(); });
+        incOrDec.accept(() -> { mv.visitInsn(isInc ? LADD : LSUB); popType(); });
         break;
       case DOUBLE:
-        incOrDec.accept(() -> { mv.visitInsn(isInc ? DADD : DSUB); pop(); });
+        incOrDec.accept(() -> { mv.visitInsn(isInc ? DADD : DSUB); popType(); });
         break;
       case DECIMAL:
         incOrDec.accept(() -> invokeMethod(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class));
@@ -3177,9 +3197,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(valueOf(peek(), 1));
     }
     switch (peek().getType()) {
-      case INT:     mv.visitInsn(isInc ? IADD : ISUB);   pop();                                    break;
-      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);   pop();                                    break;
-      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);   pop();                                    break;
+      case INT:     mv.visitInsn(isInc ? IADD : ISUB);   popType();                                    break;
+      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);   popType();                                    break;
+      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);   popType();                                    break;
       case DECIMAL: invokeMethod(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class); break;
       default:      throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
@@ -3229,14 +3249,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void isInstanceOf(JactlType type) {
     expect(1);
     mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
-    pop();
+    popType();
     push(BOOLEAN);
   }
 
   private void isInstanceOf(Class clss) {
     expect(1);
     mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(clss));
-    pop();
+    popType();
     push(BOOLEAN);
   }
 
@@ -3485,7 +3505,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       checkCast(returnType);
     }
-    pop();
+    popType();
 
     mv.visitLabel(after);              // :after
   }
@@ -3588,7 +3608,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              box();
                              newInstance(HEAPLOCAL);
                              int temp = stack.allocateSlot(HEAPLOCAL);
-                             dup();
+                             dupType();
                              storeLocal(temp);
                              swap();
                              invokeMethod(HeapLocal.class, "setValue", Object.class);
@@ -3683,7 +3703,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void invokeMethodHandle() {
     expect(5);
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Lio/jactl/runtime/Continuation;Ljava/lang/String;I[Ljava/lang/Object;)Ljava/lang/Object;", false);
-    pop(5);   // methodHandle, continuation, source, offset, Object[]
+    popType(5);   // methodHandle, continuation, source, offset, Object[]
     push(ANY);
   }
 
@@ -3692,13 +3712,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (Modifier.isStatic(method.getModifiers())) {
       expect(paramTypes.length);
       mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(clss), methodName, Type.getMethodDescriptor(method), false);
-      pop(paramTypes.length);
+      popType(paramTypes.length);
     }
     else {
       expect(paramTypes.length + 1);
       boolean isInterface = clss.isInterface();
       mv.visitMethodInsn(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, Type.getInternalName(clss), methodName,Type.getMethodDescriptor(method), isInterface);
-      pop(paramTypes.length + 1);
+      popType(paramTypes.length + 1);
     }
     if (!method.getReturnType().equals(void.class)) {
       push(method.getReturnType());
@@ -3757,7 +3777,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        methodName,
                        getMethodDescriptor(returnType, paramTypes),
                        false);
-    pop(stackCount);
+    popType(stackCount);
     push(returnType);
   }
 
@@ -3772,7 +3792,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(3);
       box();
       mv.visitInsn(AASTORE);
-      pop(3);  // arr + index + value
+      popType(3);  // arr + index + value
     }
   }
 
@@ -3835,7 +3855,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     _loadClassField(internalClassName, fieldName, type, isStatic);
     if (!isStatic) {
-      pop();
+      popType();
     }
     push(type);
   }
@@ -3857,7 +3877,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int stackCount = isStatic ? 1 : 2;
     expect(stackCount);
     _storeClassField(internalClassName, fieldName, type, isStatic);
-    pop(stackCount);
+    popType(stackCount);
   }
 
   private void _storeClassField(String internalClassName, String fieldName, JactlType type, boolean isStatic) {
@@ -3878,7 +3898,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(varDecl.name.getValue());
       invokeMethod(Map.class, "get", Object.class);
       checkCast(varDecl.type);
-      pop();
+      popType();
       push(varDecl.type.boxed());
       return;
     }
@@ -3929,7 +3949,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void checkCast(JactlType type) {
     expect(1);
     Utils.checkCast(mv, type.boxed());
-    pop();
+    popType();
     push(type.boxed());
   }
 
@@ -4049,7 +4069,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     dupVal();
     Label end = new Label();
     mv.visitJumpInsn(IFNONNULL, end);
-    pop();
+    popType();
     popVal();
 
     // We have no value for the field so we have to construct a default value. Type of field must be Map/List or
@@ -4097,7 +4117,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
              () -> invokeMethod(Field.class, "set", Object.class, Object.class),
              () -> {
                throwError("Cannot set field to " + (isMap ? "Map" : "List") + ": field type incomptible", expr.right.location);
-               pop(3);  // Pop types for field, parent, value
+               popType(3);  // Pop types for field, parent, value
              });
 
     stack.freeSlot(parentVar);

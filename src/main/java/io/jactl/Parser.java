@@ -1496,14 +1496,19 @@ public class Parser {
     // If we have a single ExprStmt then our expression is just the expression inside the statement
     if (block.stmts.stmts.size() == 1) {
       Stmt stmt = block.stmts.stmts.get(0);
+      // If we have a single "simple" expression (no return, continue, break, and no regex match/substitutes),
+      // then we don't have to bother with a separate closure for the block.
+      // If there are regex matches or substitutes we create a closure since they might need their own RegexMatcher.
       if (stmt instanceof Stmt.ExprStmt) {
-        Expr expr = ((Stmt.ExprStmt) stmt).expr;
-        expr.isResultUsed = true;
-        return expr;
+        var expr = ((Stmt.ExprStmt) stmt).expr;
+        if (isSimple(expr)) {
+          expr.isResultUsed = true;
+          return expr;
+        }
       }
     }
 
-    // We have more than one statement or statement is more than just an expression so convert
+    // We have more than one statement or statement is more than just a simple expression so convert
     // block into a parameter-less closure and then invoke it.
     Stmt.FunDecl closureFunDecl = convertBlockToClosure(leftBrace, block);
     closureFunDecl.declExpr.isResultUsed = true;
@@ -1768,7 +1773,7 @@ public class Parser {
   }
 
   private Stmt.FunDecl convertBlockToFunction(Token name, Stmt.Block block, JactlType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
-    Expr.FunDecl funDecl = Utils.createFunDecl(name, name, returnType, params, isStatic, false, false);
+    Expr.FunDecl funDecl = Utils.createFunDecl(name, null, returnType, params, isStatic, false, false);
     insertStmtsInto(params, block);
     funDecl.block = block;
     return new Stmt.FunDecl(name, funDecl);
@@ -2081,6 +2086,67 @@ public class Parser {
   }
 
   /**
+   * We use this to determine whether an embedded expression in an expression string warrants
+   * its own closure or not.
+   * Return true if expression is a simple expression meaning no return/continue/break statements
+   * and no regex matches or substitutes (since we could be in a replace string and further regex
+   * matches would need their own RegexMatcher instance).
+   */
+  private static boolean isSimple(Expr expr) {
+    return expr.accept(new Expr.Visitor<Boolean>() {
+      boolean isSimple(Expr expr) { return expr.accept(this); }
+
+      @Override public Boolean visitReturn(Expr.Return expr)         { return false; }
+      @Override public Boolean visitBreak(Expr.Break expr)           { return false; }
+      @Override public Boolean visitContinue(Expr.Continue expr)     { return false; }
+      @Override public Boolean visitEval(Expr.Eval expr)             { return false; }
+      @Override public Boolean visitBlock(Expr.Block expr)           { return false; }
+      @Override public Boolean visitRegexMatch(Expr.RegexMatch expr) { return false; }
+      @Override public Boolean visitRegexSubst(Expr.RegexSubst expr) { return false; }
+
+      @Override public Boolean visitNoop(Expr.Noop expr)             { return true; }
+      @Override public Boolean visitClosure(Expr.Closure expr)       { return true; }
+      @Override public Boolean visitLiteral(Expr.Literal expr)       { return true; }
+      @Override public Boolean visitIdentifier(Expr.Identifier expr) { return true; }
+      @Override public Boolean visitClassPath(Expr.ClassPath expr)   { return true; }
+      @Override public Boolean visitFunDecl(Expr.FunDecl expr)       { return true; }
+      @Override public Boolean visitTypeExpr(Expr.TypeExpr expr)     { return true; }
+      @Override public Boolean visitInstanceOf(Expr.InstanceOf expr) { return true; }
+
+      @Override public Boolean visitCall(Expr.Call expr)                   { return isSimple(expr.callee) && expr.args.stream().allMatch(this::isSimple); }
+      @Override public Boolean visitMethodCall(Expr.MethodCall expr)       { return isSimple(expr.parent) && expr.args.stream().allMatch(this::isSimple); }
+      @Override public Boolean visitBinary(Expr.Binary expr)               { return isSimple(expr.left) && isSimple(expr.right);  }
+      @Override public Boolean visitTernary(Expr.Ternary expr)             { return isSimple(expr.first) && isSimple(expr.second) && isSimple(expr.third); }
+      @Override public Boolean visitPrefixUnary(Expr.PrefixUnary expr)     { return isSimple(expr.expr); }
+      @Override public Boolean visitPostfixUnary(Expr.PostfixUnary expr)   { return isSimple(expr.expr); }
+      @Override public Boolean visitCast(Expr.Cast expr)                   { return isSimple(expr.expr); }
+      @Override public Boolean visitListLiteral(Expr.ListLiteral expr)     { return expr.exprs.stream().allMatch(this::isSimple); }
+      @Override public Boolean visitMapLiteral(Expr.MapLiteral expr)       { return expr.entries.stream().allMatch(e -> isSimple(e.first) && isSimple(e.second)); }
+      @Override public Boolean visitExprString(Expr.ExprString expr)       { return expr.exprList.stream().allMatch(this::isSimple); }
+      @Override public Boolean visitVarDecl(Expr.VarDecl expr)             { return isSimple(expr.initialiser); }
+      @Override public Boolean visitVarAssign(Expr.VarAssign expr)         { return isSimple(expr.expr); }
+      @Override public Boolean visitVarOpAssign(Expr.VarOpAssign expr)     { return isSimple(expr.expr); }
+      @Override public Boolean visitFieldAssign(Expr.FieldAssign expr)     { return isSimple(expr.field) && isSimple(expr.parent) && isSimple(expr.expr); }
+      @Override public Boolean visitFieldOpAssign(Expr.FieldOpAssign expr) { return isSimple(expr.field) && isSimple(expr.parent) && isSimple(expr.expr); }
+      @Override public Boolean visitPrint(Expr.Print expr)                 { return isSimple(expr.expr); }
+      @Override public Boolean visitDie(Expr.Die expr)                     { return isSimple(expr.expr); }
+
+      // These should never occur here since they are never created in Parser (only in Resolver)
+      @Override public Boolean visitArrayLength(Expr.ArrayLength expr)       { return true; }
+      @Override public Boolean visitArrayGet(Expr.ArrayGet expr)             { return true; }
+      @Override public Boolean visitLoadParamValue(Expr.LoadParamValue expr) { return true; }
+      @Override public Boolean visitInvokeNew(Expr.InvokeNew expr)           { return true; }
+      @Override public Boolean visitDefaultValue(Expr.DefaultValue expr)     { return true; }
+      @Override public Boolean visitCastTo(Expr.CastTo expr)                 { return true; }
+
+      @Override public Boolean visitInvokeFunDecl(Expr.InvokeFunDecl expr)   { return false; }
+      @Override public Boolean visitInvokeInit(Expr.InvokeInit expr)         { return false; }
+      @Override public Boolean visitInvokeUtility(Expr.InvokeUtility expr)   { return false; }
+      @Override public Boolean visitConvertTo(Expr.ConvertTo expr)           { return false; }
+    });
+  }
+
+  /**
    * Create a call expr. The result will be an Expr.Call for runtime lookup of
    * method or an Expr.MethodCall if we have enough information that we might be
    * able to do a compile time lookup during Resolver phase.
@@ -2172,6 +2238,9 @@ public class Parser {
     // Field path is either a BinaryOp whose last operator is a field access operation
     // (map or list lookup), or fieldPath is just an identifier for a simple variable.
     if (variable instanceof Expr.Identifier) {
+      if (((Expr.Identifier)variable).identifier.getStringValue().charAt(0) == '$') {
+        throw new CompileError("Capture variable cannot be modified (invalid lvalue)", variable.location);
+      }
       if (arithmeticOp == null) {
         // Just a standard = or ?=
         return new Expr.VarAssign((Expr.Identifier) variable, assignmentOperator, rhs);

@@ -111,6 +111,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = 'aXbXYcX'; x.split(/[A-Z]+/).map{sleep(0,it)+sleep(0,'x')+sleep(0,it)}.join()", "axabxbcxcx");
     test("def x = 'aXbXYcX'; def f = x.split; f(/[A-Z]+/)", List.of("a","b","c",""));
     testError("[1,2,3].split(/[A-Z]+/)", "no such method");
+    testError("'abc'.split(/[A-Z]+/,'n')", "unexpected regex modifier 'n'");
+    testError("'abc'.split(/[A-Z]+/,'r')", "unexpected regex modifier 'r'");
   }
 
   @Test public void minMax() {

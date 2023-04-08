@@ -87,7 +87,7 @@ public class Tokeniser {
   // Valid modifiers that can come immediately after trailing '/' of a regex
   private static final String REGEX_MODIFIERS = "" + Utils.REGEX_GLOBAL + Utils.REGEX_DOTALL_MODE
                                                 + Utils.REGEX_CASE_INSENSITIVE + Utils.REGEX_MULTI_LINE_MODE
-                                                + Utils.REGEX_NON_DESTRUCTIVE;
+                                                + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS;
 
   /**
    * Constructor

@@ -196,10 +196,10 @@ public class ClassCompiler {
     classInit.visitLabel(end);
     classInit.visitInsn(RETURN);
 
-//    if (debug()) {
-//      classInit.visitEnd();
-//      cv.visitEnd();
-//    }
+    if (debug(3)) {
+      classInit.visitEnd();
+      cv.visitEnd();
+    }
 
     classInit.visitMaxs(0, 0);
     classInit.visitEnd();
@@ -427,10 +427,10 @@ public class ClassCompiler {
     Utils.box(mv, funDecl.returnType);   // Box if primitive
     mv.visitInsn(ARETURN);               // Always return Object from continuation wrapper
 
-//    if (debug()) {
-//      mv.visitEnd();
-//      cv.visitEnd();
-//    }
+    if (debug(3)) {
+      mv.visitEnd();
+      cv.visitEnd();
+    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -453,9 +453,12 @@ public class ClassCompiler {
   boolean debug() {
     return context.debugLevel > 0;
   }
+  boolean debug(int level) {
+    return context.debugLevel >= level;
+  }
 
   boolean annotate() {
-    return context.debugLevel > 1;
+    return context.debugLevel == 2 || context.debugLevel == 4;
   }
 
   //////////////////////////////////////

@@ -146,6 +146,7 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
   }
 
   @Override public Expr visitVarOpAssign(Expr.VarOpAssign expr) {
+    // Difficult to decorate properly due to assumptions that have been made
     //decorate(expr.identifierExpr);
     //expr.expr = decorate(expr.expr);
     return expr;

@@ -11,7 +11,7 @@ borrowed from Java and Groovy, with a smattering of Perl thrown in for good meas
 <div class="row">
   <div class="column" markdown="1">
 ### **Familiar Syntax**
-Subset of Java/Groovy syntax with a dash of Perl mixed in to ease adoption.
+Subset of Java/Groovy syntax with a dash of Perl mixed in.
   </div>
   <div class="column" markdown="1">
 ### **Compiles to Java Bytecode**

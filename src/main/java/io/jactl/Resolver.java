@@ -925,7 +925,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.nameToken.getStringValue();
 
       // Method name is parent + $ + functionName unless at script function level or at top level of a class
-      // in which case there is no parent so we use just functionName
+      // in which case there is no parent, so we use just functionName
       var fun = currentFunction();
       expr.functionDescriptor.implementingMethod =
         getFunctions().size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
@@ -937,7 +937,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.wrapper.functionDescriptor.implementingClassName = implementingClass;
       expr.functionDescriptor.wrapperMethod = expr.wrapper.functionDescriptor.implementingMethod;
 
-      // Resolve the wrapper. The wrapper has us as an embedded statement so we will
+      // Resolve the wrapper. The wrapper has us as an embedded statement, so we will
       // get resolved as a nested function of the wrapper and the next time through here
       // our wrapper will be set
       return doVisitFunDecl(expr.wrapper, true);
@@ -1004,9 +1004,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     }
 
-    // For capture vars type is always STRING
+    // For capture vars type is always ANY since value can be either a String or a number
     if (expr.identifier.getStringValue().charAt(0) == '$') {
-      return expr.type = STRING;
+      return expr.type = ANY;
     }
 
     return expr.type = varDecl.type;

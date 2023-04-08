@@ -69,7 +69,8 @@ public class Utils {
   public static final char   REGEX_CASE_INSENSITIVE = 'i';
   public static final char   REGEX_DOTALL_MODE      = 's';
   public static final char   REGEX_MULTI_LINE_MODE  = 'm';
-  public static final char   REGEX_NON_DESTRUCTIVE  = 'r';
+  public static final char   REGEX_NON_DESTRUCTIVE = 'r';
+  public static final char   REGEX_CAPTURE_NUMS    = 'n';
 
   public static final Object[] EMPTY_OBJ_ARR = new Object[0];
 
@@ -92,7 +93,9 @@ public class Utils {
     return methodName + "$$w";
   }
 
-  static String continuationMethod(String methodName) { return methodName + "$$c"; }
+  static String continuationMethod(String methodName) {
+    return methodName + "$$c";
+  }
   static String continuationHandle(String methodName) { return methodName + "$ch"; }
 
   /**

@@ -2504,6 +2504,7 @@ class CompilerTest extends BaseTest {
     test("def x = 'xx'; x = \"${return x}\" + 'yy'", "xxyy");
     test("def x = 'xx'; x = \"${return x}\" + 'yy'; x", "xxyy");
     test("def x = 'xx'; \"${x += 'yy'; return x}\"", "xxyy");
+    test("def x = 'xx'; \"${x += 'yy' and return x}xx\"", "xxyyxx");
     test("def x = 'xx'; \"${x += 'yy'; return x}\"; x", "xxyy");
     test("def it = 'xx'; \"${it += 'yy'; return it}\"; it", "xxyy");
     test("\"x = ${ def x = 1 + 2; x}\"", "x = 3");
@@ -2611,6 +2612,16 @@ class CompilerTest extends BaseTest {
 
     test("['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}", List.of("a","b","c"));
     test("def x = ['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}; x", List.of("a","b","c"));
+
+    test("def it = 'ab\\ncd'; /b$/mr", true);
+    test("def it = 'ab\\n#d'; /b$\\n#/mr", true);
+    test("def it = 'ab\\ncd'; /b\\$\\nc/mr", false);
+    test("def it = 'ab\\ncd'; /b$.c/smr", true);
+    test("def it = 'ab\\ncd'; /b\\$.c/smr", false);
+    test("def it = 'ab\\ncd'; /b.c/smr", true);
+
+    testError("1 =~ /abc/", "cannot convert");
+    testError("def x = 1; x =~ /abc/", "cannot convert");
   }
 
   @Test public void regexCaptureVars() {
@@ -2641,6 +2652,14 @@ class CompilerTest extends BaseTest {
     test("def it = 'xyz'; def x; /(x)(y)(z)/r and { x = \"$3$2$1\"; /a(b)/r and x += $1 }('abc'); x", "zyxb");
     test("def it = 'xyz'; def x; /(x)(y)(z)/r and { x = \"$3$2$1\"; /a(b)/r and x += $1 }('abc'); x += $3; x", "zyxbz");
     test("def it = 'xyz'; def x; it =~ sleep(0,/(x)(y)(z)/) and { x = \"$3$2$1\" }(); x", "zyx");
+
+    test("'a123b' =~ /.(\\d+)./; $1", "123");
+    test("'a123b' =~ /.(\\d+)./n; $1", 123L);
+    test("'a123.4b' =~ /.([\\d.]+)./n; $1", "#123.4");
+    test("'a-1234b' =~ /.([\\d.-]+)./n; $1", -1234L);
+    test("'a-123.4b' =~ /.([\\d.-]+)./n; $1", "#-123.4");
+    test("'a123.4.5b' =~ /.([\\d.]+)./n; $1", "123.4.5");
+    test("'a12345123451234512341234123412341234123412341234b' =~ /.([\\d.]+)./n; $1", "12345123451234512341234123412341234123412341234");
   }
 
   @Test public void regexGlobalMatch() {
@@ -2687,12 +2706,9 @@ class CompilerTest extends BaseTest {
     test("def it = 'abaac'; s///g; it", "abaac");
     test("def it = 'abaac'; s//a/g", "aaabaaaaaca");
     test("def it = 'abaac'; s//a/g; it", "aaabaaaaaca");
-    test("def it = 'ab\\ncd'; /b$/mr", true);
-    test("def it = 'ab\\n#d'; /b$\\n#/mr", true);
-    test("def it = 'ab\\ncd'; /b\\$\\nc/mr", false);
-    test("def it = 'ab\\ncd'; /b$.c/smr", true);
-    test("def it = 'ab\\ncd'; /b\\$.c/smr", false);
-    test("def it = 'ab\\ncd'; /b.c/smr", true);
+    testError("1 =~ s/abc/xyz/", "invalid lvalue");
+    testError("def x = 1; x =~ s/abc/xyz/", "cannot convert");
+    testError("'a123c' =~ /(\\d+)/; $1 =~ s/123/abc/; $1", "invalid lvalue");
   }
 
   @Test public void regexSubstituteExprString() {
@@ -2725,6 +2741,16 @@ class CompilerTest extends BaseTest {
     test("def x = 'This'; x =~ s/[a-z]/${1+2}/g; x = 'This'; x =~ s/[a-z]/${1+2}/rg; x = 'This'; x =~ s/[a-z]/${1+2}/g; x", "T333");
     test("'This SentenCe has Capital letTErs' =~ s/([A-Z][a-z])/${$1 =~ /^((.*))$/; $2.toLowerCase()}/rg", "this sentence has capital letTers");
     test("'This' =~ s/[a-z]/${1+2}/rg; 'This' =~ s/[a-z]/${1+2}/rg; 'This' =~ s/[a-z]/${1+2}/rg", "T333");
+    test("def x = 'This SentenCe has Capital letTErs'; sleep(0, x =~ s/([A-Z][a-z])/${$1 =~ /^((.*))$/; $2.toLowerCase()}/g); x", "this sentence has capital letTers");
+    test("'This SentenCe has Capital letTErs' =~ s/([A-Z][a-z])/${sleep(0,$1) =~ sleep(0,/^((.*))$/); sleep(0,sleep(0,$2).toLowerCase())}/rg", "this sentence has capital letTers");
+    test("def f(x,y,z){ sleep(0,0) if false; z }; f(null, 13, 'abc' =~ s/([A-Z][a-z])/${f(null, 17,$1)}/rg)", "abc");
+    test("def f(x,y,z){ z }; f(null, 13, 'abc' =~ s/([A-Z][a-z])/${f(null, 17,$1)}/rg)", "abc");
+    test("'12345' =~ s/([0-9])/${$1+$1}/rng", "246810");
+    testError("'12345' =~ s/([0-9])/${$1+$1}/ng", "invalid lvalue");
+    testError("1 =~ s/([0-9])/${$1+$1}/ng", "invalid lvalue");
+    test("'abcdefg' =~ s/(..)/${ $1 =~ s/(.)/${$1 + $1}/rg }/rg", "aabbccddeeffg");
+    test("'abcdefg' =~ s/(..)/${ $1 + ('abcdefg' =~ s/(..)/x/rg) }/rg", "abxxxgcdxxxgefxxxgg");
+    testError("for(int i = 0; i < 10; i++) { 'abc' =~ s/(.)/${ continue }/rg }", "must be within a while/for loop");
   }
 
   @Test public void doBlock() {

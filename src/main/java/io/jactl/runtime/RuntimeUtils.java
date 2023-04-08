@@ -969,7 +969,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static String regexGroup(RegexMatcher regexMatcher, int group) {
+  public static Object regexGroup(RegexMatcher regexMatcher, int group) {
     if (!regexMatcher.matched) {
       return null;
     }
@@ -977,7 +977,27 @@ public class RuntimeUtils {
     if (group > matcher.groupCount()) {
       return null;
     }
-    return matcher.group(group);
+    if (!regexMatcher.captureAsNums) {
+      return matcher.group(group);
+    }
+
+    // See if we have a number we can parse
+    String value = matcher.group(group);
+    if (value.indexOf('.') == -1) {
+      try {
+        return Long.parseLong(value);
+      }
+      catch (NumberFormatException e) {
+        // Too big
+        return value;
+      }
+    }
+    try {
+      return new BigDecimal(value);
+    }
+    catch (NumberFormatException e) {
+      return value;
+    }
   }
 
   /**

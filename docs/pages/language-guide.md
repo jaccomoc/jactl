@@ -1725,7 +1725,8 @@ The supported modifiers are:
 |    i     | Pattern match will be case-insensitive.                                                                                                                                          |
 |    m     | Multi-line mode: this makes `^` and `$` match beginning and endings of lines rather than beginning and ending of entire string.                                                  |
 |    s     | Dot-all mode: makes `.` match line terminator (by default `.` won't match end-of-line characters).                                                                               |
-|    g     | Global find: remembers where previous pattern occurred and starts next find from previous location. This can be used to find all occurences of a pattern within a string.        |
+|    g     | Global find: remembers where previous pattern occurred and starts next find from previous location. This can be used to find all occurrences of a pattern within a string.       |
+|    n     | If a capture group is numeric then interpret as a number.                                                                                                                        |
 |    r     | Regex match: this forces the pattern string to be interpreted as a regex match for implicit matching (see below). For substitutions this makes the substitution non-destructive. |
 
 The `g` modifier for global find can be used to iterate over a string, finding all instances of a given pattern within
@@ -1766,7 +1767,7 @@ while (x =~ /[a-c]/g && y =~ /[x-z]/g) { i++ }
 3
 ```
 
-These limitations are due to what makes sense in terms of the capture variable values and due to the way in which
+These restrictions are due to what makes sense in terms of how capture variables work (see below) and due to the way in which
 Jactl saves the state of the match to remember where to continue from the next time.
 
 The `g` modifier is more useful when used with capture variables as described in the next section.
@@ -1805,6 +1806,27 @@ AAPL=$151.03, MSFT=$255.29, GOOG=$94.02
 > while (data =~ /(\w*)=\$(\d+.\d+)/g) { stocks[$1] = $2 as Decimal }
 > stocks
 [AAPL:151.03, MSFT:255.29, GOOG:94.02]
+```
+
+The `n` modifier will make the capture variable a number if the string captured is numeric.
+If the number has no decimal place then it will be converted to a `long` value (as long as the value is not too large).
+If it has a decimal point then it will become a `Decimal` value.
+For example:
+```groovy
+> 'rate=-1234' =~ /(\w+)=([\d-]+)/n
+true
+> $1
+rate
+> $2
+-1234
+> $2 instanceof long
+true
+> 'rate=56.789' =~ /(\w+)=([\d-.]+)/n
+true
+> $2
+56.789
+> $2 instanceof Decimal
+true
 ```
 
 ### Regex Substitution
@@ -1865,7 +1887,7 @@ This[4] SentenCe[8] has[3] Capital[7] letTers[7]
 
 ### Implicit Matching and Substitution
 
-For both regex matches and regex subsitutions, if no left-hand side is given, Jactl will assume that the match or
+For both regex matches and regex substitutions, if no left-hand side is given, Jactl will assume that the match or
 the substitution should be done against the default `it` variable.
 This variable is the default variable passed in to _closures_ (see later) when no variable name is specified.
 
@@ -1894,7 +1916,7 @@ At 256.272s: Pause 5.024ms
 See later sections on _closures_, and _collections_, for a description of how the methods like `filter()` and `map()`
 and `each()` work with closures and with the implicit `it` variable.
 
-You can, of cource, define your own `it` variable and have it automatically matched against:
+You can, of course, define your own `it` variable and have it automatically matched against:
 ```groovy
 > def it = 'my value for my xplictily defined it variable'
 my value for my explictily defined it variable
