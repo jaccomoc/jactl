@@ -4315,6 +4315,8 @@ class CompilerTest extends BaseTest {
     test("String f(x) { x.toString() }; f(1)", "1");
     test("List f(x) { [x] }; f(1)", List.of(1));
     test("Map f(x) { [x:x] }; f(1)", Map.of("x",1));
+
+    test("def f(int x) { x }; f(1L)", 1);
   }
 
   @Test public void functionsAsValues() {
@@ -4436,9 +4438,9 @@ class CompilerTest extends BaseTest {
     test("def f(long t, def x) { sleep(t,x) }; [[1,2],[3,4]].map{ a,b -> f([a,b]) }", List.of(2,4));
     test("def f(long t, def x) { sleep(t,x) }; [a:2,b:4].map{ a,b -> f([b,a]) }", List.of("a","b"));
     test("def f(long t, def x) { sleep(t,x) }; def x = [[1,2],[3,4]]; x.map{ a,b -> f([a,b]) }", List.of(2,4));
-    testError("def f(long t, def x) { sleep(t,x) }; def x = [a:2,b:4]; x.map([{ a,b -> f([b,a]) }])", "incompatible argument type");
-    testError("def f(long t, def x) { sleep(t,x) }; def g = [[1,2],[3,4]].map; g([{ a,b -> f([a,b]) }])", "incompatible argument type");
-    testError("def f(long t, def x) { sleep(t,x) }; def g = [a:2,b:4].map; g([{ a,b -> f([b,a]) }])", "incompatible argument type");
+    testError("def f(long t, def x) { sleep(t,x) }; def x = [a:2,b:4]; x.map([{ a,b -> f([b,a]) }])", "cannot be cast");
+    testError("def f(long t, def x) { sleep(t,x) }; def g = [[1,2],[3,4]].map; g([{ a,b -> f([a,b]) }])", "cannot be cast");
+    testError("def f(long t, def x) { sleep(t,x) }; def g = [a:2,b:4].map; g([{ a,b -> f([b,a]) }])", "cannot be cast");
     test("def a = [1,2,3]; def f(x,y=7,z) { x + y + z }; f(1,2,3) + f(a)", 12);
     test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(a)", List.of(1,2,3,7,8));
     test("def f(String x, int y) { x + y }; def a = ['x',2]; f(a)", "x2");
@@ -4917,7 +4919,7 @@ class CompilerTest extends BaseTest {
     test("def f = sleep; f(timeMs:1,data:2)", 2);
     testError("def f = sleep; f(timeMs:1,datax:2)", "no such parameter");
     testError("sleep('abc')", "cannot convert argument");
-    testError("def f = sleep; f('abc')", "incompatible argument type");
+    testError("def f = sleep; f('abc')", "cannot be cast");
     test("sleep(1,2L)", 2L);
     test("sleep(1,2D)", 2D);
     test("sleep(1,2.0)", "#2.0");

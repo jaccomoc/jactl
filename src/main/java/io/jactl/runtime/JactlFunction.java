@@ -84,10 +84,11 @@ public class JactlFunction extends FunctionDescriptor {
   // total args including obj (for methods), and source/offset if needsLocation, and Continuation for async funcs
   int          argCount;
 
-  String[]     paramNamesArr = new String[0];   // Cache of the names as an array for faster runtime access
-  Object[]     defaultVals   = new Object[0];
-  boolean      isAsyncInstance;                 // Actually async if instance is async (e.g. async ITERATOR)
-  int          additionalArgs  = 0;             // needsLocation and methods need more args than just passed in
+  String[]    paramNamesArr;                   // Cache of the names as an array for faster runtime access
+  Class[]     paramClassesArr;                 // Class of each parameter
+  Object[]    defaultVals = new Object[0];     // Default values for each parameter (or null)
+  boolean     isAsyncInstance;                 // Actually async if instance is async (e.g. async ITERATOR)
+  int         additionalArgs  = 0;             // needsLocation and methods need more args than just passed in
 
   private static final Object MANDATORY = new Object();
 
@@ -260,6 +261,7 @@ public class JactlFunction extends FunctionDescriptor {
     }
 
     this.paramTypes       = getParamTypes();
+    this.paramClassesArr  = paramTypes.stream().map(t -> t.classFromType()).toArray(Class[]::new);
     this.firstArgtype     = firstParamType();
     this.returnType       = getReturnType();
     this.paramNamesArr    = paramNames.toArray(String[]::new);
@@ -329,15 +331,13 @@ public class JactlFunction extends FunctionDescriptor {
             throw new RuntimeError("Missing value for mandatory parameter '" + paramName + "'", source, offset);
           }
         }
-        if (isVarArgs && p == paramNamesArr.length - 1 && value instanceof List) {
-          List vargs = (List)value;
-          var newArgs = new Object[argCount + vargs.size() - 1];
-          System.arraycopy(args, 0, newArgs, 0, i);
-          args = newArgs;
-          System.arraycopy(vargs.toArray(), 0, args, i, vargs.size());
-          i += vargs.size();
+        if (isVarArgs && p == paramNamesArr.length - 1 && (value instanceof List || value instanceof Object[])) {
+          Object[] vargs = value instanceof List ? ((List)value).toArray() : (Object[])value;
+          args = addVarArgs(args, i, vargs);
+          i += vargs.length;
         }
         else {
+          value = value == null ? null : RuntimeUtils.castTo(paramClassesArr[p], value, source, offset);
           args[i++] = value;
         }
       }
@@ -359,18 +359,31 @@ public class JactlFunction extends FunctionDescriptor {
 
       validateArgCount(args, source, offset);
 
-      // Fill in any missing default values where value not supplied
-      if (additionalArgs > 0 || args.length != argCount) {
-        Object[] argVals = new Object[Math.max(argCount, args.length + additionalArgs)];
-        int i = commonArgs(obj, source, offset, argVals);
-        System.arraycopy(args, 0, argVals, i, args.length);
-        i += args.length;
-        if (i < argCount) {
-          // Copy any remaining default values needed
-          System.arraycopy(defaultVals, args.length, argVals, i, argCount - i);
+      // Check types and fill in any missing default values where value not supplied
+      Object[] argVals = new Object[Math.max(argCount, args.length + additionalArgs)];
+      int i = commonArgs(obj, source, offset, argVals);
+      for (int p = 0; p < Math.min(args.length, paramClassesArr.length); p++) {
+        if (isVarArgs && p == paramClassesArr.length - 1) {
+          // Rest of args are varargs so just copy them over
+          int varArgCount = args.length - p;
+          System.arraycopy(args, p, argVals, i, varArgCount);
+          i += varArgCount;
         }
-        args = argVals;
+        else {
+          argVals[i++] = RuntimeUtils.castTo(paramClassesArr[p], args[p], source, offset);
+        }
       }
+      if (i < argCount) {
+        // Copy any remaining default values needed
+        for (int p = args.length; p < defaultVals.length; p++) {
+          if (isVarArgs && p == defaultVals.length - 1 && defaultVals[p] instanceof Object[]) {
+            argVals = addVarArgs(argVals, i, (Object[])defaultVals[p]);
+            break;
+          }
+          argVals[i++] = defaultVals[p];
+        }
+      }
+      args = argVals;
     }
 
     try {
@@ -388,6 +401,24 @@ public class JactlFunction extends FunctionDescriptor {
     catch (Throwable e) {
       throw new RuntimeError("Error invoking " + name + "()", source, offset, e);
     }
+  }
+
+  /**
+   * Add values from vargs ito args at given position.
+   * If args not of exact size required then copy into a new array and return it.
+   * @param args   the arg array with current values
+   * @param pos    position we are up to in args
+   * @param vargs  the values to be copied
+   * @return args or new args array
+   */
+  private static Object[] addVarArgs(Object[] args, int pos, Object[] vargs) {
+    if (args.length != pos + vargs.length) {
+      var newArgs = new Object[pos + vargs.length];
+      System.arraycopy(args, 0, newArgs, 0, pos);
+      args = newArgs;
+    }
+    System.arraycopy(vargs, 0, args, pos, vargs.length);
+    return args;
   }
 
   /**

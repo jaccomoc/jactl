@@ -18,7 +18,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '1.0.0'
+implementation group: 'io.jactl', name: 'jactl', version: '{{ site.content.jactl_version }}'
 ```
 
 ### Maven
@@ -28,7 +28,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>1.0.0</version>
+ <version>{{ site.content.jactl_version }}</version>
 </dependency>
 ```
 
@@ -828,7 +828,7 @@ be passed in.
 Once we have configured our `.jactlrc` file (see [here](command-line-scripts#.jactlrc-file) for details)
 we can include our new function when running the Jactl REPL:
 ```groovy
-$ java -jar jactl-repl-1.0.0.jar
+$ java -jar jactl-repl-{{ site.content.jactl_version }}.jar
 > long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 Function@1846982837
 > measure{ fib(40) }

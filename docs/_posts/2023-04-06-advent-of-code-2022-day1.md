@@ -25,7 +25,7 @@ See [Day 1](https://adventofcode.com/2022/day/1) for a detailed description of t
 To run the Jactl shown here save the code into a file (e.g. `advent01.jactl`) and run it like this (where advent01.txt
 is your input file from the Advent of Code site for Day 1):
 ```shell
-$ cat advent01.txt | java -jar jactl-1.0.0.jar advent01.jactl 
+$ cat advent01.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent01.jactl 
 ```
 
 ### Part 1

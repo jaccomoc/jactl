@@ -25,9 +25,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static io.jactl.JactlType.INT;
+import static io.jactl.JactlType.*;
 
 public class BuiltinFunctionTests extends BaseTest {
+
   @Test public void filter() {
     test("[].filter{it>1}", List.of());
     test("[].filter()", List.of());
@@ -52,7 +53,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = [a:true,b:false,c:true].filter; f{it[1]}.map{it[0]}", List.of("a","c"));
     test("def x = [a:true,b:false,c:true]; x.filter{it[1]}.map{it[0]}", List.of("a","c"));
     testError("[1,2,3].filter('abc')", "cannot convert");
-    testError("def f = [1,2,3].filter; f('abc')", "incompatible argument type");
+    testError("def f = [1,2,3].filter; f('abc')", "cannot be cast to function");
     test("[null,null,'P'].filter{it != ' '}", Arrays.asList(null, null, "P"));
     test("[null,null,'P'].map{sleep(0,it)}.filter{it != ' '}", Arrays.asList(null, null, "P"));
     test("[null,null,'P'].map{sleep(0,it)}.filter{it}", List.of("P"));
@@ -623,7 +624,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3]; x.map{it} instanceof List", true);
     test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
     test("def f = [1,2,3].map; f()", List.of(1,2,3));
-    testError("def f = [1,2,3].map; f('x')", "incompatible argument type");
+    testError("def f = [1,2,3].map; f('x')", "cannot be cast");
     test("[1].map{ [it,it] }.map{ a,b -> a + b }", List.of(2));
     test("def x = [1,2,3]; def f = x.map{it*it}.map; f{it+it}", List.of(2,8,18));
     test("def f = [1,2,3].map; f{it+it}", List.of(2,4,6));
@@ -819,6 +820,17 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3,4,5,6].map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}; x.limit(-2)", List.of(2));
     test("def x = [1,2,3,4,5,6]; def f = x.map{sleep(0,it-1)+sleep(0,1)}.filter{it%2 == 0}.limit; f(-2)", List.of(2));
 
+    test("[1,2,3,4].limit(1L)", List.of(1));
+    test("[1,2,3,4].limit(count:1L)", List.of(1));
+    test("[1,2,3,4].limit(1.123D)", List.of(1));
+    test("[1,2,3,4].limit(1.123)", List.of(1));
+    testError("[1,2,3,4].limit('123')", "cannot convert argument");
+    testError("def f = [1,2,3,4].limit; f('123')", "cannot be cast to int");
+    test("def f = [1,2,3,4].limit; f('a')", List.of(1,2,3,4));    // 'a' converted to Unicode value
+    testError("[1,2,3,4].limit(count:'123')", "cannot convert argument");
+    testError("def f = [1,2,3,4].limit; f(count:'123')", "cannot be cast to int");
+    test("def f = [1,2,3,4].limit; f(count:'a')", List.of(1,2,3,4));    // 'a' converted to Unicode value
+
     // Async mode fails because we wrap each method invocation with a sleep which means that the
     // map() call is forced to generate entire list before passing to limit()
     doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.limit(2); i", 2);
@@ -851,7 +863,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[3,3,4,1,2,2,5].sort{ a,b -> a <=> b }", List.of(1, 2, 2, 3, 3, 4, 5));
     test("def f = [3,2,1].sort; f()", List.of(1, 2, 3));
     test("def f = [3,2,1].sort; f{a,b -> b <=> a}", List.of(3, 2, 1));
-    testError("def f = [3,2,1].sort; f('z')", "incompatible argument type");
+    testError("def f = [3,2,1].sort; f('z')", "cannot be cast");
     test("[1,2,3].sort()", List.of(1, 2, 3));
     test("[3,2,1,4,5].sort{a,b -> b <=> a}", List.of(5, 4, 3, 2, 1));
     test("def x = [3,2,1,4,5].sort{a,b -> b <=> a}; x", List.of(5, 4, 3, 2, 1));
@@ -1078,6 +1090,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("sprintf(format:'%s%d',argsx:['x',1])", "no such parameter");
     testError("def f = sprintf(format:'%s%d',argsx:['x',1])", "no such parameter");
     test("sprintf(format:'%s%d',args:['x',1])", "x1");
+    test("sprintf(format:'x1')", "x1");
     test("sprintf(format:'x1',args:[])", "x1");
     test("sprintf(format:'%s',args:['x1'])", "x1");
     testError("sprintf(format:'%s',args:'x1')", "cannot convert argument of type string to parameter type of list");
@@ -1091,6 +1104,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("sprintf('%zs%d','x','y')", "bad format string");
     testError("sprintf()", "missing mandatory argument");
     testError("def f = sprintf; f()", "missing mandatory argument");
+    testError("sprintf(format:'%s%d',args:['x','a'])", "bad format string");
   }
 
   @Test public void asNum() {
@@ -1234,6 +1248,90 @@ public class BuiltinFunctionTests extends BaseTest {
     }
   }
 
+  @Test public void varArgs() {
+    try {
+      Jactl.function().name("varArgsFunc").param("str").param("i").param("args", new Object[0]).impl(BuiltinFunctionTests.class, "varArgsFunc").register();
+      Jactl.function().name("varArgsFuncAsync").param("str").param("i").param("args", new Object[0]).impl(BuiltinFunctionTests.class, "varArgsFuncAsync").register();
+      Jactl.method(ANY).name("varArgsMethod").param("str").param("i").param("args", new Object[0]).impl(BuiltinFunctionTests.class, "varArgsMethod").register();
+      Jactl.method(ANY).name("varArgsMethodAsync").param("str").param("i").param("args", new Object[0]).impl(BuiltinFunctionTests.class, "varArgsMethodAsync").register();
+
+      test("varArgsFunc('abc', 1L)", "abc1");
+      test("varArgsFunc('abc', 1.1234)", "abc1");
+      test("varArgsFunc('abc', 1, 2, 'b', [1,2,3])", "abc12:b:[1, 2, 3]");
+      test("def x = 'abc'; def y = 1L; varArgsFunc(x, y)", "abc1");
+      test("def x = 'abc'; def y = 1.234; varArgsFunc(x, y)", "abc1");
+      test("varArgsFunc(str:'abc', i:1L)", "abc1");
+      test("varArgsFunc(str:'abc', i:1.1234)", "abc1");
+      test("varArgsFunc(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "abc12:b:[1, 2, 3]");
+      test("def f = varArgsFunc; f('abc', 1L)", "abc1");
+      test("def f = varArgsFunc; f('abc', 1.1234)", "abc1");
+      test("def f = varArgsFunc; f('abc', 1, 2, 'b', [1,2,3])", "abc12:b:[1, 2, 3]");
+      test("def x = 'abc'; def y = 1L; def f = varArgsFunc; f(x, y)", "abc1");
+      test("def x = 'abc'; def y = 1.234; def f = varArgsFunc; f(x, y)", "abc1");
+      test("def f = varArgsFunc; f(str:'abc', i:1L)", "abc1");
+      test("def f = varArgsFunc; f(str:'abc', i:1.1234)", "abc1");
+      test("def f = varArgsFunc; f(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "abc12:b:[1, 2, 3]");
+
+      test("varArgsFuncAsync('abc', 1L)", "abc1");
+      test("varArgsFuncAsync('abc', 1.1234)", "abc1");
+      test("varArgsFuncAsync('abc', 1, 2, 'b', [1,2,3])", "abc12:b:[1, 2, 3]");
+      test("def x = 'abc'; def y = 1L; varArgsFuncAsync(x, y)", "abc1");
+      test("def x = 'abc'; def y = 1.234; varArgsFuncAsync(x, y)", "abc1");
+      test("varArgsFuncAsync(str:'abc', i:1L)", "abc1");
+      test("varArgsFuncAsync(str:'abc', i:1.1234)", "abc1");
+      test("varArgsFuncAsync(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "abc12:b:[1, 2, 3]");
+      test("def f = varArgsFuncAsync; f('abc', 1L)", "abc1");
+      test("def f = varArgsFuncAsync; f('abc', 1.1234)", "abc1");
+      test("def f = varArgsFuncAsync; f('abc', 1, 2, 'b', [1,2,3])", "abc12:b:[1, 2, 3]");
+      test("def x = 'abc'; def y = 1L; def f = varArgsFuncAsync; f(x, y)", "abc1");
+      test("def x = 'abc'; def y = 1.234; def f = varArgsFuncAsync; f(x, y)", "abc1");
+      test("def f = varArgsFuncAsync; f(str:'abc', i:1L)", "abc1");
+      test("def f = varArgsFuncAsync; f(str:'abc', i:1.1234)", "abc1");
+      test("def f = varArgsFuncAsync; f(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "abc12:b:[1, 2, 3]");
+
+      test("def obj = 'obj'; obj.varArgsMethod('abc', 1L)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethod('abc', 1.1234)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethod('abc', 1, 2, 'b', [1,2,3])", "objabc12:b:[1, 2, 3]");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1L; obj.varArgsMethod(x, y)", "objabc1");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1.234; obj.varArgsMethod(x, y)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethod(str:'abc', i:1L)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethod(str:'abc', i:1.1234)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethod(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "objabc12:b:[1, 2, 3]");
+      test("def obj = 'obj'; def f = obj.varArgsMethod; f('abc', 1L)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethod; f('abc', 1.1234)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethod; f('abc', 1, 2, 'b', [1,2,3])", "objabc12:b:[1, 2, 3]");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1L; def f = obj.varArgsMethod; f(x, y)", "objabc1");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1.234; def f = obj.varArgsMethod; f(x, y)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethod; f(str:'abc', i:1L)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethod; f(str:'abc', i:1.1234)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethod; f(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "objabc12:b:[1, 2, 3]");
+
+      test("def obj = 'obj'; obj.varArgsMethodAsync('abc', 1L)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethodAsync('abc', 1.1234)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethodAsync('abc', 1, 2, 'b', [1,2,3])", "objabc12:b:[1, 2, 3]");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1L; obj.varArgsMethodAsync(x, y)", "objabc1");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1.234; obj.varArgsMethodAsync(x, y)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethodAsync(str:'abc', i:1L)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethodAsync(str:'abc', i:1.1234)", "objabc1");
+      test("def obj = 'obj'; obj.varArgsMethodAsync(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "objabc12:b:[1, 2, 3]");
+      test("def obj = 'obj'; def f = obj.varArgsMethodAsync; f('abc', 1L)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethodAsync; f('abc', 1.1234)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethodAsync; f('abc', 1, 2, 'b', [1,2,3])", "objabc12:b:[1, 2, 3]");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1L; def f = obj.varArgsMethodAsync; f(x, y)", "objabc1");
+      test("def obj = 'obj'; def x = 'abc'; def y = 1.234; def f = obj.varArgsMethodAsync; f(x, y)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethodAsync; f(str:'abc', i:1L)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethodAsync; f(str:'abc', i:1.1234)", "objabc1");
+      test("def obj = 'obj'; def f = obj.varArgsMethodAsync; f(str:'abc', i:1, args:[2, 'b', [1,2,3]])", "objabc12:b:[1, 2, 3]");
+    }
+    finally {
+      Jactl.deregister("varArgsFunc");
+      Jactl.deregister("varArgsFuncAsync");
+      Jactl.deregister("varArgsMethod");
+      Jactl.deregister("varArgsMethodAsync");
+      testFuncData = null;
+    }
+  }
+
   public static int testFunc(Continuation c, int val) {
     return val * val;
   }
@@ -1243,4 +1341,24 @@ public class BuiltinFunctionTests extends BaseTest {
     return obj * val;
   }
   public static Object testMethodData;
+
+  public static String varArgsFunc(String s, int i, Object... vargs) {
+    return s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
+  }
+  public static Object varArgsFuncData;
+
+  public static String varArgsFuncAsync(Continuation c, String source, int offset, String s, int i, Object... vargs) {
+    return s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
+  }
+  public static Object varArgsFuncAsyncData;
+
+  public static String varArgsMethod(Object obj, String s, int i, Object... vargs) {
+    return obj.toString() + s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
+  }
+  public static Object varArgsMethodData;
+
+  public static String varArgsMethodAsync(Object obj, Continuation c, String source, int offset, String s, int i, Object... vargs) {
+    return obj.toString() + s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
+  }
+  public static Object varArgsMethodAsyncData;
 }

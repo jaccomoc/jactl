@@ -1796,7 +1796,7 @@ public class RuntimeUtils {
     MethodHandle.class, FieldType.FUNCTION
   );
 
-  private static Object castTo(Class clss, Object value, String source, int offset) {
+  public static Object castTo(Class clss, Object value, String source, int offset) {
     FieldType type = classToType.get(clss);
     if (type == null) {
       if (value == null || clss.isAssignableFrom(value.getClass())) {
@@ -1825,7 +1825,7 @@ public class RuntimeUtils {
           return castToFunction(value, source, offset);
       }
     }
-    throw new RuntimeError("Cannot assign from " + className(value) + " to field of type " + clss.getName(), source, offset);
+    throw new RuntimeError("Cannot convert from " + className(value) + " to type " + clss.getName(), source, offset);
   }
 
   public static int castToIntValue(Object obj, String source, int offset) {

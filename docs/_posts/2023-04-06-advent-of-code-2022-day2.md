@@ -16,7 +16,7 @@ Links:
 To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
 Advent of Code site (e.g. `advent.txt`) and run it like this:
 ```shell
-$ cat advent.txt | java -jar jactl-1.0.0.jar advent.jactl 
+$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
 ```
 
 Although Jactl is similar to Groovy, some differences to note if you are familiar with Groovy:

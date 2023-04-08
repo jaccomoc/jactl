@@ -16,7 +16,7 @@ The Jactl JAR file, when run using `java -jar` will compile and run a given scri
 
 If you run the JAR file without any arguments it prints this help text:
 ```shell
-$ java -jar jactl-1.0.0.jar
+$ java -jar jactl-{{ site.content.jactl_version }}.jar
 Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]*
          -p           : run in a print loop reading input from stdin or files
          -n           : run in a loop but do not print each line
@@ -33,19 +33,19 @@ Exception in thread "main" java.lang.IllegalArgumentException: Missing '-e' opti
 ## Jactl Shell Script
 
 It is recommended that you create a shell script for invoking Jactl called `jactl` to save having to type the
-`java -jar <path_to>/jactl-1.0.0.jar` every time.
+`java -jar <path_to>/jactl-{{ site.content.jactl_version }}.jar` every time.
 
 For a shell compatible with `bash` you can create a shell script like the following called `jactl` and add it to
 a directory in your execution path:
 ```shell
 #!/bin/bash
-java -jar <path_to>/jactl-1.0.0.jar "$@"
+java -jar <path_to>/jactl-{{ site.content.jactl_version }}.jar "$@"
 ```
 
 Note that the `/bin/bash` should be the location of your shell and `<path_to>` should be replaced with the location
-of the `jactl-1.0.0.jar` file.
+of the `jactl-{{ site.content.jactl_version }}.jar` file.
 
-We will assume from now on that you have such a shell script and will use `jactl` in place of `java -jar jactl-1.0.0.jar`. 
+We will assume from now on that you have such a shell script and will use `jactl` in place of `java -jar jactl-{{ site.content.jactl_version }}.jar`. 
 
 ## Running Scripts
 
@@ -421,12 +421,12 @@ For the `jactl-vertx` library, there are two classes that handle the registratio
 
 We therefore need to list these classes in the `functionClasses` list of our `.jactlrc` file.
 
-If the jars are located under `~/.m2/repository/jactl/jactl-vertx/1.0.0` then a `.jactlrc` file that allows
+If the jars are located under `~/.m2/repository/jactl/jactl-vertx/{{ site.content.jactl_version }}` then a `.jactlrc` file that allows
 the Jactl REPL and the Jactl commandline script execution to use Vert.x and these new functions would look like this:
 ```groovy
 environmentClass = 'jactl.vertx.JactlVertxEnv'
-extraJars        = [ '~/.m2/repository/jactl/jactl-vertx/1.0.0/jactl-vertx-1.0.0.jar',
-                     '~/.m2/repository/jactl/jactl-vertx/1.0.0/jactl-vertx-1.0.0-tests.jar' ]
+extraJars        = [ '~/.m2/repository/jactl/jactl-vertx/{{ site.content.jactl_version }}/jactl-vertx-{{ site.content.jactl_version }}.jar',
+                     '~/.m2/repository/jactl/jactl-vertx/{{ site.content.jactl_version }}/jactl-vertx-{{ site.content.jactl_version }}-tests.jar' ]
 functionClasses  = [ 'jactl.vertx.JsonFunctions',
                      'jactl.vertx.example.VertxFunctions' ]
 ```
@@ -436,7 +436,7 @@ functionClasses  = [ 'jactl.vertx.JsonFunctions',
 
 Since the file is Jactl code we could also write it like this:
 ```groovy
-def VERSION = '1.0.0'                                                // The jactl-vertx version to use
+def VERSION = '{{ site.content.jactl_version }}'                                                // The jactl-vertx version to use
 def LIBS    = "~/.m2/repository/jactl/jactl-vertx/${VERSION}"    // Location of the jars
 
 // Specify the Vertx environment class to use
