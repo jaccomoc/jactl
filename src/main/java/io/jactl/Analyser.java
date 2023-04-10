@@ -167,8 +167,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (function != null) {
       if (function.isAsync == null) {
         assert isFirstPass;
-        // Forward reference to a function so we don't yet know if it will be async or not.
-        // Add ourselves to dependency map so we can be re-analysed at the end when we will
+        // Forward reference to a function, so we don't yet know if it will be async or not.
+        // Add ourselves to dependency map, so we can be re-analysed at the end when we will
         // hopefully know whether callee is async or not.
         addAsyncCallDependency(currentFunction(), expr, function);
       }
@@ -498,6 +498,27 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.expr);
     analyse(expr.source);
     analyse(expr.offset);
+
+    // If converting to an instance then we are async if initialiser is async
+    if (expr.varType.is(INSTANCE)) {
+      FunctionDescriptor initMethod = expr.varType.getClassDescriptor().getInitMethod();
+      if (initMethod.isAsync == null) {
+        assert isFirstPass;
+        addAsyncCallDependency(currentFunction(), expr, initMethod);
+      }
+      else {
+        // If initMethod is async then we need to mark ourselves as async
+        if (initMethod.isAsync) {
+          async(expr);
+        }
+      }
+    }
+
+    // Also async if expression we are converting from is async
+    if (expr.expr.isAsync) {
+      async(expr);
+    }
+
     freeLocals(3);
     return null;
   }
@@ -606,6 +627,14 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   ///////////////////////////////////////
 
   private void async(Expr expr) {
+    // Error if this would make a toString() implementation async.
+    // We don't support async toString() in order to support toString() invocations if object leaks into Java
+    // domain (by being stored in the globals Map) and to save on the extra generated code needed for invoking
+    // async functions and handling suspend/resume.
+    if (Utils.TO_STRING.equals(currentFunction().functionDescriptor.name)) {
+      throw new CompileError(Utils.TO_STRING + "() cannot invoke anything that is async or potentially async", expr.location);
+    }
+
     currentFunction().functionDescriptor.isAsync = true;
     expr.isAsync = true;
   }

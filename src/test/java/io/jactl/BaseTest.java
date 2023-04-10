@@ -111,6 +111,12 @@ public class BaseTest {
               expr instanceof Expr.ClassPath) {
             return expr;
           }
+          if (expr instanceof Expr.Identifier &&
+              ((Expr.Identifier)expr).identifier.getStringValue().equals(Utils.SUPER_VAR)) {
+            // Don't wrap super.xxx() calls because wrapping super in async means super.f() would turn into
+            // super(0,super).f() which would invoke this.f() and not super.f().
+            return expr;
+          }
           Expr newExpr = new Expr.Call(expr.location,
                                        new Expr.Identifier(expr.location.newIdent("sleep")),
                                        List.of(new Expr.Literal(new Token(TokenType.INTEGER_CONST, expr.location).setValue(0)),

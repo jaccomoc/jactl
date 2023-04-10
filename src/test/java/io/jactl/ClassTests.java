@@ -915,6 +915,9 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void toStringTest() {
+    useAsyncDecorator = false;
+    test("class X { int i = 1; def toString() { \"[ii:$i]\" + 'abc' } }; new X().toString()", "[ii:1]abc");
+    testError("class X { int i = 1; def toString() { sleep(0,\"[ii:$i]\") + sleep(0,'abc') } }; [x:new X()].toString()", "cannot invoke anything that is async");
     test("class X { X x; int i; String s }; new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz').toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; int i; String s }; X x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; int i; String s }; def x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
@@ -927,12 +930,14 @@ public class ClassTests extends BaseTest {
     test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = a as X; x.toString()", "[y:[x:[y:null]]]");
     test("class X { def toString() { 'xxx' } }; new X().toString()", "xxx");
     test("class X { def toString() { 'xxx' } }; def x = [new X()]; x.toString()", "[xxx]");
-    testError("class X { int i=3; def toString(x) { x + 'xxx' } }; def x = [new X()]; x.toString()", "toString() cannot have mandatory parameters");
+    testError("class X { int i=3; def toString(x) { x + 'xxx' } }; def x = [new X()]; x.toString()", "toString() cannot have parameters");
     test("def x = [:]; x.x = x; x.toString()", "[x:<CIRCULAR_REF>]");
     test("def a = [1,2,3]; [a:a,b:a].toString()", "[a:[1, 2, 3], b:[1, 2, 3]]");
+    test("class X { int i = 3; def toString() { new X().i.toString() } }; new X().toString()", "3");
   }
 
   @Test public void closedOverParams() {
+    useAsyncDecorator = false;
     test("class X { int i=3; String toString() { \"i=$i\" } }; def f(X x){ def g(){x.toString()}; g()}; f(new X())", "i=3");
   }
 
@@ -1145,6 +1150,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void superReferences() {
+    useAsyncDecorator = false;
     testError("class X { def f(){super.f()} }; X x = new X(); x.f()", "does not extend any base class");
     testError("class X {}; class Y extends X { def f(){super.f()} }; Y y = new Y(); y.f()", "no such method/field 'f'");
     testError("class X {}; class Y extends X { int i = 1; def f(){super.i} }; Y y = new Y(); y.f()", "no such field or method 'i'");

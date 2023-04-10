@@ -427,9 +427,11 @@ public class Parser {
     matchAny(EOL);
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
     if (inClassDecl && !isStatic && name.getStringValue().equals(Utils.TO_STRING)) {
-      Optional<Stmt.VarDecl> mandatoryParam = parameters.stream().filter(p -> p.declExpr.initialiser == null).findFirst();
-      if (mandatoryParam.isPresent()) {
-        throw new CompileError(Utils.TO_STRING + "() cannot have mandatory parameters", mandatoryParam.get().name);
+      if (!returnType.is(JactlType.STRING,JactlType.ANY)) {
+        throw new CompileError(Utils.TO_STRING + "() must return String or use 'def'", start);
+      }
+      if (parameters.size() > 0) {
+        throw new CompileError(Utils.TO_STRING + "() cannot have parameters", parameters.get(0).name);
       }
     }
     matchAny(EOL);

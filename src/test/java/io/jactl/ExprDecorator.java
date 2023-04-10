@@ -274,6 +274,9 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
     decorate(stmt.classBlock);
+    stmt.fieldVars.entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey(),
+                                                                entry -> decorate(entry.getValue())));
+    stmt.methods.forEach(this::decorate);
     decorate(stmt.scriptMain);
     return null;
   }
