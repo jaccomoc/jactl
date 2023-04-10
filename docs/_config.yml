@@ -25,7 +25,7 @@ description: >-
 baseurl: ""
 domain: "jactl.io"
 url: "https://jactl.io"
-twitter_username: JactLang
+twitter_username: JactlLang
 github_username:  jaccomoc
 
 # Build settings
