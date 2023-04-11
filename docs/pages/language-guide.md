@@ -1047,12 +1047,12 @@ precedence are shown with the same precedence value:
 |                  |              `?=`              | Conditional assignment                              |
 |                  | `+=` `-=` `*=` `/=` `%=` `%%=` | Arithmetic assignment operators                     |
 |                  |       `<<=` `>>=` `>>>=`       | Shift assignment operators                          |
-|                  |      `&=` `&#124;=` `^=`       | Bitwise assignment operators                        |
+|                  |         `&=` `\|=` `^=`         | Bitwise assignment operators                        |
 |        5         |             `? :`              | Ternary conditional opeartor                        |
 |                  |              `?:`              | Default value operator                              |
-|        6         |         `&#124;&#124;`         | Boolean or                                          |
- |        7         |              `&&`              | Boolean and                                         |
- |        8         |            `&#124;`            | Bitwise or                                          |
+|        6         |        `\|\|`                  | Boolean or                                          |
+ |        7        |              `&&`              | Boolean and                                         |
+ |        8        |            `\|`                | Bitwise or                                          |
 |        9         |              `^`               | Bitwise xor                                         |
 |        10        |              `&`               | Bitwise and                                         |
 |        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                   |
@@ -1471,7 +1471,7 @@ An expression such as `x += 5` is just shorthand for `x = x + 5`.
 
 The full list of assignment operators is:
 
-> `+=` `-=` `*=` `/=` `%=` `%%=` `<<=` `>>=` `>>>=` `&=` `&#124;=` `^=`  
+> `+=` `-=` `*=` `/=` `%=` `%%=` `<<=` `>>=` `>>>=` `&=` `|=` `^=`  
 
 For example:
 ```groovy
