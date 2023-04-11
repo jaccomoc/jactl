@@ -25,7 +25,9 @@ import org.objectweb.asm.Type;
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
@@ -404,43 +406,71 @@ public class LocalTypes {
          .forEachRemaining(StackEntry::convertToStack);
   }
 
-  public void saveLocals(int continuationVar, int longArr, int objArr) {
-    Utils.loadConst(mv, locals.size());
-    mv.visitInsn(DUP);
-    mv.visitIntInsn(NEWARRAY, T_LONG);
-    _storeLocal(longArr);
-    mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-    _storeLocal(objArr);
+  public void saveLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
+    Function<Integer,Boolean>    ignoreEntry = i -> i == continuationVar || i == globalsVar || i == longArr || i == objArr;
+    int  startSlot = isStatic ? 0 : 1;
+    boolean savePrimitives = IntStream.range(startSlot, locals.size())
+                                      .filter(i -> !ignoreEntry.apply(i))
+                                      .mapToObj(i -> locals.get(i))
+                                      .anyMatch(entry -> entry != null && entry.type.isPrimitive());
+    boolean saveObjects = IntStream.range(startSlot, locals.size())
+                                   .filter(i -> !ignoreEntry.apply(i))
+                                   .mapToObj(i -> locals.get(i))
+                                   .anyMatch(entry -> entry != null && !entry.type.isPrimitive());
 
-    int startSlot = isStatic ? 0 : 1;
-    for (int i = startSlot; i < locals.size(); i++) {
-      var entry = locals.get(i);
-      if (entry == null || i == continuationVar) {
-        continue;
+    if (!savePrimitives) {
+      mv.visitInsn(ACONST_NULL);
+      _storeLocal(longArr);
+    }
+    if (!saveObjects) {
+      mv.visitInsn(ACONST_NULL);
+      _storeLocal(objArr);
+    }
+
+    if (!savePrimitives && !saveObjects) {
+      return;   // nothing to do
+    }
+
+    Utils.loadConst(mv, locals.size());
+    if (savePrimitives && saveObjects) {
+      mv.visitInsn(DUP);
+    }
+    if (savePrimitives) {
+      mv.visitIntInsn(NEWARRAY, T_LONG);
+      _storeLocal(longArr);
+    }
+    if (saveObjects) {
+      mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+      _storeLocal(objArr);
+    }
+
+    for (int i = startSlot; i < locals.size(); ) {
+      var       entry = locals.get(i);
+      JactlType type  = entry == null ? null : entry.type;
+      if (entry != null && !ignoreEntry.apply(i)) {
+        _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
+        Utils.loadConst(mv, i);
+        _loadLocal(i);
+        if (type.isPrimitive()) {
+          if (type.is(BOOLEAN,INT)) { mv.visitInsn(I2L); }
+          if (type.is(DOUBLE)) {
+            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
+                               "doubleToRawLongBits",
+                               Type.getMethodDescriptor(Type.getType(long.class),
+                                                        Type.getType(double.class)),
+                               false); }
+        }
+        mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
       }
-      var type = entry.type;
-      _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
-      Utils.loadConst(mv, i);
-      _loadLocal(i);
-      if (type.isPrimitive()) {
-        if (type.is(BOOLEAN,INT)) { mv.visitInsn(I2L); }
-        if (type.is(DOUBLE)) {
-          mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
-                             "doubleToRawLongBits",
-                             Type.getMethodDescriptor(Type.getType(long.class),
-                                                      Type.getType(double.class)),
-                             false); }
-      }
-      mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
-      i += slotsNeeded(type) - 1;
+      i += type == null ? 1 : slotsNeeded(type);
     }
   }
 
-  public void restoreLocals(int continuationVar) {
+  public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
     int startSlot = isStatic ? 0 : 1;
     for (int i = startSlot; i < locals.size(); i++) {
       var entry = locals.get(i);
-      if (entry == null || i == continuationVar) {
+      if (entry == null || i == continuationVar || i == globalsVar || i == longArr || i == objArr) {
         continue;
       }
       var type = entry.type;

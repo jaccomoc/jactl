@@ -316,6 +316,7 @@ class Expr {
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
+    public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync ? 2 : 1) : -1; }
   }
 
   /**

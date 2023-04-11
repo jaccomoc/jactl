@@ -392,7 +392,7 @@ public class Parser {
     if (varAllowed ? matchAny(typesAndVar) : matchAny(types)) {
       return JactlType.valueOf(previous().getType());
     }
-    return JactlType.createInstance(className());
+    return JactlType.createInstanceType(className());
   }
 
   private boolean isFunDecl(boolean inClassDecl) {
@@ -463,7 +463,7 @@ public class Parser {
       }
       // We have an identifier but we don't yet know if it is a parameter name or a class name
       if (lookahead(() -> className() != null, () -> matchAny(IDENTIFIER))) {
-        type = JactlType.createInstance(className());   // we have a class name
+        type = JactlType.createInstanceType(className());   // we have a class name
       }
 
       // Note that unlike a normal varDecl where commas separate different vars of the same type,
@@ -694,16 +694,16 @@ public class Parser {
       // Since we allow multiple fields in the same declaration we need to check for Stmt.Stmts as well as
       // just Stmt.VarDecl (e.g. int i,j=2  --> Stmt.Stmts(VarDecl i, VarDecl j) so we use flatMap to flatten
       // to a single stream of Stmt objects.
-      List<Stmt.VarDecl> fields = classStmts.stream()
-                                            .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts) stmt).stmts.stream()
-                                                                                        : Stream.of(stmt))
-                                            .filter(stmt -> stmt instanceof Stmt.VarDecl)
-                                            .map(stmt -> (Stmt.VarDecl) stmt)
-                                            .collect(Collectors.toList());
+      classDecl.fields = classStmts.stream()
+                                   .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts) stmt).stmts.stream()
+                                                                               : Stream.of(stmt))
+                                   .filter(stmt -> stmt instanceof Stmt.VarDecl)
+                                   .map(stmt -> (Stmt.VarDecl) stmt)
+                                   .collect(Collectors.toList());
 
       classBlock.functions   = classDecl.methods;
       classDecl.innerClasses = innerClasses;
-      fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
+      classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
       return classDecl;
     }
     finally {
@@ -1054,7 +1054,7 @@ public class Parser {
    */
   private Expr newInstance() {
     var token     = expect(NEW);
-    var className = JactlType.createInstance(className());
+    var className = JactlType.createInstanceType(className());
     var leftParen = expect(LEFT_PAREN);
     var args      = arguments();
     return Utils.createNewInstance(token, className, leftParen, args);

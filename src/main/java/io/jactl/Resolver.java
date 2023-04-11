@@ -18,7 +18,6 @@
 package io.jactl;
 
 import io.jactl.runtime.*;
-import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 
 import java.lang.reflect.Method;
@@ -128,7 +127,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         jactlContext.globalVars.put(name, varDecl);
       }
     });
-    // Build map of builtin functions, making them look like internal functions for consistency
+    // Build map of built-in functions, making them look like internal functions for consistency
     BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, builtinVarDecl(f)));
   }
 
@@ -232,7 +231,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (varDecl.isField) {
           String fieldName = varDecl.name.getStringValue();
           if (Functions.lookupMethod(ANY, fieldName) != null) {
-            error("Field name '" + fieldName + "' clashes with builtin method of same name", varDecl.name);
+            error("Field name '" + fieldName + "' clashes with built-in method of same name", varDecl.name);
           }
           if (!classDescriptor.addField(fieldName, varDecl.type, varDecl.initialiser == null)) {
             error("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
@@ -242,14 +241,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
       var                initMethod         = createInitMethod(classDecl);
       FunctionDescriptor initFuncDescriptor = initMethod.declExpr.functionDescriptor;
-      initFuncDescriptor.firstArgtype = classType.createInstance();
+      initFuncDescriptor.firstArgtype = classType.createInstanceType();
       classDescriptor.setInitMethod(initFuncDescriptor);
 
       classDecl.methods.forEach(funDeclStmt -> {
         var    funDecl    = funDeclStmt.declExpr;
         String methodName = funDecl.nameToken.getStringValue();
         FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
-        functionDescriptor.firstArgtype       = classType.createInstance();
+        functionDescriptor.firstArgtype       = classType.createInstanceType();
         if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
           error("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
@@ -277,7 +276,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classDecl.methods = RuntimeUtils.concat(initMethod, classDecl.methods);
 
       // Create varDecl for "this"
-      var thisDecl = fieldDecl(classDecl.name, Utils.THIS_VAR, JactlType.createInstance(classDescriptor));
+      var thisDecl = fieldDecl(classDecl.name, Utils.THIS_VAR, JactlType.createInstanceType(classDescriptor));
       thisDecl.declExpr.slot = 0;                // "this" is always in local var slot 0
       classDecl.thisField = thisDecl.declExpr;
       var thisStmt = thisDecl;
@@ -286,7 +285,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       var baseClass = classDescriptor.getBaseClass();
       var superStmts = new ArrayList<Stmt>();
       if (baseClass != null) {
-        var superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstance(classDescriptor.getBaseClass()));
+        var superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstanceType(classDescriptor.getBaseClass()));
         superDecl.declExpr.slot = 0;             // "super" is always in local var slot 0
         superStmts.add(superDecl);
         superStmts.addAll(baseClass.getAllFields()
@@ -310,16 +309,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStmts.stmts.addAll(superStmts);
       classStmts.stmts.addAll(classDecl.innerClasses);
       classStmts.stmts.add(thisStmt);
-      var fields = classDecl.fieldVars.values()
-                                      .stream()
-                                      .map(decl -> {
-                                        var newDecl = new Expr.VarDecl(decl.name, null);
-                                        newDecl.isField = true;
-                                        newDecl.type    = decl.type;
-                                        return newDecl;
-                                      })
-                                      .map(decl -> new Stmt.VarDecl(decl.name, decl))
-                                      .collect(Collectors.toList());
+      var fields = classDecl.fields.stream()
+                                   .map(decl -> {
+                                     var newDecl = new Expr.VarDecl(decl.name, null);
+                                     newDecl.isField = true;
+                                     newDecl.type    = decl.declExpr.type;
+                                     return newDecl;
+                                   })
+                                   .map(decl -> new Stmt.VarDecl(decl.name, decl))
+                                   .collect(Collectors.toList());
       classStmts.stmts.addAll(fields);
       classStmts.stmts.addAll(classDecl.methods);
     }
@@ -603,7 +601,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
             expr.type = expr.type.boxed();         // since with ?. and ?[ we could get null
           }
           // Field access if we have an instance and if field is not a function since some functions might be
-          // static functions or builtin functions which aren't fields from a GETFIELD point of view.
+          // static functions or built-in functions which aren't fields from a GETFIELD point of view.
           expr.isFieldAccess = expr.left.type.is(INSTANCE) && expr.right instanceof Expr.Literal && !expr.type.is(FUNCTION);
         }
         // '[' and '?['
@@ -688,7 +686,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (type == null && fieldName != null) {
         var descriptor = desc.getMethod(fieldName);
         if (descriptor == null) {
-          // Finally check if builtin method exists for that name
+          // Finally check if built-in method exists for that name
           descriptor = lookupMethod(parent.type, (String) fieldName);
         }
         if (descriptor != null) {
@@ -715,7 +713,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return type;
     }
     else {
-      // Might be a builtin method...
+      // Might be a built-in method...
       if (lookupMethod(parent.type, (String) fieldName) != null) {
         return FUNCTION;
       }
@@ -1575,8 +1573,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (!(jactlContext.replMode && isAtTopLevel())) {
       var existingDecl = vars.get(varName);
       // Allow fields to be shadowed by local variables
-      if (existingDecl != null && !existingDecl.isField) {
-        error("Variable '" + varName + "' in scope " + currentFunctionName() + " clashes with previously declared variable of same name", decl.name);
+      if (existingDecl != null && (!existingDecl.isField || decl.isField)) {
+        error("Variable '" + varName + "' in scope " + currentFunctionName() +
+              " clashes with previously declared " + (existingDecl.isField ? "field" : "variable") + " of same name", decl.name);
       }
     }
     // Add variable with type of UNDEFINED as a marker to indicate variable has been declared but is
@@ -1795,7 +1794,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Reference to '" + name + "' in static function", location);
     }
 
-    // We haven't found symbol yet so check super classes, class names, builtin functions
+    // We haven't found symbol yet so check super classes, class names, built-in functions
     if (varDecl == null) { varDecl = lookupClassMember(name);       }
     if (varDecl == null) { varDecl = lookupClass(name, location);   }
     if (varDecl == null) { varDecl = builtinFunctions.get(name);    }
@@ -2324,7 +2323,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                         .collect(Collectors.toList());
     JactlType   classType     = createClass(classDescriptor);
     Token        initNameToken = token.newIdent(Utils.JACTL_INIT);
-    Expr.FunDecl initFunc      = Utils.createFunDecl(token, initNameToken, classType.createInstance(), mandatoryParams, false, true, false);
+    Expr.FunDecl initFunc      = Utils.createFunDecl(token, initNameToken, classType.createInstanceType(), mandatoryParams, false, true, false);
     Stmt.Stmts initStmts       = new Stmt.Stmts();
     initFunc.block             = new Stmt.Block(token, initStmts);
 
@@ -2377,7 +2376,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     initStmts.stmts.add(new Stmt.Return(token,
                                         new Expr.Return(token,
                                                         new Expr.Identifier(token.newIdent(Utils.THIS_VAR)),
-                                                        classType.createInstance())));
+                                                        classType.createInstanceType())));
 
     initFunc.classDecl = classDecl;
     var initMethod = new Stmt.FunDecl(initNameToken, initFunc);
@@ -2495,7 +2494,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     wrapperSmts.stmts.add(new Stmt.Return(classDecl.name,
                                         new Expr.Return(classDecl.name,
                                                         new Expr.Identifier(classDecl.name.newIdent(Utils.THIS_VAR)),
-                                                        classType.createInstance())));
+                                                        classType.createInstanceType())));
     return initWrapper;
   }
 

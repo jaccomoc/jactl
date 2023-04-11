@@ -31,17 +31,25 @@ public class ClassTests extends BaseTest {
     test("class X{}; int X = 1; X", 1);
     test("class X{static def f(){2}}; Map X = [f:{3}]; X.f()", 3);
     test("class X{static def f(){2}}; def X = [f:{3}]; X.f()", 3);
-    test("class X{int i=2}; Map X = [i:1]; X x = new X(); X.i", 1);
-    test("class X{int i=2}; Map X = [i:1]; def x = new X(); X.i", 1);
-    test("class X{int i=2}; X X = new X(); X.i", 2);
-    test("class X{int i=2}; def X = new X(); X.i", 2);
-    test("class X{int i=2}; { X X = new X(); return X.i}", 2);
-    test("class X{int i=2}; {def X = new X(); return X.i}", 2);
+    test("class X{int i}; Map X = [i:1]; X x = new X(2); X.i", 1);
+    test("class X{int i}; Map X = [i:1]; def x = new X(2); X.i", 1);
+    test("class X{int i}; X X = new X(2); X.i", 2);
+    test("class X{int i}; def X = new X(2); X.i", 2);
+    test("class X{int i}; { X X = new X(2); return X.i}", 2);
+    test("class X{int i}; {def X = new X(2); return X.i}", 2);
     testError("def x = 1; class A { static def f(){x} }; A.f()", "unknown variable");
     testError("def x = 1; class A { def f(){x} }; A.f()", "unknown variable");
     testError("class X {}; def x = X", "cannot convert");
     testError("class X {}; def x; x = X", "cannot convert");
     testError("class X {}; def f(){X}; def x; x = f()", "not compatible");
+  }
+
+  @Test public void asyncInitialisers() {
+    useAsyncDecorator = false;
+    test("class X { int i = 1 }; new X().i", 1);
+    test("class X { int i = sleep(0,1) }; new X().i", 1);
+    test("class X { int i = sleep(0,1); String s }; new X('abc').i", 1);
+    test("class X { int i }; new X(2).i", 2);
   }
 
   @Test public void simpleClass() {
@@ -51,30 +59,30 @@ public class ClassTests extends BaseTest {
     test("class X { def f(){3} }; def g = new X().f; g()", 3);
     test("class X { def f(x){x*x} }; new X().f(3)", 9);
     test("class X { def f(x){x*x} }; def g = new X().f; g(3)", 9);
-    test("class X { int i = 2; def f(x){i*x} }; new X().f(3)", 6);
-    test("class X { int i = 2; def f(x){i*x} }; def g = new X().f; g(3)", 6);
-    test("class X { int i = 2; def f(x){i*x} }; def g = new X().\"${'f'}\"; g(3)", 6);
+    test("class X { int i; def f(x){i*x} }; new X(2).f(3)", 6);
+    test("class X { int i; def f(x){i*x} }; def g = new X(2).f; g(3)", 6);
+    test("class X { int i; def f(x){i*x} }; def g = new X(2).\"${'f'}\"; g(3)", 6);
     test("class X { def f(x){x*x} }; X x = new X(); x.f(3)", 9);
     test("class X { def f(x){x*x} }; X x = new X(); def g = x.f; g(3)", 9);
-    test("class X { int i = 2; def f(x){i*x} }; X x = new X(); def g = x.f; g(3)", 6);
-    test("class X { int i = 2; def f(x){i*x} }; X x = new X(); def g = x.\"${'f'}\"; g(3)", 6);
+    test("class X { int x; int i = 2; def f(x){i*x} }; X x = new X(1); def g = x.f; g(3)", 6);
+    test("class X { int x; int i = 2; def f(x){i*x} }; X x = new X(1); def g = x.\"${'f'}\"; g(3)", 6);
     test("class X { def f(x){x*x} }; def x = new X(); x.f(3)", 9);
     test("class X { def f(x){x*x} }; def x = new X(); def g = x.f; g(3)", 9);
-    test("class X { int i = 2; def f(x){i*x} }; def x = new X(); def g = x.f; g(3)", 6);
-    test("class X { int i = 2; def f(x){i*x} }; def x = new X(); def g = x.\"${'f'}\"; g(3)", 6);
-    test("class X { def f = {it*it} }; new X().f(2)", 4);
-    test("class X { def f = {it*it} }; new X().\"${'f'}\"(2)", 4);
-    test("class X { def f = {it*it} }; X x = new X(); x.f(2)", 4);
-    test("class X { def f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
-    test("class X { def f = {it*it} }; def x = new X(); x.f(2)", 4);
-    test("class X { def f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
-    test("class X { var f = {it*it} }; new X().f(2)", 4);
-    test("class X { var f = {it*it} }; new X().\"${'f'}\"(2)", 4);
-    test("class X { var f = {it*it} }; X x = new X(); x.f(2)", 4);
-    test("class X { var f = {it*it} }; X x = new X(); x.\"${'f'}\"(2)", 4);
-    test("class X { var f = {it*it} }; def x = new X(); x.f(2)", 4);
-    test("class X { var f = {it*it} }; def x = new X(); x.\"${'f'}\"(2)", 4);
-    testError("class X { int i = sleep(0,-1)+sleep(0,2); static def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", "field in static function");
+    test("class X { int x; int i = 2; def f(x){i*x} }; def x = new X(1); def g = x.f; g(3)", 6);
+    test("class X { int x; int i = 2; def f(x){i*x} }; def x = new X(1); def g = x.\"${'f'}\"; g(3)", 6);
+    test("class X { int x; def f = {it*it} }; new X(1).f(2)", 4);
+    test("class X { int x; def f = {it*it} }; new X(1).\"${'f'}\"(2)", 4);
+    test("class X { int x; def f = {it*it} }; X x = new X(1); x.f(2)", 4);
+    test("class X { int x; def f = {it*it} }; X x = new X(1); x.\"${'f'}\"(2)", 4);
+    test("class X { int x; def f = {it*it} }; def x = new X(1); x.f(2)", 4);
+    test("class X { int x; def f = {it*it} }; def x = new X(1); x.\"${'f'}\"(2)", 4);
+    test("class X { int x; var f = {it*it} }; new X(1).f(2)", 4);
+    test("class X { int x; var f = {it*it} }; new X(1).\"${'f'}\"(2)", 4);
+    test("class X { int x; var f = {it*it} }; X x = new X(1); x.f(2)", 4);
+    test("class X { int x; var f = {it*it} }; X x = new X(1); x.\"${'f'}\"(2)", 4);
+    test("class X { int x; var f = {it*it} }; def x = new X(1); x.f(2)", 4);
+    test("class X { int x; var f = {it*it} }; def x = new X(1); x.\"${'f'}\"(2)", 4);
+    testError("class X { int x; int i = sleep(0,-1)+sleep(0,2); static def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(1); def g = x.f(); g() + g() + x.i", "field in static function");
   }
 
   @Test public void simpleStaticMethods() {
@@ -106,12 +114,16 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void fieldClashWithBuiltinMethod() {
-    testError("class X { int toString = 1 }; new X().toString", "clashes with builtin method");
+    testError("class X { int x; int toString = 1 }; new X(1).toString", "clashes with built-in method");
   }
 
   @Test public void simpleFields() {
+    useAsyncDecorator = false;
     test("class X { int i = 1 }; new X().i", 1);
     test("class X { int i }; new X(1).i", 1);
+    testError("class X { int i = 1; String i = 'abc' }; new X().i", "clashes with previously declared field");
+    testError("class X { int i = 1; String i() { 'abc' }}; new X().i", "clashes with another field or method");
+    testError("class X { String i() { 'abc' }; int i = 1 }; new X().i", "clashes with another field or method");
     test("class X { def i = 1 }; new X().i", 1);
     test("class X { var i = 1 }; new X().i", 1);
     testError("class X { int i }; new X().i", "missing mandatory field: i");
@@ -157,24 +169,23 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void fieldsWithInitialisers() {
-    test("class X { int i = 1; long j = i + 2 }; new X().j", 3L);
-    test("class X { int i = j+1; long j = i + 2 }; new X().j", 3L);
-    test("class X { int i = 1; long j = i+1; long k = j+1 }; new X().k", 3L);
-
-    test("class X { int i = 1; long j = this.i+2 }; new X().j", 3L);
-    test("class X { int i = this.j+1; long j = this.i+2 }; new X().j", 3L);
+    test("class X { int x; int i = 1; long j = i + 2 }; new X(1).j", 3L);
+    test("class X { int x; int i = j+1; long j = i + 2 }; new X(1).j", 3L);
+    test("class X { int x; int i = 1; long j = i+1; long k = j+1 }; new X(1).k", 3L);
+    test("class X { int x; int i = 1; long j = this.i+2 }; new X(1).j", 3L);
+    test("class X { int x; int i = this.j+1; long j = this.i+2 }; new X(1).j", 3L);
 
     test("class X { int x; def z={++x + ++y}; def y=++x+2 }; new X(3).z()", 12);
     test("class X { int x; def z(){++x + ++y}; def y=++x+2 }; new X(3).z()", 12);
     test("class X { int x; def y=++x+2; def z={++x + ++y} }; new X(3).z()", 12);
     test("class X { int x; def y=++x+2; def z={++x + ++y} }; new X(x:3,y:2).z()", 7);
     test("class X { int x; def y=++x+2; def z={++x + ++y} }; def x = new X(0); x.x++; x.z()", 7);
-    test("class X { String x = null }; new X().x", null);
-    test("class X { String x = null }; new X().x = null", null);
-    test("class X { List x = null }; new X().x", null);
-    test("class X { List x = null }; new X().x = null", null);
-    test("class X { Map x = null }; new X().x", null);
-    test("class X { Map x = null }; new X().x = null", null);
+    test("class X { int i; String x = null }; new X(1).x", null);
+    test("class X { int i; String x = null }; new X(1).x = null", null);
+    test("class X { int i; List x = null }; new X(1).x", null);
+    test("class X { int i; List x = null }; new X(1).x = null", null);
+    test("class X { int i; Map x = null }; new X(1).x", null);
+    test("class X { int i; Map x = null }; new X(1).x = null", null);
   }
 
   @Test public void methodsAsValues() {
@@ -799,7 +810,6 @@ public class ClassTests extends BaseTest {
 
   @Test public void assignmentsAndEquality() {
     test("class X { int i }; X x = [i:2]; x.i", 2);
-    test("class X { int i = 1}; X x; x = [i:2]; x.i", 2);
     test("class X { int i }; X x = [i:2]; x.i = 3", 3);
     test("class X { int i }; X x = [i:2]; x.i = 3; x.i", 3);
     test("class X { int i }; X x = [i:2]; x['i'] = 3", 3);
@@ -839,6 +849,11 @@ public class ClassTests extends BaseTest {
     test("class X { int i; int j; def x = null }; def x1 = new X(i:1,j:2,x:[i:3,j:4]); def x2 = new X(1,2); x1 != x2", true);
     test("Z f() { return new Z(3) }; class Z { int i }; Z z = f(); z instanceof Z", true);
     test("def f() { return new Z(3) }; class Z { int i }; Z z = f(); z instanceof Z", true);
+  }
+
+  @Test public void assignmentsAndEquality2() {
+    useAsyncDecorator = false;
+    test("class X { int i = 1}; X x; x = [i:2]; x.i", 2);
     test("class X { int i=1; int j=2 }; new X() == [i:1,j:2]", true);
     test("class X { int i=1; int j=2 }; new X() != [i:1,j:2]", false);
     test("class X { int i=1; int j=2 }; new X() == [i:1,j:2,k:3]", false);
@@ -856,6 +871,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void mapConversions() {
+    useAsyncDecorator = false;
     test("class X { int i = 0 }; X x = [i:2]; x.i", 2);
     test("class X { int i = 0 }; X x = [i:2]; (x as Map).i", 2);
     test("class X { int i = 0 }; def x = [i:2]; (x as Map).i", 2);
@@ -880,12 +896,16 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void instanceOf() {
+    useAsyncDecorator = false;
     test("class X { int i=0 }; new X() instanceof X", true);
     test("class X { int i=0 }; X x = new X(); x instanceof X", true);
     test("class X { int i=0 }; def x = new X(); x instanceof X", true);
     test("class X { int i=0 }; new X() !instanceof X", false);
     test("class X { int i=0 }; X x = new X(); x !instanceof X", false);
     test("class X { int i=0 }; def x = new X(); x !instanceof X", false);
+  }
+
+  @Test public void instanceOf2() {
     test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = a as X; Y y = new Y(x); x instanceof X && y instanceof Y && x !instanceof Y && y !instanceof X && x.y instanceof Y && y.x instanceof X", true);
     test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z; z instanceof X", false);
     test("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Z(); z instanceof X", true);
@@ -965,10 +985,20 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void closedOverThis() {
+    useAsyncDecorator = false;
     test("class X { int i = 1; def f(){ return { ++i } } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
   }
 
   @Test public void autoCreateFieldsDuringAssignment() {
+    if (asyncAutoCreate()) {
+      test("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", 4);
+      test("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", 4);
+    }
+    else {
+      useAsyncDecorator = false;
+      testError("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", "detected async");
+      testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
+    }
     test("class X { Y y }; class Y { int i = 3 }; X x = new X(null); x.y.i = 4; x.y.i", 4);
     test("class X { Y y }; class Y { int i = 3 }; def x = new X(null); x.y.i = 4; x.y.i", 4);
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
@@ -1017,6 +1047,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void newlinesInClassDecl() {
+    useAsyncDecorator = false;
     test("class\nX\n{\nint\ni=\n1\ndef\nf(\n)\n{\ni\n+\ni\n}\n}\nnew\nX\n(\n)\n.\ni", 1);
   }
 
@@ -1025,13 +1056,13 @@ public class ClassTests extends BaseTest {
     test("class A { def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12);
     test("class A { def a() { long x = 1; return { x++ } } }; def f = new A().a(); f() + f() + f()", 6L);
     test("class A { def a() { long x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12L);
-    test("class A { long x = 1; def a() { def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A().a(); b() + b() + b()", 12L);
-    test("class A { String x = '1'; def f = { def g() { x + x }; g() } }; new A().f()", "11");
-    test("class A { long x = 1; def f = { def g() { x + x }; g() } }; new A().f()", 2L);
-    test("class A { double x = 1; def f = { def g() { x + x }; g() } }; new A().f()", 2D);
-    test("class A { Decimal x = 1; def f = { def g() { x + x }; g() } }; new A().f()", "#2");
-    test("class A { def x = { it=2 -> it + it }; def f = { def g() { x() + x() }; g() }}; new A().f()", 8);
-    test("class A { def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}; new A().f()", 16);
+    test("class A { long x; def a() { def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = new A(1L).a(); b() + b() + b()", 12L);
+    test("class A { String x; def f = { def g() { x + x }; g() } }; new A('1').f()", "11");
+    test("class A { long x; def f = { def g() { x + x }; g() } }; new A(1L).f()", 2L);
+    test("class A { double x; def f = { def g() { x + x }; g() } }; new A(1).f()", 2D);
+    test("class A { Decimal x; def f = { def g() { x + x }; g() } }; new A(1).f()", "#2");
+    test("class A { int i; def x = { it=2 -> it + it }; def f = { def g() { x() + x() }; g() }}; new A(1).f()", 8);
+    test("class A { int i; def x = { y=2 -> y+y }; def f = { def g = { def a(x){x+x}; a(x()) + a(x()) }; g() }}; new A(1).f()", 16);
     test("class A { def f(x,y=++x) { def g() { x+y }; g() }}; new A().f(3)", 8);
     test("class A { def f(x,y={++x}) { def g() { y()+x }; g() }}; new A().f(3)", 8);
     test("class A { def f(x,y=++x+2,z={++x + ++y}) { def g() { x++ + y++ + z() }; g() }}; new A().f(3)", 24);
@@ -1104,16 +1135,20 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void baseClasses() {
-    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new Y().x", 2);
-    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new X().x", 1);
-    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(); x.x", 2);
-    test(" class X { int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(); x.f()", 2);
+    test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new Y(1).x", 2);
+    test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new X(1).x", 1);
+    test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(1); x.x", 2);
+    test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(1); x.f()", 2);
     testError("class X { int f(){1} }; class Y extends X { long f(){1} }; new Y().f()", "'long' not compatible");
-    test("class X { int i = 3 }; class Y extends X { int j = 1 }; Y y = new Y(); y.i + y.j", 4);
+    test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
     testError("class X { int i = 3 }; class Y extends X { int i = 1 }; Y y = new Y(); y.i + y.j", "field 'i' clashes");
     testError("class X { int i = 3 }; class Y extends X { def i(x){x} }; Y y = new Y(); y.i + y.j", "method name 'i' clashes");
     testError("class X { int i = 2 }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", "too many arguments");
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
+  }
+
+  @Test public void baseClasses2() {
+    useAsyncDecorator = false;
     test("class X { int i = 2 }; class Y extends X { int j = i+1 }; Y y = new Y(); y.i + y.j", 5);
     test("class X { int i }; class Y extends X { int j = i+1 }; Y y = new Y(3); y.i + y.j", 7);
     test("class X { int i }; class Y extends X { int j = this.i+1 }; Y y = new Y(3); y.i + y.j", 7);
@@ -1181,30 +1216,47 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void asyncTests() {
-    test("class X { int i = 1 }; new X().\"${sleep(0,'i')}\"", 1);
-    test("class X { int abc = 1 }; new X().\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
-    test("class X { int abc = 1 }; X x = new X(); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
-    test("class X { int abc = 1 }; def x = new X(); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
-    test("class X { int abc = sleep(0,1) + sleep(0,new X(abc:3).abc) }; def x = new X(); x.abc", 4);
-    test("class X { int i = sleep(0,-1)+sleep(0,2); def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
-    test("class X { Y y = sleep(0,null) }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2; x.y.i", 2);
-    test("class X { Y y = sleep(0,null) }; class Y { int i = sleep(0,1) }; def x = new X(); x.y.i = 2; x.y.i", 2);
-    test("class X { def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { def f() { sleep(0,5) + sleep(0,4)} }; def y = new Y(); y.f()", 9);
-    test("class X { def f() { 1 + 2 }}; class Y extends X { def f() { super.f() + 5 + 4} }; def y = new Y(); y.f()", 12);
-    test("class X { def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { def f() { super.f() + sleep(0,5) + sleep(0,4)} }; def y = new Y(); y.f()", 12);
-    test("class X { def f(x) { x == 0 ? 0 : sleep(0,f(x-1)) + sleep(0,x) }}; class Y extends X { def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
-    test("class X { def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(); y.f(4) + y.f(5)", 15 + 21);
+    test("class X { int z;  int i = 1 }; new X(1).\"${sleep(0,'i')}\"", 1);
+    test("class X { int z;  int abc = 1 }; new X(1).\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
+    test("class X { int z;  int abc = 1 }; X x = new X(1); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
+    test("class X { int z;  int abc = 1 }; def x = new X(1); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
+    test("class X { int z;  int abc = sleep(0,1) + sleep(0,new X(abc:3,z:1).abc) }; def x = new X(1); x.abc", 4);
+    test("class X { int z;  int i = sleep(0,-1)+sleep(0,2); def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(1); def g = x.f(); g() + g() + x.i", 8);
+  }
+
+  @Test public void asyncTests2() {
+    if (!asyncAutoCreate()) {
+      useAsyncDecorator = false;
+    }
+    test("class X { int z;  Y y = sleep(0,null) }; class Y { int i = 1 }; X x = new X(1); x.y.i = 2; x.y.i", 2);
+    test("class X { int z;  Y y = sleep(0,null) }; class Y { int i = 1 }; def x = new X(1); x.y.i = 2; x.y.i", 2);
+    test("class X { int z;  def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { int i;  def f() { sleep(0,5) + sleep(0,4)} }; def y = new Y(1,1); y.f()", 9);
+    test("class X { int z;  def f() { 1 + 2 }}; class Y extends X { int i;  def f() { super.f() + 5 + 4} }; def y = new Y(1,1); y.f()", 12);
+    test("class X { int z;  def f() { sleep(0,1) + sleep(0,2) }}; class Y extends X { int i;  def f() { super.f() + sleep(0,5) + sleep(0,4)} }; def y = new Y(1,1); y.f()", 12);
+    test("class X { int z;  def f(x) { x == 0 ? 0 : sleep(0,f(x-1)) + sleep(0,x) }}; class Y extends X { int i;  def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(1,1); y.f(4) + y.f(5)", 15 + 21);
+    test("class X { int z;  def f(x) { x == 0 ? 0 : f(x-1) + x }}; class Y extends X { int i;  def f(x) { sleep(0, super.f(x)) + sleep(0,1) } }; def y = new Y(1,1); y.f(4) + y.f(5)", 15 + 21);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.(sleep(0,'y')).z.x.y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.(sleep(0,'z')).x.y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.(sleep(0,'x')).y.z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.x.(sleep(0,'y')).z.i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.x.y.(sleep(0,'z')).i = 4; x.y.z.\"${'x'}\".y.z.i", 4);
     test("class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z.x.y.z.(sleep(0,'i')) = 4; x.y.z.\"${'x'}\".y.z.i", 4);
-    test("class X { int i = sleep(0,3) }; sleep(0,new X()).i", 3);
+    test("class X { int z; int i = sleep(0,3) }; sleep(0,new X(1)).i", 3);
     test("class X { int i }; sleep(0,new X(i:sleep(0,3))).i", 3);
-    test("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
-    test("class X { Y y = null }; class Y { int i = sleep(0,1) }; def x = new X(); x.y.i = 2", 2);
-    test("class X { Y y = null }; class Y { int i = 1 }; def x = new X(); x.y.i = 2", 2);
+    if (asyncAutoCreate()) {
+      test("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
+    }
+    else {
+      testError("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "detected async");
+    }
+    testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "null value for parent");
+    testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; def x = new X(); x.y.i = 2", "mandatory fields");
+    testError("class X { Y y = null }; class Y { int z; int i = 1 }; def x = new X(); x.y.i = 2", "mandatory fields");
+  }
+
+  @Test public void asyncAutoCreateDetection() {
+    useAsyncDecorator = false;
+    test("class X { Y y = null }; class Y { int i = 1 }; new X().\"${'y'}\".i = 2", 2);
   }
 
   @Test public void cast() {
@@ -1385,6 +1437,16 @@ public class ClassTests extends BaseTest {
     test("class X{ int i = 3 }; X x = null; (x?:new X()).i = 4", 4);
     test("class X{ int i = 3 }; X x = null; (x?:new X())['i'] = 4", 4);
     test("class X{ int i = 3; Y y = null }; class Y{int i=4}; X x = null; (x?:new X())?.y?.i", null);
-    test("class X{ int i = 3; Y y = null }; class Y{int i=4}; X x = null; (x?:new X())?.y?.i = 5", 5);
+    if (asyncAutoCreate()) {
+      test("class X{ int i = 3; Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", 5);
+      test("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=4}; X x = null; (x?:new X())?.y?.i = 5", 5);
+    }
+    else {
+      testError("class X{ int i = 3; Y y = null }; class Y{ int i = sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
+      testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
+      testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.\"${'y'}\"?.i = 5", "detected async");
+      testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.(sleep(0,'y'))?.i = 5", "detected async");
+    }
+    test("class X{ int i = sleep(0,3) }; (null?:new X())?.i = 5", 5);
   }
 }

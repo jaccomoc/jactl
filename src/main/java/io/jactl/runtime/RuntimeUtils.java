@@ -1300,7 +1300,7 @@ public class RuntimeUtils {
       value = getJactlFieldOrMethod((JactlObject) parent, field, source, offset, false, false);
     }
     else {
-      // Fields of a map cannot override builtin methods so look up method first
+      // Fields of a map cannot override built-in methods so look up method first
       value = onlyField ? null : Functions.lookupWrapper(parent, field);
       if (value == null && parent instanceof Map) {
         value = ((Map) parent).get(field);
@@ -1516,7 +1516,7 @@ public class RuntimeUtils {
    */
   private static Object getJactlFieldOrMethod(JactlObject parent, Object field, String source, int offset, boolean createIfMissing, boolean isMap) {
     // Check for field, instance method, static method, and then if that fails check if there
-    // is a generic builtin method that applies
+    // is a generic built-in method that applies
     String fieldName     = field.toString();
     Object fieldOrMethod = parent._$j$getFieldsAndMethods().get(fieldName);
     if (fieldOrMethod instanceof MethodHandle) {

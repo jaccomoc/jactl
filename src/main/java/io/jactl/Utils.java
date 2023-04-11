@@ -353,7 +353,7 @@ public class Utils {
   public static Expr.FunDecl createFunDecl(Token start, Token nameToken, JactlType returnType, List<Stmt.VarDecl> params, boolean isStatic, boolean isInitMethod, boolean isFinal) {
     Expr.FunDecl funDecl = new Expr.FunDecl(start, nameToken, returnType, params);
 
-    // Build a FunctionDescriptor to unify Jactl functions with builtin functions
+    // Build a FunctionDescriptor to unify Jactl functions with built-in functions
     int mandatoryArgCount = mandatoryParamCount(params);
     FunctionDescriptor descriptor = new FunctionDescriptor(nameToken == null ? null : nameToken.getStringValue(),
                                                            returnType,

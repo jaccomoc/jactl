@@ -42,7 +42,7 @@ public class FunctionDescriptor {
   public boolean          isFinal      = false;     // True if user function is declared as final
   public boolean          isVarArgs    = false;     // Varargs if last param is Object[]
 
-  // Used by builtin functions:
+  // Used by built-in functions:
   public boolean          needsLocation;
   public String           wrapperMethod;
   public MethodHandle     wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])

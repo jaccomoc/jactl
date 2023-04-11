@@ -127,41 +127,51 @@ public class JactlType {
     return new JactlType(type, false, true);
   }
 
-  public static JactlType createInstance(Class clss) {
+  /**
+   * Create instance type from class type
+   * @param clss  the Java class representing the instance type
+   * @return a mew JactlType of type INSTANCE
+   */
+  public static JactlType createInstanceType(Class clss) {
     JactlType type   = createRefType(TypeEnum.INSTANCE);
     type.internalName = Type.getInternalName(clss);
     return type;
   }
 
-  public static JactlType createInstance(ClassDescriptor clss) {
+  /**
+   * Create instance type from class type
+   * @param clss  the ClassDescriptor for the class
+   * @return a mew JactlType of type INSTANCE
+   */
+  public static JactlType createInstanceType(ClassDescriptor clss) {
     JactlType type      = createRefType(TypeEnum.INSTANCE);
     type.classDescriptor = clss;
     type.internalName    = type.classDescriptor.getInternalName();
     return type;
   }
 
-  public static JactlType createInstance(List<Expr> className) {
+  public static JactlType createInstanceType(List<Expr> className) {
     JactlType type = createRefType(TypeEnum.INSTANCE);
     type.className  = className;
     return type;
   }
 
   public static JactlType createClass(List<Expr> className) {
-    JactlType classType = createInstance(className);
+    JactlType classType = createInstanceType(className);
     classType.type = TypeEnum.CLASS;
     return classType;
   }
 
   // Create instance type from class type
-  public JactlType createInstance() {
+  public JactlType createInstanceType() {
     if (!is(CLASS)) {
       throw new IllegalStateException("Internal error: unexpected type " + this);
     }
-    return createInstance(getClassDescriptor());
+    return createInstanceType(getClassDescriptor());
   }
 
   public static JactlType createClass(ClassDescriptor descriptor) {
-    var classType = createInstance(descriptor);
+    var classType = createInstanceType(descriptor);
     classType.type = TypeEnum.CLASS;
     return classType;
   }

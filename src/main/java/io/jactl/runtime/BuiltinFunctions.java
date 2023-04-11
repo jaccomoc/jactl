@@ -406,7 +406,7 @@ public class BuiltinFunctions {
   public static MethodHandle lookupMethodHandle(String name) {
     FunctionDescriptor descriptor = globalFunctions.get(name);
     if (descriptor == null) {
-      throw new IllegalStateException("Internal error: attempt to get MethodHandle to unknown builtin function " + name);
+      throw new IllegalStateException("Internal error: attempt to get MethodHandle to unknown built-in function " + name);
     }
     return descriptor.wrapperHandle;
   }

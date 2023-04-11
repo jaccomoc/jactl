@@ -50,7 +50,7 @@ public class DelegatingJactlType extends JactlType {
     return expr.type;
   }
 
-  @Override public JactlType createInstance()                         { return getDelegate().createInstance();           }
+  @Override public JactlType createInstanceType()                         { return getDelegate().createInstanceType();           }
   @Override public TypeEnum getType()                                  { return getDelegate().getType();                  }
   @Override public boolean isBoxed()                                   { return getDelegate().isBoxed();                  }
   @Override public TokenType tokenType()                               { return getDelegate().tokenType();                }

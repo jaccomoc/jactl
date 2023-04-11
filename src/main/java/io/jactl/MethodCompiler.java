@@ -202,7 +202,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // We know we need heap vars array passed to us if our top level access level is
     // less than our current level (i.e. we access vars from one of our parents).
     if (!methodFunDecl.isStatic()) {
-      stack.allocateSlot(JactlType.createInstance(classCompiler.classDecl.classDescriptor));  // this
+      stack.allocateSlot(JactlType.createInstanceType(classCompiler.classDecl.classDescriptor));  // this
     }
 
     // Allocate slots for heap local vars passed to us as implicit parameters from
@@ -231,6 +231,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (methodFunDecl.functionDescriptor.isAsync) {
       _loadLocal(continuationVar);
       mv.visitJumpInsn(IFNONNULL, isContinuation);
+    }
+
+    // If main script method then initialise our globals field
+    if (methodFunDecl.isScriptMain) {
+      // FieldAssign globals map to field so we can access it from anywhere
+      mv.visitVarInsn(ALOAD, 0);
+      mv.visitVarInsn(ALOAD, methodFunDecl.globalsVar());
+      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class));
     }
 
     // Allocate slots for our long[] and Object[] that we will use when saving state during suspension.
@@ -611,10 +619,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           dupVal();
         }
 
+        String fieldName = ((Expr.Literal)expr.field).value.getStringValue();
         compile(expr.parent);
+        boolean createIfMissing = expr.parent instanceof Expr.Binary && ((Expr.Binary) expr.parent).createIfMissing;
+        throwIfNull("Null value for parent accessing field " + fieldName +
+                    (createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
+                    expr.location);
         swap();
 
-        String fieldName     = ((Expr.Literal)expr.field).value.getStringValue();
         JactlType fieldType = getFieldType(expr.parent.type, fieldName);
         storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
       }
@@ -932,6 +944,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     //= Handle ?: default operator
     if (expr.operator.is(QUESTION_COLON)) {
+      if (expr.isAsync) {
+        stack.convertStackToLocals();
+      }
       compile(expr.left);
       if (peek().isPrimitive()) {
         convertTo(expr.type, null, false, expr.left.location);
@@ -1075,7 +1090,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           // we don't know the type we assume that the initialiser could be async so we wrap in appropriate code to
           // handle async invocation.
           dupVal();
-          emitIf(true,  // potentially async since auto-creation can call constructors which could be async
+          emitIf(true,  // loadOrCreateInstanceField uses try/catch to protect against errors setting field
                  IfTest.IS_TRUE,
                  () -> isInstanceOf(JactlObject.class),
                  () -> loadOrCreateInstanceField(expr),
@@ -1466,7 +1481,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (isBuiltinFunction) {
-      // If we have the name of a builtin function then lookup its MethodHandle
+      // If we have the name of a built-in function then lookup its MethodHandle
       loadConst(name);
       invokeMethod(BuiltinFunctions.class, "lookupMethodHandle", String.class);
     }
@@ -2048,7 +2063,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (createIfMissing) {
         dupVal();    // Save parent in case field is null and we need to store a value
 
-        emitIf(true, IfTest.IS_NULL,
+        emitIf(asyncAutoCreateAllowed(), IfTest.IS_NULL,
                () -> {
                  loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);
                  dupVal();
@@ -2056,7 +2071,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> {
                  popVal();             // pop the duplicate null
                  // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
-                 loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr.right.location);
+                 loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr);
                  setStackType(fieldType);
                  expect(2);
                  dupValX1();          // Copy value and move it two slots
@@ -2242,13 +2257,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     IS_NOTNULL(IFNULL);
     final int opCode; IfTest(int opCode) { this.opCode = opCode; }
   }
-  private void emitIf(boolean isAsync, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {
+  private void emitIf(boolean usesTryCatch, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {
     condition.run();
 
-    // If async and we have stmts for both branches then we need to save stack in locals to ensure
+    // If async or code that uses try/catch then any stack values will be stored into locals
+    // and so if we have stmts for both branches then we need to save stack in locals to ensure
     // that result after each branch from a stack point of view looks the same or is at least close
     // enough that simple saving or loading values makes the stack the same.
-    if (isAsync && trueStmts != null && falseStmts != null) {
+    if (usesTryCatch && trueStmts != null && falseStmts != null) {
       stack.convertStackToLocals();
     }
 
@@ -2625,33 +2641,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private JactlType _loadConst(Object obj) {
     return Utils.loadConst(mv, obj);
-  }
-
-  private void loadDefaultValueOrNewInstance(JactlType type, Location location) {
-    if (type.is(INSTANCE)) {
-      // If there is no no-arg constructor (i.e. there is at least one mandatory field) then we have to throw
-      // a NullError since field is currently null
-      FunctionDescriptor initMethod = type.getClassDescriptor().getInitMethod();
-      if (initMethod.paramCount > 0) {
-        throwNullError("Null value during field access and type " + type + " cannot be auto-created due to mandatory fields", location);
-      }
-      else {
-        invokeMaybeAsync(initMethod.isAsync, type, 0, location,
-                         () -> {
-                           newInstance(type);
-                           if (initMethod.isAsync) {
-                             loadNullContinuation();
-                           }
-                         },
-                         () -> {
-                           invokeUserMethod(initMethod, false);
-                         });
-      }
-      return;
-    }
-
-    // Other types we fall back to default value
-    loadDefaultValue(type);
   }
 
   private void loadDefaultValue(JactlType type) {
@@ -3459,10 +3448,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Label continuation = new Label();
     asyncLocations.add(continuation);
 
+    // If we are script main then we have globalVars param which we don't need to restore
+    int globalsVar = methodFunDecl.globalsVar();
+
     // Add a runnable for this continuation that restores state. This will be invoked in switch statement that is
     // run when resuming (see MethodCompiler::compile()) before jumping back to place in code where we resume from.
     Runnable restoreState = () -> {
-      savedState.restoreLocals(continuationVar);
+      savedState.restoreLocals(continuationVar, globalsVar, longArr, objArr);
     };
     asyncStateRestorations.add(restoreState);
 
@@ -3473,7 +3465,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(blockEnd);     // :blockEnd
 
     mv.visitLabel(catchLabel);   // :catchLabel
-    savedState.saveLocals(continuationVar, longArr, objArr);
+    savedState.saveLocals(continuationVar, globalsVar, longArr, objArr);
     mv.visitTypeInsn(NEW, "io/jactl/runtime/Continuation");
 
     // Move copy of new Continuation to before current one and then swap to get order we want
@@ -4060,7 +4052,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     box();                        // Field name/index passed as Object
     loadLocation(expr.right.location);
     invokeMethod(RuntimeUtils.class, "getFieldGetter", Object.class, Object.class, String.class, int.class);
-    setStackType(JactlType.createInstance(Field.class));
+    setStackType(JactlType.createInstanceType(Field.class));
     dupVal();
     int fieldVar = stack.saveInTemp();
     loadLocal(parentVar);
@@ -4074,7 +4066,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // We have no value for the field so we have to construct a default value. Type of field must be Map/List or
     // Instance for us to be doing auto-creation.
-    emitIf(true, IfTest.IS_TRUE,
+    boolean async = asyncAutoCreateAllowed();
+    emitIf(async, IfTest.IS_TRUE,
            () -> {
              loadLocal(fieldVar);
              invokeMethod(Field.class, "getType");
@@ -4089,15 +4082,33 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
              invokeMethod(Class.class, "getConstructor", Class[].class);
              loadConst(null);
              invokeMethod(Constructor.class, "newInstance", Object[].class);
-             invokeMaybeAsync(true, ANY, 1, expr.right.location,
+             invokeMaybeAsync(async, ANY, 1, expr.right.location,
                               () -> {
                                 loadNullContinuation();
                                 loadLocation(expr.right.location);
                                 loadConst(null);
                               },
                               () -> {
-                                invokeMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class,
-                                             String.class, int.class, Object[].class);
+                                if (!async) {
+                                  // Detect attempt at suspending if we are not supposed to be async
+                                  Label blockStart = new Label();
+                                  Label blockEnd   = new Label();
+                                  Label catchLabel = new Label();
+                                  Label afterCatch = new Label();
+                                  mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+                                  mv.visitLabel(blockStart);
+                                  invokeMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class,
+                                               String.class, int.class, Object[].class);
+                                  mv.visitJumpInsn(GOTO, afterCatch);
+                                  mv.visitLabel(blockEnd);
+                                  mv.visitLabel(catchLabel);
+                                  throwError("Detected async function invocation during instance auto-creation (which is not allowed)", expr.right.location);
+                                  mv.visitLabel(afterCatch);
+                                }
+                                else {
+                                  invokeMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class,
+                                               String.class, int.class, Object[].class);
+                                }
                               });
            },
            () -> {
@@ -4122,6 +4133,63 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     stack.freeSlot(parentVar);
     stack.freeSlot(fieldVar);
+  }
+
+  private boolean asyncAutoCreateAllowed() {
+    return classCompiler.context.autoCreateAsync();
+  }
+
+  private void loadDefaultValueOrNewInstance(JactlType type, Expr expr) {
+    if (type.is(INSTANCE)) {
+      // If there is no no-arg constructor (i.e. there is at least one mandatory field) then we have to throw
+      // a NullError since field is currently null
+      FunctionDescriptor initMethod = type.getClassDescriptor().getInitMethod();
+      if (initMethod.paramCount > 0) {
+        throwNullError("Null value during field access and type " + type + " cannot be auto-created due to mandatory fields", expr.location);
+      }
+      else {
+        if (asyncAutoCreateAllowed()) {
+          invokeMaybeAsync(initMethod.isAsync, type, 0, expr.location,
+                           () -> {
+                             newInstance(type);
+                             if (initMethod.isAsync) {
+                               loadNullContinuation();
+                             }
+                             if (initMethod.needsLocation) {
+                               loadLocation(expr.location);
+                             }
+                           },
+                           () -> {
+                             invokeUserMethod(initMethod, false);
+                           });
+        }
+        else {
+          Label blockStart = new Label();
+          Label blockEnd   = new Label();
+          Label catchLabel = new Label();
+          Label afterCatch = new Label();
+          mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+          mv.visitLabel(blockStart);
+          newInstance(type);
+          if (initMethod.isAsync) {
+            loadNullContinuation();
+          }
+          if (initMethod.needsLocation) {
+            loadLocation(expr.location);
+          }
+          invokeUserMethod(initMethod, false);
+          mv.visitJumpInsn(GOTO, afterCatch);
+          mv.visitLabel(blockEnd);
+          mv.visitLabel(catchLabel);
+          throwError("Detected async function invocation during instance auto-creation (which is not permitted)", expr.location);
+          mv.visitLabel(afterCatch);
+        }
+      }
+      return;
+    }
+
+    // Other types we fall back to default value
+    loadDefaultValue(type);
   }
 
   /**

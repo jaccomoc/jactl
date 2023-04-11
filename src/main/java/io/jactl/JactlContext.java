@@ -32,6 +32,7 @@ public class JactlContext {
   boolean evaluateConstExprs = true;
   boolean printLoop          = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
   boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
+  boolean autoCreateAsync    = false;   // Whether to allow async functions in initialisers during auto-creation
 
   int     minScale           = Utils.DEFAULT_MIN_SCALE;
 
@@ -88,11 +89,11 @@ public class JactlContext {
     public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
 
     // The following are for internal use
-    JactlContextBuilder replMode(boolean mode)            { replMode           = mode;    return this; }
-    JactlContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
-    JactlContextBuilder printLoop(boolean value)          { printLoop          = value;   return this; }
-    JactlContextBuilder nonPrintLoop(boolean value)       { nonPrintLoop       = value;   return this; }
-    JactlContextBuilder printSize(boolean value)          { printSize          = value;   return this; }
+    JactlContextBuilder replMode(boolean mode)                { replMode               = mode;    return this; }
+    JactlContextBuilder evaluateConstExprs(boolean value)     { evaluateConstExprs     = value;   return this; }
+    JactlContextBuilder printLoop(boolean value)              { printLoop              = value;   return this; }
+    JactlContextBuilder nonPrintLoop(boolean value)           { nonPrintLoop           = value;   return this; }
+    JactlContextBuilder printSize(boolean value)              { printSize              = value;   return this; }
 
     public JactlContext build() {
       if (executionEnv == null) {
@@ -106,6 +107,13 @@ public class JactlContext {
 
   public boolean printLoop()    { return printLoop; }
   public boolean nonPrintLoop() { return nonPrintLoop; }
+
+  // Whether to support auto-creation of class instances that can suspend.
+  // E.g. for x.y.z = 1 if y is auto-created do we allow it to suspend during creation
+  // in its initialiser (due to field initialisation invoking something async).
+  // We will disallow for now in order to reduce how many instructions generated for code
+  // like: a.b.c.d.e = x
+  public boolean autoCreateAsync() { return autoCreateAsync; }
 
   public void debugLevel(int level) {
     this.debugLevel = level;

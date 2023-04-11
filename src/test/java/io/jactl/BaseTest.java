@@ -73,8 +73,8 @@ public class BaseTest {
       }
     }
     catch (Exception e) {
-      fail(e);
       e.printStackTrace();
+      fail(e);
     }
   }
 
@@ -243,5 +243,9 @@ public class BaseTest {
                                                .build();
     Map<String, Object> globals = new HashMap<>();
     return Compiler.compileScript(code, jactlContext, globals);
+  }
+
+  protected boolean asyncAutoCreate() {
+    return JactlContext.create().build().autoCreateAsync();
   }
 }

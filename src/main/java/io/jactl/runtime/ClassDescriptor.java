@@ -65,7 +65,7 @@ public class ClassDescriptor {
   public String     getPackagedName() { return packagedName; }
   public String     getInternalName() { return internalName; }
   public JactlType getClassType()    { return JactlType.createClass(this); }
-  public JactlType getInstanceType() { return getClassType().createInstance(); }
+  public JactlType getInstanceType() { return getClassType().createInstanceType(); }
 
   public void setInitMethod(FunctionDescriptor initMethod) { this.initMethod = initMethod; }
   public FunctionDescriptor getInitMethod() { return initMethod; }

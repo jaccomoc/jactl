@@ -70,6 +70,10 @@ import static io.jactl.JactlType.INSTANCE;
  *   pass. This allows us to know when evaluating an Expr during the compile phase whether
  *   it or any child of it will invoke an async function.
  * </p>
+ * <h2>Parent Expr and Stmt</h2>
+ * <p>While analysing Expr and Stmt objects, if an Expr turns out to be async then we
+ * automatically mark its parent Expr or Stmt (if one exists) as async so we don't need to
+ * check this in each of the visitXXX() methods.</p>
  */
 public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
@@ -220,7 +224,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitBinary(Expr.Binary expr) {
     analyse(expr.left);
     analyse(expr.right);
-    if (expr.createIfMissing) {
+
+    // If auto-creation and we allow async initialisers (which by default we don't)
+    if (expr.createIfMissing && context.autoCreateAsync()) {
       // Async if class init for field is async
       if (expr.isFieldAccess) {
         if (expr.type.is(INSTANCE)) {
@@ -327,7 +333,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Expr.FunDecl expr = funDecl;
 
-    // If we have a wrapper then resolve it. Note that it has an embedded FunDecl for us so we will
+    // If we have a wrapper then resolve it. Note that it has an embedded FunDecl for us, so we will
     // get analysed as part of its statement block. This means we need to check next time not to
     // analyse wrapper if we are already analysiing it.
     if (funDecl.wrapper != null && getFunctions().peek() != funDecl.wrapper) {
@@ -348,7 +354,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If we are the wrapper
     if (expr != funDecl) {
-      // If we were the wrapper and we are async then function is also marked as async.
+      // If we were the wrapper, and we are async then function is also marked as async.
       // If we were cleverer we could track better when invoking wrapper and wouldn't need
       // to be so conservative about this...
       if (expr.functionDescriptor.isAsync != null && expr.functionDescriptor.isAsync) {
@@ -366,6 +372,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitVarAssign(Expr.VarAssign expr) {
     analyse(expr.identifierExpr);
     analyse(expr.expr);
+    if (!expr.expr.isNull() && expr.type.is(INSTANCE)) {
+      asyncIfTypeIsAsync(expr);
+    }
     freeLocals(2);
     return null;
   }
@@ -381,10 +390,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
-    if (expr.expr.isAsync) {
-      async(expr);
-    }
-    if (expr.type.is(INSTANCE)) {
+    if (!expr.expr.isNull() && expr.type.is(INSTANCE)) {
       asyncIfTypeIsAsync(expr);
     }
     freeLocals(3);
@@ -711,7 +717,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If function is only async if passed an async arg then check the args.
     // For methods note that index 0 means the object on whom we are performing the method call so other
     // arguments start at index 1 so args.get(index-1) gets the arg value for that index.
-    // For calls to builtin functions arg0 is null and counting is as per args list indexing.
+    // For calls to built-in functions arg0 is null and counting is as per args list indexing.
     if (Utils.isNamedArgs(args)) {
       var namedArgs = Utils.getNamedArgs(args);
       // Lambda to extract ith arg. For methods arg0 is 0th arg and param counting starts at 1:

@@ -108,8 +108,9 @@ class Stmt {
 
     List<List<Expr>>     @interfaces = new ArrayList<>();
 
-    Stmt.FunDecl             @scriptMain;   // Mainline of script
-    Map<String,Expr.VarDecl> @fieldVars = new LinkedHashMap<>();
+    Stmt.FunDecl             @scriptMain;                         // Mainline of script
+    List<Stmt.VarDecl>       @fields;                             // Field VarDecl stmts
+    Map<String,Expr.VarDecl> @fieldVars = new LinkedHashMap<>();  // Map of field name to decl expr
     Expr.VarDecl             @thisField;
 
     // Used by Parser and Resolver

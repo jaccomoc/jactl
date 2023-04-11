@@ -1101,6 +1101,8 @@ class CompilerTest extends BaseTest {
     test("def x = [1]; false ? x.flatMap() : [x]", List.of(List.of(1)));
     test("List x = [1]; true ? x : x.map()", List.of(1));
     test("List x = [1]; false ? x : x.flatMap()", List.of(1));
+    test("(null?:sleep(0,5))", 5);
+    test("(null?:sleep(0,[:])).i = 5", 5);
   }
 
   @Test public void plusEquals(){
@@ -2422,6 +2424,7 @@ class CompilerTest extends BaseTest {
     test("def x = 2; if (true) { def x = 4; x++ }; x", 2);
     test("def x = 2; if (true) { def x = 4; x++; { def x = 17; x = x + 5 } }; x", 2);
     testError("def x = 2; { def x = 3; def x = 4; }", "clashes with previously declared variable");
+    testError("def x = 2; { int x = 3; String x = 'abc'; }", "clashes with previously declared variable");
     testError("int f() { def x = 3; def x = 4; }", "clashes with previously declared variable");
     testError("int f(x) { def x = 3; }", "clashes with previously declared variable");
   }
@@ -4941,7 +4944,7 @@ class CompilerTest extends BaseTest {
     test("def x; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))()?.size(); y", null);
     test("def x = [1,2,3]; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))(); y", 3);
     test("def x = [1,2,3]; def y; y ?= x?.(sleep(sleep(1,1),'si') + sleep(sleep(1,1),'ze'))(); y", 3);
-    test("def f(int x) { sleep(1,x) + sleep(1,x) }; f(1 )", 2);
+    test("def f(int x) { sleep(1,x) + sleep(1,x) }; f(1)", 2);
     test("def f(int x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2);
     test("def f(long x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2L);
     test("def f(double x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2D);

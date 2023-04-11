@@ -367,15 +367,6 @@ public class ClassCompiler {
                                       null, null);
     mv.visitCode();
 
-    // If main script method then initialise our globals field
-    if (isScriptMain) {
-      // FieldAssign globals map to field so we can access it from anywhere
-      mv.visitVarInsn(ALOAD, 0);
-      boolean isAsync = method.functionDescriptor.isAsync;
-      mv.visitVarInsn(ALOAD, isAsync ? 2 : 1);
-      mv.visitFieldInsn(PUTFIELD, internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class));
-    }
-
     MethodCompiler methodCompiler = new MethodCompiler(this, method, methodName, mv);
     methodCompiler.compile();
     mv.visitEnd();
@@ -414,6 +405,10 @@ public class ClassCompiler {
     // The index into the long[]/Object[] will be paramIdx + heapLocals.size() since the parameters come immediately
     // after the heaplocals (and the Continuation that we don't store).
     for (int i = 0; i < funDecl.parameters.size(); i++, slot++) {
+      if (slot == funDecl.globalsVar()) {
+        Utils.loadConst(mv, null);       // no need to restore globals since we previously stored it in a field
+        continue;
+      }
       final var  declExpr = funDecl.parameters.get(i).declExpr;
       JactlType type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
       Utils.loadStoredValue(mv, slot, type, () -> Utils.loadContinuationArray(mv, continuationSlot, type));

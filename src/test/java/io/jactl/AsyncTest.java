@@ -31,6 +31,10 @@ public class AsyncTest {
 
   int debugLevel = 0;
 
+  private boolean autoCreateAsyncAllowed() {
+    return JactlContext.create().build().autoCreateAsync();
+  }
+
   private boolean isAsync(String source) {
     var context  = JactlContext.create().debug(debugLevel).build();
     var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACTL_PKG);
@@ -99,22 +103,34 @@ public class AsyncTest {
     async("def f(x){g(x)}; def g(x){sleep(0,x)+sleep(0,x)}; f(2)+f(3)", 10);
     async("def s = sleep; def f(x){x<=1?s(0,1):g(x)}; def g(x){s(0,x)+s(0,f(x-1))}; f(2)+f(3)", 9);
     async("def f(x){x<=1?1:g(x)}; def g(x){def s = sleep; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
-    async("class X { Y y = null; }; class Y { int i = sleep(0,1) + sleep(0,2) }; def x = new X(); x.y.i = 5; x.y.i", 5);
-    async("Map m; def x; m.a.b.c ?= x.a", null);
+    sync("class X { Y y = null; }; class Y { int i = 1+2 }; def x = new X(); x.y.i = 5; x.y.i", 5);
+    if (autoCreateAsyncAllowed()) {
+      async("class X { Y y = null; }; class Y { int i = sleep(0,1) + sleep(0,2) }; def x = new X(); x.y.i = 5; x.y.i", 5);
+      async("Map m; def x; m.a.b.c ?= x.a", null);
+    }
+    else {
+      sync("Map m; def x; m.a.b.c ?= x.a", null);
+    }
 
     // MAYBE TODO: analyse MethodCall/Call expressions to see if return value could be async closure/function
     //sync("class A { static def a() { int x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6);
   }
 
   @Test public void classes() {
+    async("class X { int i; int j = sleep(0,i) }; Map m = [:]; m.a = new X(1); m.a.j", 1);
     sync("class X{ int i = 3 }; new X().i;", 3);
-    async("class X{ int i = sleep(0,3) }; new X().i;", 3);
-    async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; X x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
-    async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+    async("class X{ int x; int i = sleep(0,3) }; new X(1).i;", 3);
+    if (autoCreateAsyncAllowed()) {
+      async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; X x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+      async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+      async("class X{ Y y = null }; class Y { int i = 3; int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+      async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+      async("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
+    }
+    else {
+      sync("class X{ Y y = null }; class Y { int i = 3; int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
+    }
     sync("class X{ Y y = null }; class Y { int i = 3; int j = 4; }; X x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
-    async("class X{ Y y = null }; class Y { int i = 3; int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
-    async("class X{ Y y = null }; class Y { int i = sleep(0,3); int j = 4; }; def x = new X(); x.y.j = 5; x.y.j + x.y.i", 8);
-    async("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
     sync("class X { Y y = null }; class Y { int i = 1 }; X x = new X(); x.y.i = 2", 2);
 
     // Call to f() is async since one day another class may override with async version

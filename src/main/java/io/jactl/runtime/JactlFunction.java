@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Class that captures information about a builtin function or method and registers it with the Jactl runtime.
+ * Class that captures information about a built-in function or method and registers it with the Jactl runtime.
  * Example usage for a global function:
  * <pre>
  *   Jactl.function()
