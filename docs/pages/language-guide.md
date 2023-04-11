@@ -1047,12 +1047,12 @@ precedence are shown with the same precedence value:
 |                  |              `?=`              | Conditional assignment                              |
 |                  | `+=` `-=` `*=` `/=` `%=` `%%=` | Arithmetic assignment operators                     |
 |                  |       `<<=` `>>=` `>>>=`       | Shift assignment operators                          |
-|                  |         `&=` `\|=` `^=`         | Bitwise assignment operators                        |
+|                  | `&=` <code>&#124;=</code> `^=` | Bitwise assignment operators                        |
 |        5         |             `? :`              | Ternary conditional opeartor                        |
 |                  |              `?:`              | Default value operator                              |
-|        6         |        `\|\|`                  | Boolean or                                          |
- |        7        |              `&&`              | Boolean and                                         |
- |        8        |            `\|`                | Bitwise or                                          |
+|        6         |   <code>&#124;&#124;</code>    | Boolean or                                          |
+ |        7         |              `&&`              | Boolean and                                         |
+ |        8         |      <code>&#124;</code>       | Bitwise or                                          |
 |        9         |              `^`               | Bitwise xor                                         |
 |        10        |              `&`               | Bitwise and                                         |
 |        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                   |
