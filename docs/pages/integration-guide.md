@@ -576,7 +576,7 @@ public class VertxFunctions {
 ### Default Values
 
 When registering the parameter names you can also specify a default value for parameters that are optional.
-For example, the builtin `String.asNum(base)` method parses a String that could be in any base (up to 36).
+For example, the built-in `String.asNum(base)` method parses a String that could be in any base (up to 36).
 By default, it assumes base 10 but can be used to parse hex strings or binary strings etc.:
 ```java
 Jactl.method(STRING)

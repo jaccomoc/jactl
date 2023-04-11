@@ -6,7 +6,7 @@ It can be run from a REPL and from the commandline for commandline scripts but i
 to be integrated into Java applications and provide a secure, locked-down mechanism that
 customers/users can use to customise the application behaviour.
 
-It is especially suited to event-loop/reactive applications due to its builtin suspend/resume
+It is especially suited to event-loop/reactive applications due to its built-in suspend/resume
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
@@ -58,7 +58,7 @@ Easy to integrate additional functions and methods into the language for applica
 
 ### Secure
 Unlike many other JVM based languages, in Jactl the things that a script writer can do are tightly controlled.
-The only things available to the script writer are the builtin functions and the functions that you provide.
+The only things available to the script writer are the built-in functions and the functions that you provide.
 This allows Jactl scripts to be safely executed in frameworks where creating threads, writing to files,
 connecting to remote systems, and performing other blocking operations would not normally be allowed.
 

@@ -28,8 +28,8 @@ permalink: /language-guide
 * [Closures](#closures)
 * [Collection Methods](#collection-methods)
 * [Classes](#classes)
-* [Builtin Global Functions](#builtin-global-functions)
-* [Builtin Methods](#builtin-methods)
+* [Built-in Global Functions](#builtin-global-functions)
+* [Built-in Methods](#builtin-methods)
 
 ## The REPL
 
@@ -1495,7 +1495,7 @@ For example:
 
 The `instanceof` and `!instanceof` operators allow you to check if an object is an instance (or not an instance) of a
 specific type.
-The type can be a builtin type like `int`, `String`, `List`, etc. or can be a user defined class:
+The type can be a built-in type like `int`, `String`, `List`, etc. or can be a user defined class:
 ```groovy
 > def x = 1
 1
@@ -1590,7 +1590,7 @@ You can use it to convert anything to a string:
 [1, 2, 3]
 ```
 
-Of course, you can do the same thing with the builtin `toString()` method as well:
+Of course, you can do the same thing with the built-in `toString()` method as well:
 ```groovy
 > 123.toString()
 123
@@ -2586,7 +2586,7 @@ def ntimes(n, f) {
 ntimes(5){ println it }
 ```
 
-There is a builtin methods on Lists, Maps, Strings, and numbers called `each`, `map`, etc. that takes a single argument
+There is a built-in methods on Lists, Maps, Strings, and numbers called `each`, `map`, etc. that takes a single argument
 which is a closure.
 For numbers, the `each` method iterates `n` times and passes each value from `0` to `n-1` to the closure.
 For example:
@@ -2754,7 +2754,7 @@ In the example, `x` and `y` are two different instances of the closure which eac
 
 ## Collection Methods
 
-Jactl has a number of builtin methods that operate on collections and things that can be iterated over.
+Jactl has a number of built-in methods that operate on collections and things that can be iterated over.
 In Jactl this means Lists, Maps, Strings, and numbers.
 
 ### each()
@@ -2779,7 +2779,7 @@ This method iterates over the list and passes each element into the closure.
 This makes the code more concise, easier to understand, and less error-prone to write.
 
 In general, when explicitly iterating over a collection of some sort, consider whether there is a better
-way to achieve the same thing using the builtin collection methods.
+way to achieve the same thing using the built-in collection methods.
 
 ### map()
 
@@ -3919,7 +3919,7 @@ be declared in two places:
 1. Top level of a script or class file, or
 2. As an inner class within another class declaration.
 
-## Builtin Global Functions
+## Built-in Global Functions
 
 There are a handful of global functions.
 
@@ -4073,7 +4073,7 @@ To read all lines into a list:
 def lines = stream(nextLine)
 ```
 
-## Builtin Methods
+## Built-in Methods
 
 ### Common Methods for Collections
 

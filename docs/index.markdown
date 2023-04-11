@@ -22,7 +22,7 @@ Compiles to bytecode for fast execution times.
 <div class="row">
   <div class="column" markdown="1">
 ### **Never Blocks**
-Builtin continuation mechanism allows scripts to suspend execution while waiting for asynchronous reponses and
+Built-in continuation mechanism allows scripts to suspend execution while waiting for asynchronous reponses and
 then resume from where they left off.
 Execution thread is never blocked while waiting for a long-running response.
   </div>
@@ -62,7 +62,7 @@ Jactl is open sourced under the [Apache License 2.0](https://www.apache.org/lice
 Jactl is intended to be integrated into Java applications where it provides a secure, locked-down, way for
 customers/users to be able to customise the application behaviour.
 
-It is especially suited to event-loop/reactive applications due to its builtin suspend/resume
+It is especially suited to event-loop/reactive applications due to its built-in suspend/resume
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 

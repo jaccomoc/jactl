@@ -9,7 +9,7 @@ from Java, Groovy, and Perl.
 It was written to be integrated into Java applications to provide a secure locked-down, way for
 customers/users to be able to customise the application behaviour.
 
-It is especially suited to event-loop/reactive applications due to its builtin suspend/resume
+It is especially suited to event-loop/reactive applications due to its built-in suspend/resume
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
