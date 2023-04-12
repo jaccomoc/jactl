@@ -93,8 +93,8 @@ publishing {
                     }
                 }
                 scm {
-                    connection = "scm:git:https://github.com/jaccomoc/jactl"
-                    developerConnection = "scm:git:https://github.com/jaccomoc/jactl"
+                    connection = "scm:git:git://github.com/jaccomoc/jactl.git"
+                    developerConnection = "scm:git:git://github.com/jaccomoc/jactl.git"
                     url = 'https://github.com/jaccomoc/jactl'
                 }
             }
