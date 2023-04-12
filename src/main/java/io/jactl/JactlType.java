@@ -190,7 +190,7 @@ public class JactlType {
 
   /**
    * Return true if type is a boxed primitive type
-   * @return
+   * @return true if boxed primitive
    */
   public boolean isBoxed() {
     return boxed;
@@ -198,6 +198,8 @@ public class JactlType {
 
   /**
    * Create a JactlType from a TokenType
+   * @param tokenType  the TokenType
+   * @return the static object for the corresponding JactlType
    */
   public static JactlType valueOf(TokenType tokenType) {
     switch (tokenType) {
@@ -220,6 +222,7 @@ public class JactlType {
 
   /**
    * Return the TokenType that would generate this JactlType
+   * @return the TokenType
    */
   public TokenType tokenType() {
     switch (this.type) {
@@ -310,6 +313,8 @@ public class JactlType {
    * any type is boxed (allows quick check for INT, LONG, etc
    * without having to worry about checking whether either type
    * is boxed).
+   * @param types  list of JactlTypes to compare to
+   * @return true if type is one of the types in the list
    */
   public boolean isBoxedOrUnboxed(JactlType... types) {
     for (JactlType type: types) {
@@ -378,8 +383,9 @@ public class JactlType {
 
   /**
    * In an expression with two operands determine the resulting type of the expression.
-   * @param type1  type of operand1
-   * @param type2  type of operand2
+   * @param type1    type of operand1
+   * @param operator the operator
+   * @param type2    type of operand2
    * @return resulting type
    */
   public static JactlType result(JactlType type1, Token operator, JactlType type2) {

@@ -21,7 +21,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
- * Async iterator that supports limit(n) where n < 0 which means discard last n.
+ * Async iterator that supports limit(n) where n &lt; 0 which means discard last n.
  */
 public class NegativeLimitIterator implements Iterator {
   Iterator               iter;

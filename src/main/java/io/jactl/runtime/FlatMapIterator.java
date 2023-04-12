@@ -24,7 +24,10 @@ import java.util.Iterator;
  * Iterator for iterating over a list of iterators.
  * The mapping function transforms an element into either a single element or another iterator.
  * E.g.:
- *   [1,[2,3,4],5].flatMap{ it instanceof List ? it.map{it*it} : it*it } --> [1,4,9,16,25]
+ * <pre>
+ *   [1,[2,3,4],5].flatMap{ it instanceof List ? it.map{it*it} : it*it }
+ *         --&gt; [1,4,9,16,25]
+ * </pre>
  */
 public class FlatMapIterator implements Iterator {
   Iterator     iter;

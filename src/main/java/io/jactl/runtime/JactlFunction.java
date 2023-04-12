@@ -50,7 +50,7 @@ import java.util.stream.IntStream;
  *        .param("start")
  *        .param("end", Integer.MAX_VALUE)
  *        .impl(BuiltinFunctions.class, "stringSubstring")
- *        .register()
+ *        .register();
  * </pre>
  * <p>The register() call must be the last call in the chain of calls.</p>
  * <p>NOTE: the impl() method needs the name of a public static Object field in the same
@@ -105,30 +105,77 @@ public class JactlFunction extends FunctionDescriptor {
    */
   public JactlFunction() {}
 
+  /**
+   * Register the function.
+   * <p>Must be last method called on function.</p>
+   */
   public void register() {
     BuiltinFunctions.registerFunction(this);
   }
 
+  /**
+   * Set name of function/method
+   * @param name  the name
+   * @return the current JactlFunction for method chaining
+   */
   public JactlFunction name(String name)  { this.name = name;    return alias(name); }
+
+  /**
+   * Create an alias for the function
+   * @param name  the alias
+   * @return the current JactlFunction for method chaining
+   */
   public JactlFunction alias(String name) { aliases.add(name);   return this;        }
 
   /**
    * Mandatory parameter
    * @param name  the parameter name
+   * @return the current JactlFunction for method chaining
    */
-  public JactlFunction param(String name)                    { return param(name, MANDATORY, false); }
+  public JactlFunction param(String name) { return param(name, MANDATORY, false); }
+
+  /**
+   * Optional parameter with default value.
+   * @param name        the parameter name
+   * @param defaultVal  the default value to use
+   * @return the current JactlFunction for method chaining
+   */
+
   public JactlFunction param(String name, Object defaultVal) { return param(name, defaultVal, false); }
 
-  public JactlFunction asyncParam(String name)                    { return param(name, MANDATORY, true); }
+  /**
+   * Mandatory async parameter. If this parameter is async then this makes the function async.
+   * For example, if parameter is a closure that the function invokes then if an async closure
+   * is passed in, the function will be async.
+   * @param name  the parameter name
+   * @return the current JactlFunction for method chaining
+   */
+  public JactlFunction asyncParam(String name) { return param(name, MANDATORY, true); }
+
+  /**
+   * Optional async parameter. If this parameter is async then this makes the function async.
+   * For example, if parameter is a closure that the function invokes then if an async closure
+   * is passed in, the function will be async.
+   * @param name        the parameter name
+   * @param defaultVal  the default value to use
+   * @return the current JactlFunction for method chaining
+   */
   public JactlFunction asyncParam(String name, Object defaultVal) { return param(name, defaultVal, true); }
 
+  /**
+   * If object that method acts on is async then this makes function async. For example methods that
+   * act on iterators which can be async.
+   * @param value  true or false
+   * @return the current JactlFunction for method chaining
+   */
   public JactlFunction asyncInstance(boolean value) { isAsyncInstance = value;  return this; }
 
   /**
-   * Parameter
+   * Define a parameter. Internal use only.
    * @param name          the parameter name
    * @param defaultValue  the default value if parameter value not supplied
    * @param async         true if argument being async (e.g. async closure) makes this function async
+   * @return the current JactlFunction for method chaining
    */
   private JactlFunction param(String name, Object defaultValue, boolean async) {
     paramNames.add(name);
@@ -148,6 +195,7 @@ public class JactlFunction extends FunctionDescriptor {
    * Data field defaults to methodName + "Data" (i.e. method name with Data appended to it).
    * @param clss        the class
    * @param methodName  the name of the method
+   * @return the current JactlFunction for method chaining
    */
   public JactlFunction impl(Class clss, String methodName) {
     return impl(clss, methodName, methodName + "Data");
@@ -159,6 +207,7 @@ public class JactlFunction extends FunctionDescriptor {
    * @param methodName  the name of the method
    * @param fieldName   name of a public static class field of type Object where Jactl can cache some runtime data.
    *                    Field must not have been initialised to anything (other than null).
+   * @return the current JactlFunction for method chaining
    */
   public JactlFunction impl(Class clss, String methodName, String fieldName) {
     this.implementingClass     = clss;
@@ -168,18 +217,14 @@ public class JactlFunction extends FunctionDescriptor {
     return this;
   }
 
-  public boolean isVarArgs() {
-    return isVarArgs;
-  }
+  ////////////////////////////////////////////////////////
 
-  public Set<String> getMandatoryParams() {
+  private Set<String> getMandatoryParams() {
     return IntStream.range(0, defaultVals.length)
                     .filter(i -> defaultVals[i] == MANDATORY)
                     .mapToObj(i -> paramNames.get(i))
                     .collect(Collectors.toSet());
   }
-
-  ////////////////////////////////////////////////////////
 
   void init() {
     if (name == null) {

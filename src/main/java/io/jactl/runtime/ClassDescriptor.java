@@ -84,6 +84,8 @@ public class ClassDescriptor {
   /**
    * Add method to this class descriptor. We allow methods to override methods of the same
    * name in a base class as long as the signatures are identical.
+   * @param name  the method name
+   * @param fun   the FunctionDescriptor for the method
    * @return true if added successfully, false if clash with a field name or if we already
    *         have a method of that name in this class
    */
@@ -135,6 +137,7 @@ public class ClassDescriptor {
 
   /**
    * Get mandatory fields for all based classes and this class
+   * @return a Map which maps field name to its type
    */
   public Map<String,JactlType> getAllMandatoryFields() {
     LinkedHashMap<String,JactlType> allMandatoryFields = new LinkedHashMap<>();
@@ -171,6 +174,8 @@ public class ClassDescriptor {
 
   /**
    * Is the same or is a child of base class or implements clss if clss is an interface.
+   * @param clss  the class to compare to
+   * @return true if clss is the same as us or we are a child
    */
   public boolean isSameOrChildOf(ClassDescriptor clss) {
     if (clss == this) {

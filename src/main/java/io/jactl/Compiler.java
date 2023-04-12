@@ -21,6 +21,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+/**
+ * Internal class for invoking Jactl compiler. The methods in the {@link Jactl} class should be used instead
+ * for compiling and running scripts.
+ */
 public class Compiler {
 
   private static final AtomicInteger counter = new AtomicInteger();
@@ -55,9 +59,7 @@ public class Compiler {
     return compileWithCompletion(source, jactlContext, script);
   }
 
-  /**
-   * For internal use by eval() function.
-   */
+  // For internal use by eval() function.
   public static Function<Map<String, Object>,Object> compileScriptInternal(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
     String className = Utils.JACTL_SCRIPT_PREFIX + counter.incrementAndGet();
     var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);

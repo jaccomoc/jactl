@@ -64,6 +64,9 @@ public class Functions {
 
   /**
    * Lookup method at compile time and return FunctionDescriptor if method exists
+   * @param type        the type that owns the method
+   * @param methodName  the name of the method
+   * @return the FunctionDescriptor for the method or null if no such method
    */
   public static FunctionDescriptor lookupMethod(JactlType type, String methodName) {
     var function = findMatching(type, methodName);

@@ -21,7 +21,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
- * Async iterator to support iterator.limit(n) where n >= 0
+ * Async iterator to support iterator.limit(n) where n &gt;= 0
  */
 public class LimitIterator implements Iterator {
   Iterator iter;

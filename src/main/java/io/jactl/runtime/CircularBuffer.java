@@ -19,10 +19,12 @@ package io.jactl.runtime;
 
 /**
  * CircularBuffer of given size.
- * NOTE: we allocated one element more so that we can tell
+ * NOTE: we allocate one element more so that we can tell
  * when buffer is full vs empty.
- * head == tail     --> empty
- * head - tail == 1 --> full
+ * <pre>
+ * head == tail     --&gt; empty
+ * head - tail == 1 --&gt; full
+ * </pre>
  */
 public class CircularBuffer<T> {
   Object[] buffer;

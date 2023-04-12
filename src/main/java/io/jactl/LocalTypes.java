@@ -224,7 +224,7 @@ public class LocalTypes {
   /**
    * Duplicate top two elemenets on the stack:
    * <pre>
-   *   ... x, y ->
+   *   ... x, y -&gt;
    *   ... x, y, x, y
    * </pre>
    * Note that we need to take care whether any of the types are long or double
@@ -319,6 +319,7 @@ public class LocalTypes {
    * Expect n entries on the stack.
    * This method will convert any entries that are currently stored in locals
    * back into entries on the real stack.
+   * @param count  how many entries to ensure are on the stack
    */
   public void expect(int count) {
     check(stack.size() >= count, "stack size is " + stack.size() + " but expecting at least " + count + " entries");
@@ -370,8 +371,11 @@ public class LocalTypes {
   /**
    * Make our state same as another stack state by converting stack entries to local entries
    * and converting local entries to stack entries as appropriate.
+   * <p>
    * NOTE: only supports a single element that is different to avoid the complicated (and as
-   * yet unneeded) generic process of converting multiple entries.
+   * yet unneeded) generic process of converting multiple entries.</p>
+   * @param other  the other set of stack/locals
+   * @param n      how many to convert (only 1 is currently supported)
    */
   public void makeSameAs(LocalTypes other, int n) {
     check(n <= 1, "no support for converting more than 1 element at the moment");
@@ -730,15 +734,17 @@ public class LocalTypes {
     @Override public String toString() { return "[" + type + "," + refCount + "]"; }
   }
 
-  // As we generate the byte code we keep a stack where we track the type of the value that
-  // would currently be on the JVM stack at that point in the generated code. This allows
-  // us to know when to do appropriate conversions.
-  // When doing async calls we need to move what ever is on the real stack to local var slots
-  // because exception catching discards what is on the stack. We track which slots correspond
-  // to the entries in our virtual stack. When the entry is on the real stack we store a value
-  // of -1. We also track how many references to each slot exist on our virtual stack. This is
-  // to allow us to dup() values without having to actually do anything except increment the
-  // reference count. We release the local var slot once the reference count goes to 0.
+  /**
+   * As we generate the byte code we keep a stack where we track the type of the value that
+   * would currently be on the JVM stack at that point in the generated code. This allows
+   * us to know when to do appropriate conversions.
+   * When doing async calls we need to move what ever is on the real stack to local var slots
+   * because exception catching discards what is on the stack. We track which slots correspond
+   * to the entries in our virtual stack. When the entry is on the real stack we store a value
+   * of -1. We also track how many references to each slot exist on our virtual stack. This is
+   * to allow us to dup() values without having to actually do anything except increment the
+   * reference count. We release the local var slot once the reference count goes to 0.
+   */
   public class StackEntry {
     JactlType type;
     int slot = -1;

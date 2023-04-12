@@ -67,6 +67,7 @@ public class Continuation extends RuntimeException {
    * state and then throw a new Continuation chained to this one (and so on until we get to the top-most
    * caller).
    * @param asyncWork  the work to be run on a blocking thread once we are suspended
+   * @return nothing - always throws an exception
    * @throws Continuation always
    */
   public static Continuation suspendBlocking(Supplier<Object> asyncWork) {
@@ -86,6 +87,7 @@ public class Continuation extends RuntimeException {
    * the async work has been received (receiving a message or timer expiring) then the execution
    * is resumed.
    * @param asyncWork  the taks that will schedule some async work in the background
+   * @return nothing - always throws an exception
    * @throws Continuation always
    */
   public static Continuation suspendNonBlocking(BiConsumer<JactlContext, Consumer<Object>> asyncWork) {

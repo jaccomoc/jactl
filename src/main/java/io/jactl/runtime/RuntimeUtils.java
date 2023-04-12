@@ -737,11 +737,11 @@ public class RuntimeUtils {
 
   /**
    * Perform bitwise operation.
-   * Also caters for list << elem and list <<= elem
+   * Also caters for list &lt;&lt; elem and list &lt;&lt; elem
    * @param left          the lhs
    * @param right         the rhs
-   * @param operator      the operator (without '=': e.g. <<= is just <<)
-   * @param isAssignment  whether original operator ended in '=' (e.g. was <<=). only used for list <<= elem
+   * @param operator      the operator (without '=': e.g. &lt;&lt;= is just &lt;&lt;)
+   * @param isAssignment  whether original operator ended in '=' (e.g. was &lt;&lt;=). only used for list &lt;&lt;= elem
    * @param source        source code
    * @param offset        offset where operator is
    * @return the result of the operation
@@ -925,7 +925,13 @@ public class RuntimeUtils {
    * We are doing a "find" rather than a "match" if the global modifier is set and the source string is unchanged. In
    * this case we continue the searching from the last unmatched char in the source string. If the source string has
    * changed then we revert to a "match". We update the Matcher in the RegexMatcher object if the Matcher changes.
-   *
+   * @param regexMatcher   the RegexMatcher that is used to hold our current state
+   * @param str            the string being matched
+   * @param regex          the regex pattern
+   * @param globalModifier true if find is a global find ('g' modifier used)
+   * @param modifiers      other modifiers for the search (doesn't include 'g' or 'r' or 'n')
+   * @param source         the source code
+   * @param offset         the offset into the source
    * @return true if regex find/match succeeds
    */
   public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, boolean globalModifier, String modifiers, String source, int offset) {
@@ -1001,9 +1007,8 @@ public class RuntimeUtils {
   }
 
   /**
-   * Add to a list. If second object is a list then we concatenat the lists. Otherwise object is added to and of the
-   * list.
-   *
+   * Add to a list. If second object is a list then we concatenate the lists. Otherwise,
+   * object is added to and of the list.
    * @param list        the list
    * @param obj         object to add or merge with list
    * @param isPlusEqual whether we are doing += or just +
@@ -1025,8 +1030,8 @@ public class RuntimeUtils {
    * Add single element to a list even if element is itself a list.
    * @param list         the list
    * @param elem         the element
-   * @param isAssignment true if <<= (add to existing list), false creates a new list
-   * @return the list (same list for <<= and new list for <<)
+   * @param isAssignment true if &lt;&lt;= (add to existing list), false creates a new list
+   * @return the list (same list for &lt;&lt;= and new list for &lt;&lt;)
    */
   public static List listAddSingle(List list, Object elem, boolean isAssignment) {
     List result = isAssignment ? list : new ArrayList(list);
@@ -1038,7 +1043,9 @@ public class RuntimeUtils {
    * Add twp maps together. The result is a new map with a merge of the keys and values from the two maps. If the same
    * key appears in both maps the value from the second map "overwrites" the other value and becomes the value of the
    * key in the resulting map.
-   *
+   * @param map1         the first map
+   * @param map2         the second map
+   * @param isPlusEqual  true if using += rather than just +
    * @return a new map which is the combination of the two maps
    */
   public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual) {
@@ -1062,9 +1069,18 @@ public class RuntimeUtils {
   }
 
   /**
-   * Return true if object satisfies truthiness check: null    --> false boolean --> value of the boolean number  -->
-   * true if non-zero String  --> true if non-empty Object  --> true if non-null If negated is true then test is
-   * inverted and we test for "falsiness".
+   * Return true if object satisfies truthiness check:
+   * <pre>
+   * null    --&gt; false
+   * boolean --&gt; value of the boolean
+   * number  --&gt; true if non-zero
+   * String  --&gt; true if non-empty
+   * Object  --&gt; true if non-null
+   * </pre>
+   * If negated is true then test is inverted, and we test for "falsiness".
+   * @param value   the value to test
+   * @param negated true if result is negated (i.e. "true" returns false)
+   * @return negated if object is "true" and !negated otherwise
    */
   public static boolean isTruth(Object value, boolean negated) {
     if (value == null) {
@@ -1620,9 +1636,15 @@ public class RuntimeUtils {
 
   /**
    * Store value into map/list field. Note that first three args are either value,parent,field or parent,field,value
-   * depending on whether valueFirst is set to true or not. parent        parent (map or list) field         field
-   * (field name or list index) value         the value to store
-   *
+   * depending on whether valueFirst is set to true or not.
+   * <pre>
+   * parent        parent (map or list)
+   * field         field  (field name or list index)
+   * value         the value to store
+   * </pre>
+   * @param arg1       value or parent depending on valueFirst
+   * @param arg2       parent or field/index depending on valueFirst
+   * @param arg3       field or value depending on valueFirst
    * @param valueFirst true if args are value,parent,field and false if args are parent,field,value
    * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
    * @param source     source code
@@ -1699,11 +1721,13 @@ public class RuntimeUtils {
   }
 
   /**
-   * Create an iterator from List, Map, Object[] or if not one of those
+   * Create an iterator from List, Map, Object[], or if not one of those
    * then return an iterator over singleton list containing given object.
    * Used by flatMap to give results that more closely match what would
    * be naively expected rather than createIterator() which would turn
    * String and Number objects into lists of chars or list of numbers.
+   * @param obj  the object of type List, Map, Object[] or single object
+   * @return an iterator that iterates over the object
    */
   public static Iterator createIteratorFlatMap(Object obj) {
     Iterator iter = doCreateIterator(obj);
@@ -2147,6 +2171,8 @@ public class RuntimeUtils {
   /**
    * If we have a Map.Entry then convert to List so that when passed to a closure
    * the closure will see a list of [key,value]
+   * @param elem  the element
+   * @return a two entry List if elem is a Map.Entry or return elem otherwise
    */
   public static Object mapEntryToList(Object elem) {
     if (elem instanceof Map.Entry) {

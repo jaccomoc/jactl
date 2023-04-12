@@ -216,6 +216,7 @@ public class ClassCompiler {
   /**
    * Create static handle to point to varargs wrapper method and another one for
    * the continuation handle if needed
+   * @param funDecl  the Expr.FunDecl for the method
    */
   protected void addHandleToClass(Expr.FunDecl funDecl) {
     // Helper for creating handle to continuation wrapper

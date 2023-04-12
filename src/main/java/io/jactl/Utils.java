@@ -602,6 +602,9 @@ public class Utils {
   /**
    * Return true if t1 is earlier (in the _same_ code) then t2.
    * Return false if t1 is not earlier or if code is not the same.
+   * @param t1  the first token
+   * @param t2  the second token
+   * @return true if t1 occurs before t2
    */
   static public boolean isEarlier(Token t1, Token t2) {
     if (!t1.getSource().equals(t2.getSource())) { return false; }

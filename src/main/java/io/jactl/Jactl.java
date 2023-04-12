@@ -28,7 +28,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * <p>The Jactl class is the main entry into running and compiling Jactl scripts.
+ * <p>The Jactl class is the main entry point into running and compiling Jactl scripts.
  * It provides a main() method for the commandline script execution utility as
  * well as methods for compiling Jactl scripts for use within a Java application.</p>
  * <p>For eval() and compileScript() calls that take a Map of global variables,
@@ -46,6 +46,8 @@ import java.util.stream.Collectors;
  * </ul>
  * <p>Also supported are object instances of Jactl classes that have been returned
  * from a previous script invocation.</p>
+ * <p>This class also provides the {@link #function()} and {@link #method(JactlType)} calls
+ * for creating global functions methods to be registered with the Jactl runtime.</p>
  */
 public class Jactl {
 

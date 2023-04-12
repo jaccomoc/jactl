@@ -21,7 +21,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
- * Async iterator to support iterator.skip(n) when n is < 0.
+ * Async iterator to support iterator.skip(n) when n is &lt; 0.
  * In these circumstances n represents an offset from the end of the "list" so we
  * need to keep a buffer of elements abs(n) big to support this behaviour.
  */

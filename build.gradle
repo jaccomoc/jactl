@@ -19,6 +19,8 @@ plugins {
     id 'maven-publish'
     id 'com.github.johnrengelman.shadow' version '8.1.0'
     id 'java'
+    id 'signing'
+    id 'net.researchgate.release' version '3.0.2'
 }
 
 group   'io.jactl'
@@ -44,9 +46,10 @@ dependencies {
 }
 
 tasks.withType(JavaCompile) { options.deprecation = true }
-task testJar(type: Jar) {
-    from sourceSets.test.output
-    archiveClassifier = 'tests'
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 test { useJUnitPlatform() }
@@ -63,7 +66,7 @@ jar {
 }
 
 shadowJar {
-    relocate 'org.objectweb.asm', 'jactl.ow2.asm'
+    relocate 'org.objectweb.asm', 'io.jactl.ow2.asm'
     archiveClassifier.set('')
 }
 
@@ -71,19 +74,46 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-        }
 
-        mavenTests(MavenPublication) {
-            groupId project.group
-            artifactId "${project.name}"
-            version project.version
-            artifact testJar
+            pom {
+                name = 'Jactl'
+                description = 'A secure non-blocking scripting language for the JVM platform.'
+                url = 'https://jactl.io'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'jaccomoc'
+                        name = 'James Crawford'
+                        url = 'https://github.com/jaccomoc'
+                    }
+                }
+                scm {
+                    connection = "scm:git:https://github.com/jaccomoc/jactl"
+                    developerConnection = "scm:git:https://github.com/jaccomoc/jactl"
+                    url = 'https://github.com/jaccomoc/jactl'
+                }
+            }
+            pom.withXml {
+                asNode().get('dependencies').replaceNode()
+            }
         }
     }
     repositories {
-        mavenLocal()
+        maven {
+            url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials(PasswordCredentials) {
+                username = ossrhUsername
+                password = ossrhPassword
+            }
+        }
     }
 }
 
-tasks.generateMetadataFileForMavenJavaPublication.mustRunAfter(testJar)
-tasks.publishMavenTestsPublicationToMavenLocal.dependsOn(jar)
+signing {
+    sign publishing.publications.mavenJava
+}

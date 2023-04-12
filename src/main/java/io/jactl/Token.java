@@ -74,6 +74,7 @@ public class Token extends Location {
    * Construct a Token that wraps an exception. This is used when throwing Tokeniser
    * exceptions during lookahead to be able to remember what exceptions was thrown
    * and reproduce it after rewind.
+   * @param e  the exception to wrap
    */
   public Token(JactlError e) {
     super(e.getLocation());
@@ -199,6 +200,7 @@ public class Token extends Location {
 
   /**
    * Get the value of the token when value is a String
+   * @return the string value of the token
    */
   public String getStringValue() {
     return (String)getValue();
@@ -206,6 +208,7 @@ public class Token extends Location {
 
   /**
    * Get the actual characters of the token in the source
+   * @return the actual characters parsed for the token
    */
   public String getChars() {
     return source.substring(getOffset(), getOffset() + length);

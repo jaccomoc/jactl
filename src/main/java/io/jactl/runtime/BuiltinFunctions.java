@@ -1271,6 +1271,13 @@ public class BuiltinFunctions {
 
   /**
    * Bottom up merge sort.
+   * @param list     the list to be sorted
+   * @param closure  the closure for the comparator (returns -1, 0, or 1 for a pair of values from list)
+   * @param source   the source code
+   * @param offset   offset into source code where sort is being performed
+   * @param c        the Continuation object for when closure is async
+   * @return the sorted list
+   * @throws Continuation if closure invokes async operation which suspends
    */
   public static Object mergeSort(List list, MethodHandle closure, String source, Integer offset, Continuation c) {
     int size = list.size();

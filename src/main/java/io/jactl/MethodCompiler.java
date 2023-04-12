@@ -55,9 +55,9 @@ import static org.objectweb.asm.Opcodes.NEW;
 import static org.objectweb.asm.Opcodes.*;
 
 /**
- * This class is the class that does most of the work from a compilation point of view.
+ * <p>This class is the class that does most of the work from a compilation point of view.
  * It converts the AST for a function/method into byte code.
- * <p>
+ * </p>
  * <h2>Type Stack</h2>
  * To compile into byte code we keep track of the type of the objects on the JVM stack
  * with a type stack that tries to mirror what would be on the JVM stack at the point
@@ -67,7 +67,7 @@ import static org.objectweb.asm.Opcodes.*;
  * etc all manipulate the type stack. There are also other versions of some of these
  * methods that begin with '_' such as _loadConst(), _dupVal(), _popVal() that don't
  * touch the type stack. All methods beginning with '_' leave the type stack unchanged.
- * <p>
+ * </p>
  * <b>Note:</b> when generating code that has jump/branches we need to be careful not
  * to have leave additional types on the type stack. For example, consider when we are
  * generating code for something like this:
@@ -90,8 +90,8 @@ import static org.objectweb.asm.Opcodes.*;
  * one value. We need to make sure to pop the extra ANY type off the type stack before
  * continuing:
  * <pre>
- *   pop();</pre>
- * <p>
+ *   pop();
+ * </pre>
  * <h2>Local Variables</h2>
  * This class tracks what each local variable slot is being used for.
  * Slot 0 will be the instance ("this") if the method is not a static method. Then
@@ -103,7 +103,7 @@ import static org.objectweb.asm.Opcodes.*;
  * Most types require just one slot but long and double types take two slots. This
  * class tracks the types in each slot and hides the callers having to know how many
  * slots are needed.
- * <p>
+ * </p>
  * <h2>Method Invocation</h2>
  * Each function/method will have two versions of the method generated:
  * <ul>
@@ -111,21 +111,22 @@ import static org.objectweb.asm.Opcodes.*;
  *   <li>A varargs wrapper method that takes care of invocations where not all parameter values
  *       are being passed in and also takes care of named argument handling</li>
  * </ul>
- * When passing methods as values or invoking them "dynamically" (when we don't know the type at
+ * <p>When passing methods as values or invoking them "dynamically" (when we don't know the type at
  * compile time) we actually use a MethodHandle. The MethodHandle is generated bound to the varargs
  * wrapper method and not the normal method because we don't know at compile time what the parameter
  * types will be.
+ * </p>
  * <p>
  * If the method is an async method (invokes code that is async or potentially async) then we also
  * generate a continuation wrapper method for both the normal method and the varargs wrapper.
  * This continuation wrapper is used when continuing execution after being suspended while waiting
  * for an async operation to complete. Its only job is to extract the parameters from the Continuation
  * object and then invoke the real method (normal or varargs wrapper as appropriate).
- * <p>
+ * </p><p>
  * If the function closes over variables declared in an outer scope then these variables are passed
  * in as additional arguments of type HeapLocal and the MethodHandle is bound to these HeapLocals
  * at the time it is created so that the signature of the MethodHandle is always the same.
- * <p>
+ * </p>
  * If we look at a concrete example, imagine we have a class X with a single method f() like this:
  * <pre>
  *   class X {
@@ -148,12 +149,11 @@ import static org.objectweb.asm.Opcodes.*;
  * </ul>
  * We always pass a Continuation object since we don't know whether the function we will be calling is async
  * or not when invoking via a MethodHandle.
- * <p>
- * The return type of the varargs wrapper function is always of type Object, again because we want to use
+ * <p>The return type of the varargs wrapper function is always of type Object, again because we want to use
  * MethodHandle.invokeExact() for efficient method invocation and the return type is used to determine how
  * to invoke the method.
- * <p>
- * If the function is async then we also generate continuation wrapper functions:
+ * </p><p>
+ * If the function is async then we also generate continuation wrapper functions:</p>
  * <pre>
  *   String f(Continuation cont, List strings, String separator)
  *   String f$$c(Continuation cont)    {
@@ -163,11 +163,11 @@ import static org.objectweb.asm.Opcodes.*;
  *   Object f$$w$$c(Continuation cont) {
  *     return f$$w(cont,cont.localObjects[2],cont.localObjects[3],cont.localObjects[4]);
  *   }</pre>
- * When invoking a function, we will invoke the actual "normal" function only when we have values for all
+ * <p>When invoking a function, we will invoke the actual "normal" function only when we have values for all
  * of its parameters. If there are missing values (due to optional parameters) or if we are invoking via
  * named args invocation then we will invoke the varargs wrapper function instead. If we don't know what
  * function we are invoking at compile time (invoking via a variable or field that contains a MethodHandle)
- * then we invoke using the MethodHandle that will point to a varargs wrapper function.
+ * then we invoke using the MethodHandle that will point to a varargs wrapper function.</p>
  */
 public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
