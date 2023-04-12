@@ -20,7 +20,6 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.0'
     id 'java'
     id 'signing'
-    id 'net.researchgate.release' version '3.0.2'
 }
 
 group   'io.jactl'
