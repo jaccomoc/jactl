@@ -4,7 +4,7 @@ title: "Jactl Language Guide"
 permalink: /language-guide
 ---
 
-<!-- To generate this list: jactl -pe '/^## /r or continue; s/## //; it = "* [$it](#${it.toLowerCase() =~ s/ /-/gr =~ s/[^\w-]//gr})"' language-guide.md -->
+<!-- To generate this list: jactl -pe '/^# /r or continue; s/# //; it = "* [$it](#${it.toLowerCase() =~ s/ /-/gr =~ s/[^\w-]//gr})"' language-guide.md -->
 * [The REPL](#the-repl)
 * [Command Line Scripts](#command-line-scripts)
 * [Statement Termination: Newlines and Semicolons](#statement-termination-newlines-and-semicolons)
@@ -31,7 +31,7 @@ permalink: /language-guide
 * [Built-in Global Functions](#built-in-global-functions)
 * [Built-in Methods](#built-in-methods)
  
-## The REPL
+# The REPL
 
 The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
 with Jactl.
@@ -65,7 +65,7 @@ x is not less than 4
 
 See [Jactl REPL](https://github.com/jaccomoc/jactl-repl) for more details on how to run the REPL.
 
-## Command Line Scripts
+# Command Line Scripts
 
 Jactl scripts can also be invoked from the command line:
 ```shell
@@ -94,7 +94,7 @@ $ java -jar jactl-{{ site.content.jactl_version }}.jar myscript.jactl
 See [Command Line Scripts](command-line-scripts.md) for more details about how to invoke scripts
 from the command line.
 
-## Statement Termination: Newlines and Semicolons
+# Statement Termination: Newlines and Semicolons
 
 Jactl syntax borrows heavily from Java, Groovy, and Perl and so while Java and Perl both require a semicolon to terminate
 simple statements, Jactl adopts the Groovy approach where semicolons are optional.
@@ -132,7 +132,7 @@ if (
 In this case, the newlines within the `if` statement condition will be treated as whitespace and the expression
 will be interpreted as `x[0]`.  
 
-## Comments
+# Comments
 
 Comments in Jactl are the same as for Java and Groovy and are denoted using either line comment form, where `//` is
 used to begin a comment that extends to the end of the line, or with a pair of `/*` and `*/` that delimit a comment that
@@ -148,7 +148,7 @@ can be either embeeded within a single line or span multiple lines:
 36
 ```
 
-## Variables
+# Variables
 
 A variable in Jactl is a symbol that is used to refer to a value. Variables are declared by specifying a type followed
 by their name and an optional expression to use as an initial value for the variable. If no initialization expression
@@ -168,7 +168,7 @@ current value is retrieved and used within that expression:
 4
 ```
 
-### Valid Variable Names
+## Valid Variable Names
 
 Variable names must be a valid _identifier_. Identifiers start with a letter or with an underscore `_` followed
 by a combination of letters, digits and underscores. The only special case is that a single underscore `_` is not a
@@ -197,7 +197,7 @@ For example:
 * accountNumber
 * emailAddress
 
-## Keywords
+# Keywords
 
 The following table list the reserved keywords used by Jactl:
 
@@ -214,9 +214,9 @@ The following table list the reserved keywords used by Jactl:
 | unless     | var      | void        | while    |             |
 
 
-## Types
+# Types
 
-### Standard Types
+## Standard Types
 
 Jactl supports a few built-in types as well as the ability to build your own types by creating
 [Classes](classes).
@@ -237,7 +237,7 @@ The standard types are:
 | Map      | Map of key/value pairs     | `[:]`         | `[a:1]`, `[x:1, y:[1,2,3], z:[a:1,b:2]]`, `{d:2,e:5}` |
 | def      | Used for untyped variables | `null`        | |
 
-### Inferred Type
+## Inferred Type
 
 Variables can also be declared using the `var` keyword if an initialiser expression is given.
 Jactl will then create a variable of the same type as the initialisation expression:
@@ -253,7 +253,7 @@ Jactl will then create a variable of the same type as the initialisation express
 some place
 ```
 
-### Dynamic/Weak Typing
+## Dynamic/Weak Typing
 
 While Jactl supports the use of specific types when declaring variables and functions, Jactl can also be used as
 a weakly or dynamically typed language (also known as _duck typing_). The keyword `def` is used to define variables and
@@ -290,9 +290,9 @@ Function@45822040
 6765
 ```
 
-### Numbers
+## Numbers
 
-#### Integers
+### Integers
 
 Jactl supports two types of integers: `int` and `long`.
 
@@ -315,7 +315,7 @@ Error at line 1, column 1: Integer literal too large for int
 9223372036854775807
 ```
 
-#### Floating Point
+### Floating Point
 
 In Jactl, by default, floating point numbers are represented by the `Decimal` type and numeric literals that have
 a decimal point will be interpreted as Decimal numbers.
@@ -339,7 +339,7 @@ To illustrate how Decimal values and double values behave differently, consider 
 24.23
 ```
 
-### Strings
+## Strings
 
 Strings in Jactl are usually delimited with single quotes:
 ```groovy
@@ -356,7 +356,7 @@ a multi-line
 string
 ```
 
-#### Special Characters
+### Special Characters
 
 Special characters such as newlines can be embedded in strings by using the appropriate escape sequence. The following
 escape sequences are supported:
@@ -378,7 +378,7 @@ a\b	'c'	d
 e
 ```
 
-#### Subscripts and Characters
+### Subscripts and Characters
 
 Subscript notation can be used to access individual characters:
 ```groovy
@@ -408,7 +408,7 @@ a
 X
 ```
 
-#### String Operators
+### String Operators
 
 Strings can be concatenated using `+`:
 ```groovy
@@ -439,7 +439,7 @@ false
 true
 ```
 
-#### Expression Strings
+### Expression Strings
 
 Strings that are delimited with double quotes can have embedded expressions inside them where `$` is used to denote the
 start of the expression. If the expression is a simple identifier then it identifies a variable whose value should be
@@ -500,7 +500,7 @@ For example:
 x is odd
 ```
 
-#### Pattern Strings
+### Pattern Strings
 
 In order to better support regular expressions, pattern strings can be delimited with `/` and are multi-line strings
 where standard backslash escaping for `\n`, `\r`, etc. is not performed. Backslashes can be used to escape `/`, `$`,
@@ -534,7 +534,7 @@ a multi-line regex string
 
 > Note that an empty pattern string `//` is not supported since this is treated as the start of a line comment.
 
-### Lists
+## Lists
 
 A Jactl `List` represents a list of values of any type. Lists can have a mixture of types within them. Lists are
 created using the `[]` syntax where the elements are a list of comma separated values:
@@ -687,7 +687,7 @@ current size of the list which will fill any gaps with `null`:
 ['value1', 3, ['a', 'b'], null, null, null, null, null, null, null, 10]
 ```
 
-### Maps
+## Maps
 
 A `Map` in Jactl is used hold a set of key/value pairs and provides efficient lookup of a value based on a given key
 value.
@@ -710,7 +710,7 @@ If the key is a valid identifier (or keyword) then the key does not need to be q
 2
 ```
 
-#### Variable Value as Key
+### Variable Value as Key
 If you have a variable whose value you wish to use as the map key then you should surround the key in parentheses `()`
 to tell the compiler to use the variable value and not the identifier as the key:
 ```groovy
@@ -727,7 +727,7 @@ my key
 ['my key':1, b:2]
 ```
 
-#### Map Addition
+### Map Addition
 As with lists, you can add maps together:
 ```groovy
 > [a:1,b:2] + [c:3,d:4]
@@ -750,7 +750,7 @@ The `+=` operator adds the values to an existing map rather than creating a new 
 [a:2, b:2, c:3]
 ```
 
-#### Map Subtraction
+### Map Subtraction
 You can subtract from a Map to remove specific keys from the Map (see also [Map.remove()](#Map.remove())).
 To subtract one map from the other:
 ```groovy
@@ -772,7 +772,7 @@ You can also subtract a List of values from a Map where the List is treated as a
 [b:2]
 ```
 
-#### JSON Syntax
+### JSON Syntax
 Jactl also supports JSON-like syntax for maps. This makes it handy if you want to cut-and-paste some JSON into your
 Jactl script:
 ```groovy
@@ -780,7 +780,7 @@ Jactl script:
 [name:'Fred Smith', employeeId:1234, address:[street:['Apartment 456', '123 High St'], town:'Freetown']]
 ```
 
-#### toString(indent)
+### toString(indent)
 Maps can be used to build up complex, nested data structures. The normal `toString()` will convert the map to its
 standard compact form but if you specify an indent amount it will provide a more readable form:
 ```groovy
@@ -804,7 +804,7 @@ standard compact form but if you specify an indent amount it will provide a more
 > The `toString()` Jactl function outputs values in a form that is legal, executable
 > Jactl code, which is useful for cut-and-pasting into scripts and when working with the REPL command line.
 
-#### Map Field Access
+### Map Field Access
 
 Maps can be used as though they are objects with fields using `.`:
 ```groovy
@@ -867,7 +867,7 @@ update the value of a field within the map:
 [a:1, b:4, c:[d:4, e:[gg:2, hh:3], f:[1, 2, 3]]]
 ```
 
-#### Map Subscript Access
+### Map Subscript Access
 
 Maps can also be accessed using subscript notation:
 ```groovy
@@ -904,7 +904,7 @@ abc
 [a:1, b:'abc', c:[d:4, e:5], zz:'123']
 ```
 
-#### Auto-Creation
+### Auto-Creation
 
 The field access mechanism can also be used to automatically create missing maps or lists, based on the context,
 when used on the left-hand side of an assignment.
@@ -974,21 +974,7 @@ x.a['b'] = 1
    ^
 ```
 
-#### in and !in Operators
-
-The `in` and `!in` operators can be used to check for existent of a key in a Map:
-```groovy
-> def x = [a:1, b:2]
-[a:1, b:2]
-> 'a' in x
-true
-> 'x' in x
-false
-> 'ab' !in x
-true
-```
-
-## Truthiness
+# Truthiness
 
 In Jactl we often want to know whether an expression is `true` or not. The _truthiness_ of an expression is used to
 determine which branch of an `if` statement to evaluate, or whether a `for` loop or a `while` loop should continue
@@ -1031,9 +1017,9 @@ false
 false
 ```
 
-## Expressions and Operators
+# Expressions and Operators
 
-### Operator Precedence
+## Operator Precedence
 
 Jactl supports the following operators. Operators are shown in increasing precedence order and operators of the same
 precedence are shown with the same precedence value:
@@ -1091,7 +1077,7 @@ Bracketing can be used to force the order of evaluation of sub-expressions where
 15
 ```
 
-### Assignment and Conditional Assignment
+## Assignment and Conditional Assignment
 
 Variables can have values assigned to them using the `=` operator:
 ```groovy
@@ -1129,7 +1115,7 @@ So `x ?= y` means `x` will be assigned the value of `y` only if `y` is not null:
 1
 ```
 
-### Basic Arithmetic Operators
+## Basic Arithmetic Operators
 
 The standard arithmetic operators `+`, `-`, `*`, `/` are supported for addition, subtraction, multiplication, and
 division:
@@ -1139,7 +1125,7 @@ division:
 ```
 Remember that `*` and `/` have higher precedence and are evaluated before any addition or subtraction. 
 
-### Prefix `+` and `-`
+## Prefix `+` and `-`
 
 The `+` and `-` operators can also be used as prefix operators:
 ```groovy
@@ -1151,7 +1137,7 @@ The `+` and `-` operators can also be used as prefix operators:
 The `-` prefix operator negates the value following expression while the `+` prefix operator does nothing but exists
 to correspond to the `-` case so that things like `-3` and `+3` can both be written.
 
-### Bitwise Operators
+## Bitwise Operators
 
 The bitwise operators are `|`, `&`, `^`, and `~`.
 
@@ -1194,7 +1180,7 @@ opposite of the bit value in the expression:
 -6
 ```
 
-### Shift Operators
+## Shift Operators
 
 The shift operators `<<`, `>>`, `>>>` work at the bit level and shift bits of a number by the given number of positions.
 
@@ -1228,7 +1214,7 @@ For example:
 1111111100001111
 ```
 
-### Modulo `%` and Remainder `%%` operators
+## Modulo `%` and Remainder `%%` operators
 
 In addition to the basic four operators, Jactl also has `%` (modulo) and `%%` (remainder) operators.
 Both operators perform similar functions in that they calculate the "remainder" after dividing by some number.
@@ -1256,7 +1242,7 @@ Jactl retains `%%` for scenarios where you want compatibility with how Java does
 the left-hand side will always be positive and you care about performance (since `%%` compiles to a single JVM
 instruction while `%` is several instructions).
 
-### Increment/Decrement Operators
+## Increment/Decrement Operators
 
 Jactl offers increment `++` and decrement `--` operators that increment or decrement a value by `1`.
 Both prefix and postfix versions of these operators exist.
@@ -1296,7 +1282,7 @@ decrement but in the prefix case the value returned is as though the value had b
 20
 ```
 
-### Comparison Operators
+## Comparison Operators
 
 The following table shows the operators that can be used to compare two values:
 
@@ -1350,7 +1336,7 @@ true
 false
 ```
 
-### Comparator Operator
+## Comparator Operator
 
 The `<=>` comparator operator evaluates to -1 if the left-hand side is less than the right-hand side, 0 if the two
 values are equal, and 1 if the left-hand side is greater than the right-hand side:
@@ -1378,7 +1364,7 @@ that needs to return -1, 0, or 1 based on the comparison of any two elements in 
 [[name:'Daisy', salary:3000], [name:'Frank', salary:2000], [name:'Joe', salary:1500]]
 ```
 
-### Logical/Boolean Operators
+## Logical/Boolean Operators
 
 There are two sets of logical or boolean operators:
 1. `&&`, `||`, `!`, and
@@ -1428,7 +1414,7 @@ In this case, there are obviously other ways to achieve the same thing (such as 
 occasions where having these low-precedence versions of the boolean operators is useful.
 It comes down to personal preference whether and when to use them.
 
-### Conditional Operator
+## Conditional Operator
 
 The conditional operator allows you to embed an `if` statement inside an expression.
 It takes the form:
@@ -1448,7 +1434,7 @@ odd
 4
 ```
 
-### Default Value Operator
+## Default Value Operator
 
 The default value operator `?:` evaluates to the left-hand side if the left-hand side is not null and evaluates to
 the right-hand side if the left-hand side is null.
@@ -1461,7 +1447,7 @@ It allows you to specify a default value in case an expression evaluates to null
 7
 ```
 
-### Other Assignment Operators
+## Other Assignment Operators
 
 Many operators also have assignment versions that perform the operation and then assign the result to the
 left-hand side.
@@ -1491,7 +1477,7 @@ For example:
 47
 ```
 
-### Instance Of
+## Instance Of
 
 The `instanceof` and `!instanceof` operators allow you to check if an object is an instance (or not an instance) of a
 specific type.
@@ -1516,7 +1502,7 @@ true
 true
 ```
 
-### Type Casts
+## Type Casts
 
 In Java, type casting is done for two reasons:
 1. You are passed an object of some generic type but you know it is actually a sepcific type and you want to treat it as that specific type (to invoke a method on it, for example), or
@@ -1561,7 +1547,7 @@ Remember that characters in Jactl are just single character strings so if you ca
 65
 ```
 
-### As Operator
+## As Operator
 
 The `as` operator is used to convert values from one type to another (where such a conversion is possible).
 The operator is an infix operator where the left-hand side is the expression to be converted and the right-hand side
@@ -1617,7 +1603,7 @@ true
 [x:3, y:4]
 ```
 
-### In Operator
+## In Operator
 
 The `in` and `!in` operators are used to test if an object exists or not within a list of values.
 For example:
@@ -1635,7 +1621,7 @@ false
 This operator works by iterating through the list and comparing each value until it finds a match so if the list of values is particularly
 large then this will not be very efficient.
 
-The `in` and `!in` operators also work on Maps and allow you to check if a key exists in the Map:
+For Maps, the `in` and `!in` operators allow you to check if a key exists in the Map:
 ```groovy
 > def m = [abc:1, xyz:2]
 [abc:1, xyz:2]
@@ -1645,7 +1631,13 @@ true
 false
 ```
 
-### Field Access Operators
+The `in` and `!in` operators also work on Strings to see if one string is contained within another:
+```groovy
+> 'the' in 'some of the time'
+true
+```
+
+## Field Access Operators
 
 The `.` `?.` `[]` and `?[]` operators are used for accessing fields of Maps and class objects while the `[]` and `?[]`
 are also used to access elements of Lists.
@@ -1672,9 +1664,9 @@ true
 true
 ```
 
-## Regular Expressions
+# Regular Expressions
 
-### Regex Matching
+## Regex Matching
 
 Jactl provides two operators for doing regular expression (regex) find and regex subsitutions.
 The `=~` operator is used for matching a string against a regex pattern.
@@ -1705,7 +1697,7 @@ The `!~` operator tests that the string does not match the pattern:
 false
 ```
 
-### Modifiers
+## Modifiers
 
 When using a regex string (a string delimited with `/`) you can append modifiers to the regex pattern to control the
 behaviour of the pattern match.
@@ -1772,7 +1764,7 @@ Jactl saves the state of the match to remember where to continue from the next t
 
 The `g` modifier is more useful when used with capture variables as described in the next section.
 
-### Capture Variables
+## Capture Variables
 
 With regex patterns you can provide capture groups using `(` and `)`.
 These groupings then create _capture_ _variables_ `$1` `$2` etc. for each of the capture groups that correspond
@@ -1829,7 +1821,7 @@ true
 true
 ```
 
-### Regex Substitution
+## Regex Substitution
 
 Jactl supports regex substitution where substrings in the source string that match the given pattern are replaced
 with a supplied substitution string.
@@ -1885,7 +1877,7 @@ For example to append the size of each word to each word in a sentence:
 This[4] SentenCe[8] has[3] Capital[7] letTers[7]
 ```
 
-### Implicit Matching and Substitution
+## Implicit Matching and Substitution
 
 For both regex matches and regex substitutions, if no left-hand side is given, Jactl will assume that the match or
 the substitution should be done against the default `it` variable.
@@ -1949,7 +1941,7 @@ s/MY/a random/ig
 ^
 ```
 
-### Split Method
+## Split Method
 
 The `split()` method is another place where regex patterns are used.
 Split operates on strings to split them into their constituent parts where the separator is based on a supplied
@@ -1978,7 +1970,7 @@ The order of the modifiers is unimportant.
 The only modifiers supported for `split` are `i` (case-insensitive), `s` (dot matches line terminators), and
 `m` (multi-line mode).)
 
-## Eval Statement
+# Eval Statement
 
 The `eval()` statement can be used to evaluate arbitrary Jactl code.
 It takes the string passed to it and compiles and runs it.
@@ -2034,7 +2026,7 @@ def f(n) { : n == 1 ? 1 : n * f(n-1)}; def first10 = 10.map{ f(it+1) }; f(x)
 Note that this is not the most efficient way to run Jactl code since it has to compile the code before it can run
 it, so if it is to be used it should be used judiciously.
 
-## If/Else Statements
+# If/Else Statements
 
 Jactl `if` statements work in the same way as Java and Groovy `if` statements.
 The syntax is: 
@@ -2083,7 +2075,7 @@ else {
 }
 ```
 
-## If/Unless Statements
+# If/Unless Statements
 
 In addition to the `if/else` statements, Jactl supports single statement `if` and `unless` statements where the
 test for the condition comes at the end of the statement rather than the beginning.
@@ -2114,7 +2106,7 @@ abc
 > die "x has invalid value: $x" unless x.size() == 3
 ```
 
-## While Loops
+# While Loops
 
 Jactl `while` loops work like Java and Groovy:
 > `while (<cond>) <statement>`
@@ -2132,7 +2124,7 @@ while (i < 5) {
 die if sum != 10
 ```
 
-### Break and Continue
+## Break and Continue
 
 Like Java, `break` can be used to exit the while loop at any point and `continue` can be used to goto the next
 iteration of the loop before the current iteration has completed:
@@ -2161,7 +2153,7 @@ while (i < 100) {
 die unless sum == 1683
 ```
 
-## For Loops
+# For Loops
 
 A `for` loop is similar to a `while` loop in that it executes a block of statements while a given condition is met.
 It additionally has some initialisation that is run before the loop and some statements that are run for every loop
@@ -2223,7 +2215,7 @@ for (;;) {
 die unless sum == 55 
 ```
 
-## Labels for While/For Statements
+# Labels for While/For Statements
 
 With `while` or `for` loops you can always break out of or continue the current loop using `break` or `continue`.
 Jacasal also allows you to break out of or continue an outer loop by labelling the loops and using the label in the
@@ -2248,7 +2240,7 @@ Label names are any valid identifier (any combination of letters, digits, and un
 is not a digit and identifier is not a single underscore).
 Label names can be the same as other variable names (although not recommended practice).
 
-## Do Expression
+# Do Expression
 
 Jactl has a `do` expression that allows you to execute a block of statements where normally an expression would be
 expected.
@@ -2283,7 +2275,7 @@ do { found = true; println "Found multiple of 17: $x" } if x % 17 == 0
 > **Note**<br/>
 > `do/while` statements like those in Java are not currently supported in Jactl.
 
-## Print Statements
+# Print Statements
 
 Jactl has `print` and `println` statements for printing a string.
 `println` will print the string followed by a new-line.
@@ -2302,12 +2294,12 @@ The output will, by default, be printed to `System.out` (standard out) but can b
 to a diagnostics log file).
 See [Integration Guide](integration-guide.md) for more details.
 
-## Die Statements
+# Die Statements
 
 The `die` statement allows you to instantly exit a Jactl script with an optional error message.
 It should be used only in situations where something unexpected has occurred and it makes no sense to continue.
 
-## Functions
+# Functions
 
 Jactl supports functions that take arguments and return a result.
 Functions always return a result (even if it is just `null`) - there is no concept of `void` functions in Jactl.
@@ -2365,7 +2357,7 @@ List joinStrings(List left, List right, String separator) {
 die unless joinStrings(['a','b','c'],['AA','BB'],':') == ['a:AA', 'b:BB', 'c:']
 ```
 
-### Default Parameter Values
+## Default Parameter Values
 
 You can supply default values for parameters in situations where having a default value makes sense.
 For example we could default the separator to `':'` in the function above:
@@ -2410,7 +2402,7 @@ def joinStrings(List left, var right = left, var separator = ':') {
 die unless joinStrings(['a','b']) == ['a:a', 'b:b']
 ```
 
-### Named Argument Invocation
+## Named Argument Invocation
 
 It is possible to invoke functions using named arguments where the names and the argument values are given
 as a list of colon separated pairs:
@@ -2423,7 +2415,7 @@ def joinStrings(List left, var right = left, var separator = ':') {
 die unless joinStrings(separator:'=', left:['a','b'], right:['A','B']) == ['a=A', 'b=B']
 ```
 
-### Declaration Scope
+## Declaration Scope
 
 Functions can be declared wherever it makes sense based on where they need to be invoked from.
 Their visibility is based on the current scope in which they are declared, just like any variable.
@@ -2453,7 +2445,7 @@ def factorials(n) {
 die unless factorials(10) == [1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800]
 ```
 
-### Functions as Values
+## Functions as Values
 
 A function declaration can be treated as a value and assigned to other variables, passed as an argument to another
 function, or returned as a value from a function.
@@ -2480,7 +2472,7 @@ die unless func(3) == 36         // should be sqr(twice(3))
 While you can assign functions to other variables, the function variable itself (the name of the function) cannot be
 assigned to.
 
-### Invocation With List of Arguments
+## Invocation With List of Arguments
 
 Functions can be invoked with a single list supplying the argument values for the function (in the declared order).
 
@@ -2494,7 +2486,7 @@ die unless f(x) == 6
 die unless f(y) == 'xabc123'   // since parameters are untyped we can pass strings and get string concatenation 
 ```
 
-## Closures
+# Closures
 
 Closures in Jactl are modelled after the closure syntax of Groovy.
 Closures are similar to functions in that they take one or more parameters and return a result.
@@ -2530,7 +2522,7 @@ die unless f('ab', 3) == 'ababab'
 die unless f('ab') == 'abab'
 ```
 
-### Implicit `it` Parameter
+## Implicit `it` Parameter
 
 It is common enough for a closure to have a single argument and Jactl follows the Groovy convention of creating an
 implicit `it` parameter if there is no `->` at the start of the closure:
@@ -2540,7 +2532,7 @@ def f = { it * it }
 die unless f(3) == 9
 ```
 
-### No Parameter Closures
+## No Parameter Closures
 
 If you want a closure that has no arguments use the `->` and don't list any parameters:
 ```groovy
@@ -2549,7 +2541,7 @@ def f = { -> "The current timestamp is ${timestamp()}" }
 die unless f() =~ /The current timestamp is/
 ```
 
-### Closure Passing Syntax
+## Closure Passing Syntax
 
 Closures can be passed as values like functions:
 ```groovy
@@ -2643,7 +2635,7 @@ timeIt{
 // 63245986, 102334155]
 ```
 
-### Functions vs Closures
+## Functions vs Closures
 
 Consider the following:
 ```groovy
@@ -2695,7 +2687,7 @@ def f(x) { x == 1 ? 1 : x + g(x - 1) }
 def g(x) { x == 1 ? 1 : x * f(x - 1) }
 ```
 
-### Closing Over Variables
+## Closing Over Variables
 
 Both functions and closures can "close over" variables in outer scopes, which means that they have access to
 these variables and can read and/or modify them.
@@ -2752,12 +2744,12 @@ In the example, `x` and `y` are two different instances of the closure which eac
 > In functional programming, side effects such as modifying variables outside the scope of the closure are 
 > generally frowned upon since pure functions don't modify state, they just return values.
 
-## Collection Methods
+# Collection Methods
 
 Jactl has a number of built-in methods that operate on collections and things that can be iterated over.
 In Jactl this means Lists, Maps, Strings, and numbers.
 
-### each()
+## each()
 
 Consider this code that iterates over the elements of a List:
 ```groovy
@@ -2781,7 +2773,7 @@ This makes the code more concise, easier to understand, and less error-prone to 
 In general, when explicitly iterating over a collection of some sort, consider whether there is a better
 way to achieve the same thing using the built-in collection methods.
 
-### map()
+## map()
 
 Another important collection method is `map()` which, like `each()`, iterates and passes each element to the given
 closure. The difference is that the closure passed to `map()` is expected to return a value so the result of using
@@ -2802,7 +2794,7 @@ Since the output of map is another list we can chain them together:
 32
 ```
 
-### Map Iteration and collectEntries()
+## Map Iteration and collectEntries()
 
 As well as applying to Lists, these methods can also be applied to Map objects.
 For Maps, each element passed into the closure is a two-element list consisting of the key and the value:
@@ -2843,7 +2835,7 @@ becomes the key in the Map and the second element being the value for that key.
 If there are multiple entries with the same key then the value for the last element in the list with that key will
 become the value in the Map.
 
-### String Iteration and join()
+## String Iteration and join()
 
 Strings can also be iterated over in which case the elements are the characters of the string.
 (Remember that a character is just a single-character string.)
@@ -2866,7 +2858,7 @@ aAbBcC
 aA:bB:cC
 ```
 
-### Number Iteration
+## Number Iteration
 
 Numbers can also be "iterated" over.
 In this case the number acts as the number of times to iterate with the values of the iteration being the numbers
@@ -2885,7 +2877,7 @@ For example:
 [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
 ```
 
-### filter()
+## filter()
 
 The `filter()` method can be used to retain only elements that match a given condition.
 It is passed a closure that should evaluate to `true` if the element should be retained or `false` if the element
@@ -2908,7 +2900,7 @@ Function@124888672
 ['a', 1, 2, 3]
 ```
 
-### mapWithIndex()
+## mapWithIndex()
 
 The `mapWithIndex()` method works like the `map()` method except that as well as passing in the element to the
 closure it will also pass in the index.
@@ -2935,7 +2927,7 @@ being the list element and the second being the index:
 [['a', 0], ['b', 1], ['c', 2]]
 ```
 
-### flatMap()
+## flatMap()
 
 The `flatMap()` method is similar to the `map()` method in that it is expected that each element is transformed into
 a new value by the given closure:
@@ -2973,7 +2965,7 @@ Note that only one level of flattening will result:
 [1, 2, 3, 4, 5, [6, 7, 8]]
 ```
 
-### skip() and limit()
+## skip() and limit()
 
 If you know that you are not interested in the first `n` elements or are only interested in the first `n` elements
 of the result you can use `skip()` and `limit()` to skip elements and limit the result.
@@ -2997,7 +2989,7 @@ So `skip(-2)` means skip until there are only two elements left:
 [1, 2]
 ```
 
-### Lazy Evaluation, Side Effects, and collect()
+## Lazy Evaluation, Side Effects, and collect()
 
 In Jactl, if a collection method results in another list of values then most methods don't actually generate the
 list unless they are the last method in the invocation chain.
@@ -3070,7 +3062,7 @@ So in Jactl these two expressions are equivalent:
 [1, 4, 9]
 ```
 
-### grouped()
+## grouped()
 
 The `grouped()` method groups elements into sub-lists.
 So `grouped(2)` will create a list of pairs of elements from the source list, while `grouped(3)` would split the list
@@ -3096,7 +3088,7 @@ sub-lists:
 [[1], [2], [3]]
 ```
 
-### sort()
+## sort()
 
 The `sort()` method will sort a list of elements.
 With no argument it will sort based on natural sort order if one exists:
@@ -3158,7 +3150,7 @@ Since you can sort based on arbitrary criteria, you can sort arbitrary objects:
 [[name:'Joe', salary:1500], [name:'Frank', salary:2000], [name:'Daisy', salary:3000]]
 ```
 
-### unique()
+## unique()
 
 The `unique()` method allows you to eliminate duplicate elements in a list.
 It works like the Unix `uniq` command in that it only considers elements next to each other in the list to determine
@@ -3178,7 +3170,7 @@ If you want to eliminate all duplicates regardless of where they are in the list
 ['a', 'b', 'c']
 ```
 
-### reverse()
+## reverse()
 
 The `reverse()` method will reverse the order of the elements being iterated over:
 ```groovy
@@ -3188,7 +3180,7 @@ The `reverse()` method will reverse the order of the elements being iterated ove
 [100, 81, 64, 49, 36, 25, 16, 9, 4, 1]
 ```
 
-### reduce()
+## reduce()
 
 The `reduce()` method will iterate over a list and invoke a given closure on each element.
 In addition to passing in the element to the closure, `reduce()` passes in the previous value that the
@@ -3219,7 +3211,7 @@ this is some example text to use to count letter frequency
 [['e', 9], ['t', 8], ['s', 4], ['o', 4], ['u', 3]]
 ```
 
-### min() and max()
+## min() and max()
 
 You can use `min()` and `max()` to find the minimum or maximum element from a list:
 ```groovy
@@ -3245,7 +3237,7 @@ For example, to find the employee with the smallest or biggest salary:
 [name:'Daisy', salary:3000]
 ```
 
-### avg() and sum()
+## avg() and sum()
 
 The `avg()` and `sum()` methods only work on lists of numbers and return the average or the sum of the values in the
 list:
@@ -3256,7 +3248,7 @@ list:
 3.6666666667
 ```
 
-## Classes
+# Classes
 
 Like Java, Jactl supports user defined classes but in a more simplified form.
 Jactl uses a syntax that (mostly) follows that of Java.
@@ -3290,7 +3282,7 @@ the values for the mandatory fields of the class (in the order in which the fiel
 Notice that by default, the value of the object when printed by the REPL is shown as though the object were a Map of
 field values.
 
-### Field Access
+## Field Access
 
 To access the fields of the class object you use `.` or `?.` just as for Maps:
 ```groovy
@@ -3319,7 +3311,7 @@ You can also use '[]' and '?[]' to access the fields:
 It is recommended to use '.' and '?.' with explicit names rather than expressions where possible as this is a
 more efficient access mechanism.
 
-### Class Name as Type
+## Class Name as Type
 
 When declaring a variable to contain a class instance you can make the variable strongly typed if you want.
 If you then try to assign something else to the variable that is not a Point you will get an error:
@@ -3345,7 +3337,7 @@ Function@375457936
 [x:2, y:3]
 ```
 
-### Field Initialisers and Mandatory Fields
+## Field Initialisers and Mandatory Fields
 
 Like variables, fields can be declared with initialisers:
 ```groovy
@@ -3401,7 +3393,7 @@ default value is for the type of field:
 [x:0, y:7]
 ```
 
-### Named Argument Passing for `new`
+## Named Argument Passing for `new`
 
 To set values for non-mandatory fields you can use the named argument way of invoking `new` which allows you set
 the values of any fields (as long as all mandatory fields are given a value):
@@ -3416,7 +3408,7 @@ the values of any fields (as long as all mandatory fields are given a value):
 [x:4, y:0]
 ```
 
-### Converting between Maps and Class Instances
+## Converting between Maps and Class Instances
 
 As shown, instances, when printed out look like Maps and passing named arguments to `new` is like constructing a
 Map literal.
@@ -3444,7 +3436,7 @@ Missing value for mandatory field 'x' @ line 1, column 7
 [x:6, y:0]
 ```
 
-### Field Types
+## Field Types
 
 We have shown, so far, only examples of fields with type `int` but, as for variables and function parameters,
 fields can have any type:
@@ -3470,7 +3462,7 @@ class Tree {
 }
 ```
 
-### Auto-Creation
+## Auto-Creation
 
 Just as for Maps, Jactl supports "auto-creation" of fields when a field reference appears as a left-hand side of an
 assignment like operator such as `=`, `?=`, `+=`, `-=`, etc., as long as the types of the fields are types that can
@@ -3504,7 +3496,7 @@ x.y.z.i = 4
 
 
 
-### Instance Methods
+## Instance Methods
 
 We have seen classes with fields but classes are more than just a data structure for grouping related pieces of
 data.
@@ -3546,7 +3538,7 @@ true
 16
 ```
 
-### This
+## This
 
 Within instance methods instance fields are accessed by referring directly to their names:
 ```groovy
@@ -3577,7 +3569,7 @@ or method:
 [i:3]
 ```
 
-### Final Methods
+## Final Methods
 
 Instance methods can be marked as `final` which means that they cannot be overridden by a child class.
 In addition, in situations where we know the type of the object and we know that the method is final, there
@@ -3595,7 +3587,7 @@ class Y extends X { def func() { 'trying to override final function' } }
                     ^
 ```
 
-### Static Methods
+## Static Methods
 
 The methods we saw previously were methods that are instance methods and apply to an instance of a class.
 Jactl also supports methods that are defined as `static` which are class methods rather than instance methods.
@@ -3642,7 +3634,7 @@ Invoking a static method via an instance works even if the type of the variable 
 [x:2, y:3]
 ```
 
-### No Static Fields
+## No Static Fields
 
 In Jactl, there is no support for static fields.
 This differs from Java and Groovy which support static fields that exist at the class level rather than the class
@@ -3662,7 +3654,7 @@ If global state is really required then it is up to the application to provide i
 scripts to use that can update/read some global state, potentially in a database, or in a distributed in-memory
 key/value store of some sort.
 
-### Methods as Values
+## Methods as Values
 
 Like normal functions, methods can be assigned as values to variables and passed as values to other function/methods:
 ```groovy
@@ -3719,7 +3711,7 @@ Note what happens if we now change the value of the `rect` variable:
 The `area` variable points to the `area()` method bound to the original instance so even if `rect` gets a new value
 `area` is still bound to the old value.
 
-### Inner Classes
+## Inner Classes
 
 Inner classes can be defined within a class if desired:
 ```groovy
@@ -3783,7 +3775,7 @@ Note that Jactl inner classes are always "static inner classes" in Java terminol
 This means that instances of inner classes are not implicitly bound to an instance of an outer class. 
 There is no way in Jactl to declare a non-static inner class.
 
-### toString()
+## toString()
 
 When converting a class instance to a string for the purposes of printing them or because they are being coerced
 into a string use `as` then the output is shown as though the instance were a Map:
@@ -3807,7 +3799,7 @@ i=3, j=4
 
 The `toString()` method must have no mandatory arguments and must have a return type of `String` or `def`.
 
-### Duck Typing
+## Duck Typing
 
 Jactl allows you to use strong typing, where fields, variables, and parameters are given an expicit type, or dynamic
 typing where fields, variables, and parameters can be defined as `def` which allows them to hold values of any type.
@@ -3836,7 +3828,7 @@ invoked Y.f()
 Jactl does not take any position on whether strong typing or weak typing is more superior.
 It is up to you as the developer to decide what makes sense or what feels more natural.
 
-### Packages
+## Packages
 
 Related classes can be grouped together into packages.
 When using the Jactl REPL all classes are put into the top level package and there is no way to specify any other
@@ -3870,7 +3862,7 @@ The package name can be a single name such as `util` or can be list like `xyz.ut
 The packages form a tree where a package `a.b.c` is contained with the package `a.b` which is inside `a`.
 Classes can exist at any level of the tree, not just at the most nested levels.
 
-### Fully Qualified Class Names and Import
+## Fully Qualified Class Names and Import
 
 When using packages, classes in the same package can be accessed directly via their name.
 If a class exists in a different package then you can refer to the class using its fully qualified name which is
@@ -3912,18 +3904,18 @@ def x = new MLNC()
 Using `import as` is also useful if you have classes of the same name in different packages that you need
 access to.
 
-### Scoping
+## Scoping
 
 Unlike functions which can be declared in any scope and then have visibility within that scope, classes can only
 be declared in two places:
 1. Top level of a script or class file, or
 2. As an inner class within another class declaration.
 
-## Built-in Global Functions
+# Built-in Global Functions
 
 There are a handful of global functions.
 
-### timestamp() and nanoTime()
+## timestamp() and nanoTime()
 
 The `timestamp()` function returns the current epoch time in milliseconds.
 It is equivalent to Java's `System.currentTimeMillis()`:
@@ -3952,7 +3944,7 @@ Function@2050339061
 Result: 102334155, duration: 199072125 nanoseconds
 ```
 
-### sprintf()
+## sprintf()
 
 You can use `sprintf` to format strings.
 It takes a format string as its first argument and then a list of arguments that are formatted according to the
@@ -3978,7 +3970,7 @@ Daisy      $3000        $18.46
 Joe        $1500        $9.23
 ```
 
-### sleep()
+## sleep()
 
 The `sleep()` function will pause execution of the script until the given delay time has expired.
 The argument to `sleep()` is the number of milliseconds to pause for.
@@ -4002,11 +3994,11 @@ This is mainly just used for internal testing of Jactl for testing the suspendin
 abc
 ```
 
-### eval()
+## eval()
 
 The [Eval Function](#Eval Function) section describes how this function works.
 
-### nextLine()
+## nextLine()
 
 When running Jactl scripts from the [command line](#command-line-scripts) this function reads the next line from
 the input.
@@ -4030,7 +4022,7 @@ while ((n = nextLine()) != null) {
 println sum
 ```
 
-### stream()
+## stream()
 
 The `stream()` function takes a closure/function as argument and produces a stream of values by continually
 invoking the closure/function until it returns `null`.
@@ -4073,9 +4065,9 @@ To read all lines into a list:
 def lines = stream(nextLine)
 ```
 
-## Built-in Methods
+# Built-in Methods
 
-### Common Methods for Collections
+## Common Methods for Collections
 
 In the section on [Collection Methods](#collection-methods) we have covered all the methods that work on any type
 of collection such as Lists, Maps, and Strings (as well on numbers when they act as a stream of integers):
@@ -4105,9 +4097,9 @@ of collection such as Lists, Maps, and Strings (as well on numbers when they act
 
 Following sections will list the other methods for these types as well as methods for other types.
 
-### List Methods
+## List Methods
 
-#### List.size()
+### List.size()
 
 The `size()` method returns the number of elements in a List, including any elements that are `null`:
 ```groovy
@@ -4115,7 +4107,7 @@ The `size()` method returns the number of elements in a List, including any elem
 5
 ```
 
-#### List.add()
+### List.add()
 
 The `add()` method will add an element to the end of a list.
 It works like the `<<=` operator:
@@ -4132,7 +4124,7 @@ It works like the `<<=` operator:
 [1, 2, 3, 4, 5]
 ```
 
-#### List.addAt()
+### List.addAt()
 
 To add an element at a given position in the list you can use the  `addAt()` method.
 This will insert the given value into the position given by the first argument (with `0` being
@@ -4183,7 +4175,7 @@ z
 
 The `addAt()` method inserts into the list whereas `[]` replaces what was at the position with the new value.
 
-#### List.remove()
+### List.remove()
 
 The `remove()` method removes the element at the given position from the list:
 ```groovy
@@ -4197,7 +4189,7 @@ d
 
 The value returned from `remove()` is the value of the element that was removed.
 
-#### List.subList()
+### List.subList()
 
 The `subList()` method returns a sub-list of the list it is applied to.
 It can have one or two arguments.
@@ -4235,9 +4227,9 @@ Since Maps, Strings, and numbers can be iterated over, `subList()` can also be a
 [5, 6, 7]
 ```
 
-### Map Methods
+## Map Methods
 
-#### Map.size()
+### Map.size()
 
 The `size()` method returns the number of entries in the Map:
 ```groovy
@@ -4245,7 +4237,7 @@ The `size()` method returns the number of entries in the Map:
 3
 ```
 
-#### Map.remove()
+### Map.remove()
 
 The `remove()` method removes the entry with the given key from the Map and returns the value for that key:
 ```groovy
@@ -4267,9 +4259,9 @@ true
 [a:1, b:2, c:3]
 ```
 
-### String Methods
+## String Methods
 
-### String.size() and String.length()
+## String.size() and String.length()
 
 Jactl supports the use of both `size()` and `length()` for getting the length of a string.
 `length()` is supported in order to make it easier for Java progammers who are used to using `length()`
@@ -4281,7 +4273,7 @@ while `size()` is supported for consitency in naming across Lists, Maps, and Str
 5
 ```
 
-### String.lines()
+## String.lines()
 
 The `lines()` method splits the string into a list of strings, one per line in the source string:
 ```groovy
@@ -4299,7 +4291,7 @@ four lines
 ['']
 ```
 
-### String.toUpperCase() and String.toLowerCase()
+## String.toUpperCase() and String.toLowerCase()
 
 These methods turn a string into all upper case or all lower case:
 ```groovy
@@ -4309,7 +4301,7 @@ ABC
 a string with capitals
 ```
 
-### String.substring()
+## String.substring()
 
 The `substring()` method allows you to extract a substring starting at a given index.
 Like `subList()` it has a single argument version that returns the remaining string from the given index, and a two
@@ -4331,12 +4323,12 @@ This means that to extract `n` chars at index `i` you use `substring(i, i + n)`:
 cd
 ```
 
-### String.split()
+## String.split()
 
 The `split()` method splits a string based on a separator specified by a regex with optional modifiers.
 See the previous section on the [Split Method](#split-method) for more information.
 
-### String.asNum()
+## String.asNum()
 
 The `asNum()` method parses a string of digits and returns their numeric value.
 It takes an optional argument which is the base (or radix) for the number being parsed.
@@ -4369,9 +4361,9 @@ Both lowercase and uppercase letters are supported for bases greater than 10:
 2882400153
 ```
 
-### Int Methods
+## Int Methods
 
-#### int.asChar()
+### int.asChar()
 
 The `asChar()` method converts a Unicode value back into its corresponding character (which is a single-character
 string in Jactl):
@@ -4389,11 +4381,11 @@ To convert from a character to its Unicode value, cast the single-character stri
 Z
 ```
 
-### Numeric Methods
+## Numeric Methods
 
 Apart from `toBase()`, these methods apply to all number types (`int`, `long`, `double`, and `Decimal`).
 
-#### Number.toBase()
+### Number.toBase()
 
 The `toBase()` method converts an `int` or `long` to its character representation in the specified base:
 ```groovy
@@ -4411,7 +4403,7 @@ Base must be between 2 and 36 @ line 1, column 12
            ^
 ```
 
-#### Number.abs()
+### Number.abs()
 
 The `abs()` method returns the absolute value of the number:
 ```groovy
@@ -4423,7 +4415,7 @@ Function@1987169128
 110
 ```
 
-#### Number.sqr()
+### Number.sqr()
 
 The `sqr()` method returns the square of the given number:
 ```groovy
@@ -4431,7 +4423,7 @@ The `sqr()` method returns the square of the given number:
 1524138.3936
 ```
 
-#### Number.sqrt()
+### Number.sqrt()
 
 The `sqrt()` method returns the square root of the number:
 ```groovy
@@ -4439,7 +4431,7 @@ The `sqrt()` method returns the square root of the number:
 35.13641700572214
 ```
 
-#### Number.pow()
+### Number.pow()
 
 The `pow()` method allows you to calculate one number raised to the power of another.
 For example, to calculate the cube of a number:
@@ -4458,7 +4450,7 @@ The value of the exponent passed to `pow()` can be fractional and can be negativ
 0.015625
 ```
 
-### Object Methods
+## Object Methods
 
 The only method that applies to objects of all types is the `toString()` method.
 If passed no argument it prints the string representation of the object:
