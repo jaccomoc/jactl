@@ -98,6 +98,14 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 * Regex matching syntax
 * Regex capture variables
 
+## Download
+
+To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
+[https://repo1.maven.org/maven2/io/jactl/jactl/1.1.0/jactl-1.1.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.1.0/jactl-1.1.0.jar)
+
+To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
+[jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
+
 ## Building
 
 ### Requirements
@@ -108,13 +116,15 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 
 ### Build
 
+Download the source code from GitHub as a zip file or use `git` to clone the repository:
 ```shell
 git clone https://github.com/jaccomoc/jactl.git
 cd jactl
 ./gradlew build
 ```
 
-That will build `jactl-1.1.0.jar` under the `build/libs` directory.
+That will build `jactl-${VERSION}.jar` under the `build/libs` directory where `${VERSION}` is the current version or
+whatever version you have downloaded/checked out.
 
 To push to your Maven repository you can use `publishToMaven`:
 ```shell
