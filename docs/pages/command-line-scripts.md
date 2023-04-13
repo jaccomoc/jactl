@@ -421,12 +421,12 @@ For the `jactl-vertx` library, there are two classes that handle the registratio
 
 We therefore need to list these classes in the `functionClasses` list of our `.jactlrc` file.
 
-If the jars are located under `~/.m2/repository/jactl/jactl-vertx/{{ site.content.jactl_version }}` then a `.jactlrc` file that allows
+If the jars are located under `~/projects/jactl-vertx/{{ site.content.jactl_version }}` then a `.jactlrc` file that allows
 the Jactl REPL and the Jactl commandline script execution to use Vert.x and these new functions would look like this:
 ```groovy
 environmentClass = 'jactl.vertx.JactlVertxEnv'
-extraJars        = [ '~/.m2/repository/jactl/jactl-vertx/{{ site.content.jactl_version }}/jactl-vertx-{{ site.content.jactl_version }}.jar',
-                     '~/.m2/repository/jactl/jactl-vertx/{{ site.content.jactl_version }}/jactl-vertx-{{ site.content.jactl_version }}-tests.jar' ]
+extraJars        = [ '~/projects/jactl-vertx/{{ site.content.jactl_version }}/jactl-vertx-{{ site.content.jactl_version }}.jar',
+                     '~/projects/jactl-vertx/{{ site.content.jactl_version }}/jactl-vertx-{{ site.content.jactl_version }}-tests.jar' ]
 functionClasses  = [ 'jactl.vertx.JsonFunctions',
                      'jactl.vertx.example.VertxFunctions' ]
 ```
@@ -436,8 +436,8 @@ functionClasses  = [ 'jactl.vertx.JsonFunctions',
 
 Since the file is Jactl code we could also write it like this:
 ```groovy
-def VERSION = '{{ site.content.jactl_version }}'                                                // The jactl-vertx version to use
-def LIBS    = "~/.m2/repository/jactl/jactl-vertx/${VERSION}"    // Location of the jars
+def VERSION = '{{ site.content.jactl_version }}'     // The jactl-vertx version to use
+def LIBS    = "~/projects/jactl-vertx/${VERSION}"    // Location of the jars
 
 // Specify the Vertx environment class to use
 environmentClass = 'jactl.vertx.JactlVertxEnv'
