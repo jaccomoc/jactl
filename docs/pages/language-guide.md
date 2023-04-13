@@ -28,9 +28,9 @@ permalink: /language-guide
 * [Closures](#closures)
 * [Collection Methods](#collection-methods)
 * [Classes](#classes)
-* [Built-in Global Functions](#builtin-global-functions)
-* [Built-in Methods](#builtin-methods)
-
+* [Built-in Global Functions](#built-in-global-functions)
+* [Built-in Methods](#built-in-methods)
+ 
 ## The REPL
 
 The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
