@@ -69,6 +69,6 @@ a2 < b1 || a1 > b2
 We just filter on the negation of this test since the opposite of no overlap is an overlap:
 
 ```groovy
-stream(nextLine).filter{ /(\d+)-(\d+),(\d+)-(\d+)/n; !($2 < $3 || $1 > $4) }
+stream(nextLine).filter{ /(\d+)-(\d+),(\d+)-(\d+)/n && !($2 < $3 || $1 > $4) }
                 .size()
 ```
