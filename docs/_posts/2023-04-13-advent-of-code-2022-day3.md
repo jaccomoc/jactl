@@ -33,8 +33,8 @@ The only difficulty was remembering to filter out duplicates.
 
 ```groovy
 stream(nextLine).flatMap{
-                   def half1=it.substring(0,it.size()/2);
-                   def half2=it.substring(it.size()/2);
+                   def half1 = it.substring(0,it.size()/2);
+                   def half2 = it.substring(it.size()/2);
                    half1.filter{ it in half2 }.sort().unique()
                  }
                 .map{ /[a-z]/r ? (int)it - (int)'a' + 1 : (int)it - (int)'A' + 27 }
