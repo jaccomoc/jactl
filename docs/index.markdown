@@ -5,13 +5,12 @@ layout: home
 <h1 style="text-align:center;color:#2240aa;">A scripting language for Java-based applications</h1>
 
 Jactl is a powerful scripting language for Java-based applications whose syntax is a combination of bits
-borrowed from Java and Groovy, with a smattering of Perl thrown in for good measure.
-
+borrowed from Java and Groovy, with a dash of Perl thrown in for good measure.
 
 <div class="row">
   <div class="column" markdown="1">
 ### **Familiar Syntax**
-Subset of Java/Groovy syntax with a dash of Perl mixed in.
+Subset of Java/Groovy syntax with a touch of Perl mixed in.
   </div>
   <div class="column" markdown="1">
 ### **Compiles to Java Bytecode**
@@ -54,7 +53,8 @@ for interactively trying out Jactl code.
   </div>
   <div class="column" markdown="1">
 ### **Open Source**
-Jactl is open sourced under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+Jactl is open sourced [here](https://github.com/jaccomoc/jactl) under the
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
   </div>
 </div>
 
@@ -90,11 +90,11 @@ println "fib(20) = ${fib(20)}"
 See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL
 which provides a quick, interactive, way to run Jactl code.
 
-The [Jactl Language Guide](https://jaccomoc.github.io/jactl/language-guide) describes the Jactl Language.
+The [Jactl Language Guide](/language-guide) describes the Jactl Language.
 
-The [Jactl Commandline Scripts Guide](https://jaccomoc.github.io/jactl/command-line-scripts) describes how to run Jactl scripts at the commandline.
+The [Jactl Commandline Scripts Guide](/command-line-scripts) describes how to run Jactl scripts at the commandline.
 
-The [Jactl Integration Guide](https://jaccomoc.github.io/jactl/integration-guide) describes how to integrate Jactl into an application and how
+The [Jactl Integration Guide](/integration-guide) describes how to integrate Jactl into an application and how
 to provide additional functions and methods to extend the language.
 
 The [Jactl-Vertx library](https://github.com/jaccomoc/jactl-vertx) provides some basic Vert.x integration capabilities

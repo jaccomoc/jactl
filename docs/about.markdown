@@ -15,7 +15,7 @@ running.
 
 # Why?
 
-I wrote Jactl because I wanted a scripting language that Java applications could embed and allow their users
+I wrote Jactl because I wanted a scripting language that Java applications could embed to allow their users
 to provide customisations and extensions that had the following characteristics:
 * **Tightly Controlled**
  
@@ -54,7 +54,7 @@ It is intended to be used in any Java based application where the application de
 capabilities to their users.
 
 It could just be used as a mechanism for reading in a configuration file.
-For example, the Jactl commandline scripts and REPL assume a `.jactlrc` [configuration file](/jactl/command-line-scripts#jactlrc-file)
+For example, the Jactl commandline scripts and REPL assume a `.jactlrc` [configuration file](/command-line-scripts#jactlrc-file)
 which contains Jactl code that is read and executed at startup to set the values of some properties in a Map.
 
 Other uses would be to provide a customisation mechanism for:
@@ -70,17 +70,17 @@ Other uses would be to provide a customisation mechanism for:
 
 You can download the Jactl library and find the source code for Jactl at GitHub: [jactl](https://github.com/jaccomoc/jactl)
 
-The to start playing wth Jactl you can look at running some simple scripts using the [command line scripts](/jactl/command-line-scripts)
+The to start playing wth Jactl you can look at running some simple scripts using the [command line scripts](/command-line-scripts)
 facility.
 
 For testing out code interactively, you can also use the [Read-Evaluate-Print-Loop (REPL) utility](https://github.com/jaccomoc/jactl-repl).
 
-To learn how to integrate Jactl into your application see the [Integration Guide](/jactl/integration-guide).
+To learn how to integrate Jactl into your application see the [Integration Guide](/integration-guide).
 
 To integrate Jactl into a [Vert.x](https://vertx.io) based application have a look at the
 [jactl-vertx library](https://github.com/jaccomoc/jactl-vertx).
 
-To learn more about the language itself read the [Language Guide](/jactl/language-guide).
+To learn more about the language itself read the [Language Guide](/language-guide).
 
 <br/>
 

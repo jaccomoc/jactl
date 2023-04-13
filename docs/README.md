@@ -1,6 +1,6 @@
 # Jactl Programming Language
 
-Jactl is a powerful scripting language for the JVM platform whose syntax is a combination of bits
+[Jactl](https://jactl.io) is a powerful scripting language for the JVM platform whose syntax is a combination of bits
 from Java, Groovy, and Perl.
 It can be run from a REPL and from the commandline for commandline scripts but its main goal is
 to be integrated into Java applications and provide a secure, locked-down mechanism that
