@@ -66,6 +66,10 @@ list being the top of the stack and the last element being the bottom.
 
 The next section just iterates over the move commands in the input and moves the crates from the given source stack
 to the given destination stack.
+The `/move .../n or return` is how we skip lines that don't match that pattern.
+The `return` in this instance is returning from the closure passed to `each()` which will then move on to the next
+line.
+
 Note that when move multiple crates, the crates are moved one at a time starting with the topmost one, so we have
 to reverse the order of the crates when moving from one stack to the other.
 
