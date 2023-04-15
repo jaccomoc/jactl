@@ -1,7 +1,7 @@
 ---
 ---
 
-$content-width: min(50%, 1000px);
+$content-width: 1000px;
 
 @import "minima";
 
@@ -32,6 +32,18 @@ $content-width: min(50%, 1000px);
   max-width: 100%;
   color: #ffffff;
   text-align: center;
-  background-color: #1756ff;
-  background-image: linear-gradient(120deg, #08368f, #1068de);
+  background-color: #1746a0;
+  background-image: linear-gradient(120deg, #08368f, #1058be);
+}
+
+.site-nav {
+  .page-link {
+    color: #ddddff;
+  }
+
+  @media screen and (max-width: $on-palm) {
+    .page-link {
+      color: #000088;
+    }
+  }
 }
