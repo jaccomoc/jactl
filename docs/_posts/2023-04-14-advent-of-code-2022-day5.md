@@ -29,29 +29,25 @@ In part 1 we are given a set of stacks of crates abd then a list of moves where 
 stack to another one.
 Then at the end we have to list out the top crate on each stack.
 
-This wasn't difficult but the parsing of the input did not lend itself to an easy, elegant solution, or at least not
-one that I found.
+This wasn't difficult but the parsing of the crate configuration was a little messy.
 
 ```groovy
-def init   = stream{it = nextLine(); it && !/^$/r ? it: null }.map{ it.grouped(4).map{ it[1] } }
-def labels = init[init.size()-1]
-init       = init.limit(-1)
-def stacks = labels.mapWithIndex{ label,i -> [label, init.map{ it[i] }.filter{ it != ' '}] }
-                   .collectEntries()
+def input  = stream(nextLine)
+def config = input.filter{ /[\[]/r }.map{ it.grouped(4).map{ it[1] } }
+def stacks = config[0].size().map{ i -> ["${i+1}", config.map{ it[i] }.filter{ it != ' '}] }.collectEntries()
 
-stream(nextLine).each{
-  /move (.*) from (.*) to (.*)/n and do {
-    stacks[$3] = stacks[$2].limit($1).reverse() + stacks[$3]
-    stacks[$2] = stacks[$2].skip($1)
-  }
+input.each{
+  /move (.*) from (.*) to (.*)/n or return;
+  stacks[$3] = stacks[$2].limit($1).reverse() + stacks[$3]
+  stacks[$2] = stacks[$2].skip($1)
 }
 
 stacks.map{ a,b -> b[0] ?: ' ' }.join()
-
 ```
 
-The first line reads until a blank line and maps each line into groups of 4 characters, taking the second character
-from the group.
+The first line reads all the input.
+Then the second line parses the crate configuration by looking for lines with `[` and splitting the line into
+groups of 4 characters, taking the second character from each group.
 This allows us to parse lines like:
 ```
 [C]     [E]
@@ -65,15 +61,12 @@ The `it.grouped(4)` splits the string into a sequence of characters and then gro
 If there are not enough letters for the last group of 4 then the `grouped(4)` will return a list with null for any
 missing elements.
 
-The last line before the blank line in the input lists the labels for the stack, so the second line extracts the
-labels and third line removes the labels from the list of stack values.
-
-The fourth line builds a map from stack label to a list of crates for that stack with the first element in the
+The thrid line builds a map from stack label to a list of crates for that stack with the first element in the
 list being the top of the stack and the last element being the bottom.
 
 The next section just iterates over the move commands in the input and moves the crates from the given source stack
 to the given destination stack.
-Note that when move multiple crates, the crates are moved one at a time starting with the topmost one so we have
+Note that when move multiple crates, the crates are moved one at a time starting with the topmost one, so we have
 to reverse the order of the crates when moving from one stack to the other.
 
 ### Part 2
@@ -82,18 +75,15 @@ For part 2 everything is exactly the same as for part 1 except that now when mov
 to move them one at a time, we move `n` at once so we no longer have to reverse their order.
 
 ```groovy
-def init   = stream{it = nextLine(); it && !/^$/r ? it: null }.map{ it.grouped(4).map{ it[1] } }
-def labels = init[init.size()-1]
-init       = init.limit(init.size()-1)
-def stacks = labels.mapWithIndex{ label,i -> [label, init.map{ it[i] }.filter{ it != ' '}] }
-                   .collectEntries()
+def input  = stream(nextLine)
+def config = input.filter{ /[\[]/r }.map{ it.grouped(4).map{ it[1] } }
+def stacks = config[0].size().map{ i -> ["${i+1}", config.map{ it[i] }.filter{ it != ' '}] }.collectEntries()
 
-stream(nextLine).each{
-  /move (.*) from (.*) to (.*)/n and do {
-    stacks[$3] = stacks[$2].limit($1) + stacks[$3]
-    stacks[$2] = stacks[$2].skip($1)
-  }
+input.each{
+  /move (.*) from (.*) to (.*)/n or return;
+  stacks[$3] = stacks[$2].limit($1) + stacks[$3]
+  stacks[$2] = stacks[$2].skip($1)
 }
 
-println stacks.map{ a,b -> b[0] ?: ' ' }.join()
+stacks.map{ a,b -> b[0] ?: ' ' }.join()
 ```
