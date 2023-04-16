@@ -691,6 +691,12 @@ public class BuiltinFunctions {
       if (end == Integer.MAX_VALUE) {
         end = list.size();
       }
+      if (start < 0) {
+        start += list.size();
+      }
+      if (end < 0) {
+        end += list.size();
+      }
       return list.subList(start, end);
     }
     catch (Exception e) {
@@ -1432,6 +1438,9 @@ public class BuiltinFunctions {
   public static Object stringSubstringData;
   public static String stringSubstring(String str, String source, int offset, int start, int end) {
     try {
+      if (start < 0) {
+        start += str.length();
+      }
       if (end < 0) {
         end += str.length();
       }

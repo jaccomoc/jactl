@@ -1489,11 +1489,15 @@ public class RuntimeUtils {
     }
 
     int index = ((Number) field).intValue();
-    if (index < 0) {
-      throw new RuntimeError("Index must be >= 0 (was " + index + ")", source, offset);
-    }
-
     if (parentString != null) {
+      if (index < 0) {
+        int newIndex = parentString.length() + index;
+        if (newIndex < 0) {
+          throw new RuntimeError("Index (" + index + ") out of range for String (length=" + parentString.length() + ")", source, offset);
+        }
+        index = newIndex;
+      }
+      else
       if (index >= parentString.length()) {
         throw new RuntimeError("Index (" + index + ") too large for String (length=" + parentString.length() + ")", source, offset);
       }
@@ -1502,6 +1506,13 @@ public class RuntimeUtils {
 
     if (parent instanceof Object[]) {
       Object[] arr = (Object[]) parent;
+      if (index < 0) {
+        int newIndex = arr.length + index;
+        if (newIndex < 0) {
+          throw new RuntimeError("Index (" + index + ") out of range for Object[] (length=" + arr.length + ")", source, offset);
+        }
+        index = newIndex;
+      }
       if (index < arr.length) {
         return arr[index];
       }
@@ -1510,11 +1521,18 @@ public class RuntimeUtils {
 
     List   list  = (List) parent;
     Object value = null;
+    if (index < 0) {
+      int newIndex = list.size() + index;
+      if (newIndex < 0) {
+        throw new RuntimeError("Index (" + index + ") out of range for List (size=" + list.size() + ")", source, offset);
+      }
+      index = newIndex;
+    }
     if (index < list.size()) {
       value = list.get(index);
     }
 
-    if (createIfMissing && value == null) {
+    if (createIfMissing && value == null && index >= list.size()) {
       value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
       for (int i = list.size(); i < index + 1; i++) {
         list.add(null);

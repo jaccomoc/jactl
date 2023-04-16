@@ -2874,7 +2874,14 @@ class CompilerTest extends BaseTest {
     test("def x = []; x[0]", null);
     test("def x = [1,2,3][4]; x", null);
     test("def x = [1,2,3]; x[1]", 2);
-    testError("def x = []; x[-1]", "index must be >= 0");
+    test("List x = [1,2,3]; x[-1]", 3);
+    test("def x = [1,2,3]; x[-1]", 3);
+    test("List x = [1,2,3]; x[-3]", 1);
+    test("[1,2,3].map{ sleep(0,it) }[-3]", 1);
+    test("def x = [1,2,3]; x[-3]", 1);
+    testError("List x = [1,2,3]; x[-4]", "out of range");
+    testError("def x = [1,2,3]; x[-4]", "out of range");
+    testError("def x = []; x[-1]", "out of range");
     test("def x = []; def y = 7; x[y + y * y - y]", null);
     test("def x = [1,2,3,4]; def y = 7; x[y + y * y - y * y - 5]", 3);
     test("def x = [0,1,2,3,4]; def y = [a:7]; x[--y.a - y.a-- + --y.a - 3]", 1);
@@ -2909,6 +2916,9 @@ class CompilerTest extends BaseTest {
     test("Map x = [a:1]; x['a'] = 2; x.a", 2);
     test("Map x = [a:1]; def f = 'a'; x[f]", 1);
     test("Map x = [a:1]; def f = 'a'; x[f] = 2; x.a", 2);
+    test("[a:1,b:2].map{ it[-1] }", List.of(1,2));
+    test("[a:1,b:2].map{ it[-2] }", List.of("a","b"));
+    testError("[a:1,b:2].map{ it[-3] }", "out of range");
   }
 
   @Test public void fieldAssignments() {
@@ -3103,9 +3113,16 @@ class CompilerTest extends BaseTest {
   @Test public void stringIndexing() {
     test("'abc'[0]", "a");
     testError("''[0]", "index (0) too large");
+    testError("''[-1]", "out of range");
     test("def x = 'abcdef'; def i = 3; x[i]", "d");
+    test("def x = 'abcdef'; def i = -1; x[i]", "f");
+    test("def x = 'abcdef'; def i = -6; x[i]", "a");
+    testError("def x = 'abcdef'; def i = -7; x[i]", "out of range");
     test("def x = 'abcdef'; def i = 3; x?[i]", "d");
     test("String x = 'abcdef'; def i = 3; x[i]", "d");
+    test("String x = 'abcdef'; def i = -1; x[i]", "f");
+    test("String x = 'abcdef'; def i = -6; x[i]", "a");
+    testError("String x = 'abcdef'; def i = -7; x[i]", "out of range");
     test("String x = 'abcdef'; def i = 3; x?[i]", "d");
     test("var x = 'abcdef'; def i = 3; x[i]", "d");
     test("var x = 'abcdef'; def i = 3; x?[i]", "d");

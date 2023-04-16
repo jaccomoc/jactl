@@ -272,8 +272,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("'abcdef'.substring(start:1,end:6)", "bcdef");
     test("def f = 'abcdef'.substring; f(start:1,end:6)", "bcdef");
     testError("'abcdef'.substring(1,7)", "StringIndexOutOfBoundsException");
-    testError("'abcdef'.substring(-1,6)", "StringIndexOutOfBoundsException");
+    testError("'abcdef'.substring(-7,6)", "StringIndexOutOfBoundsException");
+    test("'abcdef'.substring(-1,6)", "f");
     test("'abcdef'.substring(0,6)", "abcdef");
+    test("'abcdef'.substring(-4,-2)", "cd");
     test("'abcdef'.substring(0,1)", "a");
     test("'abcdef'.substring(5,6)", "f");
     test("\"a${'bc'}def\".substring(2,5)", "cde");
@@ -290,7 +292,9 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = 'abcdef'; x.substring(1,4)", "bcd");
     test("def x = 'abcdef'; x.substring(1,6)", "bcdef");
     testError("def x = 'abcdef'; x.substring(1,7)", "StringIndexOutOfBoundsException");
-    testError("def x = 'abcdef'; x.substring(-1,6)", "StringIndexOutOfBoundsException");
+    testError("def x = 'abcdef'; x.substring(-7,6)", "StringIndexOutOfBoundsException");
+    test("def x = 'abcdef'; x.substring(-1,6)", "f");
+    test("def x = 'abcdef'; x.substring(-4,-2)", "cd");
     test("def x = 'abcdef'; x.substring(0,6)", "abcdef");
     test("def x = 'abcdef'; x.substring(0,1)", "a");
     test("def x = 'abcdef'; x.substring(5,6)", "f");
@@ -944,7 +948,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[].subList(0)", List.of());
     test("[1,2,3].subList(1,2)", List.of(2));
     test("[1,2,3].subList(1,3)", List.of(2,3));
-    testError("[1,2,3].subList(1,-1)", "illegalargument");
+    test("[1,2,3].subList(1,-1)", List.of(2));
     test("def x = []; x.subList(0)", List.of());
     test("def x = [1,2,3]; x.subList(1,2)", List.of(2));
     test("def x = [1,2,3]; x.subList(1,3)", List.of(2,3));
@@ -988,9 +992,20 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = [a:1,b:2,c:3].subList; f(3)", List.of());
     test("def x = [1,2,3,4,5]; x.subList(2,4)", List.of(3,4));
     test("def x = [1,2,3,4,5]; x.subList(4,5)", List.of(5));
+    testError("def x = [1,2,3,4,5]; x.subList(4,6)", "indexoutofbounds");
     test("def x = [1,2,3,4,5]; x.subList(2)", List.of(3,4,5));
     test("def x = [1,2,3,4,5]; x.subList(0)", List.of(1,2,3,4,5));
     test("def x = [1,2,3,4,5]; x.subList(5)", List.of());
+    test("def x = [1,2,3,4,5]; x.subList(-1)", List.of(5));
+    test("def x = [1,2,3,4,5]; x.subList(-5)", List.of(1,2,3,4,5));
+    testError("def x = [1,2,3,4,5]; x.subList(-6)", "indexoutofbounds");
+    test("List x = [1,2,3,4,5]; x.subList(-1)", List.of(5));
+    test("List x = [1,2,3,4,5]; x.subList(-5)", List.of(1,2,3,4,5));
+    testError("List x = [1,2,3,4,5]; x.subList(-6)", "indexoutofbounds");
+    test("List x = [1,2,3,4,5]; x.subList(-2,-1)", List.of(4));
+    test("List x = [1,2,3,4,5]; x.subList(2,-1)", List.of(3,4));
+    test("List x = [1,2,3,4,5]; x.subList(-5,-2)", List.of(1,2,3));
+    testError("List x = [1,2,3,4,5]; x.subList(-6,-1)", "indexoutofbounds");
     test("def x = [1,2,3,4,5]; def f = x.subList; f(5)", List.of());
     test("def x = 'abcdef'; x.subList(2,4).join()", "cd");
     test("def x = 'abcde'; x.subList(4,5).join()", "e");
@@ -1009,6 +1024,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [a:1,b:2,c:3]; x.subList(0)", List.of(List.of("a",1),List.of("b",2),List.of("c",3)));
     test("def x = [a:1,b:2,c:3]; x.subList(2,3)", List.of(List.of("c",3)));
     test("def x = [a:1,b:2,c:3]; x.subList(3)", List.of());
+    test("def x = [a:1,b:2,c:3]; x.subList(-1)", List.of(List.of("c",3)));
+    test("def x = [a:1,b:2,c:3]; x.subList(-2,-1)", List.of(List.of("b",2)));
   }
 
   @Test public void mapRemove() {
