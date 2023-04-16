@@ -76,17 +76,18 @@ of knots and the head is the first entry.
 Each knot follows the preceding knot using the same rule we had for how the tail followed the head in part 1.
 
 ```groovy
-def knots = 10.map{[0,0]}, visited = ["0:0":true]
+def N = 10
+def knots = N.map{[0,0]}, visited = ["0:0":true]
 
 def add(p,q) { [ p[0]+q[0], p[1]+q[1] ] }
 def move(m) {
   def shouldMove(k1,k2) { (k1[0] - k2[0]).abs() > 1 || (k1[1] - k2[1]).abs() > 1 }
   knots[0] = add(knots[0], [R:[1,0], L:[-1,0], U:[0,1], D:[0,-1]][m])
-  9.each{
+  (N-1).each{
     def k1 = knots[it+1], k2 = knots[it]
     knots[it+1] = add(k1, [k2[0] <=> k1[0], k2[1] <=> k1[1]]) if shouldMove(k1,k2)
   }
-  visited["${knots[9][0]}:${knots[9][1]}"] = true
+  visited["${knots[N-1][0]}:${knots[N-1][1]}"] = true
 }
 
 stream(nextLine).each{ /^([RLUD]) (.*)$/n and $2.each{ move($1) } }
