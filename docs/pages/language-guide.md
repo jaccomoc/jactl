@@ -392,6 +392,13 @@ represent an individual character:
 true
 ```
 
+Subscripts can be negative which is interpreted as an offset from the end of the string.
+So to get the last character from a string use an index of `-1`:
+```groovy
+> 'xyz'[-1]
+z
+```
+
 If you need to get the Unicode number for a given character you can cast the single character string into an int:
 ```groovy
 > (int)'a'
@@ -4215,6 +4222,14 @@ This means that to extract a sub-list of length `n` at index `i` you would use `
 [2, 3]
 ```
 
+If the index value is negative it will be treated as an offset from the end of the string:
+```groovy
+> [1,2,3,4].subList(-1)
+[4]
+> [1,2,3,4].subList(-3,3)
+[2, 3]
+```
+
 Since Maps, Strings, and numbers can be iterated over, `subList()` can also be applied those types of objects as well:
 ```groovy
 > 'abcdef'.subList(2,4)
@@ -4321,6 +4336,16 @@ This means that to extract `n` chars at index `i` you use `substring(i, i + n)`:
 ```groovy
 > 'abcde'.substring(2,4)
 cd
+```
+
+Negative values for the indexes are treated as an offset from the end of the string:
+```groovy
+> 'abcdef'.substring(-2)
+ef
+> 'abcdef'.substring(-4,-2)
+cd
+> 'abcdef'.substring(-4,5)
+cde
 ```
 
 ## String.split()
