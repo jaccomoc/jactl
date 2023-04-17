@@ -106,7 +106,7 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 ## Download
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/1.1.0/jactl-1.1.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.1.0/jactl-1.1.0.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/{{ site.content.jactl_version }}/jactl-{{ site.content.jactl_version }}.jar](https://repo1.maven.org/maven2/io/jactl/jactl/{{ site.content.jactl_version }}/jactl-{{ site.content.jactl_version }}.jar)
 
 To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
 [jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
