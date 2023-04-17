@@ -59,6 +59,108 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[null,null,'P'].map{sleep(0,it)}.filter{it}", List.of("P"));
   }
 
+  @Test public void allMatch() {
+    test("[].allMatch{it>1}", true);
+    test("[].allMatch()", true);
+    test("[1,'',2].allMatch{it}", false);
+    test("[1,'',2].allMatch(predicate:{it})", false);
+    test("def f = [1,'',2].allMatch; f(predicate:{it})", false);
+    testError("def f = [1,'',2].allMatch; f(closurex:{it})", "no such parameter");
+    test("[1,'',2].allMatch()", false);
+    test("[:].allMatch()", true);
+    test("def x = []; x.allMatch{it>1}", true);
+    test("def x = []; x.allMatch()", true);
+    test("def x = [:]; x.allMatch()", true);
+    testError("null.allMatch()", "null value");
+    test("''.allMatch()", true);
+    test("'abacad'.allMatch{it != 'a'}", false);
+    test("'abacad'.allMatch{it in 'abcd'}", true);
+    test("def f = 'abacad'.allMatch; f{it != 'a'}", false);
+    test("def x = 'abc'; x.allMatch()", true);
+    testError("def x = null; x.allMatch()", "null value");
+    test("[1,2,3].allMatch()", true);
+    test("[1,2,3].allMatch{it>1}", false);
+    test("[a:true,b:false,c:true].allMatch{it[1]}", false);
+    test("[a:true,b:true,c:true].allMatch{it[1]}", true);
+    test("def f = [a:true,b:false,c:true].allMatch; f{it[1]}", false);
+    test("def f = [a:true,b:true,c:true].allMatch; f{it[1]}", true);
+    testError("[1,2,3].allMatch('abc')", "cannot convert");
+    testError("def f = [1,2,3].allMatch; f('abc')", "cannot be cast to function");
+    test("[null,null,'P'].allMatch{it != ' '}", true);
+    test("[null,null,'P'].map{sleep(0,it)}.allMatch{it != ' '}", true);
+    test("[null,null,'P'].map{sleep(0,it)}.allMatch{it}", false);
+  }
+
+  @Test public void noneMatch() {
+    test("[].noneMatch{it>1}", true);
+    test("[].noneMatch()", true);
+    test("[1,2].noneMatch{it}", false);
+    test("[1,'',2].noneMatch{it}", false);
+    test("['',null].noneMatch{it}", true);
+    test("[false,'',null].noneMatch(predicate:{it})", true);
+    test("def f = [false,'',null].noneMatch; f(predicate:{it})", true);
+    testError("def f = [1,'',2].noneMatch; f(closurex:{it})", "no such parameter");
+    test("[false,''].noneMatch()", true);
+    test("[:].noneMatch()", true);
+    test("def x = []; x.noneMatch{it>1}", true);
+    test("def x = []; x.noneMatch()", true);
+    test("def x = [:]; x.noneMatch()", true);
+    testError("null.noneMatch()", "null value");
+    test("''.noneMatch()", true);
+    test("'abacad'.noneMatch{it != 'a'}", false);
+    test("'aaa'.noneMatch{it != 'a'}", true);
+    test("'abacad'.noneMatch{it in 'abcd'}", false);
+    test("def f = 'bcd'.noneMatch; f{it == 'a'}", true);
+    test("def x = 'abc'; x.noneMatch()", false);
+    testError("def x = null; x.noneMatch()", "null value");
+    test("[1,2,3].noneMatch()", false);
+    test("[1,2,3].noneMatch{it>3}", true);
+    test("[a:true,b:false,c:true].noneMatch{it[1]}", false);
+    test("[a:true,b:true,c:true].noneMatch{!it[1]}", true);
+    test("def f = [a:true,b:false,c:true].noneMatch; f{it[1]}", false);
+    test("def f = [a:true,b:true,c:true].noneMatch; f{!it[1]}", true);
+    testError("[1,2,3].noneMatch('abc')", "cannot convert");
+    testError("def f = [1,2,3].noneMatch; f('abc')", "cannot be cast to function");
+    test("[null,null,'P'].noneMatch{it != ' '}", false);
+    test("[null,null,'P'].map{sleep(0,it)}.noneMatch{it != ' '}", false);
+    test("[null,null,'P'].map{sleep(0,it)}.noneMatch{it}", false);
+  }
+
+  @Test public void anyMatch() {
+    test("[].anyMatch{it>1}", false);
+    test("[].anyMatch()", false);
+    test("[1,2].anyMatch{it}", true);
+    test("[1,'',2].anyMatch{it}", true);
+    test("['',null].anyMatch{it}", false);
+    test("[false,'',null].anyMatch(predicate:{it})", false);
+    test("def f = [false,'',null].anyMatch; f(predicate:{it})", false);
+    testError("def f = [1,'',2].anyMatch; f(closurex:{it})", "no such parameter");
+    test("[false,''].anyMatch()", false);
+    test("[:].anyMatch()", false);
+    test("def x = []; x.anyMatch{it>1}", false);
+    test("def x = []; x.anyMatch()", false);
+    test("def x = [:]; x.anyMatch()", false);
+    testError("null.anyMatch()", "null value");
+    test("''.anyMatch()", false);
+    test("'abacad'.anyMatch{it != 'a'}", true);
+    test("'aaa'.anyMatch{it != 'a'}", false);
+    test("'abacad'.anyMatch{it in 'abcd'}", true);
+    test("def f = 'bcd'.anyMatch; f{it == 'a'}", false);
+    test("def x = 'abc'; x.anyMatch()", true);
+    testError("def x = null; x.anyMatch()", "null value");
+    test("[1,2,3].anyMatch()", true);
+    test("[1,2,3].anyMatch{it>3}", false);
+    test("[a:true,b:false,c:true].anyMatch{it[1]}", true);
+    test("[a:true,b:true,c:true].anyMatch{!it[1]}", false);
+    test("def f = [a:true,b:false,c:true].anyMatch; f{it[1]}", true);
+    test("def f = [a:true,b:true,c:true].anyMatch; f{!it[1]}", false);
+    testError("[1,2,3].anyMatch('abc')", "cannot convert");
+    testError("def f = [1,2,3].anyMatch; f('abc')", "cannot be cast to function");
+    test("[null,null,'P'].anyMatch{it != ' '}", true);
+    test("[null,null,'P'].map{sleep(0,it)}.anyMatch{it != ' '}", true);
+    test("[null,null,'P'].map{sleep(0,it)}.anyMatch{it}", true);
+  }
+
   @Test public void lines() {
     test("''.lines()", List.of(""));
     testError("[].lines()", "no such method");

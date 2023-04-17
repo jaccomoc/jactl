@@ -221,6 +221,27 @@ public class BuiltinFunctions {
            .register();
 
       Jactl.method(ITERATOR)
+           .name("allMatch")
+           .asyncInstance(true)
+           .asyncParam("predicate", null)
+           .impl(BuiltinFunctions.class, "iteratorAllMatch")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("anyMatch")
+           .asyncInstance(true)
+           .asyncParam("predicate", null)
+           .impl(BuiltinFunctions.class, "iteratorAnyMatch")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("noneMatch")
+           .asyncInstance(true)
+           .asyncParam("predicate", null)
+           .impl(BuiltinFunctions.class, "iteratorNoneMatch")
+           .register();
+
+      Jactl.method(ITERATOR)
            .name("subList")
            .asyncInstance(true)
            .param("start")
@@ -1096,6 +1117,29 @@ public class BuiltinFunctions {
       }
     };
     return (String)iteratorCollect$c(RuntimeUtils.createIterator(iterable), "", joiner, source, offset, null, c);
+  }
+
+  /////////////////////////////
+
+  // = allMatches
+
+  public static Object iteratorAllMatchData;
+  public static boolean iteratorAllMatch(Object iterable, Continuation c, String source, int offset, MethodHandle predicate) {
+    return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.ALL).matching(c);
+  }
+
+  // = anyMatches
+
+  public static Object iteratorAnyMatchData;
+  public static boolean iteratorAnyMatch(Object iterable, Continuation c, String source, int offset, MethodHandle predicate) {
+    return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.ANY).matching(c);
+  }
+
+  // = noneMatches
+
+  public static Object iteratorNoneMatchData;
+  public static boolean iteratorNoneMatch(Object iterable, Continuation c, String source, int offset, MethodHandle predicate) {
+    return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.NONE).matching(c);
   }
 
   /////////////////////////////
