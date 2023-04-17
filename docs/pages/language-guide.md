@@ -2907,6 +2907,37 @@ Function@124888672
 ['a', 1, 2, 3]
 ```
 
+## allMatch(), anyMatch(), and noneMatch()
+
+These methods take a predicate closure (a function/closure that returns true or false) and apply the predicate to
+the elements and return true or false based on the test being performed:
+
+| Method      | Description                                                                                                                                                                       |
+|:------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| allMatch()  | Returns true if **all** elements satisfy the predicate (empty list will return true).                                                                                             |
+| anyMatch()  | Returns true if **any** element satisfies the predicate (empty list will return false). Terminates iteration as soon as the first matching element found.                         |
+| noneMatch() | Returns true if **none** of the elements satisfy the predicate (empty list will return true). Terminates iteration as it encounters an element for which the predicate is true.   |
+
+For example to make sure that there are no words shorter than three letters:
+```groovy
+> ['here', 'are', 'some', 'words'].allMatch{ it.size() > 2 }
+true 
+> ['here', 'are', 'some', 'words'].noneMatch{ it.size() < 3 }
+true
+> !['here', 'are', 'some', 'words'].anyMatch{ it.size() < 3 }
+true
+```
+
+Note that the predicate can return anything that will then use the [truthiness][#truthiness) check to determine if
+the element satisfies the predicate check or not.
+By default, if not predicate is supplied, the methods will use test the element itself for truthiness:
+```groovy
+> [null, '', 0, false, [], [:]].noneMatch()
+true
+> [1, true, 'abc', [1], [a:123]].allMatch()
+true
+```
+
 ## mapWithIndex()
 
 The `mapWithIndex()` method works like the `map()` method except that as well as passing in the element to the

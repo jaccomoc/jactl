@@ -151,6 +151,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1,2,3].anyMatch()", true);
     test("[1,2,3].anyMatch{it>3}", false);
     test("[a:true,b:false,c:true].anyMatch{it[1]}", true);
+
     test("[a:true,b:true,c:true].anyMatch{!it[1]}", false);
     test("def f = [a:true,b:false,c:true].anyMatch; f{it[1]}", true);
     test("def f = [a:true,b:true,c:true].anyMatch; f{!it[1]}", false);
