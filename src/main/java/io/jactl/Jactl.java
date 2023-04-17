@@ -232,8 +232,9 @@ public class Jactl {
                    "         -v           : show verbose errors (give stack trace)\n" +
                    "         -V var=value : initialise Jactl variable before running script\n" +
                    "         -d           : debug: output generated code\n" +
+                   "         -c           : do not read .jactlrc config file\n" +
                    "         -h           : print this help\n";
-    var argMap = Utils.parseArgs(args, "d*vpne:V:*",
+    var argMap = Utils.parseArgs(args, "d*vcpne:V:*",
                                  usage);
     var files     = (List<String>) argMap.get('*');
     var arguments = (List<String>) argMap.get('@');
@@ -262,6 +263,8 @@ public class Jactl {
     }
 
     try {
+      var options = !argMap.containsKey('c') ? JactlOptions.initOptions() : null;
+
       globals.put("args", arguments);
       List<InputStream> fileStreams = files.stream().map(Jactl::getFileStream).collect(Collectors.toList());
       var inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
