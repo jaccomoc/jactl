@@ -36,8 +36,8 @@ def rows = stream(nextLine).map{ it.map{ it as int } }
 def cols = rows[0].size().map{ col -> rows.map{ it[col] } }
 
 def invisible = { x,y,h ->
-  rows[x].skip(y+1).filter{ it >= h } && rows[x].limit(y).filter{ it >= h } &&
-  cols[y].skip(x+1).filter{ it >= h } && cols[y].limit(x).filter{ it >= h }
+  rows[x].skip(y+1).anyMatch{ it >= h } && rows[x].limit(y).anyMatch{ it >= h } &&
+  cols[y].skip(x+1).anyMatch{ it >= h } && cols[y].limit(x).anyMatch{ it >= h }
 }
 
 rows.size()
