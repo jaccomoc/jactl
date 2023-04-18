@@ -409,14 +409,12 @@ public class JactlType {
     }
 
     if (operator.is(TokenType.COMPARE)) {
-      if (type1.is(BOOLEAN,STRING,ANY) &&
-          type2.is(BOOLEAN,STRING,ANY) &&
-          type1.equals(type2))                                 { return INT;     }
+      if (type1.is(BOOLEAN,STRING,ANY,LIST) &&
+          type2.is(BOOLEAN,STRING,ANY,LIST) &&
+          (type1.is(ANY,type2) || type2.is(ANY,type1)))        { return INT;     }
       if (type1.isNumeric() && type2.isNumeric())              { return INT;     }
       if (type1.isNumeric() && type2.is(ANY))                  { return INT;     }
       if (type2.isNumeric() && type1.is(ANY))                  { return INT;     }
-      if (type1.is(BOOLEAN,STRING) && type2.is(ANY))           { return INT;     }
-      if (type2.is(BOOLEAN,STRING) && type1.is(ANY))           { return INT;     }
       throw new CompileError("Cannot compare objects of type " + type1 + " and " + type2, operator);
     }
 

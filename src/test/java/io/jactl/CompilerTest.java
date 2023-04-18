@@ -3655,10 +3655,45 @@ class CompilerTest extends BaseTest {
     test("def x = 1.0; def y = null; x <=> y", 1);
     test("def x = null; def y = 1.0; x <=> y", -1);
 
-    testError("[1,2,3] <=> [2,3,4]", "cannot compare");
+    test("1 <=> 2", -1);
+    test("def x = 1; x <=> 2", -1);
+    test("def x = 'abc'; 'bcd' <=> x", 1);
+    test("[1,2,3] <=> [2,3,4]", -1);
+    test("[1,2,3] <=> [1,2,3]", 0);
+    test("[3,2,3] <=> [2,3,4]", 1);
+    test("[1,2,3,4] <=> [2,3,4]", -1);
+    test("[1,2,3,4] <=> [1,2,3]", 1);
+    test("[1] <=> []", 1);
+    test("[] <=> []", 0);
+    test("[] <=> [1]", -1);
+    test("[1,[2,3]] <=> [1,[3,4]]", -1);
+    test("[1,[2,3]] <=> [1,[1,3,4]]", 1);
+    test("[1,[2,3]] <=> [1,[2,3]]", 0);
+    test("[1,[null,3]] <=> [1,[2,3]]", -1);
+    test("[1,[null,3]] <=> [1,[null,3]]", 0);
+    test("[1,null] <=> [1,[null,3]]", -1);
+    test("[1] <=> null", 1);
+    test("null <=> [1]", -1);
+    testError("[1] <=> ['a']", "cannot compare");
     testError("[a:1] <=> [:]", "cannot compare");
     testError("[1,2,3] <=> 'xxx'", "cannot compare");
     testError("[1,2,3] <=> 'xxx'", "cannot compare");
+    test("def x = [1,2,3]; x <=> [2,3,4]", -1);
+    test("def x = [1,2,3]; x <=> [1,2,3]", 0);
+    test("def x = [3,2,3]; x <=> [2,3,4]", 1);
+    test("def x = [1,2,3,4]; x <=> [2,3,4]", -1);
+    test("def x = [1,2,3,4]; x <=> [1,2,3]", 1);
+    test("def x = [1]; x <=> []", 1);
+    test("def x = []; x <=> []", 0);
+    test("def x = []; x <=> [1]", -1);
+    test("def x = [1,[2,3]]; x <=> [1,[3,4]]", -1);
+    test("def x = [1,[2,3]]; x <=> [1,[1,3,4]]", 1);
+    test("def x = [1,[2,3]]; x <=> [1,[2,3]]", 0);
+    test("def x = [1]; x <=> null", 1);
+    testError("def x = [1]; x <=> ['a']", "cannot compare");
+    testError("def x = [a:1]; x <=> [:]", "cannot compare");
+    testError("def x = [1,2,3]; x <=> 'xxx'", "cannot compare");
+    testError("def x = [1,2,3]; x <=> 'xxx'", "cannot compare");
   }
 
   @Test public void expressionComparisons() {

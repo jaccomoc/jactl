@@ -1001,7 +1001,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("'afedcba'.sort{a,b -> b <=> a}.join()", "fedcbaa");
     test("''.sort{a,b -> b <=> a}.join()", "");
     testError("[[a:1],[b:2]].sort()", "cannot compare objects of type map");
-    testError("[[1],[2]].sort()", "cannot compare objects of type list");
+    test("[[1],[2]].sort()", List.of(List.of(1),List.of(2)));
+    test("[[2],[1]].sort()", List.of(List.of(1),List.of(2)));
+    test("[[1,2],[1]].sort()", List.of(List.of(1),List.of(1,2)));
+    test("[[1,2],[1]].sort{ a,b -> b <=> a }", List.of(List.of(1,2),List.of(1)));
   }
 
   @Test public void largeSort() {

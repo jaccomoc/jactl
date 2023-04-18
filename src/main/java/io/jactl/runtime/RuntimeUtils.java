@@ -259,6 +259,23 @@ public class RuntimeUtils {
       int result = ((Comparable) obj1).compareTo(obj2);
       return result < 0 ? -1 : result == 0 ? 0 : 1;
     }
+    if (obj1 instanceof List && obj2 instanceof List) {
+      List list1 = (List)obj1;
+      List list2 = (List)obj2;
+      for (int i = 0; i < list1.size(); i++) {
+        if (i >= list2.size()) {
+          return 1;
+        }
+        int cmp = compareTo(list1.get(i), list2.get(i), source, offset);
+        if (cmp != 0) {
+          return cmp;
+        }
+      }
+      if (list2.size() > list1.size()) {
+        return -1;
+      }
+      return 0;
+    }
 
     throw new RuntimeError("Cannot compare objects of type " + className(obj1) + " and " + className(obj2), source, offset);
   }
