@@ -19,7 +19,7 @@ Advent of Code site (e.g. `advent.txt`) and run it like this:
 $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
 ```
 
-## Day 10 - Monkey in the Middle
+## Day 11 - Monkey in the Middle
 
 See [Day 11](https://adventofcode.com/2022/day/11) for a detailed description of the problem.
 
