@@ -2820,19 +2820,51 @@ class CompilerTest extends BaseTest {
     testError("String x = [a:1]", "cannot convert");
     testError("String x = {a:1,b:2}", "cannot convert");
     testError("String x = [:]", "cannot convert");
-
     test("String x = '' + [a:1]", "[a:1]");
     test("String x = '' + [a:1,b:2]", "[a:1, b:2]");
     test("String x = '' + {a:1,b:2}", "[a:1, b:2]");
     test("String x = '' + [:]", "[:]");
     test("String x = '' + [a:[1,2,3]]", "[a:[1, 2, 3]]");
     test("String x = '' + [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
-
+    test("['1':['2':3]].1.2", 3);
+    test("['1':['2':3]].(1).2", 3);
+    testError("['1':[null:['2':3]].(1).(null).2", "unexpected EOF");
+    testError("['1':[null:['2':3]]].(1).(null).2", "null value for field");
+    test("['1':[null:['2':3]]].(1).null.2", 3);
     test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
     test("[this:1, if:2, while:[if:[z:3],for:3]].while.if.z", 3);
+    test("[true:[false:[null:[if:[z:3],for:3]]]].true.false.null.if.z", 3);
+    test("[true:[false:[null:[if:[z:3],for:3]]]]?.true?.false?.null?.if?.z", 3);
     test("[a:1]['a']", 1);
     testError("[(1):2]", "map key must be string");
     testError("[a:2,b:3,a:4]", "key 'a' occurs multiple times");
+    test("{a:1}.a", 1);
+    test("{a:{b:2}}.a.b", 2);
+    test("{a:{b:2}}?.a?.b", 2);
+    test("{a:{b:2}}?.a?['b']", 2);
+    test("{a:{b:2}}['a']['b']", 2);
+    test("{a:{b:2}}.c", null);
+    testError("String x = {a:1}", "cannot convert");
+    testError("String x = {a:1,b:2}", "cannot convert");
+    testError("String x = {:}", "cannot convert");
+    test("String x = '' + {a:1}", "[a:1]");
+    test("String x = '' + {a:1,b:2}", "[a:1, b:2]");
+    test("String x = '' + {a:1,b:2}", "[a:1, b:2]");
+    test("String x = '' + {:}", "[:]");
+    test("String x = '' + {a:[1,2,3]}", "[a:[1, 2, 3]]");
+    test("String x = '' + {a:[1,{b:2},3]}", "[a:[1, [b:2], 3]]");
+    test("{'1':{'2':3}}.1.2", 3);
+    test("{'1':{'2':3}}.(1).2", 3);
+    testError("{'1':{null:{'2':3}}.(1).(null).2", "unexpected EOF");
+    testError("{'1':{null:{'2':3}}}.(1).(null).2", "null value for field");
+    test("{'1':{null:{'2':3}}}.(1).null.2", 3);
+    test("{\"a${1+2}\":1,b:2}", Map.of("a3",1, "b", 2));
+    test("{this:1, if:2, while:{if:{z:3},for:3}}.while.if.z", 3);
+    test("{true:{false:{null:{if:{z:3},for:3}}}}.true.false.null.if.z", 3);
+    test("{true:{false:{null:{if:{z:3},for:3}}}}?.true?.false?.null?.if?.z", 3);
+    test("{a:1}['a']", 1);
+    testError("{(1):2}", "map key must be string");
+    testError("{a:2,b:3,a:4}", "key 'a' occurs multiple times");
   }
 
   @Test public void listMapVariables() {
@@ -2919,6 +2951,8 @@ class CompilerTest extends BaseTest {
     test("[a:1,b:2].map{ it[-1] }", List.of(1,2));
     test("[a:1,b:2].map{ it[-2] }", List.of("a","b"));
     testError("[a:1,b:2].map{ it[-3] }", "out of range");
+    test("[for:1].for", 1);
+    test("[true:1].true", 1);
   }
 
   @Test public void fieldAssignments() {
@@ -4264,7 +4298,7 @@ class CompilerTest extends BaseTest {
     test("def s=[1]; while (s.size())\n{\nfalse and continue\n(0 + (2*3) - 10 < s.size()) and s.remove(0) and continue\n}\ns", List.of());
     test("int i = 0; int sum = 0; while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
     test("if (true) { LABEL: while(false){}; 17 }", 17);
-    testError("def x = 0; if (true) { LABEL: x++; while(false){}; 17 }", "labels can only be applied to for/while");
+    testError("def x = 0; if (true) { LABEL: x++; while(false){}; 17 }", "label applied to statement that is not for/while");
     test("int i = 0; int sum = 0; while (i < 10) { XXX: while(false){}; int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
     test("int i = 0; int sum = 0; OUTER: while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; i++; continue OUTER }; i++ }; sum", 9);
     test("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
@@ -4352,6 +4386,8 @@ class CompilerTest extends BaseTest {
     testError("def f(String x) { x + x }; def g = f; g(1)", "cannot convert");
     test("def x = [1,2,3]; def f = x.map; f{it+it}", List.of(2,4,6));
     test("def x = [1,2,3]; def f = x.map; x = [4,5]; f{it+it}", List.of(2,4,6));
+    test("def f(x){x*x}; def m = [g:f, '1':f, true:f, false:f, null:f]; m.g(2) + m.1(3) + m.true(4) + m.false(5) + m.null(6)", 4+9+16+25+36);
+    test("def f(x){x*x}; def m = [g:f, if:f, true:f, false:f, null:f]; m.g(2) + m.if(3) + m.true(4) + m.false(5) + m.null(6)", 4+9+16+25+36);
   }
 
   @Test public void functionsForwardReference() {

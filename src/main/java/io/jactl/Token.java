@@ -184,7 +184,9 @@ public class Token extends Location {
     return this;
   }
 
-  public boolean isKeyword()    { return isKeyword; }
+  public boolean isKeyword()    {
+    return isKeyword;
+  }
 
   /**
    * Return value of token. For literals returns the Integer, Long, Double, etc.
@@ -216,6 +218,10 @@ public class Token extends Location {
 
   public Token newIdent(String name) {
     return new Token(IDENTIFIER, this).setValue(name);
+  }
+
+  public Token newLiteral(String value) {
+    return new Token(STRING_CONST, this).setValue(value);
   }
 
   /**

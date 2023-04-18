@@ -1151,11 +1151,12 @@ public class Parser {
       return nested;
     };
 
+    Token prev = previous();
     matchAny(EOL);
     if (isPlusMinusNumber())                               { return getPlusMinusNumber();                 }
     if (matchAny(INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
-                 STRING_CONST, TRUE, FALSE, NULL))         { return new Expr.Literal(previous());         }
+                 STRING_CONST, TRUE, FALSE, NULL))         { return literal(prev, previous());            }
     if (peek().is(SLASH, SLASH_EQUAL, EXPR_STRING_START))  { return exprString();                         }
     if (matchAny(REGEX_SUBST_START))                       { return regexSubstitute();                    }
     if (peek().is(IDENTIFIER))                             { return classPathOrIdentifier();              }
@@ -1169,11 +1170,19 @@ public class Parser {
       Token leftBrace = expect(LEFT_BRACE);
       return new Expr.Block(leftBrace, block(RIGHT_BRACE));
     }
-    if (previousWas(DOT,QUESTION_DOT) && peek().isKeyword()) {
+    if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
       // Allow keywords to be used in dotted paths. E.g: x.y.while.z
       return new Expr.Literal(new Token(STRING_CONST, advance()).setValue(previous().getChars()));
     }
     return unexpected("Expected start of expression");
+  }
+
+  private Expr.Literal literal(Token previous, Token current) {
+    if (previous != null && previous.is(DOT,QUESTION_DOT) && current.is(NULL)) {
+      // Special case for 'null' when used as field name
+      current = current.newLiteral("null");
+    }
+    return new Expr.Literal(current);
   }
 
   private Expr.Literal getPlusMinusNumber() {
@@ -1316,18 +1325,23 @@ public class Parser {
     else {
       while (!matchAnyIgnoreEOL(endToken)) {
         if (expr.entries.size() > 0) {
-          expect(COMMA);
+          if (!matchAny(COMMA)) {
+            if (endToken.is(RIGHT_BRACE) && expr.entries.size() == 1) {
+              unexpected("Label applied to statement that is not for/while or malformed Map literal using '{}' form.");
+            }
+            unexpected("Was Expecting ',' while parsing Map literal.");
+          }
         }
         Expr   key       = mapKey();
         String keyString = null;
         if (key instanceof Expr.Literal) {
-          Object keyValue = ((Expr.Literal) key).value.getValue();
-          if (!(keyValue instanceof String)) {
-            throw new CompileError(paramOrKey + " must be String not " + RuntimeUtils.className(keyValue), key.location);
+          Object value = ((Expr.Literal) key).value.getValue();
+          if (!(value instanceof String)) {
+            throw new CompileError(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location);
           }
-          keyString = keyValue.toString();
+          keyString = ((Expr.Literal)key).value.getStringValue();
           if (literalKeyMap.containsKey(keyString)) {
-            throw new CompileError(paramOrKey + " '" + keyValue.toString() + "' occurs multiple times", key.location);
+            throw new CompileError(paramOrKey + " '" + keyString + "' occurs multiple times", key.location);
           }
         }
         else {
@@ -1359,7 +1373,7 @@ public class Parser {
     matchAny(EOL);
     if (matchAny(STRING_CONST,IDENTIFIER)) { return new Expr.Literal(previous()); }
     if (peek().is(EXPR_STRING_START))      { return exprString(); }
-    if (peek().isKeyword())                { advance(); return new Expr.Literal(previous()); }
+    if (peek().isKeyword())                { advance(); return new Expr.Literal(previous().newLiteral(previous().getChars())); }
     if (matchAny(LEFT_PAREN)) {
       Expr expr = expression(true);
       expect(RIGHT_PAREN);
@@ -1801,8 +1815,9 @@ public class Parser {
                        return matchAnyIgnoreEOL(COLON) ||
                               mapKey() != null &&
                               matchAnyIgnoreEOL(COLON) &&
-                              expression() != null &&
-                              matchAnyIgnoreEOL(COMMA,close); });
+                              // Make sure we are not doing a label for while/for immediately after '{'
+                              !(close == RIGHT_BRACE && matchAnyIgnoreEOL(WHILE,FOR));
+    });
  }
 
   /////////////////////////////////////////////////
