@@ -3023,6 +3023,10 @@ class CompilerTest extends BaseTest {
     test("def m = []; m[1].a++; m[1].a", 1);
     test("def m = []; ++m[1].a", 1);
     test("def m = []; ++m[1].a; m[1].a", 1);
+    test("def m = []\nm[2][0]=1\nm[0][0]=2", 2);
+    test("def m = []; m[2] = 3; m[0] = 1; m[0]+m[2]", 4);
+    test("def m = []; m[2][2] = 3; m[0][2] = 1", 1);
+    test("def m = []; m[2][2] = 3; m[0][2] = 1; m[2][0]=2; m[2][2]+m[0][2]+m[2][0]", 6);
 
     testError("def m = [:]; m.a.b() = 1", "invalid lvalue");
     testError("def m = [:]; m.a.['b']", "unexpected token '['");

@@ -1549,7 +1549,7 @@ public class RuntimeUtils {
       value = list.get(index);
     }
 
-    if (createIfMissing && value == null && index >= list.size()) {
+    if (createIfMissing && value == null) {
       value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
       for (int i = list.size(); i < index + 1; i++) {
         list.add(null);
