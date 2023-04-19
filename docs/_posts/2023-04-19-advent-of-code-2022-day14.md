@@ -44,32 +44,28 @@ formation (which will occur when a grain is pushed out to the far left or right 
 previous grains of sand having built up and there being no more space to capture the sand).
 
 ```groovy
-def grid = [], maxDepth = 0
+def grid = []
 def set(p,v)    { grid[p[0]][p[1]] = v }
 def valueAt(p)  { (grid[p[0]] ?: [])[p[1]] }
 def line(p1,p2) { for (def p = p1;; p = [p[0]+(p2[0]<=>p[0]), p[1]+(p2[1]<=>p[1])]) { set(p, '#'); break if p == p2 } }
 
-                                                                                    // Note 1
-stream(nextLine).flatMap{ it.split(/ *-> */).flatMap{ /(\d+),(\d+)/n; [[$1,$2],[$1,$2]] }.subList(1,-1).grouped(2) }
-                .each{ p,q -> line(p,q); maxDepth = [maxDepth, p[1], q[1]].max() }  // Note 2
-for (def count = 0; ; count++) {
+                                                                                        // Note 1
+stream(nextLine).each{ it.split(/ *-> */).reduce(null){ p,it -> /(\d+),(\d+)/n; line(p,[$1,$2]) if p; [$1,$2] } }
+for (def count = 0, maxDepth = grid.filter().map{ it.size() }.max(); ; count++) {
   for (def next = [500,0], p = next; p; p = next) {
-    return count if valueAt(p) || p[1] > maxDepth                                   // Note 3
+    return count if valueAt(p) || p[1] > maxDepth                                       // Note 2
     set(p, 'o')
-    next = [0,-1,1].map{ [p[0]+it, p[1]+1] }.filter{ !valueAt(it) }.limit(1)[0]     // Note 4
+    next = [0,-1,1].map{ [p[0]+it, p[1]+1] }.filter{ !valueAt(it) }.limit(1)[0]         // Note 3
     set(p, null) if next
   }
 }
 ```
 
 Notes:
-1. We read in the input lines and map them to a list of coordinates then duplicate each one so we have a list of
-duplicates.
-Then, by using `subList(1,-1)` we eliminate the first and last entry and use `grouped(2)` to turn the list into
-a list of coordinate pairs, being the start and end coordinates of each line we need to draw.
-2. This is where we draw the lines and keep track of the maximum depth.
-3. We have the result once we have fallen off the edge (`> maxDepth`) or the entry point is already full.
-4. We search the three places below us to look for a spare spot, first the spot immediately below us, then the
+1. We use reduce to iterate over the points passing the previous one to the next so we can draw a line between the
+previous and the current one.
+2. We have the result once we have fallen off the edge (`> maxDepth`) or the entry point is already full.
+3. We search the three places below us to look for a spare spot, first the spot immediately below us, then the
 one to the left, and then the one to the right.
 The first one we find that has a null value (unoccupied) is the one we choose for `next`.
 If `next` is null then there is nowhere else to go, and we leave the grain of sand where it is and move on to the next
@@ -91,17 +87,16 @@ The only changes we need to make are to capture the maximum depth value plus 2 f
 for the floor at this level.
 
 ```groovy
-def grid = [], maxDepth = 0
+def grid = [], maxDepth
 def set(p,v)    { grid[p[0]][p[1]] = v }
 def valueAt(p)  { (grid[p[0]] ?: [])[p[1]] }
 def line(p1,p2) { for (def p = p1;; p = [p[0]+(p2[0]<=>p[0]), p[1]+(p2[1]<=>p[1])]) { set(p, '#'); break if p == p2 } }
 
-stream(nextLine).flatMap{ it.split(/ *-> */).flatMap{ /(\d+),(\d+)/n; [[$1,$2],[$1,$2]] }.subList(1,-1).grouped(2) }
-                .each{ p,q -> line(p,q); maxDepth = [maxDepth, p[1]+2, q[1]+2].max() }    // Note 1
-line([0, maxDepth], [grid.size()+maxDepth, maxDepth])                                     // Note 2
+stream(nextLine).each{ it.split(/ *-> */).reduce(null){ p,it -> /(\d+),(\d+)/n; line(p,[$1,$2]) if p; [$1,$2] } }
+line([0, maxDepth = grid.filter().map{ it.size() }.max() + 1], [grid.size()+maxDepth, maxDepth])    // Note 1
 for (def count = 0; ; count++) {
   for (def next = [500,0], p = next; p; p = next) {
-    return count if valueAt(p) || p[1] > maxDepth
+    return count if valueAt(p)
     set(p, 'o')
     next = [0,-1,1].map{ [p[0]+it, p[1]+1] }.filter{ !valueAt(it) }.limit(1)[0]
     set(p, null) if next
@@ -110,5 +105,6 @@ for (def count = 0; ; count++) {
 ```
 
 Notes:
-1. This is the change to capture maximum depth plus 2.
-2. This is the change to draw the line for the bottom of the cave.
+1. We measure the maximum depth + 2 as one more than the largest size of our columns (since the grid is a list of
+columns).
+The size of a list is one more than the largest index in the list so `size() + 1` will be maximum depth plus 2.
