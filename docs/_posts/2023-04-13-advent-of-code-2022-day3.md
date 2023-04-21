@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 3 - Rucksack Reorganisation
+# Day 3 - Rucksack Reorganisation
 
 See [Day 3](https://adventofcode.com/2022/day/3) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 Part 1 involved splitting each input line in half and then finding which letters were in common between
 the two halves and then generating a "priority" score for the letter (a-z: 1-26, A-Z:27-52) and summing
@@ -41,7 +41,7 @@ stream(nextLine).flatMap{
                 .sum()
 ```
 
-### Part 2
+## Part 2
 
 For part 2 we have to group the input lines into sets of 3 and find the letter in common across each set of 3
 lines and then sum their priorities as before.

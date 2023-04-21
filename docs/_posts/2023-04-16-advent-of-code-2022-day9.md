@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 9 - Rope Bridge
+# Day 9 - Rope Bridge
 
 See [Day 9](https://adventofcode.com/2022/day/9) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 For part 1 we need to simulate the movement of a 2 segment rope on a two-dimensional grid (think of it as a snake
 with a head and a tail).
@@ -69,7 +69,7 @@ the head.
 
 Finally, we record the fact that the tail has visited the square using a map keyed on `x:y` that we can count at the end.
 
-### Part 2
+## Part 2
 
 For part 2 the rope now has 10 segments (knots) rather than 2 and the tail is therefore the 10th knot in an array
 of knots and the head is the first entry.

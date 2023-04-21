@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 5 - Supply Stacks
+# Day 5 - Supply Stacks
 
 See [Day 5](https://adventofcode.com/2022/day/5) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 In part 1 we are given a set of stacks of crates abd then a list of moves where each move moves `n` crates from one
 stack to another one.
@@ -73,7 +73,7 @@ line.
 Note that when move multiple crates, the crates are moved one at a time starting with the topmost one, so we have
 to reverse the order of the crates when moving from one stack to the other.
 
-### Part 2
+## Part 2
 
 For part 2 everything is exactly the same as for part 1 except that now when moving `n` crates instead of having
 to move them one at a time, we move `n` at once so we no longer have to reverse their order.

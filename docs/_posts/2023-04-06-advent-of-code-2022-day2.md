@@ -6,28 +6,28 @@ categories: blog
 author: "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+# Day 2 - Rock Paper Scissors
 
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
+See [Day 2](https://adventofcode.com/2022/day/2) for a detailed description of the problem.
 
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
 
 Although Jactl is similar to Groovy, some differences to note if you are familiar with Groovy:
 * `stream(nextLine)` calls `nextLine()` to repeatedly read each line until there is no more input
 * `%` is always non-negative (unlike Java and Groovy where `-1 % 3` would be `-1` rather than `2`)
 
-## Day 2 - Rock Paper Scissors
-
-See [Day 2](https://adventofcode.com/2022/day/2) for a detailed description of the problem.
-
-### Part 1
+## Part 1
 
 This problem involved calculating the outcome of a series of Rock/Paper/Scissors games based on a specific
 scoring mechanism.
@@ -50,7 +50,7 @@ the value of the expression `(x - a) % 3`.
 The expression will always result in a value of `0`, `1`, or `2` since `%` is guaranteed to produce non-negative
 values (which is different to `%` in Java).
 
-### Part 2
+## Part 2
 
 For Part 2, the second letter now maps to the desired outcome (`X` - lose, `Y` - draw, `Z` - win) and we have to
 choose the appropriate Rock, Paper, or Scissors to achieve the outcome.

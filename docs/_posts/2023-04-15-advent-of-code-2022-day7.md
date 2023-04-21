@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 7 - No Space Left On Device
+# Day 7 - No Space Left On Device
 
 See [Day 7](https://adventofcode.com/2022/day/7) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 The puzzles are starting to get a little more complicated now.
 
@@ -73,7 +73,7 @@ root.descendants()
     .sum()
 ```
 
-### Part 2
+## Part 2
 
 For part 2 we leave the parsing and creation of the data structures the same.
 The difference for part 2 is now we need to find a directory, that when deleted (along with its descendants) frees

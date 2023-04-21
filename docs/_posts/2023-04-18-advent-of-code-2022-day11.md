@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 11 - Monkey in the Middle
+# Day 11 - Monkey in the Middle
 
 See [Day 11](https://adventofcode.com/2022/day/11) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 This puzzle has a bunch of monkeys throwing items amongst each other based on a "worry" score for each item
 (read the [puzzle description]https://adventofcode.com/2022/day/11) for a full explanation.
@@ -107,7 +107,7 @@ the `monkey.true` field.
 Note that `x % y` in a boolean expression will be `true` when it is not divisible since when it is not divisible it
 evaluates to non-zero. 
 
-### Part 2
+## Part 2
 
 For part 2, the only difference is that we no longer divide the scores by 3 each time, and instead of 20 iterations,
 we now have 10000 iterations.

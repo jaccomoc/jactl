@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 14 - Regolith Reservoir
+# Day 14 - Regolith Reservoir
 
 See [Day 14](https://adventofcode.com/2022/day/14) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 Today's challenge is to do with simulating sand falling in a two-dimensional cave filled with rocks.
 Each grain of sand falls until it finds an occupied spot (due to a rock or a previous grain of sand occupying that
@@ -71,7 +71,7 @@ The first one we find that has a null value (unoccupied) is the one we choose fo
 If `next` is null then there is nowhere else to go, and we leave the grain of sand where it is and move on to the next
 one.
 
-### Part 2
+## Part 2
 
 For part 2 the puzzle changes slightly in that we now need to simulate an infinitely wide floor for the cave that sits
 at a depth of 2 more than the deepest rock formation.

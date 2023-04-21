@@ -18,7 +18,7 @@ is easy to modify, but sometimes the second part requires a complete rethink.
 It is a lot of fun, and I recommend that you try to solve them yourself using your programming language of choice,
 so if you don't want to see my solutions stop reading this post and any other post titled "Advent of Code".
 
-## Day 1 - Calorie Counting
+# Day 1 - Calorie Counting
 
 See [Day 1](https://adventofcode.com/2022/day/1) for a detailed description of the problem.
 
@@ -28,7 +28,7 @@ is your input file from the Advent of Code site for Day 1):
 $ cat advent01.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent01.jactl 
 ```
 
-### Part 1
+## Part 1
 
 The task for the first part was to process a file with a list of numbers like:
 
@@ -54,7 +54,7 @@ stream(nextLine).join('\n')                                   // Read input and 
                 .max()                                        // Return maximum value
 ```
 
-### Part 2
+## Part 2
 
 The variation for Part 2 was to return the sum of the values for the three highest groups.
 This was a simple change to sort in descending order, limit to the first three, and sum them:

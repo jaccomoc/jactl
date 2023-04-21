@@ -6,24 +6,25 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 13 - Distress Signal
+# Day 13 - Distress Signal
 
 See [Day 13](https://adventofcode.com/2022/day/13) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+
+## Part 1
 
 For this challenge we are given as input a series of pairs of lists separated by blank lines like this:
 ```groovy
@@ -82,7 +83,7 @@ just a single element on the line by itself).
 map to the index plus 1 (requirements are for counting to start at 1), otherwise we map to 0 so that when we sum
 we will be summing only indexes where entries were in correct order.
 
-### Part 2
+## Part 2
 
 For part 2 we now need to include two "divider" entries `[[2]]` and `[[6]]` and sort all entries including these
 two dividers.

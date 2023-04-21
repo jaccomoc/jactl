@@ -6,24 +6,24 @@ categories: blog
 author:     "James Crawford"
 ---
 
-Continuing to solve the Advent of Code 2022 problems
-(see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
-
-Links:
-* [Jactl Programming Language](https://jactl.io)
-* [Jactl on Github](https://github.com/jaccomoc/jactl)
-
-To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
-Advent of Code site (e.g. `advent.txt`) and run it like this:
-```shell
-$ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
-```
-
-## Day 10 - Cathode-Ray Tube
+# Day 10 - Cathode-Ray Tube
 
 See [Day 10](https://adventofcode.com/2022/day/10) for a detailed description of the problem.
 
-### Part 1
+> Continuing to solve the Advent of Code 2022 problems
+> (see [Advent of Code - Day 1]({{ site.baseurl }}{% link _posts/2023-04-06-advent-of-code-2022-day1.md %})).
+>
+> Links:
+> * [Jactl Programming Language](https://jactl.io)
+> * [Jactl on Github](https://github.com/jaccomoc/jactl)
+>
+> To run the example code in this post save the code into file such as `advent.jactl` and take your input from the
+> Advent of Code site (e.g. `advent.txt`) and run it like this:
+> ```shell
+> $ cat advent.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent.jactl 
+> ```
+
+## Part 1
 
 For this exercise we need to simulate a very simple CPU that has only two instructions:
 1. `noop  &nbsp;` - does nothing (takes 1 cycle to complete), and
@@ -54,7 +54,7 @@ the end of the list.
 At the end, we calculate our 6 signal strengths and sum them.
 
 
-### Part 2
+## Part 2
 
 For part 2, we now have to interpret the `X` values as the horizontal position of a 3 pixel wide sprite.
 The cycles correspond to the position on a cathode ray tube which has 6 lines of 40 characters.
