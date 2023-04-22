@@ -70,7 +70,7 @@ Once done we count all the faces of the droplets that are immediately adjacent t
 total external surface area.
 
 ```groovy
-def MAX = 1000000000, DROPLET = 1, STEAM = 2, AIR = 3
+def DROPLET = 1, STEAM = 2, AIR = 3
 def grid = []
 def cubes = stream(nextLine).filter{it}.map{ it.split(/,/).map{ (it as int) + 1 } }
 cubes.each{ x, y, z ->  grid[x][y][z] = DROPLET }
