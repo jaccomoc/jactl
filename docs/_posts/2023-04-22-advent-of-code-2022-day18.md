@@ -30,23 +30,23 @@ with the goal being to count the number of faces across all the cubes that are n
 
 This part was pretty easy.
 We read in the comma separated points and split them and store them as 3 element lists inside another list called
-`cubes`.
+`droplets`.
 The only trick is to add 1 to each index so that if there is a point on the boundary we don't go negative when looking
 for neighbours.
 
 We iterate over the cubes and set the value in our three-dimensional grid for each point to 1.
 
-Then, for every element of `cubes` we count the number of our immediate neighbouring grid locations that are empty
+Then, for every element of `droplets` we count the number of our immediate neighbouring grid locations that are empty
 and sum across all the cubes.
 
 Note that we use `grid[x]?[y]?[z]` to return null if any of the indices returns a null list.
 This is because we have a sparse array where only the points from the input are set.
 
 ```groovy
-def grid = [], cubes = stream(nextLine).map{ it.split(/,/).map{ (it as int)+1 } }
-cubes.each{ x,y,z -> grid[x][y][z] = 1 }
+def grid = [], droplets = stream(nextLine).map{ it.split(/,/).map{ (it as int)+1 } }
+droplets.each{ x,y,z -> grid[x][y][z] = 1 }
 def adjacent(x,y,z) { [[-1,0,0],[1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].map{ dx,dy,dz -> [x+dx,y+dy,z+dz] } }
-cubes.map{ adjacent(it).filter{ x,y,z -> !grid[x]?[y]?[z] }.size() }.sum()
+droplets.map{ adjacent(it).filter{ x,y,z -> !grid[x]?[y]?[z] }.size() }.sum()
 ```
 
 ## Part 2
@@ -72,9 +72,9 @@ total external surface area.
 ```groovy
 def DROPLET = 1, STEAM = 2, AIR = 3
 def grid = []
-def cubes = stream(nextLine).filter{it}.map{ it.split(/,/).map{ (it as int) + 1 } }
-cubes.each{ x, y, z ->  grid[x][y][z] = DROPLET }
-def MAXX = cubes.map{it[0]}.max() + 1, MAXY = cubes.map{it[1]}.max() + 1, MAXZ = cubes.map{it[2]}.max() + 1
+def droplets = stream(nextLine).filter{it}.map{ it.split(/,/).map{ (it as int) + 1 } }
+droplets.each{ x, y, z ->  grid[x][y][z] = DROPLET }
+def MAXX = droplets.map{it[0]}.max() + 1, MAXY = droplets.map{it[1]}.max() + 1, MAXZ = droplets.map{it[2]}.max() + 1
 def gridAt(x,y,z) { grid[x]?[y]?[z] }
 def faces = [[-1,0,0],[1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]
 def adjacent(x,y,z) { faces.map{ dx,dy,dz -> [x+dx,y+dy,z+dz] }.filter{ it.allMatch{ it >= 0 } }
@@ -83,5 +83,5 @@ for (def steamCells = [[0,0,0]]; steamCells; ) {
   steamCells.each{ x,y,z -> grid[x][y][z] = STEAM }
   steamCells = steamCells.flatMap{ p -> adjacent(p).filter{ !gridAt(it) } }.sort().unique()
 }
-cubes.map{ adjacent(it).filter{ gridAt(it) == STEAM }.size() }.sum()
+droplets.map{ adjacent(it).filter{ gridAt(it) == STEAM }.size() }.sum()
 ```
