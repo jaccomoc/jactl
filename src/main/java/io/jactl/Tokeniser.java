@@ -700,7 +700,8 @@ public class Tokeniser {
               advance(1);
               c = nextChar;
             }
-            if (nextChar == '$') {
+            else
+            if (nextChar == '$' || c == '\\') {
               sb.append('\\');
               advance(1);
               c = nextChar;

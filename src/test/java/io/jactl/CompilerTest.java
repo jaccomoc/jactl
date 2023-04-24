@@ -2625,6 +2625,9 @@ class CompilerTest extends BaseTest {
 
     testError("1 =~ /abc/", "cannot convert");
     testError("def x = 1; x =~ /abc/", "cannot convert");
+    test("'abc' =~ /\\\\/", false);
+    test("'ab\\\\c' =~ /\\\\/", true);
+    test("'ab\\\\c' =~ s/\\\\/x/gr", "abxc");
   }
 
   @Test public void regexCaptureVars() {
