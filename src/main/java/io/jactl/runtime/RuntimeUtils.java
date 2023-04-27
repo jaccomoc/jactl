@@ -2397,9 +2397,9 @@ public class RuntimeUtils {
     return true;
   }
 
-  public static boolean debugBreakPoint(Object data, String info) {
+  public static int debugBreakPoint(int data, String info) {
     System.out.println("DEBUG: " + info + ": " + data);
-    return true;
+    return data;
   }
 
   public static Object evalScript(Continuation c, String code, Map bindings, ClassLoader classLoader) {

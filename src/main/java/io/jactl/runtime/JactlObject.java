@@ -27,5 +27,15 @@ public interface JactlObject {
   public Map<String,Object>        _$j$getFieldsAndMethods();
   public Map<String, MethodHandle> _$j$getStaticMethods();
 
-  public Object _$j$init$$w(Continuation c, String source, int offset, Object[] args);
+  public Object      _$j$init$$w(Continuation c, String source, int offset, Object[] args);
+  public void        _$j$writeJson(JsonEncoder buffer);
+
+  /**
+   * Used internally for decoding JSON.
+   * Returns either a 64 bit long of flags showing which (optional) fields were missing
+   * or, if there are more than 64 fields, it returns an array of longs instead.
+   * @param decoder  the decoder to use
+   * @return flags for missing fields
+   */
+  public Object      _$j$readJson(JsonDecoder decoder);
 }

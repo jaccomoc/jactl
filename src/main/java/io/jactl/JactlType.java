@@ -17,10 +17,7 @@
 
 package io.jactl;
 
-import io.jactl.runtime.ClassDescriptor;
-import io.jactl.runtime.Continuation;
-import io.jactl.runtime.HeapLocal;
-import io.jactl.runtime.RegexMatcher;
+import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -96,7 +93,7 @@ public class JactlType {
   public static JactlType NUMBER       = createRefType(TypeEnum.NUMBER);
   public static JactlType MATCHER      = createRefType(TypeEnum.MATCHER);
   public static JactlType CONTINUATION = createRefType(TypeEnum.CONTINUATION);
-  public static JactlType INSTANCE     = createRefType(TypeEnum.INSTANCE);
+  public static JactlType INSTANCE     = createInstanceType(ClassDescriptor.getJactlObjectDescriptor());
   public static JactlType CLASS        = createRefType(TypeEnum.CLASS);
   public static JactlType UNKNOWN      = createRefType(TypeEnum.UNKNOWN);
 
@@ -440,6 +437,7 @@ public class JactlType {
         type1.is(STRING))                                         { return STRING;    }
 
     if (operator.is(TokenType.EQUAL, TokenType.QUESTION_COLON, TokenType.QUESTION)) {
+      if (type1 == type2)                                         { return type1; }
       if (!type2.isConvertibleTo(type1)) {
         throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
       }
@@ -640,6 +638,7 @@ public class JactlType {
     if (clss == Number.class)       { return NUMBER;        }
     if (clss == RegexMatcher.class) { return MATCHER;       }
     if (clss == Continuation.class) { return CONTINUATION;  }
+    if (clss == JactlObject.class)  { return INSTANCE;      }
     if (clss == Object.class)       { return ANY;           }
     throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
   }
@@ -654,7 +653,7 @@ public class JactlType {
       case STRING:        return String.class;
       case MAP:           return Map.class;
       case LIST:          return List.class;
-      case INSTANCE:      throw new UnsupportedOperationException();
+      case INSTANCE:      return JactlObject.class;
       case ANY:           return Object.class;
       case FUNCTION:      return MethodHandle.class;
       case HEAPLOCAL:     return HeapLocal.class;

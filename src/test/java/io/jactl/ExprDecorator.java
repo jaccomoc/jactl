@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static io.jactl.JactlType.CLASS;
+
 public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   Function<Expr,Expr> decorator;
@@ -61,7 +63,17 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
   }
 
   @Override public Expr visitMethodCall(Expr.MethodCall expr) {
-    expr.parent = decorate(expr.parent);
+    if (expr.parent instanceof Expr.Identifier) {
+      String ident = ((Expr.Identifier) expr.parent).identifier.getStringValue();
+      // Don't decorate if parent looks like it might be a class name because
+      // classes aren't values and can't be wrapped in sleep(0, X) for example.
+      if (!Character.isUpperCase(ident.charAt(0))) {
+        expr.parent = decorate(expr.parent);
+      }
+    }
+    else {
+      expr.parent = decorate(expr.parent);
+    }
     expr.args = decorate(expr.args);
     return expr;
   }
@@ -240,6 +252,10 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   @Override public Expr visitCastTo(Expr.CastTo expr) {
     expr.expr = decorate(expr.expr);
+    return expr;
+  }
+
+  @Override public Expr visitSpecialVar(Expr.SpecialVar expr) {
     return expr;
   }
 

@@ -493,7 +493,7 @@ class Expr {
   }
 
   /**
-   * Invoke a internal utility function
+   * Invoke an internal utility function
    */
   class InvokeUtility extends Expr {
     Token       token;
@@ -549,5 +549,14 @@ class Expr {
     Expr       expr;
     Expr       source;
     Expr       offset;
+  }
+
+  /**
+   * Used for times when we need to get the source or offset value from our params (when needsLocation is set).
+   * Since we don't declare formal parameters for these we use this as a special place holder.
+   */
+  class SpecialVar extends Expr {
+    Token   name;          // $source or $offset (Utils.SOURCE_VAR_NAME, Utils.OFFSET_VAR_NAME)
+    FunDecl @function;     // Our current function
   }
 }

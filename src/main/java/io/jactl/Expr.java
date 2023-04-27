@@ -768,7 +768,7 @@ abstract class Expr {
   }
 
   /**
-   * Invoke a internal utility function
+   * Invoke an internal utility function
    */
   static class InvokeUtility extends Expr {
     Token       token;
@@ -876,6 +876,21 @@ abstract class Expr {
     @Override public String toString() { return "ConvertTo[" + "token=" + token + ", " + "varType=" + varType + ", " + "expr=" + expr + ", " + "source=" + source + ", " + "offset=" + offset + "]"; }
   }
 
+  /**
+   * Used for times when we need to get the source or offset value from our params (when needsLocation is set).
+   * Since we don't declare formal parameters for these we use this as a special place holder.
+   */
+  static class SpecialVar extends Expr {
+    Token   name;          // $source or $offset (Utils.SOURCE_VAR_NAME, Utils.OFFSET_VAR_NAME)
+    FunDecl function;     // Our current function
+    SpecialVar(Token name) {
+      this.name = name;
+      this.location = name;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitSpecialVar(this); }
+    @Override public String toString() { return "SpecialVar[" + "name=" + name + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
@@ -919,5 +934,6 @@ abstract class Expr {
     T visitInstanceOf(InstanceOf expr);
     T visitCastTo(CastTo expr);
     T visitConvertTo(ConvertTo expr);
+    T visitSpecialVar(SpecialVar expr);
   }
 }

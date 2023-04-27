@@ -478,7 +478,7 @@ public class LocalTypes {
         continue;
       }
       var type = entry.type;
-      Utils.loadStoredValue(mv, i, type, () -> Utils.loadContinuationArray(mv, continuationVar, type));
+      Utils.loadStoredValue(mv, continuationVar, i, type);
       _storeLocal(type, i);
       i += slotsNeeded(type) - 1;
     }
@@ -668,7 +668,9 @@ public class LocalTypes {
     Collection<StackEntry> stack2 = other.stack;
     if (stack.size() != stack2.size()) { return false; }
     for (Iterator<StackEntry> iter1 = stack.iterator(), iter2 = stack2.iterator(); iter1.hasNext() && iter2.hasNext(); ) {
-      if (!iter1.next().type.equals(iter2.next().type)) {
+      JactlType type1 = iter1.next().type;
+      JactlType type2 = iter2.next().type;
+      if (!type1.isConvertibleTo(type2) && !type2.isConvertibleTo(type1)) {
         return false;
       }
     }

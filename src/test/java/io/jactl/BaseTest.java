@@ -108,6 +108,7 @@ public class BaseTest {
               expr instanceof Expr.Binary && ((Expr.Binary)expr).createIfMissing ||
               expr instanceof Expr.RegexSubst ||
               expr instanceof Expr.InvokeNew ||
+              expr instanceof Expr.SpecialVar ||
               expr instanceof Expr.ClassPath) {
             return expr;
           }

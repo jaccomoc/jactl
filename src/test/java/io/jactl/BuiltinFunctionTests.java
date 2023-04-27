@@ -20,6 +20,7 @@ package io.jactl;
 import io.jactl.runtime.Continuation;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -1345,6 +1346,132 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f(x) {x*x}; f.toString() =~ /Function@(\\d+)/", true);
     test("def f = { x -> x*x}; f.toString() =~ /Function@(\\d+)/", true);
     test("def x = 'abc'; def f = x.toString; f()", "abc");
+  }
+
+  @Test public void toJson() {
+    test("0.toJson()", "0");
+    test("1.toJson()", "1");
+    test("1L.toJson()", "1");
+    test("-1.toJson()", "-1");
+    test("-1L.toJson()", "-1");
+    test("" + Long.MAX_VALUE + "L.toJson()", "" + Long.MAX_VALUE + "");
+    test("'abc'.toJson()", "\"abc\"");
+    test("1.234.toJson()", "1.234");
+    test("[].toJson()", "[]");
+    test("[:].toJson()", "{}");
+    test("[1,2,3].toJson()", "[1,2,3]");
+    test("[a:1,b:2,c:[1,2,3]].toJson()", "{\"a\":1,\"b\":2,\"c\":[1,2,3]}");
+    test("class X { int i = 1 }; new X().toJson()", "{\"i\":1}");
+    test("class X { int i = 1, j = 2; def m = [a:1] }; new X().toJson()", "{\"i\":1,\"j\":2,\"m\":{\"a\":1}}");
+    test("class X { int i = 1; long j = 2; double d = 1.23D; var b = 1.2345; var s = 'abc'; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":\"abc\",\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
+    test("class X { List l = []; int i = 1; long j = 2; double d = 1.23D; var b = 1.2345; var s = 'abc'; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"l\":[],\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":\"abc\",\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
+    test("class X { int i = 1, j = 2; def m = [a:1] }; [x:new X()].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1}}}");
+    test("class X { int i = 1, j = 2; def m = [a:1]; X x = null }; [x:new X(x:new X())].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1},\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1},\"x\":null}}}");
+    testError("class X { int i = 1, j = 2; def m = [a:1]; X x = null }; def x = new X(); x.x = x; x.toJson()", "StackOverflow");
+    test("127.map{ it.asChar() }.join().toJson()", "\"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000B\\f\\r\\u000E\\u000F\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001A\\u001B\\u001C\\u001D\\u001E\\u001F !\\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\"");
+    test("[a:null,b:123].toJson()", "{\"a\":null,\"b\":123}");
+    test("class X { int i = 3; X x = null }; new X().toJson()", "{\"i\":3,\"x\":null}");
+    test("class X { int i = 3; Y y = new Y() }; class Y { X x = null }; new X().toJson()", "{\"i\":3,\"y\":{\"x\":null}}");
+  }
+
+  @Test public void fromJson() {
+    test("\"[1]\".fromJson()", List.of(1));
+    test("'\"\\\\\\\\\"'.fromJson()", "\\");
+    test("'\"\\\\\"\"'.fromJson()", "\"");
+    testError("'\"'.fromJson()", "unterminated string");
+    test("'\"a\"'.fromJson()", "a");
+    test("'1'.fromJson()", 1);
+    test("'1.2'.fromJson()", "#1.2");
+    test("'-1.2'.fromJson()", "#-1.2");
+    test("' -1.2 '.fromJson()", "#-1.2");
+    testError("'-'.fromJson()", "end of json reading negative number");
+    test("'-1'.fromJson()", -1);
+    test("'" + Integer.MAX_VALUE + "'.fromJson()", Integer.MAX_VALUE);
+    test("'" + Long.MAX_VALUE + "'.fromJson()", Long.MAX_VALUE);
+    test("'-" + Long.MAX_VALUE + "'.fromJson()", -Long.MAX_VALUE);
+    test("'" + Long.MAX_VALUE + "1'.fromJson().toString()", "" + Long.MAX_VALUE + "1");
+    test("'" + Long.MAX_VALUE + "1'.fromJson()", "#" + Long.MAX_VALUE + "1");
+    test("'-" + Long.MAX_VALUE + "1'.fromJson().toString()", "-" + Long.MAX_VALUE + "1");
+    test("'-" + Long.MAX_VALUE + "1'.fromJson()", "#-" + Long.MAX_VALUE + "1");
+    test("'-1.23456e7'.fromJson()", "#-1.23456e7");
+    testError("'-1.234e56e7'.fromJson()", "illegally formatted number");
+    test("'null'.fromJson()", null);
+    test("'true'.fromJson()", true);
+    test("'false'.fromJson()", false);
+    test("'\"\"'.fromJson()", "");
+    test("'\"abc\"'.fromJson()", "abc");
+    test("'\"ab\\nc\"'.fromJson()", "ab\nc");
+    test("'[]'.fromJson()", List.of());
+    test("'[1.2,2.3,-1.234,4]'.fromJson()", List.of(new BigDecimal("1.2"), new BigDecimal("2.3"), new BigDecimal("-1.234"), 4));
+    test("'[null]'.fromJson()", new ArrayList() {{ add(null); }});
+    test("'[\"a\",\"b\",\"c\"]'.fromJson()", List.of("a", "b", "c"));
+    test("'{\"a\":[1,2,3],\"b\":2,\"c\":{\"x\":1234}}'.fromJson()", Map.of("a", List.of(1, 2, 3), "b", 2, "c", Map.of("x", 1234)));
+    test("' 1'.fromJson()", 1);
+    test("'1 '.fromJson()", 1);
+    testError("' -'.fromJson()", "end of json reading negative number");
+    test("' -1 '.fromJson()", -1);
+    test("' " + Long.MAX_VALUE + " '.fromJson()", Long.MAX_VALUE);
+    test("' -" + Long.MAX_VALUE + " '.fromJson()", -Long.MAX_VALUE);
+    test("' " + Long.MAX_VALUE + "1 '.fromJson().toString()", "" + Long.MAX_VALUE + "1");
+    test("' " + Long.MAX_VALUE + "1 '.fromJson()", "#" + Long.MAX_VALUE + "1");
+    test("' -" + Long.MAX_VALUE + "1 '.fromJson().toString()", "-" + Long.MAX_VALUE + "1");
+    test("' -" + Long.MAX_VALUE + "1 '.fromJson()", "#-" + Long.MAX_VALUE + "1");
+    test("' -1.23456e7'.fromJson()", "#-1.23456e7");
+    testError("'-1.234e56e7 '.fromJson()", "illegally formatted number");
+    test("' null'.fromJson()", null);
+    test("'null '.fromJson()", null);
+    test("' true'.fromJson()", true);
+    test("' false '.fromJson()", false);
+    test("' \"\" '.fromJson()", "");
+    test("' \"abc\" '.fromJson()", "abc");
+    test("'\"ab\\nc\" '.fromJson()", "ab\nc");
+    test("'[ ]'.fromJson()", List.of());
+    test("'[ ] '.fromJson()", List.of());
+    test("' [] '.fromJson()", List.of());
+    test("' {} '.fromJson()", Map.of());
+    test("' { } '.fromJson()", Map.of());
+    test("' [1.2 , 2.3,-1.234 , 4 ] '.fromJson()", List.of(new BigDecimal("1.2"), new BigDecimal("2.3"), new BigDecimal("-1.234"), 4));
+    test("'[ null]'.fromJson()", new ArrayList() {{ add(null); }});
+    test("'[\"a\", \"b\",\"c\"]'.fromJson()", List.of("a", "b", "c"));
+    test("' { \"a\" : [1 , 2, 3 ] , \"b\" :2 , \"c\": { \"x\":1234 } } '.fromJson()", Map.of("a", List.of(1, 2, 3), "b", 2, "c", Map.of("x", 1234)));
+    testError("' { \"a\" : [1 , 2, 3 ] , \"b\" :2 , \"a\": { \"x\":1234 } } '.fromJson()", "duplicate field");
+    test("'\"\\\\u0001\"'.fromJson().toJson()", "\"\\u0001\"");
+    test("def s = 0x5c.asChar(); s.toJson().fromJson() == s", true);
+    test("def s = 127.map{ it.asChar() }.join(); s.toJson().fromJson() == s", true);
+  }
+
+  @Test public void classFromJson() {
+    useAsyncDecorator = false;
+    test("class X { int i; }; X.fromJson('{\"i\":3}').i", 3);
+    test("class X { int i; long j }; X x = X.fromJson('{\"i\":3,\"j\":4}'); x.i + x.j", 7L);
+    test("class X { int i; long j }; X x = X.fromJson('{\"i\":3 , \"j\" : 4 }'); x.i + x.j", 7L);
+    testError("class X { int i }; X.fromJson('{\"i\":3,\"i\":4}').i", "appears multiple times");
+    testError("class X { int i; long j }; X.fromJson('{\"i\":3,\"j\":5,\"i\":4}').i", "field 'i'");
+    testError("class X { int i; X x }; X.fromJson('{\"i\":3}').i", "missing field(s): x");
+    test("class X { int i; Y yval }; class Y { String s }; X.fromJson('{\"i\":3,\"yval\":{\"s\":\"abc\"}}').yval.s", "abc");
+    test("class X { int i; long j; String s; double d; Decimal dd; boolean b1; boolean b2; Map m; List l }; X.fromJson('''{'l':[1,2,3],'m':{'a':123,'b':4},'b2':false,'b1':true,'dd':1.234,'d':3.456,'s':'abc','j':123456789123456789,'i':-1234}''' =~ s/'/\"/rg).toString()", "[i:-1234, j:123456789123456789, s:'abc', d:3.456, dd:1.234, b1:true, b2:false, m:[a:123, b:4], l:[1, 2, 3]]");
+    testError( "class X { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
+          "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i32':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
+          "missing field(s): i36,i40");
+    testError( "class X { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
+          "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
+          "missing field(s): i32");
+    test("class X { int i; Y y }; class Y { Map m }; X.fromJson('{\"i\":3,\"y\":{\"m\":null}}').i", 3);
+    test("class X { int i; Y y }; class Y { List a }; X.fromJson('{\"i\":3,\"y\":{\"a\":null}}').i", 3);
+    test("class X { int i; X x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
+    test("class X { int i; String x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
+    test("class X { int i; Decimal x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
+    testError("class X { int i; int x }; X.fromJson('{\"i\":3,\"x\":null}').i", "integer value cannot be null");
+    testError("class X { int i; long x }; X.fromJson('{\"i\":3,\"x\":null}').i", "long value cannot be null");
+    testError("class X { int i; double x }; X.fromJson('{\"i\":3,\"x\":null}').i", "double value cannot be null");
+    test("class X { int i; X x = null }; X.fromJson('{\"i\":3}').i", 3);
+    test("class X { int i; }; X.fromJson('null')", null);
+    test("class X { int i; X x = sleep(0,null) }; X.fromJson('{\"i\":3}').i", 3);
+  }
+
+  @Test public void classFromFuncAsValue() {
+    useAsyncDecorator = false;
+    test("class X { int i; String x }; def f = X.fromJson; f('{\"i\":3,\"x\":null}').i", 3);
   }
 
   @Test public void functionWithDefaults() {

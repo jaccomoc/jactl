@@ -985,7 +985,6 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void closedOverThis() {
-    useAsyncDecorator = false;
     test("class X { int i = 1; def f(){ return { ++i } } }; def x = new X(); def g = x.f(); g() + g() + x.i", 8);
   }
 

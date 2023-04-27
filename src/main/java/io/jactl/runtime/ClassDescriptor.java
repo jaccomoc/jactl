@@ -32,10 +32,10 @@ public class ClassDescriptor {
   String                          packagedName;  // a.b.c.X.Y.Z
   String                          internalName;
   boolean                         isInterface;
-  JactlType                      baseClass;
+  JactlType                       baseClass;
   List<ClassDescriptor>           interfaces;
-  Map<String, JactlType>         fields          = new LinkedHashMap<>();
-  Map<String, JactlType>         mandatoryFields = new LinkedHashMap<>();
+  Map<String, JactlType>          fields          = new LinkedHashMap<>();
+  Map<String, JactlType>          mandatoryFields = new LinkedHashMap<>();
   Map<String, FunctionDescriptor> methods         = new LinkedHashMap<>();
   Map<String, ClassDescriptor>    innerClasses    = new LinkedHashMap<>();
   FunctionDescriptor              initMethod;
@@ -64,8 +64,8 @@ public class ClassDescriptor {
   public String     getPackageName()  { return pkg; }
   public String     getPackagedName() { return packagedName; }
   public String     getInternalName() { return internalName; }
-  public JactlType getClassType()    { return JactlType.createClass(this); }
-  public JactlType getInstanceType() { return getClassType().createInstanceType(); }
+  public JactlType  getClassType()    { return JactlType.createClass(this); }
+  public JactlType  getInstanceType() { return getClassType().createInstanceType(); }
 
   public void setInitMethod(FunctionDescriptor initMethod) { this.initMethod = initMethod; }
   public FunctionDescriptor getInitMethod() { return initMethod; }
@@ -178,7 +178,7 @@ public class ClassDescriptor {
    * @return true if clss is the same as us or we are a child
    */
   public boolean isSameOrChildOf(ClassDescriptor clss) {
-    if (clss == this) {
+    if (clss == this || clss == JACTL_OBJECT_DESCRIPTOR) {
       return true;
     }
     if (clss.isInterface) {
@@ -188,5 +188,10 @@ public class ClassDescriptor {
       return baseClass.getClassDescriptor().isSameOrChildOf(clss);
     }
     return false;
+  }
+
+  private static ClassDescriptor JACTL_OBJECT_DESCRIPTOR = new ClassDescriptor("JactlObject", "JactlObject", true, "", "", null, List.of());
+  public static ClassDescriptor getJactlObjectDescriptor() {
+    return JACTL_OBJECT_DESCRIPTOR;
   }
 }

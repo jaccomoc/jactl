@@ -630,6 +630,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitSpecialVar(Expr.SpecialVar expr) {
+    return null;
+  }
+
   ///////////////////////////////////////
 
   private void async(Expr expr) {

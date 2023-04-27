@@ -300,6 +300,11 @@ public class BuiltinFunctions {
            .impl(BuiltinFunctions.class, "stringAsNum")
            .register();
 
+      Jactl.method(STRING)
+           .name("fromJson")
+           .impl(Json.class, "fromJson")
+           .register();
+
       // int methods
       Jactl.method(INT)
            .name("asChar")
@@ -378,6 +383,11 @@ public class BuiltinFunctions {
            .name("toString")
            .param("indent", 0)
            .impl(BuiltinFunctions.class, "objectToString")
+           .register();
+
+      Jactl.method(ANY)
+           .name("toJson")
+           .impl(Json.class, "toJson")
            .register();
 
       // Global functions

@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
@@ -252,14 +253,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
           error("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
-        // Make sure that if overriding a base class method we have same signature (including param names)
-        var baseClass = classDescriptor.getBaseClass();
-        var method = baseClass != null ? baseClass.getMethod(methodName) : null;
-        if (baseClass != null) {
-          if (method != null) {
-            validateSignatures(funDecl, baseClass, method);
-          }
-        }
+//        // Make sure that if overriding a base class method we have same signature (including param names)
+//        var baseClass = classDescriptor.getBaseClass();
+//        var method = baseClass != null ? baseClass.getMethod(methodName) : null;
+//        if (baseClass != null) {
+//          if (method != null) {
+//            validateSignatures(funDecl, baseClass, method);
+//          }
+//        }
         // Instance method
         if (!funDecl.isStatic()) {
           // We have to treat all non-final instance methods as async since we might later be overridden by a
@@ -268,6 +269,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // the method is async or not so we have to assume always that a call to a non-final instance method is async.
           // If a method is final and it does not override a method that is async then we will mark it async (during
           // Analyser phase) only if it invokes something that is async.
+          var baseClass = classDescriptor.getBaseClass();
+          var method = baseClass != null ? baseClass.getMethod(methodName) : null;
           if (!functionDescriptor.isFinal || baseClass != null && method != null && method.isAsync) {
             functionDescriptor.isAsync = true;
           }
@@ -345,6 +348,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void validateSignatures(Expr.FunDecl funDecl, ClassDescriptor baseClass, FunctionDescriptor baseMethod) {
+    if (baseMethod.isStatic || funDecl.isStatic()) {
+      // Not overriding if one of the methods is static so no further check required
+      return;
+    }
     if (baseMethod.isFinal) {
       error("Method " + baseMethod.name + "() is final in base class " + baseClass.getClassName() + " and cannot be overridden", funDecl.location);
     }
@@ -735,9 +742,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr.second.isNull() && !expr.third.type.isPrimitive()) {
       expr.second.type = expr.third.type;
     }
+    else
     if (expr.third.isNull() && !expr.second.type.isPrimitive()) {
       expr.third.type = expr.second.type;
     }
+    else
     if (!expr.third.type.isConvertibleTo(expr.second.type)) {
       error("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
     }
@@ -902,12 +911,25 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitFunDecl(Expr.FunDecl expr) {
-    var implementingClass = classStack.peek().classDescriptor.getInternalName();
+    ClassDescriptor classDescriptor = classStack.peek().classDescriptor;
+    var implementingClass           = classDescriptor.getInternalName();
     expr.functionDescriptor.implementingClassName = implementingClass;
+    String functionName = expr.nameToken == null ? null : expr.nameToken.getStringValue();
+
+    // Make sure that if overriding a base class method we have same signature (including param names)
+    if (functionName != null && !expr.isStatic() && !expr.isInitMethod()) {
+      var baseClass = classDescriptor.getBaseClass();
+      var method    = baseClass != null ? baseClass.getMethod(functionName) : null;
+      if (baseClass != null) {
+        if (method != null) {
+          validateSignatures(expr, baseClass, method);
+        }
+      }
+    }
 
     // If the script main function
-    if (getFunctions().size() == 0) {
-      expr.functionDescriptor.implementingMethod = expr.nameToken.getStringValue();
+      if (getFunctions().size() == 0) {
+      expr.functionDescriptor.implementingMethod = functionName;
       return doVisitFunDecl(expr, false);
     }
 
@@ -920,11 +942,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
       // Create a name if we are a closure
       Expr.FunDecl parent = currentFunction();
-      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : expr.nameToken.getStringValue();
+      String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : functionName;
 
       // Method name is parent + $ + functionName unless at script function level or at top level of a class
       // in which case there is no parent, so we use just functionName
-      var fun = currentFunction();
       expr.functionDescriptor.implementingMethod =
         getFunctions().size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
                                                                                      : parent.functionDescriptor.implementingMethod + "$" + methodName;
@@ -1357,6 +1378,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type = expr.castType;
   }
 
+  @Override public JactlType visitSpecialVar(Expr.SpecialVar expr) {
+    expr.function = currentFunction();
+    if (!expr.function.functionDescriptor.needsLocation) {
+      throw new IllegalStateException("Internal error: reference to " + expr.name.getStringValue() + " from function that does have location passed to it");
+    }
+    switch (expr.name.getStringValue()) {
+      case Utils.SOURCE_VAR_NAME: return expr.type = STRING;
+      case Utils.OFFSET_VAR_NAME: return expr.type = INT;
+    }
+    throw new IllegalStateException("Internal error: unexpected special var name " + expr.name.getStringValue());
+  }
+
   private void resolve(JactlType type) {
     if (type == null)                      { return; }
     if (!type.is(INSTANCE, CLASS))          { return; }
@@ -1595,7 +1628,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // If we have a field then get class block variables, otherwise get vars for current block
     var vars = decl.isField ? classStack.peek().classBlock.variables : getVars(decl.isParam);
 
-    // In repl mode we don't have a top level block and we store var types in the compileContext
+    // In repl mode we don't have a top level block, and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
     if (!decl.isParam && isAtTopLevel() && jactlContext.replMode) {
       decl.isGlobal = true;
@@ -2060,7 +2093,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * how many arguments are required and what their types are.
    * E.g.:
    * <pre>  def f(int x, String y) {...}; def g = f; g(1,'xyz')</pre>
-   * When we call via the variable 'g' we don't know anything about which function it points to and
+   * When we call via the variable 'g' we don't know anything about which function it points to, and
    * so we pass in an Object[] and invoke the wrapper function which extracts the arguments to then
    * call the real function.
    * <p>The wrapper function also takes care of filling in the default values for any missing paremeters
@@ -2136,17 +2169,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     //  : boolean _$isObjArr = true
     String isObjArrName = "_$isObjArr";
-    stmtList.add(varDecl(startToken, wrapperFunDecl, isObjArrName, BOOLEAN, trueExpr));
+    stmtList.add(createVarDecl(startToken, wrapperFunDecl, isObjArrName, BOOLEAN, trueExpr));
     var isObjArrIdent = ident.apply(isObjArrName);
 
     //  :   int _$argCount = _$args.length
     String argCountName = "_$argCount";
-    stmtList.add(varDecl(startToken, wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argsIdent)));
+    stmtList.add(createVarDecl(startToken, wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argsIdent)));
     final var argCountIdent = ident.apply(argCountName);
 
     //  :   Map _$mapCopy = null
     String mapCopyName = "_$mapCopy";
-    stmtList.add(varDecl(startToken, wrapperFunDecl, mapCopyName, MAP,  new Expr.Literal(token.apply(NULL))));
+    stmtList.add(createVarDecl(startToken, wrapperFunDecl, mapCopyName, MAP, new Expr.Literal(token.apply(NULL))));
     var mapCopyIdent = ident.apply(mapCopyName);
 
     int paramCount = funDecl.parameters.size();
@@ -2290,11 +2323,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     stmtList.add(realFunction);
 
     // Now invoke the real function (unless we are the init method). For init method we already initialise
-    // the fields in the varargs wrapper so we don't need to invoke the non-wrapper version of the function.
-    List<Expr> args = funDecl.parameters.stream()
-                                        .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr))
-                                        .collect(Collectors.toList());
-    stmtList.add(returnStmt(startToken, new Expr.InvokeFunDecl(startToken, funDecl, args), funDecl.returnType));
+    // the fields in the varargs wrapper, so we don't need to invoke the non-wrapper version of the function.
+    Stream<Expr> args = funDecl.parameters.stream()
+                                          .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr));
+    if (funDecl.functionDescriptor.needsLocation) {
+      args = Stream.concat(Stream.of(sourceIdent, offsetIdent), args);
+    }
+    stmtList.add(returnStmt(startToken, new Expr.InvokeFunDecl(startToken, funDecl, args.collect(Collectors.toList())),
+                            funDecl.returnType));
 
     wrapperFunDecl.block      = new Stmt.Block(startToken, stmts);
     wrapperFunDecl.isWrapper  = true;
@@ -2307,8 +2343,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   /**
    * Create the initialisation method for a user class.
-   * The init method supports initialisation with a list of values for the mandatory field values or, via its
-   * wrapper, a map of named arg values to be applied to the corresponding fields.
+   * The init method supports initialisation with a list of values for the mandatory field values or (via its
+   * wrapper) a map of named arg values to be applied to the corresponding fields.
    * The only way to set values for optional fields (those with initialisers) is via the wrapper using named args.
    * This differs from normal function/methods where all parameter values can be supplied via the arg list version
    * of a function.
@@ -2328,7 +2364,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     initFunc.block             = new Stmt.Block(token, initStmts);
 
     // Change name of params to avoid clashing with field names. This allows us to reuse initialiser expressions
-    // in the init and init wrapper methods. Otherwise references to field names in initialisers could resolve to
+    // in the init and init wrapper methods. Otherwise, references to field names in initialisers could resolve to
     // parameter in this method and to field in wrapper method and during resolution one would overwrite the other.
     // Note that we do this after creating our FunDecl in order that the FunctionDescriptor for the init method
     // uses names that match the field names (for error reporting purposes).
@@ -2387,7 +2423,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Expr.FunDecl createInitWrapper(Expr.FunDecl initMethod) {
     // Wrapper will be a non-standard wrapper in that it will only support named args invocation. It will support
     // values for all fields, both mandatory and optional. It will first invoke base class init wrapper. We need to
-    // tell base class wrapper will not check for additional arguments (since they could be for us). When we have
+    // tell base class wrapper to not check for additional arguments (since they could be for us). When we have
     // named args we always creat a copy of the map so that we can remove args as they are processed and thus check
     // for any additional args at the end. So we will pass this map to our base class init but the rule is that you
     // only check for additional args if you are the one that copied the named args. Additionally, we know to copy
@@ -2416,8 +2452,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     initWrapper.block         = new Stmt.Block(classDecl.name, wrapperSmts);
     wrapperSmts.stmts.addAll(List.of(objectArrParam, sourceParam, offsetParam));
 
-    // If null value for args or empty array and we have no mandatory fields then invoke normal init method.
-    // Otherwise generate error.
+    // If null value for args or empty array, and we have no mandatory fields then invoke normal init method.
+    // Otherwise, generate error.
     Expr.Literal zero = new Expr.Literal(new Token(INTEGER_CONST, classDecl.name).setValue(0));
     var mandatoryFields = initMethod.functionDescriptor.mandatoryArgCount > 0;
     var ifNullArgArr = new Stmt.If(classDecl.name,
@@ -2445,7 +2481,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                  new Expr.CastTo(classDecl.name, arg0, MAP),
                                                  new Token(COLON, classDecl.name),
                                                  new Expr.InvokeUtility(classDecl.name, RuntimeUtils.class, "copyNamedArgs", List.of(Object.class), List.of(arg0)));
-    wrapperSmts.stmts.add(varDecl(classDecl.name, initWrapper, argMapName, MAP, initialiser));
+    wrapperSmts.stmts.add(createVarDecl(classDecl.name, initWrapper, argMapName, MAP, initialiser));
 
     // Assign value to each field from map or from initialiser
     var trueLiteral      = new Expr.Literal(new Token(TRUE, classDecl.name).setValue(true));
@@ -2498,17 +2534,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return initWrapper;
   }
 
-  private Stmt.VarDecl varDecl(Token token, Expr.FunDecl ownerFunDecl, String name, JactlType type, Expr init) {
-    return varDecl(ownerFunDecl, token.newIdent(name), type, init);
-  }
-
-  private Stmt.VarDecl varDecl(Expr.FunDecl ownerFunDecl, Token name, JactlType type, Expr init) {
-    Expr.VarDecl varDecl = new Expr.VarDecl(name, init);
-    init.isResultUsed = true;
-    varDecl.type = type;
-    varDecl.isResultUsed = false;
-    varDecl.owner = ownerFunDecl;
-    return new Stmt.VarDecl(name, varDecl);
+  private static Stmt.VarDecl createVarDecl(Token token, Expr.FunDecl ownerFunDecl, String name, JactlType type, Expr init) {
+    return Utils.createVarDecl(ownerFunDecl, token.newIdent(name), type, init);
   }
 
   /**
@@ -2516,7 +2543,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * passed in arg or via initialiser if no arg passed in. We move initialiser from the param to the var.
    */
   private Stmt.VarDecl paramVarDecl(Expr.FunDecl ownerFunDecl, Expr.VarDecl param, Expr init) {
-    Stmt.VarDecl varDecl = varDecl(ownerFunDecl, param.name, param.type, init);
+    Stmt.VarDecl varDecl = Utils.createVarDecl(ownerFunDecl, param.name, param.type, init);
     varDecl.declExpr.paramVarDecl    = param;
     param.initialiser                = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
     param.initialiser.type           = param.type;

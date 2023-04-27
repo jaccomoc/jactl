@@ -177,6 +177,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private final String        methodName;
   private       int           currentLineNum = 0;
   private       int           continuationVar = -1;
+  private       int           sourceVar = -1;
+  private       int           offsetVar = -1;
   private       int           longArr = -1;
   private       int           objArr  = -1;
 
@@ -212,6 +214,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If async or wrapper then allocate slot for the Continuation
     if (methodFunDecl.isWrapper || methodFunDecl.functionDescriptor.isAsync) {
       continuationVar = stack.allocateSlot(CONTINUATION);
+    }
+    if (!methodFunDecl.isWrapper && methodFunDecl.functionDescriptor.needsLocation) {
+      sourceVar = stack.allocateSlot(STRING);
+      offsetVar = stack.allocateSlot(INT);
     }
 
     // Process parameters in order to allocate their slots in the right order
@@ -1939,6 +1945,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitSpecialVar(Expr.SpecialVar expr) {
+    switch (expr.name.getStringValue()) {
+      case Utils.SOURCE_VAR_NAME: loadLocal(sourceVar); break;
+      case Utils.OFFSET_VAR_NAME: loadLocal(offsetVar); break;
+      default: throw new IllegalStateException("Internal error: unknown special var " + expr.name.getStringValue());
+    }
+    return null;
+  }
+
   ///////////////////////////////////////////////////////////////
 
   private void convertIteratorToList(boolean isAsync, Token location) {
@@ -2448,9 +2463,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (funDecl.functionDescriptor.isAsync || funDecl.isWrapper) {
       params = Stream.concat(params, Stream.of(CONTINUATION));
     }
+    if (funDecl.functionDescriptor.needsLocation) {
+      params = Stream.concat(params, Stream.of(STRING, INT));
+    }
     params = Stream.concat(params, funDecl.parameters.stream()
                                                      .map(p -> p.declExpr.isPassedAsHeapLocal ? HEAPLOCAL : p.declExpr.type));
     return params.collect(Collectors.toList());
+  }
+
+  private List<JactlType> methodParamTypes(FunctionDescriptor method) {
+    List<JactlType> types = new ArrayList<>();
+    if (method.isBuiltin) {
+      // We simulate methods with static functions so we need to add the object we
+      // are invoking method on as first arg
+      types.add(method.firstArgtype);
+    }
+    if (method.isAsync || method.isWrapper) { types.add(CONTINUATION); }
+    if (method.needsLocation)               { types.addAll(List.of(STRING, INT)); }
+    types.addAll(method.paramTypes);
+    return types;
   }
 
   ///////////////////////////////////////////////
@@ -3527,19 +3558,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   //////////////////////////////////////////////////////
 
   // = Method invocation
-
-  private List<JactlType> methodParamTypes(FunctionDescriptor method) {
-    List<JactlType> types = new ArrayList<>();
-    if (method.isBuiltin) {
-      // We simulate methods with static functions so we need to add the object we
-      // are invoking method on as first arg
-      types.add(method.firstArgtype);
-    }
-    if (method.isAsync || method.isWrapper) { types.add(CONTINUATION); }
-    if (method.needsLocation)               { types.addAll(List.of(STRING, INT)); }
-    types.addAll(method.paramTypes);
-    return types;
-  }
 
   private void invokeUserFunction(Expr.Call expr, Expr.FunDecl funDecl, FunctionDescriptor func) {
     // We invoke wrapper if we don't have enough args since it will fill in missing

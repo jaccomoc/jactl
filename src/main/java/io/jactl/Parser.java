@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import io.jactl.runtime.JactlObject;
+import io.jactl.runtime.JsonDecoder;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
@@ -25,15 +27,14 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlType.ANY;
-import static io.jactl.JactlType.UNKNOWN;
 import static io.jactl.TokenType.*;
 
 /**
  * Recursive descent parser for parsing the Jactl language.
- * In general we try to avoid too much lookahead in the parsing to make the parsing efficient
+ * In general, we try to avoid too much lookahead in the parsing to make the parsing efficient
  * but there are a couple of places where lookahead is required to disambiguate parts of the
  * grammar.
- * Usually a single token lookahead suffices.
+ * Usually a single token lookahead suffices, but we support arbitrary amounts of lookahead.
  *
  * After the parsing has been done and the AST generated, the resulting AST needs to be passed
  * to the Resolver which resolves all variable references and does as much validation as possible
@@ -129,20 +130,15 @@ public class Parser {
     Token start = peek();
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
     // Script take a single parameter which is a Map of globals
-    Token        name     = start.newIdent(Utils.JACTL_GLOBALS_NAME);
-    Expr.VarDecl declExpr = new Expr.VarDecl(name, null);
-    declExpr.type = JactlType.MAP;
-    declExpr.isParam = true;
-    declExpr.isResultUsed = false;
-    Stmt.VarDecl globals  = new Stmt.VarDecl(new Token(MAP, start), declExpr);
-    Stmt.FunDecl funDecl  = parseFunDecl(scriptName, scriptName, ANY, List.of(globals), EOF, true, false, false);
+    var globalsParam           = createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
+    Stmt.FunDecl funDecl       = parseFunDecl(scriptName, scriptName, ANY, List.of(globalsParam), EOF, true, false, false);
     Stmt.ClassDecl scriptClass = classes.peek();
-    scriptClass.scriptMain = funDecl;
-    List<Stmt> scriptStmts = scriptClass.scriptMain.declExpr.block.stmts.stmts;
-    scriptClass.innerClasses = scriptStmts.stream()
-                                          .filter(stmt -> stmt instanceof Stmt.ClassDecl)
-                                          .map(stmt -> (Stmt.ClassDecl)stmt)
-                                          .collect(Collectors.toList());
+    scriptClass.scriptMain     = funDecl;
+    List<Stmt> scriptStmts     = scriptClass.scriptMain.declExpr.block.stmts.stmts;
+    scriptClass.innerClasses   = scriptStmts.stream()
+                                            .filter(stmt -> stmt instanceof Stmt.ClassDecl)
+                                            .map(stmt -> (Stmt.ClassDecl)stmt)
+                                            .collect(Collectors.toList());
     // Find all BEGIN blocks and move to start and END blocks and move to the end
     var beginBlocks = scriptStmts.stream()
                                  .filter(stmt -> stmt instanceof Stmt.Block)
@@ -155,7 +151,7 @@ public class Parser {
 
     // If we have begin/end blocks or have to wrap script in a while loop for reading from input
     if (beginBlocks.size() > 0 || endBlocks.size() > 0 || context.printLoop() || context.nonPrintLoop()) {
-      Stream<Stmt> bodyStream = scriptStmts.stream().filter(this::isNotBeginEndBlock).filter(stmt -> stmt != globals);
+      Stream<Stmt> bodyStream = scriptStmts.stream().filter(this::isNotBeginEndBlock).filter(stmt -> stmt != globalsParam);
       if (context.nonPrintLoop() || context.printLoop()) {
         var body = bodyStream.collect(Collectors.toList());
         Token whileToken = body.size() > 0 ? body.get(0).location : start;
@@ -181,7 +177,7 @@ public class Parser {
       }
 
       scriptClass.scriptMain.declExpr.block.stmts.stmts =
-        Stream.of(Stream.of(globals),
+        Stream.of(Stream.of(globalsParam),
                   beginBlocks.stream(),
                   bodyStream,
                   endBlocks.stream())
@@ -438,7 +434,7 @@ public class Parser {
     matchAny(EOL);
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
     if (inClassDecl && !isStatic && name.getStringValue().equals(Utils.TO_STRING)) {
-      if (!returnType.is(JactlType.STRING,JactlType.ANY)) {
+      if (!returnType.is(JactlType.STRING, ANY)) {
         throw new CompileError(Utils.TO_STRING + "() must return String or use 'def'", start);
       }
       if (parameters.size() > 0) {
@@ -529,7 +525,7 @@ public class Parser {
       initialiser = parseExpression();
     }
 
-    if (type.is(UNKNOWN)) {
+    if (type.is(JactlType.UNKNOWN)) {
       if (initialiser == null) {
         unexpected("Initialiser expression required for 'var' declaration");
       }
@@ -711,10 +707,12 @@ public class Parser {
                                    .filter(stmt -> stmt instanceof Stmt.VarDecl)
                                    .map(stmt -> (Stmt.VarDecl) stmt)
                                    .collect(Collectors.toList());
+      classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
 
+      classBlock.stmts.stmts.add(createFromJsonFunc(classDecl));
+      classBlock.stmts.stmts.add(createMissingFieldsFunc(classDecl));
       classBlock.functions   = classDecl.methods;
       classDecl.innerClasses = innerClasses;
-      classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
       return classDecl;
     }
     finally {
@@ -1771,10 +1769,9 @@ public class Parser {
                                     boolean isStatic, boolean isFinal) {
     params.forEach(p -> p.declExpr.isExplicitParam = true);
     Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic, false, isFinal);
-    params.forEach(p -> p.declExpr.owner = funDecl);
     Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(start, funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
-      // Add to functions in block so we can support forward references during Resolver phase
+      // Add to functions in block, so we can support forward references during Resolver phase
       // or add to Class if we are in a class declaration
       addFunDecl(funDeclStmt);
     }
@@ -1789,6 +1786,105 @@ public class Parser {
     finally {
       popFunDecl();
     }
+  }
+
+  private Stmt.VarDecl createParam(Token name, JactlType type) {
+    Expr.VarDecl declExpr = new Expr.VarDecl(name, null);
+    declExpr.type         = type;
+    declExpr.isParam      = true;
+    declExpr.isResultUsed = false;
+    return new Stmt.VarDecl(name, declExpr);
+  }
+
+  private Stmt.FunDecl createFromJsonFunc(Stmt.ClassDecl classDecl) {
+    Token classToken       = classDecl.name;
+    JactlType instanceType = JactlType.createInstanceType(List.of(new Expr.Identifier(classToken)));
+    Token paramName        = classToken.newIdent("json");
+    var param              = createParam(paramName, JactlType.STRING);
+    var funDecl            = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_FROM_JSON), instanceType, List.of(param), true, false, true);
+    var funDeclStmt        = new Stmt.FunDecl(classToken, funDecl);
+    addFunDecl(funDeclStmt);
+    Stmt.Stmts stmts    = new Stmt.Stmts();
+    stmts.stmts.add(param);
+    Token objIdent      = classToken.newIdent("obj");
+    stmts.stmts.add(Utils.createVarDecl(funDecl, objIdent, instanceType, new Expr.InvokeNew(classToken, instanceType)));
+    int fieldCount      = classDecl.fields.size();
+    Token retValIdent   = classToken.newIdent("retVal");
+    JactlType flagsType = fieldCount > 64 ? JactlType.LONG_ARR : JactlType.LONG;
+    stmts.stmts.add(Utils.createVarDecl(funDecl, retValIdent, ANY, new Expr.InvokeUtility(classToken, JsonDecoder.class, "decodeJactlObj",
+                                                                                          List.of(String.class, String.class, int.class, JactlObject.class),
+                                                                                          List.of(new Expr.Identifier(paramName),
+                                                                                                  new Expr.SpecialVar(classToken.newIdent(Utils.SOURCE_VAR_NAME)),
+                                                                                                  new Expr.SpecialVar(classToken.newIdent(Utils.OFFSET_VAR_NAME)),
+                                                                                                  new Expr.Identifier(objIdent)))));
+    stmts.stmts.add(new Stmt.Return(classToken,
+                                    new Expr.Return(classToken,
+                                                    new Expr.Ternary(new Expr.Binary(new Expr.Identifier(retValIdent),
+                                                                                     new Token(BANG_EQUAL, classToken),
+                                                                                     new Expr.Literal(new Token(NULL, classToken).setValue(null))),
+                                                                     new Token(QUESTION, classToken),
+                                                                     new Expr.MethodCall(classToken,
+                                                                                         new Expr.Identifier(objIdent),
+                                                                                         new Token(DOT, classToken),
+                                                                                         Utils.JACTL_INIT_MISSING,
+                                                                                         classToken,
+                                                                                         List.of(new Expr.CastTo(classToken, new Expr.Identifier(retValIdent), flagsType))),
+                                                                     new Token(COLON, classToken),
+                                                                     new Expr.Literal(new Token(NULL, classToken).setValue(null))),
+                                                    instanceType)));
+    var block = new Stmt.Block(classToken, stmts);
+    funDecl.block = block;
+    funDecl.functionDescriptor.needsLocation = true;
+    Utils.createVariableForFunction(funDeclStmt);
+    return funDeclStmt;
+  }
+
+  private Stmt.FunDecl createMissingFieldsFunc(Stmt.ClassDecl classDecl) {
+    Token classToken       = classDecl.name;
+    JactlType instanceType = JactlType.createInstanceType(List.of(new Expr.Identifier(classToken)));
+    int fieldCount         = classDecl.fields.size();
+    var flagsParam         = classToken.newIdent("flagsParam");
+    var param              = createParam(flagsParam, ANY);
+    var funDecl            = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_MISSING), instanceType, List.of(param), false, false, false);
+    var funDeclStmt        = new Stmt.FunDecl(classToken, funDecl);
+    addFunDecl(funDeclStmt);
+    Stmt.Stmts stmts = new Stmt.Stmts();
+    stmts.stmts.add(param);
+    Token     flagsIdent   = classToken.newIdent("flags");
+    JactlType flagsType    = fieldCount > 64 ? JactlType.LONG_ARR : JactlType.LONG;
+    stmts.stmts.add(Utils.createVarDecl(funDecl, flagsIdent, flagsType, new Expr.CastTo(classToken, new Expr.Identifier(flagsParam), flagsType)));
+    Token     thisIdent    = classToken.newIdent(Utils.THIS_VAR);
+    // Iterate over flags returned from decodeJactlObj and work out which optional fields have not been
+    // set and invoke their initialisers
+    for (int i = 0; i < fieldCount; i++) {
+      var field = classDecl.fields.get(i);
+      if (field.declExpr.initialiser == null) {
+        // Not optional so nothing to do
+        continue;
+      }
+      long flag = 1L << (i % 64);
+      var flags = fieldCount <= 64 ? new Expr.Identifier(flagsIdent)
+                                   : new Expr.ArrayGet(classToken,
+                                                       new Expr.Identifier(flagsIdent),
+                                                       new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(i / 64)));
+      Expr.FieldAssign assignField = new Expr.FieldAssign(new Expr.Identifier(thisIdent),
+                                                   new Token(DOT, classToken),
+                                                   new Expr.Literal(classToken.newLiteral(field.name.getStringValue())),
+                                                   new Token(EQUAL, classToken),
+                                                   field.declExpr.initialiser);
+      assignField.isResultUsed = false;
+      stmts.stmts.add(new Stmt.If(classToken,
+                                  new Expr.Binary(new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(flag)),
+                                                  new Token(AMPERSAND, classToken),
+                                                  flags),
+                                  new Stmt.ExprStmt(classToken, assignField),
+                                  null));
+    }
+    stmts.stmts.add(new Stmt.Return(classToken, new Expr.Return(classToken, new Expr.Identifier(thisIdent), instanceType)));
+    var block = new Stmt.Block(classToken, stmts);
+    funDecl.block = block;
+    Utils.createVariableForFunction(funDeclStmt);
+    return funDeclStmt;
   }
 
   /**
@@ -2171,6 +2267,7 @@ public class Parser {
       @Override public Boolean visitInvokeInit(Expr.InvokeInit expr)         { return false; }
       @Override public Boolean visitInvokeUtility(Expr.InvokeUtility expr)   { return false; }
       @Override public Boolean visitConvertTo(Expr.ConvertTo expr)           { return false; }
+      @Override public Boolean visitSpecialVar(Expr.SpecialVar expr)         { return false; }
     });
   }
 

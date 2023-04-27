@@ -48,6 +48,10 @@ public class Utils {
   public static final String JACTL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
   public static final String JACTL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
   public static final String JACTL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
+  public static final String JACTL_WRITE_JSON            = "_$j$writeJson";
+  public static final String JACTL_FROM_JSON             = "fromJson";
+  public static final String JACTL_READ_JSON             = "_$j$readJson";
+  public static final String JACTL_INIT_MISSING          = "_$j$initMissingFields";
 
   public static final Class JACTL_MAP_TYPE  = LinkedHashMap.class;
   public static final Class JACTL_LIST_TYPE = ArrayList.class;
@@ -55,6 +59,9 @@ public class Utils {
   public static final String JACTL_GLOBALS_NAME   = JACTL_PREFIX + "globals";
   public static final String JACTL_GLOBALS_OUTPUT = "$output";   // Name of global to use as PrintStream for print/println
   public static final String JACTL_GLOBALS_INPUT  = "$input";    // Name of global to use when reading from stdin
+
+  public static final String SOURCE_VAR_NAME   = "$source";
+  public static final String OFFSET_VAR_NAME   = "$offset";
 
   public static final String EVAL_ERROR        = "$error";   // Name of output variable containing error (if any) for eval()
 
@@ -310,8 +317,9 @@ public class Utils {
     }
   }
 
-  public static void loadStoredValue(MethodVisitor mv, int idx, JactlType type, Runnable loadArray) {
-    loadArray.run();            // Get long array or object array onto stack
+  public static void loadStoredValue(MethodVisitor mv, int continuationSlot, int idx, JactlType type) {
+    loadContinuationArray(mv, continuationSlot, type);
+    //loadArray.run();            // Get long array or object array onto stack
     Utils.loadConst(mv, idx);
     mv.visitInsn(type.isPrimitive() ? LALOAD : AALOAD);
     if (!type.isPrimitive()) {
@@ -372,6 +380,7 @@ public class Utils {
     funDecl.functionDescriptor = descriptor;
     funDecl.isResultUsed = false;
     funDecl.type = FUNCTION;
+    params.forEach(p -> p.declExpr.owner = funDecl);
     return funDecl;
   }
 
@@ -437,14 +446,6 @@ public class Utils {
   }
 
   public static Expr createNewInstance(Token newToken, JactlType className, Token leftParen, List<Expr> args) {
-    // Check for potential named args
-    if (args.size() == 1 && args.get(0) instanceof Expr.MapLiteral) {
-      var mapLiteral = (Expr.MapLiteral)args.get(0);
-//      if (mapLiteral.literalKeyMap != null) {
-//        mapLiteral.isNamedArgs = true;
-//      }
-    }
-
     // We create the instance and then invoke _$j$init on it
     var invokeNew  = new Expr.InvokeNew(newToken, className);
     var invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, args);
@@ -617,5 +618,14 @@ public class Utils {
 
   public static void setReplMode(JactlContext context) {
     context.replMode = true;
+  }
+
+  public static Stmt.VarDecl createVarDecl(Expr.FunDecl ownerFunDecl, Token name, JactlType type, Expr init) {
+    Expr.VarDecl varDecl = new Expr.VarDecl(name, init);
+    init.isResultUsed = true;
+    varDecl.type = type;
+    varDecl.isResultUsed = false;
+    varDecl.owner = ownerFunDecl;
+    return new Stmt.VarDecl(name, varDecl);
   }
 }

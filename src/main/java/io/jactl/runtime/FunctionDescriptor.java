@@ -25,13 +25,13 @@ import java.util.List;
 import java.util.Set;
 
 public class FunctionDescriptor {
-  public JactlType       type;            // Type method is for, or null for global functions
-  public JactlType       firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
+  public JactlType        type;            // Type method is for, or null for global functions
+  public JactlType        firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
   public String           name;            // Jactl method/function name
-  public JactlType       returnType;
+  public JactlType        returnType;
   public List<String>     paramNames = new ArrayList<>();
   public Set<String>      mandatoryParams;
-  public List<JactlType> paramTypes;
+  public List<JactlType>  paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
   public String           implementingClassName;

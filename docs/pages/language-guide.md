@@ -3949,6 +3949,78 @@ be declared in two places:
 1. Top level of a script or class file, or
 2. As an inner class within another class declaration.
 
+# JSON Support
+
+As well as supporting JSON syntax for creating Maps in the language itself, Jactl also offers functions for encoding
+objects into JSON and decoding JSON back into objects.
+
+## toJson()
+
+Any Jactl object can be converted to a JSON string representation using the `toJson()` method.
+This method acts on any object type, including primitives:
+```groovy
+> 123.toJson()
+123
+> 'abc'.toJson()
+"abc"
+> [1,2,3].toJson()
+[1,2,3]
+> [a:1,b:2,c:[1,2,[x:1,y:4]]].toJson()
+{"a":1,"b":2,"c":[1,2,{"x":1,"y":4}]}
+```
+
+It can also be used on class instances:
+```groovy
+> class Address { String street; String suburb; String state }
+> class Employee { String name; int employeeId; Address homeAddress }
+> def jim = new Employee('Jim Henderson', 1234, [street:'123 High St', suburb:'Downtown', state:'South Australia'])
+[name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
+> jim.toJson()
+{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
+```
+
+## fromJson()
+
+There is also a `fromJson()` method that acts on strings to convert from a JSON string back into an object:
+```groovy
+> '"abc"'.fromJson()
+abc
+> '"[1,2,3]"'.fromJson()
+[1,2,3]
+> '{"a":1,"b":2,"c":[1,2,{"x":1,"y":4}]}'.fromJson()
+[a:1, b:2, c:[1, 2, [x:1, y:4]]]
+```
+
+By default, when converting from a JSON string, it will create Maps and Lists where appropriate:
+```groovy
+> def json = '{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}'
+{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
+> def jim = json.fromJson()
+[name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
+> jim instanceof Map
+true
+```
+
+It is possible to create a class instance instead by using the builtin `fromJson()` class static method generated for
+every class:
+```groovy
+> class Address { String street; String suburb; String state }
+> class Employee { String name; int employeeId; Address homeAddress }
+> def json = '{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}'
+{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
+> def jim = Employee.fromJson(json)
+[name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
+> jim instanceof Employee
+true
+```
+
+Another way to achieve the same goal is to read into a Map and then coercing the Map into the class type but this is
+more inefficient:
+```groovy
+> json.fromJson() as Employee
+[name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
+```
+
 # Built-in Global Functions
 
 There are a handful of global functions.
