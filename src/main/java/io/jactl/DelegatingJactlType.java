@@ -50,26 +50,28 @@ public class DelegatingJactlType extends JactlType {
     return expr.type;
   }
 
-  @Override public JactlType createInstanceType()                         { return getDelegate().createInstanceType();           }
-  @Override public TypeEnum getType()                                  { return getDelegate().getType();                  }
-  @Override public boolean isBoxed()                                   { return getDelegate().isBoxed();                  }
-  @Override public TokenType tokenType()                               { return getDelegate().tokenType();                }
-  @Override public boolean isRef()                                     { return getDelegate().isRef();                    }
-  @Override public boolean isNumeric()                                 { return getDelegate().isNumeric();                }
-  @Override public boolean isPrimitive()                               { return getDelegate().isPrimitive();              }
-  @Override public JactlType boxed()                                  { return getDelegate().boxed();                    }
-  @Override public JactlType unboxed()                                { return getDelegate().unboxed();                  }
-  @Override public boolean is(JactlType... types)                     { return getDelegate().is(types);                  }
-  @Override public boolean isBoxedOrUnboxed(JactlType... types)       { return getDelegate().isBoxedOrUnboxed(types);    }
-  @Override public boolean isConvertibleTo(JactlType otherType)       { return getDelegate().isConvertibleTo(otherType); }
-  @Override public String descriptor()                                 { return getDelegate().descriptor();               }
-  @Override public Type descriptorType()                               { return getDelegate().descriptorType();           }
-  @Override public String getInternalName()                            { return getDelegate().getInternalName();          }
-  @Override public Class classFromType()                               { return getDelegate().classFromType();            }
-  @Override public String typeName()                                   { return getDelegate().typeName();                 }
-  @Override public List<Expr> getClassName()                           { return getDelegate().getClassName();             }
-  @Override public String toString()                                   { return getDelegate().toString();                 }
-  @Override public void setClassDescriptor(ClassDescriptor descriptor) { getDelegate().setClassDescriptor(descriptor);    }
-  @Override public ClassDescriptor getClassDescriptor()                { return getDelegate().getClassDescriptor();       }
-
+  @Override public JactlType createInstanceType()                      { return getDelegate().createInstanceType();    }
+  @Override public TypeEnum getType()                                  { return getDelegate().getType();               }
+  @Override public boolean isBoxed()                                   { return getDelegate().isBoxed();               }
+  @Override public TokenType tokenType()                               { return getDelegate().tokenType();             }
+  @Override public boolean isRef()                                     { return getDelegate().isRef();                 }
+  @Override public boolean isNumeric()                                 { return getDelegate().isNumeric();             }
+  @Override public boolean isPrimitive()                               { return getDelegate().isPrimitive();           }
+  @Override public JactlType boxed()                                   { return getDelegate().boxed();                 }
+  @Override public JactlType unboxed()                                 { return getDelegate().unboxed();               }
+  @Override public boolean is(JactlType... types)                      { return getDelegate().is(types);               }
+  @Override public boolean isBoxedOrUnboxed(JactlType... types)        { return getDelegate().isBoxedOrUnboxed(types); }
+  @Override public boolean isConvertibleTo(JactlType otherType)        { return getDelegate().isConvertibleTo(otherType);}
+  @Override public String descriptor()                                 { return getDelegate().descriptor();            }
+  @Override public Type descriptorType()                               { return getDelegate().descriptorType();        }
+  @Override public String getInternalName()                            { return getDelegate().getInternalName();       }
+  @Override public Class classFromType()                               { return getDelegate().classFromType();         }
+  @Override public String typeName()                                   { return getDelegate().typeName();              }
+  @Override public List<Expr> getClassName()                           { return getDelegate().getClassName();          }
+  @Override public String toString()                                   { return getDelegate().toString();              }
+  @Override public void setClassDescriptor(ClassDescriptor descriptor) { getDelegate().setClassDescriptor(descriptor); }
+  @Override public ClassDescriptor getClassDescriptor()                { return getDelegate().getClassDescriptor();    }
+  @Override public JactlType getArrayType()                            { return getDelegate().getArrayType();          }
+  @Override public boolean isAssignableFrom(JactlType otherType)       { return getDelegate().isAssignableFrom(otherType); }
+  @Override public boolean equals(Object obj)                          { return getDelegate().equals(obj);             }
 }

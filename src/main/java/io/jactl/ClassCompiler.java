@@ -19,6 +19,7 @@ package io.jactl;
 
 import io.jactl.runtime.*;
 import org.objectweb.asm.*;
+import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
 import java.io.PrintWriter;
@@ -69,7 +70,8 @@ public class ClassCompiler {
     this.sourceName      = sourceName;
     cv = cw = new JactlClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
     if (debug()) {
-      cv = new TraceClassVisitor(cw, new PrintWriter(System.out));
+      cv = new TraceClassVisitor(cw, new Textifier(), new PrintWriter(System.out));
+      //cv = new TraceClassVisitor(cw, new ASMifier(), new PrintWriter(System.out));
     }
 
     String baseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : Type.getInternalName(Object.class);
@@ -533,9 +535,10 @@ public class ClassCompiler {
   }
 
   private void compileToJsonFunction() {
-    final int THIS_SLOT = 0;
-    final int BUFF_SLOT = 1;
-    final int FIRST_SLOT = 2;
+    final int THIS_SLOT      = 0;
+    final int BUFF_SLOT      = 1;
+    final int FIRST_SLOT     = 2;
+    final int ARR_SLOT_START = 3;
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_WRITE_JSON, Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JsonEncoder.class)),
                                       null, null);
     BiConsumer<String, Class> invoke = (method,type) -> mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonEncoder.class), method,
@@ -592,48 +595,10 @@ public class ClassCompiler {
       mv.visitVarInsn(ALOAD, BUFF_SLOT);
       Utils.loadConst(mv, ':');
       invoke.accept("writeByte", char.class);
-
       mv.visitVarInsn(ALOAD, BUFF_SLOT);
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitFieldInsn(GETFIELD, internalName, field, type.descriptor());
-      switch (type.getType()) {
-        case BOOLEAN: invoke.accept("writeBoolean", boolean.class);      break;
-        case INT:     invoke.accept("writeInt",     int.class);          break;
-        case LONG:    invoke.accept("writeLong",    long.class);         break;
-        case DOUBLE:  invoke.accept("writeDouble",  double.class);       break;
-        case STRING:
-          mv.visitVarInsn(ALOAD, BUFF_SLOT);
-          mv.visitInsn(SWAP);
-          invoke.accept("writeString",  String.class);
-          break;
-        case DECIMAL:
-          mv.visitVarInsn(ALOAD, BUFF_SLOT);
-          mv.visitInsn(SWAP);
-          invoke.accept("writeDecimal", BigDecimal.class);   break;
-        case INSTANCE:
-          Label NULL_VAL = new Label();
-          Label NEXT     = new Label();
-          mv.visitInsn(DUP);
-          mv.visitJumpInsn(IFNULL, NULL_VAL);
-          mv.visitVarInsn(ALOAD, BUFF_SLOT);
-          mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_WRITE_JSON,
-                             Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JsonEncoder.class)),
-                             true);
-          mv.visitJumpInsn(GOTO, NEXT);
-NULL_VAL: mv.visitLabel(NULL_VAL);
-          mv.visitInsn(POP);
-          mv.visitVarInsn(ALOAD, BUFF_SLOT);
-          Utils.loadConst(mv,"null");
-          invoke.accept("writeBareString",  String.class);
-NEXT:     mv.visitLabel(NEXT);
-          break;
-        default:
-          mv.visitVarInsn(ALOAD, BUFF_SLOT);
-          mv.visitInsn(SWAP);
-          invoke.accept("writeObj", Object.class);
-          break;
-      }
-
+      writeField(mv, type, invoke, ARR_SLOT_START);
       first = false;
     }
     mv.visitVarInsn(ALOAD, BUFF_SLOT);
@@ -649,13 +614,104 @@ NEXT:     mv.visitLabel(NEXT);
     mv.visitEnd();
   }
 
-  private void compileReadJsonFunction() {
+  // Expect on stack: ...JsonEncoder,fieldValue
+  private void writeField(MethodVisitor mv, JactlType type, BiConsumer<String, Class> invoke, int arraySlots) {
     final int THIS_SLOT    = 0;
-    final int DECODER_SLOT = 1;
+    final int BUFF_SLOT    = 1;
     final int FIRST_SLOT   = 2;
-    final int TMP_OBJ      = 3;
-    final int TMP_LONG     = 4;  // two slots
-    final int DUP_FLAGS    = 6;  // two slots per flag
+    final int ARR_IDX_SLOT = arraySlots;
+    final int ARR_SLOT     = arraySlots + 1;
+    switch (type.getType()) {
+      case BOOLEAN: invoke.accept("writeBoolean", boolean.class);   break;
+      case INT:     invoke.accept("writeInt", int.class);           break;
+      case LONG:    invoke.accept("writeLong", long.class);         break;
+      case DOUBLE:  invoke.accept("writeDouble", double.class);     break;
+      case STRING: {
+        invoke.accept("writeString", String.class);
+        break;
+      }
+      case DECIMAL: {
+        invoke.accept("writeDecimal", BigDecimal.class);
+        break;
+      }
+      case INSTANCE: {
+        Label NULL_VAL = new Label();
+        Label NEXT     = new Label();
+        mv.visitInsn(DUP);
+        mv.visitJumpInsn(IFNULL, NULL_VAL);
+        mv.visitInsn(SWAP);
+        mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_WRITE_JSON,
+                           Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JsonEncoder.class)),
+                           true);
+        mv.visitJumpInsn(GOTO, NEXT);
+NULL_VAL: mv.visitLabel(NULL_VAL);
+        mv.visitInsn(POP);
+        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonEncoder.class), "writeNull",
+                           Type.getMethodDescriptor(Type.getType(void.class)), false);
+NEXT:   mv.visitLabel(NEXT);
+        break;
+      }
+      case ARRAY: {
+        Label NULL_VAL = new Label();
+        Label NEXT     = new Label();
+        mv.visitVarInsn(ASTORE, ARR_SLOT);
+        mv.visitInsn(POP);
+        mv.visitVarInsn(ALOAD, ARR_SLOT);
+        mv.visitJumpInsn(IFNULL, NULL_VAL);
+        mv.visitVarInsn(ALOAD, BUFF_SLOT);
+        Utils.loadConst(mv, '[');     // JsonEncoder is currently on stack
+        invoke.accept("writeByte", char.class);
+        Label LOOP     = new Label();
+        Label END_LOOP = new Label();
+        Utils.loadConst(mv,0);
+        mv.visitVarInsn(ISTORE, ARR_IDX_SLOT);
+LOOP:   mv.visitLabel(LOOP);
+        mv.visitVarInsn(ALOAD, ARR_SLOT);
+        mv.visitInsn(ARRAYLENGTH);
+        mv.visitVarInsn(ILOAD, ARR_IDX_SLOT);
+        mv.visitJumpInsn(IF_ICMPLE, END_LOOP);
+        mv.visitVarInsn(ILOAD, ARR_IDX_SLOT);
+        Label FIRST = new Label();
+        mv.visitJumpInsn(IFEQ, FIRST);
+        mv.visitVarInsn(ALOAD, BUFF_SLOT);
+        Utils.loadConst(mv, ',');
+        invoke.accept("writeByte", char.class);
+FIRST:  mv.visitLabel(FIRST);
+        mv.visitVarInsn(ALOAD, BUFF_SLOT);
+        mv.visitVarInsn(ALOAD, ARR_SLOT);
+        mv.visitVarInsn(ILOAD, ARR_IDX_SLOT);
+        Utils.loadArrayElement(mv, type.getArrayType());
+        writeField(mv, type.getArrayType(), invoke, arraySlots + 2);
+        mv.visitIincInsn(ARR_IDX_SLOT, 1);
+        mv.visitJumpInsn(GOTO, LOOP);
+END_LOOP: mv.visitLabel(END_LOOP);
+        mv.visitVarInsn(ALOAD, BUFF_SLOT);
+        Utils.loadConst(mv, ']');
+        invoke.accept("writeByte", char.class);
+        mv.visitJumpInsn(GOTO, NEXT);
+NULL_VAL: mv.visitLabel(NULL_VAL);
+        mv.visitVarInsn(ALOAD, BUFF_SLOT);
+        Utils.loadConst(mv, "null");
+        invoke.accept("writeBareString", String.class);
+NEXT:   mv.visitLabel(NEXT);
+        break;
+      }
+      default:
+        invoke.accept("writeObj", Object.class);
+        break;
+    }
+  }
+
+  private void compileReadJsonFunction() {
+    final int THIS_SLOT      = 0;
+    final int DECODER_SLOT   = 1;
+    final int FIRST_SLOT     = 2;   // Records whether we are decoding first field
+    final int TMP_OBJ        = 3;
+    final int TMP_LONG       = 4;  // two slots
+    final int DUP_FLAGS      = 6;  // two slots per flag
+    // Need for array and array index. If multi-dimensions we use extra two slots for each dimension
+    final int ARR_SLOTS      = DUP_FLAGS + 2 + classDecl.fields.size() / 64;
+
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(Type.getType(Object.class), Type.getType(JsonDecoder.class)),
                                       null, null);
 
@@ -668,12 +724,29 @@ NEXT:     mv.visitLabel(NEXT);
     mv.visitInsn(ACONST_NULL);
     mv.visitInsn(ARETURN);
 
+    // We need to build a list of field hashCodes in sort order with each entry being a list of fields that map
+    // to that hash. This will be used to build the lookupTable for our switch on field name.
+    var fieldNames = classDecl.fields.stream()
+                                     .map(f -> f.name.getStringValue())
+                                     .sorted(Comparator.comparingInt(Object::hashCode))
+                                     .collect(Collectors.toList());
+    var hashCodeList = new ArrayList<Pair<Integer,List<String>>>();
+    int currentHash = 0;
+    Pair<Integer,List<String>> entry = null;
+    for (int i = 0; i < fieldNames.size(); i++) {
+      String fieldName = fieldNames.get(i);
+      if (i == 0 || fieldName.hashCode() != currentHash) {
+        entry = Pair.create(fieldName.hashCode(), new ArrayList<>());
+        hashCodeList.add(entry);
+        currentHash = fieldName.hashCode();
+      }
+      entry.second.add(fieldName);
+    }
+    var fieldLabels = IntStream.range(0,hashCodeList.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
+
 BRACE: mv.visitLabel(BRACE);
+    int numFlagSlots = fieldNames.size() / 64 + 1;
     // Initialise flags we use to detect duplicate fields to 0
-    Label[] fieldLabels  = IntStream.range(0, classDecl.fields.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
-    var fields = classDecl.fields.stream().map(f -> Pair.create(f.name.getStringValue(), f.name.getStringValue().hashCode())).collect(Collectors.toList());
-    fields.sort(Comparator.comparingInt(f -> f.second));
-    int numFlagSlots = fields.size() / 64 + 1;
     IntStream.range(0, numFlagSlots).forEach(i -> {
       mv.visitInsn(LCONST_0);
       mv.visitVarInsn(LSTORE, DUP_FLAGS + i * 2);
@@ -681,13 +754,13 @@ BRACE: mv.visitLabel(BRACE);
 
     mv.visitInsn(ICONST_0);
     mv.visitVarInsn(ISTORE, FIRST_SLOT);
-    Label LOOP            = new Label();
-    Label NOT_END         = new Label();
-    Label END_LOOP        = new Label();
-    Label FIRST           = new Label();
-    Label NOT_COMMA_ERROR = new Label();
-    Label NOT_QUOTE_ERROR = new Label();
-    Label READ_FIELD      = new Label();
+    Label LOOP     = new Label();
+    Label NOT_END  = new Label();
+    Label END_LOOP = new Label();
+    Label FIRST    = new Label();
+    Label ERROR    = new Label();
+    Label COMMA    = new Label();
+    Label QUOTE    = new Label();
 
 LOOP: mv.visitLabel(LOOP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
@@ -703,39 +776,32 @@ NOT_END: mv.visitLabel(NOT_END);
     mv.visitJumpInsn(IFEQ, FIRST);
     mv.visitInsn(DUP);
     Utils.loadConst(mv, ',');
-    mv.visitJumpInsn(IF_ICMPNE, NOT_COMMA_ERROR);
+    mv.visitJumpInsn(IF_ICMPEQ, COMMA);
+    Utils.loadConst(mv, "Expecting ',' or '}' but got ");
+
+ERROR: mv.visitLabel(ERROR);
+    // Expect on stack:  ...char,errMsg
+    mv.visitVarInsn(ALOAD, DECODER_SLOT);
+    mv.visitInsn(DUP_X2);
+    mv.visitInsn(POP);
+    mv.visitInsn(SWAP);
+    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
+                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class), Type.getType(char.class)), false);
+    mv.visitInsn(ACONST_NULL);
+    mv.visitInsn(ATHROW);
+
+COMMA: mv.visitLabel(COMMA);
     mv.visitInsn(POP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
-
 FIRST: mv.visitLabel(FIRST);
     mv.visitInsn(DUP);
     Utils.loadConst(mv, '"');
-    mv.visitJumpInsn(IF_ICMPNE, NOT_QUOTE_ERROR);
-    mv.visitInsn(POP);
-    mv.visitJumpInsn(GOTO, READ_FIELD);
-
-NOT_COMMA_ERROR: mv.visitLabel(NOT_COMMA_ERROR);
-    mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitInsn(SWAP);
-    Utils.loadConst(mv, "Expecting ',' or '}' but got ");
-    mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class), Type.getType(char.class)), false);
-    mv.visitInsn(ACONST_NULL);
-    mv.visitInsn(ATHROW);
-
-NOT_QUOTE_ERROR: mv.visitLabel(NOT_QUOTE_ERROR);
-    mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitInsn(SWAP);
+    mv.visitJumpInsn(IF_ICMPEQ, QUOTE);
     Utils.loadConst(mv, "Expecting '\"' but got ");
-    mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class), Type.getType(char.class)), false);
-    mv.visitInsn(ACONST_NULL);
-    mv.visitInsn(ATHROW);
-
-READ_FIELD: mv.visitLabel(READ_FIELD);
+    mv.visitJumpInsn(GOTO, ERROR);
+QUOTE: mv.visitLabel(QUOTE);
+    mv.visitInsn(POP);
     mv.visitIincInsn(FIRST_SLOT, 1);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "decodeString", Type.getMethodDescriptor(Type.getType(String.class)), false);
@@ -745,91 +811,52 @@ READ_FIELD: mv.visitLabel(READ_FIELD);
     Label   DEFAULT_LABEL = new Label();
     Label   DUP_FOUND     = new Label();
 
-    mv.visitLookupSwitchInsn(DEFAULT_LABEL, fields.stream().mapToInt(f -> f.second).toArray(), fieldLabels);
-    for (int i = 0; i < fields.size(); i++) {
-      mv.visitLabel(fieldLabels[i]);
-      String fieldName = fields.get(i).first;
-      mv.visitInsn(DUP);
-      Utils.loadConst(mv, fieldName);
-      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z", false);
-      mv.visitJumpInsn(IFEQ, DEFAULT_LABEL);    // No match even though hashcode matched
-      mv.visitInsn(POP);
-      // Make sure we haven't already decoded a value for this field by storing a flag in a local long of 64 flags, one
-      // per field (we overflow to multiple 64 bit longs if necessary)
-      int shift = i % 64;                      // which bit to test/set
-      int flag  = DUP_FLAGS + (i / 64) * 2;    // which of our longs to use
-      Utils.loadConst(mv, 1L << shift);
-      mv.visitVarInsn(LLOAD, flag);
-      mv.visitInsn(LAND);
-      mv.visitInsn(LCONST_0);
-      mv.visitInsn(LCMP);
-      Label NO_DUP = new Label();
-      mv.visitJumpInsn(IFEQ, NO_DUP);
-      Utils.loadConst(mv, fieldName);
-      mv.visitJumpInsn(GOTO, DUP_FOUND);
+    mv.visitLookupSwitchInsn(DEFAULT_LABEL, hashCodeList.stream().mapToInt(h -> h.first).toArray(), fieldLabels);
+    int fidx = -1;
+    for (int h = 0; h < hashCodeList.size(); h++) {
+      mv.visitLabel(fieldLabels[h]);
+      var     hashEntry = hashCodeList.get(h).second;
+      Label   NEXT      = null;
+      for (int hashIdx = 0; hashIdx < hashEntry.size(); hashIdx++) {
+        if (NEXT != null && NEXT != DEFAULT_LABEL) {
+NEXT:     mv.visitLabel(NEXT);
+        }
+        NEXT = hashIdx == hashEntry.size() - 1 ? DEFAULT_LABEL : new Label();
+        fidx++;
+        String fieldName = hashEntry.get(hashIdx);
+        mv.visitInsn(DUP);
+        Utils.loadConst(mv, fieldName);
+        mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z", false);
+        mv.visitJumpInsn(IFEQ, NEXT);    // No match even though hashcode matched
+        mv.visitInsn(POP);
+        // Make sure we haven't already decoded a value for this field by storing a flag in a local long of 64 flags, one
+        // per field (we overflow to multiple 64 bit longs if necessary)
+        int shift = fidx % 64;                      // which bit to test/set
+        int flag  = DUP_FLAGS + (fidx / 64) * 2;    // which of our longs to use
+        Utils.loadConst(mv, 1L << shift);
+        mv.visitVarInsn(LLOAD, flag);
+        mv.visitInsn(LAND);
+        mv.visitInsn(LCONST_0);
+        mv.visitInsn(LCMP);
+        Label NO_DUP = new Label();
+        mv.visitJumpInsn(IFEQ, NO_DUP);
+        Utils.loadConst(mv, fieldName);
+        mv.visitJumpInsn(GOTO, DUP_FOUND);
 NO_DUP: mv.visitLabel(NO_DUP);
-      Utils.loadConst(mv, 1L << shift);
-      mv.visitVarInsn(LLOAD, flag);
-      mv.visitInsn(LOR);
-      mv.visitVarInsn(LSTORE, flag);          // set flag to remember we have seen this field
-      mv.visitVarInsn(ALOAD, DECODER_SLOT);
-      Utils.loadConst(mv, ':');
-      mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expect", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(char.class)), false);
-      mv.visitVarInsn(ALOAD, THIS_SLOT);
-      mv.visitVarInsn(ALOAD, DECODER_SLOT);
-      var type = classDecl.fieldVars.get(fieldName).type;
-      String typeName = type.getType().toString().charAt(0) + type.getType().toString().toLowerCase().substring(1);
-      switch (type.getType()) {
-        case BOOLEAN: case INT: case LONG: case DOUBLE: case DECIMAL: case STRING: case MAP: case LIST: case ANY:
-          mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class),
-                             type.is(ANY) ? "_decode" : "get" + typeName,
-                             Type.getMethodDescriptor(type.descriptorType()), false);
-          break;
-        case INSTANCE:
-          mv.visitTypeInsn(NEW, type.getInternalName());
-          mv.visitInsn(DUP);
-          mv.visitMethodInsn(INVOKESPECIAL, type.getInternalName(), "<init>", "()V", false);
-          mv.visitInsn(DUP);
-          mv.visitVarInsn(ASTORE, TMP_OBJ);
-          mv.visitInsn(SWAP);
-          mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_READ_JSON,
-                             Type.getMethodDescriptor(Type.getType(Object.class),
-                                                      Type.getType(JsonDecoder.class)),
-                             true);
-          mv.visitInsn(DUP);
-          Label NULL_CHILD = new Label();
-          mv.visitJumpInsn(IFNULL, NULL_CHILD);
-          mv.visitVarInsn(ALOAD, TMP_OBJ);
-          mv.visitInsn(SWAP);
-          boolean async = type.getClassDescriptor().getMethod(Utils.JACTL_INIT_MISSING).isAsync;
-          // Note we don't actually support async behaviour (it will be detected in JsonDecoder.decodeJactlObj())
-          // but we need to pass in a null continuation just in case. If a Continuation is thrown it will be
-          // converted into a RuntimeError.
-          if (async) {
-            mv.visitInsn(ACONST_NULL);
-            mv.visitInsn(SWAP);
-          }
-          mv.visitMethodInsn(INVOKEVIRTUAL, type.getInternalName(), Utils.JACTL_INIT_MISSING,
-                             async ? Type.getMethodDescriptor(type.descriptorType(), Type.getType(Continuation.class), Type.getType(Object.class))
-                                   : Type.getMethodDescriptor(type.descriptorType(), Type.getType(Object.class)),
-                             false);
-NULL_CHILD: mv.visitLabel(NULL_CHILD);
-          Utils.checkCast(mv, type);
-          break;
-        case FUNCTION:
-          Utils.loadConst(mv, "Field " + fieldName + " of type function/closure cannot be instantiated from json");
-          mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                             Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class)), false);
-          mv.visitInsn(ACONST_NULL);
-          mv.visitInsn(ATHROW);
-          break;
-        default:
-          throw new IllegalStateException("Internal error: invalid type for a field " + type.getType());
+        Utils.loadConst(mv, 1L << shift);
+        mv.visitVarInsn(LLOAD, flag);
+        mv.visitInsn(LOR);
+        mv.visitVarInsn(LSTORE, flag);          // set flag to remember we have seen this field
+        mv.visitVarInsn(ALOAD, DECODER_SLOT);
+        Utils.loadConst(mv, ':');
+        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expect", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(char.class)), false);
+        mv.visitVarInsn(ALOAD, THIS_SLOT);
+        var type = classDecl.fieldVars.get(fieldName).type;
+        readJsonField(mv, type, fieldName, ERROR, DECODER_SLOT, TMP_OBJ, ARR_SLOTS);
+        mv.visitFieldInsn(PUTFIELD, internalName, fieldName, type.descriptor());
+        mv.visitJumpInsn(GOTO, LOOP);
       }
-      mv.visitFieldInsn(PUTFIELD, internalName, fieldName, type.descriptor());
-      mv.visitJumpInsn(GOTO, LOOP);
     }
-
 DEFAULT_LABEL: mv.visitLabel(DEFAULT_LABEL);
     Utils.loadConst(mv, " field in JSON data does not exist in " + className);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
@@ -856,14 +883,14 @@ DUP_FOUND: mv.visitLabel(DUP_FOUND);
 END_LOOP: mv.visitLabel(END_LOOP);
 
     // Generate flags which are set for mandatory fields and then check that all mandatory fields have a value
-    long[] mandatoryFlags = new long[fields.size() / 64 + 1];
+    long[] mandatoryFlags = new long[fieldNames.size() / 64 + 1];
     int mandatoryCount = 0;
-    long[] optionalFlags  = new long[fields.size() / 64 + 1];
+    long[] optionalFlags  = new long[fieldNames.size() / 64 + 1];
     int optionalCount = 0;
-    for (int i = 0; i < fields.size(); i++) {
+    for (int i = 0; i < fieldNames.size(); i++) {
       int          m           = i / 64;
       int          b           = i % 64;
-      String       fieldName   = fields.get(i).first;
+      String       fieldName   = fieldNames.get(i);
       Expr.VarDecl field       = classDecl.fieldVars.get(fieldName);
       boolean      isMandatory = field.initialiser == null;
       if (isMandatory) {
@@ -991,5 +1018,175 @@ END: mv.visitLabel(END);
     }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
+  }
+
+  private void readJsonField(MethodVisitor mv, JactlType type, String fieldName, Label ERROR, int DECODER_SLOT, int TMP_OBJ, int ARR_SLOTS) {
+    String typeName = type.getType().toString().charAt(0) + type.getType().toString().toLowerCase().substring(1);
+    switch (type.getType()) {
+      case BOOLEAN: case INT: case LONG: case DOUBLE: case DECIMAL: case STRING: case MAP: case LIST: case ANY:
+        mv.visitVarInsn(ALOAD, DECODER_SLOT);
+        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class),
+                           type.is(ANY) ? "_decode" : "get" + typeName,
+                           Type.getMethodDescriptor(type.descriptorType()), false);
+        break;
+      case INSTANCE:
+        mv.visitVarInsn(ALOAD, DECODER_SLOT);
+        mv.visitTypeInsn(NEW, type.getInternalName());
+        mv.visitInsn(DUP);
+        mv.visitMethodInsn(INVOKESPECIAL, type.getInternalName(), "<init>", "()V", false);
+        mv.visitInsn(DUP);
+        mv.visitVarInsn(ASTORE, TMP_OBJ);
+        mv.visitInsn(SWAP);
+        mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_READ_JSON,
+                           Type.getMethodDescriptor(Type.getType(Object.class),
+                                                    Type.getType(JsonDecoder.class)),
+                           true);
+        mv.visitInsn(DUP);
+        Label NULL_CHILD = new Label();
+        mv.visitJumpInsn(IFNULL, NULL_CHILD);
+        mv.visitVarInsn(ALOAD, TMP_OBJ);
+        mv.visitInsn(SWAP);
+        boolean async = type.getClassDescriptor().getMethod(Utils.JACTL_INIT_MISSING).isAsync;
+        // Note we don't actually support async behaviour (it will be detected in JsonDecoder.decodeJactlObj())
+        // but we need to pass in a null continuation just in case. If a Continuation is thrown it will be
+        // converted into a RuntimeError.
+        if (async) {
+          mv.visitInsn(ACONST_NULL);
+          mv.visitInsn(SWAP);
+        }
+        mv.visitMethodInsn(INVOKEVIRTUAL, type.getInternalName(), Utils.JACTL_INIT_MISSING,
+                           async ? Type.getMethodDescriptor(type.descriptorType(), Type.getType(Continuation.class), Type.getType(Object.class))
+                                 : Type.getMethodDescriptor(type.descriptorType(), Type.getType(Object.class)),
+                           false);
+NULL_CHILD: mv.visitLabel(NULL_CHILD);
+        Utils.checkCast(mv, type);
+        break;
+      case ARRAY:
+        readJsonArray(mv, type, fieldName, ERROR, DECODER_SLOT, TMP_OBJ, ARR_SLOTS);
+        break;
+      case FUNCTION:
+        mv.visitVarInsn(ALOAD, DECODER_SLOT);
+        Utils.loadConst(mv, "Field " + fieldName + " of type function/closure cannot be instantiated from json");
+        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
+                           Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class)), false);
+        mv.visitInsn(ACONST_NULL);
+        break;
+      default:
+        throw new IllegalStateException("Internal error: invalid type for a field: " + type.getType());
+    }
+  }
+
+  private void readJsonArray(MethodVisitor mv, JactlType type, String fieldName, Label ERROR, int DECODER_SLOT, int TMP_OBJ, int ARR_SLOTS) {
+    final int INITIAL_ARR_SIZE = 16;
+    final int ARR_SLOT = ARR_SLOTS;
+    final int ARR_IDX  = ARR_SLOTS + 1;
+
+    Label BRACKET = new Label();
+    Label FINISH_LIST = new Label();
+    Label END_LOOP    = new Label();
+
+    mv.visitVarInsn(ALOAD, DECODER_SLOT);
+    Utils.loadConst(mv, '[');
+    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expectOrNull", Type.getMethodDescriptor(Type.getType(boolean.class), Type.getType(char.class)), false);
+    mv.visitJumpInsn(IFNE, BRACKET);
+    // Was null so return null value
+    mv.visitInsn(ACONST_NULL);
+    mv.visitJumpInsn(GOTO, FINISH_LIST);
+
+BRACKET: mv.visitLabel(BRACKET);
+    Utils.loadConst(mv, INITIAL_ARR_SIZE);
+    Utils.newArray(mv, type, 1);
+    mv.visitVarInsn(ASTORE, ARR_SLOT);
+    Utils.loadConst(mv, 0);
+    mv.visitVarInsn(ISTORE, ARR_IDX);
+
+    Label LOOP        = new Label();
+    Label READ_FIELD  = new Label();
+    Label FIRST_FIELD = new Label();
+    Label NOT_END     = new Label();
+LOOP: mv.visitLabel(LOOP);
+    mv.visitVarInsn(ALOAD, DECODER_SLOT);
+    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "skipWhitespace", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitInsn(DUP);
+    Utils.loadConst(mv, ']');
+    mv.visitJumpInsn(IF_ICMPNE, NOT_END);
+    mv.visitInsn(POP);
+    mv.visitVarInsn(ALOAD, DECODER_SLOT);
+    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitInsn(POP);
+    mv.visitJumpInsn(GOTO, END_LOOP);
+
+NOT_END: mv.visitLabel(NOT_END);
+    mv.visitVarInsn(ILOAD, ARR_IDX);
+    mv.visitJumpInsn(IFEQ, FIRST_FIELD);
+    mv.visitInsn(DUP);
+    Utils.loadConst(mv, ',');
+    mv.visitJumpInsn(IF_ICMPEQ, READ_FIELD);
+    Utils.loadConst(mv, "Expecting ',' or ']' but got ");
+    mv.visitVarInsn(ALOAD, DECODER_SLOT);
+    mv.visitInsn(DUP_X2);
+    mv.visitInsn(POP);
+    mv.visitInsn(SWAP);
+    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
+                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class), Type.getType(char.class)), false);
+    mv.visitInsn(ACONST_NULL);
+    mv.visitInsn(ATHROW);
+
+READ_FIELD: mv.visitLabel(READ_FIELD);
+    mv.visitInsn(POP);
+    mv.visitVarInsn(ALOAD, DECODER_SLOT);
+    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
+
+FIRST_FIELD: mv.visitLabel(FIRST_FIELD);
+    mv.visitInsn(POP);
+    // Check if array is big enough
+    Label BIG_ENOUGH = new Label();
+    mv.visitVarInsn(ILOAD, ARR_IDX);
+    mv.visitVarInsn(ALOAD, ARR_SLOT);
+    mv.visitInsn(ARRAYLENGTH);
+    mv.visitJumpInsn(IF_ICMPLT, BIG_ENOUGH);
+
+    // Grow array by doubling in size
+    mv.visitVarInsn(ILOAD, ARR_IDX);
+    Utils.loadConst(mv,2);
+    mv.visitInsn(IMUL);
+
+    Runnable copyArray = () -> {
+      // Expect on stack: ...arraySize
+      Utils.newArray(mv, type, 1);
+      mv.visitVarInsn(ALOAD, ARR_SLOT);
+      mv.visitInsn(SWAP);
+      mv.visitInsn(DUP);
+      mv.visitVarInsn(ASTORE, ARR_SLOT);
+      Utils.loadConst(mv, 0);
+      mv.visitInsn(SWAP);
+      Utils.loadConst(mv, 0);
+      mv.visitVarInsn(ILOAD, ARR_IDX);
+      mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V", false);
+    };
+    copyArray.run();
+
+BIG_ENOUGH: mv.visitLabel(BIG_ENOUGH);
+    mv.visitVarInsn(ALOAD, ARR_SLOT);
+    mv.visitVarInsn(ILOAD, ARR_IDX);
+    readJsonField(mv, type.getArrayType(), fieldName, ERROR, DECODER_SLOT, TMP_OBJ, ARR_SLOTS + 2);
+    Utils.storeArrayElement(mv, type.getArrayType());
+    mv.visitIincInsn(ARR_IDX, 1);
+    mv.visitJumpInsn(GOTO, LOOP);
+
+END_LOOP: mv.visitLabel(END_LOOP);
+    Label NO_COPY_NEEDED = new Label();
+    // Copy array into one of exact size needed
+    mv.visitVarInsn(ILOAD, ARR_IDX);
+    mv.visitVarInsn(ALOAD, ARR_SLOT);
+    mv.visitInsn(ARRAYLENGTH);
+    mv.visitJumpInsn(IF_ICMPEQ, NO_COPY_NEEDED);
+    mv.visitVarInsn(ILOAD, ARR_IDX);
+    copyArray.run();
+
+NO_COPY_NEEDED: mv.visitLabel(NO_COPY_NEEDED);
+    mv.visitVarInsn(ALOAD, ARR_SLOT);
+
+FINISH_LIST: mv.visitLabel(FINISH_LIST);
   }
 }

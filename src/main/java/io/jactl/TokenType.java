@@ -49,6 +49,7 @@ public enum TokenType {
   SEMICOLON(";"),
   SINGLE_QUOTE("'"),
   DOUBLE_QUOTE("\""),
+  UNDERSCORE("_"),
 
   //= Double char tokens
   PERCENT_PERCENT("%%"),
@@ -116,6 +117,7 @@ public enum TokenType {
   DOUBLE("double"),
   DECIMAL("Decimal"),
   STRING("String"),
+  OBJECT("Object"),
   VOID("void"),
   MAP("Map"),
   LIST("List"),
@@ -222,10 +224,6 @@ public enum TokenType {
 
   boolean isBitShift() {
     return this.is(DOUBLE_LESS_THAN,DOUBLE_GREATER_THAN,TRIPLE_GREATER_THAN);
-  }
-
-  boolean isType() {
-    return this.is(BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, DEF, OBJECT_ARR);
   }
 
   @Override

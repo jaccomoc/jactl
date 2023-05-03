@@ -793,14 +793,15 @@ abstract class Expr {
    */
   static class InvokeNew extends Expr {
     Token      token;
-    JactlType className;
-    InvokeNew(Token token, JactlType className) {
+    JactlType  instanceType;
+    List<Expr> dimensions = new ArrayList<>();
+    InvokeNew(Token token, JactlType instanceType) {
       this.token = token;
-      this.className = className;
+      this.instanceType = instanceType;
       this.location = token;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeNew(this); }
-    @Override public String toString() { return "InvokeNew[" + "token=" + token + ", " + "className=" + className + "]"; }
+    @Override public String toString() { return "InvokeNew[" + "token=" + token + ", " + "instanceType=" + instanceType + "]"; }
   }
 
   /**

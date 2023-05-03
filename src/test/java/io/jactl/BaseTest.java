@@ -64,12 +64,42 @@ public class BaseTest {
       var    compiled = compileScript(scriptCode, jactlContext, packageName, testAsync, bindings);
 
       Object result   = compiled.runSync(bindings);
-      if (expected instanceof Object[]) {
-        assertTrue(result instanceof Object[]);
-        assertTrue(Arrays.equals((Object[]) expected, (Object[]) result));
+      if (expected == null) {
+        assertEquals(expected, result);
       }
       else {
-        assertEquals(expected, result);
+        switch (expected.getClass().getName()) {
+          case "[Z":
+            assertTrue(result instanceof boolean[]);
+            assertArrayEquals((boolean[]) expected, (boolean[]) result);
+            break;
+          case "[I":
+            assertTrue(result instanceof int[]);
+            assertArrayEquals((int[]) expected, (int[]) result);
+            break;
+          case "[J":
+            assertTrue(result instanceof long[]);
+            assertArrayEquals((long[]) expected, (long[]) result);
+            break;
+          case "[D":
+            assertTrue(result instanceof double[]);
+            assertArrayEquals((double[]) expected, (double[]) result);
+            break;
+          case "[Ljava.lang.String;":
+            assertTrue(result instanceof Object[]);
+            assertArrayEquals((String[]) expected, (String[]) result);
+          case "[Ljava.lang.Object;":
+            assertTrue(result instanceof Object[]);
+            assertArrayEquals((Object[]) expected, (Object[]) result);
+            break;
+          case "[Ljava.math.BigDecimal;":
+            assertTrue(result instanceof BigDecimal[]);
+            assertArrayEquals((BigDecimal[]) expected, (BigDecimal[]) result);
+            break;
+          default:
+            assertEquals(expected, result);
+            break;
+        }
       }
     }
     catch (Exception e) {

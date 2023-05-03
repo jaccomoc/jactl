@@ -1156,11 +1156,11 @@ public class RuntimeUtils {
    * @return
    */
   private static String doToString(Object obj, Set<Object> previousObjects, String prefix, int indent) {
-    if (obj instanceof Object[]) {
-      obj = Arrays.asList((Object[]) obj);
+    if (obj == null) {
+      return "null";
     }
 
-    if (obj instanceof List || obj instanceof Map || obj instanceof JactlObject) {
+    if (obj instanceof List || obj instanceof Map || obj instanceof JactlObject || obj.getClass().isArray()) {
       // If we have already visited this object then we have a circular reference so to avoid infinite recursion
       // we output "<CIRCULAR_REF>"
       if (!previousObjects.add(System.identityHashCode(obj))) {
@@ -1168,9 +1168,14 @@ public class RuntimeUtils {
       }
     }
 
-    if (obj == null) {
-      return "null";
+    if (obj instanceof Object[]) {
+      obj = Arrays.asList((Object[]) obj);
     }
+    if (obj instanceof boolean[]) { return Arrays.toString((boolean[])obj); }
+    if (obj instanceof int[])     { return Arrays.toString((int[])obj); }
+    if (obj instanceof long[])    { return Arrays.toString((long[])obj); }
+    if (obj instanceof double[])  { return Arrays.toString((double[])obj); }
+
     try {
       if (obj instanceof List) {
         StringBuilder sb = new StringBuilder();
@@ -1454,7 +1459,7 @@ public class RuntimeUtils {
 
     if (parent instanceof Class) {
       Class clss = (Class) parent;
-      // For classes we only support runtime lookup of static methods
+      // For classes, we only support runtime lookup of static methods
       if (JactlObject.class.isAssignableFrom(clss)) {
         try {
           // Need to get map of static methods via getter rather than directly accessing the
@@ -1557,6 +1562,83 @@ public class RuntimeUtils {
       list.set(index, value);
     }
     return value;
+  }
+
+  public static Object loadArrayField(Object parent, int idx, String source, int offset) {
+    try {
+      if (parent instanceof String) {
+        String str = (String)parent;
+        return String.valueOf(str.charAt(idx >= 0 ? idx : idx + str.length()));
+      }
+      if (parent instanceof int[]) {
+        int[] arr = (int[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length];
+      }
+      if (parent instanceof Object[]) {
+        Object[] arr = (Object[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length];
+      }
+      if (parent instanceof long[]) {
+        long[] arr = (long[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length];
+      }
+      if (parent instanceof double[]) {
+        double[] arr = (double[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length];
+      }
+      if (parent instanceof boolean[]) {
+        boolean[] arr = (boolean[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length];
+      }
+    }
+    catch (StringIndexOutOfBoundsException|ArrayIndexOutOfBoundsException e) {
+      throw new RuntimeError("Index out of bounds: " + idx, source, offset);
+    }
+    throw new IllegalStateException("Internal error: unexpected array type " + className(parent));
+  }
+
+  public static Object storeArrayField(Object parent, Object field, Object value, String source, int offset) {
+    if (!(field instanceof Number)) {
+      throw new RuntimeError("Non-numeric array index (" + className(field) + ")", source, offset);
+    }
+    int idx = ((Number)field).intValue();
+    try {
+      if (parent instanceof int[]) {
+        int[] arr = (int[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length] = ((Number)value).intValue();
+      }
+      if (parent instanceof BigDecimal[]) {
+        BigDecimal[] arr = (BigDecimal[])parent;
+        BigDecimal result;
+        if      (value instanceof BigDecimal) { result = (BigDecimal)value; }
+        else if (value instanceof Double)     { result = BigDecimal.valueOf((double)value); }
+        else                                  { result = BigDecimal.valueOf(((Number)value).longValue()); }
+        return arr[idx >= 0 ? idx : idx + arr.length] = result;
+      }
+      if (parent instanceof Object[]) {
+        Object[] arr = (Object[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length] = value;
+      }
+      if (parent instanceof long[]) {
+        long[] arr = (long[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length] = ((Number)value).longValue();
+      }
+      if (parent instanceof double[]) {
+        double[] arr = (double[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length] = ((Number)value).doubleValue();
+      }
+      if (parent instanceof boolean[]) {
+        boolean[] arr = (boolean[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length] = isTruth(value, false);
+      }
+    }
+    catch (ArrayIndexOutOfBoundsException e) {
+      throw new RuntimeError("Index out of bounds: " + idx, source, offset);
+    }
+    catch (ArrayStoreException|ClassCastException e) {
+      throw new RuntimeError("Cannot store object of type " + className(value) + " in " + className(parent), source, offset);
+    }
+    throw new IllegalStateException("Internal error: unexpected array type " + className(parent));
   }
 
   /**
@@ -1696,6 +1778,11 @@ public class RuntimeUtils {
       throw new NullError("Null value for Map/List/Object storing field value", source, offset);
     }
 
+    if (!isDot && parent.getClass().isArray()) {
+      storeArrayField(parent, field, value, source, offset);
+      return value;
+    }
+
     if (parent instanceof Map) {
       if (field == null) {
         throw new NullError("Null value for field name", source, offset);
@@ -1727,23 +1814,26 @@ public class RuntimeUtils {
     }
 
     if (!(parent instanceof List)) {
-      throw new RuntimeError("Invalid object type (" + className(parent) + ") for storing value: expected Map/List", source, offset);
+      throw new RuntimeError("Invalid object type (" + className(parent) + ") for storing value: expected Map/List/Array", source, offset);
     }
 
     // Check that we are doing a list operation
     if (isDot) {
-      throw new RuntimeError("Field access not supported for List object", source, offset);
+      throw new RuntimeError("Field access not supported for object of type " + className(parent), source, offset);
     }
 
-    // Must be a List
     if (!(field instanceof Number)) {
       throw new RuntimeError("Non-numeric value for index during List access", source, offset);
     }
 
-    List list  = (List) parent;
     int  index = ((Number) field).intValue();
+    List list  = (List) parent;
     if (index < 0) {
-      throw new RuntimeError("Index for List access must be >= 0 (was " + index + ")", source, offset);
+      int originalIndex = index;
+      index += list.size();
+      if (index < 0) {
+        throw new RuntimeError("Negative index (" + originalIndex + ") out of range (list size is " + list.size() + ")", source, offset);
+      }
     }
     if (index >= list.size()) {
       // Grow list to required size
@@ -1805,6 +1895,38 @@ public class RuntimeUtils {
     if (obj instanceof Map)      { return ((Map)obj).entrySet().iterator(); }
     if (obj instanceof Object[]) {
       Object[] arr = (Object[])obj;
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < arr.length; }
+        @Override public Object next()     { return arr[index++];       }
+      };
+    }
+    if (obj instanceof int[]) {
+      int[] arr = (int[])obj;
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < arr.length; }
+        @Override public Object next()     { return arr[index++];       }
+      };
+    }
+    if (obj instanceof long[]) {
+      long[] arr = (long[])obj;
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < arr.length; }
+        @Override public Object next()     { return arr[index++];       }
+      };
+    }
+    if (obj instanceof boolean[]) {
+      boolean[] arr = (boolean[])obj;
+      return new Iterator() {
+        int index = 0;
+        @Override public boolean hasNext() { return index < arr.length; }
+        @Override public Object next()     { return arr[index++];       }
+      };
+    }
+    if (obj instanceof double[]) {
+      double[] arr = (double[])obj;
       return new Iterator() {
         int index = 0;
         @Override public boolean hasNext() { return index < arr.length; }
@@ -2107,20 +2229,41 @@ public class RuntimeUtils {
   }
 
   public static String className(Object obj) {
-    if (obj == null)               { return "null"; }
-    if (obj instanceof String)     { return "String"; }
-    if (obj instanceof BigDecimal) { return "Decimal"; }
-    if (obj instanceof Double)     { return "double"; }
-    if (obj instanceof Long)       { return "long"; }
-    if (obj instanceof Integer)    { return "int"; }
-    if (obj instanceof Boolean)    { return "boolean"; }
-    if (obj instanceof Map)        { return "Map"; }
-    if (obj instanceof List)       { return "List"; }
-    if (obj instanceof Iterator)   { return "Iterator"; }
-    String className = obj.getClass().getName();
-    int    lastDot   = className.lastIndexOf('.');
-    className = className.substring(lastDot == -1 ? 0 : lastDot + 1);
-    return "Instance<" + className + ">";
+    if (obj == null)                 { return "null"; }
+    if (obj instanceof String)       { return "String"; }
+    if (obj instanceof BigDecimal)   { return "Decimal"; }
+    if (obj instanceof Double)       { return "double"; }
+    if (obj instanceof Long)         { return "long"; }
+    if (obj instanceof Integer)      { return "int"; }
+    if (obj instanceof Boolean)      { return "boolean"; }
+    if (obj instanceof Map)          { return "Map"; }
+    if (obj instanceof List)         { return "List"; }
+    if (obj instanceof Iterator)     { return "Iterator"; }
+    if (obj instanceof MethodHandle) { return "Function"; }
+    if (obj.getClass().isArray())    { return "Array<" + componentType(obj.getClass().getComponentType()) + ">"; }
+    if (obj instanceof JactlObject) {
+      String className = obj.getClass().getName();
+      int    lastDot   = className.lastIndexOf('.');
+      className = className.substring(lastDot == -1 ? 0 : lastDot + 1);
+      return "Instance<" + className + ">";
+    }
+    return obj.getClass().getName();
+  }
+
+  private static String componentType(Class clss) {
+    if (clss.equals(Object.class))       { return "Object"; }
+    if (clss.equals(String.class))       { return "String"; }
+    if (clss.equals(BigDecimal.class))   { return "Decimal"; }
+    if (clss.equals(Double.class))       { return "double"; }
+    if (clss.equals(Long.class))         { return "long"; }
+    if (clss.equals(Integer.class))      { return "int"; }
+    if (clss.equals(Boolean.class))      { return "boolean"; }
+    if (clss.equals(Map.class))          { return "Map"; }
+    if (clss.equals(List.class))         { return "List"; }
+    if (clss.equals(Iterator.class))     { return "Iterator"; }
+    if (clss.equals(MethodHandle.class)) { return "Function"; }
+    if (clss.isArray())                  { return "Array<" + componentType(clss.getComponentType()) + ">"; }
+    return clss.getName();
   }
 
   private static void ensureNonNull(Object obj, String source, int offset) {

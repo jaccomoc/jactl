@@ -525,52 +525,54 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // the assignment
     if (isConditionalAssign) {
       Label end = new Label();
-      tryCatch(NullError.class,
+      tryCatch(NullError.class, true,
                () -> {
                  // Try block: get rhs value and if not null assign
                  compile(expr.expr);
                  expect(1);
 
-                 // Only need check for null value if not a primitive
-                 if (!peek().isPrimitive()) {
-                   _dupVal();
-                   // If non null then jump to assignment
-                   Label haveRhsValue = new Label();
-                   mv.visitJumpInsn(IFNONNULL, haveRhsValue);
-                   // Pop null off stack if we don't need a value as a result
-                   if (!expr.isResultUsed) {
-                     _popVal();
+                 Runnable storeValue = () -> {
+                   // If conditional assign then we know by now whether we have a null value or not
+                   // so we don't need to check again when checking for type conversion
+                   convertTo(expr.identifierExpr.type, null, false, expr.expr.location);
+                   if (expr.isResultUsed) {
+                     dupVal();
                    }
-                   mv.visitJumpInsn(GOTO, end);
-                   mv.visitLabel(haveRhsValue);    // :haveRhsValue
-                 }
+                   storeVar(expr.identifierExpr.varDecl);
+                   if (expr.isResultUsed) {
+                     // Need to box if primitive because when we don't do the assign due to NullError
+                     // we leave null as the result so we need to box so that type of entire expression
+                     // is compatible with use of null
+                     box();
+                     popType();
+                     push(expr.type);
+                   }
+                 };
 
-                 // If conditional assign then we know by now whether we have a null value or not
-                 // so we don't need to check again when checking for type conversion
-                 convertTo(expr.identifierExpr.type, null, !isConditionalAssign, expr.expr.location);
-                 if (expr.isResultUsed) {
-                   dupVal();
+                 // Only need check for null value if not a primitive
+                 if (peek().isPrimitive()) {
+                   storeValue.run();
                  }
-                 storeVar(expr.identifierExpr.varDecl);
-                 if (expr.isResultUsed) {
-                   // Need to box if primitive because when we don't do the assign due to NullError
-                   // we leave null as the result so we need to box so that type of entire expression
-                   // is compatible with use of null
-                   box();
-                   popType();
-                   push(expr.type);
+                 else {
+                   emitIf(false, IfTest.IS_NULL, () -> dupVal(),
+                          () -> {
+                            if (!expr.isResultUsed) {
+                              popVal();
+                            }
+                          },
+                          () -> storeValue.run());
                  }
                },
 
                // Catch block: if NullError thrown then don't assign and return
                // null if result needed
                () -> {
+                 popVal();          // discard exception
                  if (expr.isResultUsed) {
                    // Need a null value if no value from rhs
                    loadNull(expr.type);
                  }
                });
-      mv.visitLabel(end);
     }
     else {
       // Normal assignment
@@ -627,14 +629,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
         String fieldName = ((Expr.Literal)expr.field).value.getStringValue();
         compile(expr.parent);
-        boolean createIfMissing = expr.parent instanceof Expr.Binary && ((Expr.Binary) expr.parent).createIfMissing;
-        throwIfNull("Null value for parent accessing field " + fieldName +
-                    (createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
-                    expr.location);
+        if (couldBeNull(expr.parent)) {
+          boolean createIfMissing = expr.parent instanceof Expr.Binary && ((Expr.Binary) expr.parent).createIfMissing;
+          throwIfNull("Null value for parent accessing field " + fieldName +
+                      (createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
+                      expr.location);
+        }
         swap();
 
         JactlType fieldType = getFieldType(expr.parent.type, fieldName);
         storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+      }
+      else
+      if (expr.parent.type.is(ARRAY)) {
+        storeArrayValue(expr);
       }
       else {
         box();
@@ -652,7 +660,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Label end = new Label();
       tryCatch(NullError.class,
                // Try block:
-               () -> {
+               true, () -> {
                  compile(expr.expr);
 
                  // Only check for null if not primitive
@@ -685,6 +693,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                },
                // Catch block:
                () -> {
+                 popVal();
                  if (expr.isResultUsed) {
                    // Need a null value if no value from rhs
                    loadNull(expr.type);
@@ -1036,7 +1045,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    //= Check for Map/List/String/Instance/Class access via field/index
+    //= Check for Map/List/Array/String/Instance/Class access via field/index
     if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
       if (expr.isFieldAccess) {
         compileFieldAccess(expr);
@@ -1106,8 +1115,38 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  });
         }
         else {
-          compile(expr.right);
-          loadField(expr.operator, null, expr.right.location);
+          if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
+            var   parentType = peek();
+            Label FINISH     = new Label();
+            // Check for array type for efficient access
+            if (expr.operator.is(LEFT_SQUARE)) {
+              if (couldBeNull(expr.left)) {
+                throwIfNull("Cannot retrieve field from null parent", expr.operator);
+              }
+              // Get the index
+              compile(expr.right);
+              loadIndexField(expr, parentType);
+            }
+            else {
+              // QUESTION_SQUARE
+              if (couldBeNull(expr.left)) {
+                // If parent is null then value is null
+                dupVal();
+                compile(expr.right);   // must always compile index expression in case there are side-effects
+                emitIf(false, IfTest.IS_NULL, () -> swap(),
+                       () -> { popVal(); },
+                       () -> loadIndexField(expr, parentType));
+              }
+              else {
+                compile(expr.right);
+                loadIndexField(expr, parentType);
+              }
+            }
+          }
+          else {
+            compile(expr.right);
+            loadField(expr.operator, null, expr.right.location);
+          }
         }
       }
       return null;
@@ -1117,7 +1156,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
       compile(expr.left);
       box();
-      isInstanceOf(expr.right.type);
+      isInstanceOf(expr.right.type.boxed());
       if (expr.operator.is(BANG_INSTANCE_OF)) {
         _booleanNot();
       }
@@ -1165,7 +1204,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertToBoolean(false, expr.left);
 
       // Look for short-cutting && or || (i.e. if we already know the result
-      // we don't need to evaluate right hand side)
+      // we don't need to evaluate right-hand side)
       if (expr.operator.is(AMPERSAND_AMPERSAND)) {
         // Handle case for &&
         Label isFalse = new Label();
@@ -1384,6 +1423,59 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throw new IllegalStateException("Internal error: unexpected type " + expr.type + " for operator " + expr.operator.getType());
     }
     return null;
+  }
+
+  private static boolean couldBeNull(Expr expr) {
+    // Can't be null if "this" or "super"
+    if (expr.isSuper() || expr.isThis()) {
+      return false;
+    }
+    if (expr.isNull()) {
+      return true;
+    }
+    if (expr instanceof Expr.Identifier) {
+      var ident = (Expr.Identifier)expr;
+      if (ident.varDecl.isFinal && ident.varDecl.initialiser != null && !couldBeNull(ident.varDecl.initialiser)) {
+        return false;
+      }
+    }
+    return expr.couldBeNull;
+  }
+
+  private void loadIndexField(Expr.Binary expr, JactlType parentType) {
+    if (parentType.is(ARRAY, STRING)) {
+      loadArrElemOrStringChar(expr);
+    }
+    else {
+      if (parentType.is(ANY)) {
+        swap();
+        dupVal();
+        emitIf(false, IfTest.IS_NOTTRUE,
+               () -> isInstanceOf(String.class),
+               () -> {
+                 dupVal();
+                 invokeMethod(Object.class, "getClass");
+                 invokeMethod(Class.class, "isArray");
+               },
+               () -> loadConst(true));
+        emitIf(false, IfTest.IS_TRUE,
+               () -> {},
+               () -> {
+                 swap();
+                 convertToInt(expr.right.location);
+                 loadLocation(expr.operator);
+                 invokeMethod(RuntimeUtils.class, "loadArrayField", Object.class, int.class, String.class, int.class);
+               },
+               () -> {
+                 swap();
+                 loadField(expr.operator, null, expr.right.location);
+               });
+      }
+      else {
+        swap();
+        loadField(expr.operator, null, expr.right.location);
+      }
+    }
   }
 
   @Override public Void visitTernary(Expr.Ternary expr) {
@@ -1648,7 +1740,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            // Get the instance
                            compile(expr.parent);
-                           if (!expr.parent.isSuper() && !expr.parent.isThis() && expr.parent.couldBeNull) {
+                           if (couldBeNull(expr.parent)) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
                            if (method.isBuiltin) {
@@ -1675,6 +1767,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
                            }
                          },
+//                         () -> invokeUserMethod(method, invokeSpecial));
                          () -> invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.implementingMethod,
                                                 expr.type, methodParamTypes(method)));
       }
@@ -1683,7 +1776,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
                          () -> {
                            compile(expr.parent);                    // Get the instance
-                           if (expr.parent.couldBeNull) {
+                           if (couldBeNull(expr.parent)) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
                            if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(JactlType.CLASS)) {
@@ -1881,7 +1974,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
-    newInstance(expr.type);
+    var type = expr.type;
+    int maybeNegative = (int)expr.dimensions.stream().filter(d -> !compilePositiveInt(d)).count();
+    if (maybeNegative == 0) {
+      // Guaranteed that all dimensions are positive
+      newInstance(expr.type, expr.dimensions.size());
+    }
+    else {
+      // Might have a negative dimension so wrap in try/catch
+      tryCatch(NegativeArraySizeException.class, false,
+               () -> newInstance(expr.type, expr.dimensions.size()),
+               () -> {
+                 invokeMethod(Throwable.class, "getMessage");
+                 _throwErrorWithString("Negative array index: ", expr.location);
+               });
+    }
     return null;
   }
 
@@ -1955,6 +2062,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   ///////////////////////////////////////////////////////////////
+
+  // Return true if we can guarantee expression evaluates to positive integer
+  private boolean compilePositiveInt(Expr expr) {
+    boolean isDefinitelyPositive = false;
+    if (expr.isConst) {
+      var value = expr.constValue;
+      if (value instanceof Number) {
+        if (((Number) value).intValue() < 0) {
+          throw new CompileError("Invalid array size (" + value + "): cannot be negative", expr.location);
+        }
+        isDefinitelyPositive = true;
+      }
+    }
+    compile(expr);
+    convertToInt(expr.location);
+    return isDefinitelyPositive;
+  }
 
   private void convertIteratorToList(boolean isAsync, Token location) {
     dupVal();
@@ -2051,7 +2175,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Expr.Binary leftMost = nodes.get(nodes.size() - 1);
     // For left most field compile parent and save its value in case we need it once null value found
     compile(leftMost.left);
-    if (leftMost.left.couldBeNull && !leftMost.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
+    if (couldBeNull(leftMost.left) && !leftMost.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
       throwIfNull("Trying to access field/element of null object", leftMost.operator);
     }
     boolean checkForNull = false;
@@ -2268,6 +2392,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   enum IfTest {
     // NOTE: opCode is op code for false test
     IS_TRUE(IFEQ),
+    IS_NOTTRUE(IFNE),
     IS_NULL(IFNONNULL),
     IS_NOTNULL(IFNULL);
     final int opCode; IfTest(int opCode) { this.opCode = opCode; }
@@ -2325,7 +2450,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void newInstance(JactlType type) {
-    _newInstance(type.getInternalName());
+    newInstance(type, 0);
+  }
+
+  private void newInstance(JactlType type, int numDimensionsSepcified) {
+    if (type.is(ARRAY)) {
+      expect(numDimensionsSepcified);
+      Utils.newArray(mv, type, numDimensionsSepcified);
+      popType(numDimensionsSepcified); // pop the array size(s)
+    }
+    else {
+      _newInstance(type.getInternalName());
+    }
     push(type);
   }
 
@@ -2698,6 +2834,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _newInstance(Utils.JACTL_LIST_TYPE);
         push(LIST);
         break;
+      case ARRAY:
+        loadConst(null);
+        break;
       default:       throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }
@@ -2739,7 +2878,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private Void convertTo(JactlType type, Expr expr, boolean couldBeNull, Location location) {
     if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
-    if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull) {
+    if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull && couldBeNull(expr)) {
       if (expr.isNull()) {
         throw new CompileError("Cannot convert null value to " + type, location);
       }
@@ -2759,8 +2898,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case ITERATOR:   return null;  // noop
       case NUMBER:     return castToNumber(location);
       case INSTANCE:   return castToInstance(type, expr, location);
-      default:         throw new IllegalStateException("Unknown type " + type);
+      case ARRAY:      return castToArray(type, location);
+      default:         throw new IllegalStateException("Internal error: Unknown type " + type);
     }
+  }
+
+  private Void castToArray(JactlType type, Location location) {
+    if (peek().is(type)) {
+      return null;
+    }
+    if (peek().is(ANY)) {
+      tryCatch(ClassCastException.class, false,
+               () -> checkCast(type),
+               () -> { popVal(); throwError("Invalid type: could not cast to " + type, location); });
+      return null;
+    }
+    throw new CompileError("Cannot cast from " + peek() + " to " + type, location);
   }
 
   private Void castToInstance(JactlType type, Expr expr, Location location) {
@@ -2874,7 +3027,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       switch (peek().getType()) {
         case LONG:    mv.visitInsn(L2I);   break;
         case DOUBLE:  mv.visitInsn(D2I);   break;
-        default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
+        default:      throw new CompileError("Cannot convert " + peek() + " to int", (Token)location);
       }
     }
     popType();
@@ -2902,7 +3055,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       switch (peek().getType()) {
         case INT:     mv.visitInsn(I2L);   break;
         case DOUBLE:  mv.visitInsn(D2L);   break;
-        default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
+        default:      throw new CompileError("Cannot convert " + peek() + " to long", (Token)location);
       }
     }
     popType();
@@ -2930,7 +3083,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       switch (peek().getType()) {
         case INT:     mv.visitInsn(I2D);   break;
         case LONG:    mv.visitInsn(L2D);   break;
-        default:     throw new IllegalStateException("Internal error: unexpected type " + peek());
+        default:      throw new CompileError("Cannot convert " + peek() + " to double", (Token)location);
       }
     }
     popType();
@@ -2961,7 +3114,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DECIMAL:
         break;
       default:
-        throw new IllegalStateException("Internal error: unexpected type " + peek());
+        throw new CompileError("Cannot convert " + peek() + " to Decimal", (Token)location);
     }
     popType();
     push(DECIMAL);
@@ -2976,7 +3129,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToMap", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new IllegalStateException("Internal error: unexpected type " + peek());
+    throw new CompileError("Cannot convert " + peek() + " to Map", (Token)location);
   }
 
   private Void castToList(SourceLocation location) {
@@ -2987,7 +3140,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new IllegalStateException("Internal error: unexpected type " + peek());
+    throw new CompileError("Cannot convert " + peek() + " to List", (Token)location);
   }
 
   private Void castToNumber(SourceLocation location) {
@@ -3001,7 +3154,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new IllegalStateException("Internal error: unexpected type " + peek());
+    throw new CompileError("Cannot convert " + peek() + " to Number", (Token)location);
   }
 
   private Void castToFunction(SourceLocation location) {
@@ -3012,7 +3165,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToFunction", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    return null;
+    throw new CompileError("Cannot convert " + peek() + " to Function", (Token)location);
   }
 
   private Void castToObjectArr(SourceLocation location) {
@@ -3023,7 +3176,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToObjectArr", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    return null;
+    throw new CompileError("Cannot convert " + peek() + " to Object[]", (Token)location);
   }
 
   private Void convertToAny(SourceLocation location) {
@@ -3290,6 +3443,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(isNotNull);
   }
 
+  private void throwIfNotNumber(String msg, SourceLocation location) {
+    expect(1);
+    _dupVal();
+    mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Number.class));
+    Label isNumber = new Label();
+    mv.visitJumpInsn(IFNE, isNumber);
+    _popVal();
+    throwError(msg, location);
+    mv.visitLabel(isNumber);
+  }
+
   private void throwNullError(String msg, SourceLocation location) {
     mv.visitTypeInsn(NEW, "io/jactl/runtime/NullError");
     mv.visitInsn(DUP);
@@ -3333,19 +3497,63 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Emit code for a try/catch statement.
-   * @param exceptionClass  the class to catch
-   * @param tryBlock        Runnable that emits code for the try block
-   * @param catchBlock      Runnable that emits code for the catch block
+   * Throw RuntimeError with given message prepended to string that is on stack.
+   * <p>Expect stack: ...,string</p>
+   * @param msg       message to prepend to string
+   * @param location
    */
-  private void tryCatch(Class exceptionClass, Runnable tryBlock, Runnable catchBlock) {
+  private void _throwErrorWithString(String msg, SourceLocation location) {
+    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+    mv.visitInsn(DUP_X1);
+    mv.visitInsn(SWAP);
+    _loadConst(msg);
+    mv.visitInsn(SWAP);
+    invokeMethod(String.class, "concat", String.class);
+    _loadLocation(location);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+  }
+
+  private void _throwErrorWithInt(String msg, SourceLocation location) {
+    int intSlot = stack.allocateSlot(INT);
+    _storeLocal(intSlot);
+    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+    mv.visitInsn(DUP);
+    loadConst(msg);
+    loadLocal(intSlot);
+    invokeMethod(Integer.class, "toString", int.class);
+    invokeMethod(String.class, "concat", String.class);
+    popType();
+    _loadLocation(location);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+    stack.freeSlot(intSlot);
+  }
+
+  /**
+   * Emit code for a try/catch statement.
+   * We use the checkStacksMatch flag to determine whether the stacks need to match after both the try
+   * and catch blocks. Usually they have to be the same or the JVM will complain during class validation
+   * but if the catch block always throws an exception (for example) then the two do not need to be the
+   * same.
+   *
+   * @param exceptionClass   the class to catch
+   * @param checkStacksMatch true if we should validate stacks are the same for both try and catch blocks
+   * @param tryBlock         Runnable that emits code for the try block
+   * @param catchBlock       Runnable that emits code for the catch block
+   */
+  private void tryCatch(Class exceptionClass, boolean checkStacksMatch, Runnable tryBlock, Runnable catchBlock) {
     // We need to check for any values that are on the stack at the point that the try/catch
     // is to be used since the JVM will discard these values if an exception is thrown and
     // will leave just the exception on the stack at the point the exception is caught.
     // If we have values on the stack we save them in temp locations and then put them back
     // onto the stack for the try block to use. After the catch we also restore them so that
     // code in the catch block has the same stack as the code in the try block.
-    stack.convertStackToLocals();
+    if (checkStacksMatch) {
+      // If stacks need to match then we need to make sure that we preserve the stack in locals
+      // so we can restore after the catch
+      stack.convertStackToLocals();
+    }
 
     // If we were in a try/catch then terminate previous one (we will reinstate later)
     if (tryCatches.size() > 0) {
@@ -3395,14 +3603,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // meet, irrespective of which path was chosen.
     // We save the type stack we have after the try block and restore the stack ready for the
     // catch block.
-    mv.visitInsn(POP);           // Don't need the exception
     stack = preTryState;
+    push(exceptionClass);
     catchBlock.run();
     mv.visitLabel(after);
 
     // Validate that the two stacks are the same
-    check(stack.stacksEqual(postTryState), "Stack after try does not match stack after catch: tryStack=" + postTryState + ", catchStack=" + stack);
-    stack.makeSameAs(postTryState, 0);   // Make sure maxIndex is tracked properly
+    if (checkStacksMatch) {
+      check(stack.stacksEqual(postTryState), "Stack after try does not match stack after catch:\n  tryStack=" + postTryState + "\n  catchStack=" + stack);
+      stack.makeSameAs(postTryState, 0);   // Make sure maxIndex is tracked properly
+    }
+    else {
+      // Use the post try block stack if they don't need to match
+      stack = postTryState;
+    }
   }
 
   /**
@@ -3946,7 +4160,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         default:           methodName = "getValue";          break;
       }
       invokeMethod(HeapLocal.class, methodName);
-      if (varDecl.type.is(INSTANCE)) {
+      if (varDecl.type.is(INSTANCE,ARRAY)) {
         checkCast(varDecl.type);
       }
       return;
@@ -4143,8 +4357,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadLocal(parentVar);
     swap();
     tryCatch(IllegalArgumentException.class,
-             () -> invokeMethod(Field.class, "set", Object.class, Object.class),
+             true, () -> invokeMethod(Field.class, "set", Object.class, Object.class),
              () -> {
+               popVal();
                throwError("Cannot set field to " + (isMap ? "Map" : "List") + ": field type incomptible", expr.right.location);
                popType(3);  // Pop types for field, parent, value
              });
@@ -4221,6 +4436,144 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(accessOperator.getSource());
     loadConst(accessOperator.getOffset());
     invokeMethod(RuntimeUtils.class, "loadMethodOrField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+  }
+
+  /**
+   * Load array element or string char
+   * <p>Expect on stack: ...,parent
+   * @param expr the binary expression for parent[index]
+   */
+  private void loadArrElemOrStringChar(Expr.Binary expr) {
+    JactlType parentType = expr.left.type;
+    convertToInt(expr.right.location);
+    expect(2);        // in case parent has been stored in a local due to async in index expression
+
+    // Check for negative value (offset from length)
+    Label NOT_NEGATIVE = new Label();
+    _dupVal();
+    mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
+    mv.visitInsn(SWAP);
+    mv.visitInsn(DUP_X1);
+    if (parentType.is(STRING)) {
+      push(STRING);
+      invokeMethod(String.class, "length");
+      popType();
+    }
+    else {
+      mv.visitInsn(ARRAYLENGTH);
+    }
+    mv.visitInsn(IADD);
+NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
+
+    tryCatch(IndexOutOfBoundsException.class, false,
+             () -> {
+               if (parentType.is(STRING)) {
+                 invokeMethod(String.class, "charAt", int.class);
+                 invokeMethod(String.class, "valueOf", char.class);
+               }
+               else {
+                 switch (parentType.getArrayType().getType()) {
+                   case BOOLEAN:  mv.visitInsn(BALOAD); break;
+                   case INT:      mv.visitInsn(IALOAD); break;
+                   case LONG:     mv.visitInsn(LALOAD); break;
+                   case DOUBLE:   mv.visitInsn(DALOAD); break;
+                   default:       mv.visitInsn(AALOAD); break;
+                 }
+                 popType(2);
+                 push(parentType.getArrayType());
+               }
+             },
+             () -> {
+               invokeMethod(Throwable.class, "getMessage");
+               _throwErrorWithString("Index out of bounds: ", expr.right.location);
+             });
+  }
+
+  /**
+   * Store value into given index of an array
+   * <p>Expect to have on stack: ... value
+   */
+  private void storeArrayValue(Expr.FieldAssign expr) {
+    if (!expr.accessType.is(LEFT_SQUARE)) {
+      throw new CompileError("Field access not supported for Array object", expr.accessType);
+    }
+    JactlType arrayType = expr.parent.type.getArrayType();
+    convertTo(arrayType, expr.expr, true, expr.expr.location);
+    compile(expr.parent);
+    if (couldBeNull(expr.parent)) {
+      throwIfNull("Null value for array", expr.parent.location);
+    }
+    int parentVar = stack.allocateSlot(expr.parent.type);
+    storeLocal(parentVar);
+    if (expr.field instanceof Expr.Literal && expr.field.type.isNumeric()) {
+      Number value = (Number)((Expr.Literal) expr.field).value.getValue();
+      int    index = value.intValue();
+      tryCatch(ArrayIndexOutOfBoundsException.class, false,
+               () -> {
+                 if (expr.isResultUsed) {
+                   dupVal();
+                 }
+                 loadLocal(parentVar);
+                 swap();
+                 loadConst(index);
+                 if (index < 0) {
+                   _loadLocal(parentVar);
+                   mv.visitInsn(ARRAYLENGTH);
+                   mv.visitInsn(IADD);
+                 }
+                 swap();
+                 Utils.storeArrayElement(mv, peek());
+                 popType(3);
+               },
+               () -> {
+                 loadConst(index);
+                 _throwErrorWithInt("Array index out of bounds: ", expr.field.location);
+               });
+    }
+    else {
+      compile(expr.field);
+      int indexVar  = stack.allocateSlot(INT);
+      if (expr.field.type.is(ANY)) {
+        throwIfNotNumber("Array index must be numeric not ", expr.field.location);
+        mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
+      }
+      unbox();
+      switch (expr.field.type.getType()) {
+        case DECIMAL:
+        case ANY:      invokeMethod(Number.class, "intValue");  break;
+        case LONG:     mv.visitInsn(L2I);                                   break;
+        case DOUBLE:   mv.visitInsn(D2I);                                   break;
+      }
+      setStackType(INT);
+      _dupVal();
+      Label NOT_NEGATIVE = new Label();
+      mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
+      _loadLocal(parentVar);
+      mv.visitInsn(ARRAYLENGTH);
+      mv.visitInsn(IADD);
+NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
+      tryCatch(ArrayIndexOutOfBoundsException.class, false,
+               () -> {
+                 // Have value,index on stack
+                 swap();
+                 int valueSlot = stack.allocateSlot(peek());
+                 storeLocal(valueSlot);
+                 loadLocal(parentVar);
+                 swap();
+                 loadLocal(valueSlot);
+                 Utils.storeArrayElement(mv, peek());
+                 popType(3);
+                 if (expr.isResultUsed) {
+                   loadLocal(valueSlot);
+                 }
+                 stack.freeSlot(valueSlot);
+               },
+               () -> {
+                 invokeMethod(Throwable.class, "getMessage");
+                 _throwErrorWithString("Array index out of bounds: ", expr.field.location);
+               });
+    }
+    stack.freeSlot(parentVar);
   }
 
   /**

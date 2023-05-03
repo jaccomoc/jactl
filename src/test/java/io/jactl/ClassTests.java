@@ -1259,7 +1259,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void cast() {
-    testError("class X {int i}; int i = 3; X x = (X)i", "cannot cast");
+    testError("class X {int i}; int i = 3; X x = (X)i", "cannot convert");
     testError("class X {int i}; def i = 3; X x = (X)i", "cannot be cast to");
     test("class X {int i}; def a = [i:3]; X x = (X)a; x.i", 3);  // ???
     test("class X {int i}; Map a = [i:3]; X x = (X)a; x.i", 3);  // ???
@@ -1268,7 +1268,7 @@ public class ClassTests extends BaseTest {
     test("class X { class Y { int i = 3 }; def f(){ def y = new Y(); ((Y)y).i }}; def x = new X(); x.f()", 3);
     test("class X { class Y { int i = 3 }; def f(){ def y = new Y(); ((Y)y).i }}; def x = new X(); ((X)x).f()", 3);
     test("class X { class Y extends X { int i = 3 }; def f(){ def y = new Y(); ((Y)y).i }}; def x = new X.Y(); ((X)x).f()", 3);
-    testError("class X {}; class Y {}; X x = new X(); Y y = (Y)x", "cannot cast");
+    testError("class X {}; class Y {}; X x = new X(); Y y = (Y)x", "cannot convert");
     test("class X {def f(){2}}; class Y extends X {def f(){3}}; Y y = new Y(); X x = (X)y; x.f()", 3);
     test("class X {}; class Y extends X {def f(){3}}; X x = new Y(); Y y = (Y)x; y.f()", 3);
     testError("class X {}; class Y {}; def x = new X(); def y = (Y)x", "cannot be cast to");
@@ -1448,4 +1448,20 @@ public class ClassTests extends BaseTest {
     }
     test("class X{ int i = sleep(0,3) }; (null?:new X())?.i = 5", 5);
   }
+
+  @Test public void arrays() {
+    test("class X{ int i = 3 }; X[] x = new X[10]; x[0]", null);
+    test("class X{ int i = 3 }; X[] x = new X[10]; x[0] = new X(i:4); x[0].i", 4);
+    test("class X{ int i = 3; int[] a = new int[10] }; new X().a[-1]", 0);
+    test("class X{ int i = 3; X[] a = new X[10] }; new X().a[-1]", null);
+    test("class X{ int i = 3; X[][] a = new X[10][] }; new X().a[-1]", null);
+    test("class X{ int i = 3; X[][] a = new X[10][] }; def x = new X(); x.a[0] = new X[1]; x.a[0][0] = new X(i:4,a:null); x.a[0][0].i", 4);
+  }
+
+  @Test public void autoCreateArrayFields() {
+    useAsyncDecorator = asyncAutoCreate();
+    test("class X { Y y = null }; class Y { Z[] z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z = new Z[1]; x.y.z[0]", null);
+    testError("class X { Y y = null }; class Y { Z[] z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z[2].x.y.z[0].i = 4; x.y.z[2].x.y.z[0].i", "null parent");
+  }
+
 }

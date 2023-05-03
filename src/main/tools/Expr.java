@@ -508,7 +508,8 @@ class Expr {
    */
   class InvokeNew extends Expr {
     Token      token;
-    JactlType className;
+    JactlType  instanceType;
+    List<Expr> @dimensions = new ArrayList<>();
   }
 
   /**

@@ -158,9 +158,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  Void resolve(List<Stmt> stmts) {
-    if (stmts != null) {
-      stmts.forEach(this::resolve);
+  Void resolve(List<Expr> exprs) {
+    if (exprs != null) {
+      exprs.forEach(this::resolve);
     }
     return null;
   }
@@ -612,9 +612,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           expr.isFieldAccess = expr.left.type.is(INSTANCE) && expr.right instanceof Expr.Literal && !expr.type.is(FUNCTION);
         }
         // '[' and '?['
-        if (expr.operator.is(LEFT_SQUARE, QUESTION_SQUARE) && !expr.left.type.is(MAP, LIST, ITERATOR, STRING, INSTANCE)) {
+        if (expr.operator.is(LEFT_SQUARE, QUESTION_SQUARE) && !expr.left.type.is(MAP, LIST, ARRAY, ITERATOR, STRING, INSTANCE)) {
           error("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
         }
+      }
+
+      // For arrays, we don't currently support auto-creation
+      if (expr.left.type.is(ARRAY)) {
+        expr.createIfMissing = false;
       }
 
       // Since we now know we are doing a map/list lookup we know what parent type should
@@ -663,6 +668,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private JactlType getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
+    if (parent.type.is(ARRAY)) {
+      if (!accessOperator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
+        error("Array field access using '" + accessOperator.getChars() + "' not supported", accessOperator);
+      }
+      if (!(field.type.isNumeric() || field.type.is(ANY))) {
+        error("Array index must be numeric, not " + field.type, field.location);
+      }
+      return parent.type.getArrayType();
+    }
+
     String fieldName = null;
     if (field instanceof Expr.Literal) {
       Object fieldValue = ((Expr.Literal) field).value.getValue();
@@ -838,9 +853,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Throw error if bad cast
-    if (!expr.expr.type.isConvertibleTo(expr.type) && !expr.type.isConvertibleTo(expr.expr.type)) {
-      error("Cannot cast from " + expr.expr.type + " to " + expr.type, expr.location);
-    }
+    checkTypeConversion(expr.expr, expr.castType, true);
 
     // We have a cast so our type is the type we are casting to
     return expr.type;
@@ -901,10 +914,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     declare(expr);
 
     JactlType type = resolve(expr.initialiser);
-    if (type != null && !type.isConvertibleTo(expr.type)) {
-      error("Cannot convert initialiser of type " + type + " to type of variable " +
-                             expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
-    }
+//    if (type != null && !type.isConvertibleTo(expr.type)) {
+//      error("Cannot convert initialiser of type " + type + " to type of variable " +
+//                             expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
+//    }
+    checkTypeConversion(expr.initialiser, expr.type, false);
 
     define(expr.name, expr);
     return expr.type;
@@ -1055,9 +1069,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Cannot assign to function", expr.identifierExpr.location);
     }
     resolve(expr.expr);
-    if (!expr.expr.type.isConvertibleTo(expr.type)) {
-      error("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
-    }
+    checkTypeConversion(expr.expr, expr.type, false);
     if (expr.operator.is(QUESTION_EQUAL)) {
       // If using ?= have to allow for null being result
       expr.type = ANY;
@@ -1066,6 +1078,29 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.identifierExpr.varDecl.isFinal = false;
 
     return expr.type;
+  }
+
+  /**
+   * Check if we can convert from 'from' type to 'to' type and generate an error if not.
+   * <p>We allow toAndFrom param to dictate whether we check for 'to' being able to
+   * be converted to 'from' type. This is because when casting we can do (Y)x where
+   * Y extends X and x is instance of X (some subclass) and the cast can downcast
+   * and we won't know until runtime whether it succeeds, so at compile time we have to
+   * allow it.</p>
+   * @param from      the from expr
+   * @param to        the type to convert to
+   * @param toAndFrom whether to try converting both ways
+   */
+  private void checkTypeConversion(Expr from, JactlType to, boolean toAndFrom) {
+    if (from == null) {
+      return;
+    }
+    if (!from.type.isConvertibleTo(to) && !(toAndFrom && from.type.isAssignableFrom(to))) {
+      error("Cannot convert from " + from.type + " to " + to, from.location);
+    }
+    if (to.is(BOOLEAN) && from instanceof Expr.RegexMatch && from.type.is(STRING)) {
+      error("Regex string used in boolean context", from.location);
+    }
   }
 
   @Override public JactlType visitVarOpAssign(Expr.VarOpAssign expr) {
@@ -1083,7 +1118,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(expr.expr);
 
     if (!expr.expr.type.isConvertibleTo(expr.type)) {
-      error("Cannot convert from type of right hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
+      error("Cannot convert from type of right-hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
     return expr.type;
   }
@@ -1130,7 +1165,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (dottedAcess && !parent.type.is(ANY, MAP, INSTANCE)) {
       error("Invalid object type (" + parent.type + ") for field access", accessType);
     }
-    if (!dottedAcess && !parent.type.is(ANY, LIST, MAP, INSTANCE)) {
+    if (!dottedAcess && !parent.type.is(ANY, LIST, ARRAY, MAP, INSTANCE)) {
       if (parent.type.is(STRING)) {
         error("Cannot assign to element of String", accessType);
       }
@@ -1159,6 +1194,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign)expr).assignmentOperator.is(QUESTION_EQUAL)) {
       return expr.type = ANY;
+    }
+
+    if (parent.type.is(LIST,ARRAY) && !field.type.is(ANY) && !field.type.isNumeric()) {
+      throw new CompileError("Non-numeric value for index for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
     }
 
     // Map, List, or we don't know...
@@ -1333,9 +1372,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitInvokeNew(Expr.InvokeNew expr) {
-    resolve(expr.className);
+    resolve(expr.instanceType);
+    resolve(expr.dimensions);
     expr.couldBeNull = false;
-    return expr.type = expr.className;
+    return expr.type = expr.instanceType;
   }
 
   @Override public JactlType visitClassPath(Expr.ClassPath expr) {
@@ -1392,9 +1432,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private void resolve(JactlType type) {
     if (type == null)                      { return; }
-    if (!type.is(INSTANCE, CLASS))          { return; }
-    if (type.getClassDescriptor() != null) { return; }
-    type.setClassDescriptor(lookupClass(type.getClassName()));
+    if (type.is(ARRAY)) {
+      resolve(type.getArrayType());
+      return;
+    }
+    if (type.is(INSTANCE, CLASS) && type.getClassDescriptor() == null) {
+      type.setClassDescriptor(lookupClass(type.getClassName()));
+    }
   }
 
   ////////////////////////////////////////////
@@ -2495,10 +2539,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                               : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, Map.class, "containsKey",
                                                                                         List.of(Object.class), List.of(argMapIdent, fieldNameLiteral)),
                                                                  new Token(QUESTION, fieldToken),
-                                                                 new Expr.InvokeUtility(fieldToken, Map.class, "remove",
-                                                                                        List.of(Object.class), List.of(argMapIdent, fieldNameLiteral)),
+                                                                 new Expr.Cast(fieldToken, varDecl.type,
+                                                                               new Expr.InvokeUtility(fieldToken, Map.class, "remove",
+                                                                                                      List.of(Object.class), List.of(argMapIdent, fieldNameLiteral))),
                                                                  new Token(COLON, fieldToken),
-                                                                 varDecl.initialiser);
+                                                                 new Expr.Cast(fieldToken, varDecl.type, varDecl.initialiser));
       var assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
                                         new Token(DOT, fieldToken),
                                         new Expr.Literal(fieldToken),

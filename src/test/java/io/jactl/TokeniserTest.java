@@ -62,6 +62,7 @@ class TokeniserTest {
     doTest.accept("|", TokenType.PIPE);
     doTest.accept(":", TokenType.COLON);
     doTest.accept(";", TokenType.SEMICOLON);
+    doTest.accept("_", TokenType.UNDERSCORE);
     doTest.accept("->", TokenType.ARROW);
     doTest.accept("!=", TokenType.BANG_EQUAL);
     doTest.accept("==", TokenType.EQUAL_EQUAL);
@@ -110,6 +111,7 @@ class TokeniserTest {
     doTest.accept("double", TokenType.DOUBLE);
     doTest.accept("Decimal", TokenType.DECIMAL);
     doTest.accept("String", TokenType.STRING);
+    doTest.accept("Object", TokenType.OBJECT);
     doTest.accept("Map", TokenType.MAP);
     doTest.accept("List", TokenType.LIST);
     doTest.accept("void", TokenType.VOID);
@@ -1105,5 +1107,16 @@ class TokeniserTest {
     token = tokeniser.next();
     Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
     assertEquals("g", token.getStringValue());
+  }
+
+  @Test public void numberOverflow() {
+    Tokeniser tokeniser = new Tokeniser("12345123451234512345L");
+    try {
+      Token token = tokeniser.next();
+      fail("Expected numeric overflow exception");
+    }
+    catch (JactlError e) {
+      assertTrue(e.getMessage().contains("too large"));
+    }
   }
 }

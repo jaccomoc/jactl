@@ -249,8 +249,9 @@ public class Tokeniser {
                                              .filter(symbol -> symbolMatches(symbol, remaining))
                                              .findFirst();
 
-    // If we did not find matching symbol then we must have an identifier (or an unknown token character)
-    if (symbolOptional.isEmpty()) {
+    // If we did not find matching symbol or we have an underscore then we must have an identifier
+    // (or an unknown token character)
+    if (symbolOptional.isEmpty() || symbolOptional.get().type.is(UNDERSCORE)) {
       return parseIdentifier(token, remaining);
     }
 
@@ -472,12 +473,13 @@ public class Tokeniser {
       }
     }
 
+    TokenType tokenType = IDENTIFIER;
     if (startChar == '_' && i == 1) {
-      throw new CompileError("Invalid value for identifier", token);
+      tokenType = UNDERSCORE;
     }
 
     advance(i);
-    return token.setType(IDENTIFIER)
+    return token.setType(tokenType)
                 .setLength(i);
   }
 
@@ -549,7 +551,11 @@ public class Tokeniser {
     switch (type) {
       case INTEGER_CONST: {
         try {
-          token.setValue(Integer.parseUnsignedInt(value, base));
+          int num = Integer.parseUnsignedInt(value, base);
+          if (num < 0 && base == 10) {
+            throw new CompileError("Number too large for integer constant", token);
+          }
+          token.setValue(num);
         }
         catch (NumberFormatException e) {
           throw new CompileError("Number too large for integer constant", token);
@@ -558,7 +564,11 @@ public class Tokeniser {
       }
       case LONG_CONST: {
         try {
-          token.setValue(Long.parseUnsignedLong(value, base));
+          long num = Long.parseUnsignedLong(value, base);
+          if (num < 0 && base == 10) {
+            throw new CompileError("Number too large for long constant", token);
+          }
+          token.setValue(num);
         }
         catch (NumberFormatException e) {
           throw new CompileError("Number too large for long constant", token);

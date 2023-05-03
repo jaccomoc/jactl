@@ -3359,7 +3359,7 @@ If you then try to assign something else to the variable that is not a Point you
 > point = new Point(5,5)
 [x:5, y:5]
 > point = 'abc'
-Cannot convert from type of right hand side (String) to Instance<Point> @ line 1, column 7
+Cannot convert from type of right-hand side (String) to Instance<Point> @ line 1, column 7
 point = 'abc'
         ^
 ```

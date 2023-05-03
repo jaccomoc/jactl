@@ -79,22 +79,7 @@ public class LocalTypes {
   }
 
   public void push(Class clss) {
-    if (Void.TYPE.equals(clss))          { /* void */                  return; }
-    if (Boolean.TYPE.equals(clss))       { push(BOOLEAN);              return; }
-    if (Boolean.class.equals(clss))      { push(BOXED_BOOLEAN);        return; }
-    if (Integer.TYPE.equals(clss))       { push(INT);                  return; }
-    if (Integer.class.equals(clss))      { push(BOXED_INT);            return; }
-    if (Long.TYPE.equals(clss))          { push(LONG);                 return; }
-    if (Long.class.equals(clss))         { push(BOXED_LONG);           return; }
-    if (Double.TYPE.equals(clss))        { push(DOUBLE);               return; }
-    if (Double.class.equals(clss))       { push(BOXED_DOUBLE);         return; }
-    if (BigDecimal.class.equals(clss))   { push(DECIMAL);              return; }
-    if (String.class.equals(clss))       { push(STRING);               return; }
-    if (Map.class.equals(clss))          { push(MAP);                  return; }
-    if (List.class.equals(clss))         { push(LIST);                 return; }
-    if (MethodHandle.class.equals(clss)) { push(FUNCTION);             return; }
-    if (RegexMatcher.class.equals(clss)) { push(MATCHER);              return; }
-    push(ANY);
+    push(JactlType.typeFromClass(clss));
   }
 
   public void push(JactlType type) {

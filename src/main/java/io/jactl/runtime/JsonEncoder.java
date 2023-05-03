@@ -145,6 +145,10 @@ public class JsonEncoder {
   }
 
   public void writeString(String str, boolean quotes) {
+    if (str == null) {
+      writeNull();
+      return;
+    }
     ensureCapacity(str.length() + 13);
     int startOffset = offset;
     if (quotes) {
@@ -281,10 +285,22 @@ public class JsonEncoder {
   }
 
   public void writeDecimal(BigDecimal n) {
+    if (n == null) {
+      writeNull();
+      return;
+    }
     writeString(((BigDecimal) n).toPlainString(), false);
   }
 
   public void writeDouble(double n) {
     writeString(Double.toString(n), false);
+  }
+
+  public void writeNull() {
+    ensureCapacity(4);
+    bytes[offset++] = 'n';
+    bytes[offset++] = 'u';
+    bytes[offset++] = 'l';
+    bytes[offset++] = 'l';
   }
 }

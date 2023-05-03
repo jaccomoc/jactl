@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class BuiltinFunctionTests extends BaseTest {
 
@@ -742,6 +743,30 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = 'abcde'; x.map{it+it}.join()", "aabbccddee");
     test("def x = 'abcde'; def f = x.map; f{it+it}.join()", "aabbccddee");
     testError("[1,2,3].map{ -> }", "too many arguments");
+    test("[1,2,3].map{ int i -> i * i }", List.of(1,4,9));
+    test("int[] a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2,4,6));
+    test("long[] a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2L,4L,6L));
+    test("double[] a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2.0,4.0,6.0));
+    test("Decimal[] a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
+    test("String[] a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", List.of("11","22","33"));
+    test("var a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2,4,6));
+    test("var a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2L,4L,6L));
+    test("var a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2.0,4.0,6.0));
+    test("var a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
+    test("var a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", List.of("11","22","33"));
+    test("def a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2,4,6));
+    test("def a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2L,4L,6L));
+    test("def a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2.0,4.0,6.0));
+    test("def a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
+    test("def a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", List.of("11","22","33"));
+    test("Object a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2,4,6));
+    test("Object a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2L,4L,6L));
+    test("Object a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(2.0,4.0,6.0));
+    test("Object a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", List.of(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
+    test("Object a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", List.of("11","22","33"));
+    test("int[][] a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", List.of(4,8,12));
+    test("def a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", List.of(4,8,12));
+    test("var a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", List.of(4,8,12));
   }
 
   @Test public void reverse() {
@@ -1362,8 +1387,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1,2,3].toJson()", "[1,2,3]");
     test("[a:1,b:2,c:[1,2,3]].toJson()", "{\"a\":1,\"b\":2,\"c\":[1,2,3]}");
     test("class X { int i = 1 }; new X().toJson()", "{\"i\":1}");
+    test("class X { String s = null }; new X().toJson()", "{\"s\":null}");
     test("class X { int i = 1, j = 2; def m = [a:1] }; new X().toJson()", "{\"i\":1,\"j\":2,\"m\":{\"a\":1}}");
     test("class X { int i = 1; long j = 2; double d = 1.23D; var b = 1.2345; var s = 'abc'; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":\"abc\",\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
+    test("class X { int i = 1; long j = 2; double d = 1.23D; Decimal b = 1.2345; String s = null; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":null,\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
     test("class X { List l = []; int i = 1; long j = 2; double d = 1.23D; var b = 1.2345; var s = 'abc'; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"l\":[],\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":\"abc\",\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
     test("class X { int i = 1, j = 2; def m = [a:1] }; [x:new X()].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1}}}");
     test("class X { int i = 1, j = 2; def m = [a:1]; X x = null }; [x:new X(x:new X())].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1},\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1},\"x\":null}}}");
@@ -1406,6 +1433,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("'[null]'.fromJson()", new ArrayList() {{ add(null); }});
     test("'[\"a\",\"b\",\"c\"]'.fromJson()", List.of("a", "b", "c"));
     test("'{\"a\":[1,2,3],\"b\":2,\"c\":{\"x\":1234}}'.fromJson()", Map.of("a", List.of(1, 2, 3), "b", 2, "c", Map.of("x", 1234)));
+    test("'{\"a\":[1,[4,5,6,[2]],3],\"b\":2,\"c\":{\"x\":1234}}'.fromJson()", Map.of("a", List.of(1, List.of(4,5,6,List.of(2)), 3), "b", 2, "c", Map.of("x", 1234)));
     test("' 1'.fromJson()", 1);
     test("'1 '.fromJson()", 1);
     testError("' -'.fromJson()", "end of json reading negative number");
@@ -1450,28 +1478,96 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("class X { int i; X x }; X.fromJson('{\"i\":3}').i", "missing field(s): x");
     test("class X { int i; Y yval }; class Y { String s }; X.fromJson('{\"i\":3,\"yval\":{\"s\":\"abc\"}}').yval.s", "abc");
     test("class X { int i; long j; String s; double d; Decimal dd; boolean b1; boolean b2; Map m; List l }; X.fromJson('''{'l':[1,2,3],'m':{'a':123,'b':4},'b2':false,'b1':true,'dd':1.234,'d':3.456,'s':'abc','j':123456789123456789,'i':-1234}''' =~ s/'/\"/rg).toString()", "[i:-1234, j:123456789123456789, s:'abc', d:3.456, dd:1.234, b1:true, b2:false, m:[a:123, b:4], l:[1, 2, 3]]");
-    testError( "class X { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
-          "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i32':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
-          "missing field(s): i36,i40");
-    testError( "class X { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
-          "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
-          "missing field(s): i32");
+    testError("class X { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
+              "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i32':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
+              "missing field(s): i36,i40");
+    testError("class X { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
+              "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
+              "missing field(s): i32");
     test("class X { int i; Y y }; class Y { Map m }; X.fromJson('{\"i\":3,\"y\":{\"m\":null}}').i", 3);
     test("class X { int i; Y y }; class Y { List a }; X.fromJson('{\"i\":3,\"y\":{\"a\":null}}').i", 3);
     test("class X { int i; X x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
     test("class X { int i; String x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
+    test("class X { int i; String x }; X.fromJson('{\"i\":3,\"x\":null}').x", null);
     test("class X { int i; Decimal x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
+    test("class X { int i; Decimal x }; X.fromJson('{\"i\":3,\"x\":null}').x", null);
     testError("class X { int i; int x }; X.fromJson('{\"i\":3,\"x\":null}').i", "integer value cannot be null");
     testError("class X { int i; long x }; X.fromJson('{\"i\":3,\"x\":null}').i", "long value cannot be null");
     testError("class X { int i; double x }; X.fromJson('{\"i\":3,\"x\":null}').i", "double value cannot be null");
     test("class X { int i; X x = null }; X.fromJson('{\"i\":3}').i", 3);
     test("class X { int i; }; X.fromJson('null')", null);
     test("class X { int i; X x = sleep(0,null) }; X.fromJson('{\"i\":3}').i", 3);
+    test("class X { int i; String x }; def f = X.fromJson; f('{\"i\":3,\"x\":null}').i", 3);
+
+    // Test with fields that map to same hashCode:
+    test("class X { int Aa; String BB }; X.fromJson('{\"Aa\":3,\"BB\":null}').Aa", 3);
+    test("class X { int Aa; String BB }; def x = X.fromJson('{\"Aa\":3,\"BB\":\"xxx\"}'); x.BB + x.Aa", "xxx3");
   }
 
-  @Test public void classFromFuncAsValue() {
+  @Test public void arrayFieldsToJson() {
+    test("class X { int[] a = new int[4] }; new X().toJson()", "{\"a\":[0,0,0,0]}");
+    test("class X { int[] a = new int[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
+    test("class X { long[] a = new long[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
+    test("class X { int[][] a = new int[4][2] }; def x = new X(); x.a[0][1] = 1; x.a[3][0] = 4; x.toJson()", "{\"a\":[[0,1],[0,0],[0,0],[4,0]]}");
+    test("class X { int[][] a = new int[4][] }; def x = new X(); x.a[0] = new int[3]; x.a[0][1] = 1; x.a[3] = new int[0]; x.a[1] = new int[1]; x.a[1][0] = 4; x.toJson()", "{\"a\":[[0,1,0],[4],null,[]]}");
+    test("class X { long[] a = new long[4] }; new X().toJson()", "{\"a\":[0,0,0,0]}");
+    test("class X { long[] a = new long[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
+    test("class X { long[] a = new long[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
+    test("class X { long[][] a = new long[4][2] }; def x = new X(); x.a[0][1] = 1; x.a[3][0] = 4; x.toJson()", "{\"a\":[[0,1],[0,0],[0,0],[4,0]]}");
+    test("class X { long[][] a = new long[4][] }; def x = new X(); x.a[0] = new long[3]; x.a[0][1] = 1; x.a[3] = new long[0]; x.a[1] = new long[1]; x.a[1][0] = 4; x.toJson()", "{\"a\":[[0,1,0],[4],null,[]]}");
+    test("class X { double[] a = new double[4] }; new X().toJson()", "{\"a\":[0.0,0.0,0.0,0.0]}");
+    test("class X { double[] a = new double[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1.0,0.0,0.0,4.0]}");
+    test("class X { double[] a = new double[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1.0,0.0,0.0,4.0]}");
+    test("class X { double[][] a = new double[4][2] }; def x = new X(); x.a[0][1] = 1; x.a[3][0] = 4; x.toJson()", "{\"a\":[[0.0,1.0],[0.0,0.0],[0.0,0.0],[4.0,0.0]]}");
+    test("class X { double[][] a = new double[4][] }; def x = new X(); x.a[0] = new double[3]; x.a[0][1] = 1; x.a[3] = new double[0]; x.a[1] = new double[1]; x.a[1][0] = 4; x.toJson()", "{\"a\":[[0.0,1.0,0.0],[4.0],null,[]]}");
+    test("class X { Decimal[] a = new Decimal[4] }; new X().toJson()", "{\"a\":[null,null,null,null]}");
+    test("class X { Decimal[] a = new Decimal[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,null,null,4]}");
+    test("class X { Decimal[] a = new Decimal[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,null,null,4]}");
+    test("class X { Decimal[][] a = new Decimal[4][2] }; def x = new X(); x.a[0][1] = 1; x.a[3][0] = 4; x.toJson()", "{\"a\":[[null,1],[null,null],[null,null],[4,null]]}");
+    test("class X { Decimal[][] a = new Decimal[4][] }; def x = new X(); x.a[0] = new Decimal[3]; x.a[0][1] = 1; x.a[3] = new Decimal[0]; x.a[1] = new Decimal[1]; x.a[1][0] = 4; x.toJson()", "{\"a\":[[null,1,null],[4],null,[]]}");
+    test("class X { String[] a = new String[4] }; new X().toJson()", "{\"a\":[null,null,null,null]}");
+    test("class X { String[] a = new String[4] }; def x = new X(); x.a[0] = \"123\"; x.a[3] = \"abc\"; x.toJson()", "{\"a\":[\"123\",null,null,\"abc\"]}");
+    test("class X { String[] a = new String[4] }; def x = new X(); x.a[0] = \"123\"; x.a[3] = \"abc\"; x.toJson()", "{\"a\":[\"123\",null,null,\"abc\"]}");
+    test("class X { String[][] a = new String[4][2] }; def x = new X(); x.a[0][1] = \"123\"; x.a[3][0] = \"abc\"; x.toJson()", "{\"a\":[[null,\"123\"],[null,null],[null,null],[\"abc\",null]]}");
+    test("class X { String[][] a = new String[4][] }; def x = new X(); x.a[0] = new String[3]; x.a[0][1] = \"123\"; x.a[3] = new String[0]; x.a[1] = new String[1]; x.a[1][0] = \"abc\"; x.toJson()", "{\"a\":[[null,\"123\",null],[\"abc\"],null,[]]}");
+    test("class X { Object[] a = new Object[4] }; new X().toJson()", "{\"a\":[null,null,null,null]}");
+    test("class X { Object[] a = new Object[4] }; def x = new X(); x.a[0] = \"123\"; x.a[3] = \"abc\"; x.toJson()", "{\"a\":[\"123\",null,null,\"abc\"]}");
+    test("class X { Object[] a = new Object[4] }; def x = new X(); x.a[0] = \"123\"; x.a[3] = \"abc\"; x.toJson()", "{\"a\":[\"123\",null,null,\"abc\"]}");
+    test("class X { Object[][] a = new Object[4][2] }; def x = new X(); x.a[0][1] = \"123\"; x.a[3][0] = \"abc\"; x.toJson()", "{\"a\":[[null,\"123\"],[null,null],[null,null],[\"abc\",null]]}");
+    test("class X { Object[][] a = new Object[4][] }; def x = new X(); x.a[0] = new Object[3]; x.a[0][1] = \"123\"; x.a[3] = new Object[0]; x.a[1] = new Object[1]; x.a[1][0] = \"abc\"; x.toJson()", "{\"a\":[[null,\"123\",null],[\"abc\"],null,[]]}");
+    test("class X { Object[][] a = new Object[4][] }; def x = new X(); x.a[0] = new String[3]; x.a[0][1] = \"123\"; x.a[3] = new Object[0]; x.a[1] = new String[1]; x.a[1][0] = \"abc\"; x.toJson()", "{\"a\":[[null,\"123\",null],[\"abc\"],null,[]]}");
+    test("class X { Object[][] a = new Object[4][] }; def x = new X(); x.a[0] = new String[3]; x.a[0][1] = \"123\"; x.a[3] = new Decimal[0]; x.a[1] = new Decimal[1]; x.a[1][0] = 1234512345123451234L; x.toJson()", "{\"a\":[[null,\"123\",null],[1234512345123451234],null,[]]}");
+  }
+
+  @Test public void arrayFieldsFromJson() {
     useAsyncDecorator = false;
-    test("class X { int i; String x }; def f = X.fromJson; f('{\"i\":3,\"x\":null}').i", 3);
+    test("class X { boolean[] a }; X.fromJson('{\"a\":[false,true,true]}').a", new boolean[]{false,true,true});
+    test("class X { int[] a }; X.fromJson('{\"a\":[1,2,3]}').a", new int[]{1,2,3});
+    test("class X { int[] a }; X.fromJson('{\"a\":[]}').a", new int[0]);
+    test("class X { int[] Aa,BB }; X.fromJson('{\"BB\":[1,2,3],\"Aa\":[4,5,6]}').Aa", new int[]{4,5,6});
+    test("class X { int[] Aa,BB }; X.fromJson('{\"BB\":[1,2,3],\"Aa\":[4,5,6]}').BB", new int[]{1,2,3});
+    test("class X { int[] a }; X.fromJson('{\"a\":null}').a", null);
+    test("class X { long[] a }; X.fromJson('{\"a\":[1,2,3]}').a", new long[]{1,2,3});
+    test("class X { double[] a }; X.fromJson('{\"a\":[1,2,3]}').a", new double[]{1,2,3});
+    test("class X { Decimal[] a }; X.fromJson('{\"a\":[1,2,3]}').a", new BigDecimal[]{new BigDecimal("1"),new BigDecimal("2"),new BigDecimal("3")});
+    test("class X { String[] a }; X.fromJson('{\"a\":[\"1\",\"2\"]}').a", new String[]{"1","2"});
+    test("class X { Object[] a }; X.fromJson('{\"a\":[\"1\",\"2\"]}').a", new Object[]{"1","2"});
+    test("class X { Object[] a }; X.fromJson('{\"a\":[1,\"2\"]}').a", new Object[]{1,"2"});
+    test("class X { int[] a }; X.fromJson('{\"a\":[]}').a", new int[0]);
+    test("class X { int[][] a }; X.fromJson('{\"a\":[[1],[2,3],[]]}').a.toString()", "[[1], [2, 3], []]");
+    testError("class X { int[] a }; X.fromJson('{\"a\":[1,\"abc\",3]}').a", "invalid character");
+    testError("class X { boolean[] a }; X.fromJson('{\"a\":[0,1,2]}').a", "invalid json");
+    test("class X { String a }; class Y { X[] x }; def y = Y.fromJson('{\"x\":[{\"a\":\"1\"},{\"a\":\"2\"}]}'); y.x[0] instanceof X", true);
+    test("class X { String a }; class Y { X[] x }; def y = Y.fromJson('{\"x\":[{\"a\":\"1\"},{\"a\":\"2\"}]}'); y.toString()", "[x:[[a:'1'], [a:'2']]]");
+    test("class X { String a }; class Y { X[] x }; def y = Y.fromJson(' { \"x\" : [ { \"a\" : \"1\" } , { \"a\":\"2\" } ] } '); y.toString()", "[x:[[a:'1'], [a:'2']]]");
+  }
+
+  @Test public void instanceArrayToJson() {
+    //fail("not implemented");
+  }
+
+  @Test public void instanceArrayFromJson() {
+    //fail("not implemented");
   }
 
   @Test public void functionWithDefaults() {

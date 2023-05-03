@@ -66,7 +66,7 @@ public class JsonDecoder {
     }
   }
 
-  Object _decode() {
+  public Object _decode() {
     //char c = skipWhitespace();
 
     char c = offset < length ? json.charAt(offset++) : 0;
@@ -488,11 +488,15 @@ public class JsonDecoder {
 
   public BigDecimal getDecimal() {
     char c = nextChar();
-    Number num = decodeNumber(c);
-    if (num instanceof Long) {
-      return BigDecimal.valueOf((long)num);
+    if (c == 'n' && json.startsWith("ull", offset)) {
+      offset += 3;
+      return null;
     }
-    return (BigDecimal)num;
+    Number num = decodeNumber(c);
+    if (num instanceof BigDecimal) {
+      return (BigDecimal) num;
+    }
+    return BigDecimal.valueOf(num.longValue());
   }
 
   public Map getMap() {

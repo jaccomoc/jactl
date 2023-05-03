@@ -264,19 +264,27 @@ public class Utils {
       return STRING;
     }
     else
-    if (obj instanceof Class || obj instanceof JactlType) {
-      String internalName = obj instanceof Class ? Type.getInternalName((Class)obj)
-                                                 : ((JactlType)obj).getInternalName();
-      boolean isPrimive = obj instanceof Class ? ((Class)obj).isPrimitive()
-                                               : ((JactlType)obj).isPrimitive();
+    if (obj instanceof Class) {
+      Class   clss      = (Class) obj;
+      boolean isPrimive = clss.isPrimitive();
       if (isPrimive) {
-        if (obj instanceof Class) {
-          internalName = JactlType.typeFromClass((Class)obj).getInternalName();
-        }
+        String internalName = JactlType.typeFromClass(clss).boxed().getInternalName();
         mv.visitFieldInsn(GETSTATIC, internalName, "TYPE", "Ljava/lang/Class;");
       }
       else {
-        mv.visitLdcInsn(Type.getType("L" + internalName + ";"));
+        mv.visitLdcInsn(Type.getType(clss));
+      }
+      return ANY;
+    }
+    else
+    if (obj instanceof JactlType) {
+      JactlType type = (JactlType)obj;
+      if (type.isPrimitive()) {
+        String internalName = type.boxed().getInternalName();
+        mv.visitFieldInsn(GETSTATIC, internalName, "TYPE", "Ljava/lang/Class;");
+      }
+      else {
+        mv.visitLdcInsn(type.descriptorType());
       }
       return ANY;
     }
@@ -292,6 +300,39 @@ public class Utils {
     final var internalName = type.getInternalName();
     if (internalName != null) {
       mv.visitTypeInsn(CHECKCAST, internalName);
+    }
+  }
+
+  public static void newArray(MethodVisitor mv, JactlType type, int numDimensions) {
+    switch (type.getArrayType().getType()) {
+      case BOOLEAN:  mv.visitIntInsn(NEWARRAY, T_BOOLEAN);                         break;
+      case INT:      mv.visitIntInsn(NEWARRAY, T_INT);                             break;
+      case LONG:     mv.visitIntInsn(NEWARRAY, T_LONG);                            break;
+      case DOUBLE:   mv.visitIntInsn(NEWARRAY, T_DOUBLE);                          break;
+      case ARRAY:    mv.visitMultiANewArrayInsn(type.descriptor(), numDimensions); break;
+      default:
+        mv.visitTypeInsn(ANEWARRAY, type.getArrayType().getInternalName());
+        break;
+    }
+  }
+
+  public static void storeArrayElement(MethodVisitor mv, JactlType type) {
+    switch (type.getType()) {
+      case BOOLEAN:  mv.visitInsn(BASTORE); break;
+      case INT:      mv.visitInsn(IASTORE); break;
+      case LONG:     mv.visitInsn(LASTORE); break;
+      case DOUBLE:   mv.visitInsn(DASTORE); break;
+      default:       mv.visitInsn(AASTORE); break;
+    }
+  }
+
+  public static void loadArrayElement(MethodVisitor mv, JactlType type) {
+    switch (type.getType()) {
+      case BOOLEAN:  mv.visitInsn(BALOAD); break;
+      case INT:      mv.visitInsn(IALOAD); break;
+      case LONG:     mv.visitInsn(LALOAD); break;
+      case DOUBLE:   mv.visitInsn(DALOAD); break;
+      default:       mv.visitInsn(AALOAD); break;
     }
   }
 
@@ -451,6 +492,13 @@ public class Utils {
     var invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, args);
     invokeInit.couldBeNull = false;
     return invokeInit;
+  }
+
+  public static Expr createNewInstance(Token newToken, JactlType type, List<Expr> dimensions) {
+    var invokeNew = new Expr.InvokeNew(newToken, type);
+    invokeNew.dimensions  = dimensions;
+    invokeNew.couldBeNull = false;
+    return invokeNew;
   }
 
   public static Stmt.VarDecl createParam(Token name, JactlType type, Expr initialiser) {

@@ -481,6 +481,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
+    expr.dimensions.forEach(this::analyse);
+    freeLocals(expr.dimensions.size());
     return null;
   }
 

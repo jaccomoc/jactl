@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlType.ANY;
+import static io.jactl.JactlType.UNKNOWN;
 import static io.jactl.TokenType.*;
 
 /**
@@ -118,7 +119,7 @@ public class Parser {
 
   // = Stmt
 
-  private static final TokenType[] types = new TokenType[] { DEF, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST };
+  private static final TokenType[] types = new TokenType[] { DEF, OBJECT, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, OBJECT };
   private static final List<TokenType> typesAndVar = RuntimeUtils.concat(types, VAR);
 
   /**
@@ -392,14 +393,34 @@ public class Parser {
   }
 
   /**
-   *# type -&gt; "def" | "boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List"
-   *#         | className
+   * # type -&gt; "def" | "var" #         | ( ("boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" |
+   * "List" | "Object") ("[" "]") * ) #         | ( className ( "[" "]" ) * ) ;
+   *
+   * @param varAllowed       true if "var" is allowed in place of a type name
+   * @param ignoreArrays     true if we should ignore "[" after the type
+   * @param ignoreArrayError
    */
-  JactlType type(boolean varAllowed) {
+  JactlType type(boolean varAllowed, boolean ignoreArrays, boolean ignoreArrayError) {
+    JactlType type;
+    Token     typeToken = null;
     if (varAllowed ? matchAny(typesAndVar) : matchAny(types)) {
-      return JactlType.valueOf(previous().getType());
+      typeToken = previous();
+      type = JactlType.valueOf(typeToken.getType());
     }
-    return JactlType.createInstanceType(className());
+    else {
+      type = JactlType.createInstanceType(className());
+    }
+    // Allow arrays for everything but "def" and "var"
+    if (!ignoreArrayError && typeToken != null && typeToken.is(VAR,DEF) && peek().is(LEFT_SQUARE)) {
+      error("Unexpected '[' after " + typeToken.getChars());
+    }
+    if (!ignoreArrays) {
+      while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
+        expect(RIGHT_SQUARE);
+        type = JactlType.arrayOf(type);
+      }
+    }
+    return type;
   }
 
   private boolean isFunDecl(boolean inClassDecl) {
@@ -411,7 +432,7 @@ public class Parser {
         return true;           // "final" can only appear for function declarations
       }
       else {
-        type(false);
+        type(false, false, false);
       }
       if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeywordIgnoreEOL()) {
         return false;
@@ -428,7 +449,7 @@ public class Parser {
     boolean isStatic = inClassDecl && matchAny(STATIC);
     boolean isFinal  = inClassDecl && !isStatic && matchAny(FINAL);
     Token start = peek();
-    JactlType returnType = type(false);
+    JactlType returnType = type(false, false, false);
     Token      name       = expect(IDENTIFIER);
     expect(LEFT_PAREN);
     matchAny(EOL);
@@ -463,7 +484,7 @@ public class Parser {
       // Check for optional type. Default to "def".
       JactlType type = ANY;
       if (peek().is(typesAndVar)) {
-        type = type(true);
+        type = type(true, false, false);
       }
       if (!peek().is(IDENTIFIER)) {
         unexpected("Expected valid type or parameter name");
@@ -485,8 +506,8 @@ public class Parser {
   }
 
   private boolean isVarDecl() {
-    return lookahead(() -> matchAny(typesAndVar) || className() != null,
-                     () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER) || matchKeywordIgnoreEOL());
+    return lookahead(() -> type(true, false, true) != null,
+                     () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE) || matchKeywordIgnoreEOL());
   }
 
   /**
@@ -500,7 +521,7 @@ public class Parser {
   }
 
   private Stmt doVarDecl(boolean inClassDecl) {
-    JactlType type = type(true);
+    JactlType type = type(true, false, false);
     Stmt.Stmts stmts = new Stmt.Stmts();
     stmts.stmts.add(singleVarDecl(type, inClassDecl));
     while (matchAny(COMMA)) {
@@ -525,7 +546,7 @@ public class Parser {
       initialiser = parseExpression();
     }
 
-    if (type.is(JactlType.UNKNOWN)) {
+    if (type.is(UNKNOWN)) {
       if (initialiser == null) {
         unexpected("Initialiser expression required for 'var' declaration");
       }
@@ -898,7 +919,7 @@ public class Parser {
       Token operator = previous();
       if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF,AS)) {
         Token token = peek();
-        JactlType type = type(false);
+        JactlType type = type(false, false, false);
         expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
         continue;
       }
@@ -994,13 +1015,13 @@ public class Parser {
   private Expr unary(int precedenceLevel) {
     Expr expr;
     matchAny(EOL);
-    if (lookahead(() -> matchAny(LEFT_PAREN), () -> type(false) != null, () -> matchAny(RIGHT_PAREN))) {
+    if (lookahead(() -> matchAny(LEFT_PAREN), () -> type(false, false, false) != null, () -> matchAny(RIGHT_PAREN))) {
       // Type cast. Rather than create a separate operator for each type case we just use the
       // token for the type as the operator if we detect a type cast.
       expect(LEFT_PAREN);
       matchAny(EOL);
       Token typeToken = peek();
-      var castType = type(false);
+      var castType = type(false, false, false);
       matchAny(EOL);
       expect(RIGHT_PAREN);
       Expr unary = unary(precedenceLevel);
@@ -1059,14 +1080,39 @@ public class Parser {
   }
 
   /**
-   *# newInstance -&gt; "new" classPathOrIdentifier "(" arguments ")" ;
+   *# newInstance -&gt; "new" classPathOrIdentifier "(" arguments ")"
+   *#                | "new" type ("[" expression "]" ) ( "[" expression "]" ) * ( "[" "]" ) * ;
    */
   private Expr newInstance() {
     var token     = expect(NEW);
-    var className = JactlType.createInstanceType(className());
-    var leftParen = expect(LEFT_PAREN);
-    var args      = arguments();
-    return Utils.createNewInstance(token, className, leftParen, args);
+    var type      = type(true, true, false);   // get the type and ignore the square brackets for now
+    if (type.is(JactlType.INSTANCE)) {
+      if (matchAnyIgnoreEOL(LEFT_PAREN)) {
+        var leftParen = previous();
+        var args      = arguments();
+        return Utils.createNewInstance(token, type, leftParen, args);
+      }
+    }
+    peekExpect(LEFT_SQUARE);
+    boolean seenEmptyBrackets = false;
+    List<Expr> dimensions = new ArrayList<>();
+    while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
+      type = JactlType.arrayOf(type);
+      if (matchAnyIgnoreEOL(RIGHT_SQUARE)) {
+        if (dimensions.size() == 0) {
+          error("Need a size for array allocation");
+        }
+        seenEmptyBrackets = true;
+      }
+      else {
+        if (!seenEmptyBrackets) {
+          // Can't have dimensions after first []
+          dimensions.add(expression(true));
+        }
+        expect(RIGHT_SQUARE);
+      }
+    }
+    return Utils.createNewInstance(token, type, dimensions);
   }
 
   /**
@@ -2171,6 +2217,11 @@ public class Parser {
     if (matchAnyIgnoreEOL(types)) {
       return previous();
     }
+    expectError(types);
+    return null;
+  }
+
+  private void expectError(TokenType[] types) {
     if (types.length > 1) {
       unexpected("Expecting one of " +
                  Arrays.stream(types)
@@ -2182,11 +2233,18 @@ public class Parser {
       var expected = types[0].is(IDENTIFIER) ? "identifier" : "'" + types[0] + "'";
       unexpected("Expecting " + expected);
     }
-    return null;
   }
 
   private Token expect(List<TokenType> types) {
     return expect(types.toArray(TokenType[]::new));
+  }
+
+  private Token peekExpect(TokenType ...types) {
+    if (peek().is(types)) {
+      return peek();
+    }
+    expectError(types);
+    return null;
   }
 
   private void consumeUntil(TokenType... types) {
@@ -2296,7 +2354,7 @@ public class Parser {
       Expr.Binary binaryExpr = (Expr.Binary) callee;
       // Make sure we have a '.' or '.?' which means we might have a method call
       if (binaryExpr.operator.is(DOT, QUESTION_DOT)) {
-        // Get potential method name if right hand side of '.' is a string or identifier
+        // Get potential method name if right-hand side of '.' is a string or identifier
         String methodName = getStringValue(binaryExpr.right);
         if (methodName != null) {
           return new Expr.MethodCall(leftParen, binaryExpr.left, binaryExpr.operator, methodName, binaryExpr.right.location, args);
@@ -2321,11 +2379,11 @@ public class Parser {
   /**
    * Convert an expression that represents some sort of field path into an assignment
    * expression by converting the expression type into a Expr.FieldAssign component.
-   * Note that when a field path occurs on the left hand side of an assignment-like operator
+   * Note that when a field path occurs on the left-hand side of an assignment-like operator
    * we mark all parts of the path with createIfMissing so that if the map field or list entry
    * is not there we automatically create the entry.
    * The other thing to note is that operators such as '+=', '-=', etc need the value of the
-   * left hand side in order to compute the final value. The rules are that something like
+   * left-hand side in order to compute the final value. The rules are that something like
    * <pre>  x += 5</pre>
    * is equivalent to
    * <pre>   x = x + 5</pre>

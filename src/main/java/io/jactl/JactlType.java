@@ -58,6 +58,8 @@ public class JactlType {
     CLASS,
     ANY,
     FUNCTION,
+    ARRAY,
+
     // internal use only
     HEAPLOCAL,
     OBJECT_ARR,
@@ -82,6 +84,7 @@ public class JactlType {
   public static JactlType STRING        = createRefType(TypeEnum.STRING);
   public static JactlType MAP           = createRefType(TypeEnum.MAP);
   public static JactlType LIST          = createRefType(TypeEnum.LIST);
+  public static JactlType ARRAY         = createRefType(TypeEnum.ARRAY);
   public static JactlType ANY           = createRefType(TypeEnum.ANY);
   public static JactlType FUNCTION      = createRefType(TypeEnum.FUNCTION);
 
@@ -106,6 +109,9 @@ public class JactlType {
   private ClassDescriptor classDescriptor = null;
   private List<Expr>      className       = null;  // Unresolved className which resolves to classDescriptor
 
+  // For array types
+  private JactlType       arrayType       = null;
+
   protected JactlType() {}
 
   private JactlType(TypeEnum type, boolean boxed, boolean isRef) {
@@ -122,6 +128,12 @@ public class JactlType {
   }
   private static JactlType createRefType(TypeEnum type) {
     return new JactlType(type, false, true);
+  }
+
+  public static JactlType arrayOf(JactlType type) {
+    var arrType = createRefType(TypeEnum.ARRAY);
+    arrType.arrayType = type;
+    return arrType;
   }
 
   /**
@@ -209,6 +221,7 @@ public class JactlType {
       case MAP:        return MAP;
       case LIST:       return LIST;
       case DEF:        return ANY;
+      case OBJECT:     return ANY;
       case OBJECT_ARR: return OBJECT_ARR;
       case LONG_ARR:   return LONG_ARR;
       case STRING_ARR: return STRING_ARR;
@@ -301,6 +314,9 @@ public class JactlType {
       if (this.type == TypeEnum.CLASS && type.type == TypeEnum.CLASS) {
         return true;
       }
+      if (this.type == TypeEnum.ARRAY && type.type == TypeEnum.ARRAY) {
+        return this.arrayType == null || type.arrayType == null || this.arrayType.is(type.arrayType);
+      }
     }
     return false;
   }
@@ -326,6 +342,8 @@ public class JactlType {
   protected JactlType getDelegate() {
     return this;
   }
+
+  public JactlType getArrayType() { return arrayType; }
 
   ///////////////////////////////////////
 
@@ -502,12 +520,8 @@ public class JactlType {
    * @return true if convertible
    */
   public boolean isConvertibleTo(JactlType otherType) {
-    //if (otherType.isBoxedOrUnboxed(BOOLEAN))     { return true; }
-    if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
-      if (getClassDescriptor() == null)           { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
-      if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
-      return otherType.getClassDescriptor().isAssignableFrom(this.getClassDescriptor());
-    }
+    if (otherType.isBoxedOrUnboxed(BOOLEAN))                                    { return true; }
+    if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE)  { return otherType.isAssignableFrom(this); }
     if (is(CLASS) || otherType.is(CLASS))                                       { return false; }
     if (isBoxedOrUnboxed(otherType))                                            { return true; }
     if (is(ANY) || otherType.is(ANY))                                           { return true; }
@@ -515,6 +529,15 @@ public class JactlType {
     if (is(MAP) && otherType.is(INSTANCE))                                      { return true; }
     if (is(MAP,INSTANCE) && otherType.is(MAP,INSTANCE))                         { return true; }
     if (is(LIST,ITERATOR,OBJECT_ARR) && otherType.is(LIST,ITERATOR,OBJECT_ARR)) { return true; }
+    return false;
+  }
+
+  public boolean isAssignableFrom(JactlType otherType) {
+    if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
+      if (getClassDescriptor() == null)           { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
+      if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
+      return this.getClassDescriptor().isAssignableFrom(otherType.getClassDescriptor());
+    }
     return false;
   }
 
@@ -529,6 +552,7 @@ public class JactlType {
       case MAP:            return Type.getDescriptor(Map.class);
       case LIST:           return Type.getDescriptor(List.class);
       case INSTANCE:       return "L" + getInternalName() + ";";
+      case CLASS:          return "L" + getInternalName() + ";";
       case ANY:            return Type.getDescriptor(Object.class);
       case FUNCTION:       return Type.getDescriptor(MethodHandle.class);
       case HEAPLOCAL:      return Type.getDescriptor(HeapLocal.class);
@@ -538,21 +562,24 @@ public class JactlType {
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
       case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
       case CONTINUATION:   return Type.getDescriptor(Continuation.class);
+      case ARRAY:          return "[" + arrayType.descriptor();
       default:             throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
   }
 
   public Type descriptorType() {
     switch (this.type) {
-      case BOOLEAN:        return Type.getType(isBoxed() ? Boolean.class : Boolean.TYPE);
-      case INT:            return Type.getType(isBoxed() ? Integer.class : Integer.TYPE);
-      case LONG:           return Type.getType(isBoxed() ? Long.class    : Long.TYPE);
-      case DOUBLE:         return Type.getType(isBoxed() ? Double.class  : Double.TYPE);
+      case BOOLEAN:        return Type.getType(isBoxed() ? Boolean.class : boolean.class);
+      case INT:            return Type.getType(isBoxed() ? Integer.class : int.class);
+      case LONG:           return Type.getType(isBoxed() ? Long.class    : long.class);
+      case DOUBLE:         return Type.getType(isBoxed() ? Double.class  : double.class);
       case DECIMAL:        return Type.getType(BigDecimal.class);
       case STRING:         return Type.getType(String.class);
       case MAP:            return Type.getType(Map.class);
       case LIST:           return Type.getType(List.class);
       case INSTANCE:       return Type.getType(descriptor());
+      case CLASS:          return Type.getType(descriptor());
+      case ARRAY:          return Type.getType(descriptor());
       case ANY:            return Type.getType(Object.class);
       case FUNCTION:       return Type.getType(MethodHandle.class);
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
@@ -569,10 +596,10 @@ public class JactlType {
 
   public String getInternalName() {
     switch (this.type) {
-      case BOOLEAN:      return Type.getInternalName(Boolean.class);
-      case INT:          return Type.getInternalName(Integer.class);
-      case LONG:         return Type.getInternalName(Long.class);
-      case DOUBLE:       return Type.getInternalName(Double.class);
+      case BOOLEAN:      return Type.getInternalName(isBoxed() ? Boolean.class : boolean.class);
+      case INT:          return Type.getInternalName(isBoxed() ? Integer.class : int.class);
+      case LONG:         return Type.getInternalName(isBoxed() ? Long.class    : long.class);
+      case DOUBLE:       return Type.getInternalName(isBoxed() ? Double.class  : double.class);
       case DECIMAL:      return Type.getInternalName(BigDecimal.class);
       case STRING:       return Type.getInternalName(String.class);
       case MAP:          return Type.getInternalName(Map.class);
@@ -587,6 +614,15 @@ public class JactlType {
       case NUMBER:       return Type.getInternalName(Number.class);
       case MATCHER:      return Type.getInternalName(RegexMatcher.class);
       case CONTINUATION: return Type.getInternalName(Continuation.class);
+      case ARRAY: {
+        if (arrayType.is(ARRAY)) {
+          return "[" + arrayType.getInternalName();
+        }
+        if (arrayType.isPrimitive()) {
+          return "[" + arrayType.descriptor();
+        }
+        return "[L" + arrayType.getInternalName() + ";";
+      }
       case INSTANCE:
       case CLASS:
         if (internalName != null) {
@@ -612,6 +648,9 @@ public class JactlType {
     if (obj instanceof long[])       return LONG_ARR;
     if (obj instanceof String[])     return STRING_ARR;
     if (obj instanceof Object[])     return OBJECT_ARR;
+    if (obj instanceof int[])        return JactlType.arrayOf(INT);
+    if (obj instanceof boolean[])    return JactlType.arrayOf(BOOLEAN);
+    if (obj instanceof double[])     return JactlType.arrayOf(DOUBLE);
     if (obj instanceof Iterator)     return ITERATOR;
     return ANY;
   }
@@ -638,9 +677,12 @@ public class JactlType {
     if (clss == Number.class)       { return NUMBER;        }
     if (clss == RegexMatcher.class) { return MATCHER;       }
     if (clss == Continuation.class) { return CONTINUATION;  }
-    if (clss == JactlObject.class)  { return INSTANCE;      }
     if (clss == Object.class)       { return ANY;           }
-    throw new IllegalStateException("Internal error: unexpected class " + clss.getName());
+    if (clss == Class.class)        { return CLASS;         }
+    if (clss == JactlObject.class || JactlObject.class.isAssignableFrom(clss))  {
+      return INSTANCE;
+    }
+    return ANY;
   }
 
   public Class classFromType() {
@@ -664,6 +706,7 @@ public class JactlType {
       case MATCHER:       return RegexMatcher.class;
       case CONTINUATION:  return Continuation.class;
       case NUMBER:        return Number.class;
+      case CLASS:         return Class.class;
       default: throw new IllegalStateException("Internal error: unexpected type " + type);
     }
   }
@@ -696,6 +739,7 @@ public class JactlType {
       case CONTINUATION: return "Continuation";
       case INSTANCE:     return "Instance<" + getPackagedName() + ">";
       case CLASS:        return "Class<" + getPackagedName() + ">";
+      case ARRAY:        return "Array<" + arrayType + ">";
       case UNKNOWN:      return "UNKNOWN";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
@@ -728,6 +772,9 @@ public class JactlType {
   public boolean equals(Object obj) {
     if (!(obj instanceof JactlType)) {
       return false;
+    }
+    if (obj instanceof DelegatingJactlType) {
+      obj = ((DelegatingJactlType)obj).getDelegate();
     }
     JactlType other = (JactlType)obj;
     if (this.type != other.type) {

@@ -228,7 +228,11 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     return expr;
   }
 
-  @Override public Expr visitInvokeNew(Expr.InvokeNew expr)       { return expr; }
+  @Override public Expr visitInvokeNew(Expr.InvokeNew expr) {
+    expr.dimensions = expr.dimensions.stream().map(this::decorate).collect(Collectors.toList());
+    return expr;
+  }
+
   @Override public Expr visitClassPath(Expr.ClassPath expr)       { return expr; }
   @Override public Expr visitDefaultValue(Expr.DefaultValue expr) { return expr; }
   @Override public Expr visitTypeExpr(Expr.TypeExpr expr)         { return expr; }
