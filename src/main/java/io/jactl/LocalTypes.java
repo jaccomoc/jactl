@@ -17,13 +17,9 @@
 
 package io.jactl;
 
-import io.jactl.runtime.RegexMatcher;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-import java.lang.invoke.MethodHandle;
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -655,7 +651,7 @@ public class LocalTypes {
     for (Iterator<StackEntry> iter1 = stack.iterator(), iter2 = stack2.iterator(); iter1.hasNext() && iter2.hasNext(); ) {
       JactlType type1 = iter1.next().type;
       JactlType type2 = iter2.next().type;
-      if (!type1.isConvertibleTo(type2) && !type2.isConvertibleTo(type1)) {
+      if (!type1.isCastableTo(type2) && !type2.isCastableTo(type1)) {
         return false;
       }
     }

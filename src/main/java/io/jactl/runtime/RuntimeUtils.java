@@ -24,6 +24,7 @@ import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -102,10 +103,10 @@ public class RuntimeUtils {
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
   // as a special marker since that way when we need the before value of an inc/dec it will
-  // have the right value but we can still check specifically for this value when doing
+  // have the right value, but we can still check specifically for this value when doing
   // x.a += 'some string' as this turns into x.a = DEFAULT_VALUE + 'some string' and so
   // when the rhs is a string we turn DEFAULT_VALUE into ''.
-  public static final Object DEFAULT_VALUE = new Integer(0);
+  public static final Object DEFAULT_VALUE = 0;
 
   public static String getOperatorType(TokenType op) {
     if (op == null) {
@@ -2162,6 +2163,13 @@ public class RuntimeUtils {
     if (obj == null) {
       throw new NullError("Cannot convert null value to Number", source, offset);
     }
+    if (obj instanceof String) {
+      String value = (String)obj;
+      if (value.length() != 1) {
+        throw new RuntimeError((value.isEmpty() ? "Empty String" : "String with multiple chars") + " cannot be cast to number", source, offset);
+      }
+      return (int) (value.charAt(0));
+    }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Number", source, offset);
   }
 
@@ -2171,6 +2179,13 @@ public class RuntimeUtils {
     }
     if (obj == null) {
       throw new NullError("Null value for Decimal", source, offset);
+    }
+    if (obj instanceof String) {
+      String value = (String)obj;
+      if (value.length() != 1) {
+        throw new RuntimeError((value.isEmpty() ? "Empty String" : "String with multiple chars") + " cannot be cast to Decimal", source, offset);
+      }
+      return BigDecimal.valueOf(value.charAt(0));
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
   }
@@ -2185,14 +2200,66 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Function", source, offset);
   }
 
-  public static Object[] castToObjectArr(Object obj, String source, int offset) {
-    if (obj instanceof Object[]) {
-      return (Object[]) obj;
-    }
+  public static Object asArray(Object obj, Class clss, String source, int offset) {
+    return convertToArray(obj, clss, false, source, offset);
+  }
+
+  public static Object castToArray(Object obj, Class clss, String source, int offset) {
+    return convertToArray(obj, clss, true, source, offset);
+  }
+
+  public static Object convertToArray(Object obj, Class clss, boolean isCast, String source, int offset) {
     if (obj == null) {
-      throw new NullError("Null value for Object[]", source, offset);
+      return null;
     }
-    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Object[]", source, offset);
+    if (clss.isAssignableFrom(obj.getClass())) {
+      return obj;
+    }
+    Class  componentType = clss.getComponentType();
+    if (obj instanceof List) {
+      List   list = (List)obj;
+      Object arr  = Array.newInstance(componentType, list.size());
+      for (int i = 0; i < list.size(); i++) {
+        Array.set(arr, i, castToType(list.get(i), componentType, isCast, source, offset));
+      }
+      return arr;
+    }
+    if (obj.getClass().isArray()) {
+      int    length = Array.getLength(obj);
+      Object arr    = Array.newInstance(componentType, length);
+      for (int i = 0; i < length; i++) {
+        Array.set(arr, i, castToType(Array.get(obj, i), componentType, isCast, source, offset));
+      }
+      return arr;
+    }
+    throw new RuntimeError("Cannot cast from " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+  }
+
+  private static Object castToType(Object obj, Class clss, boolean isCast, String source, int offset) {
+    if (clss.isArray())                        { return convertToArray(obj, clss, isCast, source, offset); }
+    if (clss.isPrimitive() || clss == BigDecimal.class) {
+      ensureNonNull(obj, source, offset);
+      if (clss == boolean.class)               { return isTruth(obj, false); }
+      if (obj instanceof String && ((String)obj).length() == 1) {
+        obj = (int)((String)obj).charAt(0);
+      }
+      if (obj instanceof Number) {
+        Number num = (Number)obj;
+        if (clss == int.class)                 { return num.intValue(); }
+        if (clss == long.class)                { return num.longValue(); }
+        if (clss == double.class)              { return num.doubleValue(); }
+        if (clss == BigDecimal.class) {
+          if (num instanceof BigDecimal)       { return num; }
+          return num instanceof Double ? BigDecimal.valueOf((double)num)
+                                       : BigDecimal.valueOf(num.longValue());
+        }
+        throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+      }
+      throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+    }
+    if (!isCast && clss == String.class)       { return toStringOrNull(obj); }
+    if (clss.isAssignableFrom(obj.getClass())) { return obj; }
+    throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
   }
 
   public static boolean print(String obj) {

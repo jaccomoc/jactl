@@ -957,10 +957,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1,2,3,4].limit(count:1L)", List.of(1));
     test("[1,2,3,4].limit(1.123D)", List.of(1));
     test("[1,2,3,4].limit(1.123)", List.of(1));
-    testError("[1,2,3,4].limit('123')", "cannot convert argument");
+    testError("[1,2,3,4].limit('123')", "cannot be cast");
     testError("def f = [1,2,3,4].limit; f('123')", "cannot be cast to int");
     test("def f = [1,2,3,4].limit; f('a')", List.of(1,2,3,4));    // 'a' converted to Unicode value
-    testError("[1,2,3,4].limit(count:'123')", "cannot convert argument");
+    testError("[1,2,3,4].limit(count:'123')", "cannot be cast");
     testError("def f = [1,2,3,4].limit; f(count:'123')", "cannot be cast to int");
     test("def f = [1,2,3,4].limit; f(count:'a')", List.of(1,2,3,4));    // 'a' converted to Unicode value
 

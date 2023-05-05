@@ -99,6 +99,10 @@ public class ClassCompiler {
     classInit.visitInsn(DUP);
     classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_STATIC_METHODS_MAP, "Ljava/util/Map;");
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_PACKAGED_NAME_FIELD, Type.getDescriptor(String.class), null, null);
+    fieldVisitor.visitEnd();
+    classInit.visitLdcInsn(classDescriptor.getPackagedName());
+    classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_PACKAGED_NAME_FIELD, Type.getDescriptor(String.class));
 
     // Add instance method and static for retrieving map of static Jactl methods
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_STATIC_METHODS_GETTER,

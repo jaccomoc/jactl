@@ -31,6 +31,7 @@ import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.LONG;
 import static io.jactl.TokenType.DOT;
+import static io.jactl.TokenType.EQUAL;
 import static org.objectweb.asm.Opcodes.*;
 
 public class Utils {
@@ -48,6 +49,7 @@ public class Utils {
   public static final String JACTL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
   public static final String JACTL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
   public static final String JACTL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
+  public static final String JACTL_PACKAGED_NAME_FIELD   = "_$j$PackagedName";
   public static final String JACTL_WRITE_JSON            = "_$j$writeJson";
   public static final String JACTL_FROM_JSON             = "fromJson";
   public static final String JACTL_READ_JSON             = "_$j$readJson";
@@ -502,7 +504,7 @@ public class Utils {
   }
 
   public static Stmt.VarDecl createParam(Token name, JactlType type, Expr initialiser) {
-    Expr.VarDecl decl  = new Expr.VarDecl(name, initialiser);
+    Expr.VarDecl decl  = new Expr.VarDecl(name, new Token(EQUAL,name), initialiser);
     decl.isParam = true;
     decl.isResultUsed = false;
     decl.type = type;
@@ -512,7 +514,7 @@ public class Utils {
   public static void createVariableForFunction(Stmt.FunDecl funDecl) {
     // Create a "variable" for the function that will have the MethodHandle as its value
     // so we can get the function by value
-    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.nameToken, null);
+    Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.nameToken, null, null);
     varDecl.type = FUNCTION;
     varDecl.funDecl = funDecl.declExpr;
     varDecl.isResultUsed = false;
@@ -617,7 +619,7 @@ public class Utils {
    * @return the new VarDecl
    */
   public static Expr.VarDecl createVarDecl(String name, Expr.VarDecl varDecl, Expr.FunDecl funDecl) {
-    Expr.VarDecl newVarDecl    = new Expr.VarDecl(varDecl.name, null);
+    Expr.VarDecl newVarDecl    = new Expr.VarDecl(varDecl.name, null, null);
     newVarDecl.type            = varDecl.type.boxed();
     newVarDecl.owner           = varDecl.owner;
     newVarDecl.isHeapLocal     = true;
@@ -669,7 +671,7 @@ public class Utils {
   }
 
   public static Stmt.VarDecl createVarDecl(Expr.FunDecl ownerFunDecl, Token name, JactlType type, Expr init) {
-    Expr.VarDecl varDecl = new Expr.VarDecl(name, init);
+    Expr.VarDecl varDecl = new Expr.VarDecl(name, new Token(EQUAL,name), init);
     init.isResultUsed = true;
     varDecl.type = type;
     varDecl.isResultUsed = false;

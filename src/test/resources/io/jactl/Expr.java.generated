@@ -346,6 +346,7 @@ abstract class Expr {
    */
   static class VarDecl extends Expr implements ManagesResult {
     Token           name;
+    Token           equals;
     Expr            initialiser;
     Expr.FunDecl    owner;               // Which function variable belongs to (for local vars)
     boolean         isGlobal;            // Whether global (bindings var) or local
@@ -373,13 +374,14 @@ abstract class Expr {
     VarDecl      paramVarDecl;
 
     Type descriptorType() { return isPassedAsHeapLocal ? HEAPLOCAL.descriptorType() : type.descriptorType(); }
-    VarDecl(Token name, Expr initialiser) {
+    VarDecl(Token name, Token equals, Expr initialiser) {
       this.name = name;
+      this.equals = equals;
       this.initialiser = initialiser;
       this.location = name;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
-    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "initialiser=" + initialiser + "]"; }
+    @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "equals=" + equals + ", " + "initialiser=" + initialiser + "]"; }
   }
 
   /**
@@ -840,18 +842,18 @@ abstract class Expr {
   /**
    * Cast to given type
    */
-  static class CastTo extends Expr {
+  static class CheckCast extends Expr {
     Token      token;
     Expr       expr;      // Object being cast
     JactlType castType;  // Type to cast to
-    CastTo(Token token, Expr expr, JactlType castType) {
+    CheckCast(Token token, Expr expr, JactlType castType) {
       this.token = token;
       this.expr = expr;
       this.castType = castType;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCastTo(this); }
-    @Override public String toString() { return "CastTo[" + "token=" + token + ", " + "expr=" + expr + ", " + "castType=" + castType + "]"; }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCheckCast(this); }
+    @Override public String toString() { return "CheckCast[" + "token=" + token + ", " + "expr=" + expr + ", " + "castType=" + castType + "]"; }
   }
 
   /**
@@ -933,7 +935,7 @@ abstract class Expr {
     T visitInvokeNew(InvokeNew expr);
     T visitDefaultValue(DefaultValue expr);
     T visitInstanceOf(InstanceOf expr);
-    T visitCastTo(CastTo expr);
+    T visitCheckCast(CheckCast expr);
     T visitConvertTo(ConvertTo expr);
     T visitSpecialVar(SpecialVar expr);
   }

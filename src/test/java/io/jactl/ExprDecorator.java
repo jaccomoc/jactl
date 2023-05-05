@@ -21,8 +21,6 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static io.jactl.JactlType.CLASS;
-
 public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   Function<Expr,Expr> decorator;
@@ -254,7 +252,7 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     return expr;
   }
 
-  @Override public Expr visitCastTo(Expr.CastTo expr) {
+  @Override public Expr visitCheckCast(Expr.CheckCast expr) {
     expr.expr = decorate(expr.expr);
     return expr;
   }

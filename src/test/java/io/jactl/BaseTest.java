@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -97,7 +98,7 @@ public class BaseTest {
             assertArrayEquals((BigDecimal[]) expected, (BigDecimal[]) result);
             break;
           default:
-            assertEquals(expected, result);
+            checkEquality(expected, result);
             break;
         }
       }
@@ -105,6 +106,24 @@ public class BaseTest {
     catch (Exception e) {
       e.printStackTrace();
       fail(e);
+    }
+  }
+
+  private static void checkEquality(Object o1, Object o2) {
+    if (o1 == null && o2 == null) {
+      return;
+    }
+    assertTrue(o1 != null);
+    assertTrue(o2 != null);
+    if (!o1.getClass().isArray() && !o2.getClass().isArray()) {
+      assertEquals(o1, o2);
+      return;
+    }
+    assertEquals(o1.getClass().isArray(), o2.getClass().isArray());
+    assertEquals(o1.getClass().getComponentType(), o2.getClass().getComponentType());
+    assertEquals(Array.getLength(o1), Array.getLength(o2));
+    for (int i = 0; i < Array.getLength(o1); i++) {
+      checkEquality(Array.get(o1, i), Array.get(o2, i));
     }
   }
 
@@ -240,7 +259,7 @@ public class BaseTest {
     }
   }
 
-  private void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
+  protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
     try {
       JactlContext jactlContext = JactlContext.create()
                                                  .evaluateConstExprs(evalConsts)

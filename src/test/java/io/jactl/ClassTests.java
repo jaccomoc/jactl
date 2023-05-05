@@ -331,7 +331,7 @@ public class ClassTests extends BaseTest {
   @Test public void namedMethodArgs() {
     testError("class X { def f(x, y=[a:3]) { x + y }}; new X().f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("class X { def f(x, y=[a:3]) { x + y }}; new X().f(x:1,yy:2)", "no such parameter: yy");
-    testError("class X { def f(int x, y=[a:3]) { x + y }}; new X().f(x:'1',y:2)", "cannot convert argument of type string to parameter type of int");
+    testError("class X { def f(int x, y=[a:3]) { x + y }}; new X().f(x:'123',y:2)", "cannot be cast");
     testError("class X { def f(x, y=[a:3]) { x + y }}; new X().f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { def f(x, y=[a:3]) { x + y }}; new X().f(x:1,y:2)", 3);
     testError("class X { def f(x, y) { x + y }}; new X().f([x:1,y:2])", "missing mandatory argument: y");
@@ -397,7 +397,7 @@ public class ClassTests extends BaseTest {
 
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,yy:2)", "no such parameter: yy");
-    testError("class X { def f(int x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:'abc',y:2)", "cannot convert argument of type string to parameter type of int");
+    testError("class X { def f(int x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:'abc',y:2)", "cannot be cast to int");
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,y:2)", 3);
     testError("class X { def f(x, y) { x + y }}; X x = new X(); x.f([x:1,y:2])", "missing mandatory argument");
@@ -467,7 +467,7 @@ public class ClassTests extends BaseTest {
 
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,yy:2)", "no such parameter: yy");
-    testError("class X { static def f(int x, y=[a:3]) { x + y }}; X.f(x:'abc',y:2)", "cannot convert argument of type string to parameter type of int");
+    testError("class X { static def f(int x, y=[a:3]) { x + y }}; X.f(x:'abc',y:2)", "cannot be cast to int");
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,y:2)", 3);
     testError("class X { static def f(x, y) { x + y }}; X.f([x:1,y:2])", "missing mandatory argument");
@@ -527,7 +527,7 @@ public class ClassTests extends BaseTest {
     test("class X { String a; int b; List c; Map d }; new X('abc',1,[1,2,3],[a:5]).d.a", 5);
     test("class X { String a; int b; List c = []; Map d = [:] }; new X('abc',1).b", 1);
     testError("class X { String a; int b; List c = []; Map d = [:] }; new X('abc').b", "missing mandatory field");
-    testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc').b", "cannot convert argument of type string to parameter type of int");
+    testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc').b", "cannot be cast to int");
     test("class X { String a; int b; List c; Map d = [:] }; new X('abc', 1, [1,2,3]).c[2]", 3);
     testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc', 1, [1,2,3], 5, 6).c[2]", "too many arguments");
     testError("class X { String a; int b; List c; Map d }; new X('abc', 1, [1,2,3], 5).c[2]", "cannot convert argument of type int");
@@ -1456,6 +1456,14 @@ public class ClassTests extends BaseTest {
     test("class X{ int i = 3; X[] a = new X[10] }; new X().a[-1]", null);
     test("class X{ int i = 3; X[][] a = new X[10][] }; new X().a[-1]", null);
     test("class X{ int i = 3; X[][] a = new X[10][] }; def x = new X(); x.a[0] = new X[1]; x.a[0][0] = new X(i:4,a:null); x.a[0][0].i", 4);
+    test("class X{int i}; X[] x = [new X(1),new X(2),new X(3)]; x.map{ it.i }.sum()", 6);
+    test("class X{int i}; class Y extends X{int j}; X[] x = [new X(1),new Y(2,3),new X(3)]; x.map{ it.i }.sum()", 6);
+    test("class X{int i}; class Y extends X{int j}; Y[] y = [new Y(1,2),new Y(2,3),new Y(3,4)]; X[] x = y; x.map{ it.i }.sum()", 6);
+    test("class X{int i}; class Y extends X{int j}; def y = [new Y(1,2),new Y(2,3),new Y(3,4)]; X[] x = y; x.map{ it.i }.sum()", 6);
+    test("class X{int i}; class Y extends X{int j}; var y = [new Y(1,2),new Y(2,3),new Y(3,4)]; X[] x = y; x.map{ it.i }.sum()", 6);
+    test("class X{int i}; class Y extends X{int j}; def y = [new Y(1,2),new Y(2,3),new Y(3,4)]; X[] x = (X[])y; x.map{ it.i }.sum()", 6);
+    test("class X{int i}; class Y extends X{int j}; def y = [new Y(1,2),new Y(2,3),new Y(3,4)]; X[] x = (Y[])y; x.map{ it.i }.sum()", 6);
+    testError("class X{int i}; class Y extends X{int j}; X[] x = [new X(1),new X(2),new Y(3,4)]; Y[] y = x; y.map{ it.i }.sum()", "cannot convert");
   }
 
   @Test public void autoCreateArrayFields() {

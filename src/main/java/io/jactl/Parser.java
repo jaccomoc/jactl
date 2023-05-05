@@ -36,12 +36,15 @@ import static io.jactl.TokenType.*;
  * but there are a couple of places where lookahead is required to disambiguate parts of the
  * grammar.
  * Usually a single token lookahead suffices, but we support arbitrary amounts of lookahead.
- *
+ * <p>
  * After the parsing has been done and the AST generated, the resulting AST needs to be passed
  * to the Resolver which resolves all variable references and does as much validation as possible
  * to validate types of operands in expressions.
- *
+ * </p><p>
  * Finally, the Compiler then should be invoked to compile the AST into JVM byte code.
+ * </p>
+ * To extract the EBNF grammar from the comments grep out lines starting with '  *#' and then
+ * convert the HTML escaped '&gt;' back to '&gt;'.
  */
 public class Parser {
   Tokeniser tokeniser;
@@ -231,9 +234,11 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# block -&gt; "{" stmts "}"
    *#        | stmts EOF      // Special case for top most script block
    *#        ;
+   * </pre>
    */
   private Stmt.Block block(TokenType endBlock) {
     return block(previous(), endBlock, () -> declaration());
@@ -261,7 +266,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# stmts -&gt; declaration* ;
+   * </pre>
    */
   private void stmts(Stmt.Stmts stmts, Supplier<Stmt> stmtSupplier) {
     Stmt previousStmt = null;
@@ -294,10 +301,12 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# declaration -&gt; funDecl
    *#              | varDecl
    *#              | classDecl
    *#              | statement;
+   * </pre>
    */
   private Stmt declaration() {
     return declaration(false);
@@ -325,12 +334,14 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# statement -&gt; block
    *#            | ifStmt
    *#            | forStmt
    *#            | whileStmt
    *#            | ("BEGIN" | "END") block
    *#            | exprStatement;
+   * </pre>
    */
   private Stmt statement() {
     matchAny(EOL);
@@ -393,9 +404,11 @@ public class Parser {
   }
 
   /**
-   * # type -&gt; "def" | "var" #         | ( ("boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" |
-   * "List" | "Object") ("[" "]") * ) #         | ( className ( "[" "]" ) * ) ;
-   *
+   * <pre>
+   * # type -&gt; "def" | "var"
+   * #         | ( ("boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List" | "Object") ("[" "]") * )
+   * #         | ( className ( "[" "]" ) * ) ;
+   * </pre>
    * @param varAllowed       true if "var" is allowed in place of a type name
    * @param ignoreArrays     true if we should ignore "[" after the type
    * @param ignoreArrayError
@@ -443,7 +456,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# funDecl -&gt; "static"? type IDENTIFIER "(" ( varDecl ( "," varDecl ) * ) ? ")" "{" block "}" ;
+   * </pre>
    */
   private Stmt.FunDecl funDecl(boolean inClassDecl) {
     boolean isStatic = inClassDecl && matchAny(STATIC);
@@ -472,7 +487,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# parameters -&gt; ( varDecl ( "," varDecl ) * ) ? ;
+   * </pre>
    */
   private List<Stmt.VarDecl> parameters(TokenType endToken) {
     List<Stmt.VarDecl> parameters = new ArrayList<>();
@@ -511,8 +528,12 @@ public class Parser {
   }
 
   /**
-   *# varDecl -&gt; ("var" | "boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List" )
-   *#                      IDENTIFIER ( "=" expression ) ? ( "," IDENTIFIER ( "=" expression ) ? ) * ;
+   * <pre>
+   *# varDecl -&gt; ("var" | "boolean" | "int" | "long" | "double" | "Decimal" |
+   *#                "String" | "Map" | "List" )
+   *#                 IDENTIFIER ( "=" expression ) ?
+   *#                       ( "," IDENTIFIER ( "=" expression ) ? ) * ;
+   * </pre>
    * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
    *       a list of VarDecls if multiple variables declared.
    */
@@ -560,7 +581,7 @@ public class Parser {
       initialiser = new Expr.Binary(initialiser, new Token(AS, initialiser.location), new Expr.TypeExpr(initialiser.location, type));
     }
 
-    Expr.VarDecl varDecl = new Expr.VarDecl(identifier, initialiser);
+    Expr.VarDecl varDecl = new Expr.VarDecl(identifier, equalsToken, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
     varDecl.isField = inClassDecl;
@@ -568,7 +589,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# ifStmt -&gt; "if" "(" expression ")" statement ( "else" statement ) ? ;
+   * </pre>
    */
   private Stmt.If ifStmt() {
     Token ifToken = previous();
@@ -598,7 +621,10 @@ public class Parser {
   }
 
   /**
-   *# forStmt -&gt; "for" "(" declaration ";" expression ";" commaSeparatedStatements ")" statement ;
+   * <pre>
+   *# forStmt -&gt; "for" "(" declaration ";" expression ";"
+   *#                         commaSeparatedStatements ")" statement ;
+   * </pre>
    */
   private Stmt forStmt(Token label) {
     Token forToken = previous();
@@ -638,7 +664,9 @@ public class Parser {
 
 
   /**
+   * <pre>
    *# commaSeparatedStatements -&gt; ( statement ( "," statement ) * ) ? ;
+   * </pre>
    */
   Stmt.Stmts commaSeparatedStatements() {
     matchAny(EOL);
@@ -654,7 +682,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# beginEndBlock -&gt; ("BEGIN" | "END") "{" statements "}" ;
+   * </pre>
    */
   Stmt.Block beginEndBlock() {
     Token blockType = previous();
@@ -666,7 +696,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# exprStmt -&gt; expression;
+   * </pre>
    */
   private Stmt.ExprStmt exprStmt() {
     Token location = peek();
@@ -680,7 +712,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# stmtBlock -&gt; "{" statement * "}"
+   * </pre>
    */
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
     Stmt.Stmts stmts = new Stmt.Stmts();
@@ -689,9 +723,11 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# classDecl -&gt; "class" IDENTIFIER "extends" className "{"
    *#                ( singleVarDecl | "static"? funDecl | classDecl ) *
    *#               "}" ;
+   * </pre>
    */
   private Stmt.ClassDecl classDecl() {
     if (!isClassDeclAllowed()) {
@@ -803,7 +839,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# expression -&gt; orExpression ;
+   * </pre>
    * Note that we handle special case of regex on its own here.
    * A regex as a single statement or single expr where we expect some kind of condition
    * (such as in an if/while) is turned into "it =~ /regex/" to make it a bit like perl syntax
@@ -820,7 +858,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# orExpression -&gt; andExpression ( "or" andExpression) * ;
+   * </pre>
    */
   private Expr orExpression() {
     Expr expr = andExpression();
@@ -831,7 +871,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# andExpression -&gt; notExpression ( AND notExpression ) * ;
+   * </pre>
    */
   private Expr andExpression() {
     Expr expr = notExpression();
@@ -842,7 +884,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# notExpresssion -&gt; NOT * (expr | returnExpr | printExpr | "break" | "continue" ) ;
+   * </pre>
    */
   private Expr notExpression() {
     Expr expr;
@@ -872,10 +916,12 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# expr -&gt; expr operator expr
    *#       | expr "?" expr ":"" expr
    *#       | unary
    *#       | primary;
+   * </pre>
    * Parse expressions (mostly binary operations).
    * We parse based on operator precedence. If we reach highest level of precedence
    * then we return a primaru().
@@ -1009,8 +1055,11 @@ public class Parser {
   }
 
   /**
-   *# unary -&gt; ( "!" | "--" | "++" | "-" | "+" | "~" | "(" type ")" ) unary ( "--" | "++" )
+   * <pre>
+   *# unary -&gt; ( "!" | "--" | "++" | "-" | "+" | "~" | "(" type ")" )
+   *#                  unary ( "--" | "++" )
    *#        | expression;
+   * </pre>
    */
   private Expr unary(int precedenceLevel) {
     Expr expr;
@@ -1080,8 +1129,11 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# newInstance -&gt; "new" classPathOrIdentifier "(" arguments ")"
-   *#                | "new" type ("[" expression "]" ) ( "[" expression "]" ) * ( "[" "]" ) * ;
+   *#                | "new" type ("[" expression "]" ) ( "[" expression "]" ) *
+   *#                         ( "[" "]" ) * ;
+   * </pre>
    */
   private Expr newInstance() {
     var token     = expect(NEW);
@@ -1116,7 +1168,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# expressionList -&gt; expression ( "," expression ) * ;
+   * </pre>
    */
   private List<Expr> expressionList(TokenType endToken) {
     List<Expr> exprs = new ArrayList<>();
@@ -1131,7 +1185,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# arguments -&gt; mapEntry + | argList ;
+   * </pre>
    */
   private List<Expr> arguments() {
     // Check for named args
@@ -1147,7 +1203,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# argList -&gt; expressionList ? ( "{" closure "}" ) * ;
+   * </pre>
    */
   private List<Expr> argList() {
     Token token = previous();
@@ -1174,6 +1232,7 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# primary -&gt; (("+" | "-")? INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST)
    *#          | STRING_CONST
    *#          | "true" | "false" | "null"
@@ -1186,6 +1245,7 @@ public class Parser {
    *#          | "{" closure "}"
    *#          | evalExpr
    *#          ;
+   * </pre>
    */
   private Expr primary() {
     Supplier<Expr> nestedExpression = () -> {
@@ -1239,7 +1299,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# classPathOrIdentifier -&gt; IDENTIFIER | classPath ;
+   * </pre>
    */
   private Expr classPathOrIdentifier() {
     // Can only be classPath if previous token was not "." since we want to avoid treating a.x.y.z.A
@@ -1254,7 +1316,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# className -&gt; IDENTIFIER ( "." IDENTIFIER ) + ;
+   * </pre>
    * We look for a class path like: x.y.z.A
    * where x, y, and z are all in lowercase and A begins with an uppercase.
    * If x.y.z is a package name then return single Expr.ClassName with x.y.z.A as the value.
@@ -1293,7 +1357,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# className -&gt; classPathOrIdentifier ( "." IDENTIFIER ) * ;
+   * </pre>
    */
   private List<Expr> className() {
     List<Expr> className = new ArrayList<>();
@@ -1329,7 +1395,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# listLiteral -&gt; "[" ( expression ( "," expression ) * ) ? "]"
+   * </pre>
    */
   private Expr.ListLiteral listLiteral() {
     Expr.ListLiteral expr = new Expr.ListLiteral(previous());
@@ -1343,11 +1411,13 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# mapLiteral -&gt; "[" ":" "]"
    *#             | "{" ":" "}"
    *#             | "[" ( mapKey ":" expression ) + "]"
    *#             | "{" ( mapKey ":" expression ) + "}"
    *#             ;
+   * </pre>
    * Return a map literal. For maps we support Groovy map syntax using "[" and "]"
    * as well as JSON syntax using "{" and "}".
    */
@@ -1411,7 +1481,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# mapKey -&gt; STRING_CONST | IDENTIFIER | "(" expression() + ")" | exprString | keyWord ;
+   * </pre>
    */
   private Expr mapKey() {
     matchAny(EOL);
@@ -1435,8 +1507,11 @@ public class Parser {
   }
 
   /**
-   *# exprString -&gt; EXPR_STRING_START ( "$" IDENTIFIER | "${" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END
+   * <pre>
+   *# exprString -&gt; EXPR_STRING_START ( "$" IDENTIFIER | "${" blockExpr "}" |
+   *#                       STRING_CONST ) * EXPR_STRING_END
    *#             | "/" ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * "/";
+   * </pre>
    * We parse an expression string delimited by " or """ or /
    * For the / version we treat as a multi-line regular expression and don't support escape chars.
    */
@@ -1493,8 +1568,12 @@ public class Parser {
   }
 
   /**
-   *# regexSubstitute -&gt; REGEX_SUBST_START ( "$" IDENTIFIER | "${" blockExpr "}" | STRING_CONST ) *
-   *                        REGEX_REPLACE ( "$" IDENTIFIER | "${" blockExpr "}" | STRING_CONST ) * EXPR_STRING_END;
+   * <pre>
+   *# regexSubstitute -&gt; REGEX_SUBST_START ( "$" IDENTIFIER | "${" blockExpr "}" |
+   *#                           STRING_CONST ) *
+   *#                       REGEX_REPLACE ( "$" IDENTIFIER | "${" blockExpr "}" |
+   *#                           STRING_CONST ) * EXPR_STRING_END;
+   * </pre>
    */
   private Expr regexSubstitute() {
     Token start = previous();
@@ -1549,7 +1628,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# blockExpression -&gt; "{" block "}"
+   * </pre>
    *
    * Used inside expression strings. If no return statement there is an implicit
    * return on last statement in block that gives the value to then interpolate
@@ -1588,7 +1669,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# closure -&gt; "{" (parameters "-&gt;" ) ? block "}"
+   * </pre>
    */
   private Expr closure() {
     Token openBrace = previous();
@@ -1610,7 +1693,9 @@ public class Parser {
   }
 
   /**
-   # returnExpr -&gt; "return" expression;
+   * <pre>
+   *# returnExpr -&gt; "return" expression;
+   * </pre>
    */
   private Expr.Return returnExpr() {
     Token location = previous();
@@ -1620,7 +1705,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# printExpr -&gt; ("print" | "println") expr ?;
+   * </pre>
    */
   private Expr.Print printExpr() {
     Token printToken = previous();
@@ -1630,7 +1717,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# dieExpr -&gt; "die" expr ?;
+   * </pre>
    */
   private Expr.Die dieExpr() {
     Token dieToken = previous();
@@ -1640,7 +1729,9 @@ public class Parser {
   }
 
   /**
+   * <pre>
    *# evalExpr -&gt; "eval" ("(" expr ")" | "(" expr "," expr ")" );
+   * </pre>
    */
   private Expr.Eval evalExpr() {
     Token evalToken = previous();
@@ -1835,7 +1926,7 @@ public class Parser {
   }
 
   private Stmt.VarDecl createParam(Token name, JactlType type) {
-    Expr.VarDecl declExpr = new Expr.VarDecl(name, null);
+    Expr.VarDecl declExpr = new Expr.VarDecl(name, null, null);
     declExpr.type         = type;
     declExpr.isParam      = true;
     declExpr.isResultUsed = false;
@@ -1874,7 +1965,7 @@ public class Parser {
                                                                                          new Token(DOT, classToken),
                                                                                          Utils.JACTL_INIT_MISSING,
                                                                                          classToken,
-                                                                                         List.of(new Expr.CastTo(classToken, new Expr.Identifier(retValIdent), flagsType))),
+                                                                                         List.of(new Expr.CheckCast(classToken, new Expr.Identifier(retValIdent), flagsType))),
                                                                      new Token(COLON, classToken),
                                                                      new Expr.Literal(new Token(NULL, classToken).setValue(null))),
                                                     instanceType)));
@@ -1898,7 +1989,7 @@ public class Parser {
     stmts.stmts.add(param);
     Token     flagsIdent   = classToken.newIdent("flags");
     JactlType flagsType    = fieldCount > 64 ? JactlType.LONG_ARR : JactlType.LONG;
-    stmts.stmts.add(Utils.createVarDecl(funDecl, flagsIdent, flagsType, new Expr.CastTo(classToken, new Expr.Identifier(flagsParam), flagsType)));
+    stmts.stmts.add(Utils.createVarDecl(funDecl, flagsIdent, flagsType, new Expr.CheckCast(classToken, new Expr.Identifier(flagsParam), flagsType)));
     Token     thisIdent    = classToken.newIdent(Utils.THIS_VAR);
     // Iterate over flags returned from decodeJactlObj and work out which optional fields have not been
     // set and invoke their initialisers
@@ -2319,7 +2410,7 @@ public class Parser {
       @Override public Boolean visitLoadParamValue(Expr.LoadParamValue expr) { return true; }
       @Override public Boolean visitInvokeNew(Expr.InvokeNew expr)           { return true; }
       @Override public Boolean visitDefaultValue(Expr.DefaultValue expr)     { return true; }
-      @Override public Boolean visitCastTo(Expr.CastTo expr)                 { return true; }
+      @Override public Boolean visitCheckCast(Expr.CheckCast expr)           { return true; }
 
       @Override public Boolean visitInvokeFunDecl(Expr.InvokeFunDecl expr)   { return false; }
       @Override public Boolean visitInvokeInit(Expr.InvokeInit expr)         { return false; }

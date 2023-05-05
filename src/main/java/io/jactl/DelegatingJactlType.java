@@ -61,7 +61,7 @@ public class DelegatingJactlType extends JactlType {
   @Override public JactlType unboxed()                                 { return getDelegate().unboxed();               }
   @Override public boolean is(JactlType... types)                      { return getDelegate().is(types);               }
   @Override public boolean isBoxedOrUnboxed(JactlType... types)        { return getDelegate().isBoxedOrUnboxed(types); }
-  @Override public boolean isConvertibleTo(JactlType otherType)        { return getDelegate().isConvertibleTo(otherType);}
+  @Override public boolean isCastableTo(JactlType otherType)        { return getDelegate().isCastableTo(otherType);}
   @Override public String descriptor()                                 { return getDelegate().descriptor();            }
   @Override public Type descriptorType()                               { return getDelegate().descriptorType();        }
   @Override public String getInternalName()                            { return getDelegate().getInternalName();       }

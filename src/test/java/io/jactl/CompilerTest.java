@@ -20,6 +20,7 @@ package io.jactl;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
@@ -947,7 +948,6 @@ class CompilerTest extends BaseTest {
     test("Decimal x = 1", "#1");
     test("Decimal x = 1L", "#1");
     test("Decimal x = 1D", "#1.0");
-
     test("int x; x = x + 1L", 1);
     test("int x; x = x + 1D", 1);
     test("int x; x = x + 1.0", 1);
@@ -960,7 +960,6 @@ class CompilerTest extends BaseTest {
     test("Decimal x; x = x + 1", "#1");
     test("Decimal x; x = x + 1L", "#1");
     test("Decimal x; x = x + 1D", "#1.0");
-
     test("int x; def y = 1L; x = x + y", 1);
     test("int x; def y = 1D; x = x + y", 1);
     test("int x; def y = 1.0; x = x + y", 1);
@@ -973,7 +972,6 @@ class CompilerTest extends BaseTest {
     test("Decimal x; def y = 1; x = x + y", "#1");
     test("Decimal x; def y = 1L; x = x + y", "#1");
     test("Decimal x; def y = 1D; x = x + y", "#1.0");
-
     test("int x = 1; x += 2L", 3);
     test("int x = 1; x += 2L; x", 3);
     test("int x = 1; x += 2D", 3);
@@ -997,7 +995,6 @@ class CompilerTest extends BaseTest {
     test("Decimal x = 1.0; x += 2D; x", "#3.0");
     test("Decimal x = 1.0; x += 2.0", "#3.0");
     test("Decimal x = 1.0; x += 2.0; x", "#3.0");
-
     test("int x = 3; x *= 2L", 6);
     test("int x = 3; x *= 2L; x", 6);
     test("int x = 3; x *= 2D", 6);
@@ -1021,15 +1018,18 @@ class CompilerTest extends BaseTest {
     test("Decimal x = 3.0; x *= 2D; x", "#6.00");
     test("Decimal x = 3.0; x *= 2.0", "#6.00");
     test("Decimal x = 3.0; x *= 2.0; x", "#6.00");
-
     test("int x = 'A'[0]", 65);
     testError("int x = 'A' as int", "not a valid int");
-    testError("int x = 'A'", "cannot convert from string to int");
+    testError("int x = 'Abc'", "cannot be cast");
+    testError("long x = 'Abc'", "cannot be cast");
+    testError("double x = 'Abc'", "cannot be cast");
+    testError("Decimal x = 'Abc'", "cannot be cast");
     test("int x = (int)'A'", 65);
     test("boolean b = 1", true);
     test("boolean b = []", false);
     test("boolean b = [a:1]", true);
     test("def x = 1; boolean b = x", true);
+    test("int i = 'a'", 97);
   }
 
   @Test public void simpleVariables() {
@@ -1050,6 +1050,7 @@ class CompilerTest extends BaseTest {
     test("Decimal v = 1; v", "#1");
     test("var v = 1.0; v", "#1.0");
     test("def x = 'abc', y = 'xyz'", "xyz");
+    test("boolean x = 1", true);
   }
 
   @Test public void multipleVarDecls() {
@@ -3116,8 +3117,8 @@ class CompilerTest extends BaseTest {
     test("def arr = new int[10]; 10.each{ arr[it] = it }; long result = 0; for (def i = 0; i < 10; i++) { result += arr[i] }; result", 45L);
     testError("int[] a = new int[10]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot be cast to int");
     testError("def a = new int[10]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot store object of type string");
-    testError("def a = new int[10][4]; int[] b = a", "could not cast to");
-    testError("int[][] a = new int[10][4]; int[] b = a", "cannot cast");
+    testError("def a = new int[10][4]; int[] b = a", "cannot convert");
+    testError("int[][] a = new int[10][4]; int[] b = a", "cannot convert");
     test("var a = new int[10]; a[0] = 3; a[0]", 3);
     test("var a = new int[10]; a[-1] = 3; a[-1]", 3);
     test("var a = new int[10]; def i = 0; a[i] = 3; a[i]", 3);
@@ -3196,9 +3197,9 @@ class CompilerTest extends BaseTest {
     test("def x = 3.2D; def a = new int[10][4]; def i = -1; a[i][i] = x; a[i][i]", 3);
     testError("int[][] a = new int[]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
     testError("int[][] a = new int[][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
-    testError("int[][] a = new int[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
+    testError("int[][] a = new int[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot convert");
     testError("int[][][] a = new int[10][][4]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "unexpected token");
-    testError("int[][] a = new int[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "could not cast to");
+    testError("int[][] a = new int[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
     testError("int[][] a = new int[10][]; def i = -1; def x = 'abc'; a[i] = new int[4]; a[i][0] = x; a[i][0]", "cannot be cast to int");
     test("var a = new int[10][1]; a[0][0] = 3; a[0][0]", 3);
     test("var a = new int[10][1]; a[-1][0] = 3; a[-1][0]", 3);
@@ -3345,9 +3346,9 @@ class CompilerTest extends BaseTest {
     test("def x = 3.2D; def a = new long[10][4]; def i = -1; a[i][i] = x; a[i][i]", 3L);
     testError("long[][] a = new long[]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
     testError("long[][] a = new long[][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
-    testError("long[][] a = new long[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
+    testError("long[][] a = new long[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot convert");
     testError("long[][][] a = new long[10][][4]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "unexpected token");
-    testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "could not cast to");
+    testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
     testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = new long[4]; a[i][0] = x; a[i][0]", "cannot be cast");
     test("var a = new long[10][1]; a[0][0] = 3; a[0][0]", 3L);
     test("var a = new long[10][1]; a[-1][0] = 3; a[-1][0]", 3L);
@@ -3495,9 +3496,9 @@ class CompilerTest extends BaseTest {
     test("def x = 3.2D; def a = new double[10][4]; def i = -1; a[i][i] = x; a[i][i]", 3.2D);
     testError("double[][] a = new double[]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
     testError("double[][] a = new double[][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
-    testError("double[][] a = new double[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
+    testError("double[][] a = new double[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot convert");
     testError("double[][][] a = new double[10][][4]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "unexpected token");
-    testError("double[][] a = new double[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "could not cast to");
+    testError("double[][] a = new double[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
     testError("double[][] a = new double[10][]; def i = -1; def x = 'abc'; a[i] = new double[4]; a[i][0] = x; a[i][0]", "cannot be cast");
     test("var a = new double[10][1]; a[0][0] = 3; a[0][0]", 3D);
     test("var a = new double[10][1]; a[-1][0] = 3; a[-1][0]", 3D);
@@ -3892,7 +3893,94 @@ class CompilerTest extends BaseTest {
     test("def f(Decimal[] a) { a[0] + a[1] }; Decimal[] x = new Decimal[2]; x[0] = x[1] = 2; f(x)", "#4");
     test("def f(String[] a) { a[0] + a[1] }; String[] x = new String[2]; x[0] = x[1] = '2'; f(x)", "22");
   }
-  
+
+  @Test public void arrayConversions() {
+    test("boolean[] a = [true,false,3]; a instanceof boolean[] && a[0] && !a[1] && a[2]", true);
+    test("boolean[][] a = [[1],[0,'']]; a instanceof boolean[][] && !a[1][0] && !a[1][1]", true);
+    testError("boolean[][] a = [1,[2],3]", "cannot cast");
+    test("boolean[] a = new boolean[10]; a = [1L,2L,3L]", new boolean[]{true, true, true});
+    test("boolean[] a = new boolean[10]; a = [1L,2D,3.0]", new boolean[]{true, true, true});
+    test("boolean[][] a = new boolean[10][]; a = [[true,false,true]]; a[0]", new boolean[]{true, false, true});
+    test("int[] a = [1,2,3]; a instanceof int[] && a.sum() == 6", true);
+    test("int[] a = (int[])[1,2,3]; a instanceof int[] && a.sum() == 6", true);
+    test("int[] a = [1,2,3] as int[]; a instanceof int[] && a.sum() == 6", true);
+    test("def a = [1,2,3] as int[]; a instanceof int[] && a.sum() == 6", true);
+    test("var a = [1,2,3] as int[]; a instanceof int[] && a.sum() == 6", true);
+    test("int[][] a = [[1],[2,3]]; a instanceof int[][] && a[1].sum() == 5", true);
+    test("int[][] a = (int[][])[[1],[2,3]]; a instanceof int[][] && a[1].sum() == 5", true);
+    test("int[][] a = [[1],[2,3]] as int[][]; a instanceof int[][] && a[1].sum() == 5", true);
+    test("def a = [[1],[2,3]] as int[][]; a instanceof int[][] && a[1].sum() == 5", true);
+    test("var a = [[1],[2,3]] as int[][]; a instanceof int[][] && a[1].sum() == 5", true);
+    testError("int[][] a = [1,[2],3]", "cannot cast");
+    test("int[] a = new int[10]; a = [1L,2L,3L]", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; a = [1L,2D,3.0]", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; long[] x = [1L,2D,3.0]; a = x", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; long[] x = [1L,2D,3.0]; a = (int[])x", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; long[] x = [1L,2D,3.0]; a = x as int[]", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; long[] x = [1L,2D,3.0]; a = (long[])x", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; long[] x = [1L,2D,3.0]; a = x as long[]", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; long[] x = [1L,2D,3.0]; def y = x; a = y", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; double[] x = [1L,2D,3.0]; a = x", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; Decimal[] x = [1L,2D,3.0]; a = x", new int[]{1, 2, 3});
+    test("int[] a = new int[10]; String[] x = ['a','b','c']; a = x", new int[]{97, 98, 99});
+    test("int[][] a = new int[10][]; a = [[1L,2D,3.0]]; a[0]", new int[]{1, 2, 3});
+    test("int[][] a = new int[10][]; a = [[1L,2D,3.0]]; a[0].toString()", "[1, 2, 3]");
+    testError("int[][] a = new int[10][]; a = [[1L,'2D',3.0]]; a[0]", "incompatible types");
+    test("long[] a = [1,2,3]; a instanceof long[] && a.sum() == 6", true);
+    test("long[][] a = [[1],[2,3]]; a instanceof long[][] && a[1].sum() == 5", true);
+    testError("long[][] a = [1,[2],3]", "cannot cast");
+    test("long[] a = new long[10]; a = [1L,2L,3L]", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; a = (long[])[1L,2L,3L]", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; a = [1L,2L,3L] as long[]", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; a = [1L,2D,3.0]", new long[]{1, 2, 3});
+    test("long[][] a = new long[10][]; a = [[1L,2D,3.0]]; a[0]", new long[]{1, 2, 3});
+    test("long[][] a = new long[10][]; a = (long[][])[[1L,2D,3.0]]; a[0]", new long[]{1, 2, 3});
+    test("long[][] a = new long[10][]; a = [[1L,2D,3.0]] as long[][]; a[0]", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; long[] x = [1L,2D,3.0]; a = x", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; double[] x = [1L,2D,3.0]; a = x", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; Decimal[] x = [1L,2D,3.0]; a = x", new long[]{1, 2, 3});
+    test("long[] a = new long[10]; String[] x = ['a','b','c']; a = x", new long[]{97, 98, 99});
+    testError("long[][] a = new long[10][]; a = [[1L,'2D',3.0]]; a[0]", "incompatible types");
+    test("double[] a = [1,2,3]; a instanceof double[] && a.sum() == 6", true);
+    test("double[][] a = [[1],[2,3]]; a instanceof double[][] && a[1].sum() == 5", true);
+    testError("double[][] a = [1,[2],3]", "cannot cast");
+    test("double[] a = new double[10]; a = [1L,2L,3L]", new double[]{1, 2, 3});
+    test("double[] a = new double[10]; a = (double[])[1L,2L,3L]", new double[]{1, 2, 3});
+    test("double[] a = new double[10]; a = [1L,2D,3.0]", new double[]{1, 2, 3});
+    test("double[][] a = new double[10][]; a = [[1L,2D,3.0]]; a[0]", new double[]{1, 2, 3});
+    testError("double[][] a = new double[10][]; a = [[1L,'2D',3.0]]; a[0]", "incompatible types");
+    test("double[] a = new double[10]; double[] x = [1L,2D,3.0]; a = x", new double[]{1, 2, 3});
+    test("double[] a = new double[10]; def x = (long[])[1L,2D,3.0]; a = (double[])x", new double[]{1, 2, 3});
+    test("double[] a = new double[10]; double[] x = [1L,2D,3.0]; a = x", new double[]{1, 2, 3});
+    test("double[] a = new double[10]; Decimal[] x = [1L,2D,3.0]; a = x", new double[]{1, 2, 3});
+    test("double[] a = new double[10]; String[] x = ['a','b','c']; a = x", new double[]{97, 98, 99});
+    test("double[] a = new double[10]; String[] x = (String[])['a','b','c']; a = x", new double[]{97, 98, 99});
+    test("Decimal[] a = [1,2,3]; a instanceof Decimal[] && a.sum() == 6", true);
+    test("Decimal[][] a = [[1],[2,3]]; a instanceof Decimal[][] && a[1].sum() == 5", true);
+    testError("Decimal[][] a = [1,[2],3]", "cannot cast");
+    test("Decimal[] a = new Decimal[10]; a = [1L,2L,3L]", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2), BigDecimal.valueOf(3)});
+    test("Decimal[] a = new Decimal[10]; a = [1L,2D,3.0]", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2.0), BigDecimal.valueOf(3.0)});
+    test("Decimal[][] a = new Decimal[10][]; a = [[1L,2D,3.0]]; a[0]", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2.0), BigDecimal.valueOf(3.0)});
+    testError("Decimal[][] a = new Decimal[10][]; a = [[1L,'2D',3.0]]; a[0]", "incompatible types");
+    test("Decimal[] a = new Decimal[10]; Decimal[] x = [1L,2D,3.0]; a = x", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2.0), BigDecimal.valueOf(3.0)});
+    test("Decimal[] a = new Decimal[10]; Decimal[] x = [1L,2D,3.0]; a = x", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2.0), BigDecimal.valueOf(3.0)});
+    test("Decimal[] a = new Decimal[10]; Decimal[] x = [1L,2D,3.0]; a = x", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2.0), BigDecimal.valueOf(3.0)});
+    test("Decimal[] a = new Decimal[10]; String[] x = ['a','b','c']; a = x", new BigDecimal[]{BigDecimal.valueOf(97), BigDecimal.valueOf(98), BigDecimal.valueOf(99)});
+    testError("String[][] a = new String[10][]; a = [[1L,2D,3.0]]; a[0]", "cannot convert");
+    testError("String[][] a = new String[10][]; int[][] x = [[1L,2D,3.0]]; a = x; a[0]", "cannot convert");
+    testError("String[][] a = new String[10][]; def x = [[1L,2D,3.0]]; a = x; a[0]", "cannot convert");
+    testError("String[] a = [[1L,2D,3.0]]; a", "cannot convert");
+    test("Object[][] a = new Object[10][]; a = [[1L,2D,3.0]]; a[0]", new Object[]{1L,2D,BigDecimal.valueOf(3.0)});
+    test("Object[][] a = new Object[10][]; int[][] x = [[1L,2D,3.0]]; a = x; a[0]", new Object[]{1,2,3});
+    test("Object[][] a = new Object[10][]; int[][] x = [[1L,2D,3.0]]; a = (Object[][])x; a[0]", new Object[]{1,2,3});
+    test("Object[] a = [[1L,2D,3.0]]; a", new Object[]{List.of(1L,2D,BigDecimal.valueOf(3.0))});
+    test("Object[] a = [[1],[1,1],[4]]; int[] x = [2,3]; a[1] = x; int[][] i = a", new int[][]{new int[]{1}, new int[]{2,3}, new int[]{4}});
+    test("[1,2,3] as int[]", new int[]{1,2,3});
+    test("String[][] a = new String[10][]; int[][] x = [[1L,2D,3.0]]; a = x as String[][]; a[0]", new String[]{"1","2","3"});
+    test("String[][] a = new String[10][]; def x = [[1L,2D,3.0]]; a = x as String[][]; a[0]", new String[]{"1","2.0","3.0"});
+    test("String[] a = new String[10]; def x = [[1L,2D,3.0]]; a = x as String[]; a", new String[]{"[1, 2.0, 3.0]"});
+  }
+
   @Test public void fieldAssignments() {
     testError("Map m = [a:1]; m*a = 2", "invalid lvalue");
     test("Map m = [:]; m.a = 1", 1);
@@ -5156,6 +5244,8 @@ class CompilerTest extends BaseTest {
     test("('abc' as List).join()", "abc");
     testError("'123456789123456789123456789' as long", "not a valid long");
     testError("'89.123.123' as double", "not a valid double");
+    test("(123 as String).length()", 3);
+    test("(123 as String) + 'abc'", "123abc");
   }
 
   @Test public void inOperator() {
@@ -5465,9 +5555,9 @@ class CompilerTest extends BaseTest {
     test("def f(int x = 3, int y = 4) { x + y }; def a = [1.0,2L]; def g = f; g(a)", 3);
 
     test("def f(long t, def x) { sleep(t,x) }; f([1,2])", 2);
-    testError("def f(long t, def x) { sleep(t,x) }; f(['1',2])", "cannot be cast to number");
+    testError("def f(long t, def x) { sleep(t,x) }; f(['123',2])", "cannot be cast to number");
     test("def f(long t, def x) { sleep(t,x) }; def a = [1,2]; f(a)", 2);
-    testError("def f(long t, def x) { sleep(t,x) }; def a = ['1',2]; f(a)", "cannot be cast to number");
+    testError("def f(long t, def x) { sleep(t,x) }; def a = ['123',2]; f(a)", "cannot be cast to number");
     test("def f(long t, def x) { sleep(t,x) }; [[1,2],[3,4]].map{ a,b -> f([a,b]) }", List.of(2,4));
     test("def f(long t, def x) { sleep(t,x) }; [a:2,b:4].map{ a,b -> f([b,a]) }", List.of("a","b"));
     test("def f(long t, def x) { sleep(t,x) }; def x = [[1,2],[3,4]]; x.map{ a,b -> f([a,b]) }", List.of(2,4));
@@ -5495,7 +5585,7 @@ class CompilerTest extends BaseTest {
   @Test public void passingNamedArgs() {
     testError("def f(x, y=[a:3]) { x + y }; f(x:1,x:2,y:2)", "parameter 'x' occurs multiple times");
     testError("def f(x, y=[a:3]) { x + y }; f(x:1,yy:2)", "no such parameter: yy");
-    testError("def f(int x, y=[a:3]) { x + y }; f(x:'1',y:2)", "cannot convert argument of type string to parameter type of int");
+    testError("def f(int x, y=[a:3]) { x + y }; f(x:'123',y:2)", "cannot be cast to int");
     testError("def f(x, y=[a:3]) { x + y }; f(x:1,(''+'y'):2)", "invalid parameter name");
     test("def f(x, y=[a:3]) { x + y }; f(x:1,y:2)", 3);
     testError("def f(x, y) { x + y }; f([x:1,y:2])", "missing mandatory argument: y");
@@ -5951,7 +6041,7 @@ class CompilerTest extends BaseTest {
     test("sleep(timeMs:1,data:2)", 2);
     test("def f = sleep; f(timeMs:1,data:2)", 2);
     testError("def f = sleep; f(timeMs:1,datax:2)", "no such parameter");
-    testError("sleep('abc')", "cannot convert argument");
+    testError("sleep('abc')", "cannot be cast to number");
     testError("def f = sleep; f('abc')", "cannot be cast");
     test("sleep(1,2L)", 2L);
     test("sleep(1,2D)", 2D);

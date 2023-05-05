@@ -110,7 +110,7 @@ public class Functions {
     // List/Map/Object[]/String can match on Iterable.
     var match = functions.stream().filter(f -> f.type.is(type)).findFirst();
     if (match.isEmpty()) {
-      if (type.is(LIST,MAP,OBJECT_ARR,STRING_ARR,LONG_ARR,STRING,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
+      if (type.is(LIST,MAP,STRING,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
         match = functions.stream().filter(f -> f.type == ITERATOR).findFirst();
       }
     }

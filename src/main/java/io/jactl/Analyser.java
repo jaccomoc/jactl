@@ -550,7 +550,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitCastTo(Expr.CastTo expr) {
+  @Override public Void visitCheckCast(Expr.CheckCast expr) {
     analyse(expr.expr);
     freeLocals(1);
     return null;

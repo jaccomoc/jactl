@@ -314,7 +314,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStmts.stmts.add(thisStmt);
       var fields = classDecl.fields.stream()
                                    .map(decl -> {
-                                     var newDecl = new Expr.VarDecl(decl.name, null);
+                                     var newDecl = new Expr.VarDecl(decl.name, null, null);
                                      newDecl.isField = true;
                                      newDecl.type    = decl.declExpr.type;
                                      return newDecl;
@@ -331,7 +331,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private Stmt.VarDecl fieldDecl(Token token, String name, JactlType instanceType) {
     Token        ident   = token.newIdent(name);
-    Expr.VarDecl varDecl = new Expr.VarDecl(ident, null);
+    Expr.VarDecl varDecl = new Expr.VarDecl(ident, null, null);
     varDecl.isResultUsed = false;
     varDecl.type = instanceType;
     varDecl.isField = true;
@@ -558,7 +558,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (captureArrVar == null) {
       final var captureArrName = expr.operator.newIdent(Utils.CAPTURE_VAR);
       // Allocate our capture array var if we don't already have one in scope
-      captureArrVar = new Expr.VarDecl(captureArrName, null);
+      captureArrVar = new Expr.VarDecl(captureArrName, null, null);
       captureArrVar.type = MATCHER;
       captureArrVar.owner = currentFunction();
       captureArrVar.isResultUsed = false;
@@ -641,20 +641,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       assert expr.right instanceof Expr.TypeExpr;
       expr.isConst = false;
       if (!expr.left.type.isConvertibleTo(expr.right.type)) {
-        // Even if not normally convertible for "as" we support these conversions:
-        //  - Anything can be converted to STRING or BOOLEAN
-        //  - String can be converted to any numeric
-        //  - String can be converted to List (of chars)
-        //  - Map/List can be converted to Map/List
-        //  - Map can be converted to INSTANCE
-        //  - INSTANCE can be converted to Map
-        if (expr.right.type.is(BOOLEAN, STRING) ||
-            expr.left.type.is(STRING) && expr.right.type.isNumeric() ||
-            expr.left.type.is(STRING) && expr.right.type.is(LIST) ||
-            expr.left.type.is(MAP, LIST, ITERATOR) && expr.right.type.is(MAP, LIST) ||
-            expr.left.type.is(MAP, INSTANCE) && expr.right.type.is(MAP, INSTANCE)) {
-          return expr.type = expr.right.type;
-        }
         error("Cannot coerce from " + expr.left.type + " to " + expr.right.type, expr.operator);
       }
       return expr.type = expr.right.type;
@@ -762,7 +748,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.third.type = expr.second.type;
     }
     else
-    if (!expr.third.type.isConvertibleTo(expr.second.type)) {
+    if (!expr.third.type.isCastableTo(expr.second.type)) {
       error("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
     }
     return expr.type = JactlType.result(expr.second.type, expr.operator1, expr.third.type);
@@ -853,7 +839,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Throw error if bad cast
-    checkTypeConversion(expr.expr, expr.castType, true);
+    checkTypeConversion(expr.expr, expr.castType, true, expr.location);
 
     // We have a cast so our type is the type we are casting to
     return expr.type;
@@ -875,7 +861,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       case FALSE:         return expr.type = BOOLEAN;
       case NULL:          return expr.type = ANY;
       case IDENTIFIER:    return expr.type = STRING;
-      case OBJECT_ARR:    return expr.type = STRING;
       case LIST:          return expr.type = STRING;
       case MAP:           return expr.type = STRING;
       default:
@@ -913,12 +898,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // in the initialiser. E.g. we can catch:  int x = x + 1
     declare(expr);
 
-    JactlType type = resolve(expr.initialiser);
-//    if (type != null && !type.isConvertibleTo(expr.type)) {
-//      error("Cannot convert initialiser of type " + type + " to type of variable " +
-//                             expr.name.getStringValue() + " (" + expr.type + ")", expr.initialiser.location);
-//    }
-    checkTypeConversion(expr.initialiser, expr.type, false);
+    resolve(expr.initialiser);
+    checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
 
     define(expr.name, expr);
     return expr.type;
@@ -1069,7 +1050,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Cannot assign to function", expr.identifierExpr.location);
     }
     resolve(expr.expr);
-    checkTypeConversion(expr.expr, expr.type, false);
+    checkTypeConversion(expr.expr, expr.type, false, expr.operator);
     if (expr.operator.is(QUESTION_EQUAL)) {
       // If using ?= have to allow for null being result
       expr.type = ANY;
@@ -1091,12 +1072,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * @param to        the type to convert to
    * @param toAndFrom whether to try converting both ways
    */
-  private void checkTypeConversion(Expr from, JactlType to, boolean toAndFrom) {
+  private void checkTypeConversion(Expr from, JactlType to, boolean toAndFrom, Token location) {
     if (from == null) {
       return;
     }
-    if (!from.type.isConvertibleTo(to) && !(toAndFrom && from.type.isAssignableFrom(to))) {
-      error("Cannot convert from " + from.type + " to " + to, from.location);
+    if (!from.type.isCastableTo(to) && !(toAndFrom && from.type.isAssignableFrom(to))) {
+      error("Cannot convert from " + from.type + " to " + to, location);
     }
     if (to.is(BOOLEAN) && from instanceof Expr.RegexMatch && from.type.is(STRING)) {
       error("Regex string used in boolean context", from.location);
@@ -1117,7 +1098,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolve(expr.expr);
 
-    if (!expr.expr.type.isConvertibleTo(expr.type)) {
+    if (!expr.expr.type.isCastableTo(expr.type)) {
       error("Cannot convert from type of right-hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
     return expr.type;
@@ -1216,7 +1197,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(returnExpr.returnType);
     returnExpr.returnType = currentFunction().returnType;
     returnExpr.funDecl = currentFunction();
-    if (!returnExpr.expr.type.isConvertibleTo(returnExpr.returnType)) {
+    if (!returnExpr.expr.type.isCastableTo(returnExpr.returnType)) {
       error("Expression type " + returnExpr.expr.type + " not compatible with function " +
                              currentFunctionName() + "() return type of " +
                              returnExpr.returnType, returnExpr.expr.location);
@@ -1412,7 +1393,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type = expr.classDescriptor.getClassType();
   }
 
-  @Override public JactlType visitCastTo(Expr.CastTo expr) {
+  @Override public JactlType visitCheckCast(Expr.CheckCast expr) {
     resolve(expr.expr);
     resolve(expr.castType);
     return expr.type = expr.castType;
@@ -1641,7 +1622,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     throw new CompileError(msg, location);
   }
 
-  private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null);
+  private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null, null);
 
   private void declare(Expr.VarDecl decl) {
     String varName = decl.name.getStringValue();
@@ -1748,7 +1729,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (classDescriptor == null) {
       return null;
     }
-    var classVarDecl = new Expr.VarDecl(location.newIdent(className), null);
+    var classVarDecl = new Expr.VarDecl(location.newIdent(className), null, null);
     classVarDecl.classDescriptor = classDescriptor;
     classVarDecl.type = JactlType.createClass(classDescriptor);
     return classVarDecl;
@@ -2169,7 +2150,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     BiFunction<String, JactlType,Stmt.VarDecl> createParam =
       (name,type) -> {
         Token nameToken = funDecl.startToken.newIdent(name);
-        var declExpr = new Expr.VarDecl(nameToken,null);
+        var declExpr = new Expr.VarDecl(nameToken, null, null);
         declExpr.type = type;
         declExpr.isParam = true;
         declExpr.isExplicitParam = true;
@@ -2522,7 +2503,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     var argMapIdent           = new Expr.Identifier(classDecl.name.newIdent(argMapName));
     var initialiser           = new Expr.Ternary(instanceOfNamedArgs,
                                                  new Token(QUESTION, classDecl.name),
-                                                 new Expr.CastTo(classDecl.name, arg0, MAP),
+                                                 new Expr.CheckCast(classDecl.name, arg0, MAP),
                                                  new Token(COLON, classDecl.name),
                                                  new Expr.InvokeUtility(classDecl.name, RuntimeUtils.class, "copyNamedArgs", List.of(Object.class), List.of(arg0)));
     wrapperSmts.stmts.add(createVarDecl(classDecl.name, initWrapper, argMapName, MAP, initialiser));
@@ -2614,13 +2595,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Function<TokenType,Token> token = t -> new Token(null, 0).setType(t);
     List<Stmt.VarDecl> params = new ArrayList<>();
     for (int i = 0; i < func.paramTypes.size(); i++) {
-      final var p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null);
+      final var p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null,  null);
       p.type = func.paramTypes.get(i);
       params.add(new Stmt.VarDecl(token.apply(p.type.tokenType()), p));
     }
     var funDecl = new Expr.FunDecl(null, null, func.returnType, params);
     funDecl.functionDescriptor = func;
-    var varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), funDecl);
+    var varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), token.apply(EQUAL), funDecl);
     varDecl.funDecl = funDecl;
     varDecl.type = FUNCTION;
     return varDecl;
@@ -2655,7 +2636,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private static Expr.VarDecl createGlobalVarDecl(String name, JactlType type) {
     Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(name),
-                                            null);
+                                            null, null);
     varDecl.type = type;
     varDecl.isGlobal = true;
     return varDecl;

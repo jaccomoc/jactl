@@ -1193,8 +1193,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       expect(1);
       box();
-      loadLocation(expr.location);
-      invokeMethod(RuntimeUtils.class, "as" + Utils.capitalise(expr.type.typeName()), Object.class, String.class, int.class);
+      if (expr.type.is(ARRAY)) {
+        loadConst(expr.type);
+        loadLocation(expr.location);
+        invokeMethod(RuntimeUtils.class, "asArray", Object.class, Class.class, String.class, int.class);
+      }
+      else {
+        loadLocation(expr.location);
+        invokeMethod(RuntimeUtils.class, "as" + Utils.capitalise(expr.type.typeName()), Object.class, String.class, int.class);
+      }
       return null;
     }
 
@@ -2046,7 +2053,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override public Void visitCastTo(Expr.CastTo expr) {
+  @Override public Void visitCheckCast(Expr.CheckCast expr) {
     compile(expr.expr);
     checkCast(expr.type);
     return null;
@@ -2107,7 +2114,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Value of current type on stack
     JactlType valueType = peek();
 
-    if (valueType.is(INSTANCE) && valueType.isConvertibleTo(varType)) { return; }  // We have a compatible instance type
+    if (valueType.is(INSTANCE) && valueType.isCastableTo(varType)) { return; }  // We have a compatible instance type
     if (expr != null && expr.isNull())                                { return; }  // Null is valid for an Instance
 
     if (!valueType.is(ANY, MAP)) {
@@ -2371,7 +2378,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     else
-    if (!argExpr.type.isConvertibleTo(paramType)) {
+    if (!argExpr.type.isCastableTo(paramType)) {
       paramType = paramType.is(OBJECT_ARR) ? LIST : paramType;
       throw new CompileError("Cannot convert argument of type " + argExpr.type + " to parameter type of " + paramType, location);
     }
@@ -2820,7 +2827,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case STRING:      loadConst("");           break;
       case ANY:         loadConst(null);         break;
       case INSTANCE:    loadConst(null);         break;
-      case OBJECT_ARR:  loadConst(null);         break;
       case FUNCTION:    loadConst(null);         break;   // use null for the moment to indicate identity function
       case MATCHER:
         _newInstance(RegexMatcher.class);
@@ -2894,26 +2900,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case LIST:       return castToList(location);
       case ANY:        return convertToAny(location);
       case FUNCTION:   return castToFunction(location);
-      case OBJECT_ARR: return castToObjectArr(location);
       case ITERATOR:   return null;  // noop
       case NUMBER:     return castToNumber(location);
       case INSTANCE:   return castToInstance(type, expr, location);
-      case ARRAY:      return castToArray(type, location);
+      case ARRAY:      return convertToArray(type, location);
       default:         throw new IllegalStateException("Internal error: Unknown type " + type);
     }
-  }
-
-  private Void castToArray(JactlType type, Location location) {
-    if (peek().is(type)) {
-      return null;
-    }
-    if (peek().is(ANY)) {
-      tryCatch(ClassCastException.class, false,
-               () -> checkCast(type),
-               () -> { popVal(); throwError("Invalid type: could not cast to " + type, location); });
-      return null;
-    }
-    throw new CompileError("Cannot cast from " + peek() + " to " + type, location);
   }
 
   private Void castToInstance(JactlType type, Expr expr, Location location) {
@@ -2925,7 +2917,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     if (peek().is(INSTANCE)) {
-      if (peek().isConvertibleTo(type) || type.isConvertibleTo(peek())) {
+      if (peek().isCastableTo(type) || type.isCastableTo(peek())) {
         checkCast(type);
         return null;
       }
@@ -3041,7 +3033,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     expect(1);
-    if (peek().is(ANY)) {
+    if (peek().is(ANY,STRING)) {
       loadLocation(location);
       invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeMethod(Number.class, "longValue");
@@ -3069,7 +3061,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     expect(1);
-    if (peek().is(ANY)) {
+    if (peek().is(ANY,STRING)) {
       loadLocation(location);
       invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeMethod(Number.class, "doubleValue");
@@ -3096,7 +3088,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     expect(1);
-    if (peek().is(ANY)) {
+    if (peek().is(ANY,STRING)) {
       loadLocation(location);
       invokeMethod(RuntimeUtils.class, "castToDecimal", Object.class, String.class, Integer.TYPE);
     }
@@ -3168,15 +3160,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     throw new CompileError("Cannot convert " + peek() + " to Function", (Token)location);
   }
 
-  private Void castToObjectArr(SourceLocation location) {
-    if (peek().is(OBJECT_ARR)) { return null; }
-    if (peek().is(ANY)) {
-      expect(1);
-      loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "castToObjectArr", Object.class, String.class, Integer.TYPE);
+  private Void convertToArray(JactlType type, Location location) {
+    if (peek().is(type)) {
       return null;
     }
-    throw new CompileError("Cannot convert " + peek() + " to Object[]", (Token)location);
+    if (peek().is(ANY,LIST,ARRAY)) {
+      expect(1);
+      loadConst(type);
+      loadLocation(location);
+      invokeMethod(RuntimeUtils.class, "castToArray", Object.class, Class.class, String.class, Integer.TYPE);
+      checkCast(type);
+      return null;
+    }
+    throw new CompileError("Cannot cast from " + peek() + " to " + type, location);
   }
 
   private Void convertToAny(SourceLocation location) {

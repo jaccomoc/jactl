@@ -30,7 +30,7 @@ public class ClassDescriptor {
   String                          namePath;      // Name including outerclasses: X$Y$Z
   String                          pkg;           // a.b.c
   String                          packagedName;  // a.b.c.X.Y.Z
-  String                          internalName;
+  String                          internalName;  // io/jactl/pkg/a/b/c/X/Y/Z
   boolean                         isInterface;
   JactlType                       baseClass;
   List<ClassDescriptor>           interfaces;

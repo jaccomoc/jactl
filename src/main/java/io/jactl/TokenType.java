@@ -163,9 +163,6 @@ public enum TokenType {
   EOF(),            // End of file
 
   // Internal use only
-  OBJECT_ARR(),
-  LONG_ARR(),
-  STRING_ARR(),
   NUMBER();
 
   final String asString;

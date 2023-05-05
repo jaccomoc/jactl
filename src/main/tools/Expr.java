@@ -235,6 +235,7 @@ class Expr {
    */
   class VarDecl extends Expr implements ManagesResult {
     Token           name;
+    Token           equals;
     Expr            initialiser;
     Expr.FunDecl    @owner;               // Which function variable belongs to (for local vars)
     boolean         @isGlobal;            // Whether global (bindings var) or local
@@ -533,7 +534,7 @@ class Expr {
   /**
    * Cast to given type
    */
-  class CastTo extends Expr {
+  class CheckCast extends Expr {
     Token      token;
     Expr       expr;      // Object being cast
     JactlType castType;  // Type to cast to
