@@ -2095,10 +2095,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return returnStmt;
     }
 
-    // For functions that return ANY there is an implicit "return null" even if last statement
-    // does not have a value so replace stmt with list of statements that include the stmt and
-    // then a "return null" statement.
-    if (returnType.is(ANY)) {
+    // For functions that return an object (i.e. not a primitive) there is an implicit "return null"
+    // even if last statement does not have a value so replace stmt with list of statements that
+    // include the stmt and then a "return null" statement.
+    if (returnType.isRef()) {
       Stmt.Stmts stmts = new Stmt.Stmts();
       stmts.stmts.add(stmt);
       stmts.location = stmt.location;
@@ -2108,7 +2108,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Other statements are not supported for implicit return
-    error("Unsupported statement type " + stmt.getClass().getName()  + " for implicit return", stmt.location);
+    error("Implicit return of null incompatible with function return type of " + returnType, stmt.location);
     return null;
   }
 

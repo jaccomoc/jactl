@@ -2176,7 +2176,7 @@ public class RuntimeUtils {
       return toBigDecimal(obj);
     }
     if (obj == null) {
-      throw new NullError("Null value for Decimal", source, offset);
+      return null;
     }
     if (obj instanceof String) {
       String value = (String)obj;

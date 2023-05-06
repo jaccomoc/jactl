@@ -3129,6 +3129,7 @@ class CompilerTest extends BaseTest {
     test("var a = new int[1]; a instanceof int[]", true);
     test("def a = new int[1]; ((int[])a)[0]", 0);
     test("def a = new int[1]; ((int[])a)[0] instanceof int", true);
+    test("int[] f() { [1,2,3] }; f() instanceof int[] and f().sum() == 6", true);
   }
 
   @Test public void nullArrays() {
@@ -5027,16 +5028,16 @@ class CompilerTest extends BaseTest {
     test("(String)null", null);
     test("(Map)null", null);
     test("(List)null", null);
+    test("(Decimal)null", null);
     test("def x = null; (Map)x", null);
     test("def x = null; (List)x", null);
+    test("def x = null; (Decimal)x", null);
     testError("(int)null", "cannot convert null");
     testError("(long)null", "cannot convert null");
     testError("(double)null", "cannot convert null");
-    testError("(Decimal)null", "null value for decimal");
     testError("def x; (int)x", "cannot convert null");
     testError("def x; (long)x", "cannot convert null");
     testError("def x; (double)x", "cannot convert null");
-    testError("def x; (Decimal)x", "null value for decimal");
 
     test("(int)'a'", 97);
     test("def x = 'a'; (int)x", 97);
@@ -5338,6 +5339,18 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; for (int i = 0; true;) { break if i > 5; i++; sum += i }; sum", 21);
     test("int sum = 0; for (int i = 0; true; true) { break if i > 5; i++; sum += i }; sum", 21);
     test("int sum = 0; int i = 0; for (;;) { break if i > 5; i++; sum += i }; sum", 21);
+    test("def f() { for (int i = 0; i < 10; ) i++ }; f()", null);
+    test("def f() { for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    test("String f() { if (false) { return '' } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    test("Decimal f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    test("class X{}; X f() { if (false) { return new X() } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    test("int[] f() { if (false) { return new int[0] } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    test("int[][] f() { if (false) { return new int[0][] } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    test("long[] f() { if (false) { return new long[0] } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", null);
+    testError("int f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
+    testError("long f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
+    testError("double f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
+    testError("boolean f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
   }
 
   @Test public void breakContinue() {

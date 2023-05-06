@@ -2573,15 +2573,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DOUBLE:
         mv.visitInsn(DRETURN);
         break;
-      case DECIMAL:
-      case STRING:
-      case ANY:
-      case INSTANCE:
-      case LIST:
-      case MAP:
+      default:
         mv.visitInsn(ARETURN);
         break;
-      default: throw new IllegalStateException("Unexpected type " + returnType);
     }
   }
 
