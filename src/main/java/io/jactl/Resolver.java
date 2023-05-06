@@ -654,10 +654,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private JactlType getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
-    if (parent.type.is(ARRAY)) {
-      if (!accessOperator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
-        error("Array field access using '" + accessOperator.getChars() + "' not supported", accessOperator);
-      }
+    if (parent.type.is(ARRAY) && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
       if (!(field.type.isNumeric() || field.type.is(ANY))) {
         error("Array index must be numeric, not " + field.type, field.location);
       }
@@ -671,11 +668,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         fieldName = (String) fieldValue;
       }
       else {
-        if (parent.type.is(INSTANCE, CLASS)) {
+        if (parent.type.is(INSTANCE, CLASS, ARRAY)) {
           error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
         }
       }
     }
+
     if (fieldName == null) {
       if (parent.isSuper()) {
         error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
@@ -720,18 +718,20 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       return type;
     }
-    else {
-      // Might be a built-in method...
-      if (lookupMethod(parent.type, (String) fieldName) != null) {
-        return FUNCTION;
-      }
-      if (parent.type.is(MAP, ANY)) {
-        // Either we have a map whose field could have any value or we don't know parent type so we
-        // default to ANY and figure it out at runtime
-        return ANY;
-      }
-      error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
+
+    // Not INSTANCE or CLASS
+
+    // Might be a built-in method...
+    if (lookupMethod(parent.type, (String) fieldName) != null) {
+      return FUNCTION;
     }
+
+    if (parent.type.is(MAP, ANY)) {
+      // Either we have a map (whose field could have any value) or we don't know parent type, so we
+      // default to ANY and figure it out at runtime
+      return ANY;
+    }
+    error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
     return null;
   }
 

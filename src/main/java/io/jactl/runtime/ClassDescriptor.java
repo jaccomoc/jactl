@@ -27,10 +27,11 @@ import java.util.stream.Stream;
 public class ClassDescriptor {
 
   String                          className;     // Declared name: class Z { }
-  String                          namePath;      // Name including outerclasses: X$Y$Z
+  String                          namePath;      // Name including outerclasses: _$j$Script123$X$Y$Z
   String                          pkg;           // a.b.c
-  String                          packagedName;  // a.b.c.X.Y.Z
-  String                          internalName;  // io/jactl/pkg/a/b/c/X/Y/Z
+  String                          packagedName;  // a.b.c._$j$Script123$X$Y$Z
+  String                          prettyName;    // a.b.c.X.Y.Z
+  String                          internalName;  // io/jactl/pkg/a/b/c/_$j$Script123/X/Y/Z
   boolean                         isInterface;
   JactlType                       baseClass;
   List<ClassDescriptor>           interfaces;
@@ -55,6 +56,20 @@ public class ClassDescriptor {
     this.isInterface  = isInterface;
     this.interfaces   = interfaces != null ? interfaces : new ArrayList<>();
     this.pkg          = pkgName;
+    this.prettyName   = namePath;
+    int idx = namePath.indexOf(Utils.JACTL_SCRIPT_PREFIX);
+    // Strip off script name if we are an embedded class
+    if (idx != -1) {
+      int dollarIdx = namePath.indexOf('$',idx + Utils.JACTL_SCRIPT_PREFIX.length());
+      if (dollarIdx != -1) {
+        this.prettyName = namePath.substring(0, idx) + namePath.substring(dollarIdx + 1);
+        this.prettyName = prettyName.replaceAll("\\$",".");
+      }
+    }
+    else {
+      this.prettyName = prettyName.replaceAll("\\$",".");
+    }
+    this.prettyName = (pkgName.equals("")?"":(pkgName + ".")) + prettyName;
     this.packagedName = (pkgName.equals("")?"":(pkgName + ".")) + namePath;
     this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
   }
@@ -63,6 +78,7 @@ public class ClassDescriptor {
   public String     getNamePath()     { return namePath; }
   public String     getPackageName()  { return pkg; }
   public String     getPackagedName() { return packagedName; }
+  public String     getPrettyName()   { return prettyName; }
   public String     getInternalName() { return internalName; }
   public JactlType  getClassType()    { return JactlType.createClass(this); }
   public JactlType  getInstanceType() { return getClassType().createInstanceType(); }

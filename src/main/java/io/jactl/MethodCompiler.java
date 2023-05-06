@@ -24,10 +24,7 @@ import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
@@ -1197,6 +1194,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(expr.type);
         loadLocation(expr.location);
         invokeMethod(RuntimeUtils.class, "asArray", Object.class, Class.class, String.class, int.class);
+        checkCast(expr.type);
       }
       else {
         loadLocation(expr.location);
@@ -1774,9 +1772,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
                            }
                          },
-//                         () -> invokeUserMethod(method, invokeSpecial));
-                         () -> invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.implementingMethod,
-                                                expr.type, methodParamTypes(method)));
+                         () -> {
+                           if (methodClass.equals(method.implementingClassName)) {
+                             invokeMethod(method, methodParamTypes(method), invokeSpecial);
+                           }
+                           else {
+                             invokeMethod(method.isStatic, invokeSpecial, methodClass, method.implementingMethod,
+                                          expr.type, methodParamTypes(method));
+                           }
+                         });
       }
       else {
         // Need to invoke the wrapper
@@ -1814,7 +1818,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              invokeMethodHandle();
                            }
                            else {
-                             invokeUserMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
+                             invokeMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
                            }
                            // Convert Object returned by wrapper back into return type of the function
                            checkCast(method.returnType);
@@ -2046,7 +2050,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        expr.args.forEach(this::compile);
                      },
                      () -> {
-                       invokeUserMethod(initMethod, expr.invokeSpecial);
+                       invokeMethod(initMethod, expr.invokeSpecial);
                      }
     );
 
@@ -2158,8 +2162,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        // Note: wrapper always has continuation since when invoking as a handle we have
                        // no idea about whether it is async or not.
                        List<JactlType> paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
-                       invokeUserMethod(false, false, method.implementingClassName, method.wrapperMethod, ANY,
-                                        paramTypes);
+                       invokeMethod(false, false, method.implementingClassName, method.wrapperMethod, ANY,
+                                    paramTypes);
                      });
     mv.visitLabel(end);                          // :end
     // Convert Object returned by wrapper back into instance type
@@ -3909,11 +3913,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            loadArgsAsObjectArr(expr.args.subList(argIdx, expr.args.size()));
                          }
                        },
-                       () -> invokeUserMethod(func.isStatic,
-                                              false, func.implementingClassName == null ? classCompiler.internalName : func.implementingClassName,
-                                              func.implementingMethod,
-                                              func.returnType,
-                                              finalParamTypes));
+                       () -> invokeMethod(func, finalParamTypes, false));
     }
   }
 
@@ -3964,30 +3964,45 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void invokeUserMethod(Expr.FunDecl funDecl) {
     // Note: param types can include heap locals if funDecl has any
-    invokeUserMethod(funDecl.functionDescriptor, methodParamTypes(funDecl), false);
+    invokeMethod(funDecl.functionDescriptor, methodParamTypes(funDecl), false);
   }
 
-  private void invokeUserMethod(FunctionDescriptor functionDescriptor, boolean isInvokeSpecial) {
+  private void invokeMethod(FunctionDescriptor functionDescriptor, boolean isInvokeSpecial) {
     // Note: param types based solely off functionDescriptor so no support for heap locals with this call
-    invokeUserMethod(functionDescriptor, methodParamTypes(functionDescriptor), isInvokeSpecial);
+    invokeMethod(functionDescriptor, methodParamTypes(functionDescriptor), isInvokeSpecial);
   }
 
-  private void invokeUserMethod(FunctionDescriptor functionDescriptor, List<JactlType> paramTypes, boolean isInvokeSpecial) {
-    invokeUserMethod(functionDescriptor.isStatic,
-                     isInvokeSpecial, functionDescriptor.implementingClassName == null ? classCompiler.internalName : functionDescriptor.implementingClassName,
-                     functionDescriptor.implementingMethod,
-                     functionDescriptor.returnType,
-                     paramTypes);
-    if (functionDescriptor.isWrapper) {
-      // Convert Object returned by wrapper back into return type of the function
-      checkCast(functionDescriptor.returnType.boxed());
-      if (functionDescriptor.returnType.isPrimitive()) {
-        unbox();
+  private void invokeMethod(FunctionDescriptor functionDescriptor, List<JactlType> paramTypes, boolean isInvokeSpecial) {
+    if (!isInvokeSpecial && !functionDescriptor.isWrapper && functionDescriptor.inlineMethod != null) {
+      // Invoke method for generating code inline
+      try {
+        int stackCount = paramTypes.size() + (functionDescriptor.isStatic ? 0 : 1);
+        expect(stackCount);
+        functionDescriptor.inlineMethod.invoke(null, this.mv);
+        popType(stackCount);
+        push(functionDescriptor.returnType);
+      }
+      catch (IllegalAccessException|InvocationTargetException e) {
+        throw new IllegalStateException("Error invoking inlining method for " + functionDescriptor.name + ": " + e.getMessage(), e);
+      }
+    }
+    else {
+      invokeMethod(functionDescriptor.isStatic,
+                   isInvokeSpecial, functionDescriptor.implementingClassName == null ? classCompiler.internalName : functionDescriptor.implementingClassName,
+                   functionDescriptor.implementingMethod,
+                   functionDescriptor.returnType,
+                   paramTypes);
+      if (functionDescriptor.isWrapper) {
+        // Convert Object returned by wrapper back into return type of the function
+        checkCast(functionDescriptor.returnType.boxed());
+        if (functionDescriptor.returnType.isPrimitive()) {
+          unbox();
+        }
       }
     }
   }
 
-  private void invokeUserMethod(boolean isStatic, boolean isInvokeSpecial, String internalClassName, String methodName, JactlType returnType, List<JactlType> paramTypes) {
+  private void invokeMethod(boolean isStatic, boolean isInvokeSpecial, String internalClassName, String methodName, JactlType returnType, List<JactlType> paramTypes) {
     int stackCount = paramTypes.size() + (isStatic ? 0 : 1);
     expect(stackCount);
     mv.visitMethodInsn(isStatic ? INVOKESTATIC
@@ -4389,7 +4404,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              }
                            },
                            () -> {
-                             invokeUserMethod(initMethod, false);
+                             invokeMethod(initMethod, false);
                            });
         }
         else {
@@ -4406,7 +4421,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           if (initMethod.needsLocation) {
             loadLocation(expr.location);
           }
-          invokeUserMethod(initMethod, false);
+          invokeMethod(initMethod, false);
           mv.visitJumpInsn(GOTO, afterCatch);
           mv.visitLabel(blockEnd);
           mv.visitLabel(catchLabel);

@@ -1501,9 +1501,7 @@ public class RuntimeUtils {
 
     // Check that we are doing a list operation
     if (isDot) {
-      throw new RuntimeError("Field access not supported for " +
-                             (parentString != null ? "String" : "List") +
-                             " object", source, offset);
+      throw new RuntimeError("Field access not supported for " + className(parent), source, offset);
     }
 
     // Must be a List or String so field should be an index
@@ -2307,12 +2305,14 @@ public class RuntimeUtils {
     if (obj instanceof List)         { return "List"; }
     if (obj instanceof Iterator)     { return "Iterator"; }
     if (obj instanceof MethodHandle) { return "Function"; }
-    if (obj.getClass().isArray())    { return "Array<" + componentType(obj.getClass().getComponentType()) + ">"; }
+    if (obj.getClass().isArray())    { return componentType(obj.getClass().getComponentType()) + "[]"; }
     if (obj instanceof JactlObject) {
-      String className = obj.getClass().getName();
-      int    lastDot   = className.lastIndexOf('.');
-      className = className.substring(lastDot == -1 ? 0 : lastDot + 1);
-      return "Instance<" + className + ">";
+      try {
+        return (String)obj.getClass().getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
+      }
+      catch (IllegalAccessException | NoSuchFieldException e) {
+        throw new IllegalStateException("Internal error: error accessing " + Utils.JACTL_PRETTY_NAME_FIELD, e);
+      }
     }
     return obj.getClass().getName();
   }
@@ -2329,7 +2329,15 @@ public class RuntimeUtils {
     if (clss.equals(List.class))         { return "List"; }
     if (clss.equals(Iterator.class))     { return "Iterator"; }
     if (clss.equals(MethodHandle.class)) { return "Function"; }
-    if (clss.isArray())                  { return "Array<" + componentType(clss.getComponentType()) + ">"; }
+    if (clss.isArray())                  { return componentType(clss.getComponentType()) + "[]"; }
+    if (JactlObject.class.isAssignableFrom(clss)) {
+      try {
+        return (String)clss.getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
+      }
+      catch (IllegalAccessException | NoSuchFieldException e) {
+        throw new IllegalStateException("Internal error: error accessing " + Utils.JACTL_PRETTY_NAME_FIELD, e);
+      }
+    }
     return clss.getName();
   }
 

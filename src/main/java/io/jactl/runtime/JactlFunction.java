@@ -217,6 +217,17 @@ public class JactlFunction extends FunctionDescriptor {
     return this;
   }
 
+  /**
+   * Name of public static method in impl class that can generate inline code
+   * for functions that support inlining.
+   * @param methodName  name of the public static method
+   * @return the current JactlFunction for method chaining
+   */
+  public JactlFunction inline(String methodName) {
+    this.inlineMethodName = methodName;
+    return this;
+  }
+
   ////////////////////////////////////////////////////////
 
   private Set<String> getMandatoryParams() {
@@ -231,6 +242,7 @@ public class JactlFunction extends FunctionDescriptor {
       throw new IllegalArgumentException("Missing name for function");
     }
     this.method               = findMethod(implementingClass, implementingMethod);
+    this.inlineMethod         = inlineMethodName == null ? null : findMethod(implementingClass, inlineMethodName);
     Class<?>[] parameterTypes = method.getParameterTypes();
     this.methodHandle         = RuntimeUtils.lookupMethod(implementingClass, implementingMethod, method.getReturnType(), parameterTypes);
     this.argCount             = method.getParameterCount();

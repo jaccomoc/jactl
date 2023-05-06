@@ -109,15 +109,14 @@ public class Functions {
     // Look for exact match and then generic match.
     // List/Map/Object[]/String can match on Iterable.
     var match = functions.stream().filter(f -> f.type.is(type)).findFirst();
-    if (match.isEmpty()) {
-      if (type.is(LIST,MAP,STRING,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
-        match = functions.stream().filter(f -> f.type == ITERATOR).findFirst();
-      }
+    if (match.isEmpty() && type.is(ARRAY) && type.isCastableTo(OBJECT_ARR)) {
+      match = functions.stream().filter(f -> f.type.is(OBJECT_ARR)).findFirst();
     }
-    if (match.isEmpty()) {
-      if (type.is(INT,LONG,DOUBLE,DECIMAL)) {
-        match = functions.stream().filter(f -> f.type == NUMBER).findFirst();
-      }
+    if (match.isEmpty() && type.is(LIST,MAP,STRING,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
+      match = functions.stream().filter(f -> f.type.is(ITERATOR)).findFirst();
+    }
+    if (match.isEmpty() && type.is(INT,LONG,DOUBLE,DECIMAL)) {
+      match = functions.stream().filter(f -> f.type.is(NUMBER)).findFirst();
     }
     // Final check is for ANY
     if (match.isEmpty()) {

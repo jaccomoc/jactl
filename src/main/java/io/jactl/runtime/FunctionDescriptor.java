@@ -20,6 +20,7 @@ package io.jactl.runtime;
 import io.jactl.JactlType;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -36,6 +37,8 @@ public class FunctionDescriptor {
   public int              mandatoryArgCount;
   public String           implementingClassName;
   public String           implementingMethod;
+  public String           inlineMethodName;         // Name of method compiler can invoke to inline function (if supported)
+  public Method           inlineMethod;
   public boolean          isStatic     = false;     // Whether implementation method itself is static or not (for builtins always true)
   public boolean          isInitMethod = false;     // True if this is a user class instance initialiser
   public boolean          isWrapper    = false;     // True if this is the wrapper func for a user function

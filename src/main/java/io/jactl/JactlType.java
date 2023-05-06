@@ -794,7 +794,7 @@ public class JactlType {
       case CONTINUATION: return "Continuation";
       case INSTANCE:     return "Instance<" + getPackagedName() + ">";
       case CLASS:        return "Class<" + getPackagedName() + ">";
-      case ARRAY:        return "Array<" + arrayType + ">";
+      case ARRAY:        return getArrayType().toString() + "[]";
       case UNKNOWN:      return "UNKNOWN";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
@@ -804,10 +804,10 @@ public class JactlType {
     if (getClassDescriptor() == null) {
       if (clss != null && JactlObject.class.isAssignableFrom(clss)) {
         try {
-          return (String)clss.getDeclaredField(Utils.JACTL_PACKAGED_NAME_FIELD).get(null);
+          return (String)clss.getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
         }
         catch (IllegalAccessException | NoSuchFieldException e) {
-          throw new IllegalStateException("Internal error: error accessing " + Utils.JACTL_PACKAGED_NAME_FIELD, e);
+          throw new IllegalStateException("Internal error: error accessing " + Utils.JACTL_PRETTY_NAME_FIELD, e);
         }
       }
       return internalName;

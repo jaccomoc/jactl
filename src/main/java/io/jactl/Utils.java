@@ -49,8 +49,8 @@ public class Utils {
   public static final String JACTL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
   public static final String JACTL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
   public static final String JACTL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
-  public static final String JACTL_PACKAGED_NAME_FIELD   = "_$j$PackagedName";
-  public static final String JACTL_WRITE_JSON            = "_$j$writeJson";
+  public static final String JACTL_PRETTY_NAME_FIELD            = "_$j$PackagedName";
+  public static final String JACTL_WRITE_JSON                   = "_$j$writeJson";
   public static final String JACTL_FROM_JSON             = "fromJson";
   public static final String JACTL_READ_JSON             = "_$j$readJson";
   public static final String JACTL_INIT_MISSING          = "_$j$initMissingFields";

@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.*;
+import org.objectweb.asm.MethodVisitor;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -31,6 +32,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static io.jactl.JactlType.*;
+import static org.objectweb.asm.Opcodes.INVOKESTATIC;
+import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
 
 public class BuiltinFunctions {
 
@@ -47,11 +50,6 @@ public class BuiltinFunctions {
       Jactl.method(LIST)
            .name("size")
            .impl(BuiltinFunctions.class, "listSize")
-           .register();
-
-      Jactl.method(OBJECT_ARR)
-           .name("size")
-           .impl(BuiltinFunctions.class, "objArrSize")
            .register();
 
       Jactl.method(MAP)
@@ -390,6 +388,12 @@ public class BuiltinFunctions {
            .impl(Json.class, "toJson")
            .register();
 
+      Jactl.method(ANY)
+           .name("className")
+           .impl(BuiltinFunctions.class, "objectClassName")
+           .inline("objectClassNameInline")
+           .register();
+
       // Global functions
       Jactl.function()
            .name("timestamp")
@@ -425,6 +429,8 @@ public class BuiltinFunctions {
            .asyncParam("closure")
            .impl(BuiltinFunctions.class, "stream")
            .register();
+
+      BuiltinArrayFunctions.registerFunctions();
 
       initialised = true;
     }
@@ -636,6 +642,14 @@ public class BuiltinFunctions {
 
   public static Object objectToStringData;
   public static String objectToString(Object obj, int indent) { return RuntimeUtils.toString(obj, indent); }
+
+  // = className
+
+  public static Object objectClassNameData;
+  public static String objectClassName(Object obj) { return RuntimeUtils.className(obj); }
+  public static void objectClassNameInline(MethodVisitor mv) {
+    mv.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/RuntimeUtils", "className", "(Ljava/lang/Object;)Ljava/lang/String;", false);
+  }
 
   // = remove
 

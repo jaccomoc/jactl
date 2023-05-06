@@ -17,6 +17,9 @@
 
 package io.jactl;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -35,6 +38,8 @@ public class BaseTest {
   protected boolean            useAsyncDecorator = true;
   protected boolean            replMode = true;
 
+  protected static int testCounter = 0;
+
   protected void doTest(String code, Object expected) {
     doTest(code, true, false, false, expected);
   }
@@ -48,6 +53,7 @@ public class BaseTest {
   }
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
+    testCounter++;
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
@@ -144,7 +150,7 @@ public class BaseTest {
       return null;
     }
 
-    String className = "Script" + scriptNum++;
+    String className = Utils.JACTL_SCRIPT_PREFIX + scriptNum++;
     var parser = new Parser(new Tokeniser(source), jactlContext, packageName);
     var code   = isScript ? parser.parseScript(className) : parser.parseClass();
     var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
@@ -260,6 +266,7 @@ public class BaseTest {
   }
 
   protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
+    testCounter++;
     try {
       JactlContext jactlContext = JactlContext.create()
                                                  .evaluateConstExprs(evalConsts)
@@ -298,4 +305,17 @@ public class BaseTest {
   protected boolean asyncAutoCreate() {
     return JactlContext.create().build().autoCreateAsync();
   }
+
+  @BeforeAll
+  public static void initCounter() {
+    testCounter = 0;
+  }
+
+  @AfterAll
+  public static void displayCounter() {
+    System.out.println("Total tests: " + testCounter);
+    testCounter = 0;
+  }
+
+
 }
