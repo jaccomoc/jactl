@@ -90,7 +90,7 @@ and an `rhs` variable which is the other side of the equality.
 The `lhs` variable will be of the form `lhsnode op rhsnode`.
 (For the sake of illustrating how this works, we will assume that the marker is always
 in the `lhsnode` subtree of the `lhs` variable.)
-We then iterate, peforming the opposite of the current operation.
+We then iterate, performing the opposite of the current operation.
 For example, if the operator is `+` then we would do this:
 ```groovy
 lhs = lhsnode
