@@ -33,7 +33,6 @@ import java.util.function.Function;
 
 import static io.jactl.JactlType.*;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
-import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
 
 public class BuiltinFunctions {
 
@@ -109,6 +108,18 @@ public class BuiltinFunctions {
            .impl(BuiltinFunctions.class, "iteratorReduce")
            .register();
 
+      Jactl.method(LIST)
+           .name("min")
+           .asyncParam("closure", null)
+           .impl(BuiltinFunctions.class, "listMin")
+           .register();
+
+      Jactl.method(LIST)
+           .name("max")
+           .asyncParam("closure", null)
+           .impl(BuiltinFunctions.class, "listMax")
+           .register();
+
       Jactl.method(ITERATOR)
            .name("min")
            .asyncInstance(true)
@@ -121,6 +132,16 @@ public class BuiltinFunctions {
            .asyncInstance(true)
            .asyncParam("closure", null)
            .impl(BuiltinFunctions.class, "iteratorMax")
+           .register();
+
+      Jactl.method(LIST)
+           .name("avg")
+           .impl(BuiltinFunctions.class, "listAvg")
+           .register();
+
+      Jactl.method(LIST)
+           .name("sum")
+           .impl(BuiltinFunctions.class, "listSum")
            .register();
 
       Jactl.method(ITERATOR)
@@ -548,6 +569,10 @@ public class BuiltinFunctions {
     return new StreamIterator(source, offset, closure);
   }
 
+  /////////////////////////////////////
+  // Methods
+  /////////////////////////////////////
+
   // = abs
   public static Object intAbsData;
   public static int intAbs(int n)                   { return n < 0 ? -n : n; }
@@ -557,10 +582,6 @@ public class BuiltinFunctions {
   public static double doubleAbs(double n)          { return n < 0 ? -n : n; }
   public static Object decimalAbsData;
   public static BigDecimal decimalAbs(BigDecimal n) { return n.abs(); }
-
-  /////////////////////////////////////
-  // Methods
-  /////////////////////////////////////
 
   // = asChar
   public static Object intAsCharData;
@@ -707,9 +728,6 @@ public class BuiltinFunctions {
   public static int listSize(List list) {
     return list.size();
   }
-
-  public static Object objArrSizeData;
-  public static int objArrSize(Object[] list) { return list.length; }
 
   public static Object iteratorSizeData;
   public static int iteratorSize(Object iterable, Continuation c) {
@@ -1170,6 +1188,18 @@ public class BuiltinFunctions {
 
   // = avg
 
+  public static Object listAvgData;
+  public static Object listAvg(List list, String source, int offset) {
+    int size = list.size();
+    if (size == 0) {
+      throw new RuntimeError("Empty list for avg() function", source, offset);
+    }
+    Object value = listSum(list, source, offset);
+    if (value instanceof Double)                           { value = BigDecimal.valueOf((double)value); }
+    if (value instanceof Integer || value instanceof Long) { value = BigDecimal.valueOf(((Number)value).longValue()); }
+    return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(size), Utils.DEFAULT_MIN_SCALE, source, offset);
+  }
+
   public static Object iteratorAvgData;
   public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
     int[] counter = new int[]{0};
@@ -1190,6 +1220,16 @@ public class BuiltinFunctions {
   }
 
   // = sum
+
+  public static Object listSumData;
+  public static Object listSum(List list, String source, int offset) {
+    Object sum = 0;
+    int size = list.size();
+    for (int i = 0; i < size; i++) {
+      sum = addNumbers(sum, list.get(i), source, offset);
+    }
+    return sum;
+  }
 
   public static Object iteratorSumData;
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
@@ -1220,6 +1260,38 @@ public class BuiltinFunctions {
   }
 
   // = min/max
+
+  public static Object listMinData;
+  public static Object listMin(List list, Continuation c, String source, int offset, MethodHandle closure) {
+    if (closure != null) {
+      return iteratorMin(list, c, source, offset, closure);
+    }
+    int size = list.size();
+    Object min = null;
+    for (int i = 0; i < size; i++) {
+      Object current = list.get(i);
+      if (i == 0 || RuntimeUtils.compareTo(current, min, source, offset) < 0) {
+        min = current;
+      }
+    }
+    return min;
+  }
+
+  public static Object listMaxData;
+  public static Object listMax(List list, Continuation c, String source, int offset, MethodHandle closure) {
+    if (closure != null) {
+      return iteratorMax(list, c, source, offset, closure);
+    }
+    int size = list.size();
+    Object max = null;
+    for (int i = 0; i < size; i++) {
+      Object current = list.get(i);
+      if (i == 0 || RuntimeUtils.compareTo(current, max, source, offset) > 0) {
+        max = current;
+      }
+    }
+    return max;
+  }
 
   public static Object iteratorMinData;
   public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
