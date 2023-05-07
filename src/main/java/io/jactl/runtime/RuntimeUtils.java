@@ -2520,6 +2520,41 @@ public class RuntimeUtils {
       Map<Object,Object> map = (Map)obj;
       return map.entrySet().stream().map(e -> List.of(e.getKey(), e.getValue())).collect(Collectors.toList());
     }
+    if (obj instanceof Object[]) {
+      return Arrays.asList((Object[])obj);
+    }
+    if (obj instanceof int[]) {
+      int[] arr = (int[])obj;
+      List list = new ArrayList(arr.length);
+      for (int i = 0; i < arr.length; i++) {
+        list.add(arr[i]);
+      }
+      return list;
+    }
+    if (obj instanceof long[]) {
+      long[] arr = (long[])obj;
+      List list = new ArrayList(arr.length);
+      for (int i = 0; i < arr.length; i++) {
+        list.add(arr[i]);
+      }
+      return list;
+    }
+    if (obj instanceof boolean[]) {
+      boolean[] arr = (boolean[])obj;
+      List list = new ArrayList(arr.length);
+      for (int i = 0; i < arr.length; i++) {
+        list.add(arr[i]);
+      }
+      return list;
+    }
+    if (obj instanceof double[]) {
+      double[] arr = (double[])obj;
+      List list = new ArrayList(arr.length);
+      for (int i = 0; i < arr.length; i++) {
+        list.add(arr[i]);
+      }
+      return list;
+    }
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to List", source, offset);
   }
 

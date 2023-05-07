@@ -3982,6 +3982,11 @@ class CompilerTest extends BaseTest {
     test("String[][] a = new String[10][]; int[][] x = [[1L,2D,3.0]]; a = x as String[][]; a[0]", new String[]{"1","2","3"});
     test("String[][] a = new String[10][]; def x = [[1L,2D,3.0]]; a = x as String[][]; a[0]", new String[]{"1","2.0","3.0"});
     test("String[] a = new String[10]; def x = [[1L,2D,3.0]]; a = x as String[]; a", new String[]{"[1, 2.0, 3.0]"});
+    test("int[] x = [1,2,3]; x as List", List.of(1,2,3));
+    test("int[][] x = [[1,2],[2],[3]]; def y = x as List; y[0] instanceof int[] && y[0].sum() == 3 && y[1] instanceof int[]", true);
+    test("long[] x = [1,2,3]; x as List", List.of(1L,2L,3L));
+    test("double[] x = [1,2,3]; x as List", List.of(1D,2D,3D));
+    test("boolean[] x = [true,false,true]; x as List", List.of(true,false,true));
   }
 
   @Test public void fieldAssignments() {
