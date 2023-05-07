@@ -813,7 +813,7 @@ public class Parser {
       new Pair(true, List.of(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
       //      List.of(STAR_STAR)
       new Pair(true, unaryOps),
-      new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE, NEW))
+      new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
     );
 
   // Binary operators which can also sometimes be the start of an expression. We need to know
@@ -953,13 +953,7 @@ public class Parser {
       return unary(level);
     }
 
-    Expr expr;
-    if (operators.contains(NEW) && peek().is(NEW)) {
-      expr = newInstance();
-    }
-    else {
-      expr = parseExpression(level + 1);
-    }
+    Expr expr = parseExpression(level + 1);
 
     while (matchOp(operators)) {
       Token operator = previous();
@@ -1136,7 +1130,7 @@ public class Parser {
    * </pre>
    */
   private Expr newInstance() {
-    var token     = expect(NEW);
+    var token     = previous();
     var type      = type(true, true, false);   // get the type and ignore the square brackets for now
     if (type.is(JactlType.INSTANCE)) {
       if (matchAnyIgnoreEOL(LEFT_PAREN)) {
@@ -1244,6 +1238,7 @@ public class Parser {
    *#          | "do" "{" block "}"
    *#          | "{" closure "}"
    *#          | evalExpr
+   *#          | newInstance
    *#          ;
    * </pre>
    */
@@ -1269,6 +1264,7 @@ public class Parser {
     if (matchAny(LEFT_PAREN))                              { return nestedExpression.get();               }
     if (matchAny(LEFT_BRACE))                              { return closure();                            }
     if (matchAny(EVAL))                                    { return evalExpr();                           }
+    if (matchAny(NEW))                                     { return newInstance();                        }
     if (matchAny(DO)) {
       matchAny(EOL);
       Token leftBrace = expect(LEFT_BRACE);

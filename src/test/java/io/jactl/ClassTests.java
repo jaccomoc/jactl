@@ -85,6 +85,15 @@ public class ClassTests extends BaseTest {
     testError("class X { int x; int i = sleep(0,-1)+sleep(0,2); static def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(1); def g = x.f(); g() + g() + x.i", "field in static function");
   }
 
+  @Test public void newOperator() {
+    test("class X{int i = 4}\ndef x = 1\nnew X().i", 4);
+    testError("class X{int i = 4}; new new X().i", "expecting identifier");
+    testError("class X{int i = 4}; new + new X().i", "expecting identifier");
+    test("class X{int i = 4}; ++ new X().i", 5);
+    test("class X{int i = 4}; def x; ++ (x = new X()).i", 5);
+    test("class X{int i = 4}; def x; ++ (x = new X()).i; x.i", 5);
+  }
+
   @Test public void simpleStaticMethods() {
     useAsyncDecorator = false;    // sleep(0,X) won't compile so can't test with async decorator
 
