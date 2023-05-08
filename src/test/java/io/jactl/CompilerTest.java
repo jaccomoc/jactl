@@ -3889,6 +3889,15 @@ class CompilerTest extends BaseTest {
     test("var a = new Object[1];  a[0] = 3.0; var x = a[0]; x instanceof Decimal", true);
   }
 
+  @Test public void otherArrayTypes() {
+    test("List[] x = [[1,2],['a','b','c']]; x instanceof List[] && x[1] instanceof List && x[1] == ['a','b','c']", true);
+    test("List[][] x = [[[1,2],['a','b','c']]]; x instanceof List[][] && x[0][1] instanceof List && x[0][1] == ['a','b','c']", true);
+    test("def x = [[1,2],['a','b','c']] as List[]; x instanceof List[] && x[1] instanceof List && x[1] == ['a','b','c']", true);
+    test("def x = [[[1,2],['a','b','c']]] as List[][]; x instanceof List[][] && x[0][1] instanceof List && x[0][1] == ['a','b','c']", true);
+    test("Map[][] x = [[[a:1,b:2],[x:'a',y:'b',z:'c']]]; x instanceof Map[][] && x[0][1] instanceof Map && x[0][1] == [x:'a',y:'b',z:'c']", true);
+    test("def x = [[[a:1,b:2],[x:'a',y:'b',z:'c']]] as Map[][]; x instanceof Map[][] && x[0][1] instanceof Map && x[0][1] == [x:'a',y:'b',z:'c']", true);
+  }
+
   @Test public void arraysAsValues() {
     test("def f(int[] a) { a[0] + a[1] }; int[] x = new int[2]; x[0] = x[1] = 2; f(x)", 4);
     test("def f(long[] a) { a[0] + a[1] }; long[] x = new long[2]; x[0] = x[1] = 2; f(x)", 4L);

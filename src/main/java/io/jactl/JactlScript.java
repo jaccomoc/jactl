@@ -51,7 +51,8 @@ public class JactlScript {
    *   <li>BigDecimal</li>
    *   <li>String</li>
    *   <li>List</li>
-   *   <li>Map</li>
+   *   <li>Map (where keys are Strings)</li>
+   *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
    *   <li>null - Object with value null</li>
    * </ul>
    * <p>Also supported are object instances of Jactl classes that have been returned
@@ -78,7 +79,8 @@ public class JactlScript {
    *   <li>BigDecimal</li>
    *   <li>String</li>
    *   <li>List</li>
-   *   <li>Map</li>
+   *   <li>Map (where keys are Strings)</li>
+   *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
    *   <li>null - Object with value null</li>
    * </ul>
    * <p>Also supported are object instances of Jactl classes that have been returned
