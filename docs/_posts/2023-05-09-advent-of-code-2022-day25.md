@@ -26,7 +26,7 @@ See [Day 25](https://adventofcode.com/2022/day/25) for a detailed description of
 This is the last challenge for Advent of Code 2022 and day 25 has only one part, unlike the other days.
 
 A fairly simple challenge for the last day.
-The goal is to take a list of numbers encoded in a code they have called SNAFU, sum them, and the output the
+The goal is to take a list of numbers encoded in a code they have called SNAFU, sum them, and then output the
 sum as a SNAFU number.
 
 In SNAFU the numbers are base 5 but the twist is that the digits are `=`, `-`, `0`, `1`, `2` with `=` meaning `-2`
