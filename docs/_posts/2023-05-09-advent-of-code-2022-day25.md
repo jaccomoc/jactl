@@ -39,7 +39,7 @@ In the end, not a lot of code for this challenge.
 def n = stream(nextLine).map{ it.reduce(0L){ v,d -> v*5 + ['2':2,'1':1,'0':0,'-':-1,'=':-2][d] } }.sum()
 for (def dval = 0, value = ''; ; n /= 5) {
   dval = (n % 5) + (dval > 2 ? 1 : 0)
-  value = ['0','1','2','=','-'][dval % 5] + value
+  value = '012=-'[dval % 5] + value
   return value unless n > 0 || dval > 2
 }
 ```
