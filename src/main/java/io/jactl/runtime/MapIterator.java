@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.Iterator;
 
@@ -32,15 +31,15 @@ class MapIterator implements Iterator {
   Iterator     iter;
   String       source;
   int          offset;
-  MethodHandle closure;
+  JactlMethodHandle closure;
   boolean      withIndex;
   int          index = 0;
 
-  MapIterator(Iterator iter, String source, int offset, MethodHandle closure) {
+  MapIterator(Iterator iter, String source, int offset, JactlMethodHandle closure) {
     this(iter, source, offset, closure, false);
   }
 
-  MapIterator(Iterator iter, String source, int offset, MethodHandle closure, boolean withIndex) {
+  MapIterator(Iterator iter, String source, int offset, JactlMethodHandle closure, boolean withIndex) {
     this.iter      = iter;
     this.source    = source;
     this.offset    = offset;
@@ -48,9 +47,8 @@ class MapIterator implements Iterator {
     this.withIndex = withIndex;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(MapIterator.class, "hasNext$c", Object.class, MapIterator.class, Continuation.class);
-
-  public static Object hasNext$c(MapIterator iter, Continuation c) {
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(MapIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
     return c.getResult();
   }
 
@@ -60,14 +58,13 @@ class MapIterator implements Iterator {
       return iter.hasNext();
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, hasNextHandle.bindTo(this), 0, null, null);
+      throw new Continuation(cont, hasNext$cHandle, 0, null, null);
     }
   }
 
-  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(MapIterator.class, "next$c", Object.class, MapIterator.class, Continuation.class);
-
-  public static Object next$c(MapIterator iter, Continuation c) {
-    return iter.doNext(c);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(MapIterator.class, "next$c", Object.class, Continuation.class);
+  public static Object next$c(Continuation c) {
+    return ((MapIterator)c.localObjects[0]).doNext(c);
   }
 
   @Override
@@ -95,7 +92,7 @@ class MapIterator implements Iterator {
           elemList.add(index++);
           elem = elemList;
         }
-        return closure == null ? elem : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
+        return closure == null ? elem : closure.invoke((Continuation) null, source, offset, new Object[]{elem});
       }
       else {
         // location == 3
@@ -103,7 +100,7 @@ class MapIterator implements Iterator {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, nextHandle.bindTo(this), location + 1, null, null);
+      throw new Continuation(cont, next$cHandle, location + 1, null, new Object[]{this });
     }
     catch (RuntimeError e) {
       throw e;

@@ -21,7 +21,6 @@ import io.jactl.*;
 import io.jactl.Compiler;
 
 import java.io.PrintStream;
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
@@ -1195,11 +1194,11 @@ public class RuntimeUtils {
       if (obj instanceof JactlObject) {
         JactlObject jobj = (JactlObject)obj;
         Object toString = jobj._$j$getFieldsAndMethods().get(Utils.TO_STRING);
-        if (toString instanceof MethodHandle) {
-          MethodHandle mh = (MethodHandle)toString;
-          if (mh.type().parameterCount() == 5) {
+        if (toString instanceof JactlMethodHandle) {
+          JactlMethodHandle mh = (JactlMethodHandle)toString;
+          if (mh.parameterCount() == 5) {
             try {
-              Object result = mh.invoke(obj, (Continuation)null, null, 0, Utils.EMPTY_OBJ_ARR);
+              Object result = mh.invoke(jobj, (Continuation)null, null, 0, Utils.EMPTY_OBJ_ARR);
               return result == null ? "null" : result.toString();
             }
             catch (RuntimeError e) {
@@ -1260,7 +1259,7 @@ public class RuntimeUtils {
         return ((BigDecimal)obj).toPlainString();
       }
 
-      if (obj instanceof MethodHandle) {
+      if (obj instanceof JactlMethodHandle) {
         return "Function@" + System.identityHashCode(obj);
       }
 
@@ -1350,12 +1349,12 @@ public class RuntimeUtils {
       throw new RuntimeError("No such method '" + field + "' for type " + className(parent), source, offset);
     }
 
-    if (!(value instanceof MethodHandle)) {
+    if (!(value instanceof JactlMethodHandle)) {
       throw new RuntimeError("Cannot invoke value of '" + field + "' (type is " + className(value) + ")", source, offset);
     }
 
     try {
-      return ((MethodHandle) value).invokeExact((Continuation) null, source, offset, args);
+      return ((JactlMethodHandle) value).invoke((Continuation) null, source, offset, args);
     }
     catch (RuntimeException e) {
       throw e;
@@ -1382,7 +1381,7 @@ public class RuntimeUtils {
 
   /**
    * Load method or field. Parent can be of any type in which case we first look for a method of given name (in
-   * BuiltinFunctions) and return a MethodHandle to that method. If that returns nothing we invoke the usual loadField
+   * BuiltinFunctions) and return a method handle to that method. If that returns nothing we invoke the usual loadField
    * method to get the field value.
    *
    * @param parent     parent
@@ -1405,7 +1404,7 @@ public class RuntimeUtils {
       throw new NullError("Null value for field name", source, offset);
     }
 
-    MethodHandle handle = Functions.lookupWrapper(parent, field.toString());
+    JactlMethodHandle handle = Functions.lookupWrapper(parent, field.toString());
     if (handle != null) {
       return handle;
     }
@@ -1451,7 +1450,7 @@ public class RuntimeUtils {
       }
       if (value == null) {
         // If we still can't find a field then if we have a method of the name return
-        // its MethodHandle
+        // its method handle
         value = Functions.lookupWrapper(parent, fieldName);
       }
 
@@ -1467,8 +1466,8 @@ public class RuntimeUtils {
           // _$j$StaticMethods field because the field exists in the parent JactlObject class
           // which means we can't guarantee that class init for the actual class (which populates
           // the map) has been run yet.
-          Method                    staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
-          Map<String, MethodHandle> map           = (Map<String, MethodHandle>) staticMethods.invoke(null);
+          Method staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
+          var    map           = (Map<String, JactlMethodHandle>) staticMethods.invoke(null);
           return map.get(field.toString());
         }
         catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
@@ -1651,9 +1650,9 @@ public class RuntimeUtils {
     // is a generic built-in method that applies
     String fieldName     = field.toString();
     Object fieldOrMethod = parent._$j$getFieldsAndMethods().get(fieldName);
-    if (fieldOrMethod instanceof MethodHandle) {
+    if (fieldOrMethod instanceof JactlMethodHandle) {
       // Need to bind method handle to instance
-      fieldOrMethod = ((MethodHandle) fieldOrMethod).bindTo(parent);
+      fieldOrMethod = ((JactlMethodHandle) fieldOrMethod).bindTo(parent);
     }
     if (fieldOrMethod == null && !createIfMissing) {
       // If createIfMissing is not set we can search for matching method
@@ -1973,7 +1972,7 @@ public class RuntimeUtils {
     String.class, FieldType.STRING,
     Map.class, FieldType.MAP,
     List.class, FieldType.LIST,
-    MethodHandle.class, FieldType.FUNCTION
+    JactlMethodHandle.class, FieldType.FUNCTION
   );
 
   public static Object castTo(Class clss, Object value, String source, int offset) {
@@ -2067,10 +2066,9 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to List", source, offset);
   }
 
-  private static MethodHandle convertIteratorToListHandle = lookupMethod("convertIteratorToList$c", Object.class, Object.class, Continuation.class);
-
-  public static Object convertIteratorToList$c(Object iterAsObj, Continuation c) {
-    return convertIteratorToList(iterAsObj, c);
+  public static JactlMethodHandle convertIteratorToList$cHandle = lookupMethod(RuntimeUtils.class, "convertIteratorToList$c", Object.class, Continuation.class);
+  public static Object convertIteratorToList$c(Continuation c) {
+    return convertIteratorToList(c.localObjects[1], c);
   }
 
   public static List convertIteratorToList(Object iterable, Continuation c) {
@@ -2125,7 +2123,7 @@ public class RuntimeUtils {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, convertIteratorToListHandle.bindTo(iterable), methodLocation + 1, null, new Object[]{result});
+      throw new Continuation(cont, convertIteratorToList$cHandle,methodLocation + 1, null, new Object[]{ result, iterable });
     }
   }
 
@@ -2188,9 +2186,9 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
   }
 
-  public static MethodHandle castToFunction(Object obj, String source, int offset) {
-    if (obj instanceof MethodHandle) {
-      return (MethodHandle) obj;
+  public static JactlMethodHandle castToFunction(Object obj, String source, int offset) {
+    if (obj instanceof JactlMethodHandle) {
+      return (JactlMethodHandle) obj;
     }
     if (obj == null) {
       throw new NullError("Null value for Function", source, offset);
@@ -2294,18 +2292,18 @@ public class RuntimeUtils {
   }
 
   public static String className(Object obj) {
-    if (obj == null)                 { return "null"; }
-    if (obj instanceof String)       { return "String"; }
-    if (obj instanceof BigDecimal)   { return "Decimal"; }
-    if (obj instanceof Double)       { return "double"; }
-    if (obj instanceof Long)         { return "long"; }
-    if (obj instanceof Integer)      { return "int"; }
-    if (obj instanceof Boolean)      { return "boolean"; }
-    if (obj instanceof Map)          { return "Map"; }
-    if (obj instanceof List)         { return "List"; }
-    if (obj instanceof Iterator)     { return "Iterator"; }
-    if (obj instanceof MethodHandle) { return "Function"; }
-    if (obj.getClass().isArray())    { return componentType(obj.getClass().getComponentType()) + "[]"; }
+    if (obj == null)                      { return "null"; }
+    if (obj instanceof String)            { return "String"; }
+    if (obj instanceof BigDecimal)        { return "Decimal"; }
+    if (obj instanceof Double)            { return "double"; }
+    if (obj instanceof Long)              { return "long"; }
+    if (obj instanceof Integer)           { return "int"; }
+    if (obj instanceof Boolean)           { return "boolean"; }
+    if (obj instanceof Map)               { return "Map"; }
+    if (obj instanceof List)              { return "List"; }
+    if (obj instanceof Iterator)          { return "Iterator"; }
+    if (obj instanceof JactlMethodHandle) { return "Function"; }
+    if (obj.getClass().isArray())         { return componentType(obj.getClass().getComponentType()) + "[]"; }
     if (obj instanceof JactlObject) {
       try {
         return (String)obj.getClass().getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
@@ -2318,18 +2316,18 @@ public class RuntimeUtils {
   }
 
   private static String componentType(Class clss) {
-    if (clss.equals(Object.class))       { return "Object"; }
-    if (clss.equals(String.class))       { return "String"; }
-    if (clss.equals(BigDecimal.class))   { return "Decimal"; }
-    if (clss.equals(Double.class))       { return "double"; }
-    if (clss.equals(Long.class))         { return "long"; }
-    if (clss.equals(Integer.class))      { return "int"; }
-    if (clss.equals(Boolean.class))      { return "boolean"; }
-    if (clss.equals(Map.class))          { return "Map"; }
-    if (clss.equals(List.class))         { return "List"; }
-    if (clss.equals(Iterator.class))     { return "Iterator"; }
-    if (clss.equals(MethodHandle.class)) { return "Function"; }
-    if (clss.isArray())                  { return componentType(clss.getComponentType()) + "[]"; }
+    if (clss.equals(Object.class))            { return "Object"; }
+    if (clss.equals(String.class))            { return "String"; }
+    if (clss.equals(BigDecimal.class))        { return "Decimal"; }
+    if (clss.equals(Double.class))            { return "double"; }
+    if (clss.equals(Long.class))              { return "long"; }
+    if (clss.equals(Integer.class))           { return "int"; }
+    if (clss.equals(Boolean.class))           { return "boolean"; }
+    if (clss.equals(Map.class))               { return "Map"; }
+    if (clss.equals(List.class))              { return "List"; }
+    if (clss.equals(Iterator.class))          { return "Iterator"; }
+    if (clss.equals(JactlMethodHandle.class)) { return "Function"; }
+    if (clss.isArray())                       { return componentType(clss.getComponentType()) + "[]"; }
     if (JactlObject.class.isAssignableFrom(clss)) {
       try {
         return (String)clss.getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
@@ -2373,22 +2371,21 @@ public class RuntimeUtils {
   }
   private static boolean isString(Object value) { return value instanceof String; }
 
-  private static MethodHandle lookupMethod(String method, Class returnType, Class... argTypes) {
-    return lookupMethod(RuntimeUtils.class, method, returnType, argTypes);
-  }
-
   /**
-   * Return a MethodHandle that points to the given static method of the given class.
+   * Return a JactlMethodHandle that points to the given static method of the given class.
+   * Assumes there is a public static data member of the same class of type JactlMethodHandle
+   * where this method handle will be stored (used for externalising execution state).
    * @param clss       the class
    * @param method     the name of the static method
    * @param returnType the return type of the method
    * @param argTypes   the argument types for the method
-   * @return the MethodHandle
+   * @return the JactlMethodHandle
    * @throws IllegalStateException if method does not exist
    */
-  public static MethodHandle lookupMethod(Class clss, String method, Class returnType, Class... argTypes) {
+  public static JactlMethodHandle lookupMethod(Class clss, String method, Class returnType, Class... argTypes) {
     try {
-      return MethodHandles.lookup().findStatic(clss, method, MethodType.methodType(returnType, argTypes));
+      return JactlMethodHandle.create(MethodHandles.lookup().findStatic(clss, method, MethodType.methodType(returnType, argTypes)),
+                                      clss, method + "Handle");
     }
     catch (NoSuchMethodException | IllegalAccessException e) {
       throw new IllegalStateException("Error finding method " + method, e);
@@ -2396,11 +2393,11 @@ public class RuntimeUtils {
   }
 
   /**
-   * <p>Invoke a MethodHandle that points to a closure/function.</p>
+   * <p>Invoke a method handle that points to a closure/function.</p>
    * <p>NOTE: invoking a closure/function can throw a Continuation if closure/function is async
    * so you will need to catch the Continuation and rethrow a new one with your captured state
    * so that you can be resumes at some later point.</p>
-   * @param handle  the MethodHandle
+   * @param handle  the method handle
    * @param source  the source code
    * @param offset  offset into source where call occurs
    * @param args    varargs set of arguments for closure/function
@@ -2408,9 +2405,9 @@ public class RuntimeUtils {
    * @throws RuntimeError if error occurs
    * @throws Continuation if execution state needs to be suspended
    */
-  public static Object invoke(MethodHandle handle, String source, int offset, Object... args) {
+  public static Object invoke(JactlMethodHandle handle, String source, int offset, Object... args) {
     try {
-      return (Object)handle.invokeExact((Continuation)null, source, offset, new Object[0]);
+      return (Object)handle.invoke((Continuation)null, source, offset, new Object[0]);
     }
     catch (RuntimeError|Continuation e) {
       throw e;
@@ -2666,7 +2663,7 @@ public class RuntimeUtils {
       return result;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, evalHandle, 0, null, null);
+      throw new Continuation(cont, eval$cHandle, 0, null, null);
     }
     catch (JactlError e) {
       if (bindings != null) {
@@ -2675,7 +2672,7 @@ public class RuntimeUtils {
       return null;
     }
   }
-  private static MethodHandle evalHandle = RuntimeUtils.lookupMethod(RuntimeUtils.class, "eval$c", Object.class, Continuation.class);
+  public static JactlMethodHandle eval$cHandle = RuntimeUtils.lookupMethod(RuntimeUtils.class, "eval$c", Object.class, Continuation.class);
   public static Object eval$c(Continuation c) {
     return evalScript(c, null, null, null);
   }

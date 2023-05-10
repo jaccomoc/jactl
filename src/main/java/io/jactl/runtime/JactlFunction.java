@@ -76,10 +76,10 @@ import java.util.stream.IntStream;
  * @see <a href="https://github.com/jaccomoc/jactl/blob/master/docs/pages/integration-guide.md">Integration Guide</a>
  */
 public class JactlFunction extends FunctionDescriptor {
-  List<String> aliases           = new ArrayList<>();
-  Class        implementingClass;
-  MethodHandle methodHandle;
-  Method       method;
+  List<String>      aliases           = new ArrayList<>();
+  Class             implementingClass;
+  JactlMethodHandle methodHandle;
+  Method            method;
 
   // total args including obj (for methods), and source/offset if needsLocation, and Continuation for async funcs
   int          argCount;
@@ -280,7 +280,7 @@ public class JactlFunction extends FunctionDescriptor {
     }
 
     try {
-      wrapperHandle =
+      MethodHandle handle =
         isMethod() ? MethodHandles.lookup().findVirtual(JactlFunction.class, "wrapper",
                                                         MethodType.methodType(Object.class,
                                                                               Object.class,
@@ -294,6 +294,8 @@ public class JactlFunction extends FunctionDescriptor {
                                                                                        String.class,
                                                                                        int.class,
                                                                                        Object[].class));
+
+      wrapperHandle = JactlMethodHandle.createFuncHandle(handle, type, name);
       wrapperHandle = wrapperHandle.bindTo(this);
 
       // Store handle in static field we have been given

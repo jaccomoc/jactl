@@ -22,7 +22,6 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
 import java.math.BigDecimal;
@@ -109,7 +108,7 @@ import static org.objectweb.asm.Opcodes.*;
  *       are being passed in and also takes care of named argument handling</li>
  * </ul>
  * <p>When passing methods as values or invoking them "dynamically" (when we don't know the type at
- * compile time) we actually use a MethodHandle. The MethodHandle is generated bound to the varargs
+ * compile time) we actually use a JactlMethodHandle. The JactlMethodHandle is generated bound to the varargs
  * wrapper method and not the normal method because we don't know at compile time what the parameter
  * types will be.
  * </p>
@@ -121,8 +120,8 @@ import static org.objectweb.asm.Opcodes.*;
  * object and then invoke the real method (normal or varargs wrapper as appropriate).
  * </p><p>
  * If the function closes over variables declared in an outer scope then these variables are passed
- * in as additional arguments of type HeapLocal and the MethodHandle is bound to these HeapLocals
- * at the time it is created so that the signature of the MethodHandle is always the same.
+ * in as additional arguments of type HeapLocal and the JactlMethodHandle is bound to these HeapLocals
+ * at the time it is created so that the signature of the method handle is always the same.
  * </p>
  * If we look at a concrete example, imagine we have a class X with a single method f() like this:
  * <pre>
@@ -134,7 +133,7 @@ import static org.objectweb.asm.Opcodes.*;
  *   String f(List,String)
  *   Object f$$w(Continuation cont, String source, int offset, Object[] args)</pre>
  * Note that wrapper methods always have the exact same signature, irrespective of the method being
- * wrapped. This means that when invoking them through the MethodHandle we always know what the argument
+ * wrapped. This means that when invoking them through the method handle we always know what the argument
  * types are:
  * <ul>
  *   <li><b>cont:</b> the Continuation object. This will always be null unless resuming after an async suspend.</li>
@@ -145,7 +144,7 @@ import static org.objectweb.asm.Opcodes.*;
  *       and again we detect this by checking for args of length 1 and arg[0] being the Map.</li>
  * </ul>
  * We always pass a Continuation object since we don't know whether the function we will be calling is async
- * or not when invoking via a MethodHandle.
+ * or not when invoking via a method handle.
  * <p>The return type of the varargs wrapper function is always of type Object, again because we want to use
  * MethodHandle.invokeExact() for efficient method invocation and the return type is used to determine how
  * to invoke the method.
@@ -163,8 +162,8 @@ import static org.objectweb.asm.Opcodes.*;
  * <p>When invoking a function, we will invoke the actual "normal" function only when we have values for all
  * of its parameters. If there are missing values (due to optional parameters) or if we are invoking via
  * named args invocation then we will invoke the varargs wrapper function instead. If we don't know what
- * function we are invoking at compile time (invoking via a variable or field that contains a MethodHandle)
- * then we invoke using the MethodHandle that will point to a varargs wrapper function.</p>
+ * function we are invoking at compile time (invoking via a variable or field that contains a method handle)
+ * then we invoke using the method handle that will point to a varargs wrapper function.</p>
  */
 public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
@@ -338,8 +337,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
     if (stmt.createVar) {
-      // Don't create variable to hold MethodHandle when in wrapper function
-      // since MethodHandle must point to wrapper and we want variable to be
+      // Don't create variable to hold method handle when in wrapper function
+      // since method handle must point to wrapper and we want variable to be
       // in parent scope of the wrapper function.
       compile(stmt.declExpr);
     }
@@ -1076,7 +1075,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           // If not static then bind to instance
           if (!method.isStatic) {
             swap();
-            invokeMethod(MethodHandle.class, "bindTo", Object.class);
+            invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
           }
           return null;
         }
@@ -1584,7 +1583,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (isBuiltinFunction) {
-      // If we have the name of a built-in function then lookup its MethodHandle
+      // If we have the name of a built-in function then lookup its method handle
       loadConst(name);
       invokeMethod(BuiltinFunctions.class, "lookupMethodHandle", String.class);
     }
@@ -1647,7 +1646,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       classCompiler.compileMethod(expr.funDecl);
       expr.funDecl.isCompiled = true;
     }
-    // Find our MethodHandle and put that on the stack
+    // Find our method handle and put that on the stack
     loadBoundMethodHandle(expr.funDecl);
     return null;
   }
@@ -1660,12 +1659,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // from within a separate nested function:  def x; def g(){x}; def f(){g()}
     // At the time the body of f is invoking g() it doesn't have direct access to x since it is not itself
     // closing over x and so can't pass it in as a heap local parameter. In this case it will try to get
-    // the value of g (the MethodHandle) and invoke g that way.
+    // the value of g (the method handle) and invoke g that way.
     boolean isFunctionCall = false;
     FunctionDescriptor functionDescriptor = null;
     if (expr.callee.isFunctionCall()) {
       functionDescriptor = ((Expr.Identifier) expr.callee).getFuncDescriptor();
-      // Can only call directly if in same class or is static method. Otherwise, we need MethodHandle that
+      // Can only call directly if in same class or is static method. Otherwise, we need method handle that
       // was bound to its instance. Functions can be in different classes in repl mode where functions are
       // compiled into separate classes every compile step and then stored in global map.
       isFunctionCall = functionDescriptor.isStatic || functionDescriptor.implementingClassName == null || functionDescriptor.implementingClassName.equals(classCompiler.internalName);
@@ -1703,7 +1702,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        compile(expr.callee);
                        convertTo(FUNCTION, expr.callee, true, expr.callee.location);
 
-                       // NOTE: we don't have to passed closed over vars here because the MethodHandle we get
+                       // NOTE: we don't have to passed closed over vars here because the method handle we get
                        //       has already had these values bound to it
                        loadNullContinuation();
                        loadLocation(expr.location);
@@ -1802,7 +1801,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              if (!method.isGlobalFunction) {
                                // Is "method" so bind to parent object
                                swap();
-                               invokeMethod(MethodHandle.class, "bindTo", Object.class);
+                               invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
                              }
                            }
                            loadNullContinuation();
@@ -1842,8 +1841,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Since we couldn't call method directly it means that either we didn't know type of parent at
     // compile time or we couldn't find a method of that name. If we didn't know type of parent we
     // will attempt to get the method handle for the field by doing a method lookup and if no method
-    // exists we will assume that there is a field of that name that holds a MethodHandle.
-    // Since we invoke through a MethodHandle we don't know whether we are async or not so we assume
+    // exists we will assume that there is a field of that name that holds a method handle.
+    // Since we invoke through a method handle we don't know whether we are async or not so we assume
     // the worst.
     invokeMaybeAsync(true, ANY, 0, expr.location,
                      () -> {
@@ -2503,7 +2502,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Load methodHandle onto stack after it has been bound to any heap local params it needs.
    */
   private void loadBoundMethodHandle(Expr.FunDecl funDecl) {
-    // The MethodHandle will point to the wrapper function
+    // The method handle will point to the wrapper function
     Expr.FunDecl wrapperFunDecl = funDecl.wrapper;
 
     // Load the handle
@@ -2531,7 +2530,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // For non-static methods we need to bind them to "this" (for closures the constructor has already done this)
       if (!isStatic) {
         loadLocal(0);
-        invokeMethod(MethodHandle.class, "bindTo", Object.class);
+        invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
       }
     }
 
@@ -2556,7 +2555,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Load HeapLocal  (not the value contained in it) from _our_ copy of this
       // var (p.varDecl.slot not p.slot)
       loadLocal(p.parentVarDecl.slot);
-      invokeMethod(MethodHandle.class, "bindTo", Object.class);
+      invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
     });
   }
 
@@ -3667,7 +3666,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // of the locals will not match because we use two slots for long/double in locals but only one
     // slot in the long[].
     // NOTE: we don't bother with preserving the "this" (if non-static) and the Continuation
-    // object since the MethodHandle will be bound to "this" and the Continuation is supplied
+    // object since the method handle will be bound to "this" and the Continuation is supplied
     // when resuming so the current value (usually null) is irrelevant.
     stack.convertStackToLocalsExcept(numArgsAlreadyOnStack);
     var savedState = stack.copy();
@@ -3717,12 +3716,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     _loadClassField(classCompiler.internalName, Utils.continuationHandle(methodFunDecl.functionDescriptor.implementingMethod), FUNCTION, true);
     if (!methodFunDecl.isStatic()) {
       _loadLocal(0);    // this
-      mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "bindTo", "(Ljava/lang/Object;)Ljava/lang/invoke/MethodHandle;", false);
+      mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/JactlMethodHandle", "bindTo", "(Ljava/lang/Object;)Lio/jactl/runtime/JactlMethodHandle;", false);
     }
     _loadConst(methodLocation);
     _loadLocal(longArr);
     _loadLocal(objArr);
-    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/Continuation", "<init>", "(Lio/jactl/runtime/Continuation;Ljava/lang/invoke/MethodHandle;I[J[Ljava/lang/Object;)V", false);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/Continuation", "<init>", "(Lio/jactl/runtime/Continuation;Lio/jactl/runtime/JactlMethodHandle;I[J[Ljava/lang/Object;)V", false);
     mv.visitInsn(ATHROW);
 
     mv.visitLabel(continuation);       // :continuation
@@ -3915,10 +3914,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Expect on stack: ...,methodHandle, continuation, source, offset, Object[]
    */
   private void invokeMethodHandle() {
-    expect(5);
-    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/invoke/MethodHandle", "invokeExact", "(Lio/jactl/runtime/Continuation;Ljava/lang/String;I[Ljava/lang/Object;)Ljava/lang/Object;", false);
-    popType(5);   // methodHandle, continuation, source, offset, Object[]
-    push(ANY);
+    invokeMethod(JactlMethodHandle.class, "invoke", Continuation.class, String.class, int.class, Object[].class);
   }
 
   private void invokeMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {

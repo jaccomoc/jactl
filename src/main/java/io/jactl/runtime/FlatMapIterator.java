@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
@@ -34,19 +33,18 @@ public class FlatMapIterator implements Iterator {
   Iterator     subIter;   // Iterator for each element of iter
   String       source;
   int          offset;
-  MethodHandle closure;
+  JactlMethodHandle closure;
 
-  FlatMapIterator(Iterator iter, String source, int offset, MethodHandle closure) {
+  FlatMapIterator(Iterator iter, String source, int offset, JactlMethodHandle closure) {
     this.iter = iter;
     this.source = source;
     this.offset = offset;
     this.closure = closure;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, "hasNext$c", Object.class, FlatMapIterator.class, Continuation.class);
-
-  public static Object hasNext$c(FlatMapIterator iter, Continuation c) {
-    return iter.doHasNext(c);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    return ((FlatMapIterator)c.localObjects[0]).doHasNext(c);
   }
 
   @Override
@@ -95,7 +93,7 @@ public class FlatMapIterator implements Iterator {
           }
           case 4: {
             mappedNext = closure == null ? iterNext
-                                         : closure.invokeExact((Continuation)null, source, offset, new Object[]{RuntimeUtils.mapEntryToList(iterNext)});
+                                         : closure.invoke((Continuation)null, source, offset, new Object[]{RuntimeUtils.mapEntryToList(iterNext)});
             location = 6;
             break;
           }
@@ -135,7 +133,7 @@ public class FlatMapIterator implements Iterator {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
+      throw new Continuation(cont, hasNext$cHandle, location + 1, null, new Object[]{this });
     }
     catch (RuntimeError e) {
       throw e;
@@ -145,10 +143,9 @@ public class FlatMapIterator implements Iterator {
     }
   }
 
-  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, "next$c", Object.class, FlatMapIterator.class, Continuation.class);
-
-  public static Object next$c(FlatMapIterator iter, Continuation c) {
-    return iter.doNext(c);
+  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, "next$c", Object.class, Continuation.class);
+  public static Object next$c(Continuation c) {
+    return ((FlatMapIterator)c.localObjects[0]).doNext(c);
   }
 
   @Override
@@ -193,7 +190,7 @@ public class FlatMapIterator implements Iterator {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, nextHandle.bindTo(this), location + 1, null, null);
+      throw new Continuation(cont, next$cHandle, location + 1, null, new Object[]{this });
     }
     catch (RuntimeError e) {
       throw e;

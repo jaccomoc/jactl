@@ -47,9 +47,9 @@ public class FunctionDescriptor {
 
   // Used by built-in functions:
   public boolean          needsLocation;
-  public String           wrapperMethod;
-  public MethodHandle     wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
-  public String           wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
+  public String            wrapperMethod;
+  public JactlMethodHandle wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
+  public String            wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
   public boolean          isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean          isBuiltin;
   public Boolean          isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
@@ -67,7 +67,7 @@ public class FunctionDescriptor {
   }
 
   public FunctionDescriptor(JactlType type, JactlType firstArgType, String name, JactlType returnType, List<JactlType> paramTypes, boolean varargs,
-                            int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, MethodHandle wrapperHandle) {
+                            int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, JactlMethodHandle wrapperHandle) {
     this(name, returnType, varargs ? -1 : paramTypes.size(), mandatoryArgCount, needsLocation);
     this.type = type;
     this.firstArgtype = firstArgType;

@@ -189,9 +189,9 @@ abstract class Stmt {
     Token        startToken;   // Either identifier for function decl or start brace for closure
     Expr.FunDecl declExpr;
 
-    // Create a var that points to MethodHandle (which points to wrapper).
+    // Create a var that points to JactlMethodHandle (which points to wrapper).
     // Exception is when inside wrapper function we don't create var that points to
-    // the function since the MethodHandle must go through the wrapper function.
+    // the function since the JactlMethodHandle must go through the wrapper function.
     boolean      createVar = true;
     FunDecl(Token startToken, Expr.FunDecl declExpr) {
       this.startToken = startToken;

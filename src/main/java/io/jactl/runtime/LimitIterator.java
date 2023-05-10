@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
@@ -34,10 +33,9 @@ public class LimitIterator implements Iterator {
     this.limit = limit;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "hasNext$c", Object.class, LimitIterator.class, Continuation.class);
-
-  public static Object hasNext$c(LimitIterator iter, Continuation c) {
-    return iter.doHasNext(c);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    return ((LimitIterator)c.localObjects[0]).doHasNext(c);
   }
 
   @Override
@@ -72,14 +70,13 @@ public class LimitIterator implements Iterator {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
+      throw new Continuation(cont, hasNext$cHandle, location + 1, null, new Object[]{ this });
     }
   }
 
-  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "next$c", Object.class, LimitIterator.class, Continuation.class);
-
-  public static Object next$c(LimitIterator iter, Continuation c) {
-    return iter.doNext(c);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "next$c", Object.class, Continuation.class);
+  public static Object next$c(Continuation c) {
+    return ((LimitIterator)c.localObjects[0]).doNext(c);
   }
 
   @Override
@@ -114,7 +111,7 @@ public class LimitIterator implements Iterator {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, nextHandle.bindTo(this), location + 1, null, null);
+      throw new Continuation(cont, next$cHandle, location + 1, null, new Object[]{this });
     }
   }
 }

@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
@@ -37,10 +36,9 @@ public class SkipIterator implements Iterator {
     this.buffer = new CircularBuffer<>(count);
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(SkipIterator.class, "hasNext$c", Object.class, SkipIterator.class, Continuation.class);
-
-  public static Object hasNext$c(SkipIterator iter, Continuation c) {
-    return iter.doHasNext(c);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(SkipIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    return ((SkipIterator)c.localObjects[0]).doHasNext(c);
   }
 
   @Override
@@ -87,7 +85,7 @@ public class SkipIterator implements Iterator {
         }
       }
       catch (Continuation cont) {
-        throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
+        throw new Continuation(cont, hasNext$cHandle, location + 1, null, new Object[]{this });
       }
     }
     return buffer.size() > 0;

@@ -20,7 +20,6 @@ package io.jactl;
 import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 
-import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -618,7 +617,7 @@ public class JactlType {
       case INSTANCE:       return "L" + getInternalName() + ";";
       case CLASS:          return "L" + getInternalName() + ";";
       case ANY:            return Type.getDescriptor(Object.class);
-      case FUNCTION:       return Type.getDescriptor(MethodHandle.class);
+      case FUNCTION:       return Type.getDescriptor(JactlMethodHandle.class);
       case HEAPLOCAL:      return Type.getDescriptor(HeapLocal.class);
       case ITERATOR:       return Type.getDescriptor(Iterator.class);
       case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
@@ -642,7 +641,7 @@ public class JactlType {
       case CLASS:          return Type.getType(descriptor());
       case ARRAY:          return Type.getType(descriptor());
       case ANY:            return Type.getType(Object.class);
-      case FUNCTION:       return Type.getType(MethodHandle.class);
+      case FUNCTION:       return Type.getType(JactlMethodHandle.class);
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
       case ITERATOR:       return Type.getType(Iterator.class);
       case NUMBER:         return Type.getType(Number.class);
@@ -663,7 +662,7 @@ public class JactlType {
       case MAP:          return Type.getInternalName(Map.class);
       case LIST:         return Type.getInternalName(List.class);
       case ANY:          return Type.getInternalName(Object.class);
-      case FUNCTION:     return Type.getInternalName(MethodHandle.class);
+      case FUNCTION:     return Type.getInternalName(JactlMethodHandle.class);
       case HEAPLOCAL:    return Type.getInternalName(HeapLocal.class);
       case ITERATOR:     return Type.getInternalName(Iterator.class);
       case NUMBER:       return Type.getInternalName(Number.class);
@@ -698,7 +697,7 @@ public class JactlType {
     if (obj instanceof String)       return STRING;
     if (obj instanceof Map)          return MAP;
     if (obj instanceof List)         return LIST;
-    if (obj instanceof MethodHandle) return FUNCTION;
+    if (obj instanceof JactlMethodHandle) return FUNCTION;
     if (obj instanceof HeapLocal)    return HEAPLOCAL;
     if (obj instanceof long[])       return LONG_ARR;
     if (obj instanceof String[])     return STRING_ARR;
@@ -723,7 +722,7 @@ public class JactlType {
     if (clss == String.class)       { return STRING;        }
     if (clss == Map.class)          { return MAP;           }
     if (clss == List.class)         { return LIST;          }
-    if (clss == MethodHandle.class) { return FUNCTION;      }
+    if (clss == JactlMethodHandle.class) { return FUNCTION;      }
     if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
     if (clss == Iterator.class)     { return ITERATOR;      }
     if (clss == Number.class)       { return NUMBER;        }
@@ -753,7 +752,7 @@ public class JactlType {
         case LIST:          return List.class;
         case INSTANCE:      return JactlObject.class;
         case ANY:           return Object.class;
-        case FUNCTION:      return MethodHandle.class;
+        case FUNCTION:      return JactlMethodHandle.class;
         case HEAPLOCAL:     return HeapLocal.class;
         case ITERATOR:      return Iterator.class;
         case MATCHER:       return RegexMatcher.class;

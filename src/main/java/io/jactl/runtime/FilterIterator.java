@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
@@ -27,24 +26,23 @@ import java.util.Iterator;
  * both throwing Continuation) as well as async behaviour in the closure passed to it.
  */
 class FilterIterator implements Iterator {
-  Iterator     iter;
-  String       source;
-  int          offset;
-  MethodHandle closure;
-  Object       next;
-  boolean      hasNext = false;
+  Iterator          iter;
+  String            source;
+  int               offset;
+  JactlMethodHandle closure;
+  Object            next;
+  boolean           hasNext = false;
 
-  FilterIterator(Iterator iter, String source, int offset, MethodHandle closure) {
+  FilterIterator(Iterator iter, String source, int offset, JactlMethodHandle closure) {
     this.iter = iter;
     this.source = source;
     this.offset = offset;
     this.closure = closure;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "hasNext$c", Object.class, FilterIterator.class, Continuation.class);
-
-  public static Object hasNext$c(FilterIterator filterIter, Continuation c) {
-    return filterIter.hasNext();
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    return ((FilterIterator)c.localObjects[0]).hasNext();
   }
 
   @Override
@@ -57,14 +55,13 @@ class FilterIterator implements Iterator {
       return hasNext;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, hasNextHandle.bindTo(this), 0, null, null);
+      throw new Continuation(cont, hasNext$cHandle, 0, null, new Object[]{this });
     }
   }
 
-  private static MethodHandle findNextHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "findNext$c", Object.class, FilterIterator.class, Continuation.class);
-
-  public static Object findNext$c(FilterIterator filterIter, Continuation c) {
-    filterIter.findNext(c);
+  public static JactlMethodHandle findNext$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "findNext$c", Object.class, Continuation.class);
+  public static Object findNext$c(Continuation c) {
+    ((FilterIterator)c.localObjects[1]).findNext(c);
     return null;
   }
 
@@ -105,7 +102,7 @@ class FilterIterator implements Iterator {
           case 4:
             elem = RuntimeUtils.mapEntryToList(elem);
             filterCond = closure == null ? RuntimeUtils.isTruth(elem, false)
-                                         : closure.invokeExact((Continuation) null, source, offset, new Object[]{elem});
+                                         : closure.invoke((Continuation) null, source, offset, new Object[]{elem});
             location = 6;
             break;
           case 5:
@@ -127,7 +124,7 @@ class FilterIterator implements Iterator {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, findNextHandle.bindTo(this), location + 1, null, new Object[]{elem});
+      throw new Continuation(cont, findNext$cHandle, location + 1, null, new Object[]{elem, this });
     }
     catch (RuntimeError e) {
       throw e;
@@ -137,10 +134,9 @@ class FilterIterator implements Iterator {
     }
   }
 
-  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "next$c", Object.class, FilterIterator.class, Continuation.class);
-
-  public static Object next$c(FilterIterator filterIter, Continuation c) {
-    return filterIter.doNext(c);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "next$c", Object.class, Continuation.class);
+  public static Object next$c(Continuation c) {
+    return ((FilterIterator)c.localObjects[0]).doNext(c);
   }
 
   @Override
@@ -156,7 +152,7 @@ class FilterIterator implements Iterator {
           findNext(null);
         }
         catch (Continuation cont) {
-          throw new Continuation(cont, nextHandle.bindTo(this), 0, null, null);
+          throw new Continuation(cont, next$cHandle, 0, null, new Object[]{this });
         }
       }
     }

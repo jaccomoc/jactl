@@ -25,23 +25,23 @@ import java.util.Iterator;
  * Iterates by invoking (possibly async) closure until closure returns null.
  */
 public class StreamIterator implements Iterator {
-  String       source;
-  int          offset;
-  MethodHandle closure;
-  Object       nextValue;
-  boolean      haveValue = false;
+  String            source;
+  int               offset;
+  JactlMethodHandle closure;
+  Object            nextValue;
+  boolean           haveValue = false;
 
   final static Object[] emptyArgs = new Object[0];
 
-  StreamIterator(String source, int offset, MethodHandle closure) {
+  StreamIterator(String source, int offset, JactlMethodHandle closure) {
     this.source = source;
     this.offset = offset;
     this.closure = closure;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(StreamIterator.class, "hasNext$c", Object.class, StreamIterator.class, Continuation.class);
-
-  public static Object hasNext$c(StreamIterator iter, Continuation c) {
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    var iter = (StreamIterator)c.localObjects[0];
     iter.haveValue = true;
     try {
       iter.nextValue = c.getResult();
@@ -58,12 +58,12 @@ public class StreamIterator implements Iterator {
       return nextValue != null;
     }
     try {
-      nextValue = closure.invokeExact((Continuation)null, source, offset, emptyArgs);
+      nextValue = closure.invoke((Continuation)null, source, offset, emptyArgs);
       haveValue = true;
       return nextValue != null;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, hasNextHandle.bindTo(this), 0, null, null);
+      throw new Continuation(cont, hasNext$cHandle, 0, null, new Object[]{this });
     }
     catch (NullError e) {
       haveValue = true;
@@ -78,10 +78,9 @@ public class StreamIterator implements Iterator {
     }
   }
 
-  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(StreamIterator.class, "next$c", Object.class, StreamIterator.class, Continuation.class);
-
-  public static Object next$c(StreamIterator iter, Continuation c) {
-    return iter.nextValue;
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, "next$c", Object.class, Continuation.class);
+  public static Object next$c(Continuation c) {
+    return ((StreamIterator)c.localObjects[0]).nextValue;
   }
 
   @Override
@@ -96,7 +95,7 @@ public class StreamIterator implements Iterator {
       return nextValue;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, nextHandle.bindTo(this), 0, null, null);
+      throw new Continuation(cont, next$cHandle, 0, null, new Object[]{this });
     }
     catch (RuntimeError e) {
       throw e;

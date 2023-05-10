@@ -85,7 +85,7 @@ public class Functions {
    * @param methodName  the name of the method to look for
    * @return MethodHandle bound to parent
    */
-  static MethodHandle lookupWrapper(Object parent, String methodName) {
+  static JactlMethodHandle lookupWrapper(Object parent, String methodName) {
     Class parentClass = parent instanceof Iterator ? Iterator.class : parent.getClass();
     var classLookup = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
     var function    = classLookup.methods.computeIfAbsent(methodName, name -> {

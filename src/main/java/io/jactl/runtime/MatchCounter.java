@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 /**
@@ -33,12 +32,12 @@ public class MatchCounter {
   Iterator     iter;
   String       source;
   int          offset;
-  MethodHandle predicate;
+  JactlMethodHandle predicate;
   MatchType    matchType;
 
   enum MatchType { NONE, ANY, ALL };
 
-  MatchCounter(Iterator iter, String source, int offset, MethodHandle predicate, MatchType matchType) {
+  MatchCounter(Iterator iter, String source, int offset, JactlMethodHandle predicate, MatchType matchType) {
     this.iter      = iter;
     this.source    = source;
     this.offset    = offset;
@@ -46,10 +45,9 @@ public class MatchCounter {
     this.matchType = matchType;
   }
 
-  private static MethodHandle handle = RuntimeUtils.lookupMethod(MatchCounter.class, "matching$c", Object.class, MatchCounter.class, Continuation.class);
-
-  public static Object matching$c(MatchCounter filterIter, Continuation c) {
-    return filterIter.matching(c);
+  public static JactlMethodHandle matching$cHandle = RuntimeUtils.lookupMethod(MatchCounter.class, "matching$c", Object.class, Continuation.class);
+  public static Object matching$c(Continuation c) {
+    return ((MatchCounter)c.localObjects[2]).matching(c);
   }
 
   public boolean matching(Continuation c) {
@@ -90,7 +88,7 @@ public class MatchCounter {
           case 4:
             elem = RuntimeUtils.mapEntryToList(elem);
             filterCond = predicate == null ? RuntimeUtils.isTruth(elem, false)
-                                           : predicate.invokeExact((Continuation) null, source, offset, new Object[]{elem});
+                                           : predicate.invoke((Continuation) null, source, offset, new Object[]{elem});
             location = 6;
             break;
           case 5:
@@ -114,7 +112,7 @@ public class MatchCounter {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, handle.bindTo(this), location + 1, null, new Object[]{hasNext, elem});
+      throw new Continuation(cont, matching$cHandle, location + 1, null, new Object[]{hasNext, elem, this });
     }
     catch (RuntimeError e) {
       throw e;

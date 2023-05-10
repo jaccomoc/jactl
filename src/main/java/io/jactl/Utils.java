@@ -512,7 +512,7 @@ public class Utils {
   }
 
   public static void createVariableForFunction(Stmt.FunDecl funDecl) {
-    // Create a "variable" for the function that will have the MethodHandle as its value
+    // Create a "variable" for the function that will have the JactlMethodHandle as its value
     // so we can get the function by value
     Expr.VarDecl varDecl = new Expr.VarDecl(funDecl.declExpr.nameToken, null, null);
     varDecl.type = FUNCTION;
@@ -637,7 +637,7 @@ public class Utils {
     // To detect such references we remember the earlies reference and check that the
     // variable we are now closing over was not declared after that reference.
     // NOTE: even if v were another function we still need to disallow this since the
-    // MethodHandle for v won't exist at the time that g is invoked.
+    // JactlMethodHandle for v won't exist at the time that g is invoked.
     if (funDecl.earliestForwardReference != null) {
       if (isEarlier(funDecl.earliestForwardReference, varDecl.location)) {
         throw new CompileError("Forward reference to function " + funDecl.nameToken.getStringValue() + " that closes over variable " +

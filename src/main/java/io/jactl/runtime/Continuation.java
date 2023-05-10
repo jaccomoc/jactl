@@ -44,14 +44,14 @@ import java.util.function.Supplier;
  */
 public class Continuation extends RuntimeException {
 
-  private AsyncTask    asyncTask;          // The blocking task that needs to be done asynchronously
-  private Continuation parentContinuation; // Continuation for our parent stack frame
-  private MethodHandle methodHandle;       // Handle pointing to continuation wrapper function
-  private RuntimeState runtimeState;       // ThreadLocal runtime state that needs to be restored on resumption
-  public  int          methodLocation;     // Location within method where resumption should continue
-  public  long[]       localPrimitives;
-  public  Object[]     localObjects;
-  private Object       result;             // Result of the async call when continuing after suspend
+  private AsyncTask         asyncTask;          // The blocking task that needs to be done asynchronously
+  private Continuation      parentContinuation; // Continuation for our parent stack frame
+  private RuntimeState      runtimeState;       // ThreadLocal runtime state that needs to be restored on resumption
+  private JactlMethodHandle methodHandle;       // Handle pointing to continuation wrapper function
+  public  int               methodLocation;     // Location within method where resumption should continue
+  public  long[]            localPrimitives;
+  public  Object[]          localObjects;
+  private Object            result;             // Result of the async call when continuing after suspend
 
   Continuation(AsyncTask asyncTask) {
     super(null, null, false, false);
@@ -86,7 +86,7 @@ public class Continuation extends RuntimeException {
    * return immediately without needing to block on a blocking scheduler thread. Once the result of
    * the async work has been received (receiving a message or timer expiring) then the execution
    * is resumed.
-   * @param asyncWork  the taks that will schedule some async work in the background
+   * @param asyncWork  the task that will schedule some async work in the background
    * @return nothing - always throws an exception
    * @throws Continuation always
    */
@@ -111,15 +111,15 @@ public class Continuation extends RuntimeException {
    * @param localPrimitives array of values for our local vars that are primitives
    * @param localObjects    array of object values for our local non-primitive vars
    */
-  public Continuation(Continuation continuation, MethodHandle methodHandle, int codeLocation, long[] localPrimitives, Object[] localObjects) {
+  public Continuation(Continuation continuation, JactlMethodHandle methodHandle, int codeLocation, long[] localPrimitives, Object[] localObjects) {
     super(null, null, false, false);
-    this.asyncTask = continuation.asyncTask;
-    continuation.asyncTask = null;
+    this.asyncTask                  = continuation.asyncTask;
+    continuation.asyncTask          = null;
     continuation.parentContinuation = this;    // chain ourselves to our child
-    this.methodLocation = codeLocation;
-    this.methodHandle = methodHandle;
-    this.localPrimitives = localPrimitives;
-    this.localObjects = localObjects;
+    this.methodLocation             = codeLocation;
+    this.methodHandle               = methodHandle;
+    this.localPrimitives            = localPrimitives;
+    this.localObjects               = localObjects;
   }
 
   /**
@@ -147,7 +147,7 @@ public class Continuation extends RuntimeException {
     for (Continuation c = this; c != null; c = c.parentContinuation) {
       try {
         c.result = result;
-        result = c.methodHandle.invokeExact(c);
+        result = c.methodHandle.invoke(c);
       }
       catch (Continuation cont) {
         // Make new continuation point back to existing chain at point we are up to so that when it

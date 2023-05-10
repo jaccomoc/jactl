@@ -965,9 +965,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private JactlType doVisitFunDecl(Expr.FunDecl expr, boolean defineVar) {
     // Only define a variable for the wrapper function. We don't define a variable
     // for the function itself within the wrapper as we never invoke it that way.
-    // The variable exists to hold the MethodHandle that points to the wrapper function
-    // so we don't want yet another MethodHandle to the actual function since all calls
-    // where we would use a MethodHandle have to go through the wrapper function to get
+    // The variable exists to hold the JactlMethodHandle that points to the wrapper function
+    // so we don't want yet another JactlMethodHandle to the actual function since all calls
+    // where we would use a JactlMethodHandle have to go through the wrapper function to get
     // the var args/named args treatment.
     if (defineVar) {
       resolve(expr.varDecl);

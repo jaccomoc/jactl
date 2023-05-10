@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -42,9 +41,9 @@ public class GroupedIterator implements Iterator {
     this.size   = size;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, "hasNext$c", Object.class, GroupedIterator.class, Continuation.class);
-
-  public static Object hasNext$c(GroupedIterator iter, Continuation c) {
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    var iter = (GroupedIterator)c.localObjects[0];
     iter.haveNext = true;
     boolean result = (boolean)c.getResult();
     iter.finished = !result;
@@ -66,14 +65,13 @@ public class GroupedIterator implements Iterator {
       return !finished;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, hasNextHandle.bindTo(this), 0, null, null);
+      throw new Continuation(cont, hasNext$cHandle, 0, null, new Object[]{this });
     }
   }
 
-  private static MethodHandle nextHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, "next$c", Object.class, GroupedIterator.class, Continuation.class);
-
-  public static Object next$c(GroupedIterator iter, Continuation c) {
-    return iter.doNext(c);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, "next$c", Object.class, Continuation.class);
+  public static Object next$c(Continuation c) {
+    return ((GroupedIterator)c.localObjects[0]).doNext(c);
   }
 
   @Override public Object next() {
@@ -112,7 +110,8 @@ public class GroupedIterator implements Iterator {
       return result;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, nextHandle.bindTo(this), location + 1, null, null);
+      throw new Continuation(cont, next$cHandle,
+                             location + 1, null, new Object[]{ this });
     }
     catch (RuntimeError e) {
       throw e;

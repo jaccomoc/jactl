@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Iterator;
 
 public class UniqueIterator implements Iterator {
@@ -31,10 +30,9 @@ public class UniqueIterator implements Iterator {
     this.iter = iter;
   }
 
-  private static MethodHandle hasNextHandle = RuntimeUtils.lookupMethod(UniqueIterator.class, "hasNext$c", Object.class, UniqueIterator.class, Continuation.class);
-
-  public static Object hasNext$c(UniqueIterator iter, Continuation c) {
-    return iter.doHasNext(c);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(UniqueIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static Object hasNext$c(Continuation c) {
+    return ((UniqueIterator)c.localObjects[0]).doHasNext(c);
   }
 
   @Override
@@ -93,7 +91,7 @@ public class UniqueIterator implements Iterator {
         }
       }
       catch (Continuation cont) {
-        throw new Continuation(cont, hasNextHandle.bindTo(this), location + 1, null, null);
+        throw new Continuation(cont, hasNext$cHandle, location + 1, null, new Object[]{this });
       }
     }
     return hasValue;

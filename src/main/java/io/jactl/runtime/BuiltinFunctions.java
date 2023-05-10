@@ -22,7 +22,6 @@ import org.objectweb.asm.MethodVisitor;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
@@ -461,7 +460,7 @@ public class BuiltinFunctions {
     return globalFunctions.get(name);
   }
 
-  public static MethodHandle lookupMethodHandle(String name) {
+  public static JactlMethodHandle lookupMethodHandle(String name) {
     FunctionDescriptor descriptor = globalFunctions.get(name);
     if (descriptor == null) {
       throw new IllegalStateException("Internal error: attempt to get MethodHandle to unknown built-in function " + name);
@@ -565,7 +564,7 @@ public class BuiltinFunctions {
 
   // = stream
   public static Object streamData;
-  public static Iterator stream(Continuation c, String source, int offset, MethodHandle closure) {
+  public static Iterator stream(Continuation c, String source, int offset, JactlMethodHandle closure) {
     return new StreamIterator(source, offset, closure);
   }
 
@@ -737,12 +736,12 @@ public class BuiltinFunctions {
       return list.size();
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorSizeHandle.bindTo(iterable), 0, null, null);
+      throw new Continuation(cont, iteratorSize$cHandle, 0, null, new Object[] { iterable });
     }
   }
-  private static MethodHandle iteratorSizeHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSize$c", Object.class, Object.class, Continuation.class);
-  public static Object iteratorSize$c(Object iterable, Continuation c) {
-    return iteratorSize(iterable, c);
+  public static JactlMethodHandle iteratorSize$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSize$c", Object.class, Continuation.class);
+  public static Object iteratorSize$c(Continuation c) {
+    return iteratorSize(c.localObjects[0], c);
   }
 
   ////////////////////////////////
@@ -769,7 +768,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorSubListData;
   public static List iteratorSubList(Object iterable, Continuation c, String source, int offset, int start, int end) {
-    source = c == null ? source : (String)c.localObjects[0];
+    source = c == null ? source : (String)c.localObjects[1];
     offset = c == null ? offset : (int)c.localPrimitives[0];
     start  = c == null ? start  : (int)c.localPrimitives[1];
     end    = c == null ? end    : (int)c.localPrimitives[2];
@@ -779,12 +778,13 @@ public class BuiltinFunctions {
       return listSubList(list, source, offset, start, end == Integer.MAX_VALUE ? list.size() : end);
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorSubListHandle.bindTo(iterable), 0, new long[]{offset, start,end}, new Object[]{source});
+      throw new Continuation(cont, iteratorSubList$cHandle,
+                             0, new long[]{offset, start,end}, new Object[]{iterable, source});
     }
   }
-  private static MethodHandle iteratorSubListHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSubList$c", Object.class, Object.class, Continuation.class);
-  public static Object iteratorSubList$c(Object iterable, Continuation c) {
-    return iteratorSubList(iterable, c, null, 0, 0, 0);
+  public static JactlMethodHandle iteratorSubList$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSubList$c", Object.class, Continuation.class);
+  public static Object iteratorSubList$c(Continuation c) {
+    return iteratorSubList(c.localObjects[0], c, null, 0, 0, 0);
   }
 
   ////////////////////////////////
@@ -792,7 +792,7 @@ public class BuiltinFunctions {
   // = filter
 
   public static Object iteratorFilterData;
-  public static Iterator iteratorFilter(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Iterator iteratorFilter(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, closure);
   }
@@ -813,12 +813,13 @@ public class BuiltinFunctions {
       return result;
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorReverseHandle.bindTo(iterable), 0, null, null);
+      throw new Continuation(cont, iteratorReverse$cHandle,
+                             0, null, new Object[]{ iterable });
     }
   }
-  private static MethodHandle iteratorReverseHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReverse$c", Object.class, Object.class, Continuation.class);
-  public static Object iteratorReverse$c(Object iterable, Continuation c) {
-    return iteratorReverse(iterable, c);
+  public static JactlMethodHandle iteratorReverse$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReverse$c", Object.class, Continuation.class);
+  public static Object iteratorReverse$c(Continuation c) {
+    return iteratorReverse(c.localObjects[0], c);
   }
 
   ////////////////////////////////
@@ -844,7 +845,7 @@ public class BuiltinFunctions {
     return new SkipIterator(iter, -count);
   }
 
-  private static MethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
+  private static JactlMethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
                                                                               Object.class, Integer.class, AtomicInteger.class,
                                                                               Continuation.class, String.class, int.class, Object[].class);
   public static Object shouldNotSkip(Integer skipAmount, AtomicInteger index, Continuation ignore1, String ignore2, int ignore3, Object[] ignore4) {
@@ -885,7 +886,7 @@ public class BuiltinFunctions {
   // = map
 
   public static Object iteratorMapData;
-  public static Iterator iteratorMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Iterator iteratorMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure);
   }
@@ -895,7 +896,7 @@ public class BuiltinFunctions {
   // = mapWithIndex
 
   public static Object iteratorMapWithIndexData;
-  public static Iterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Iterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure, true);
   }
@@ -905,7 +906,7 @@ public class BuiltinFunctions {
   // = flatMap
 
   public static Object iteratorFlatMapData;
-  public static Iterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Iterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     Iterator iter = RuntimeUtils.createIterator(iterable);
     return new FlatMapIterator(iter, source, offset, closure);
   }
@@ -915,10 +916,10 @@ public class BuiltinFunctions {
   // = each
 
   public static Object iteratorEachData;
-  public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorEach$c(RuntimeUtils.createIterator(iterable), source, offset, closure, null);
+  public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return doIteratorEach(RuntimeUtils.createIterator(iterable), source, offset, closure, null);
   }
-  public static Object iteratorEach$c(Iterator iter, String source, Integer offset, MethodHandle closure, Continuation c) {
+  public static Object doIteratorEach(Iterator iter, String source, int offset, JactlMethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext = true;
@@ -952,7 +953,7 @@ public class BuiltinFunctions {
             break;
           case 4:                      // Have result of iter.next()
             elem = RuntimeUtils.mapEntryToList(elem);
-            Object ignored = closure == null ? null : closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
+            Object ignored = closure == null ? null : closure.invoke((Continuation)null, source, (int)offset, new Object[]{ elem });
             methodLocation = 0;       // Back to initial state to get next element
             break;
           case 5:
@@ -964,8 +965,7 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorEachHandle.bindTo(iter).bindTo(source).bindTo(offset).bindTo(closure),
-                             methodLocation + 1, null, null);
+      throw new Continuation(cont, iteratorEach$cHandle,methodLocation + 1, new long[]{ offset }, new Object[]{ iter, source, closure });
     }
     catch (RuntimeError e) {
       throw e;
@@ -974,19 +974,21 @@ public class BuiltinFunctions {
       throw new RuntimeError("Unexpected error", source, offset, t);
     }
   }
-  private static MethodHandle iteratorEachHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
-                                                                             Object.class, Iterator.class, String.class,
-                                                                             Integer.class, MethodHandle.class, Continuation.class);
+  public static Object iteratorEach$c(Continuation c) {
+    return doIteratorEach((Iterator)c.localObjects[0], (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2], c);
+  }
+  public static JactlMethodHandle iteratorEach$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
+                                                                                   Object.class, Continuation.class);
 
   ////////////////////////////////
 
   // = collect
 
   public static Object iteratorCollectData;
-  public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorCollect$c(RuntimeUtils.createIterator(iterable), new ArrayList(), (list, elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
+  public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new ArrayList(), (list, elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
   }
-  public static Object iteratorCollect$c(Iterator iter, Object result, BiFunction<Object,Object,Object> collector, String source, Integer offset, MethodHandle closure, Continuation c) {
+  public static Object doIteratorCollect(Iterator iter, Object result, BiFunction<Object,Object,Object> collector, String source, int offset, JactlMethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext         = true;
@@ -1021,7 +1023,7 @@ public class BuiltinFunctions {
             break;
           case 4:                      // Have result of iter.next()
             elem = RuntimeUtils.mapEntryToList(elem);
-            transformedElem = closure == null ? elem : closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
+            transformedElem = closure == null ? elem : closure.invoke((Continuation)null, source, (int)offset, new Object[]{ elem });
             methodLocation = 6;
             break;
           case 5:
@@ -1038,8 +1040,7 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorCollectHandle.bindTo(iter).bindTo(result).bindTo(collector).bindTo(source).bindTo(offset).bindTo(closure),
-                             methodLocation + 1, null, new Object[] { result });
+      throw new Continuation(cont, iteratorCollect$cHandle, methodLocation + 1, new long[]{ offset }, new Object[] { iter, result, collector, source, closure });
     }
     catch (RuntimeError e) {
       throw e;
@@ -1049,21 +1050,24 @@ public class BuiltinFunctions {
     }
   }
 
-  private static MethodHandle iteratorCollectHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorCollect$c",
-                                                                                Object.class, Iterator.class, Object.class,
-                                                                                BiFunction.class, String.class, Integer.class,
-                                                                                MethodHandle.class, Continuation.class);
+  public static Object iteratorCollect$c(Continuation c) {
+    return doIteratorCollect((Iterator)c.localObjects[0], c.localObjects[1], (BiFunction)c.localObjects[2],
+                             (String)c.localObjects[3], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[4], c);
+  }
+
+  public static JactlMethodHandle iteratorCollect$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorCollect$c",
+                                                                                      Object.class, Continuation.class);
 
   /////////////////////////////
 
   // = reduce
 
   public static Object iteratorReduceData;
-  public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, MethodHandle closure) {
-    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, initialValue, (value, elem) -> {
+  public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, JactlMethodHandle closure) {
+    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, initialValue, (value, elem) -> {
       elem = Arrays.asList(value, elem);
       try {
-        return closure.invokeExact((Continuation)null, source, (int)offset, new Object[]{ elem });
+        return closure.invoke((Continuation)null, source, (int)offset, new Object[]{ elem });
       }
       catch (Continuation | RuntimeError e) {
         throw e;
@@ -1073,7 +1077,7 @@ public class BuiltinFunctions {
       }
     }, null, c);
   }
-  public static Object iteratorReduce$c(Iterator iter, String source, Integer offset, Object value,
+  public static Object doIteratorReduce(Iterator iter, String source, int offset, Object value,
                                         BiFunction<Object,Object,Object> invoker,
                                         Function<Object,Object> resultProcessor,
                                         Continuation c) {
@@ -1126,9 +1130,8 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorReduceHandle.bindTo(iter).bindTo(source).bindTo(offset)
-                                                       .bindTo(value).bindTo(invoker).bindTo(resultProcessor),
-                             methodLocation + 1, null, null);
+      throw new Continuation(cont, iteratorReduce$cHandle,methodLocation + 1, new long[]{ offset },
+                             new Object[]{ iter, source, value, invoker, resultProcessor});
     }
     catch (RuntimeError e) {
       throw e;
@@ -1138,9 +1141,10 @@ public class BuiltinFunctions {
     }
   }
 
-  private static MethodHandle iteratorReduceHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReduce$c",
-                                                                                Object.class, Iterator.class, String.class, Integer.class,
-                                                                                Object.class, BiFunction.class, Function.class, Continuation.class);
+  public static Object iteratorReduce$c(Continuation c) {
+    return doIteratorReduce((Iterator)c.localObjects[0], (String)c.localObjects[1], (int)c.localPrimitives[0], c.localObjects[2], (BiFunction)c.localObjects[3], (Function)c.localObjects[4], c);
+  }
+  public static JactlMethodHandle iteratorReduce$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReduce$c", Object.class, Continuation.class);
 
   /////////////////////////////
 
@@ -1158,7 +1162,7 @@ public class BuiltinFunctions {
                                : strValue.concat(joinStr).concat(RuntimeUtils.toString(elem));
       }
     };
-    return (String)iteratorCollect$c(RuntimeUtils.createIterator(iterable), "", joiner, source, offset, null, c);
+    return (String)doIteratorCollect(RuntimeUtils.createIterator(iterable), "", joiner, source, offset, null, c);
   }
 
   /////////////////////////////
@@ -1166,21 +1170,21 @@ public class BuiltinFunctions {
   // = allMatches
 
   public static Object iteratorAllMatchData;
-  public static boolean iteratorAllMatch(Object iterable, Continuation c, String source, int offset, MethodHandle predicate) {
+  public static boolean iteratorAllMatch(Object iterable, Continuation c, String source, int offset, JactlMethodHandle predicate) {
     return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.ALL).matching(c);
   }
 
   // = anyMatches
 
   public static Object iteratorAnyMatchData;
-  public static boolean iteratorAnyMatch(Object iterable, Continuation c, String source, int offset, MethodHandle predicate) {
+  public static boolean iteratorAnyMatch(Object iterable, Continuation c, String source, int offset, JactlMethodHandle predicate) {
     return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.ANY).matching(c);
   }
 
   // = noneMatches
 
   public static Object iteratorNoneMatchData;
-  public static boolean iteratorNoneMatch(Object iterable, Continuation c, String source, int offset, MethodHandle predicate) {
+  public static boolean iteratorNoneMatch(Object iterable, Continuation c, String source, int offset, JactlMethodHandle predicate) {
     return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.NONE).matching(c);
   }
 
@@ -1203,7 +1207,7 @@ public class BuiltinFunctions {
   public static Object iteratorAvgData;
   public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
     int[] counter = new int[]{0};
-    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO,
+    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO,
                             (value,elem) -> {
                               counter[0]++;
                               return addNumbers(value, elem, source, offset);
@@ -1233,7 +1237,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorSumData;
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
-    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, 0,
+    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, 0,
                             (value,elem) -> addNumbers(value, elem, source, offset),
                             (value) -> value,
                             c);
@@ -1262,7 +1266,7 @@ public class BuiltinFunctions {
   // = min/max
 
   public static Object listMinData;
-  public static Object listMin(List list, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Object listMin(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
     if (closure != null) {
       return iteratorMin(list, c, source, offset, closure);
     }
@@ -1278,7 +1282,7 @@ public class BuiltinFunctions {
   }
 
   public static Object listMaxData;
-  public static Object listMax(List list, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Object listMax(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
     if (closure != null) {
       return iteratorMax(list, c, source, offset, closure);
     }
@@ -1294,26 +1298,28 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorMinData;
-  public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, null,
+  public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, null,
                             (value,elem) -> minMaxInvoker(source, offset, closure, false, value, elem, c),
                             (value) -> value == null ? null : ((Object[])value)[1],
                             c);
   }
 
   public static Object iteratorMaxData;
-  public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
-    return iteratorReduce$c(RuntimeUtils.createIterator(iterable), source, offset, null,
+  public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, null,
                             (value,elem) -> minMaxInvoker(source, offset, closure, true, value, elem, c),
                             (value) -> value == null ? null : ((Object[])value)[1],
                             c);
   }
 
-  private static final MethodHandle minMaxInvokerHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "minMaxInvoker",
-                                                                                    Object.class, String.class, Integer.class,
-                                                                                    MethodHandle.class, Boolean.class, Object.class,
-                                                                                    Object.class, Continuation.class);
-  public static Object minMaxInvoker(String source, Integer offset, MethodHandle closure, Boolean isMax, Object currentValueObj, Object elem, Continuation c) {
+  public static final JactlMethodHandle minMaxInvoker$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "minMaxInvoker$c",
+                                                                                          Object.class, Continuation.class);
+  public static Object minMaxInvoker$c(Continuation c) {
+    return minMaxInvoker((String)c.localObjects[0], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[1],
+                         c.localPrimitives[1] == 1, c.localObjects[2], c.localObjects[3], c);
+  }
+  public static Object minMaxInvoker(String source, int offset, JactlMethodHandle closure, boolean isMax, Object currentValueObj, Object elem, Continuation c) {
     Object[] currentValue = (Object[])currentValueObj;
     Object[] nextValue;
     if (c != null) {
@@ -1325,12 +1331,10 @@ public class BuiltinFunctions {
       }
       else {
         try {
-          nextValue = new Object[] { closure.invokeExact((Continuation) null, source, (int)offset, new Object[]{elem}), elem };
+          nextValue = new Object[] { closure.invoke((Continuation) null, source, (int)offset, new Object[]{elem}), elem };
         }
         catch (Continuation cont) {
-          throw new Continuation(cont, minMaxInvokerHandle.bindTo(source).bindTo(offset).bindTo(closure)
-                                                          .bindTo(isMax).bindTo(currentValue).bindTo(elem),
-                                 0, null, null);
+          throw new Continuation(cont, minMaxInvoker$cHandle,0, new long[]{ offset, isMax ? 1 : 0 }, new Object[]{ source, closure, currentValue, elem });
         }
         catch (RuntimeError e) {
           throw e;
@@ -1353,28 +1357,27 @@ public class BuiltinFunctions {
   // = collectEntries
 
   public static Object iteratorCollectEntriesData;
-  public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+  public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     BiFunction<Object,Object,Object> collector = (mapObj,elem) -> {
       RuntimeUtils.addMapEntry((Map) mapObj, elem, source, offset);
       return mapObj;
     };
-    return iteratorCollect$c(RuntimeUtils.createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
   }
 
   /////////////////////////////
 
   // = sort
 
-  private static MethodHandle iteratorSortHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSort$c",
-                                                                             Object.class, Object.class, String.class,
-                                                                             Integer.class,MethodHandle.class, Continuation.class);
+  private static JactlMethodHandle iteratorSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSort$c",
+                                                                                    Object.class, Continuation.class);
 
-  public static Object iteratorSort$c(Object iterable, String source, Integer offset, MethodHandle closure, Continuation c) {
-    return iteratorSort(iterable, c, source, offset, closure);
+  public static Object iteratorSort$c(Continuation c) {
+    return iteratorSort(c.localObjects[0], c, (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2]);
   }
 
   public static Object iteratorSortData;
-  public static List iteratorSort(Object iterable, Continuation c, String source, int offset, MethodHandle closure) {
+  public static List iteratorSort(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     List result = null;
     int location = c == null ? 0 : c.methodLocation;
     try {
@@ -1406,14 +1409,9 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorSortHandle.bindTo(iterable).bindTo(source).bindTo((Integer)offset).bindTo(closure),
-                             location + 1, null, null);
+      throw new Continuation(cont, iteratorSort$cHandle, location + 1, new long[]{ offset }, new Object[]{ iterable, source, closure });
     }
   }
-
-  private static MethodHandle mergeSortHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "mergeSort",
-                                                                      Object.class, List.class, MethodHandle.class,
-                                                                      String.class, Integer.class, Continuation.class);
 
   /**
    * Bottom up merge sort.
@@ -1425,7 +1423,7 @@ public class BuiltinFunctions {
    * @return the sorted list
    * @throws Continuation if closure invokes async operation which suspends
    */
-  public static Object mergeSort(List list, MethodHandle closure, String source, Integer offset, Continuation c) {
+  public static Object mergeSort(List list, JactlMethodHandle closure, String source, Integer offset, Continuation c) {
     int size = list.size();
     List src;
     List dst;
@@ -1449,8 +1447,7 @@ public class BuiltinFunctions {
           merge(src, dst, i, start2, start2, Math.min(i + 2 * width, size), closure, source, offset, null);
         }
         catch (Continuation cont) {
-          throw new Continuation(cont, mergeSortHandle.bindTo(list).bindTo(closure).bindTo(source).bindTo(offset),
-                                 0, new long[] { width, i }, new Object[] { src, dst });
+          throw new Continuation(cont, mergeSort$cHandle, 0, new long[] {width, i, offset }, new Object[] {src, dst, list, closure, source });
         }
       }
       List tmp = src;
@@ -1459,14 +1456,22 @@ public class BuiltinFunctions {
     }
     return src;
   }
+  public static Object mergeSort$c(Continuation c) {
+    return mergeSort((List)c.localObjects[2], (JactlMethodHandle)c.localObjects[3], (String)c.localObjects[4], (int)c.localPrimitives[2], c);
+  }
+  public static JactlMethodHandle mergeSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "mergeSort$c",
+                                                                                Object.class, Continuation.class);
 
-  private static MethodHandle mergeHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "merge",
-                                                                      Object.class, List.class, List.class, Integer.class,
-                                                                      Integer.class, Integer.class, Integer.class, MethodHandle.class,
-                                                                      String.class, Integer.class, Continuation.class);
+  public static JactlMethodHandle merge$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "merge$c",
+                                                                            Object.class, Continuation.class);
+  public static Object merge$c(Continuation c) {
+    return merge((List)c.localObjects[0], (List)c.localObjects[1], (int)c.localPrimitives[3], (int)c.localPrimitives[4],
+                 (int)c.localPrimitives[5], (int)c.localPrimitives[6], (JactlMethodHandle)c.localObjects[2],
+                 (String)c.localObjects[3], (int)c.localPrimitives[7], c);
+  }
 
   // Merge two sorted sublists of src into same position in dst
-  public static Object merge(List src, List dst, Integer start1, Integer end1, Integer start2, Integer end2, MethodHandle comparator, String source, Integer offset, Continuation c) {
+  public static Object merge(List src, List dst, int start1, int end1, int start2, int end2, JactlMethodHandle comparator, String source, int offset, Continuation c) {
     int count = end1 - start1 + end2 - start2;
     int i1 = start1;
     int i2 = start2;
@@ -1497,11 +1502,11 @@ public class BuiltinFunctions {
         Object elem2 = src.get(i2);
         if (comparison == null) {
           try {
-            comparison = comparator.invokeExact((Continuation) null, source, (int)offset, new Object[]{ List.of(elem1, elem2) });
+            comparison = comparator.invoke((Continuation) null, source, (int)offset, new Object[]{ List.of(elem1, elem2) });
           }
           catch (Continuation cont) {
-            throw new Continuation(cont, mergeHandle.bindTo(src).bindTo(dst).bindTo(start1).bindTo(end1).bindTo(start2).bindTo(end2).bindTo(comparator).bindTo(source).bindTo(offset),
-                                   0, new long[] { i1, i2, dstPos }, null);
+            throw new Continuation(cont, merge$cHandle,
+                                   0, new long[] { i1, i2, dstPos, start1, end1, start2, end2, offset }, new Object[]{ src, dst, comparator, source });
           }
           catch (RuntimeException e) { throw e; }
           catch (Throwable t)        { throw new RuntimeError("Unexpected error", source, offset, t); }
