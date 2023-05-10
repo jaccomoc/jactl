@@ -1001,7 +1001,14 @@ public class RuntimeUtils {
       return null;
     }
     if (!regexMatcher.captureAsNums) {
-      return matcher.group(group);
+      try {
+        return matcher.group(group);
+      }
+      catch (IllegalStateException e) {
+        // Can happen when using $1 etc after a /xxx/g pattern
+        // has finished its matching
+        return null;
+      }
     }
 
     // See if we have a number we can parse

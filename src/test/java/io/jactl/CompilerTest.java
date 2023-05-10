@@ -2728,7 +2728,7 @@ class CompilerTest extends BaseTest {
     testError("1 =~ s/abc/xyz/", "invalid lvalue");
     testError("def x = 1; x =~ s/abc/xyz/", "cannot convert");
     testError("'a123c' =~ /(\\d+)/; $1 =~ s/123/abc/; $1", "invalid lvalue");
-//    test("def it = '   *# parseScript -&gt; packageDecl? script;'; s/^.*#//; s/^ *([^ ]*) *-&gt;/${ $1.toUpperCase(1) }->/g; println $1", null);
+    test("def it = '   *# parseScript -&gt; packageDecl? script;'; s/^.*#//; s/^ *([^ ]*) *-&gt;/${ $1.toUpperCase(1) }->/g; $1 == null", true);
   }
 
   @Test public void regexSubstituteExprString() {
