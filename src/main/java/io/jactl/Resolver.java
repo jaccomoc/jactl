@@ -513,7 +513,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.isConst = false;
 
     // Special case for standalone regex where we need to match against "it" if in a context where variable
-    // "it" exists but only if the regex has modifiers after it. Otherwise we will treat it as a regular
+    // "it" exists but only if the regex has modifiers after it. Otherwise, we will treat it as a regular
     // expression string. If there are modifiers but not "it" then we generate an error.
     if (expr.implicitItMatch) {
       if ((!expr.modifiers.isEmpty() || expr.isSubstitute) && !variableExists(Utils.IT_VAR)) {

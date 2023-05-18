@@ -15,16 +15,8 @@
  *
  */
 
-package io.jactl;
+package io.jactl.runtime;
 
-public class Pair<X,Y> {
-  public final X first;
-  public final Y second;
-  public Pair(X first, Y second) {
-    this.first = first;
-    this.second = second;
-  }
-  public static <X,Y> Pair<X,Y> create(X first, Y second) {
-    return new Pair(first, second);
-  }
+public interface TriConsumer<X,Y,Z> {
+  void accept(X x, Y y, Z z);
 }

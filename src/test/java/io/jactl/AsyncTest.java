@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -67,7 +68,8 @@ public class AsyncTest {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String)((String) expected).substring(1)));
     }
-    assertEquals(expected, Compiler.eval(source, context, Utils.mapOf(Utils.JACTL_GLOBALS_INPUT, new BufferedReader(new StringReader(input)))));
+    RuntimeState.setInput(new BufferedReader(new StringReader(input)));
+    assertEquals(expected, Compiler.eval(source, context, Utils.mapOf()));
   }
 
   @Test public void asyncTests() {

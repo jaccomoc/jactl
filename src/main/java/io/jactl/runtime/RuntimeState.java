@@ -20,16 +20,16 @@ package io.jactl.runtime;
 import java.io.BufferedReader;
 import java.io.PrintStream;
 
+/**
+ * For the moment we hold the input and output here.
+ * Need to work out whether to support per script input/output and if so how to
+ * checkpoint and restore them.
+ */
 public class RuntimeState {
-  PrintStream    output;
-  BufferedReader input;
+  static PrintStream    output;
+  static BufferedReader input;
 
-  private static ThreadLocal<RuntimeState> state = new ThreadLocal<>() {
-    @Override
-    protected RuntimeState initialValue() {
-      return new RuntimeState();
-    }
-  };
+  private static ThreadLocal<RuntimeState> state = ThreadLocal.withInitial(() -> new RuntimeState());
 
   static RuntimeState getState() {
     return state.get();
@@ -43,13 +43,13 @@ public class RuntimeState {
     if (out != null && !(out instanceof PrintStream)) {
       throw new IllegalArgumentException("Global 'out' must be a PrintStream not " + out.getClass().getName());
     }
-    getState().output = (PrintStream)out;
+    output = (PrintStream)out;
   }
 
   public static void setInput(Object in) {
     if (in != null && !(in instanceof BufferedReader)) {
       throw new IllegalArgumentException("Global 'in' must be a BufferedReader not " + in.getClass().getName());
     }
-    getState().input = (BufferedReader)in;
+    input = (BufferedReader)in;
   }
 }

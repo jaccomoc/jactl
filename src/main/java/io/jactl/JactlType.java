@@ -44,7 +44,7 @@ import java.util.Map;
  */
 public class JactlType {
 
-  enum TypeEnum {
+  public enum TypeEnum {
     BOOLEAN,
     INT,
     LONG,
@@ -65,7 +65,11 @@ public class JactlType {
     NUMBER,
     MATCHER,
     CONTINUATION,
-    UNKNOWN        // Used as placeholder for "var" until we know type of initialiser for a variable
+    NULL_TYPE,
+    STRING_BUILDER,
+    NAMED_ARGS_MAP,
+    BUILTIN,        // Used during checkpoint/restore
+    UNKNOWN         // Used as placeholder for "var" until we know type of initialiser for a variable
   }
 
   public static JactlType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
@@ -246,6 +250,31 @@ public class JactlType {
       default:         return TokenType.VAR;
       //default: throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
+  }
+
+  public static JactlType valueOf(TypeEnum type) {
+    switch (type) {
+      case BOOLEAN:      return BOOLEAN;
+      case INT:          return INT;
+      case LONG:         return LONG;
+      case DOUBLE:       return DOUBLE;
+      case DECIMAL:      return DECIMAL;
+      case STRING:       return STRING;
+      case MAP:          return MAP;
+      case LIST:         return LIST;
+      case INSTANCE:     return INSTANCE;
+      case CLASS:        return CLASS;
+      case ANY:          return ANY;
+      case FUNCTION:     return FUNCTION;
+      case ARRAY:        return ARRAY;
+      case HEAPLOCAL:    return HEAPLOCAL;
+      case ITERATOR:     return ITERATOR;
+      case NUMBER:       return NUMBER;
+      case MATCHER:      return MATCHER;
+      case CONTINUATION: return CONTINUATION;
+      case UNKNOWN:      return UNKNOWN;
+    }
+    throw new IllegalStateException("Unknown type: " + type);
   }
 
   public boolean isRef() {
@@ -619,7 +648,7 @@ public class JactlType {
       case ANY:            return Type.getDescriptor(Object.class);
       case FUNCTION:       return Type.getDescriptor(JactlMethodHandle.class);
       case HEAPLOCAL:      return Type.getDescriptor(HeapLocal.class);
-      case ITERATOR:       return Type.getDescriptor(Iterator.class);
+      case ITERATOR:       return Type.getDescriptor(JactlIterator.class);
       case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
       case CONTINUATION:   return Type.getDescriptor(Continuation.class);
       case ARRAY:          return "[" + arrayType.descriptor();
@@ -643,7 +672,7 @@ public class JactlType {
       case ANY:            return Type.getType(Object.class);
       case FUNCTION:       return Type.getType(JactlMethodHandle.class);
       case HEAPLOCAL:      return Type.getType(HeapLocal.class);
-      case ITERATOR:       return Type.getType(Iterator.class);
+      case ITERATOR:       return Type.getType(JactlIterator.class);
       case NUMBER:         return Type.getType(Number.class);
       case MATCHER:        return Type.getType(RegexMatcher.class);
       case CONTINUATION:   return Type.getType(Continuation.class);
@@ -664,7 +693,7 @@ public class JactlType {
       case ANY:          return Type.getInternalName(Object.class);
       case FUNCTION:     return Type.getInternalName(JactlMethodHandle.class);
       case HEAPLOCAL:    return Type.getInternalName(HeapLocal.class);
-      case ITERATOR:     return Type.getInternalName(Iterator.class);
+      case ITERATOR:     return Type.getInternalName(JactlIterator.class);
       case NUMBER:       return Type.getInternalName(Number.class);
       case MATCHER:      return Type.getInternalName(RegexMatcher.class);
       case CONTINUATION: return Type.getInternalName(Continuation.class);
@@ -705,7 +734,7 @@ public class JactlType {
     if (obj instanceof int[])        return JactlType.arrayOf(INT);
     if (obj instanceof boolean[])    return JactlType.arrayOf(BOOLEAN);
     if (obj instanceof double[])     return JactlType.arrayOf(DOUBLE);
-    if (obj instanceof Iterator)     return ITERATOR;
+    if (obj instanceof JactlIterator)     return ITERATOR;
     return ANY;
   }
 
@@ -724,7 +753,7 @@ public class JactlType {
     if (clss == List.class)         { return LIST;          }
     if (clss == JactlMethodHandle.class) { return FUNCTION;      }
     if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
-    if (clss == Iterator.class)     { return ITERATOR;      }
+    if (clss == JactlIterator.class)     { return ITERATOR;      }
     if (clss == Number.class)       { return NUMBER;        }
     if (clss == RegexMatcher.class) { return MATCHER;       }
     if (clss == Continuation.class) { return CONTINUATION;  }
@@ -754,7 +783,7 @@ public class JactlType {
         case ANY:           return Object.class;
         case FUNCTION:      return JactlMethodHandle.class;
         case HEAPLOCAL:     return HeapLocal.class;
-        case ITERATOR:      return Iterator.class;
+        case ITERATOR:      return JactlIterator.class;
         case MATCHER:       return RegexMatcher.class;
         case CONTINUATION:  return Continuation.class;
         case NUMBER:        return Number.class;

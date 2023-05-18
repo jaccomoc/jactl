@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static io.jactl.JactlType.CONTINUATION;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 
 public class ScriptCompiler extends ClassCompiler {
@@ -48,8 +49,6 @@ public class ScriptCompiler extends ClassCompiler {
     var scriptMain = compile();
 
     return new JactlScript(context, (map,completion) -> {
-      RuntimeState.setOutput(map.get(Utils.JACTL_GLOBALS_OUTPUT));
-      RuntimeState.setInput(map.get(Utils.JACTL_GLOBALS_INPUT));
       try {
         Object result = scriptMain.apply(map);
         completion.accept(result);
@@ -72,6 +71,7 @@ public class ScriptCompiler extends ClassCompiler {
 
     compileInnerClasses();
     compileScriptMain();
+    compileJactlObjectFunctions();
     finishClassCompile();
 
     try {
@@ -79,12 +79,6 @@ public class ScriptCompiler extends ClassCompiler {
       boolean      isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
       MethodHandle mh         = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACTL_SCRIPT_MAIN, methodType);
       return map -> {
-        if (map.containsKey(Utils.JACTL_GLOBALS_OUTPUT)) {
-          RuntimeState.setOutput(map.get(Utils.JACTL_GLOBALS_OUTPUT));
-        }
-        if (map.containsKey(Utils.JACTL_GLOBALS_INPUT)) {
-          RuntimeState.setInput(map.get(Utils.JACTL_GLOBALS_INPUT));
-        }
         try {
           Object instance = compiledClass.getDeclaredConstructor().newInstance();
           Object result = isAsync ? mh.invoke(instance, (Continuation) null, map)
@@ -111,8 +105,23 @@ public class ScriptCompiler extends ClassCompiler {
     // Need to execute async task on some sort of blocking work scheduler and then reschedule
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
     // the same thread as we are on).
-    final var asyncTask = c.getAsyncTask();
-    asyncTask.execute(context, result -> resumeContinuation(completion, result, asyncTask.getContinuation()));
+    try {
+      final var    asyncTask    = c.getAsyncTask();
+      Continuation asyncTaskCont = asyncTask.getContinuation();
+//      Checkpointer checkpointer = Checkpointer.get(asyncTask.getSource(), asyncTask.getOffset());
+//      checkpointer.checkpoint(asyncTaskCont);
+//      //System.out.println("DEBUG: checkpoint = \n" + Utils.dumpHex(checkpointer.getBuffer(), checkpointer.getLength()) + "\n");
+//      byte[] buf = new byte[checkpointer.getLength()];
+//      System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
+//      checkpointer.reset();
+//      Restorer     restorer = Restorer.get(context, buf, asyncTask.getSource(), asyncTask.getOffset());
+//      Continuation cont1    = (Continuation) restorer.restore();
+//      asyncTask.execute(context, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1));
+      asyncTask.execute(context, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont));
+    }
+    catch (Throwable t) {
+      completion.accept(t);
+    }
   }
 
   private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont) {

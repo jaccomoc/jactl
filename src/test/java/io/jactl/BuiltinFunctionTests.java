@@ -1483,6 +1483,122 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("123456789L.toBase(1)", "base must be between 2 and 36");
   }
 
+  @Test public void grouped() {
+    test("[].grouped(2)", List.of());
+    test("[a:1,b:2,c:3,d:4].grouped(2)", List.of(List.of(List.of("a",1),List.of("b",2)),List.of(List.of("c",3),List.of("d",4))));
+    test("[1,2].grouped(0)", List.of(1,2));
+    test("[1,2].grouped(1)", List.of(List.of(1),List.of(2)));
+    test("[1,2].grouped(2)", List.of(List.of(1,2)));
+    test("[1].grouped(2)", List.of(List.of(1)));
+    test("[1,2,3,4].grouped(2)", List.of(List.of(1,2),List.of(3,4)));
+    test("[1,2,3].grouped(2)", List.of(List.of(1,2),List.of(3)));
+    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3,4)));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3)));
+    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
+  }
+
+  @Test public void sqrt() {
+    test("4.sqrt()", 2);
+    test("4.sqrt() + 4.sqrt()", 4);
+    test("(123456789L*123456789L).sqrt()", 123456789);
+    test("(12345678901.0*12345678901.0).sqrt()", "#12345678901.0");
+    test("def f = (12345678901.0*12345678901.0).sqrt; f()", "#12345678901.0");
+    test("(0.1234D*0.1234D).sqrt()", 0.1234D);
+    test("def f = (0.1234D*0.1234D).sqrt; f()", 0.1234D);
+    testError("-1.sqrt()", "square root of negative number");
+    testError("-1.0.sqrt()", "square root of negative number");
+    testError("-1.0D.sqrt()", "square root of negative number");
+    testError("-1L.sqrt()", "square root of negative number");
+    test("def x = 4; x.sqrt()", 2);
+    test("def x = (123456789L*123456789L); x.sqrt()", 123456789);
+    test("def x = (12345678901.0*12345678901.0); x.sqrt()", "#12345678901.0");
+    test("def x = (0.1234D*0.1234D); x.sqrt()", 0.1234D);
+    test("def x = (0.1234D*0.1234D); def f = x.sqrt; f()", 0.1234D);
+    testError("def x = -1; x.sqrt()", "square root of negative number");
+    testError("def x = -1.0; x.sqrt()", "square root of negative number");
+    testError("def x = -1.0D; x.sqrt()", "square root of negative number");
+    testError("def x = -1L; x.sqrt()", "square root of negative number");
+  }
+
+  @Test public void sqr() {
+    test("2.sqr().sqrt()", 2);
+    test("2.sqr() + 2.sqr()", 8);
+    test("123456789L.sqr().sqrt()", 123456789);
+    test("12345678901.0.sqr().sqrt()", "#12345678901.0");
+    test("0.1234D.sqr().sqrt()", 0.1234D);
+    test("-1.sqr()", 1);
+    test("def f = -1.sqr; f()", 1);
+    test("-4.sqr()", 16);
+    test("-4L.sqr()", 16L);
+    test("def f = -4L.sqr; f()", 16L);
+    test("def x = 4; x.sqr()", 16);
+    test("def x = -4; x.sqr()", 16);
+    test("def x = 4L; x.sqr()", 16L);
+    test("def x = -4L; x.sqr()", 16L);
+    test("def x = 4.01; x.sqr()", "#16.0801");
+    test("def x = -4.01; x.sqr()", "#16.0801");
+    test("def x = 4.0D; x.sqr()", 16D);
+    test("def x = 4.0D; def f = x.sqr; f()", 16D);
+    test("def x = -4.0D; x.sqr()", 16D);
+    test("def x = 123456789L; x.sqr()", 123456789L*123456789L);
+    test("def x = 123456789.0; x.sqr()", "#" + 123456789L*123456789L + ".00");
+    test("def x = 0.1234D; x.sqr()", 0.1234D * 0.1234D);
+    test("def f = 0.1234D.sqr; f()", 0.1234D * 0.1234D);
+  }
+
+  @Test public void pow() {
+    test("4.pow(0)", 1);
+    test("4.pow(0.5)", 2);
+    test("4.pow(3)", 64);
+    test("16.pow(-0.5)", 0.25);
+    test("def f = 16.pow; f(-0.5)", 0.25);
+    test("-4.pow(-1)", -0.25);
+    test("4L.pow(0)", 1);
+    test("4L.pow(0.5)", 2);
+    test("4L.pow(3)", 64);
+    test("def f = 4L.pow; f(3)", 64);
+    test("16L.pow(-0.5)", 0.25);
+    test("-4L.pow(-1)", -0.25);
+    test("4.0.pow(0.5)", 2);
+    test("4.0.pow(3)", "#64.000");
+    test("16.0.pow(-0.5)", 0.25);
+    test("-4.0.pow(0)", "#1");
+    test("-4.0.pow(-1)", -0.25);
+    test("0.0D.pow(0)", 1);
+    test("4.0D.pow(0.5)", 2);
+    test("4.0D.pow(3)", 64);
+    test("4.0D.pow(3) + 4.0D.pow(3)", 128);
+    test("16.0D.pow(-0.5)", 0.25);
+    test("def f = 16.0D.pow; f(-0.5)", 0.25);
+    test("-4.0D.pow(-1)", -0.25);
+    test("(1234567890.0*1234567890.0).pow(0.5)", 1234567890);
+    test("(1234567890L*1234567890L).pow(0.5)", 1234567890);
+    test("def x = 4; x.pow(0.5)", 2);
+    test("def x = 4; x.pow(3)", 64);
+    test("def x = 16; x.pow(-0.5)", 0.25);
+    test("def x = -4; x.pow(-1)", -0.25);
+    test("def x = 4L; x.pow(0.5)", 2);
+    test("def x = 4L; x.pow(3)", 64);
+    test("def x = 16L; x.pow(-0.5)", 0.25);
+    test("def x = 16L; def f = x.pow; f(-0.5)", 0.25);
+    test("def x = -4L; x.pow(-1)", -0.25);
+    test("def x = 4.0; x.pow(0.5)", 2);
+    test("def x = 4.0; x.pow(3)", "#64.000");
+    test("def x = 16.0; x.pow(-0.5)", 0.25);
+    test("def x = -4.0; x.pow(-1)", -0.25);
+    test("def x = 4.0D; x.pow(0.5)", 2);
+    test("def x = 4.0D; x.pow(3)", 64);
+    test("def x = 16.0D; x.pow(-0.5)", 0.25);
+    test("def x = -4.0D; x.pow(-1)", -0.25);
+    test("def x = (1234567890.0*1234567890.0); x.pow(0.5)", 1234567890);
+    test("def x = (1234567890L*1234567890L); x.pow(0.5)", 1234567890);
+    testError("-4.pow(0.5)", "illegal request");
+    testError("-4.pow(-0.5)", "illegal request");
+    testError("-4.0.pow(0.5)", "illegal request");
+    testError("-4.0D.pow(0.5)", "illegal request");
+    testError("-4L.pow(0.5)", "illegal request");
+  }
+
   @Test public void asyncCollectionClosures() {
     test("def x = [1,2,3].map{ sleep(1,it) * sleep(1,it) }; x.size()", 3);
     test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }.size()", 3);

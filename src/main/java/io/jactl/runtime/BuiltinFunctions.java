@@ -31,14 +31,22 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static io.jactl.JactlType.*;
+import static io.jactl.runtime.Reducer.Type.JOIN;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 
 public class BuiltinFunctions {
 
-  private static Map<String,FunctionDescriptor> globalFunctions = new HashMap<>();
-  private static boolean initialised = false;
+  private static final Map<String,FunctionDescriptor> globalFunctions = new HashMap<>();
+  private static       boolean                        initialised     = false;
+  private static final Map<Class,Integer> classId     = new HashMap<>();
+  private static final List<Class>        fnClasses   = new ArrayList<>();
 
   static {
+    allocateId(MatchCounter.class);
+    allocateId(RuntimeUtils.class);
+    allocateId(Reducer.class);
+    allocateId(CircularBuffer.class);
+    allocateId(NamedArgsMap.class);
     BuiltinFunctions.registerBuiltinFunctions();
   }
 
@@ -485,6 +493,17 @@ public class BuiltinFunctions {
     else {
       function.aliases.forEach(alias -> globalFunctions.put(alias, function));
     }
+
+    allocateId(function.implementingClass);
+  }
+
+  private static void allocateId(Class clss) {
+    Integer id = classId.get(clss);
+    if (id == null) {
+      id = fnClasses.size();
+      classId.put(clss, id);
+      fnClasses.add(clss);
+    }
   }
 
   public static void deregisterFunction(JactlType type, String name) {
@@ -495,16 +514,32 @@ public class BuiltinFunctions {
     globalFunctions.remove(name);
   }
 
+  public static int getClassId(Class clss) {
+    Integer id = classId.get(clss);
+    if (id == null) {
+      throw new IllegalStateException("Unknown class for built-in functions: " + clss.getName());
+    }
+    return id;
+  }
+
+  public static Class getClass(int id) {
+    if (id >= fnClasses.size()) {
+      throw new IllegalStateException("Invalid class id " + id + " for built-in function classes (size=" + fnClasses.size() + ")");
+    }
+    return fnClasses.get(id);
+  }
+
+
   /////////////////////////////////////
   // Global Functions
   /////////////////////////////////////
 
   // = sleep
   public static Object sleepData;
-  public static Object sleep(Continuation c, long timeMs, Object data) {
+  public static Object sleep(Continuation c, String source, int offset, long timeMs, Object data) {
     if (timeMs >= 0) {
-      Continuation.suspendNonBlocking((JactlContext context, Consumer<Object> resumer) -> {
-        context.scheduleEvent(() -> resumer.accept(data), timeMs);
+      Continuation.suspendNonBlocking(source, offset, data, (JactlContext context, Object dataObj, Consumer<Object> resumer) -> {
+        context.scheduleEvent(() -> resumer.accept(dataObj), timeMs);
       });
     }
     return data;
@@ -531,7 +566,7 @@ public class BuiltinFunctions {
 
   // = nextLine()
   public static Object nextLineData;
-  public static String nextLine(Continuation c) {
+  public static String nextLine(Continuation c, String source, int offset) {
     var input = RuntimeState.getState().input;
     if (input == null) {
       return null;
@@ -543,7 +578,7 @@ public class BuiltinFunctions {
       }
       else {
         // Might block so schedule blocking operation and suspend
-        Continuation.suspendBlocking(() -> readLine(input));
+        Continuation.suspendBlocking(source, offset, null, () -> readLine(input));
       }
     }
     catch (IOException ignored) {}
@@ -564,7 +599,7 @@ public class BuiltinFunctions {
 
   // = stream
   public static Object streamData;
-  public static Iterator stream(Continuation c, String source, int offset, JactlMethodHandle closure) {
+  public static JactlIterator stream(Continuation c, String source, int offset, JactlMethodHandle closure) {
     return new StreamIterator(source, offset, closure);
   }
 
@@ -792,8 +827,8 @@ public class BuiltinFunctions {
   // = filter
 
   public static Object iteratorFilterData;
-  public static Iterator iteratorFilter(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorFilter(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, closure);
   }
 
@@ -827,8 +862,8 @@ public class BuiltinFunctions {
   // = unique
 
   public static Object iteratorUniqueData;
-  public static Iterator iteratorUnique(Object iterable, Continuation c, String source, int offset) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorUnique(Object iterable, Continuation c, String source, int offset) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new UniqueIterator(iter);
   }
 
@@ -837,19 +872,19 @@ public class BuiltinFunctions {
   // = skip
 
   public static Object iteratorSkipData;
-  public static Iterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (count >= 0) {
-      return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new AtomicInteger(0)));
+      return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new int[]{ 0 }));
     }
     return new SkipIterator(iter, -count);
   }
 
-  private static JactlMethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
-                                                                              Object.class, Integer.class, AtomicInteger.class,
+  public static JactlMethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
+                                                                              Object.class, Integer.class, int[].class,
                                                                               Continuation.class, String.class, int.class, Object[].class);
-  public static Object shouldNotSkip(Integer skipAmount, AtomicInteger index, Continuation ignore1, String ignore2, int ignore3, Object[] ignore4) {
-    return index.getAndIncrement() >= skipAmount;
+  public static Object shouldNotSkip(Integer skipAmount, int[] index, Continuation ignore1, String ignore2, int ignore3, Object[] ignore4) {
+    return index[0]++ >= skipAmount;
   }
 
   ////////////////////////////////
@@ -857,8 +892,8 @@ public class BuiltinFunctions {
   // = limit
 
   public static Object iteratorLimitData;
-  public static Iterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int limit) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int limit) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (limit >= 0) {
       return new LimitIterator(iter, limit);
     }
@@ -870,8 +905,8 @@ public class BuiltinFunctions {
   // = grouped
 
   public static Object iteratorGroupedData;
-  public static Iterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (size == 0) {
       return iter;
     }
@@ -886,8 +921,8 @@ public class BuiltinFunctions {
   // = map
 
   public static Object iteratorMapData;
-  public static Iterator iteratorMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure);
   }
 
@@ -896,8 +931,8 @@ public class BuiltinFunctions {
   // = mapWithIndex
 
   public static Object iteratorMapWithIndexData;
-  public static Iterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure, true);
   }
 
@@ -906,8 +941,8 @@ public class BuiltinFunctions {
   // = flatMap
 
   public static Object iteratorFlatMapData;
-  public static Iterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    Iterator iter = RuntimeUtils.createIterator(iterable);
+  public static JactlIterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new FlatMapIterator(iter, source, offset, closure);
   }
 
@@ -919,7 +954,7 @@ public class BuiltinFunctions {
   public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return doIteratorEach(RuntimeUtils.createIterator(iterable), source, offset, closure, null);
   }
-  public static Object doIteratorEach(Iterator iter, String source, int offset, JactlMethodHandle closure, Continuation c) {
+  public static Object doIteratorEach(JactlIterator iter, String source, int offset, JactlMethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext = true;
@@ -975,7 +1010,7 @@ public class BuiltinFunctions {
     }
   }
   public static Object iteratorEach$c(Continuation c) {
-    return doIteratorEach((Iterator)c.localObjects[0], (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2], c);
+    return doIteratorEach((JactlIterator)c.localObjects[0], (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2], c);
   }
   public static JactlMethodHandle iteratorEach$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorEach$c",
                                                                                    Object.class, Continuation.class);
@@ -986,9 +1021,9 @@ public class BuiltinFunctions {
 
   public static Object iteratorCollectData;
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new ArrayList(), (list, elem) -> { ((List)list).add(elem); return list; }, source, offset, closure, null);
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new ArrayList(), false, source, offset, closure, null);
   }
-  public static Object doIteratorCollect(Iterator iter, Object result, BiFunction<Object,Object,Object> collector, String source, int offset, JactlMethodHandle closure, Continuation c) {
+  public static Object doIteratorCollect(JactlIterator iter, Object result, boolean isCollectEntries, String source, int offset, JactlMethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean hasNext         = true;
@@ -1031,7 +1066,12 @@ public class BuiltinFunctions {
             methodLocation = 6;
             break;
           case 6:
-            result = collector.apply(result, transformedElem);
+            if (isCollectEntries) {
+              RuntimeUtils.addMapEntry((Map)result, transformedElem, source, offset);
+            }
+            else {
+              ((List)result).add(transformedElem);
+            }
             methodLocation = 0;
             break;
           default:
@@ -1040,7 +1080,7 @@ public class BuiltinFunctions {
       }
     }
     catch (Continuation cont) {
-      throw new Continuation(cont, iteratorCollect$cHandle, methodLocation + 1, new long[]{ offset }, new Object[] { iter, result, collector, source, closure });
+      throw new Continuation(cont, iteratorCollect$cHandle, methodLocation + 1, new long[]{ isCollectEntries ? 1 : 0, offset }, new Object[] { iter, result, source, closure });
     }
     catch (RuntimeError e) {
       throw e;
@@ -1051,8 +1091,8 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorCollect$c(Continuation c) {
-    return doIteratorCollect((Iterator)c.localObjects[0], c.localObjects[1], (BiFunction)c.localObjects[2],
-                             (String)c.localObjects[3], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[4], c);
+    return doIteratorCollect((JactlIterator)c.localObjects[0], c.localObjects[1], c.localPrimitives[0] == 0 ? false : true,
+                             (String)c.localObjects[2], (int)c.localPrimitives[1], (JactlMethodHandle)c.localObjects[3], c);
   }
 
   public static JactlMethodHandle iteratorCollect$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorCollect$c",
@@ -1064,87 +1104,8 @@ public class BuiltinFunctions {
 
   public static Object iteratorReduceData;
   public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, JactlMethodHandle closure) {
-    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, initialValue, (value, elem) -> {
-      elem = Arrays.asList(value, elem);
-      try {
-        return closure.invoke((Continuation)null, source, (int)offset, new Object[]{ elem });
-      }
-      catch (Continuation | RuntimeError e) {
-        throw e;
-      }
-      catch (Throwable t) {
-        throw new RuntimeError("Unexpected error", source, offset, t);
-      }
-    }, null, c);
+    return new Reducer(Reducer.Type.REDUCE, RuntimeUtils.createIterator(iterable), source, offset, initialValue, closure).reduce(null);
   }
-  public static Object doIteratorReduce(Iterator iter, String source, int offset, Object value,
-                                        BiFunction<Object,Object,Object> invoker,
-                                        Function<Object,Object> resultProcessor,
-                                        Continuation c) {
-    int methodLocation = c == null ? 0 : c.methodLocation;
-    try {
-      boolean hasNext         = true;
-      Object  elem            = null;
-      // Implement as a simple state machine since iter.hasNext() and iter.next() can both throw a Continuation.
-      // iter.hasNext() can throw if we have chained iterators and hasNext() needs to get the next value of the
-      // previous iterator in the chain to see if it has a value.
-      // We track our state using the methodLocation that we pass to our own Continuation when/if we throw.
-      // Even states are the synchronous behavior and the odd states are for handling the async case if the
-      // synchronous state throws and is later continued.
-      while (true) {
-        switch (methodLocation) {
-          case 0:                       // Initial state
-            hasNext = iter.hasNext();
-            methodLocation = 2;         // hasNext() returned synchronously so jump straight to state 2
-            break;
-          case 1:                       // Continuing after hasNext() threw Continuation last time
-            hasNext = (boolean) c.getResult();
-            methodLocation = 2;
-            break;
-          case 2:                      // Have a value for "hasNext"
-            if (!hasNext) {            // EXIT: exit loop when underlying iterator has no more elements
-              return resultProcessor == null ? value : resultProcessor.apply(value);
-            }
-            elem = iter.next();
-            methodLocation = 4;        // iter.next() returned synchronously so jump to state 4
-            break;
-          case 3:                      // Continuing after iter.next() threw Continuation previous time
-            elem = c.getResult();
-            methodLocation = 4;
-            break;
-          case 4:                      // Have result of iter.next()
-            elem = RuntimeUtils.mapEntryToList(elem);
-            value = invoker.apply(value, elem);
-            methodLocation = 6;
-            break;
-          case 5:
-            value = c.getResult();
-            methodLocation = 6;
-            break;
-          case 6:
-            methodLocation = 0;
-            break;
-          default:
-            throw new IllegalStateException("Internal error: unexpected state " + methodLocation);
-        }
-      }
-    }
-    catch (Continuation cont) {
-      throw new Continuation(cont, iteratorReduce$cHandle,methodLocation + 1, new long[]{ offset },
-                             new Object[]{ iter, source, value, invoker, resultProcessor});
-    }
-    catch (RuntimeError e) {
-      throw e;
-    }
-    catch (Throwable t) {
-      throw new RuntimeError("Unexpected error", source, offset, t);
-    }
-  }
-
-  public static Object iteratorReduce$c(Continuation c) {
-    return doIteratorReduce((Iterator)c.localObjects[0], (String)c.localObjects[1], (int)c.localPrimitives[0], c.localObjects[2], (BiFunction)c.localObjects[3], (Function)c.localObjects[4], c);
-  }
-  public static JactlMethodHandle iteratorReduce$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorReduce$c", Object.class, Continuation.class);
 
   /////////////////////////////
 
@@ -1152,17 +1113,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorJoinData;
   public static String iteratorJoin(Object iterable, Continuation c, String source, int offset, String joinStr) {
-    BiFunction<Object,Object,Object> joiner = (str,elem) -> {
-      if (str.equals("")) {
-        return RuntimeUtils.toString(elem);
-      }
-      else {
-        String strValue = (String)str;
-        return joinStr == null ? strValue.concat(elem.toString())
-                               : strValue.concat(joinStr).concat(RuntimeUtils.toString(elem));
-      }
-    };
-    return (String)doIteratorCollect(RuntimeUtils.createIterator(iterable), "", joiner, source, offset, null, c);
+    return (String)new Reducer(JOIN, RuntimeUtils.createIterator(iterable), source, offset, joinStr, null).reduce(null);
   }
 
   /////////////////////////////
@@ -1206,21 +1157,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorAvgData;
   public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
-    int[] counter = new int[]{0};
-    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO,
-                            (value,elem) -> {
-                              counter[0]++;
-                              return addNumbers(value, elem, source, offset);
-                            },
-                            (value) -> {
-                              if (counter[0] == 0) {
-                                throw new RuntimeError("Empty list for avg() function", source, offset);
-                              }
-                              if (value instanceof Double)                           { value = BigDecimal.valueOf((double)value); }
-                              if (value instanceof Integer || value instanceof Long) { value = BigDecimal.valueOf(((Number)value).longValue()); }
-                              return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(counter[0]), Utils.DEFAULT_MIN_SCALE, source, offset);
-                            },
-                            c);
+    return new Reducer(Reducer.Type.AVG, RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO, null).reduce(null);
   }
 
   // = sum
@@ -1230,37 +1167,14 @@ public class BuiltinFunctions {
     Object sum = 0;
     int size = list.size();
     for (int i = 0; i < size; i++) {
-      sum = addNumbers(sum, list.get(i), source, offset);
+      sum = Reducer.addNumbers(sum, list.get(i), source, offset);
     }
     return sum;
   }
 
   public static Object iteratorSumData;
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
-    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, 0,
-                            (value,elem) -> addNumbers(value, elem, source, offset),
-                            (value) -> value,
-                            c);
-  }
-
-  private static Object addNumbers(Object valueObj, Object elemObj, String source, int offset) {
-    if (!(elemObj instanceof Number)) {
-      throw new RuntimeError("Non-numeric element in list (type is " + RuntimeUtils.className(elemObj) + ")", source, offset);
-    }
-    if (valueObj instanceof BigDecimal || elemObj instanceof BigDecimal) {
-      BigDecimal value = valueObj instanceof BigDecimal ? (BigDecimal)valueObj : RuntimeUtils.toBigDecimal(valueObj);
-      BigDecimal elem  = elemObj instanceof BigDecimal ? (BigDecimal)elemObj : RuntimeUtils.toBigDecimal(elemObj);
-      return value.add(elem);
-    }
-    if (valueObj instanceof Double || elemObj instanceof Double) {
-      double value = ((Number)valueObj).doubleValue();
-      double elem  = ((Number)elemObj).doubleValue();
-      return value + elem;
-    }
-    if (valueObj instanceof Long || elemObj instanceof Long) {
-      return ((Number)valueObj).longValue() + ((Number)elemObj).longValue();
-    }
-    return (int)valueObj + (int)elemObj;
+    return new Reducer(Reducer.Type.SUM, RuntimeUtils.createIterator(iterable), source, offset, 0, null).reduce(null);
   }
 
   // = min/max
@@ -1299,57 +1213,12 @@ public class BuiltinFunctions {
 
   public static Object iteratorMinData;
   public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, null,
-                            (value,elem) -> minMaxInvoker(source, offset, closure, false, value, elem, c),
-                            (value) -> value == null ? null : ((Object[])value)[1],
-                            c);
+    return new Reducer(Reducer.Type.MIN, RuntimeUtils.createIterator(iterable), source, offset, null, closure).reduce(null);
   }
 
   public static Object iteratorMaxData;
   public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return doIteratorReduce(RuntimeUtils.createIterator(iterable), source, offset, null,
-                            (value,elem) -> minMaxInvoker(source, offset, closure, true, value, elem, c),
-                            (value) -> value == null ? null : ((Object[])value)[1],
-                            c);
-  }
-
-  public static final JactlMethodHandle minMaxInvoker$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "minMaxInvoker$c",
-                                                                                          Object.class, Continuation.class);
-  public static Object minMaxInvoker$c(Continuation c) {
-    return minMaxInvoker((String)c.localObjects[0], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[1],
-                         c.localPrimitives[1] == 1, c.localObjects[2], c.localObjects[3], c);
-  }
-  public static Object minMaxInvoker(String source, int offset, JactlMethodHandle closure, boolean isMax, Object currentValueObj, Object elem, Continuation c) {
-    Object[] currentValue = (Object[])currentValueObj;
-    Object[] nextValue;
-    if (c != null) {
-      nextValue = new Object[]{c.getResult(), elem };
-    }
-    else {
-      if (closure == null) {
-        nextValue = new Object[]{ elem, elem };
-      }
-      else {
-        try {
-          nextValue = new Object[] { closure.invoke((Continuation) null, source, (int)offset, new Object[]{elem}), elem };
-        }
-        catch (Continuation cont) {
-          throw new Continuation(cont, minMaxInvoker$cHandle,0, new long[]{ offset, isMax ? 1 : 0 }, new Object[]{ source, closure, currentValue, elem });
-        }
-        catch (RuntimeError e) {
-          throw e;
-        }
-        catch (Throwable t) {
-          throw new RuntimeError("Unexpected error", source, offset, t);
-        }
-      }
-    }
-    if (currentValue == null) {
-      return nextValue;
-    }
-    int compare = RuntimeUtils.compareTo(currentValue[0], nextValue[0], source, offset);
-    return compare < 0 ? (isMax ? nextValue : currentValue)
-                       : (isMax ? currentValue : nextValue);
+    return new Reducer(Reducer.Type.MAX, RuntimeUtils.createIterator(iterable), source, offset, null, closure).reduce(null);
   }
 
   //////////////////////////////////////
@@ -1358,18 +1227,14 @@ public class BuiltinFunctions {
 
   public static Object iteratorCollectEntriesData;
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    BiFunction<Object,Object,Object> collector = (mapObj,elem) -> {
-      RuntimeUtils.addMapEntry((Map) mapObj, elem, source, offset);
-      return mapObj;
-    };
-    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new HashMap(), collector, source, offset, closure, null);
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new HashMap(), true, source, offset, closure, null);
   }
 
   /////////////////////////////
 
   // = sort
 
-  private static JactlMethodHandle iteratorSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSort$c",
+  public static JactlMethodHandle iteratorSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSort$c",
                                                                                     Object.class, Continuation.class);
 
   public static Object iteratorSort$c(Continuation c) {
@@ -1539,8 +1404,8 @@ public class BuiltinFunctions {
 
   // = lines
   public static Object stringLinesData;
-  public static Iterator stringLines(String str) {
-    return RuntimeUtils.lines(str).iterator();
+  public static JactlIterator stringLines(String str) {
+    return JactlIterator.of(RuntimeUtils.lines(str));
   }
 
   // = length
@@ -1615,48 +1480,9 @@ public class BuiltinFunctions {
 
   // = split
   public static Object stringSplitData;
-  public static Iterator stringSplit(String str, String source, int offset, String regex, String modifiers) {
-    if (regex == null) {
-      return new Iterator() {
-        int i = 0;
-        @Override public boolean hasNext() { return i++ == 0; }
-        @Override public Object next()     { return str; }
-      };
-    }
-    if (regex.isEmpty()) {
-      return RuntimeUtils.createIterator(str);
-    }
-    var matcher = RuntimeUtils.getMatcher(str, regex, modifiers, source, offset);
-    return new Iterator() {
-      int index = 0;
-      boolean last = false;
-      boolean hasNext = false;
-      boolean findNext = true;
-      @Override public boolean hasNext() {
-        if (!findNext) { return hasNext; }
-        findNext = false;
-        if (!last && matcher.find()) {
-          return hasNext = true;
-        }
-        if (!last) {
-          last = true;
-          return hasNext = true;
-        }
-        return false;
-      }
-      @Override public Object next() {
-        if (hasNext()) {
-          findNext = true;
-          if (last) {
-            return str.substring(index);
-          }
-          int    nextIndex = matcher.start();
-          String result    = str.substring(index, nextIndex);
-          index = matcher.end();
-          return result;
-        }
-        throw new IllegalStateException("Internal error: split() - no more matches");
-      }
-    };
+  public static JactlIterator stringSplit(String str, String source, int offset, String regex, String modifiers) {
+    if (regex == null)   { return JactlIterator.of(str); }
+    if (regex.isEmpty()) { return JactlIterator.stringIterator(str); }
+    return JactlIterator.stringSplitIterator(str, regex, modifiers, source, offset);
   }
 }

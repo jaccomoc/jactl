@@ -17,7 +17,7 @@
 
 package io.jactl.runtime;
 
-import java.util.Iterator;
+import static io.jactl.JactlType.TypeEnum.BUILTIN;
 
 /**
  * Iterate and use given predicate to determine how many elements match predicate based on type of matching
@@ -28,16 +28,43 @@ import java.util.Iterator;
  *   <dd>ANY</dd><dt>True if any element matches (empty list returns false)</dt>
  * </dl>
  */
-public class MatchCounter {
-  Iterator     iter;
-  String       source;
-  int          offset;
+public class MatchCounter implements Checkpointable {
+  static int VERSION = 1;
+  JactlIterator     iter;
+  String            source;
+  int               offset;
   JactlMethodHandle predicate;
-  MatchType    matchType;
+  MatchType         matchType;
 
   enum MatchType { NONE, ANY, ALL };
 
-  MatchCounter(Iterator iter, String source, int offset, JactlMethodHandle predicate, MatchType matchType) {
+  @Override
+  public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeTypeEnum(BUILTIN);
+    checkpointer.writeCint(BuiltinFunctions.getClassId(MatchCounter.class));
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
+    checkpointer.writeObject(predicate);
+    checkpointer.writeCint(matchType.ordinal());
+  }
+
+  @Override
+  public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(BUILTIN);
+    restorer.expectCint(BuiltinFunctions.getClassId(MatchCounter.class), "Bad class id");
+    restorer.expectCint(VERSION, "Bad version");
+    iter = (JactlIterator)restorer.readObject();
+    source = (String)restorer.readObject();
+    offset = restorer.readCint();
+    predicate = (JactlMethodHandle)restorer.readObject();
+    matchType = MatchType.values()[restorer.readCint()];
+  }
+
+  public MatchCounter() {}
+
+  MatchCounter(JactlIterator iter, String source, int offset, JactlMethodHandle predicate, MatchType matchType) {
     this.iter      = iter;
     this.source    = source;
     this.offset    = offset;
@@ -45,7 +72,7 @@ public class MatchCounter {
     this.matchType = matchType;
   }
 
-  public static JactlMethodHandle matching$cHandle = RuntimeUtils.lookupMethod(MatchCounter.class, "matching$c", Object.class, Continuation.class);
+  public static JactlMethodHandle matching$cHandle = RuntimeUtils.lookupMethod(MatchCounter.class,"matching$c", Object.class, Continuation.class);
   public static Object matching$c(Continuation c) {
     return ((MatchCounter)c.localObjects[2]).matching(c);
   }

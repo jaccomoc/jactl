@@ -17,7 +17,11 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlType;
+
 import java.math.BigDecimal;
+
+import static io.jactl.JactlType.HEAPLOCAL;
 
 /**
  * Object that wraps an actual value.
@@ -25,7 +29,7 @@ import java.math.BigDecimal;
  * to the value of the variable. We pass these handles around and can then mutate the
  * underlying value via the handle so everyone using the variable sees the same value.
  */
-public class HeapLocal extends Number {
+public class HeapLocal extends Number implements Checkpointable {
 
   Object value;
 
@@ -52,4 +56,14 @@ public class HeapLocal extends Number {
   }
 
   public RegexMatcher matcherValue() { return (RegexMatcher)value; }
+
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(HEAPLOCAL);
+    checkpointer.writeObject(value);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.HEAPLOCAL);
+    value = restorer.readObject();
+  }
 }

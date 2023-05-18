@@ -18,11 +18,13 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlContext;
+import io.jactl.JactlType;
 
-import java.lang.invoke.MethodHandle;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+
+import static io.jactl.JactlType.CONTINUATION;
 
 /**
  * Class that captures current execution state and can be "continued" at some point in the future.
@@ -42,57 +44,61 @@ import java.util.function.Supplier;
  * a new Continuation and chain it to the rest of the Continuation objects in the current chain so
  * that when it is resumed and returns here we will find the rest of the chain to continue with.
  */
-public class Continuation extends RuntimeException {
+public class Continuation extends RuntimeException implements Checkpointable {
+  private static int               VERSION = 1;
+  private        AsyncTask         asyncTask;          // The blocking task that needs to be done asynchronously
+  private        Continuation      parent;             // Continuation for our parent stack frame
+  private        Continuation      child;              // Continuation of child (stack frame we are calling) if it exists
+  private        JactlMethodHandle methodHandle;       // Handle pointing to continuation wrapper function
+  public         int               methodLocation;     // Location within method where resumption should continue
+  public         long[]            localPrimitives;
+  public         Object[]          localObjects;
+  private        Object            result;             // Result of the async call when continuing after suspend
 
-  private AsyncTask         asyncTask;          // The blocking task that needs to be done asynchronously
-  private Continuation      parentContinuation; // Continuation for our parent stack frame
-  private RuntimeState      runtimeState;       // ThreadLocal runtime state that needs to be restored on resumption
-  private JactlMethodHandle methodHandle;       // Handle pointing to continuation wrapper function
-  public  int               methodLocation;     // Location within method where resumption should continue
-  public  long[]            localPrimitives;
-  public  Object[]          localObjects;
-  private Object            result;             // Result of the async call when continuing after suspend
-
-  Continuation(AsyncTask asyncTask) {
+  Continuation(AsyncTask asyncTask, Object data) {
     super(null, null, false, false);
-    this.asyncTask    = asyncTask;
-    this.runtimeState = RuntimeState.getState();
+    this.asyncTask = asyncTask;
+    localObjects = new Object[]{ data };
   }
 
   /**
-   * Suspend the current execution and capture our state in a series of chained Continuations and then
-   * schedule the given task on a blocking thread. Once the blocking task has completed the execution
-   * will be resumed from where it left off.
-   * NOTE: this throws a Continuation object which will be caught by our caller who will capture their
-   * state and then throw a new Continuation chained to this one (and so on until we get to the top-most
-   * caller).
-   * @param asyncWork  the work to be run on a blocking thread once we are suspended
+   * Suspend the current execution and capture our state in a series of chained Continuations and then schedule the
+   * given task on a blocking thread. Once the blocking task has completed the execution will be resumed from where it
+   * left off. NOTE: this throws a Continuation object which will be caught by our caller who will capture their state
+   * and then throw a new Continuation chained to this one (and so on until we get to the top-most caller).
+   *
+   * @param source    the source code
+   * @param offset    offset into source where async function was called
+   * @param data      data to be passed to task when invoked
+   * @param asyncWork the work to be run on a blocking thread once we are suspended
    * @return nothing - always throws an exception
    * @throws Continuation always
    */
-  public static Continuation suspendBlocking(Supplier<Object> asyncWork) {
-    BlockingAsyncTask task         = new BlockingAsyncTask(asyncWork);
-    Continuation      continuation = new Continuation(task);
+  public static Continuation suspendBlocking(String source, int offset, Object data, Supplier<Object> asyncWork) {
+    BlockingAsyncTask task         = new BlockingAsyncTask(asyncWork, source, offset);
+    Continuation      continuation = new Continuation(task, data);
     task.setContinuation(continuation);
     throw continuation;
   }
 
   /**
-   * Suspend the current execution and capture our state in a series of chained Continuation objects.
-   * The difference between this call and the suspendBlocking() call is that this call, rather than
-   * scheduling the async work on a blocking thread, instead runs it on the current thread (once the
-   * top-most caller has caught the last Continuation). The idea is that this type of async work will
-   * itself schedule something in the background (like sending a message or setting a timer) and then
-   * return immediately without needing to block on a blocking scheduler thread. Once the result of
-   * the async work has been received (receiving a message or timer expiring) then the execution
-   * is resumed.
-   * @param asyncWork  the task that will schedule some async work in the background
+   * Suspend the current execution and capture our state in a series of chained Continuation objects. The difference
+   * between this call and the suspendBlocking() call is that this call, rather than scheduling the async work on a
+   * blocking thread, instead runs it on the current thread (once the top-most caller has caught the last Continuation).
+   * The idea is that this type of async work will itself schedule something in the background (like sending a message
+   * or setting a timer) and then return immediately without needing to block on a blocking scheduler thread. Once the
+   * result of the async work has been received (receiving a message or timer expiring) then the execution is resumed.
+   *
+   * @param source    the source code
+   * @param offset    offset into source where async function was called
+   * @param data      data to be passed to task when invoked
+   * @param asyncWork the task that will schedule some async work in the background
    * @return nothing - always throws an exception
    * @throws Continuation always
    */
-  public static Continuation suspendNonBlocking(BiConsumer<JactlContext, Consumer<Object>> asyncWork) {
-    NonBlockingAsyncTask task         = new NonBlockingAsyncTask(asyncWork);
-    Continuation         continuation = new Continuation(task);
+  public static Continuation suspendNonBlocking(String source, int offset, Object data, TriConsumer<JactlContext, Object, Consumer<Object>> asyncWork) {
+    NonBlockingAsyncTask task         = new NonBlockingAsyncTask(asyncWork, source, offset);
+    Continuation         continuation = new Continuation(task, data);
     task.setContinuation(continuation);
     throw continuation;
   }
@@ -113,38 +119,38 @@ public class Continuation extends RuntimeException {
    */
   public Continuation(Continuation continuation, JactlMethodHandle methodHandle, int codeLocation, long[] localPrimitives, Object[] localObjects) {
     super(null, null, false, false);
-    this.asyncTask                  = continuation.asyncTask;
-    continuation.asyncTask          = null;
-    continuation.parentContinuation = this;    // chain ourselves to our child
-    this.methodLocation             = codeLocation;
-    this.methodHandle               = methodHandle;
-    this.localPrimitives            = localPrimitives;
-    this.localObjects               = localObjects;
+    this.asyncTask = continuation.asyncTask;
+    continuation.asyncTask = null;
+    continuation.parent = this;    // chain ourselves to our child
+    this.child = continuation;
+    this.methodLocation = codeLocation;
+    this.methodHandle = methodHandle;
+    this.localPrimitives = localPrimitives;
+    this.localObjects = localObjects;
   }
 
   /**
-   * Resume execution from where we left off, passing in the result of whatever asynchronous operation
-   * has now just completed.
-   * @param result  the result of the async operation that caused us to suspend
+   * Resume execution from where we left off, passing in the result of whatever asynchronous operation has now just
+   * completed.
+   *
+   * @param result the result of the async operation that caused us to suspend
    * @return the result of resuming our execution
    */
   public Object continueExecution(Object result) {
-    // Restore ThreadLocal state
-    RuntimeState.setState(runtimeState);
-
     // First Continuation object has no stack/locals as it was the one constructed in the async function.
     // Just invoke our parent's continuation to continue the code.
-    return parentContinuation.doContinue(result);
+    return parent.doContinue(result);
   }
 
   /**
-   * Invoke the Continuations in the chain, one by one, passing the result of each one to the next
-   * one in the chain until there are no more, or we are suspended again.
-   * @param result  the result from our async operation
+   * Invoke the Continuations in the chain, one by one, passing the result of each one to the next one in the chain
+   * until there are no more, or we are suspended again.
+   *
+   * @param result the result from our async operation
    * @return the result from the final Continuation being resumed
    */
   private Object doContinue(Object result) {
-    for (Continuation c = this; c != null; c = c.parentContinuation) {
+    for (Continuation c = this; c != null; c = c.parent) {
       try {
         c.result = result;
         result = c.methodHandle.invoke(c);
@@ -154,7 +160,10 @@ public class Continuation extends RuntimeException {
         // is continued it will then continue from where we were. We point to the current parent rather
         // than the continuation we were in, since the continuation we were in has just been suspended
         // and the new state for that function call is in the newly created continuation we just caught.
-        cont.parentContinuation = c.parentContinuation;
+        cont.parent = c.parent;
+        if (c.parent != null) {
+          c.parent.child = cont;
+        }
         throw cont;
       }
       catch (RuntimeError runtimeError) {
@@ -174,8 +183,36 @@ public class Continuation extends RuntimeException {
 
   public Object getResult() {
     if (result instanceof RuntimeError) {
-      throw (RuntimeError)result;
+      throw (RuntimeError) result;
     }
     return result;
+  }
+
+  public Continuation() {}
+
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(CONTINUATION);
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(parent);
+    checkpointer.writeObject(child);
+    //    checkpointer.writeObject(runtimeState);
+    checkpointer.writeObject(methodHandle);
+    checkpointer.writeCint(methodLocation);
+    checkpointer.writeObject(localPrimitives);
+    checkpointer.writeObject(localObjects);
+    checkpointer.writeObject(result);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.CONTINUATION);
+    restorer.expectCint(VERSION, "Bad version");
+    parent          = (Continuation)restorer.readObject();
+    child           = (Continuation)restorer.readObject();
+    //    runtimeState  = (RuntimeState) restorer.readObject();
+    methodHandle    = (JactlMethodHandle)restorer.readObject();
+    methodLocation  = restorer.readCint();
+    localPrimitives = (long[])restorer.readObject();
+    localObjects    = (Object[])restorer.readObject();
+    result          = restorer.readObject();
   }
 }

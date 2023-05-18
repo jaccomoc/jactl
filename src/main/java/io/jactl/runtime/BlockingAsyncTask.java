@@ -32,14 +32,15 @@ import java.util.function.Supplier;
 public class BlockingAsyncTask extends AsyncTask {
   private Supplier<Object> asyncWork;      // the blocking async work
 
-  public BlockingAsyncTask(Supplier<Object> asyncWork) {
+  public BlockingAsyncTask(Supplier<Object> asyncWork, String source, int offset) {
+    super(source, offset);
     this.asyncWork = asyncWork;
   }
 
-  public void execute(JactlContext context, Consumer<Object> resume) {
+  public void execute(JactlContext context, Object data, Consumer<Object> resume) {
     Object executionContext = context.getThreadContext();     // current thread, so we can resume on same thread if possible
     context.scheduleBlocking(() -> {
-      Object asyncResult      = asyncWork.get();;
+      Object asyncResult = asyncWork.get();
       context.scheduleEvent(executionContext, () -> resume.accept(asyncResult));
     });
   }

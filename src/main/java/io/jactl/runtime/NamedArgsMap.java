@@ -17,11 +17,32 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlType;
+
 import java.util.LinkedHashMap;
 
 /**
  * Used a bit like a marker interface to indicate to runtime argument handling that the Map
  * being passed in should be treated as named args rather than a single argument of type Map.
  */
-public class NamedArgsMap extends LinkedHashMap {
+public class NamedArgsMap extends LinkedHashMap implements Checkpointable {
+  private static int VERSION = 1;
+
+  public NamedArgsMap() {}
+
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeTypeEnum(JactlType.TypeEnum.BUILTIN);
+    checkpointer.writeCint(BuiltinFunctions.getClassId(NamedArgsMap.class));
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeMap(this);
+  }
+
+  @Override
+  public void _$j$restore(Restorer restorer) {
+    restorer.skipType();
+    restorer.expectCint(BuiltinFunctions.getClassId(NamedArgsMap.class), "Bad class id - expecting NamedArgsMap");
+    restorer.expectCint(VERSION, "Bad version");
+    restorer.skipType();
+    restorer.restoreMap(this);
+  }
 }

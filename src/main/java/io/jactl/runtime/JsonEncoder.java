@@ -71,6 +71,15 @@ public class JsonEncoder {
     bytes[offset++] = (byte) b;
   }
 
+  public void writeByte(char b, boolean replace) {
+    if (replace) {
+      bytes[offset - 1] = (byte) b;
+    }
+    else {
+      writeByte(b);
+    }
+  }
+
   public void writeObj(Object obj) {
     if (obj == null) {
       writeString("null", false);

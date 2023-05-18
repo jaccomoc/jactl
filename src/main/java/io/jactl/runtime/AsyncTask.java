@@ -27,6 +27,13 @@ import java.util.function.Consumer;
  */
 public abstract class AsyncTask {
   private Continuation     continuation;   // the continuation to invoke once work has completed
+  private String           source;
+  private int              offset;
+
+  public AsyncTask(String source, int offset) {
+    this.source = source;
+    this.offset = offset;
+  }
 
   public void setContinuation(Continuation continuation) {
     this.continuation = continuation;
@@ -35,6 +42,8 @@ public abstract class AsyncTask {
   public Continuation getContinuation() {
     return continuation;
   }
+  public String       getSource()       { return source;       }
+  public int          getOffset()       { return offset;       }
 
-  public abstract void execute(JactlContext context, Consumer<Object> resume);
+  public abstract void execute(JactlContext context, Object data, Consumer<Object> resume);
 }

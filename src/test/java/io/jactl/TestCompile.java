@@ -359,7 +359,7 @@ public class TestCompile implements Opcodes {
   public static void main(String[] args) throws Exception {
     String className = "io/jactl/pkg/_$j$Script1";
     var classLoader = JactlContext.create().build().classLoader;
-    Class clss = classLoader.defineClass(className.replaceAll("/", "."), dump());
+    Class clss = classLoader.defineClass(className, className.replaceAll("/", "."), dump());
     Object obj = clss.getDeclaredConstructor().newInstance();
     Method jmain = clss.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class);
     jmain.invoke(obj, null, Map.of());

@@ -17,8 +17,11 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlType;
+
 import java.util.ArrayList;
-import java.util.Iterator;
+
+import static io.jactl.JactlType.ITERATOR;
 
 /**
  * Iterator that wraps another iterator and transforms the elements returned by the wrapped iterator based on
@@ -27,19 +30,46 @@ import java.util.Iterator;
  * Continuation) as well as async behaviour in the closure that maps the values of the wrapped iterator into new
  * values.
  */
-class MapIterator implements Iterator {
-  Iterator     iter;
-  String       source;
-  int          offset;
+class MapIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator     iter;
+  String            source;
+  int               offset;
   JactlMethodHandle closure;
-  boolean      withIndex;
-  int          index = 0;
+  boolean           withIndex;
+  int               index = 0;
 
-  MapIterator(Iterator iter, String source, int offset, JactlMethodHandle closure) {
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.MAPPER.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
+    checkpointer.writeObject(closure);
+    checkpointer._writeBoolean(withIndex);
+    checkpointer.writeCint(index);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.MAPPER.ordinal(), "Expected MAPPER");
+    restorer.expectCint(VERSION, "Bad version");
+    iter      = (JactlIterator)restorer.readObject();
+    source    = (String)restorer.readObject();
+    offset    = restorer.readCint();
+    closure   = (JactlMethodHandle)restorer.readObject();
+    withIndex = restorer.readBoolean();
+    index     = restorer.readCint();
+  }
+
+  MapIterator() {}
+
+  MapIterator(JactlIterator iter, String source, int offset, JactlMethodHandle closure) {
     this(iter, source, offset, closure, false);
   }
 
-  MapIterator(Iterator iter, String source, int offset, JactlMethodHandle closure, boolean withIndex) {
+  MapIterator(JactlIterator iter, String source, int offset, JactlMethodHandle closure, boolean withIndex) {
     this.iter      = iter;
     this.source    = source;
     this.offset    = offset;
@@ -47,7 +77,7 @@ class MapIterator implements Iterator {
     this.withIndex = withIndex;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(MapIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(MapIterator.class, IteratorType.MAPPER, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return c.getResult();
   }
@@ -62,7 +92,7 @@ class MapIterator implements Iterator {
     }
   }
 
-  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(MapIterator.class, "next$c", Object.class, Continuation.class);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(MapIterator.class, IteratorType.MAPPER, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((MapIterator)c.localObjects[0]).doNext(c);
   }

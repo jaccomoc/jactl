@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -26,9 +28,6 @@ import java.util.function.Function;
  * for compiling and running scripts.
  */
 public class Compiler {
-
-  private static final AtomicInteger counter = new AtomicInteger();
-
   public static Object eval(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
     var compiled = compileScript(source, jactlContext, packageName, bindings);
     return compiled.runSync(bindings);
@@ -40,12 +39,12 @@ public class Compiler {
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, Map<String, Object> bindings) {
-    String className = Utils.JACTL_SCRIPT_PREFIX + counter.incrementAndGet();
+    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     return compileScript(source, jactlContext, className, Utils.DEFAULT_JACTL_PKG, bindings);
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
-    String className = Utils.JACTL_SCRIPT_PREFIX + counter.incrementAndGet();
+    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     return compileScript(source, jactlContext, className, packageName, bindings);
   }
 
@@ -61,7 +60,7 @@ public class Compiler {
 
   // For internal use by eval() function.
   public static Function<Map<String, Object>,Object> compileScriptInternal(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
-    String className = Utils.JACTL_SCRIPT_PREFIX + counter.incrementAndGet();
+    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);
     var script   = parser.parseScript(className);
     var resolver = new Resolver(jactlContext, bindings);

@@ -295,8 +295,8 @@ public class JactlFunction extends FunctionDescriptor {
                                                                                        int.class,
                                                                                        Object[].class));
 
+      handle = handle.bindTo(this);
       wrapperHandle = JactlMethodHandle.createFuncHandle(handle, type, name);
-      wrapperHandle = wrapperHandle.bindTo(this);
 
       // Store handle in static field we have been given
       Field field = implementingClass.getDeclaredField(wrapperHandleField);

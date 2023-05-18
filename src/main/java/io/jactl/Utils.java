@@ -22,6 +22,8 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -36,7 +38,7 @@ import static org.objectweb.asm.Opcodes.*;
 
 public class Utils {
 
-  public static final String JACTL_PKG           = "io/jactl/pkg";
+  public static final String JACTL_PKG           = "io.jactl.pkg";
   public static final String DEFAULT_JACTL_PKG   = "";
   public static final String JACTL_PREFIX        = "_$j$";
   public static final String JACTL_SCRIPT_MAIN   = JACTL_PREFIX + "main";
@@ -44,24 +46,23 @@ public class Utils {
   public static final String JACTL_INIT_WRAPPER  = Utils.wrapperName(JACTL_PREFIX + "init");
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
 
-  public static final String JACTL_FIELDS_METHODS_MAP    = "_$j$FieldsAndMethods";
-  public static final String JACTL_FIELDS_METHODS_GETTER = "_$j$getFieldsAndMethods";
-  public static final String JACTL_STATIC_METHODS_MAP    = "_$j$StaticMethods";
-  public static final String JACTL_STATIC_METHODS_GETTER = "_$j$getStaticMethods";
+  public static final String JACTL_FIELDS_METHODS_MAP           = "_$j$FieldsAndMethods";
+  public static final String JACTL_FIELDS_METHODS_GETTER        = "_$j$getFieldsAndMethods";
+  public static final String JACTL_STATIC_METHODS_MAP           = "_$j$StaticMethods";
+  public static final String JACTL_STATIC_METHODS_GETTER        = "_$j$getStaticMethods";
   public static final String JACTL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
   public static final String JACTL_PRETTY_NAME_FIELD            = "_$j$PackagedName";
   public static final String JACTL_WRITE_JSON                   = "_$j$writeJson";
-  public static final String JACTL_FROM_JSON             = "fromJson";
-  public static final String JACTL_READ_JSON             = "_$j$readJson";
-  public static final String JACTL_INIT_MISSING          = "_$j$initMissingFields";
+  public static final String JACTL_FROM_JSON                    = "fromJson";
+  public static final String JACTL_READ_JSON                    = "_$j$readJson";
+  public static final String JACTL_INIT_MISSING                 = "_$j$initMissingFields";
+  public static final String JACTL_CHECKPOINT_FN                = "_$j$checkpoint";
+  public static final String JACTL_RESTORE_FN                   = "_$j$restore";
 
   public static final Class JACTL_MAP_TYPE  = LinkedHashMap.class;
   public static final Class JACTL_LIST_TYPE = ArrayList.class;
 
   public static final String JACTL_GLOBALS_NAME   = JACTL_PREFIX + "globals";
-  public static final String JACTL_GLOBALS_OUTPUT = "$output";   // Name of global to use as PrintStream for print/println
-  public static final String JACTL_GLOBALS_INPUT  = "$input";    // Name of global to use when reading from stdin
-
   public static final String SOURCE_VAR_NAME   = "$source";
   public static final String OFFSET_VAR_NAME   = "$offset";
 
@@ -677,5 +678,47 @@ public class Utils {
     varDecl.isResultUsed = false;
     varDecl.owner = ownerFunDecl;
     return new Stmt.VarDecl(name, varDecl);
+  }
+
+  public static String dumpHex(byte[] buf, int length) {
+    String hex = "";
+    String readable = "";
+    String result = "";
+    int idx = 0;
+    for (int i = 0; i < length / 16 + 1; i++) {
+      for (int j = 0; j < 16; j++) {
+        hex += idx < length ? String.format("%02x ", buf[idx]) : "   ";
+        readable += (idx < length ? (Character.isISOControl(buf[idx]) ? "." : Character.toString(buf[idx] & 0xff)) : " ") + " ";
+        idx++;
+      }
+      result += String.format("%04x: ", i * 16) + hex + "    " + readable + "\n";
+      hex = readable = "";
+    }
+    return result;
+  }
+
+  private static char[] hex = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+  public static String toHexString(byte[] buf) {
+    StringBuilder sb = new StringBuilder(buf.length * 2);
+    for (int i = 0; i < buf.length; i++) {
+      int b = buf[i];
+      sb.append(hex[(b >>> 4) & 0x0f]);
+      sb.append(hex[b & 0x0f]);
+    }
+    return sb.toString();
+  }
+
+  static ThreadLocal<MessageDigest> md5 = ThreadLocal.withInitial(() -> {
+    try {
+      return MessageDigest.getInstance("MD5");
+    }
+    catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
+  });
+
+  public static String md5Hash(String source) {
+    return Utils.toHexString(md5.get().digest(source.getBytes()));
   }
 }

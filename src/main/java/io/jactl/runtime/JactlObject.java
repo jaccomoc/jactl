@@ -23,7 +23,7 @@ import java.util.Map;
 /**
  * All JactlObjects implement this. It provides runtime access to fields and methods.
  */
-public interface JactlObject {
+public interface JactlObject extends Checkpointable {
   public Map<String,Object>        _$j$getFieldsAndMethods();
   public Map<String, MethodHandle> _$j$getStaticMethods();
 

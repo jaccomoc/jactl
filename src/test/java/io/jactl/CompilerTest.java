@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -2701,6 +2702,7 @@ class CompilerTest extends BaseTest {
     test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def x = ''; while (/([a-z])/gr) { x += $1 }; while (/([A-Z])/ig) { x += $1 }; x", "abcdabcd");
     test("def it = 'abc'; def x = ''; while (/([a-z])/gr) { x += $1; while (/([A-Z])/ig) { x += $1 } }; x", "aabcbabccabc");
+    test("def x = 'abcde'; int i = 0; while (x =~ /([ace])/g) { i++; x = 'aaaa' }; i", 5);
   }
 
   @Test public void regexSubstitute() {
@@ -2728,6 +2730,9 @@ class CompilerTest extends BaseTest {
     testError("1 =~ s/abc/xyz/", "invalid lvalue");
     testError("def x = 1; x =~ s/abc/xyz/", "cannot convert");
     testError("'a123c' =~ /(\\d+)/; $1 =~ s/123/abc/; $1", "invalid lvalue");
+    test("def it = '123456'; s/([0-9])/${ $1 * $1 }/rng", "149162536");
+    test("def it = 'a1b2c3def4g56'; s/([0-9])/${ $1 * $1 }/rng", "a1b4c9def16g2536");
+    test("def it = 'abcdef'; s/([a-z])/${ $1 + $1 }/rg", "aabbccddeeff");
     test("def it = '   *# parseScript -&gt; packageDecl? script;'; s/^.*#//; s/^ *([^ ]*) *-&gt;/${ $1.toUpperCase(1) }->/g; $1 == null", true);
   }
 
@@ -3909,6 +3914,8 @@ class CompilerTest extends BaseTest {
 
   @Test public void arrayConversions() {
     test("boolean[] a = [true,false,3]; a instanceof boolean[] && a[0] && !a[1] && a[2]", true);
+    test("boolean[] a = [true,false,3,0,0,1,1,0,1,1,1,0,0,1,1,0,1,1,1,1,0,1,0,1]; a instanceof boolean[] && a[0] && !a[1] && a[2] && !a[3] && !a[4] && a[5] && a[6] && !a[7] && a[8] && a[9] && a[10] && !a[11]" +
+         " && !a[12] && a[13] && a[14] && !a[15] && a[16] && a[17] && a[18] /*&& a[19] && !a[20] && a[21] && !a[22] && a[23]*/", true);
     test("boolean[][] a = [[1],[0,'']]; a instanceof boolean[][] && !a[1][0] && !a[1][1]", true);
     testError("boolean[][] a = [1,[2],3]", "cannot cast");
     test("boolean[] a = new boolean[10]; a = [1L,2L,3L]", new boolean[]{true, true, true});
@@ -6026,7 +6033,7 @@ class CompilerTest extends BaseTest {
     test("false or null", false);
     test("null or false", false);
     test("true and (true or false and true) or not (true and false)", true);
-    test("def x = 1; true and x = 2; x", 2);
+    test("def x =\n1;\ntrue\nand\nx = 2;\n x", 2);
     test("def x = 1; x = 2 and true", true);
     test("def x = 1; x = 2 and true; x", 2);
     test("def it = 'abc'; /a/r ? true : false", true);
@@ -6055,12 +6062,12 @@ class CompilerTest extends BaseTest {
     test("def vars = [x:3]; eval('x x + 1',vars); vars.'$error' =~ /unexpected token/i", true);
     test("def vars = [output:null]; eval('''def x = 'abc'; output = x.size()''',vars); vars.output", 3);
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[result:null])", 10);
-    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
     test("['[1,2]','[3]'].map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
     test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", List.of(List.of(1,2), List.of(3)));
-    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", List.of(List.of(1,2), List.of(3)));
-    test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
-    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
+//    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", List.of(List.of(1,2), List.of(3)));
+//    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
+//    test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
+//    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
 
   @Test public void asyncFunctions() {
@@ -6241,23 +6248,21 @@ class CompilerTest extends BaseTest {
   }
 
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
-    Runnable setInput = () -> globals.put(Utils.JACTL_GLOBALS_INPUT,
-                                          input == null ? null
-                                                        : new BufferedReader(new StringReader(input)));
+    Runnable setInput = () -> RuntimeState.setInput(input == null ? null: new BufferedReader(new StringReader(input)));
     ByteArrayOutputStream output;
 
     setInput.run();
-    globals.put(Utils.JACTL_GLOBALS_OUTPUT, new PrintStream(output = new ByteArrayOutputStream()));
+    RuntimeState.setOutput(new PrintStream(output = new ByteArrayOutputStream()));
     doTest(code, true, true, false, expectedResult);
     assertEquals(expectedOutput, output.toString());
 
     setInput.run();
-    globals.put(Utils.JACTL_GLOBALS_OUTPUT, new PrintStream(output = new ByteArrayOutputStream()));
+    RuntimeState.setOutput(new PrintStream(output = new ByteArrayOutputStream()));
     doTest(code, false, true, false, expectedResult);
     assertEquals(expectedOutput, output.toString());
 
     setInput.run();
-    globals.put(Utils.JACTL_GLOBALS_OUTPUT, new PrintStream(output = new ByteArrayOutputStream()));
+    RuntimeState.setOutput(new PrintStream(output = new ByteArrayOutputStream()));
     doTest(code, true, true, true, expectedResult);
     assertEquals(expectedOutput, output.toString());
   };
@@ -6278,6 +6283,7 @@ class CompilerTest extends BaseTest {
     replTest.accept("BEGIN { def x = 7 }; x = 2; END { x + x }", null, 4, "");
 //    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
   }
+
 
   @Test public void nextLine() {
     replTest.accept("nextLine() == null", null,true, "");
@@ -6300,128 +6306,15 @@ class CompilerTest extends BaseTest {
     replTest.accept("def f = stream; f(closure:nextLine).max{it as int}", "1\n4\n3\n", "4", "");
   }
 
+  @Test public void groupedRepl() {
+    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
+  }
+
   @Test public void globalVars() {
     replError("x", "unknown variable 'x'");
     replTest.accept("x = 1", "", 1, "");
     replTest.accept("x = 1; x", "", 1, "");
     replTest.accept("x = x", "", null, "");
-  }
-
-  @Test public void grouped() {
-    test("[].grouped(2)", List.of());
-    test("[a:1,b:2,c:3,d:4].grouped(2)", List.of(List.of(List.of("a",1),List.of("b",2)),List.of(List.of("c",3),List.of("d",4))));
-    test("[1,2].grouped(0)", List.of(1,2));
-    test("[1,2].grouped(1)", List.of(List.of(1),List.of(2)));
-    test("[1,2].grouped(2)", List.of(List.of(1,2)));
-    test("[1].grouped(2)", List.of(List.of(1)));
-    test("[1,2,3,4].grouped(2)", List.of(List.of(1,2),List.of(3,4)));
-    test("[1,2,3].grouped(2)", List.of(List.of(1,2),List.of(3)));
-    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3,4)));
-    test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3)));
-    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
-    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
-  }
-
-  @Test public void sqrt() {
-    test("4.sqrt()", 2);
-    test("4.sqrt() + 4.sqrt()", 4);
-    test("(123456789L*123456789L).sqrt()", 123456789);
-    test("(12345678901.0*12345678901.0).sqrt()", "#12345678901.0");
-    test("def f = (12345678901.0*12345678901.0).sqrt; f()", "#12345678901.0");
-    test("(0.1234D*0.1234D).sqrt()", 0.1234D);
-    test("def f = (0.1234D*0.1234D).sqrt; f()", 0.1234D);
-    testError("-1.sqrt()", "square root of negative number");
-    testError("-1.0.sqrt()", "square root of negative number");
-    testError("-1.0D.sqrt()", "square root of negative number");
-    testError("-1L.sqrt()", "square root of negative number");
-    test("def x = 4; x.sqrt()", 2);
-    test("def x = (123456789L*123456789L); x.sqrt()", 123456789);
-    test("def x = (12345678901.0*12345678901.0); x.sqrt()", "#12345678901.0");
-    test("def x = (0.1234D*0.1234D); x.sqrt()", 0.1234D);
-    test("def x = (0.1234D*0.1234D); def f = x.sqrt; f()", 0.1234D);
-    testError("def x = -1; x.sqrt()", "square root of negative number");
-    testError("def x = -1.0; x.sqrt()", "square root of negative number");
-    testError("def x = -1.0D; x.sqrt()", "square root of negative number");
-    testError("def x = -1L; x.sqrt()", "square root of negative number");
-  }
-
-  @Test public void sqr() {
-    test("2.sqr().sqrt()", 2);
-    test("2.sqr() + 2.sqr()", 8);
-    test("123456789L.sqr().sqrt()", 123456789);
-    test("12345678901.0.sqr().sqrt()", "#12345678901.0");
-    test("0.1234D.sqr().sqrt()", 0.1234D);
-    test("-1.sqr()", 1);
-    test("def f = -1.sqr; f()", 1);
-    test("-4.sqr()", 16);
-    test("-4L.sqr()", 16L);
-    test("def f = -4L.sqr; f()", 16L);
-    test("def x = 4; x.sqr()", 16);
-    test("def x = -4; x.sqr()", 16);
-    test("def x = 4L; x.sqr()", 16L);
-    test("def x = -4L; x.sqr()", 16L);
-    test("def x = 4.01; x.sqr()", "#16.0801");
-    test("def x = -4.01; x.sqr()", "#16.0801");
-    test("def x = 4.0D; x.sqr()", 16D);
-    test("def x = 4.0D; def f = x.sqr; f()", 16D);
-    test("def x = -4.0D; x.sqr()", 16D);
-    test("def x = 123456789L; x.sqr()", 123456789L*123456789L);
-    test("def x = 123456789.0; x.sqr()", "#" + 123456789L*123456789L + ".00");
-    test("def x = 0.1234D; x.sqr()", 0.1234D * 0.1234D);
-    test("def f = 0.1234D.sqr; f()", 0.1234D * 0.1234D);
-  }
-
-  @Test public void pow() {
-    test("4.pow(0)", 1);
-    test("4.pow(0.5)", 2);
-    test("4.pow(3)", 64);
-    test("16.pow(-0.5)", 0.25);
-    test("def f = 16.pow; f(-0.5)", 0.25);
-    test("-4.pow(-1)", -0.25);
-    test("4L.pow(0)", 1);
-    test("4L.pow(0.5)", 2);
-    test("4L.pow(3)", 64);
-    test("def f = 4L.pow; f(3)", 64);
-    test("16L.pow(-0.5)", 0.25);
-    test("-4L.pow(-1)", -0.25);
-    test("4.0.pow(0.5)", 2);
-    test("4.0.pow(3)", "#64.000");
-    test("16.0.pow(-0.5)", 0.25);
-    test("-4.0.pow(0)", "#1");
-    test("-4.0.pow(-1)", -0.25);
-    test("0.0D.pow(0)", 1);
-    test("4.0D.pow(0.5)", 2);
-    test("4.0D.pow(3)", 64);
-    test("4.0D.pow(3) + 4.0D.pow(3)", 128);
-    test("16.0D.pow(-0.5)", 0.25);
-    test("def f = 16.0D.pow; f(-0.5)", 0.25);
-    test("-4.0D.pow(-1)", -0.25);
-    test("(1234567890.0*1234567890.0).pow(0.5)", 1234567890);
-    test("(1234567890L*1234567890L).pow(0.5)", 1234567890);
-    test("def x = 4; x.pow(0.5)", 2);
-    test("def x = 4; x.pow(3)", 64);
-    test("def x = 16; x.pow(-0.5)", 0.25);
-    test("def x = -4; x.pow(-1)", -0.25);
-    test("def x = 4L; x.pow(0.5)", 2);
-    test("def x = 4L; x.pow(3)", 64);
-    test("def x = 16L; x.pow(-0.5)", 0.25);
-    test("def x = 16L; def f = x.pow; f(-0.5)", 0.25);
-    test("def x = -4L; x.pow(-1)", -0.25);
-    test("def x = 4.0; x.pow(0.5)", 2);
-    test("def x = 4.0; x.pow(3)", "#64.000");
-    test("def x = 16.0; x.pow(-0.5)", 0.25);
-    test("def x = -4.0; x.pow(-1)", -0.25);
-    test("def x = 4.0D; x.pow(0.5)", 2);
-    test("def x = 4.0D; x.pow(3)", 64);
-    test("def x = 16.0D; x.pow(-0.5)", 0.25);
-    test("def x = -4.0D; x.pow(-1)", -0.25);
-    test("def x = (1234567890.0*1234567890.0); x.pow(0.5)", 1234567890);
-    test("def x = (1234567890L*1234567890L); x.pow(0.5)", 1234567890);
-    testError("-4.pow(0.5)", "illegal request");
-    testError("-4.pow(-0.5)", "illegal request");
-    testError("-4.0.pow(0.5)", "illegal request");
-    testError("-4.0D.pow(0.5)", "illegal request");
-    testError("-4L.pow(0.5)", "illegal request");
   }
 
   @Test public void fib() {

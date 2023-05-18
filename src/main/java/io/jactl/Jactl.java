@@ -20,6 +20,7 @@ package io.jactl;
 import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.JactlFunction;
 import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.RuntimeState;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -263,33 +264,40 @@ public class Jactl {
     }
 
     try {
-      var options = !argMap.containsKey('c') ? JactlOptions.initOptions() : null;
+      if (!argMap.containsKey('c')) {
+        JactlOptions.initOptions();
+      }
 
       globals.put("args", arguments);
       List<InputStream> fileStreams = files.stream().map(Jactl::getFileStream).collect(Collectors.toList());
       var inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
                                                : System.in;
-      globals.put(Utils.JACTL_GLOBALS_INPUT, new BufferedReader(new InputStreamReader(inputStream)));
+      BufferedReader input = new BufferedReader(new InputStreamReader(inputStream));
       boolean[] printInvoked = new boolean[]{ false };
-      globals.put(Utils.JACTL_GLOBALS_OUTPUT, new PrintStream(System.out) {
-        @Override public void print(String s) {
+      PrintStream output = new PrintStream(System.out) {
+        @Override
+        public void print(String s) {
           super.print(s);
           printInvoked[0] = true;
         }
 
-        @Override public void println(String x) {
+        @Override
+        public void println(String x) {
           super.println(x);
           super.flush();
           printInvoked[0] = true;
         }
-      });
+      };
+
+      RuntimeState.setInput(input);
+      RuntimeState.setOutput(output);
 
       var context = JactlContext.create()
-                                 .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
-                                 .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
-                                 .printLoop(argMap.containsKey('p'))
-                                 .nonPrintLoop(argMap.containsKey('n'))
-                                 .build();
+                                .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
+                                .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
+                                .printLoop(argMap.containsKey('p'))
+                                .nonPrintLoop(argMap.containsKey('n'))
+                                .build();
       Object result = null;
       result = Compiler.eval(script, context, globals);
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself

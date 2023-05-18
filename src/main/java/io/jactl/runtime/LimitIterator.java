@@ -17,23 +17,48 @@
 
 package io.jactl.runtime;
 
-import java.util.Iterator;
+import io.jactl.JactlType;
+
+import static io.jactl.JactlType.ITERATOR;
 
 /**
- * Async iterator to support iterator.limit(n) where n &gt;= 0
+ * Async JactlIterator to support iterator.limit(n) where n &gt;= 0
  */
-public class LimitIterator implements Iterator {
-  Iterator iter;
-  boolean  reachedEnd = false;
-  int      limit;
-  int      count = 0;
+public class LimitIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator iter;
+  boolean       reachedEnd = false;
+  int           limit;
+  int           count = 0;
 
-  LimitIterator(Iterator iter, int limit) {
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.LIMIT.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer._writeBoolean(reachedEnd);
+    checkpointer.writeCint(limit);
+    checkpointer.writeCint(count);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.LIMIT.ordinal(), "Expected LIMIT");
+    restorer.expectCint(VERSION, "Bad version");
+    iter       = (JactlIterator)restorer.readObject();
+    reachedEnd = restorer.readBoolean();
+    limit      = restorer.readCint();
+    count      = restorer.readCint();
+  }
+
+  LimitIterator() {}
+
+  LimitIterator(JactlIterator iter, int limit) {
     this.iter = iter;
     this.limit = limit;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(LimitIterator.class, IteratorType.LIMIT, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return ((LimitIterator)c.localObjects[0]).doHasNext(c);
   }
@@ -74,7 +99,7 @@ public class LimitIterator implements Iterator {
     }
   }
 
-  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(LimitIterator.class, "next$c", Object.class, Continuation.class);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(LimitIterator.class, IteratorType.LIMIT, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((LimitIterator)c.localObjects[0]).doNext(c);
   }

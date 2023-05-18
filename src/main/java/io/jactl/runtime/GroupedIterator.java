@@ -17,31 +17,64 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlType;
+
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+
+import static io.jactl.JactlType.ITERATOR;
+import static io.jactl.runtime.JactlIterator.IteratorType.GROUPED;
 
 /**
  * Iterator that groups the elements of list into sublists of given size.
  * E.g. turning a list into a list of pairs.
  */
-public class GroupedIterator implements Iterator {
-  Iterator     iter;
-  String       source;
-  int          offset;
-  int          size;
-  boolean      haveNext = false;
-  boolean      finished = false;
-  List<Object> group = null;
+public class GroupedIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator iter;
+  String        source;
+  int           offset;
+  int           size;
+  boolean       haveNext = false;
+  boolean       finished = false;
+  List<Object>  group = null;
 
-  GroupedIterator(Iterator iter, String source, int offset, int size) {
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(GROUPED.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
+    checkpointer.writeCint(size);
+    checkpointer._writeBoolean(haveNext);
+    checkpointer._writeBoolean(finished);
+    checkpointer.writeObject(group);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(GROUPED.ordinal(), "Expected GROUPED");
+    restorer.expectCint(VERSION, "Bad version");
+    iter     = (JactlIterator)restorer.readObject();
+    source   = (String)restorer.readObject();
+    offset   = restorer.readCint();
+    size     = restorer.readCint();
+    haveNext = restorer.readBoolean();
+    finished = restorer.readBoolean();
+    group    = (List<Object>)restorer.readObject();
+  }
+
+  GroupedIterator() {}
+
+  GroupedIterator(JactlIterator iter, String source, int offset, int size) {
     this.iter   = iter;
     this.source = source;
     this.offset = offset;
     this.size   = size;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, GROUPED, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     var iter = (GroupedIterator)c.localObjects[0];
     iter.haveNext = true;
@@ -69,7 +102,7 @@ public class GroupedIterator implements Iterator {
     }
   }
 
-  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, "next$c", Object.class, Continuation.class);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, GROUPED, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((GroupedIterator)c.localObjects[0]).doNext(c);
   }

@@ -50,6 +50,7 @@ public class JactlContext {
   int debugLevel = 0;
 
   String javaPackage = Utils.JACTL_PKG;   // The Java package under which compiled classes will be generated
+  String internalJavaPackage;
 
   Set<String>                  packages    = new HashSet<>();
   Map<String, ClassDescriptor> classLookup = new HashMap<>();  // Keyed on internal name
@@ -64,6 +65,33 @@ public class JactlContext {
 
   private JactlContext() {}
 
+  /**
+   * Get the current context by finding our thread current class loader.
+   * @return the current context
+   * @throws IllegalStateException if current class loader is not of correct type
+   */
+  public static JactlContext getContext() {
+    ClassLoader loader = Thread.currentThread().getContextClassLoader();
+    if (loader instanceof DynamicClassLoader) {
+      return ((DynamicClassLoader)loader).getJactlContext();
+    }
+    throw new IllegalStateException("Expected class loader of type " + DynamicClassLoader.class.getName() + " but found " + loader.getClass().getName());
+  }
+
+  /**
+   * Lookup class based on fully qualified internal name (a/b/c/X$Y)
+   * @param internalName the fully qualified internal class name
+   * @return the class or null if not found
+   */
+  public Class getClass(String internalName) {
+    if (internalName.startsWith(internalJavaPackage)) {
+      return classLoader.findClassByInternalName(internalName);
+    }
+    return null;
+  }
+
+  ///////////////////////////////////
+
   private JactlContextBuilder getJactlContextBuilder() {
     return new JactlContextBuilder();
   }
@@ -75,7 +103,7 @@ public class JactlContext {
       // want to refer to the old version of the class to continue working.
       classLoader = new DynamicClassLoader(classLoader);
     }
-    var clss = classLoader.defineClass(className, bytes);
+    var clss = classLoader.defineClass(descriptor.getInternalName(), className, bytes);
     addClass(descriptor);
     return clss;
   }
@@ -99,6 +127,7 @@ public class JactlContext {
       if (executionEnv == null) {
         executionEnv = new DefaultEnv();
       }
+      internalJavaPackage = javaPackage.replaceAll("\\.", "/");
       return JactlContext.this;
     }
   }
@@ -125,7 +154,7 @@ public class JactlContext {
 
   public ClassDescriptor getClassDescriptor(String packageName, String className) {
     String pname = packageName == null || packageName.equals("") ? "" : packageName + '.';
-    String name  = javaPackage + '.' + pname + className.replaceAll("\\.", "$");
+    String name  = internalJavaPackage + '.' + pname + className.replaceAll("\\.", "$");
     name = name.replaceAll("\\.", "/");
     return classLookup.get(name);
   }
@@ -161,8 +190,9 @@ public class JactlContext {
   }
 
   public class DynamicClassLoader extends ClassLoader {
-    private Map<String,Class<?>> classes  = new HashMap<>();
-    private DynamicClassLoader   previous = null;
+    private Map<String,Class<?>> classes                = new HashMap<>();
+    private Map<String,Class<?>> classesByInternalName  = new HashMap<>();
+    private DynamicClassLoader   previous               = null;
 
     DynamicClassLoader() {
       super(Thread.currentThread().getContextClassLoader());
@@ -189,9 +219,18 @@ public class JactlContext {
       return super.findClass(name);
     }
 
-    Class<?> defineClass(String name, byte[] bytes) {
+    Class findClassByInternalName(String internalName) {
+      Class clss = classesByInternalName.get(internalName);
+      if (clss == null && previous != null) {
+        clss = previous.findClassByInternalName(internalName);
+      }
+      return clss;
+    }
+
+    Class<?> defineClass(String internalName, String name, byte[] bytes) {
       Class<?> clss = defineClass(name, bytes, 0, bytes.length);
       classes.put(name, clss);
+      classesByInternalName.put(internalName, clss);
       return clss;
     }
 

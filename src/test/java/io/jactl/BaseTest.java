@@ -59,10 +59,10 @@ public class BaseTest {
     }
     try {
       JactlContext jactlContext = JactlContext.create()
-                                                 .evaluateConstExprs(evalConsts)
-                                                 .replMode(replMode)
-                                                 .debug(debugLevel)
-                                                 .build();
+                                              .evaluateConstExprs(evalConsts)
+                                              .replMode(replMode)
+                                              .debug(debugLevel)
+                                              .build();
 
       var    bindings = createGlobals();
 
@@ -104,6 +104,10 @@ public class BaseTest {
             assertArrayEquals((BigDecimal[]) expected, (BigDecimal[]) result);
             break;
           default:
+            if (result instanceof Throwable) {
+              ((Throwable) result).printStackTrace();
+              fail(((Throwable) result).getMessage());
+            }
             checkEquality(expected, result);
             break;
         }

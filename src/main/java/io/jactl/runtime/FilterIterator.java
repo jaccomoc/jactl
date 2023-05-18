@@ -17,7 +17,9 @@
 
 package io.jactl.runtime;
 
-import java.util.Iterator;
+import io.jactl.JactlType;
+
+import static io.jactl.JactlType.ITERATOR;
 
 /**
  * Iterator for the filter method. It takes the supplied iterator and wraps it in an iterator that only returns
@@ -25,22 +27,49 @@ import java.util.Iterator;
  * This FilterIterator handles async behaviour in the wrapped iterator (supports iter.hasNext() and iter.next()
  * both throwing Continuation) as well as async behaviour in the closure passed to it.
  */
-class FilterIterator implements Iterator {
-  Iterator          iter;
+class FilterIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator     iter;
   String            source;
   int               offset;
   JactlMethodHandle closure;
   Object            next;
   boolean           hasNext = false;
 
-  FilterIterator(Iterator iter, String source, int offset, JactlMethodHandle closure) {
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.FILTER.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
+    checkpointer.writeObject(closure);
+    checkpointer.writeObject(next);
+    checkpointer._writeBoolean(hasNext);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.FILTER.ordinal(), "Expected FILTER");
+    restorer.expectCint(VERSION, "Bad version");
+    iter     = (JactlIterator)restorer.readObject();
+    source   = (String)restorer.readObject();
+    offset   = restorer.readCint();
+    closure  = (JactlMethodHandle)restorer.readObject();
+    next     = restorer.readObject();
+    hasNext  = restorer.readBoolean();
+  }
+
+  FilterIterator() {}
+
+  FilterIterator(JactlIterator iter, String source, int offset, JactlMethodHandle closure) {
     this.iter = iter;
     this.source = source;
     this.offset = offset;
     this.closure = closure;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, IteratorType.FILTER,  "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return ((FilterIterator)c.localObjects[0]).hasNext();
   }
@@ -59,7 +88,7 @@ class FilterIterator implements Iterator {
     }
   }
 
-  public static JactlMethodHandle findNext$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "findNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle findNext$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, IteratorType.FILTER,"findNext$c", Object.class, Continuation.class);
   public static Object findNext$c(Continuation c) {
     ((FilterIterator)c.localObjects[1]).findNext(c);
     return null;
@@ -134,7 +163,7 @@ class FilterIterator implements Iterator {
     }
   }
 
-  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, "next$c", Object.class, Continuation.class);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(FilterIterator.class, IteratorType.FILTER, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((FilterIterator)c.localObjects[0]).doNext(c);
   }

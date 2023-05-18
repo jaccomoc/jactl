@@ -37,6 +37,8 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
+import static io.jactl.runtime.JactlIterator.of;
+
 public class RuntimeUtils {
 
   public static final String PLUS_PLUS             = "++";
@@ -76,24 +78,10 @@ public class RuntimeUtils {
   public static final String DOUBLE_GREATER_THAN = ">>";
   public static final String TRIPLE_GREATER_THAN = ">>>";
 
-  private static final ThreadLocal<LinkedHashMap<String, Pattern>> patternCache = new ThreadLocal<>() {
-    @Override
-    protected LinkedHashMap<String, Pattern> initialValue() {
-      return new LinkedHashMap<>(16, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, Pattern> eldest) {
-          return size() > patternCacheSize;
-        }
-      };
-    }
-  };
-
-  public static int patternCacheSize = 100;   // Per thread cache size
-
   private static final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap<>(16, 0.75f, true) {
       @Override protected boolean removeEldestEntry(Map.Entry<String, Function<Map<String,Object>,Object>> eldest) {
-        return size() > patternCacheSize;
+        return size() > scriptCacheSize;
       }
     });
 
@@ -895,139 +883,6 @@ public class RuntimeUtils {
     }
     ensureNonNull(str, source, offset);
     return str.repeat(count);
-  }
-
-  public static Matcher getMatcher(String str, String regex, String modifiers, String source, int offset) {
-    if (str == null) {
-      throw new NullError("Null string in regex match", source, offset);
-    }
-    if (regex == null) {
-      throw new NullError("Null regex in regex match", source, offset);
-    }
-    var     cache   = patternCache.get();
-    String  key     = regex + "/" + modifiers;
-    Pattern pattern = cache.get(key);
-    if (pattern == null) {
-      try {
-        int flags = 0;
-        for (int i = 0; i < modifiers.length(); i++) {
-          switch (modifiers.charAt(i)) {
-            case Utils.REGEX_CASE_INSENSITIVE:
-              flags += Pattern.CASE_INSENSITIVE;
-              break;
-            case Utils.REGEX_MULTI_LINE_MODE:
-              flags += Pattern.MULTILINE;
-              break;
-            case Utils.REGEX_DOTALL_MODE:
-              flags += Pattern.DOTALL;
-              break;
-            default:
-              throw new RuntimeError("Unexpected regex modifier '" + modifiers.charAt(i) + "'", source, offset);
-          }
-        }
-        pattern = Pattern.compile(regex, flags);
-      }
-      catch (PatternSyntaxException e) {
-        throw new RuntimeError("Pattern error: " + e.getMessage(), source, offset);
-      }
-      cache.put(key, pattern);
-      if (cache.size() > patternCacheSize) {
-        cache.remove(cache.keySet().iterator().next());
-      }
-    }
-    return pattern.matcher(str);
-  }
-
-  /**
-   * We are doing a "find" rather than a "match" if the global modifier is set and the source string is unchanged. In
-   * this case we continue the searching from the last unmatched char in the source string. If the source string has
-   * changed then we revert to a "match". We update the Matcher in the RegexMatcher object if the Matcher changes.
-   * @param regexMatcher   the RegexMatcher that is used to hold our current state
-   * @param str            the string being matched
-   * @param regex          the regex pattern
-   * @param globalModifier true if find is a global find ('g' modifier used)
-   * @param modifiers      other modifiers for the search (doesn't include 'g' or 'r' or 'n')
-   * @param source         the source code
-   * @param offset         the offset into the source
-   * @return true if regex find/match succeeds
-   */
-  public static boolean regexFind(RegexMatcher regexMatcher, String str, String regex, boolean globalModifier, String modifiers, String source, int offset) {
-    if (globalModifier) {
-      // Check to see if the Matcher has the same source string (note we use == not .equals())
-      if (regexMatcher.str != str || !regex.equals(regexMatcher.matcher.pattern().pattern())) {
-        regexMatcher.matcher = getMatcher(str, regex, modifiers, source, offset);
-      }
-      var matcher = regexMatcher.matcher;
-      regexMatcher.matched = matcher.find(regexMatcher.lastPos);
-      if (!regexMatcher.matched) {
-        matcher.reset();
-        regexMatcher.lastPos = 0;
-      }
-      else {
-        regexMatcher.lastPos = matcher.end();
-      }
-      return regexMatcher.matched;
-    }
-
-    // No global modifier so start from scratch and leave lastPos untouched
-    Matcher matcher = getMatcher(str, regex, modifiers, source, offset);
-    regexMatcher.matcher = matcher;
-    regexMatcher.str = str;
-    return regexMatcher.matched = matcher.find();
-  }
-
-  public static String regexSubstitute(RegexMatcher regexMatcher, String str, String regex, String replace, boolean globalModifier, String modifiers, String source, int offset) {
-    Matcher matcher = regexMatcher.matcher = getMatcher(str, regex, modifiers, source, offset);
-    regexMatcher.str = null;   // We never want to continue regex search after a substitute
-    try {
-      if (globalModifier) {
-        return matcher.replaceAll(replace);
-      }
-      else {
-        return matcher.replaceFirst(replace);
-      }
-    }
-    catch (Exception e) {
-      throw new RuntimeError("Error during regex substitution", source, offset, e);
-    }
-  }
-
-  public static Object regexGroup(RegexMatcher regexMatcher, int group) {
-    if (!regexMatcher.matched) {
-      return null;
-    }
-    final var matcher = regexMatcher.matcher;
-    if (group > matcher.groupCount()) {
-      return null;
-    }
-    if (!regexMatcher.captureAsNums) {
-      try {
-        return matcher.group(group);
-      }
-      catch (IllegalStateException e) {
-        // Can happen when using $1 etc after a /xxx/g pattern
-        // has finished its matching
-        return null;
-      }
-    }
-
-    // See if we have a number we can parse
-    String value = matcher.group(group);
-    if (value.indexOf('.') == -1) {
-      try {
-        return Long.parseLong(value);
-      }
-      catch (NumberFormatException e) {
-        // Too big
-        return value;
-      }
-    }
-    try {
-      return new BigDecimal(value);
-    }
-    catch (NumberFormatException e) {
-      return value;
-    }
   }
 
   /**
@@ -1859,85 +1714,36 @@ public class RuntimeUtils {
    * @param obj  the object of type List, Map, Object[] or single object
    * @return an iterator that iterates over the object
    */
-  public static Iterator createIteratorFlatMap(Object obj) {
-    Iterator iter = doCreateIterator(obj);
+  public static JactlIterator createIteratorFlatMap(Object obj) {
+    JactlIterator iter = doCreateIterator(obj);
     if (iter != null) {
       return iter;
     }
     if (obj == null) {
-      return List.of().iterator();
+      return JactlIterator.of();
     }
-    return List.of(obj).iterator();
+    return JactlIterator.of(obj);
   }
 
-  public static Iterator createIterator(Object obj) {
-    Iterator iter = doCreateIterator(obj);
+  public static JactlIterator createIterator(Object obj) {
+    JactlIterator iter = doCreateIterator(obj);
     if (iter != null) {
       return iter;
     }
-    if (obj instanceof Number) {
-      long num = ((Number)obj).longValue();
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < num; }
-        @Override public Object next()     { return index++;     }
-      };
-    }
-    if (obj instanceof String)  {
-      String str = (String)obj;
-      return new Iterator<String>() {
-        int i = 0;
-        @Override public boolean hasNext() { return i < str.length(); }
-        @Override public String next()     { return Character.toString(str.charAt(i++)); }
-      };
-    }
+    if (obj instanceof Number) { return JactlIterator.numberIterator((Number)obj); }
+    if (obj instanceof String) { return JactlIterator.stringIterator((String)obj); }
     throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
   }
 
-  private static Iterator doCreateIterator(Object obj) {
-    if (obj instanceof Iterator) { return (Iterator)obj;                    }
-    if (obj instanceof Iterable) { return ((Iterable)obj).iterator();       }
-    if (obj instanceof Map)      { return ((Map)obj).entrySet().iterator(); }
-    if (obj instanceof Object[]) {
-      Object[] arr = (Object[])obj;
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < arr.length; }
-        @Override public Object next()     { return arr[index++];       }
-      };
-    }
-    if (obj instanceof int[]) {
-      int[] arr = (int[])obj;
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < arr.length; }
-        @Override public Object next()     { return arr[index++];       }
-      };
-    }
-    if (obj instanceof long[]) {
-      long[] arr = (long[])obj;
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < arr.length; }
-        @Override public Object next()     { return arr[index++];       }
-      };
-    }
-    if (obj instanceof boolean[]) {
-      boolean[] arr = (boolean[])obj;
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < arr.length; }
-        @Override public Object next()     { return arr[index++];       }
-      };
-    }
-    if (obj instanceof double[]) {
-      double[] arr = (double[])obj;
-      return new Iterator() {
-        int index = 0;
-        @Override public boolean hasNext() { return index < arr.length; }
-        @Override public Object next()     { return arr[index++];       }
-      };
-    }
+  private static JactlIterator doCreateIterator(Object obj) {
+    if (obj instanceof JactlIterator) { return (JactlIterator)obj;               }
+    if (obj instanceof List)          { return JactlIterator.of((List)obj);      }
+    if (obj instanceof Map)           { return JactlIterator.of((Map)obj);       }
+    if (obj instanceof Object[])      { return JactlIterator.of((Object[])obj);  }
+    if (obj instanceof int[])         { return JactlIterator.of((int[])obj);     }
+    if (obj instanceof long[])        { return JactlIterator.of((long[])obj);    }
+    if (obj instanceof boolean[])     { return JactlIterator.of((boolean[])obj); }
+    if (obj instanceof double[])      { return JactlIterator.of((double[])obj);  }
     return null;
   }
 
@@ -2079,7 +1885,7 @@ public class RuntimeUtils {
   }
 
   public static List convertIteratorToList(Object iterable, Continuation c) {
-    Iterator iter = createIterator(iterable);
+    JactlIterator iter = createIterator(iterable);
 
     // If we are continuing (c != null) then get objects we have stored previously.
     // Object arr will have: result
@@ -2275,7 +2081,8 @@ public class RuntimeUtils {
 
   private static boolean doPrint(String obj, boolean newLine) {
     if (obj == null) { obj = "null"; }
-    PrintStream out = RuntimeState.getState().output;
+    RuntimeState state = RuntimeState.getState();
+    PrintStream  out   = state.output;
     if (out == null) {
       out = System.out;
     }
@@ -2308,7 +2115,7 @@ public class RuntimeUtils {
     if (obj instanceof Boolean)           { return "boolean"; }
     if (obj instanceof Map)               { return "Map"; }
     if (obj instanceof List)              { return "List"; }
-    if (obj instanceof Iterator)          { return "Iterator"; }
+    if (obj instanceof JactlIterator)          { return "JactlIterator"; }
     if (obj instanceof JactlMethodHandle) { return "Function"; }
     if (obj.getClass().isArray())         { return componentType(obj.getClass().getComponentType()) + "[]"; }
     if (obj instanceof JactlObject) {
@@ -2332,7 +2139,7 @@ public class RuntimeUtils {
     if (clss.equals(Boolean.class))           { return "boolean"; }
     if (clss.equals(Map.class))               { return "Map"; }
     if (clss.equals(List.class))              { return "List"; }
-    if (clss.equals(Iterator.class))          { return "Iterator"; }
+    if (clss.equals(JactlIterator.class))          { return "Iterator"; }
     if (clss.equals(JactlMethodHandle.class)) { return "Function"; }
     if (clss.isArray())                       { return componentType(clss.getComponentType()) + "[]"; }
     if (JactlObject.class.isAssignableFrom(clss)) {
@@ -2393,6 +2200,26 @@ public class RuntimeUtils {
     try {
       return JactlMethodHandle.create(MethodHandles.lookup().findStatic(clss, method, MethodType.methodType(returnType, argTypes)),
                                       clss, method + "Handle");
+    }
+    catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new IllegalStateException("Error finding method " + method, e);
+    }
+  }
+
+  /**
+   * Return a JactlMethodHandle that points to the given static method of the given JactlIterator class.
+   * @param clss       teh class
+   * @param type       the JactlIterator type (one of JactlIterator.IteratorType)
+   * @param method     the name of the static method
+   * @param returnType the return type of the method
+   * @param argTypes   the argument types for the method
+   * @return the JactlMethodHandle
+   * @throws IllegalStateException if method does not exist
+   */
+  public static JactlMethodHandle lookupMethod(Class clss, JactlIterator.IteratorType type, String method, Class returnType, Class... argTypes) {
+    try {
+      return JactlMethodHandle.create(MethodHandles.lookup().findStatic(clss, method, MethodType.methodType(returnType, argTypes)),
+                                      type, method + "Handle");
     }
     catch (NoSuchMethodException | IllegalAccessException e) {
       throw new IllegalStateException("Error finding method " + method, e);

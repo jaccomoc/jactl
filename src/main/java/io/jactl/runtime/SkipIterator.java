@@ -17,26 +17,52 @@
 
 package io.jactl.runtime;
 
-import java.util.Iterator;
+import io.jactl.JactlType;
+
+import static io.jactl.JactlType.ITERATOR;
 
 /**
  * Async iterator to support iterator.skip(n) when n is &lt; 0.
  * In these circumstances n represents an offset from the end of the "list" so we
  * need to keep a buffer of elements abs(n) big to support this behaviour.
  */
-public class SkipIterator implements Iterator {
-  Iterator               iter;
+public class SkipIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator          iter;
   int                    count;
   CircularBuffer<Object> buffer;
   boolean                reachedEnd = false;
 
-  SkipIterator(Iterator iter, int count) {
-    this.iter = iter;
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.SKIP.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeCint(count);
+    checkpointer.writeObject(buffer);
+    checkpointer._writeBoolean(reachedEnd);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.SKIP.ordinal(), "Expected SKIP");
+    restorer.expectCint(VERSION, "Bad version");
+    iter       = (JactlIterator)restorer.readObject();
+    count      = restorer.readCint();
+    buffer     = new CircularBuffer<>();
+    buffer     = (CircularBuffer<Object>)restorer.readObject();
+    reachedEnd = restorer.readBoolean();
+  }
+
+  SkipIterator() {}
+
+  SkipIterator(JactlIterator iter, int count) {
+    this.iter   = iter;
     this.count  = count;
     this.buffer = new CircularBuffer<>(count);
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(SkipIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(SkipIterator.class, IteratorType.SKIP, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return ((SkipIterator)c.localObjects[0]).doHasNext(c);
   }

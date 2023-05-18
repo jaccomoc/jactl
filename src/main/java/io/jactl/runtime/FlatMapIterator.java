@@ -17,7 +17,9 @@
 
 package io.jactl.runtime;
 
-import java.util.Iterator;
+import io.jactl.JactlType;
+
+import static io.jactl.JactlType.ITERATOR;
 
 /**
  * Iterator for iterating over a list of iterators.
@@ -28,21 +30,46 @@ import java.util.Iterator;
  *         --&gt; [1,4,9,16,25]
  * </pre>
  */
-public class FlatMapIterator implements Iterator {
-  Iterator     iter;
-  Iterator     subIter;   // Iterator for each element of iter
-  String       source;
-  int          offset;
+public class FlatMapIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator     iter;
+  JactlIterator     subIter;   // Iterator for each element of iter
+  String            source;
+  int               offset;
   JactlMethodHandle closure;
 
-  FlatMapIterator(Iterator iter, String source, int offset, JactlMethodHandle closure) {
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.FLATMAP.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeObject(subIter);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
+    checkpointer.writeObject(closure);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.FLATMAP.ordinal(), "Expected FLATMAP");
+    restorer.expectCint(VERSION, "Bad version");
+    iter     = (JactlIterator)restorer.readObject();
+    subIter  = (JactlIterator)restorer.readObject();
+    source   = (String)restorer.readObject();
+    offset   = restorer.readCint();
+    closure  = (JactlMethodHandle)restorer.readObject();
+  }
+
+  FlatMapIterator() {}
+
+  FlatMapIterator(JactlIterator iter, String source, int offset, JactlMethodHandle closure) {
     this.iter = iter;
     this.source = source;
     this.offset = offset;
     this.closure = closure;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, IteratorType.FLATMAP, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return ((FlatMapIterator)c.localObjects[0]).doHasNext(c);
   }
@@ -143,7 +170,7 @@ public class FlatMapIterator implements Iterator {
     }
   }
 
-  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, "next$c", Object.class, Continuation.class);
+  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(FlatMapIterator.class, IteratorType.FLATMAP, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((FlatMapIterator)c.localObjects[0]).doNext(c);
   }

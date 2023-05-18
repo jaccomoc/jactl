@@ -18,8 +18,6 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlContext;
-
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -37,13 +35,14 @@ import java.util.function.Consumer;
  * result is then used to resume the script on an event loop thread.
  */
 public class NonBlockingAsyncTask extends AsyncTask {
-  private BiConsumer<JactlContext, Consumer<Object>> asyncWork;
+  private TriConsumer<JactlContext, Object, Consumer<Object>> asyncWork;
 
-  public NonBlockingAsyncTask(BiConsumer<JactlContext, Consumer<Object>> asyncWork) {
+  public NonBlockingAsyncTask(TriConsumer<JactlContext, Object, Consumer<Object>> asyncWork, String source, int offset) {
+    super(source, offset);
     this.asyncWork = asyncWork;
   }
 
-  public void execute(JactlContext context, Consumer<Object> resume) {
-    asyncWork.accept(context, resume);
+  public void execute(JactlContext context, Object data, Consumer<Object> resumer) {
+    asyncWork.accept(context, data, resumer);
   }
 }

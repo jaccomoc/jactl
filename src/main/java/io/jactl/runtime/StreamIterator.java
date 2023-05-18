@@ -17,21 +17,47 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
-import java.util.Iterator;
+import io.jactl.JactlType;
+
+import static io.jactl.JactlType.ITERATOR;
 
 /**
  * Async iterator for stream() function.
  * Iterates by invoking (possibly async) closure until closure returns null.
  */
-public class StreamIterator implements Iterator {
+public class StreamIterator extends JactlIterator {
+  private static int VERSION = 1;
   String            source;
   int               offset;
   JactlMethodHandle closure;
   Object            nextValue;
   boolean           haveValue = false;
 
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.STREAM.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
+    checkpointer.writeObject(closure);
+    checkpointer.writeObject(nextValue);
+    checkpointer._writeBoolean(haveValue);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.STREAM.ordinal(), "Expected STREAM");
+    restorer.expectCint(VERSION, "Bad version");
+    source    = (String)restorer.readObject();
+    offset    = restorer.readCint();
+    closure   = (JactlMethodHandle)restorer.readObject();
+    nextValue = restorer.readObject();
+    haveValue = restorer.readBoolean();
+  }
+
   final static Object[] emptyArgs = new Object[0];
+
+  StreamIterator() {}
 
   StreamIterator(String source, int offset, JactlMethodHandle closure) {
     this.source = source;
@@ -39,7 +65,7 @@ public class StreamIterator implements Iterator {
     this.closure = closure;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, IteratorType.STREAM, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     var iter = (StreamIterator)c.localObjects[0];
     iter.haveValue = true;
@@ -78,7 +104,7 @@ public class StreamIterator implements Iterator {
     }
   }
 
-  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, "next$c", Object.class, Continuation.class);
+  public static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, IteratorType.STREAM, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((StreamIterator)c.localObjects[0]).nextValue;
   }

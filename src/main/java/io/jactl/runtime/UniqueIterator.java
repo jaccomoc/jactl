@@ -17,20 +17,47 @@
 
 package io.jactl.runtime;
 
-import java.util.Iterator;
+import io.jactl.JactlType;
 
-public class UniqueIterator implements Iterator {
-  Iterator iter;
-  Object   current    = null;
-  boolean  reachedEnd = false;
-  boolean  hasValue   = false;
-  boolean  first      = true;   // True until we have found first value
+import static io.jactl.JactlType.ITERATOR;
 
-  UniqueIterator(Iterator iter) {
+public class UniqueIterator extends JactlIterator {
+  private static int VERSION = 1;
+  JactlIterator iter;
+  Object        current    = null;
+  boolean       reachedEnd = false;
+  boolean       hasValue   = false;
+  boolean       first      = true;   // True until we have found first value
+
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeType(ITERATOR);
+    checkpointer.writeCint(IteratorType.UNIQUE.ordinal());
+    checkpointer.writeCint(VERSION);
+    checkpointer.writeObject(iter);
+    checkpointer.writeObject(current);
+    checkpointer._writeBoolean(reachedEnd);
+    checkpointer._writeBoolean(hasValue);
+    checkpointer._writeBoolean(first);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+    restorer.expectCint(IteratorType.UNIQUE.ordinal(), "Expected UNIQUE");
+    restorer.expectCint(VERSION, "Bad version");
+    iter       = (JactlIterator)restorer.readObject();
+    current    = restorer.readObject();
+    reachedEnd = restorer.readBoolean();
+    hasValue   = restorer.readBoolean();
+    first      = restorer.readBoolean();
+  }
+
+  UniqueIterator() {}
+
+  UniqueIterator(JactlIterator iter) {
     this.iter = iter;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(UniqueIterator.class, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(UniqueIterator.class, IteratorType.UNIQUE, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return ((UniqueIterator)c.localObjects[0]).doHasNext(c);
   }

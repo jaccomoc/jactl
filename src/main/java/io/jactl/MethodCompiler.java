@@ -805,7 +805,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(globalModifier);
     loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeMethod(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+    invokeMethod(RegexMatcher.class, "regexFind", String.class, String.class, boolean.class, String.class, String.class, int.class);
     if (expr.operator.is(BANG_GRAVE)) {
       _booleanNot();
     }
@@ -838,7 +838,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(globalModifier);
       loadConst(modifiers);
       loadLocation(expr.operator);
-      invokeMethod(RuntimeUtils.class, "regexSubstitute", RegexMatcher.class, String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+      invokeMethod(RegexMatcher.class, "regexSubstitute", String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
       return null;
     }
 
@@ -852,14 +852,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Setup our Matcher and get first result
     expect(3);
-    loadConst(false);     // We are taking care of looping for 'g' flag so tell regexFind not to track position
+    //loadConst(false);     // We are taking care of looping for 'g' flag so tell regexFind not to track position
+    loadConst(globalModifier);
     loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeMethod(RuntimeUtils.class, "regexFind", RegexMatcher.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
-    int matcherVar = stack.allocateSlot(ANY);
-    loadVar(expr.captureArrVarDecl);
-    mv.visitFieldInsn(GETFIELD, "io/jactl/runtime/RegexMatcher", "matcher", "Ljava/util/regex/Matcher;");
-    storeLocal(matcherVar);
+    invokeMethod(RegexMatcher.class, "regexFind", String.class, String.class, boolean.class, String.class, String.class, int.class);
 
     Label done = new Label();
     Label loop = new Label();
@@ -876,37 +873,31 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(loop);         // :loop
     compile(expr.replace);
     castToString(expr.replace.location);
-    loadLocal(matcherVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
+    loadVar(expr.captureArrVarDecl);
     swap();
     loadLocal(sbVar);
     mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
     swap();
-    invokeMethod(Matcher.class, "appendReplacement", StringBuilder.class, String.class);
-    popVal();    // Returns the Matcher which we already have
+    invokeMethod(RegexMatcher.class, "appendReplacement", StringBuilder.class, String.class);
 
     // If in loop
     if (globalModifier) {
-      loadLocal(matcherVar);
-      mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
-      invokeMethod(Matcher.class, "find");
+      loadVar(expr.captureArrVarDecl);
+      invokeMethod(RegexMatcher.class, "regexFindNext");
       mv.visitJumpInsn(IFNE, loop);
       popType();
     }
 
     mv.visitLabel(done);      // :done
-    loadLocal(matcherVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(Matcher.class));
+    loadVar(expr.captureArrVarDecl);
     loadLocal(sbVar);
     mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
-    invokeMethod(Matcher.class, "appendTail", StringBuilder.class);
-    popVal();   // Returns the StringBuilder
+    invokeMethod(RegexMatcher.class, "appendTail", StringBuilder.class);
 
     loadLocal(sbVar);
     mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
     invokeMethod(StringBuilder.class, "toString");
 
-    stack.freeSlot(matcherVar);
     stack.freeSlot(sbVar);
     return null;
   }
@@ -1592,7 +1583,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
       loadConst(Integer.parseInt(name.substring(1)));
-      invokeMethod(RuntimeUtils.class, "regexGroup", RegexMatcher.class, int.class);
+      invokeMethod(RegexMatcher.class, "regexGroup", int.class);
     }
     else {
       loadVar(expr.varDecl);

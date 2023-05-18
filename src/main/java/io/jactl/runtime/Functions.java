@@ -86,7 +86,7 @@ public class Functions {
    * @return MethodHandle bound to parent
    */
   static JactlMethodHandle lookupWrapper(Object parent, String methodName) {
-    Class parentClass = parent instanceof Iterator ? Iterator.class : parent.getClass();
+    Class parentClass = parent instanceof JactlIterator ? JactlIterator.class : parent.getClass();
     var classLookup = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
     var function    = classLookup.methods.computeIfAbsent(methodName, name -> {
       JactlType parentType = JactlType.typeOf(parent);
