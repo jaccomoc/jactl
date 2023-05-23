@@ -1287,9 +1287,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         expect(2);
         box();
         loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
-        loadConst(expr.operator.getSource());
-        loadConst(expr.operator.getOffset());
-        invokeMethod(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, Integer.TYPE);
+        loadLocation(expr.operator);
+        invokeMethod(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, int.class);
         return null;
       }
 
@@ -1410,9 +1409,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(2);
       loadConst(opCodes.get(decimalIdx));
       loadConst(classCompiler.context.minScale);
-      loadConst(expr.operator.getSource());
-      loadConst(expr.operator.getOffset());
-      invokeMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, Integer.TYPE, String.class, Integer.TYPE);
+      loadLocation(expr.operator);
+      invokeMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + expr.type + " for operator " + expr.operator.getType());
@@ -4425,9 +4423,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     box();                        // Field name/index passed as Object
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
-    loadConst(accessOperator.getSource());
-    loadConst(accessOperator.getOffset());
-    invokeMethod(RuntimeUtils.class, "loadMethodOrField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+    loadLocation(accessOperator);
+    invokeMethod(RuntimeUtils.class, "loadMethodOrField", Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
   }
 
   /**
@@ -4588,9 +4585,8 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
   private void doStoreField(Token accessOperator) {
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
-    loadConst(accessOperator.getSource());
-    loadConst(accessOperator.getOffset());
-    invokeMethod(RuntimeUtils.class, "storeField", Object.class, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+    loadLocation(accessOperator);
+    invokeMethod(RuntimeUtils.class, "storeField", Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
   }
 
   private Void loadLocal(int slot) {
@@ -4638,8 +4634,8 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     }
     if (sourceLocation instanceof Location) {
       Location location = (Location) sourceLocation;
-      _loadConst(location.getSource());
-      _loadConst(location.getOffset());
+      _loadConst(location.getLine());
+      _loadConst(location.getColumn());
       return;
     }
     throw new IllegalStateException("Unexpected SourceLocation type " + sourceLocation.getClass().getName());

@@ -37,6 +37,7 @@ public class BaseTest {
   protected Map<String,Object> globals     = new HashMap<String,Object>();
   protected boolean            useAsyncDecorator = true;
   protected boolean            replMode = true;
+  protected boolean            skipCheckpointTests = false;
 
   protected static int testCounter = 0;
 
@@ -49,10 +50,18 @@ public class BaseTest {
   }
 
   protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
-    doTest(List.of(), code, evalConsts, replMode, testAsync, expected);
+    doTest(code, evalConsts, replMode, testAsync, false, expected);
+  }
+
+  protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
+    doTest(List.of(), code, evalConsts, replMode, testAsync, testCheckpoint, expected);
   }
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
+    doTest(classCode, scriptCode, evalConsts, replMode, testAsync, false, expected);
+  }
+
+  protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
     testCounter++;
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
@@ -62,6 +71,8 @@ public class BaseTest {
                                               .evaluateConstExprs(evalConsts)
                                               .replMode(replMode)
                                               .debug(debugLevel)
+                                              .checkpoint(testCheckpoint)
+                                              .restore(testCheckpoint)
                                               .build();
 
       var    bindings = createGlobals();
@@ -201,10 +212,12 @@ public class BaseTest {
     doTest(code, true, false, false, expected);
     doTest(code, false, false, false, expected);
     doTest(code, true, false, true, expected);
+    doTest(code, true, false, true, true, expected);
     if (replMode) {
       doTest(code, true, true, false, expected);
       doTest(code, false, true, false, expected);
       doTest(code, true, true, true, expected);
+      doTest(code, true, true, true, true, expected);
     }
   }
 
@@ -212,10 +225,16 @@ public class BaseTest {
     doTest(classCode, scriptCode, true, false, false, expected);
     doTest(classCode, scriptCode, false, false, false, expected);
     doTest(classCode, scriptCode, true, false, true, expected);
+    if (!skipCheckpointTests) {
+      doTest(classCode, scriptCode, true, false, true, true, expected);
+    }
     if (replMode) {
       doTest(classCode, scriptCode, true, true, false, expected);
       doTest(classCode, scriptCode, false, true, false, expected);
       doTest(classCode, scriptCode, true, true, true, expected);
+      if (!skipCheckpointTests) {
+        doTest(classCode, scriptCode, true, true, true, true, expected);
+      }
     }
   }
 

@@ -1295,6 +1295,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void classRecompilation() {
+    skipCheckpointTests = true;
     test(List.of("class X{}", "class X{ def f(){3}}"), "new X().f()", 3);
     testError(List.of("class X{def f(){1}}",
                  "class Y extends X{def f(){2 + super.f()}}",

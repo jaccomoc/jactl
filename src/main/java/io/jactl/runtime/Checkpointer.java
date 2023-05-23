@@ -18,7 +18,6 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
-import io.jactl.Pair;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -45,22 +44,21 @@ public class Checkpointer {
   static int  VERSION = 1;
   static byte NULL_TYPE = -1;
 
-  private static int  MAX_CACHE_SIZE      = 1024 * 8;
+  private static int  MAX_CACHE_SIZE      = 1024 * 16;
   private static int  MAX_CHECKPOINT_SIZE = 1024 * 1024 * 128;
 
-  private byte[]                               buf;
-  private int                                  idx;
-  private String                               source;
-  private int                                  offset;
-  private int                                  objId;
-  private IdentityHashMap<Object,Integer>      objectIds;
-  private List<Integer>                        offsets;
-
-  private CircularBuffer<Pair<Integer,Object>> toBeProcessed = new CircularBuffer<>(127, true);
+  private byte[]                            buf;
+  private int                               idx;
+  private String                            source;
+  private int                               offset;
+  private int                               objId;
+  private Object[]                          objects;
+  private IdentityHashMap<Object,Integer>   objectIds;
+  private int[]                             offsets;
 
   public static Checkpointer get(String source, int offset) {
-    //return checkpointerThreadLocal.get().init(source, offset);
-    return new Checkpointer().init(source, offset);
+    return checkpointerThreadLocal.get().init(source, offset);
+    //return new Checkpointer().init(source, offset);
   }
 
   private Checkpointer() {}
@@ -70,8 +68,15 @@ public class Checkpointer {
     this.offset  = offset;
     this.idx     = 0;
     this.objId   = 0;
-    objectIds    = new IdentityHashMap<>();
-    this.offsets = new ArrayList<>();
+    if (this.objects == null) {
+      this.objects = new Object[MAX_CACHE_SIZE / 4];
+    }
+    if (this.objectIds == null) {
+      this.objectIds = new IdentityHashMap<>(MAX_CACHE_SIZE / 4);
+    }
+    if (this.offsets == null) {
+      this.offsets = new int[MAX_CACHE_SIZE / 4];
+    }
     if (this.buf == null) {
       this.buf = new byte[MAX_CACHE_SIZE];
     }
@@ -85,8 +90,13 @@ public class Checkpointer {
     if (buf.length > MAX_CACHE_SIZE) {
       buf = null;
     }
+    if (offsets.length > MAX_CACHE_SIZE / 4) {
+      offsets = null;
+    }
+    if (objects.length > MAX_CACHE_SIZE / 4) {
+      objects = null;
+    }
     objectIds = null;
-    offsets   = null;
     idx       = 0;
   }
 
@@ -100,9 +110,8 @@ public class Checkpointer {
 
   public void checkpoint(Object obj) {
     writeObject(obj);
-    Pair<Integer,Object> newObj;
-    while ((newObj = toBeProcessed.remove()) != null) {
-      checkpointObj(newObj.first, newObj.second);
+    for (int i = 0; i < objId; i++) {
+      checkpointObj(i, objects[i]);
     }
     // Add object table
     int objTableOffset = idx;
@@ -110,14 +119,18 @@ public class Checkpointer {
     _writeInt(objId);
     _writeInt(objTableOffset);
     idx = objTableOffset;
-    for (int i = 0; i < offsets.size(); i++) {
-      writeInt(offsets.get(i));
+    for (int i = 0; i < objId; i++) {
+      writeInt(offsets[i]);
     }
   }
 
   private void checkpointObj(int id, Object obj) {
-    assert id == offsets.size();
-    offsets.add(idx);
+    if (id >= offsets.length) {
+      int[] newOffsets = new int[offsets.length * 2];
+      System.arraycopy(offsets, 0, newOffsets, 0, offsets.length);
+      offsets = newOffsets;
+    }
+    offsets[id] = idx;
     if (obj instanceof Checkpointable) {
       ((Checkpointable)obj)._$j$checkpoint(this);
     }
@@ -166,19 +179,26 @@ public class Checkpointer {
     }
   }
 
-  private int getId(Object value) {
+  private Integer getId(Object value) {
     Integer id = objectIds.get(value);
     if (id == null) {
       id = objId++;
       objectIds.put(value, id);
-      toBeProcessed.add(Pair.create(id, value));
+      if (id >= objects.length) {
+        Object[] newObjects = new Object[objects.length * 2];
+        System.arraycopy(objects, 0, newObjects, 0, objects.length);
+        objects = newObjects;
+      }
+      objects[id] = value;
     }
     return id;
   }
 
   void writeMap(Map<String,Object> map) {
-    writeType(MAP);
-    writeCint(map.size());
+    int size = map.size();
+    ensureCapacity(1 + 5);
+    buf[idx++] = (byte)MAP.getType().ordinal();
+    _writeCint(size);
     for (var iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
       var entry = iterator.next();
       writeObject(entry.getKey());
@@ -311,8 +331,13 @@ public class Checkpointer {
       writeTypeEnum(TypeEnum.NULL_TYPE);
     }
     else {
-      writeType(STRING);
-      _writeString(v.toString());
+      String str = v.toString();
+      ensureCapacity(1 + 5 + str.length());
+      buf[idx++] = (byte)TypeEnum.STRING.ordinal();
+      _writeCint(str.length());
+      for (int i = 0; i < str.length(); i++) {
+        _writeCint(str.charAt(i));
+      }
     }
   }
 
@@ -345,11 +370,17 @@ public class Checkpointer {
 
   private void _writeCint(int num) {
     // Assumes someone has already ensured capacity
-    do {
-      int mask = num >= 128 || num < 0 ? 0x80 : 0;
-      buf[idx++] = (byte)((num & 0x7f) | mask);
-      num >>>= 7;
-    } while (num != 0);
+    byte b = (byte)(num & 0x7f);
+    if (b == num) {
+      buf[idx++] = b;
+    }
+    else {
+      do {
+        int mask = num >= 128 || num < 0 ? 0x80 : 0;
+        buf[idx++] = (byte) ((num & 0x7f) | mask);
+        num >>>= 7;
+      } while (num != 0);
+    }
   }
 
   private void _writeLongc(long num) {
@@ -367,8 +398,12 @@ public class Checkpointer {
   }
 
   private void writeString(String str) {
-    writeType(STRING);
-    _writeString(str);
+    ensureCapacity(1 + 5 + str.length() * 2);
+    buf[idx++] = ((byte)JactlType.TypeEnum.STRING.ordinal());
+    _writeCint(str.length());
+    for (int i = 0; i < str.length(); i++) {
+      _writeCint(str.charAt(i));
+    }
   }
 
   // Only for internal use. Should use writeObject() when checkpointing string fields.
@@ -410,11 +445,12 @@ public class Checkpointer {
       writeTypeEnum(TypeEnum.NULL_TYPE);
       return;
     }
-    writeTypeEnum(type.getType());
-    if (type.is(ARRAY)) {
+    TypeEnum enumType = type.getType();
+    writeTypeEnum(enumType);
+    if (enumType == JactlType.TypeEnum.ARRAY) {
       writeType(type.getArrayType());
     }
-    else if (type.is(INSTANCE)) {
+    else if (enumType == JactlType.TypeEnum.INSTANCE) {
       writeObject(type.getInternalName());
     }
   }

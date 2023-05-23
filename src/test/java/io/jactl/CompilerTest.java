@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

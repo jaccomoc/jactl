@@ -34,6 +34,10 @@ public class JactlContext {
   boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
   boolean autoCreateAsync    = false;   // Whether to allow async functions in initialisers during auto-creation
 
+  // Testing
+  boolean checkpoint = false;
+  boolean restore    = false;
+
   int     minScale           = Utils.DEFAULT_MIN_SCALE;
 
   // In repl mode top level vars are stored in the globals map and their type
@@ -116,6 +120,10 @@ public class JactlContext {
     public JactlContextBuilder javaPackage(String pkg)           { javaPackage        = pkg;     return this; }
     public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
 
+    // Testing only
+    public JactlContextBuilder checkpoint(boolean value)         { checkpoint             = value;   return this; }
+    public JactlContextBuilder restore(boolean value)            { restore                = value;   return this; }
+
     // The following are for internal use
     JactlContextBuilder replMode(boolean mode)                { replMode               = mode;    return this; }
     JactlContextBuilder evaluateConstExprs(boolean value)     { evaluateConstExprs     = value;   return this; }
@@ -136,6 +144,10 @@ public class JactlContext {
 
   public boolean printLoop()    { return printLoop; }
   public boolean nonPrintLoop() { return nonPrintLoop; }
+
+  // Testing
+  public boolean checkpoint() { return checkpoint; }
+  public boolean restore()    { return restore; }
 
   // Whether to support auto-creation of class instances that can suspend.
   // E.g. for x.y.z = 1 if y is auto-created do we allow it to suspend during creation

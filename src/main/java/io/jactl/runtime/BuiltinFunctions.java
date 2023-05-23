@@ -25,10 +25,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Reducer.Type.JOIN;
@@ -529,13 +526,12 @@ public class BuiltinFunctions {
     return fnClasses.get(id);
   }
 
-
   /////////////////////////////////////
   // Global Functions
   /////////////////////////////////////
 
   // = sleep
-  public static Object sleepData;
+  public static Object     sleepData;
   public static Object sleep(Continuation c, String source, int offset, long timeMs, Object data) {
     if (timeMs >= 0) {
       Continuation.suspendNonBlocking(source, offset, data, (JactlContext context, Object dataObj, Consumer<Object> resumer) -> {

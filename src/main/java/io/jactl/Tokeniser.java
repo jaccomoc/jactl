@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import io.jactl.runtime.RuntimeUtils;
+
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -67,6 +69,9 @@ public class Tokeniser {
   private final int    length;            // Length of source code
   private       int    offset = 0;        // The current position in the source code as offset
 
+  private List<String> lines;
+  private int[]        lineOffsets;
+
   private boolean inString     = false;   // True if parsing expression string content (but not
                                           // expression within string)
   private int     nestedBraces = 0;
@@ -97,6 +102,7 @@ public class Tokeniser {
     // Strip trailing new lines so that EOF errors point to somewhere useful
     this.source = source.replaceAll("\\R*$", "");
     this.length = this.source.length();
+    calculateLineOffsets();
   }
 
   /**
@@ -657,7 +663,7 @@ public class Tokeniser {
         int nextChar = charAt(1);
         if (nextChar == '/' || nextChar == '*') {
           mode = nextChar == '/' ? Mode.LINE_COMMENT : Mode.MULTI_LINE_COMMENT;
-          startMultiLineOffset = new Token(source, offset);
+          startMultiLineOffset = createToken();
           advance(1);
           continue;
         }
@@ -733,7 +739,7 @@ public class Tokeniser {
       }
       sb.append((char)c);
     }
-    if (!finished) { throw new EOFError("Unexpected end of file in string that started", new Token(source, stringStart)); }
+    if (!finished) { throw new EOFError("Unexpected end of file in string that started", createToken(stringStart)); }
 
     advance(-1);     // Don't swallow '$' or ending quote
     return token.setType(STRING_CONST)
@@ -752,7 +758,13 @@ public class Tokeniser {
   }
 
   private Token createToken() {
-    return new Token(source, offset);
+    return createToken(offset);
+  }
+
+  private Token createToken(int start) {
+    int lineNum = lineNum(start);
+    int colNum  = start - lineOffsets[lineNum];
+    return new Token(source, start, lines.get(lineNum), lineNum + 1, colNum + 1);
   }
 
   private static boolean isIdentifier(String s) {
@@ -761,6 +773,40 @@ public class Tokeniser {
   }
 
   //////////////////////////////////////////////////////////////////////
+
+  private void calculateLineOffsets() {
+    lines       = RuntimeUtils.lines(source);
+    lineOffsets = new int[lines.size() + 1];
+    int pos   = 0;
+    int i;
+    for (i = 0; i < lines.size(); i++) {
+      lineOffsets[i] = pos;
+      pos += lines.get(i).length() + 1;  // Include extra char for the newline
+    }
+    lineOffsets[lines.size()] = source.length();
+  }
+
+  private int lineNum(int pos) {
+    int lower = 0;
+    int upper = lines.size();
+    while (true) {
+      int line = lower + (upper - lower) / 2;
+      if (line == lines.size()) {
+        // EOF
+        return line - 1;
+      }
+      if (pos < lineOffsets[line]) {
+        upper = line;
+      }
+      else
+      if (pos >= lineOffsets[line + 1]) {
+        lower = line + 1;
+      }
+      else {
+        return line;
+      }
+    }
+  }
 
   // = INIT
 

@@ -58,6 +58,18 @@ public class Token extends Location {
   }
 
   /**
+   * Partially construct a token whose type and length is not yet known
+   * @param source  the source code of the script
+   * @param offset  the offset in source where token starts
+   * @param line    the line of source code
+   * @param lineNum the line number
+   * @param col     the columne
+   */
+  public Token(String source, int offset, String line, int lineNum, int col) {
+    super(source, offset, line, lineNum, col);
+  }
+
+  /**
    * Construct a new token of different type from an existing token
    * @param type   the new token type
    * @param token  the token to copy values from

@@ -26,20 +26,30 @@ public class Location implements SourceLocation {
   protected int    lineNum = -1; // Line number where token is
   protected int    column  = -1; // Column where token is
 
-  public Location(String source, int offset) {
+  protected Location(String source, int offset) {
     this.source = source;
     this.offset = offset;
   }
 
+  protected Location(String source, int offset, String line, int lineNum, int column) {
+    this.source  = source;
+    this.offset  = offset;
+    this.line    = line;
+    this.lineNum = lineNum;
+    this.column  = column;
+  }
+
   public Location(Location location) {
-    this(location.source, location.offset);
-    this.line      = location.line;
-    this.lineNum   = location.lineNum;
-    this.column    = location.column;
+    this(location.source, location.offset, location.line, location.lineNum, location.column);
   }
 
   public String  getSource()     { return source; }
   public int     getOffset()     { return offset; }
+
+  public String getLine() {
+    calculateLineAndColumn();
+    return line;
+  }
 
   public int getLineNum() {
     calculateLineAndColumn();
@@ -61,7 +71,7 @@ public class Location implements SourceLocation {
   }
 
   private void calculateLineAndColumn() {
-    if (lineNum != -1) {
+    if (lineNum != -1 || source == null) {
       return;
     }
     List<String> lines = RuntimeUtils.lines(source);

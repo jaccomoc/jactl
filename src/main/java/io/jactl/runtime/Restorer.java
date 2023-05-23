@@ -219,7 +219,7 @@ public class Restorer {
     }
     int oldIdx = idx;
     try {
-      // Get offset to object. Note that offsets in table start at objId 1 since we reserve 0 to mean NULL.
+      // Get offset to object
       idx = _readInt(objTableOffset + objId * 4);
       int objOffset = idx;
       Function<Object,Object> add = obj -> { toBeProcessed.add(Pair.create(objOffset, obj)); return obj; };

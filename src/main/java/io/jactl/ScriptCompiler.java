@@ -28,6 +28,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -101,6 +103,13 @@ public class ScriptCompiler extends ClassCompiler {
     }
   }
 
+  public static AtomicInteger checkpointCount = new AtomicInteger(0);
+  public static AtomicLong    checkpointSize  = new AtomicLong(0);
+  public static void resetCheckpointCounts() {
+    checkpointCount = new AtomicInteger(0);
+    checkpointSize  = new AtomicLong(0);
+  }
+
   private void asyncWork(Consumer<Object> completion, Continuation c) {
     // Need to execute async task on some sort of blocking work scheduler and then reschedule
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
@@ -108,16 +117,27 @@ public class ScriptCompiler extends ClassCompiler {
     try {
       final var    asyncTask    = c.getAsyncTask();
       Continuation asyncTaskCont = asyncTask.getContinuation();
-//      Checkpointer checkpointer = Checkpointer.get(asyncTask.getSource(), asyncTask.getOffset());
-//      checkpointer.checkpoint(asyncTaskCont);
-//      //System.out.println("DEBUG: checkpoint = \n" + Utils.dumpHex(checkpointer.getBuffer(), checkpointer.getLength()) + "\n");
-//      byte[] buf = new byte[checkpointer.getLength()];
-//      System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
-//      checkpointer.reset();
-//      Restorer     restorer = Restorer.get(context, buf, asyncTask.getSource(), asyncTask.getOffset());
-//      Continuation cont1    = (Continuation) restorer.restore();
-//      asyncTask.execute(context, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1));
-      asyncTask.execute(context, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont));
+      if (context.checkpoint()) {
+        Checkpointer checkpointer = Checkpointer.get(asyncTask.getSource(), asyncTask.getOffset());
+        checkpointer.checkpoint(asyncTaskCont);
+        //System.out.println("DEBUG: checkpoint = \n" + Utils.dumpHex(checkpointer.getBuffer(), checkpointer.getLength()) + "\n");
+        byte[] buf = new byte[checkpointer.getLength()];
+        System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
+        checkpointer.reset();
+        checkpointCount.getAndIncrement();
+        checkpointSize.addAndGet(buf.length);
+        if (context.restore()) {
+          Restorer     restorer = Restorer.get(context, buf, asyncTask.getSource(), asyncTask.getOffset());
+          Continuation cont1    = (Continuation) restorer.restore();
+          asyncTask.execute(context, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1));
+        }
+        else {
+          asyncTask.execute(context, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont));
+        }
+      }
+      else {
+        asyncTask.execute(context, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont));
+      }
     }
     catch (Throwable t) {
       completion.accept(t);
