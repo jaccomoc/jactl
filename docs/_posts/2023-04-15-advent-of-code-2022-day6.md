@@ -31,7 +31,7 @@ characters in a row.
 
 We just iterate through the string looking at each 4 character substring.
 We sort the substring, and then use `unique()` to eliminate duplicates.
-Iff we still have 4 characters we know that they are unique.
+If we still have 4 characters we know that they are unique.
 
 ```groovy
 def n = 4
