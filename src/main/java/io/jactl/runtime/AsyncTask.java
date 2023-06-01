@@ -26,9 +26,9 @@ import java.util.function.Consumer;
  * like sending/receiving message).
  */
 public abstract class AsyncTask {
-  private Continuation     continuation;   // the continuation to invoke once work has completed
-  private String           source;
-  private int              offset;
+  protected Continuation     continuation;   // the continuation to invoke once work has completed
+  protected String           source;
+  protected int              offset;
 
   public AsyncTask(String source, int offset) {
     this.source = source;
@@ -45,5 +45,5 @@ public abstract class AsyncTask {
   public String       getSource()       { return source;       }
   public int          getOffset()       { return offset;       }
 
-  public abstract void execute(JactlContext context, Object data, Consumer<Object> resume);
+  public abstract void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume);
 }

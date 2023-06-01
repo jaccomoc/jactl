@@ -34,8 +34,6 @@ import static io.jactl.runtime.Checkpointer.NULL_TYPE;
 public class Restorer {
   private byte[]        buf;
   private int           idx;
-  private String        source;
-  private int           offset;
   private JactlContext  context;
 
   private int           objTableOffset;
@@ -43,13 +41,11 @@ public class Restorer {
 
   private CircularBuffer<Pair<Integer,Object>> toBeProcessed = new CircularBuffer<>(127, true);
 
-  public static Restorer get(JactlContext context, byte[] buf, String source, int offset) {
-    return new Restorer().init(context, buf, source, offset);
+  private static Restorer get(JactlContext context, byte[] buf) {
+    return new Restorer().init(context, buf);
   }
 
-  private Restorer init(JactlContext context, byte[] buf, String source, int offset) {
-    this.source = source;
-    this.offset = offset;
+  private Restorer init(JactlContext context, byte[] buf) {
     this.idx = 0;
     this.context = context;
     this.buf = buf;
@@ -62,7 +58,12 @@ public class Restorer {
     return this;
   }
 
-  public Object restore() {
+  public static Object restore(JactlContext context, byte[] buf) {
+    Restorer restorer = get(context, buf);
+    return restorer.restore();
+  }
+
+  private Object restore() {
     Object result = readObject();
     Pair<Integer,Object> objectPair;
     while ((objectPair = toBeProcessed.remove()) != null) {
@@ -403,12 +404,5 @@ public class Restorer {
       throw new IllegalStateException("Unknown class: " + internalName);
     }
     return clss;
-  }
-
-  public static void main(String[] args) {
-    Checkpointer c = Checkpointer.get("", 0);
-    c.writeCint(-127);
-    Restorer r = Restorer.get(null, c.getBuffer(), "", 0);
-    System.out.println(r.readCint());
   }
 }

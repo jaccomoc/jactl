@@ -20,6 +20,7 @@ package io.jactl.runtime;
 import io.jactl.JactlContext;
 
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -30,17 +31,18 @@ import java.util.function.Supplier;
  * continue the original work on an event loop thread.
  */
 public class BlockingAsyncTask extends AsyncTask {
-  private Supplier<Object> asyncWork;      // the blocking async work
+  private Function<Object,Object> asyncWork;      // the blocking async work
 
-  public BlockingAsyncTask(Supplier<Object> asyncWork, String source, int offset) {
+  public BlockingAsyncTask(Function<Object,Object> asyncWork, String source, int offset) {
     super(source, offset);
     this.asyncWork = asyncWork;
   }
 
-  public void execute(JactlContext context, Object data, Consumer<Object> resume) {
+  @Override
+  public void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume) {
     Object executionContext = context.getThreadContext();     // current thread, so we can resume on same thread if possible
     context.scheduleBlocking(() -> {
-      Object asyncResult = asyncWork.get();
+      Object asyncResult = asyncWork.apply(data);
       context.scheduleEvent(executionContext, () -> resume.accept(asyncResult));
     });
   }

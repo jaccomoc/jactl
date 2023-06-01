@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
-import java.util.function.Consumer;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Reducer.Type.JOIN;
@@ -455,6 +454,18 @@ public class BuiltinFunctions {
            .impl(BuiltinFunctions.class, "stream")
            .register();
 
+      Jactl.function()
+           .name("uuid")
+           .impl(BuiltinFunctions.class, "uuid")
+           .register();
+
+      Jactl.function()
+           .name("checkpoint")
+           .param("commitClosure", null)
+           .param("recoveryClosure", null)
+           .impl(BuiltinFunctions.class, "checkpoint")
+           .register();
+
       BuiltinArrayFunctions.registerFunctions();
 
       initialised = true;
@@ -508,7 +519,10 @@ public class BuiltinFunctions {
   }
 
   public static void deregisterFunction(String name) {
-    globalFunctions.remove(name);
+    var fn = globalFunctions.remove(name);
+    if (fn instanceof JactlFunction) {
+      ((JactlFunction)fn).cleanUp();
+    }
   }
 
   public static int getClassId(Class clss) {
@@ -530,11 +544,61 @@ public class BuiltinFunctions {
   // Global Functions
   /////////////////////////////////////
 
+  // = checkpoint
+
+  public static Object _checkpointData;
+  public static Object _checkpoint(Continuation c, String source, int offset, Object data) {
+    Continuation.checkpoint(source, offset, data);
+    return data;
+  }
+
+  public static Object checkpointData;
+  public static Object checkpoint(Continuation c, String source, int offset, JactlMethodHandle commitClosure, JactlMethodHandle recoveryClosure) {
+    int location = c == null ? 0 : c.methodLocation;
+    try {
+      switch (location) {
+        case 0:
+          Continuation.checkpoint(source, offset, commitClosure, recoveryClosure);
+          break;
+        case 1:
+          JactlMethodHandle closure = (JactlMethodHandle)c.getResult();
+          if (closure != null) {
+            return closure.invoke(null, source ,offset, Utils.EMPTY_OBJ_ARR);
+          }
+          return null;
+        case 2:
+          return c.getResult();
+      }
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, checkpoint$cHandle, location + 1, null, new Object[]{ source, offset });
+    }
+    catch (RuntimeError e) {
+      throw e;
+    }
+    catch (Throwable t) {
+      throw new RuntimeError("Error invoking closure: " + t.getMessage(), source, offset, t);
+    }
+    return null;
+  }
+  public static JactlMethodHandle checkpoint$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "checkpoint$c", Object.class, Continuation.class);
+  public static Object checkpoint$c(Continuation c) {
+    return checkpoint(c, (String)c.localObjects[0], (int)c.localObjects[1], null, null);
+  }
+
+
+  // = uuid
+
+  public static Object uuidData;
+  public static String uuid() {
+    return RuntimeUtils.randomUUID().toString();
+  }
+
   // = sleep
-  public static Object     sleepData;
+  public static Object sleepData;
   public static Object sleep(Continuation c, String source, int offset, long timeMs, Object data) {
     if (timeMs >= 0) {
-      Continuation.suspendNonBlocking(source, offset, data, (JactlContext context, Object dataObj, Consumer<Object> resumer) -> {
+      Continuation.suspendNonBlocking(source, offset, data, (context, dataObj, resumer) -> {
         context.scheduleEvent(() -> resumer.accept(dataObj), timeMs);
       });
     }
@@ -574,7 +638,7 @@ public class BuiltinFunctions {
       }
       else {
         // Might block so schedule blocking operation and suspend
-        Continuation.suspendBlocking(source, offset, null, () -> readLine(input));
+        Continuation.suspendBlocking(source, offset, null, data -> readLine(input));
       }
     }
     catch (IOException ignored) {}

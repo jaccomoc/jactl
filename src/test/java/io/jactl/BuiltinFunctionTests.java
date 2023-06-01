@@ -18,15 +18,19 @@
 package io.jactl;
 
 import io.jactl.runtime.Continuation;
+import io.jactl.runtime.JactlScriptObject;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class BuiltinFunctionTests extends BaseTest {
@@ -1862,6 +1866,51 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void instanceArrayFromJson() {
     //fail("not implemented");
+  }
+
+  @Test public void uuid() {
+    test("uuid().size()", 36);
+    test("uuid() != uuid()", true);
+  }
+
+  @Test public void _checkpoint() throws ExecutionException, InterruptedException {
+    Map<UUID,byte[]> checkpoints = new HashMap<>();
+    jactlEnv = new DefaultEnv() {
+      @Override public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+        checkpoints.put(id, checkpoint);
+        runAfter.run();
+      }
+    };
+    JactlContext context = getJactlContext();
+    JactlScript script = Jactl.compileScript("_checkpoint(123)", Map.of(), context);
+    assertEquals(123, script.runSync(Map.of()));
+    assertEquals(1, checkpoints.size());
+    CompletableFuture result = new CompletableFuture();
+    context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
+    assertEquals(123, result.get());
+  }
+
+  private void checkpointTest(String source, Object commitExpected, Object recoverExpected) throws InterruptedException, ExecutionException {
+    Map<UUID,byte[]> checkpoints = new HashMap<>();
+    jactlEnv = new DefaultEnv() {
+      @Override public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+        checkpoints.put(id, checkpoint);
+        runAfter.run();
+      }
+    };
+    JactlContext context = getJactlContext();
+    JactlScript script = Jactl.compileScript(source, Map.of(), context);
+    assertEquals(commitExpected, script.runSync(Map.of()));
+    assertEquals(1, checkpoints.size());
+    CompletableFuture result = new CompletableFuture();
+    context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
+    assertEquals(recoverExpected, result.get());
+  }
+
+  @Test public void checkpoint() throws ExecutionException, InterruptedException {
+    checkpointTest("checkpoint{ 1 }{ 2 }", 1, 2);
+    checkpointTest("checkpoint{ [1,2,3] }{ 'abc' }", List.of(1,2,3), "abc");
+    checkpointTest("checkpoint{ [1,2,3].map{ sleep(0,it) } }{ 'abc'.map{ sleep(0,it) }.join() }", List.of(1,2,3), "abc");
   }
 
   @Test public void functionWithDefaults() {

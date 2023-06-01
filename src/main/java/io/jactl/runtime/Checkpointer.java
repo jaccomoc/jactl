@@ -56,7 +56,7 @@ public class Checkpointer {
   private IdentityHashMap<Object,Integer>   objectIds;
   private int[]                             offsets;
 
-  public static Checkpointer get(String source, int offset) {
+  private static Checkpointer get(String source, int offset) {
     return checkpointerThreadLocal.get().init(source, offset);
     //return new Checkpointer().init(source, offset);
   }
@@ -86,7 +86,7 @@ public class Checkpointer {
     return this;
   }
 
-  public void reset() {
+  private void reset() {
     if (buf.length > MAX_CACHE_SIZE) {
       buf = null;
     }
@@ -100,15 +100,24 @@ public class Checkpointer {
     idx       = 0;
   }
 
-  public byte[] getBuffer() {
+  private byte[] getBuffer() {
     return buf;
   }
 
-  public int getLength() {
+  private int getLength() {
     return idx;
   }
 
-  public void checkpoint(Object obj) {
+  public static byte[] checkpoint(Object obj, String source, int offset) {
+    Checkpointer checkpointer = Checkpointer.get(source, offset);
+    checkpointer._checkpoint(obj);
+    byte[] buf = new byte[checkpointer.getLength()];
+    System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
+    checkpointer.reset();
+    return buf;
+  }
+
+  private void _checkpoint(Object obj) {
     writeObject(obj);
     for (int i = 0; i < objId; i++) {
       checkpointObj(i, objects[i]);

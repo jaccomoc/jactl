@@ -17,6 +17,9 @@
 
 package io.jactl;
 
+import java.util.UUID;
+import java.util.function.Consumer;
+
 /**
  * Execution environment for running Jactl scripts.
  * Provides mechanisms for setting timers and running work on non-blocking event-loop threads or on
@@ -64,4 +67,20 @@ public interface JactlEnv {
    *          current thread
    */
   Object getThreadContext();
+
+  /**
+   * Save checkpoint with given id
+   * @param id          unique id that identifies script instance
+   * @param checkpoint  the checkpointed state to be saved
+   * @param runAfter    the code to be run once checkpoint has been saved
+   */
+  default void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+    runAfter.run();
+  }
+
+  /**
+   * Delete checkpoint data for given id once script instance has completed
+   * @param id   the id of the script instance
+   */
+  default void deleteCheckpoint(UUID id) {}
 }

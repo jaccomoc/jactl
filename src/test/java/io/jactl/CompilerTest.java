@@ -2787,7 +2787,6 @@ class CompilerTest extends BaseTest {
     test("def x; def it = 'abc'; /ab/r and do { it = 'xyz'; x = 'x' } and return \"$it$x\"", "xyzx");
   }
 
-
   @Test public void listLiterals() {
     test("[]", List.of());
     test("[1]", List.of(1));
@@ -6284,7 +6283,6 @@ class CompilerTest extends BaseTest {
     replTest.accept("BEGIN { def x = 7 }; x = 2; END { x + x }", null, 4, "");
 //    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
   }
-
 
   @Test public void nextLine() {
     replTest.accept("nextLine() == null", null,true, "");

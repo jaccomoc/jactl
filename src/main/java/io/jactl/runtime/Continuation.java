@@ -20,9 +20,8 @@ package io.jactl.runtime;
 import io.jactl.JactlContext;
 import io.jactl.JactlType;
 
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import static io.jactl.JactlType.CONTINUATION;
 
@@ -53,12 +52,19 @@ public class Continuation extends RuntimeException implements Checkpointable {
   public         int               methodLocation;     // Location within method where resumption should continue
   public         long[]            localPrimitives;
   public         Object[]          localObjects;
+  public         JactlScriptObject scriptInstance = null;
   private        Object            result;             // Result of the async call when continuing after suspend
 
   Continuation(AsyncTask asyncTask, Object data) {
     super(null, null, false, false);
     this.asyncTask = asyncTask;
     localObjects = new Object[]{ data };
+  }
+
+  Continuation(AsyncTask asyncTask, Object data1, Object data2) {
+    super(null, null, false, false);
+    this.asyncTask = asyncTask;
+    localObjects = new Object[]{ data1, data2 };
   }
 
   /**
@@ -74,7 +80,7 @@ public class Continuation extends RuntimeException implements Checkpointable {
    * @return nothing - always throws an exception
    * @throws Continuation always
    */
-  public static Continuation suspendBlocking(String source, int offset, Object data, Supplier<Object> asyncWork) {
+  public static Continuation suspendBlocking(String source, int offset, Object data, Function<Object,Object> asyncWork) {
     BlockingAsyncTask task         = new BlockingAsyncTask(asyncWork, source, offset);
     Continuation      continuation = new Continuation(task, data);
     task.setContinuation(continuation);
@@ -101,6 +107,20 @@ public class Continuation extends RuntimeException implements Checkpointable {
     Continuation         continuation = new Continuation(task, data);
     task.setContinuation(continuation);
     throw continuation;
+  }
+
+  public static Continuation checkpoint(String source, int offset, Object data) {
+    CheckpointTask task = new CheckpointTask(source, offset);
+    Continuation cont = new Continuation(task, data);
+    task.setContinuation(cont);
+    throw cont;
+  }
+
+  public static Continuation checkpoint(String source, int offset, Object data1, Object data2) {
+    CheckpointTask task = new CheckpointTask(source, offset);
+    Continuation cont = new Continuation(task, data1, data2);
+    task.setContinuation(cont);
+    throw cont;
   }
 
   /**
@@ -181,6 +201,14 @@ public class Continuation extends RuntimeException implements Checkpointable {
     return asyncTask;
   }
 
+  public void setScriptInstance(JactlScriptObject instance) {
+    scriptInstance = instance;
+  }
+
+  public JactlScriptObject getScriptInstance() {
+    return scriptInstance;
+  }
+
   public Object getResult() {
     if (result instanceof RuntimeError) {
       throw (RuntimeError) result;
@@ -201,6 +229,7 @@ public class Continuation extends RuntimeException implements Checkpointable {
     checkpointer.writeObject(localPrimitives);
     checkpointer.writeObject(localObjects);
     checkpointer.writeObject(result);
+    checkpointer.writeObject(scriptInstance);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
@@ -214,5 +243,6 @@ public class Continuation extends RuntimeException implements Checkpointable {
     localPrimitives = (long[])restorer.readObject();
     localObjects    = (Object[])restorer.readObject();
     result          = restorer.readObject();
+    scriptInstance  = (JactlScriptObject)restorer.readObject();
   }
 }

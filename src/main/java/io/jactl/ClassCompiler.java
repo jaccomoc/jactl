@@ -74,6 +74,9 @@ public class ClassCompiler {
     }
 
     String baseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : Type.getInternalName(Object.class);
+    if (classDecl.isScriptClass()) {
+      baseName = Type.getInternalName(JactlScriptObject.class);
+    }
     cv.visit(V11, ACC_PUBLIC, internalName, null, baseName, new String[] { Type.getInternalName(JactlObject.class) });
     cv.visitSource(sourceName, null);
 

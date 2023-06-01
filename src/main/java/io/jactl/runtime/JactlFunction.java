@@ -332,6 +332,16 @@ public class JactlFunction extends FunctionDescriptor {
     this.isGlobalFunction = !isMethod();
   }
 
+  public void cleanUp() {
+    try {
+      Field field = implementingClass.getDeclaredField(wrapperHandleField);
+      field.set(null, null);
+    }
+    catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   ////////////////////////////////////////////////////////
 
   public boolean isAsync() {

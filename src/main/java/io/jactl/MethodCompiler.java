@@ -3711,6 +3711,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     _loadLocal(longArr);
     _loadLocal(objArr);
     mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/Continuation", "<init>", "(Lio/jactl/runtime/Continuation;Lio/jactl/runtime/JactlMethodHandle;I[J[Ljava/lang/Object;)V", false);
+    if (methodFunDecl.isScriptMain) {
+      mv.visitInsn(DUP);
+      _loadLocal(0);
+      mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(Continuation.class), "setScriptInstance", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JactlScriptObject.class)), false);
+    }
     mv.visitInsn(ATHROW);
 
     mv.visitLabel(continuation);       // :continuation

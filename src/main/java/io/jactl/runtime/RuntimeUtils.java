@@ -30,7 +30,10 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.security.SecureRandom;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -94,6 +97,15 @@ public class RuntimeUtils {
   // x.a += 'some string' as this turns into x.a = DEFAULT_VALUE + 'some string' and so
   // when the rhs is a string we turn DEFAULT_VALUE into ''.
   public static final Object DEFAULT_VALUE = 0;
+
+  private static SecureRandom  secureRandom = new SecureRandom();
+  private static AtomicInteger uuidCounter  = new AtomicInteger();
+  private static AtomicLong    uuidMsb      = new AtomicLong();
+  private static AtomicLong    uuidLsb      = new AtomicLong();
+
+  static {
+    refreshUUIDValues();
+  }
 
   public static String getOperatorType(TokenType op) {
     if (op == null) {
@@ -2523,5 +2535,53 @@ public class RuntimeUtils {
 
   public static boolean die(String msg, String source, int offset) {
     throw new DieError(msg, source, offset);
+  }
+
+  private static final int MAX_COUNTER = 1 << 23;
+  /**
+   * Generate a random UUID.
+   * <p>We use a 13 byte random number and a 3 byte counter and refresh the random 13 bytes whenever
+   *  the counter is getting close to overflowing. This way we wear the expense of the randomness
+   *  infrequently rather than for every UUID and we also minimise the use of entropy which might be
+   *  in short supply.</p>
+   * <p>NOTE: this is not a secure random UUID since we use an incrementing count for part of it.</p>
+   * @return the type 4 UUID
+   */
+  public static UUID randomUUID() {
+    int counter = uuidCounter.getAndIncrement();
+    if (counter > MAX_COUNTER) {
+      synchronized (secureRandom) {
+        counter = uuidCounter.getAndIncrement();
+        if (counter > MAX_COUNTER) {
+          refreshUUIDValues();
+          uuidCounter.set(0);
+          counter = 0;
+        }
+      }
+    }
+    return new UUID(uuidMsb.get(), uuidLsb.get() | counter);
+  }
+
+  private static void refreshUUIDValues() {
+    byte[] randomBytes = new byte[13];
+    secureRandom.nextBytes(randomBytes);
+    // Set version information
+    randomBytes[6] &= 0x0f;
+    randomBytes[6] |= 0x40;
+    randomBytes[8] &= 0x3f;
+    randomBytes[8] |= 0x80;
+
+    long uuidMsbVal = 0;
+    long uuidLsbVal = 0;
+    int i = 0;
+    for (; i < 8; i++) {
+      uuidMsbVal = (uuidMsbVal << 8) | (randomBytes[i] & 0xff);
+    }
+    for (; i < 13; i++) {
+      uuidLsbVal = (uuidLsbVal << 8) | (randomBytes[i] & 0xff);
+    }
+    uuidLsbVal <<= 24;
+    uuidMsb.set(uuidMsbVal);
+    uuidLsb.set(uuidLsbVal);
   }
 }

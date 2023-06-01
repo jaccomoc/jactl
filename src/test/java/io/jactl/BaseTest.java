@@ -17,15 +17,16 @@
 
 package io.jactl;
 
+import io.jactl.runtime.BuiltinFunctions;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,8 +39,23 @@ public class BaseTest {
   protected boolean            useAsyncDecorator = true;
   protected boolean            replMode = true;
   protected boolean            skipCheckpointTests = false;
+  protected JactlEnv           jactlEnv = new DefaultEnv();
 
   protected static int testCounter = 0;
+
+  @BeforeEach
+  public void setUp() {
+    Jactl.function()
+         .name("_checkpoint")
+         .param("data", null)
+         .impl(BuiltinFunctions.class, "_checkpoint")
+         .register();
+  }
+
+  @AfterEach
+  public void cleanUp() {
+    BuiltinFunctions.deregisterFunction("_checkpoint");
+  }
 
   protected void doTest(String code, Object expected) {
     doTest(code, true, false, false, expected);
@@ -63,71 +79,143 @@ public class BaseTest {
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
     testCounter++;
-    if (expected instanceof String && ((String) expected).startsWith("#")) {
-      expected = new BigDecimal(((String) expected).substring(1));
-    }
     try {
-      JactlContext jactlContext = JactlContext.create()
-                                              .evaluateConstExprs(evalConsts)
-                                              .replMode(replMode)
-                                              .debug(debugLevel)
-                                              .checkpoint(testCheckpoint)
-                                              .restore(testCheckpoint)
-                                              .build();
+      JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint);
 
       var    bindings = createGlobals();
 
-      classCode.forEach(code -> compileClass(code, jactlContext, packageName, testAsync));
+      Function<Expr,Expr> asyncDecorator = testAsync ? expr -> sleepify(expr) : null;
+      classCode.forEach(code -> compileClass(code, jactlContext, packageName, asyncDecorator));
 
-      var    compiled = compileScript(scriptCode, jactlContext, packageName, testAsync, bindings);
+      var compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
 
       Object result   = compiled.runSync(bindings);
-      if (expected == null) {
-        assertEquals(expected, result);
-      }
-      else {
-        switch (expected.getClass().getName()) {
-          case "[Z":
-            assertTrue(result instanceof boolean[]);
-            assertArrayEquals((boolean[]) expected, (boolean[]) result);
-            break;
-          case "[I":
-            assertTrue(result instanceof int[]);
-            assertArrayEquals((int[]) expected, (int[]) result);
-            break;
-          case "[J":
-            assertTrue(result instanceof long[]);
-            assertArrayEquals((long[]) expected, (long[]) result);
-            break;
-          case "[D":
-            assertTrue(result instanceof double[]);
-            assertArrayEquals((double[]) expected, (double[]) result);
-            break;
-          case "[Ljava.lang.String;":
-            assertTrue(result instanceof Object[]);
-            assertArrayEquals((String[]) expected, (String[]) result);
-          case "[Ljava.lang.Object;":
-            assertTrue(result instanceof Object[]);
-            assertArrayEquals((Object[]) expected, (Object[]) result);
-            break;
-          case "[Ljava.math.BigDecimal;":
-            assertTrue(result instanceof BigDecimal[]);
-            assertArrayEquals((BigDecimal[]) expected, (BigDecimal[]) result);
-            break;
-          default:
-            if (result instanceof Throwable) {
-              ((Throwable) result).printStackTrace();
-              fail(((Throwable) result).getMessage());
-            }
-            checkEquality(expected, result);
-            break;
-        }
-      }
+      checkEqual(expected, result);
     }
     catch (Exception e) {
       e.printStackTrace();
       fail(e);
     }
+  }
+
+  protected void doTestCheckpoint(String scriptCode, Object expected) {
+    doTestCheckpoint(List.of(), scriptCode, expected);
+  }
+
+  protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected) {
+    testCounter++;
+    try {
+      byte[][] savedCheckpoint = { null };
+      UUID[]   savedId   = { null };
+      UUID[]   deletedId = { null };
+      jactlEnv = new DefaultEnv() {
+        @Override public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+          if (savedCheckpoint[0] == null) {
+            savedCheckpoint[0] = checkpoint;
+            savedId[0] = id;
+          }
+          runAfter.run();
+        }
+
+        @Override public void deleteCheckpoint(UUID id) { deletedId[0] = id; }
+      };
+
+      JactlContext jactlContext1 = getJactlContext(true, replMode, false);
+      JactlContext jactlContext2 = getJactlContext(true, replMode, false);
+
+      var    bindings = createGlobals();
+
+      Function<Expr,Expr> asyncDecorator = expr -> checkpointify(expr);
+      classCode.forEach(code -> compileClass(code, jactlContext1, packageName, asyncDecorator));
+      classCode.forEach(code -> compileClass(code, jactlContext2, packageName, asyncDecorator));
+
+      var compiled = compileScript(scriptCode, jactlContext1, packageName, asyncDecorator, bindings);
+      compileScript(scriptCode, jactlContext2, packageName, asyncDecorator, bindings);
+
+      Object result   = compiled.runSync(bindings);
+      checkEqual(expected, result);
+
+      // Now loop, restoring first checkpoint until we have reached last checkpoint
+      while (savedCheckpoint[0] != null) {
+        assertNotNull(savedId[0]);
+        assertNotNull(deletedId[0]);
+        assertEquals(savedId[0], deletedId[0]);
+        savedId[0] = deletedId[0] = null;
+        var checkpoint = savedCheckpoint[0];
+        savedCheckpoint[0] = null;
+        CompletableFuture future = new CompletableFuture();
+        jactlContext2.recoverCheckpoint(checkpoint, recoveredResult -> future.complete(recoveredResult));
+        checkEqual(expected, future.get());
+      }
+
+    }
+    catch (Exception e) {
+      e.printStackTrace();
+      fail(e);
+    }
+  }
+
+  private static void checkEqual(Object expected, Object result) {
+    if (expected instanceof String && ((String) expected).startsWith("#")) {
+      expected = new BigDecimal(((String) expected).substring(1));
+    }
+    if (expected == null) {
+      assertEquals(expected, result);
+    }
+    else {
+      switch (expected.getClass().getName()) {
+        case "[Z":
+          assertTrue(result instanceof boolean[]);
+          assertArrayEquals((boolean[]) expected, (boolean[]) result);
+          break;
+        case "[I":
+          assertTrue(result instanceof int[]);
+          assertArrayEquals((int[]) expected, (int[]) result);
+          break;
+        case "[J":
+          assertTrue(result instanceof long[]);
+          assertArrayEquals((long[]) expected, (long[]) result);
+          break;
+        case "[D":
+          assertTrue(result instanceof double[]);
+          assertArrayEquals((double[]) expected, (double[]) result);
+          break;
+        case "[Ljava.lang.String;":
+          assertTrue(result instanceof Object[]);
+          assertArrayEquals((String[]) expected, (String[]) result);
+        case "[Ljava.lang.Object;":
+          assertTrue(result instanceof Object[]);
+          assertArrayEquals((Object[]) expected, (Object[]) result);
+          break;
+        case "[Ljava.math.BigDecimal;":
+          assertTrue(result instanceof BigDecimal[]);
+          assertArrayEquals((BigDecimal[]) expected, (BigDecimal[]) result);
+          break;
+        default:
+          if (result instanceof Throwable) {
+            ((Throwable) result).printStackTrace();
+            fail(((Throwable) result).getMessage());
+          }
+          checkEquality(expected, result);
+          break;
+      }
+    }
+  }
+
+  protected JactlContext getJactlContext() {
+    return getJactlContext(true, false, false);
+  }
+
+  protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint) {
+    JactlContext jactlContext = JactlContext.create()
+                                            .environment(jactlEnv)
+                                            .evaluateConstExprs(evalConsts)
+                                            .replMode(replMode)
+                                            .debug(debugLevel)
+                                            .checkpoint(testCheckpoint)
+                                            .restore(testCheckpoint)
+                                            .build();
+    return jactlContext;
   }
 
   private static void checkEquality(Object o1, Object o2) {
@@ -148,16 +236,16 @@ public class BaseTest {
     }
   }
 
-  public void compileClass(String source, JactlContext jactlContext, String packageName, boolean testAsync) {
-    doCompile(false, source, jactlContext, packageName, testAsync, null);
+  public void compileClass(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator) {
+    doCompile(false, source, jactlContext, packageName, exprDecorator, null);
   }
 
-  public JactlScript compileScript(String source, JactlContext jactlContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
-    return doCompile(true, source, jactlContext, packageName, testAsync, bindings);
+  public JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, Map<String, Object> bindings) {
+    return doCompile(true, source, jactlContext, packageName, exprDecorator, bindings);
   }
 
-  public JactlScript doCompile(boolean isScript, String source, JactlContext jactlContext, String packageName, boolean testAsync, Map<String, Object> bindings) {
-    if (!testAsync) {
+  public JactlScript doCompile(boolean isScript, String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, Map<String, Object> bindings) {
+    if (exprDecorator == null) {
       if (isScript) {
         return Compiler.compileScript(source, jactlContext, packageName, bindings);
       }
@@ -165,11 +253,11 @@ public class BaseTest {
       return null;
     }
 
-    String className = Utils.JACTL_SCRIPT_PREFIX + scriptNum++;
+    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     var parser = new Parser(new Tokeniser(source), jactlContext, packageName);
     var code   = isScript ? parser.parseScript(className) : parser.parseClass();
-    var exprDecorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
-                                           : new ExprDecorator(
+    var decorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
+                                       : new ExprDecorator(
         expr -> {
           assert expr != null;
           if (expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
@@ -188,15 +276,12 @@ public class BaseTest {
             // super(0,super).f() which would invoke this.f() and not super.f().
             return expr;
           }
-          Expr newExpr = new Expr.Call(expr.location,
-                                       new Expr.Identifier(expr.location.newIdent("sleep")),
-                                       List.of(new Expr.Literal(new Token(TokenType.INTEGER_CONST, expr.location).setValue(0)),
-                                               expr));
+          Expr newExpr = exprDecorator.apply(expr);
           newExpr.isResultUsed = expr.isResultUsed;
           expr.isResultUsed = true;
           return newExpr;
         });
-    exprDecorator.decorate(code);
+    decorator.decorate(code);
     var resolver = new Resolver(jactlContext, bindings);
     resolver.resolveScript(code);
     var analyser = new Analyser(jactlContext);
@@ -208,16 +293,34 @@ public class BaseTest {
     return null;
   }
 
+  private static Expr.Call sleepify(Expr expr) {
+    return new Expr.Call(expr.location,
+                         new Expr.Identifier(expr.location.newIdent("sleep")),
+                         List.of(new Expr.Literal(new Token(TokenType.INTEGER_CONST, expr.location).setValue(0)),
+                                 expr));
+  }
+
+  private static Expr.Call checkpointify(Expr expr) {
+    return new Expr.Call(expr.location,
+                         new Expr.Identifier(expr.location.newIdent("_checkpoint")),
+                         List.of(expr));
+  }
+
   protected void test(String code, Object expected) {
     doTest(code, true, false, false, expected);
     doTest(code, false, false, false, expected);
     doTest(code, true, false, true, expected);
-    doTest(code, true, false, true, true, expected);
+    if (!skipCheckpointTests) {
+      doTest(List.of(), code, true, false, true, true, expected);
+      doTestCheckpoint(List.of(), code, expected);
+    }
     if (replMode) {
       doTest(code, true, true, false, expected);
       doTest(code, false, true, false, expected);
       doTest(code, true, true, true, expected);
-      doTest(code, true, true, true, true, expected);
+      if (!skipCheckpointTests) {
+        doTest(List.of(), code, true, true, true, true, expected);
+      }
     }
   }
 
@@ -227,6 +330,7 @@ public class BaseTest {
     doTest(classCode, scriptCode, true, false, true, expected);
     if (!skipCheckpointTests) {
       doTest(classCode, scriptCode, true, false, true, true, expected);
+      doTestCheckpoint(classCode, scriptCode, expected);
     }
     if (replMode) {
       doTest(classCode, scriptCode, true, true, false, expected);
@@ -271,7 +375,7 @@ public class BaseTest {
       var    bindings = createGlobals();
       Object result[] = new Object[1];
       Arrays.stream(code).forEach(scriptCode -> {
-        var compiled = compileScript(scriptCode, jactlContext, packageName, false, bindings);
+        var compiled = compileScript(scriptCode, jactlContext, packageName, null, bindings);
         result[0]    = compiled.runSync(bindings);
       });
       if (expected instanceof Object[]) {
@@ -297,7 +401,7 @@ public class BaseTest {
                                                  .debug(debugLevel)
                                                  .build();
       Map<String, Object> bindings = createGlobals();
-      classCode.forEach(code -> compileClass(code, jactlContext, packageName, false));
+      classCode.forEach(code -> compileClass(code, jactlContext, packageName, null));
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
       fail("Expected JactlError");
     }

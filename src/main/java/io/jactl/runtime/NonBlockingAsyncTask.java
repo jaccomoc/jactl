@@ -35,14 +35,15 @@ import java.util.function.Consumer;
  * result is then used to resume the script on an event loop thread.
  */
 public class NonBlockingAsyncTask extends AsyncTask {
-  private TriConsumer<JactlContext, Object, Consumer<Object>> asyncWork;
+  private final TriConsumer<JactlContext,Object,Consumer<Object>> asyncWork;
 
-  public NonBlockingAsyncTask(TriConsumer<JactlContext, Object, Consumer<Object>> asyncWork, String source, int offset) {
+  public NonBlockingAsyncTask(TriConsumer<JactlContext,Object,Consumer<Object>> asyncWork, String source, int offset) {
     super(source, offset);
     this.asyncWork = asyncWork;
   }
 
-  public void execute(JactlContext context, Object data, Consumer<Object> resumer) {
+  @Override
+  public void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resumer) {
     asyncWork.accept(context, data, resumer);
   }
 }

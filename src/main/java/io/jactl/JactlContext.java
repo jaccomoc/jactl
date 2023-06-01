@@ -17,12 +17,12 @@
 
 package io.jactl;
 
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.*;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 public class JactlContext {
 
@@ -146,7 +146,7 @@ public class JactlContext {
   public boolean nonPrintLoop() { return nonPrintLoop; }
 
   // Testing
-  public boolean checkpoint() { return checkpoint; }
+  public boolean testCheckpointing() { return checkpoint; }
   public boolean restore()    { return restore; }
 
   // Whether to support auto-creation of class instances that can suspend.
@@ -193,7 +193,91 @@ public class JactlContext {
     executionEnv.scheduleBlocking(blocking);
   }
 
+  public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+    executionEnv.saveCheckpoint(id, checkpoint, runAfter);
+  }
+
+  public void deleteCheckpoint(UUID id) {
+    executionEnv.deleteCheckpoint(id);
+  }
+
+  /**
+   * Restore checkpoint and run script from where it had been checkpointed.
+   * Invoke result handler with final result once script has finished.
+   * @param checkpoint     the checkpointed state of a script
+   * @param resultHandler  handler to be invoked with final script result
+   */
+  public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler) {
+    Continuation cont = (Continuation)Restorer.restore(this, checkpoint);
+    cont.scriptInstance.checkpointed = true;
+    // If two args then we have commit closure and recovery closure so return recovery closure on recover
+    var result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
+    scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance));
+  }
+
   //////////////////////////////////
+
+  void asyncWork(Consumer<Object> completion, Continuation c, JactlScriptObject instance) {
+    // Need to execute async task on some sort of blocking work scheduler and then reschedule
+    // continuation back onto the event loop or non-blocking scheduler (might even need to be
+    // the same thread as we are on).
+    try {
+      final var asyncTask = c.getAsyncTask();
+
+      Continuation asyncTaskCont = asyncTask.getContinuation();
+
+      // Test mode
+      if (testCheckpointing() && !(asyncTask instanceof CheckpointTask)) {
+        byte[] buf = Checkpointer.checkpoint(asyncTaskCont, asyncTask.getSource(), asyncTask.getOffset());
+        //System.out.println("DEBUG: checkpoint = \n" + Utils.dumpHex(checkpointer.getBuffer(), checkpointer.getLength()) + "\n");
+        checkpointCount.getAndIncrement();
+        checkpointSize.addAndGet(buf.length);
+        if (restore()) {
+          Continuation cont1 = (Continuation)Restorer.restore(this, buf);
+          asyncTask.execute(this, instance, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1, instance));
+        }
+        else {
+          asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance));
+        }
+      }
+      else {
+        asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance));
+      }
+    }
+    catch (Throwable t) {
+      cleanUp(instance);
+      completion.accept(t);
+    }
+  }
+
+  public static AtomicInteger checkpointCount = new AtomicInteger(0);
+  public static AtomicLong    checkpointSize  = new AtomicLong(0);
+  public static void resetCheckpointCounts() {
+    checkpointCount = new AtomicInteger(0);
+    checkpointSize  = new AtomicLong(0);
+  }
+
+  private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont, JactlScriptObject instance) {
+    try {
+      Object result = cont.continueExecution(asyncResult);
+      // We finally get the real result out of the script execution
+      cleanUp(instance);
+      completion.accept(result);
+    }
+    catch (Continuation c) {
+      asyncWork(completion, c, instance);
+    }
+    catch (Throwable t) {
+      cleanUp(instance);
+      completion.accept(t);
+    }
+  }
+
+  private void cleanUp(JactlScriptObject instance) {
+    if (instance.checkpointed) {
+      deleteCheckpoint(instance.getInstanceId());
+    }
+  }
 
   private void addClass(ClassDescriptor descriptor) {
     String packageName = descriptor.getPackageName();
@@ -228,7 +312,8 @@ public class JactlContext {
       if (clss != null) {
         return clss;
       }
-      return super.findClass(name);
+      return Thread.currentThread().getContextClassLoader().loadClass(name);
+      //return super.findClass(name);
     }
 
     Class findClassByInternalName(String internalName) {
