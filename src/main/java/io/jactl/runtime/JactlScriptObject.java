@@ -19,11 +19,34 @@ package io.jactl.runtime;
 
 import java.util.UUID;
 
-public class JactlScriptObject {
-  private UUID    instanceId   = RuntimeUtils.randomUUID();
-  public  boolean checkpointed = false;
+public class JactlScriptObject implements Checkpointable {
+  private UUID instanceId   = RuntimeUtils.randomUUID();
+  private int  checkpointId = 0;
 
   public UUID getInstanceId() {
     return instanceId;
+  }
+
+  public boolean isCheckpointed() {
+    return checkpointId > 0;
+  }
+
+  public int checkpointId() {
+    return checkpointId;
+  }
+
+  public void incrementCheckpointId() {
+    checkpointId++;
+  }
+
+  @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+    checkpointer.writeLong(instanceId.getMostSignificantBits());
+    checkpointer.writeLong(instanceId.getLeastSignificantBits());
+    checkpointer.writeCint(checkpointId);
+  }
+
+  @Override public void _$j$restore(Restorer restorer) {
+    instanceId   = new UUID(restorer.readLong(), restorer.readLong());
+    checkpointId = restorer.readCint();
   }
 }

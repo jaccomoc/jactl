@@ -18,7 +18,6 @@
 package io.jactl;
 
 import java.util.UUID;
-import java.util.function.Consumer;
 
 /**
  * Execution environment for running Jactl scripts.
@@ -69,12 +68,19 @@ public interface JactlEnv {
   Object getThreadContext();
 
   /**
-   * Save checkpoint with given id
-   * @param id          unique id that identifies script instance
-   * @param checkpoint  the checkpointed state to be saved
-   * @param runAfter    the code to be run once checkpoint has been saved
+   * Save checkpoint with given id.
+   * <p>NOTE: the checkpointId is an incrementing value and must be one more than the last checkpoint
+   * we stored. This method should throw a RuntimeError if checkpoint id does not match expected value.</p>
+   *
+   * @param id           unique id that identifies script instance
+   * @param checkpointId the checkpoint id for this instance
+   * @param checkpoint   the checkpointed state to be saved
+   * @param source       source code line (for error reporting)
+   * @param offset       offset where checkpointing occurring (for errors)
+   * @param runAfter     the code to be run once checkpoint has been saved
+   * @throws io.jactl.runtime.RuntimeError if checkpoint id is not 1 more than last value
    */
-  default void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+  default void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
     runAfter.run();
   }
 

@@ -310,6 +310,11 @@ public class Checkpointer {
     _writeLongc(v);
   }
 
+  public void writeLong(long v) {
+    ensureCapacity(8);
+    _writeLong(v);
+  }
+
   public void _writeBoolean(boolean b) {
     writeByte(b ? (byte)1 : 0);
   }

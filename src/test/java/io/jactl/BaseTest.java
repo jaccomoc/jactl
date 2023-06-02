@@ -35,7 +35,7 @@ public class BaseTest {
   private   static int         scriptNum = 1;
   protected int                debugLevel  = 0;
   protected String             packageName = Utils.DEFAULT_JACTL_PKG;
-  protected Map<String,Object> globals     = new HashMap<String,Object>();
+  protected Map<String,Object> globals     = new HashMap<>();
   protected boolean            useAsyncDecorator = true;
   protected boolean            replMode = true;
   protected boolean            skipCheckpointTests = false;
@@ -108,11 +108,14 @@ public class BaseTest {
       byte[][] savedCheckpoint = { null };
       UUID[]   savedId   = { null };
       UUID[]   deletedId = { null };
+      final int[] savedCheckpointId = {0};
       jactlEnv = new DefaultEnv() {
-        @Override public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+        @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
           if (savedCheckpoint[0] == null) {
+            assertEquals(savedCheckpointId[0] + 1, checkpointId);
             savedCheckpoint[0] = checkpoint;
             savedId[0] = id;
+            savedCheckpointId[0] = checkpointId;
           }
           runAfter.run();
         }

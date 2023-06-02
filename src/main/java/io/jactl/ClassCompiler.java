@@ -46,8 +46,9 @@ public class ClassCompiler {
   final String         pkg;
   final String         className;
   final Stmt.ClassDecl classDecl;
-  final String         sourceName;      // Name of source file
-  protected ClassVisitor    cv;
+  final String           sourceName;      // Name of source file
+  protected String       internalBaseName;
+  protected ClassVisitor cv;
   protected ClassWriter     cw;
   protected MethodVisitor   constructor;
   protected MethodVisitor   classInit;   // MethodVisitor for static class initialiser
@@ -73,11 +74,13 @@ public class ClassCompiler {
       //cv = new TraceClassVisitor(cw, new ASMifier(), new PrintWriter(System.out));
     }
 
-    String baseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : Type.getInternalName(Object.class);
+    internalBaseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : null;
     if (classDecl.isScriptClass()) {
-      baseName = Type.getInternalName(JactlScriptObject.class);
+      internalBaseName = Type.getInternalName(JactlScriptObject.class);
     }
-    cv.visit(V11, ACC_PUBLIC, internalName, null, baseName, new String[] { Type.getInternalName(JactlObject.class) });
+    String superName = internalBaseName == null ? Type.getInternalName(Object.class) : internalBaseName;
+    cv.visit(V11, ACC_PUBLIC, internalName, null,
+             superName, new String[] {Type.getInternalName(JactlObject.class) });
     cv.visitSource(sourceName, null);
 
     classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
@@ -87,7 +90,7 @@ public class ClassCompiler {
     constructor = cv.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
     constructor.visitCode();
     constructor.visitVarInsn(ALOAD, 0);
-    constructor.visitMethodInsn(INVOKESPECIAL, baseName, "<init>", "()V", false);
+    constructor.visitMethodInsn(INVOKESPECIAL, superName, "<init>", "()V", false);
 
     var fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
@@ -1237,10 +1240,10 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeObject", "(Ljava/lang/Object;)V", false);
     }
 
-    if (classDecl.classDescriptor.getBaseClass() != null) {
+    if (internalBaseName != null) {
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
-      mv.visitMethodInsn(INVOKESPECIAL, classDecl.classDescriptor.getBaseClass().getInternalName(), "_$j$checkpoint", "(Lio/jactl/runtime/Checkpointer;)V", false);
+      mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, "_$j$checkpoint", "(Lio/jactl/runtime/Checkpointer;)V", false);
     }
 
     classDecl.fields.forEach(f -> {
@@ -1295,10 +1298,10 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitFieldInsn(PUTFIELD, internalName, Utils.JACTL_GLOBALS_NAME, MAP.descriptor());
     }
 
-    if (classDecl.classDescriptor.getBaseClass() != null) {
+    if (internalBaseName != null) {
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitVarInsn(ALOAD, RESTORER_SLOT);
-      mv.visitMethodInsn(INVOKESPECIAL, classDecl.classDescriptor.getBaseClass().getInternalName(), "_$j$restore", "(Lio/jactl/runtime/Restorer;)V", false);
+      mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, "_$j$restore", "(Lio/jactl/runtime/Restorer;)V", false);
     }
 
     classDecl.fields.forEach(f -> {

@@ -146,7 +146,7 @@ public class Restorer {
   }
 
   public double readDouble() {
-    return Double.longBitsToDouble(_readLong());
+    return Double.longBitsToDouble(readLong());
   }
 
   public BigDecimal readDecimal() {
@@ -170,7 +170,7 @@ public class Restorer {
     return num;
   }
 
-  private long _readLong() {
+  public long readLong() {
     long num = buf[idx++] & 0xff;
     num += (buf[idx++] & 0xff) << 8;
     num += (buf[idx++] & 0xff) << 16;

@@ -193,8 +193,8 @@ public class JactlContext {
     executionEnv.scheduleBlocking(blocking);
   }
 
-  public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
-    executionEnv.saveCheckpoint(id, checkpoint, runAfter);
+  public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
+    executionEnv.saveCheckpoint(id, checkpointId, checkpoint, source, offset, runAfter);
   }
 
   public void deleteCheckpoint(UUID id) {
@@ -209,7 +209,6 @@ public class JactlContext {
    */
   public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler) {
     Continuation cont = (Continuation)Restorer.restore(this, checkpoint);
-    cont.scriptInstance.checkpointed = true;
     // If two args then we have commit closure and recovery closure so return recovery closure on recover
     var result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
     scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance));
@@ -274,7 +273,7 @@ public class JactlContext {
   }
 
   private void cleanUp(JactlScriptObject instance) {
-    if (instance.checkpointed) {
+    if (instance.isCheckpointed()) {
       deleteCheckpoint(instance.getInstanceId());
     }
   }

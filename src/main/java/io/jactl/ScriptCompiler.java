@@ -27,10 +27,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
@@ -114,7 +110,7 @@ public class ScriptCompiler extends ClassCompiler {
   }
 
   private void cleanUp(JactlScriptObject instance) {
-    if (instance.checkpointed) {
+    if (instance.isCheckpointed()) {
       context.deleteCheckpoint(instance.getInstanceId());
     }
   }

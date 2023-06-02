@@ -18,7 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.Continuation;
-import io.jactl.runtime.JactlScriptObject;
+import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -30,8 +30,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class BuiltinFunctionTests extends BaseTest {
 
@@ -1876,7 +1875,7 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void _checkpoint() throws ExecutionException, InterruptedException {
     Map<UUID,byte[]> checkpoints = new HashMap<>();
     jactlEnv = new DefaultEnv() {
-      @Override public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
+      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
         checkpoints.put(id, checkpoint);
         runAfter.run();
       }
@@ -1891,10 +1890,16 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   private void checkpointTest(String source, Object commitExpected, Object recoverExpected) throws InterruptedException, ExecutionException {
-    Map<UUID,byte[]> checkpoints = new HashMap<>();
+    Map<UUID,List<Pair<Integer,byte[]>>> checkpoints = new HashMap<>();
     jactlEnv = new DefaultEnv() {
-      @Override public void saveCheckpoint(UUID id, byte[] checkpoint, Runnable runAfter) {
-        checkpoints.put(id, checkpoint);
+      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
+        checkpoints.putIfAbsent(id, new ArrayList<>());
+        var list = checkpoints.get(id);
+        int nextId = list.size() == 0 ? 1 : list.get(list.size() - 1).first + 1;
+        if (nextId != checkpointId) {
+          throw new RuntimeError("Checkpoint id (" + checkpointId + ") does not match expected value of " + nextId, source, offset);
+        }
+        list.add(Pair.create(checkpointId, checkpoint));
         runAfter.run();
       }
     };
@@ -1902,15 +1907,47 @@ public class BuiltinFunctionTests extends BaseTest {
     JactlScript script = Jactl.compileScript(source, Map.of(), context);
     assertEquals(commitExpected, script.runSync(Map.of()));
     assertEquals(1, checkpoints.size());
-    CompletableFuture result = new CompletableFuture();
-    context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
-    assertEquals(recoverExpected, result.get());
+    var key  = checkpoints.keySet().iterator().next();
+    var list = checkpoints.get(key);
+    for (int i = 0; i < list.size(); i++) {
+      var pair = list.get(i);
+      checkpoints.clear();
+      checkpoints.put(key, new ArrayList<>() {{ add(pair); }});
+      CompletableFuture future = new CompletableFuture();
+      context.recoverCheckpoint(pair.second, value -> future.complete(value));
+      Object result = future.get();
+      if (result instanceof Throwable) {
+        ((Throwable) result).printStackTrace();
+        fail(((Throwable) result).getMessage());
+      }
+      if (i == list.size() - 1) {
+        assertEquals(recoverExpected, result);
+      }
+      else {
+        assertEquals(commitExpected, result);
+      }
+    }
+    if (list.size() > 1) {
+      checkpoints.put(key, list);
+      CompletableFuture result = new CompletableFuture();
+      context.recoverCheckpoint(list.get(0).second, value -> result.complete(value));
+      Object err = result.get();
+      assertTrue(err instanceof RuntimeError && ((RuntimeError) err).getMessage().contains("does not match expected"));
+    }
   }
 
   @Test public void checkpoint() throws ExecutionException, InterruptedException {
     checkpointTest("checkpoint{ 1 }{ 2 }", 1, 2);
     checkpointTest("checkpoint{ [1,2,3] }{ 'abc' }", List.of(1,2,3), "abc");
+    checkpointTest("checkpoint{1}{2}; checkpoint{3}{4}", 3, 4);
+    checkpointTest("checkpoint{1}{2}; checkpoint{5}{6}; checkpoint{3}{4}", 3, 4);
+    checkpointTest("checkpoint{1}{2}; checkpoint{sleep(0,5)}{sleep(0,6)}; checkpoint{sleep(0,3)}{sleep(0,4)}", 3, 4);
+    checkpointTest("10.each{ checkpoint{it}{it+1} }; checkpoint{3}{4}", 3, 4);
+    checkpointTest("10.each{ checkpoint{sleep(0,it)}{sleep(0,it+1)} }; checkpoint{sleep(0,3)}{sleep(0,4)}", 3, 4);
     checkpointTest("checkpoint{ [1,2,3].map{ sleep(0,it) } }{ 'abc'.map{ sleep(0,it) }.join() }", List.of(1,2,3), "abc");
+    checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ [1,2,3] }{ 'abc' }", List.of(1,2,3), "abc");
+    checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", List.of(1,2,3), "abc");
+    checkpointTest("def x = checkpoint{ [1,2,3].map{ sleep(0,it) } }{ 'abc'.map{ sleep(0,it) }.join() }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", List.of(1,2,3), "abc");
   }
 
   @Test public void functionWithDefaults() {
