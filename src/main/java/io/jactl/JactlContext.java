@@ -193,12 +193,20 @@ public class JactlContext {
     executionEnv.scheduleBlocking(blocking);
   }
 
-  public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
-    executionEnv.saveCheckpoint(id, checkpointId, checkpoint, source, offset, runAfter);
+  public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+    executionEnv.saveCheckpoint(id, checkpointId, checkpoint, source, offset, result, resumer);
   }
 
-  public void deleteCheckpoint(UUID id) {
-    executionEnv.deleteCheckpoint(id);
+  /**
+   * Delete the checkpoint (possibly asynchronously in the background).
+   * We don't need to wait for delete since the worst that will happen is that if we die before
+   * delete has been persisted we will resurrect the instance and resume it from last checkpoint.
+   * It will then delete itself when it completes.
+   * @param id            the instance id
+   * @param checkpointId  the checkpoint id (incrementing version for this instance id)
+   */
+  public void deleteCheckpoint(UUID id, int checkpointId) {
+    executionEnv.deleteCheckpoint(id, checkpointId);
   }
 
   /**
@@ -274,7 +282,7 @@ public class JactlContext {
 
   private void cleanUp(JactlScriptObject instance) {
     if (instance.isCheckpointed()) {
-      deleteCheckpoint(instance.getInstanceId());
+      deleteCheckpoint(instance.getInstanceId(), instance.checkpointId());
     }
   }
 

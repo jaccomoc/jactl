@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -1875,9 +1876,9 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void _checkpoint() throws ExecutionException, InterruptedException {
     Map<UUID,byte[]> checkpoints = new HashMap<>();
     jactlEnv = new DefaultEnv() {
-      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
+      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
         checkpoints.put(id, checkpoint);
-        runAfter.run();
+        resumer.accept(result);
       }
     };
     JactlContext context = getJactlContext();
@@ -1892,15 +1893,17 @@ public class BuiltinFunctionTests extends BaseTest {
   private void checkpointTest(String source, Object commitExpected, Object recoverExpected) throws InterruptedException, ExecutionException {
     Map<UUID,List<Pair<Integer,byte[]>>> checkpoints = new HashMap<>();
     jactlEnv = new DefaultEnv() {
-      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
+      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
         checkpoints.putIfAbsent(id, new ArrayList<>());
         var list = checkpoints.get(id);
         int nextId = list.size() == 0 ? 1 : list.get(list.size() - 1).first + 1;
         if (nextId != checkpointId) {
-          throw new RuntimeError("Checkpoint id (" + checkpointId + ") does not match expected value of " + nextId, source, offset);
+          resumer.accept(new RuntimeError("Checkpoint id (" + checkpointId + ") does not match expected value of " + nextId, source, offset));
         }
-        list.add(Pair.create(checkpointId, checkpoint));
-        runAfter.run();
+        else {
+          list.add(Pair.create(checkpointId, checkpoint));
+          resumer.accept(result);
+        }
       }
     };
     JactlContext context = getJactlContext();

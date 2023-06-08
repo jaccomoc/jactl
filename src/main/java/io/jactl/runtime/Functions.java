@@ -55,6 +55,9 @@ public class Functions {
         if (func.name.equals(name)) {
           iter.remove();
         }
+        if (func instanceof JactlFunction) {
+          ((JactlFunction)func).cleanUp();
+        }
       }
       if (methods.get(name).size() == 0) {
         methods.remove(name);

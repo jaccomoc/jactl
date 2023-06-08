@@ -27,6 +27,7 @@ import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -110,17 +111,17 @@ public class BaseTest {
       UUID[]   deletedId = { null };
       final int[] savedCheckpointId = {0};
       jactlEnv = new DefaultEnv() {
-        @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
+        @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
           if (savedCheckpoint[0] == null) {
             assertEquals(savedCheckpointId[0] + 1, checkpointId);
             savedCheckpoint[0] = checkpoint;
             savedId[0] = id;
             savedCheckpointId[0] = checkpointId;
           }
-          runAfter.run();
+          resumer.accept(result);
         }
 
-        @Override public void deleteCheckpoint(UUID id) { deletedId[0] = id; }
+        @Override public void deleteCheckpoint(UUID id, int checkpointId) { deletedId[0] = id; }
       };
 
       JactlContext jactlContext1 = getJactlContext(true, replMode, false);

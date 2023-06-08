@@ -18,6 +18,7 @@
 package io.jactl;
 
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Execution environment for running Jactl scripts.
@@ -70,23 +71,27 @@ public interface JactlEnv {
   /**
    * Save checkpoint with given id.
    * <p>NOTE: the checkpointId is an incrementing value and must be one more than the last checkpoint
-   * we stored. This method should throw a RuntimeError if checkpoint id does not match expected value.</p>
-   *
+   * we stored. This method should generate a RuntimeError and pass it to the resumer if an error occurs
+   * during the save.</p>
+   * <p>The resumer object should be invoked on a non-blocking scheduler thread so if saving requires
+   * doing anything on a blocking thread then it is up to the implementation to make sure the resume
+   * is scheduled back onto a non-blocking thread (potentially same one as the one that invoked the save).</p>
    * @param id           unique id that identifies script instance
    * @param checkpointId the checkpoint id for this instance
    * @param checkpoint   the checkpointed state to be saved
    * @param source       source code line (for error reporting)
    * @param offset       offset where checkpointing occurring (for errors)
-   * @param runAfter     the code to be run once checkpoint has been saved
-   * @throws io.jactl.runtime.RuntimeError if checkpoint id is not 1 more than last value
+   * @param result       result to pass to resumer once checkpoint has been saved (error passed in if error during save)
+   * @param resumer      the code to invoke to resume execution once checkpoint has been saved
    */
-  default void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Runnable runAfter) {
-    runAfter.run();
+  default void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+    resumer.accept(result);
   }
 
   /**
    * Delete checkpoint data for given id once script instance has completed
-   * @param id   the id of the script instance
+   * @param id           the id of the script instance
+   * @param checkpointId the last checkpoint id
    */
-  default void deleteCheckpoint(UUID id) {}
+  default void deleteCheckpoint(UUID id, int checkpointId) {}
 }

@@ -6070,6 +6070,11 @@ class CompilerTest extends BaseTest {
 //    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
 
+  @Test public void testStuff() {
+    debugLevel = 1;
+    testError("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:2]]])", "invalid parent object type");
+  }
+
   @Test public void asyncFunctions() {
     useAsyncDecorator = false;
 //    test("def start = timestamp(); sleep(100,2); def dur = timestamp() - start; dur >= 100 && dur < 120", true);
@@ -6164,6 +6169,8 @@ class CompilerTest extends BaseTest {
     test("def x = 1; x ?= sleep(0, null as int); x", 1);
     test("def f = null; f = { null as int }; def x = 1; x ?= sleep(0, 1) + f(); x", 1);
     test("def f = null; f = { sleep(0,null) as int }; def x = 1; x ?= f(); x", 1);
+    test("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:1]]])", 3);
+    testError("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:2]]])", "invalid parent object type");
   }
 
   @Test public void asyncFieldAccess() {

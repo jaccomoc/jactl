@@ -81,6 +81,7 @@ public class ScriptCompiler extends ClassCompiler {
           instance        = (JactlScriptObject)compiledClass.getDeclaredConstructor().newInstance();
           Object result   = isAsync ? mh.invoke(instance, (Continuation) null, map)
                                     : mh.invoke(instance, map);
+          cleanUp(instance);
           return result;
         }
         catch (Continuation c) {
@@ -111,7 +112,7 @@ public class ScriptCompiler extends ClassCompiler {
 
   private void cleanUp(JactlScriptObject instance) {
     if (instance.isCheckpointed()) {
-      context.deleteCheckpoint(instance.getInstanceId());
+      context.deleteCheckpoint(instance.getInstanceId(), instance.checkpointId());
     }
   }
 }
