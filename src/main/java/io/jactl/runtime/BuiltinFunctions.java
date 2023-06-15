@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Reducer.Type.JOIN;
@@ -460,9 +461,15 @@ public class BuiltinFunctions {
            .register();
 
       Jactl.function()
+           .name("random")
+           .param("bound")
+           .impl(BuiltinFunctions.class, "random")
+           .register();
+
+      Jactl.function()
            .name("checkpoint")
-           .param("commitClosure", null)
-           .param("recoveryClosure", null)
+           .param("commit", null)
+           .param("recover", null)
            .impl(BuiltinFunctions.class, "checkpoint")
            .register();
 
@@ -592,6 +599,13 @@ public class BuiltinFunctions {
   public static Object uuidData;
   public static String uuid() {
     return RuntimeUtils.randomUUID().toString();
+  }
+
+  // = random
+
+  public static Object randomData;
+  public static long random(long bound) {
+    return ThreadLocalRandom.current().nextLong(bound);
   }
 
   // = sleep
@@ -851,7 +865,7 @@ public class BuiltinFunctions {
       if (start < 0) {
         start += list.size();
       }
-      if (end < 0) {
+      if (end <= 0) {
         end += list.size();
       }
       return list.subList(start, end);
@@ -1511,7 +1525,7 @@ public class BuiltinFunctions {
       if (start < 0) {
         start += str.length();
       }
-      if (end < 0) {
+      if (end <= 0) {
         end += str.length();
       }
       if (end < 0 || end == Integer.MAX_VALUE) {

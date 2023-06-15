@@ -413,6 +413,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = /a${'bc'}def/; def f = x.substring; f(start:2,end:5)", "cde");
     test("def x = /a${'bc'}def/; def f = x.substring; f(2)", "cdef");
     testError("def x = /a${'bc'}def/; def f = x.substring; f(2,7)", "StringIndexOutOfBounds");
+    test("'abc1234'.substring(-4,0)", "1234");
+    testError("'abc1234'.substring(-4,1)", "StringIndexOutOfBounds");
   }
 
   @Test public void join() {
@@ -1340,6 +1342,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [a:1,b:2,c:3]; x.subList(3)", List.of());
     test("def x = [a:1,b:2,c:3]; x.subList(-1)", List.of(List.of("c",3)));
     test("def x = [a:1,b:2,c:3]; x.subList(-2,-1)", List.of(List.of("b",2)));
+    test("[1,2,3,4,5].subList(-2,0)", List.of(4,5));
+    testError("[1,2,3,4,5].subList(-2,1)", "IllegalArgument");
   }
 
   @Test public void mapRemove() {

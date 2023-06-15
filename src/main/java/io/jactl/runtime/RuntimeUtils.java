@@ -2548,10 +2548,10 @@ public class RuntimeUtils {
    * @return the type 4 UUID
    */
   public static UUID randomUUID() {
-    int counter = uuidCounter.getAndIncrement();
+    int counter = uuidCounter.incrementAndGet();
     if (counter > MAX_COUNTER) {
       synchronized (secureRandom) {
-        counter = uuidCounter.getAndIncrement();
+        counter = uuidCounter.incrementAndGet();
         if (counter > MAX_COUNTER) {
           refreshUUIDValues();
           uuidCounter.set(0);

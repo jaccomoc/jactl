@@ -6070,11 +6070,6 @@ class CompilerTest extends BaseTest {
 //    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
 
-  @Test public void testStuff() {
-    debugLevel = 1;
-    testError("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:2]]])", "invalid parent object type");
-  }
-
   @Test public void asyncFunctions() {
     useAsyncDecorator = false;
 //    test("def start = timestamp(); sleep(100,2); def dur = timestamp() - start; dur >= 100 && dur < 120", true);
