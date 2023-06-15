@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.BuiltinFunctions;
+import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -106,22 +107,41 @@ public class BaseTest {
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected) {
     testCounter++;
     try {
+      int[] errors = {0};
       byte[][] savedCheckpoint = { null };
       UUID[]   savedId   = { null };
       UUID[]   deletedId = { null };
       final int[] savedCheckpointId = {0};
+      final int[] lastCheckpointId = {0};
       jactlEnv = new DefaultEnv() {
         @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+          if (lastCheckpointId[0] + 1 != checkpointId) {
+            resumer.accept(new RuntimeError("Checkpoint id of " + checkpointId + " does not match expected value of " + lastCheckpointId[0] + 1, source, offset));
+            return;
+          }
+          lastCheckpointId[0] = checkpointId;
           if (savedCheckpoint[0] == null) {
-            assertEquals(savedCheckpointId[0] + 1, checkpointId);
             savedCheckpoint[0] = checkpoint;
-            savedId[0] = id;
             savedCheckpointId[0] = checkpointId;
+            savedId[0] = id;
           }
           resumer.accept(result);
         }
 
-        @Override public void deleteCheckpoint(UUID id, int checkpointId) { deletedId[0] = id; }
+        @Override public void deleteCheckpoint(UUID id, int checkpointId) {
+          if (lastCheckpointId[0] + 1 != checkpointId) {
+            System.out.println("Delete: Checkpoint id of " + checkpointId + " does not match expected value of " + (lastCheckpointId[0] + 1));
+            errors[0]++;
+            return;
+          }
+          if (deletedId[0] != null) {
+            System.out.println("Delete: checkpoint deleted multiple times, checkpointId=" + checkpointId);
+            errors[0]++;
+            return;
+          }
+          lastCheckpointId[0] = checkpointId;
+          deletedId[0] = id;
+        }
       };
 
       JactlContext jactlContext1 = getJactlContext(true, replMode, false);
@@ -139,6 +159,8 @@ public class BaseTest {
       Object result   = compiled.runSync(bindings);
       checkEqual(expected, result);
 
+      assertEquals(0, errors[0]);
+
       // Now loop, restoring first checkpoint until we have reached last checkpoint
       while (savedCheckpoint[0] != null) {
         assertNotNull(savedId[0]);
@@ -146,12 +168,14 @@ public class BaseTest {
         assertEquals(savedId[0], deletedId[0]);
         savedId[0] = deletedId[0] = null;
         var checkpoint = savedCheckpoint[0];
+        lastCheckpointId[0] = savedCheckpointId[0];
         savedCheckpoint[0] = null;
+        savedCheckpointId[0] = 0;
         CompletableFuture future = new CompletableFuture();
         jactlContext2.recoverCheckpoint(checkpoint, recoveredResult -> future.complete(recoveredResult));
         checkEqual(expected, future.get());
+        assertEquals(0, errors[0]);
       }
-
     }
     catch (Exception e) {
       e.printStackTrace();

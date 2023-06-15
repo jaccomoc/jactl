@@ -282,6 +282,7 @@ public class JactlContext {
 
   private void cleanUp(JactlScriptObject instance) {
     if (instance.isCheckpointed()) {
+      instance.incrementCheckpointId();
       deleteCheckpoint(instance.getInstanceId(), instance.checkpointId());
     }
   }
