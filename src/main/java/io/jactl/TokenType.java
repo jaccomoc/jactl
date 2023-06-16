@@ -52,6 +52,7 @@ public enum TokenType {
   UNDERSCORE("_"),
 
   //= Double char tokens
+  QUESTION_QUESTION("??"),
   PERCENT_PERCENT("%%"),
   BANG_EQUAL("!="),
   EQUAL_EQUAL("=="),
@@ -210,7 +211,7 @@ public enum TokenType {
   boolean isBooleanOperator() {
     return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL,
                    LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF,
-                   BANG_INSTANCE_OF);
+                   BANG_INSTANCE_OF, QUESTION_QUESTION);
   }
 
   boolean isBitOperator() {

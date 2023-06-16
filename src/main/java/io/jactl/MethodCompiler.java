@@ -1496,6 +1496,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    if (expr.operator.is(QUESTION_QUESTION)) {
+      if (expr.expr.type.isPrimitive()) {
+        compile(expr.expr);
+        popVal();
+        loadConst(true);
+        return null;
+      }
+      tryCatch(NullError.class, true,
+               () -> emitIf(false,
+                        IfTest.IS_NOTNULL,
+                        () -> compile(expr.expr),
+                        () -> loadConst(true),
+                        () -> loadConst(false)),
+               () -> { popVal(); loadConst(false); });    // pop exception and push false since we had NullError
+      return null;
+    }
+
     compile(expr.expr);
 
     switch (expr.operator.getType()) {

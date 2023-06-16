@@ -757,10 +757,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public JactlType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
     expr.isConst = expr.expr.isConst;
-    if (expr.operator.is(BANG)) {
+    if (expr.operator.is(BANG,QUESTION_QUESTION)) {
       expr.type = BOOLEAN;
       if (expr.isConst) {
-        expr.constValue = !Utils.toBoolean(expr.expr.constValue);
+        expr.constValue = expr.operator.is(BANG) ? !Utils.toBoolean(expr.expr.constValue)
+                                                 : expr.expr.constValue != null;
       }
       return expr.type;
     }

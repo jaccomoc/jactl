@@ -153,6 +153,7 @@ class TokeniserTest {
     doTest.accept("eval", TokenType.EVAL);
     doTest.accept("final", TokenType.FINAL);
     doTest.accept("sealed", TokenType.SEALED);
+    doTest.accept("??", TokenType.QUESTION_QUESTION);
     doTest.accept("%%", TokenType.PERCENT_PERCENT);
     doTest.accept("%%=", TokenType.PERCENT_PERCENT_EQUAL);
   }

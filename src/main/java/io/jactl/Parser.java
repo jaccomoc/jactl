@@ -783,11 +783,11 @@ public class Parser {
 
   private static TokenType[] fieldAccessOp = new TokenType[] { DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
-  // NOTE: type case also has same precendence as unaryOps but has no specific operator
-  private static List<TokenType> unaryOps = List.of(GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
+  // NOTE: type cast also has same precedence as unaryOps but has no specific operator
+  private static List<TokenType> unaryOps = List.of(QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
 
   // Operators from least precedence to highest precedence. Each entry in list is
-  // a pair of a boolean and a list of the operators at that level of precedene.
+  // a pair of a boolean and a list of the operators at that level of precedence.
   // The boolean indicates whether the operators are left-associative (true) or
   // right-associative (false).
   private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
@@ -1050,7 +1050,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# unary -&gt; ( "!" | "--" | "++" | "-" | "+" | "~" | "(" type ")" )
+   *# unary -&gt; ( "??" | "!" | "--" | "++" | "-" | "+" | "~" | "(" type ")" )
    *#                  unary ( "--" | "++" )
    *#        | expression;
    * </pre>

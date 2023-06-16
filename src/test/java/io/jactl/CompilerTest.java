@@ -2179,6 +2179,23 @@ class CompilerTest extends BaseTest {
     test("def x; false && x.a", false);
   }
 
+  @Test public void questionQuestion() {
+    test("?? true", true);
+    test("?? 1", true);
+    test("?? 1D", true);
+    test("?? 1.0", true);
+    test("?? 'abc'", true);
+    test("?? 'abc' && ?? null || ?? null", false);
+    test("?? false", true);
+    test("?? null", false);
+    test("?? ?? null", true);
+    test("def x; ?? x", false);
+    test("def x = []; ?? x", true);
+    test("def x = [:]; ?? x", true);
+    test("def x = [:]; ?? x.a", false);
+    test("def x = [:]; ?? x?.a", false);
+  }
+
   @Test public void explicitReturnFromScript() {
     test("double v = 2; return v", 2D);
     test("int v = 2; { v = v + 1; return v }; v = v + 3", 3);
