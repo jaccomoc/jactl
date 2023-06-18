@@ -203,6 +203,33 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     }
   }
 
+  public static JactlIterator<Byte> of(byte[] arr) {
+    var iter = new ByteArrIterator();
+    iter.arr = arr;
+    return iter;
+  }
+
+  private static class ByteArrIterator extends JactlIterator<Byte> {
+    int    idx = 0;
+    byte[] arr;
+    @Override public boolean hasNext() { return idx < arr.length; }
+    @Override public Byte next()    { return arr[idx++];       }
+    @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+      checkpointer.writeType(ITERATOR);
+      checkpointer.writeCint(IteratorType.INT_ARR.ordinal());
+      checkpointer.writeCint(VERSION);
+      checkpointer.writeObject(arr);
+      checkpointer.writeCint(idx);
+    }
+    @Override public void _$j$restore(Restorer restorer) {
+      restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
+      restorer.expectCint(IteratorType.INT_ARR.ordinal(), "Expected INT_ARR");
+      restorer.expectCint(VERSION, "Bad version");
+      arr = (byte[])restorer.readObject();
+      idx = restorer.readCint();
+    }
+  }
+
   public static JactlIterator<Integer> of(int[] arr) {
     var iter = new IntArrIterator();
     iter.arr = arr;

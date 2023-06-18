@@ -220,7 +220,10 @@ public class Reducer implements Checkpointable {
     if (valueObj instanceof Long || elemObj instanceof Long) {
       return ((Number)valueObj).longValue() + ((Number)elemObj).longValue();
     }
-    return (int)valueObj + (int)elemObj;
+    if (valueObj instanceof Integer || elemObj instanceof Integer) {
+      return ((Number)valueObj).intValue() + ((Number)elemObj).intValue();
+    }
+    return (byte)valueObj + (byte)elemObj;
   }
 
   private Object result() {
@@ -231,8 +234,8 @@ public class Reducer implements Checkpointable {
         if (counter == 0) {
           throw new RuntimeError("Empty list for avg() function", source, offset);
         }
-        if (value instanceof Double)                           { value = BigDecimal.valueOf((double)value); }
-        if (value instanceof Integer || value instanceof Long) { value = BigDecimal.valueOf(((Number)value).longValue()); }
+        if (value instanceof Double)             { value = BigDecimal.valueOf((double)value); }
+        else if (!(value instanceof BigDecimal)) { value = BigDecimal.valueOf(((Number)value).longValue()); }
         return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(counter), Utils.DEFAULT_MIN_SCALE, source, offset);
       case REDUCE: case SUM:
         // Fall through

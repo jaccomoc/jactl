@@ -64,6 +64,8 @@ public class ClassTests extends BaseTest {
     test("class X { int i; def f(x){i*x} }; def g = new X(2).\"${'f'}\"; g(3)", 6);
     test("class X { def f(x){x*x} }; X x = new X(); x.f(3)", 9);
     test("class X { def f(x){x*x} }; X x = new X(); def g = x.f; g(3)", 9);
+    test("class X { byte x; byte i = 2; def f(x){i*x} }; X x = new X(1); def g = x.f; g(3)", 6);
+    test("class X { byte x; byte i = 2; def f(byte x){i*x} }; X x = new X(1); def g = x.f; g(3)", (byte)6);
     test("class X { int x; int i = 2; def f(x){i*x} }; X x = new X(1); def g = x.f; g(3)", 6);
     test("class X { int x; int i = 2; def f(x){i*x} }; X x = new X(1); def g = x.\"${'f'}\"; g(3)", 6);
     test("class X { def f(x){x*x} }; def x = new X(); x.f(3)", 9);
@@ -100,6 +102,7 @@ public class ClassTests extends BaseTest {
     test("class X { static def f(){3} }; X.f()", 3);
     test("class X { static int f(x){x*x} }; X.f(3)", 9);
     test("class X { static def f(x){x*x} }; new X().f(3)", 9);
+    test("class X { static byte f(x){x*x} }; def g = X.f; g(3)", (byte)9);
     test("class X { static int f(x){x*x} }; def g = X.f; g(3)", 9);
     test("class X { static int f(x){x*x} }; def g = new X().f; g(3)", 9);
     test("class X { static int f(x){x*x} }; X.\"${'f'}\"(3)", 9);
@@ -149,6 +152,10 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 1 }; def x = new X(); x.\"${'i'}\"", 1);
     test("class X { int i = 1 }; new X().i = 3", 3);
     testError("class X { int i = 1 }; new X(3).i", "too many arguments");
+    test("class X { byte i = 1 }; new X(i:3)['i']", (byte)3);
+    test("class X { byte i }; new X(3).i", (byte)3);
+    test("class X { byte i }; new X(i:3).i", (byte)3);
+    test("class X { byte i }; new X(3)['i']", (byte)3);
     test("class X { int i }; new X(3).i", 3);
     test("class X { int i }; new X(i:3).i", 3);
     test("class X { int i }; new X(3)['i']", 3);
@@ -178,6 +185,11 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void fieldsWithInitialisers() {
+    test("class X { byte x; byte i = 1; long j = i + 2 }; new X(1).j", 3L);
+    test("class X { byte x; byte i = j+1; long j = i + 2 }; new X(1).j", 3L);
+    test("class X { byte x; byte i = 1; long j = i+1; long k = j+1 }; new X(1).k", 3L);
+    test("class X { byte x; byte i = 1; long j = this.i+2 }; new X(1).j", 3L);
+    test("class X { byte x; byte i = this.j+1; long j = this.i+2 }; new X(1).j", 3L);
     test("class X { int x; int i = 1; long j = i + 2 }; new X(1).j", 3L);
     test("class X { int x; int i = j+1; long j = i + 2 }; new X(1).j", 3L);
     test("class X { int x; int i = 1; long j = i+1; long k = j+1 }; new X(1).k", 3L);
@@ -221,6 +233,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void methodArgsAsList() {
+    test("def a = [1,2,3]; class X { def f(byte x, byte y=7, byte z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", (byte)12);
     test("def a = [1,2,3]; class X { def f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1, 2, 3, 7, 8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
@@ -346,6 +359,9 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x, y) { x + y }}; new X().f([x:1,y:2])", "missing mandatory argument: y");
     test("class X { def f(x, y=[a:3]) { x + y }}; new X().f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
     test("class X { def f(x,y) { x*y }}; new X().f(x:2,y:3)", 6);
+    test("class X { def f(byte x, byte y) { x*y }}; new X().f(x:2,y:3)", (byte)6);
+    test("class X { def f(byte x, byte y=3) { x*y }}; new X().f(x:2)", (byte)6);
+    test("class X { def f(Map x, byte y=3) { x.y = y; x }}; new X().f([x:2])", Map.of("x",2,"y",(byte)3));
     test("class X { def f(int x, int y) { x*y }}; new X().f(x:2,y:3)", 6);
     test("class X { def f(int x, int y=3) { x*y }}; new X().f(x:2)", 6);
     test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().f([x:2])", Map.of("x",2,"y",3));
@@ -519,6 +535,8 @@ public class ClassTests extends BaseTest {
     testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "invalid object type");
     test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
     test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(byte x) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
+    test("class X { static def f(byte x=2) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(int x) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(int x=2) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(x,y) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
@@ -533,6 +551,8 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void constructorArgsAsList() {
+    test("class X { String a; byte b; List c; Map d }; new X('abc',1,[1,2,3],[a:5]).d.a", 5);
+    test("class X { String a; byte b; List c = []; Map d = [:] }; new X('abc',1).b", (byte)1);
     test("class X { String a; int b; List c; Map d }; new X('abc',1,[1,2,3],[a:5]).d.a", 5);
     test("class X { String a; int b; List c = []; Map d = [:] }; new X('abc',1).b", 1);
     testError("class X { String a; int b; List c = []; Map d = [:] }; new X('abc').b", "missing mandatory field");
@@ -568,6 +588,9 @@ public class ClassTests extends BaseTest {
     test("class X { int i }; new X(i:2).i", 2);
     testError("class X { int i = 0 }; new X(2).i", "too many arguments");
     test("class X { int i = 0 }; new X(i:2).i", 2);
+    test("class X { String a; byte b; List c; Map d }; new X(a:'abc',b:1,c:[1,2,3],d:[a:5]).d.a", 5);
+    test("class X { String a; byte b=4; List c; Map d }; def x = new X(a:'abc',c:[1,2,3],d:[a:5]); x.d.a + x.b", 9);
+    test("class X { String a; byte b=4; List c; Map d }; X x = new X(a:'abc',c:[1,2,3],d:[a:5]); x.d.a + x.b", 9);
     test("class X { String a; int b; List c; Map d }; new X(a:'abc',b:1,c:[1,2,3],d:[a:5]).d.a", 5);
     test("class X { String a; int b=4; List c; Map d }; def x = new X(a:'abc',c:[1,2,3],d:[a:5]); x.d.a + x.b", 9);
     test("class X { String a; int b=4; List c; Map d }; X x = new X(a:'abc',c:[1,2,3],d:[a:5]); x.d.a + x.b", 9);
@@ -606,6 +629,54 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void mutatingPrimitiveFieldValues() {
+    test("class X { byte i = (byte)1 }; new X().i = 3", (byte)3);
+    test("class X { byte i = (byte)1 }; new X().\"${'i'}\" = 3", (byte)3);
+    test("class X { byte i = (byte)1 }; X x = new X(); x.\"${'i'}\" = 3", (byte)3);
+    test("class X { byte i = (byte)1 }; def x = new X(); x.\"${'i'}\" = 3", (byte)3);
+    test("class X { byte i = (byte)1 }; new X().i += 3", (byte)4);
+    test("class X { byte i = (byte)1 }; new X().\"${'i'}\" += 3", (byte)4);
+    test("class X { byte i = (byte)1 }; X x = new X(); x.\"${'i'}\" += 3", (byte)4);
+    test("class X { byte i = (byte)1 }; def x = new X(); x.\"${'i'}\" += 3", (byte)4);
+    test("class X { byte i = (byte)1 }; new X().i++", (byte)1);
+    test("class X { byte i = (byte)1 }; ++new X().i", (byte)2);
+    test("class X { byte i = (byte)1 }; def x = new X(); x.i++; x.i", (byte)2);
+    test("class X { byte i = (byte)1 }; ++new X().\"${'i'}\"", (byte)2);
+    test("class X { byte i = (byte)1 }; X x = new X(); ++x.\"${'i'}\"", (byte)2);
+    test("class X { byte i = (byte)1 }; def x = new X(); x.\"${'i'}\"++", (byte)1);
+    test("class X { byte i = (byte)1 }; def x = new X(); ++x.\"${'i'}\"", (byte)2);
+    test("class X { byte i = (byte)1 }; new X().i = 3L", (byte)3);
+    test("class X { byte i = (byte)1 }; new X().\"${'i'}\" = 3L", (byte)3);
+    test("class X { byte i = (byte)1 }; new X().i += 3L", (byte)4);
+    test("class X { byte i = (byte)1 }; new X().\"${'i'}\" += 3L", (byte)4);
+    test("class X { byte i = (byte)1 }; new X().i = 3.0D", (byte)3);
+    test("class X { byte i = (byte)1 }; new X().\"${'i'}\" = 3.0D", (byte)3);
+    test("class X { byte i = (byte)1 }; new X().i += 3.0", (byte)4);
+    test("class X { byte i = (byte)1 }; new X().\"${'i'}\" += 3.0", (byte)4);
+
+    test("class X { var i = (byte)1 }; new X().i = 3", (byte)3);
+    test("class X { var i = (byte)1 }; new X().\"${'i'}\" = 3", (byte)3);
+    test("class X { var i = (byte)1 }; X x = new X(); x.\"${'i'}\" = 3", (byte)3);
+    test("class X { var i = (byte)1 }; def x = new X(); x.\"${'i'}\" = 3", (byte)3);
+    test("class X { var i = (byte)1 }; new X().i += 3", (byte)4);
+    test("class X { var i = (byte)1 }; new X().\"${'i'}\" += 3", (byte)4);
+    test("class X { var i = (byte)1 }; X x = new X(); x.\"${'i'}\" += 3", (byte)4);
+    test("class X { var i = (byte)1 }; def x = new X(); x.\"${'i'}\" += 3", (byte)4);
+    test("class X { var i = (byte)1 }; new X().i++", (byte)1);
+    test("class X { var i = (byte)1 }; ++new X().i", (byte)2);
+    test("class X { var i = (byte)1 }; def x = new X(); x.i++; x.i", (byte)2);
+    test("class X { var i = (byte)1 }; ++new X().\"${'i'}\"", (byte)2);
+    test("class X { var i = (byte)1 }; X x = new X(); ++x.\"${'i'}\"", (byte)2);
+    test("class X { var i = (byte)1 }; def x = new X(); x.\"${'i'}\"++", (byte)1);
+    test("class X { var i = (byte)1 }; def x = new X(); ++x.\"${'i'}\"", (byte)2);
+    test("class X { var i = (byte)1 }; new X().i = 3L", (byte)3);
+    test("class X { var i = (byte)1 }; new X().\"${'i'}\" = 3L", (byte)3);
+    test("class X { var i = (byte)1 }; new X().i += 3L", (byte)4);
+    test("class X { var i = (byte)1 }; new X().\"${'i'}\" += 3L", (byte)4);
+    test("class X { var i = (byte)1 }; new X().i = 3.0D", (byte)3);
+    test("class X { var i = (byte)1 }; new X().\"${'i'}\" = 3.0D", (byte)3);
+    test("class X { var i = (byte)1 }; new X().i += 3.0", (byte)4);
+    test("class X { var i = (byte)1 }; new X().\"${'i'}\" += 3.0", (byte)4);
+
     test("class X { int i = 1 }; new X().i = 3", 3);
     test("class X { int i = 1 }; new X().\"${'i'}\" = 3", 3);
     test("class X { int i = 1 }; X x = new X(); x.\"${'i'}\" = 3", 3);
@@ -818,6 +889,11 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void assignmentsAndEquality() {
+    test("class X { byte i }; X x = [i:2]; x.i", (byte)2);
+    test("class X { byte i }; X x = [i:2]; x.i = 3", (byte)3);
+    test("class X { byte i }; X x = [i:2]; x.i = 3; x.i", (byte)3);
+    test("class X { byte i }; X x = [i:2]; x['i'] = 3", (byte)3);
+    test("class X { byte i }; X x = [i:2]; x['i'] = 3; x['i']", (byte)3);
     test("class X { int i }; X x = [i:2]; x.i", 2);
     test("class X { int i }; X x = [i:2]; x.i = 3", 3);
     test("class X { int i }; X x = [i:2]; x.i = 3; x.i", 3);
@@ -862,6 +938,17 @@ public class ClassTests extends BaseTest {
 
   @Test public void assignmentsAndEquality2() {
     useAsyncDecorator = false;
+    test("class X { byte i = 1}; X x; x = [i:2]; x.i", (byte)2);
+    test("class X { byte i=1; byte j=2 }; new X() == [i:1,j:2]", true);
+    test("class X { byte i=1; byte j=2 }; new X() != [i:1,j:2]", false);
+    test("class X { byte i=1; byte j=2 }; new X() == [i:1,j:2,k:3]", false);
+    test("class X { byte i=1; byte j=2 }; new X() != [i:1,j:2,k:3]", true);
+    test("class X { byte i=1; byte j=2 }; [i:1,j:2] == new X()", true);
+    test("class X { byte i=1; byte j=2 }; [i:1,j:2] != new X()", false);
+    test("class X { byte i=1; byte j=2 }; def x = new X(); def y = [i:1,j:2]; x == y", true);
+    test("class X { byte i=1; byte j=2 }; def x = new X(); def y = [i:1,j:2]; x != y", false);
+    test("class X { byte i=1; byte j=2 }; def x = [i:1,j:2]; def y = new X(); x == y", true);
+    test("class X { byte i=1; byte j=2 }; def x = [i:1,j:2]; def y = new X(); x != y", false);
     test("class X { int i = 1}; X x; x = [i:2]; x.i", 2);
     test("class X { int i=1; int j=2 }; new X() == [i:1,j:2]", true);
     test("class X { int i=1; int j=2 }; new X() != [i:1,j:2]", false);
@@ -881,8 +968,12 @@ public class ClassTests extends BaseTest {
 
   @Test public void mapConversions() {
     useAsyncDecorator = false;
+    test("class X { byte i = 0 }; X x = [i:2]; x.i", (byte)2);
+    test("class X { byte i = 0 }; X x = [i:2]; (x as Map).i", (byte)2);
+    test("class X { byte i = 0 }; def a = [i:2]; X x = a; x.i", (byte)2);
+    test("class X { byte i = 0 }; def a = [i:2]; (a as X).i", (byte)2);
+    test("class X { byte i = 0 }; def a = [i:2]; def b = (a as X); b.i", (byte)2);
     test("class X { int i = 0 }; X x = [i:2]; x.i", 2);
-    test("class X { int i = 0 }; X x = [i:2]; (x as Map).i", 2);
     test("class X { int i = 0 }; def x = [i:2]; (x as Map).i", 2);
     test("class X { int i = 0 }; def a = [i:2]; X x = a; x.i", 2);
     test("class X { int i = 0 }; def a = [i:2]; (a as X).i", 2);
@@ -947,6 +1038,9 @@ public class ClassTests extends BaseTest {
     useAsyncDecorator = false;
     test("class X { int i = 1; def toString() { \"[ii:$i]\" + 'abc' } }; new X().toString()", "[ii:1]abc");
     testError("class X { int i = 1; def toString() { sleep(0,\"[ii:$i]\") + sleep(0,'abc') } }; [x:new X()].toString()", "cannot invoke anything that is async");
+    test("class X { X x; byte i; String s }; new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz').toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
+    test("class X { X x; byte i; String s }; X x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
+    test("class X { X x; byte i; String s }; def x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; int i; String s }; new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz').toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; int i; String s }; X x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; int i; String s }; def x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
@@ -999,6 +1093,8 @@ public class ClassTests extends BaseTest {
 
   @Test public void autoCreateFieldsDuringAssignment() {
     if (asyncAutoCreate()) {
+      test("class X { Y y }; class Y { byte i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", (byte)4);
+      test("class X { Y y }; class Y { byte i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", (byte)4);
       test("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", 4);
       test("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", 4);
     }
@@ -1007,6 +1103,8 @@ public class ClassTests extends BaseTest {
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", "detected async");
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
     }
+    test("class X { Y y }; class Y { byte i = 3 }; X x = new X(null); x.y.i = 4; x.y.i", (byte)4);
+    test("class X { Y y }; class Y { byte i = 3 }; def x = new X(null); x.y.i = 4; x.y.i", (byte)4);
     test("class X { Y y }; class Y { int i = 3 }; X x = new X(null); x.y.i = 4; x.y.i", 4);
     test("class X { Y y }; class Y { int i = 3 }; def x = new X(null); x.y.i = 4; x.y.i", 4);
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", 4);
@@ -1108,6 +1206,7 @@ public class ClassTests extends BaseTest {
   @Test public void nestedStaticFunctions() {
     useAsyncDecorator = false;
 
+    test("class A { static def a() { int x = 1; byte f(){ x++ }; return f } }; def f = A.a(); f() + f() + f()", (byte)6);
     test("class A { static def a() { int x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6);
     test("class A { static def a() { int x = 1; def f() { def g() { x++ }; g() }; return { x + f() }; } }; def b = A.a(); b() + b() + b()", 12);
     test("class A { static def a() { long x = 1; return { x++ } } }; def f = A.a(); f() + f() + f()", 6L);
@@ -1197,6 +1296,7 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(){super.f()} }; X x = new X(); x.f()", "does not extend any base class");
     testError("class X {}; class Y extends X { def f(){super.f()} }; Y y = new Y(); y.f()", "no such method/field 'f'");
     testError("class X {}; class Y extends X { int i = 1; def f(){super.i} }; Y y = new Y(); y.f()", "no such field or method 'i'");
+    test("class X {byte i = 3}; class Y extends X { def f(){super.i} }; Y y = new Y(); y.f()", (byte)3);
     test("class X {int i = 3}; class Y extends X { def f(){super.i} }; Y y = new Y(); y.f()", 3);
     testError("class X {int i = 3}; class Y extends X { def f(){super.\"${'i'}\"} }; Y y = new Y(); y.f()", "dynamic field lookup not supported");
     testError("class X { def f(){2} }; class Y extends X { def f(){super.\"${'f'}\"() + 3} }; Y y = new Y(); y.f()", "dynamic field lookup not supported");
@@ -1426,6 +1526,18 @@ public class ClassTests extends BaseTest {
     test("class X{int i=1}; def x = new X(); [i:1] == x", true);
     test("class X{int i=1}; def x = new X(); [i:1] === x", false);
     test("class X{int i=1}; def x = new X(); [i:1] !== x", true);
+    test("class X{byte i=1}; X x = new X(); x == [i:1]", true);
+    test("class X{byte i=1}; X x = new X(); x === [i:1]", false);
+    test("class X{byte i=1}; X x = new X(); x !== [i:1]", true);
+    test("class X{byte i=1}; def x = new X(); x == [i:1]", true);
+    test("class X{byte i=1}; def x = new X(); x === [i:1]", false);
+    test("class X{byte i=1}; def x = new X(); x !== [i:1]", true);
+    test("class X{byte i=1}; X x = new X(); [i:1] == x", true);
+    test("class X{byte i=1}; X x = new X(); [i:1] != x", false);
+    test("class X{byte i=1}; X x = new X(); [i:1] !== x", true);
+    test("class X{byte i=1}; def x = new X(); [i:1] == x", true);
+    test("class X{byte i=1}; def x = new X(); [i:1] === x", false);
+    test("class X{byte i=1}; def x = new X(); [i:1] !== x", true);
   }
 
   @Test public void nullFieldSetting() {
@@ -1462,6 +1574,9 @@ public class ClassTests extends BaseTest {
   @Test public void arrays() {
     test("class X{ int i = 3 }; X[] x = new X[10]; x[0]", null);
     test("class X{ int i = 3 }; X[] x = new X[10]; x[0] = new X(i:4); x[0].i", 4);
+    test("class X{ int i = 3; byte[] a = new byte[10] }; new X().a[-1]", (byte)0);
+    test("class X{ int i = 3; byte[] a = new byte[10] }; new X().a = 'abc'", new byte[]{97,98,99});
+    test("class X{ int i = 3; byte[] a = new byte[10] }; X x = new X(); x.a = 'abc'; x.a", new byte[]{97,98,99});
     test("class X{ int i = 3; int[] a = new int[10] }; new X().a[-1]", 0);
     test("class X{ int i = 3; X[] a = new X[10] }; new X().a[-1]", null);
     test("class X{ int i = 3; X[][] a = new X[10][] }; new X().a[-1]", null);

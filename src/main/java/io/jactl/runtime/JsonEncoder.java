@@ -93,7 +93,7 @@ public class JsonEncoder {
       writeString(((BigDecimal) obj).toPlainString(), false);
       return;
     }
-    if (obj instanceof Integer || obj instanceof Long) {
+    if (obj instanceof Byte || obj instanceof Integer || obj instanceof Long) {
       writeLong(((Number)obj).longValue());
       return;
     }

@@ -30,6 +30,7 @@ import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
+import static io.jactl.JactlType.BYTE;
 import static io.jactl.JactlType.CLASS;
 import static io.jactl.JactlType.DECIMAL;
 import static io.jactl.JactlType.INT;
@@ -768,8 +769,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     expr.type = expr.expr.type.unboxed();
     if (expr.operator.is(GRAVE)) {
-      if (!expr.type.is(INT, LONG, ANY)) {
-        error("Operand for '~' must be int or long (not " + expr.expr.type + ")", expr.operator);
+      if (!expr.type.is(BYTE, INT, LONG, ANY)) {
+        error("Operand for '~' must be int, byte, or long (not " + expr.expr.type + ")", expr.operator);
       }
     }
     if (!expr.type.isNumeric() && !expr.type.is(ANY)) {
@@ -779,6 +780,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.constValue = expr.expr.constValue;
       if (expr.operator.is(MINUS)) {
         switch (expr.type.getType()) {
+          case BYTE:    expr.constValue = (byte)-(int)expr.constValue;            break;
           case INT:     expr.constValue = -(int)expr.constValue;                  break;
           case LONG:    expr.constValue = -(long)expr.constValue;                 break;
           case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
@@ -788,8 +790,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       else
       if (expr.operator.is(GRAVE)) {
         switch (expr.type.getType()) {
-          case INT:       expr.constValue = ~(int) expr.constValue;   break;
-          case LONG:      expr.constValue = ~(long) expr.constValue;  break;
+          case BYTE:      expr.constValue = (byte)~(int) expr.constValue;   break;
+          case INT:       expr.constValue = ~(int) expr.constValue;         break;
+          case LONG:      expr.constValue = ~(long) expr.constValue;        break;
         }
       }
       else
@@ -826,15 +829,21 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(expr.castType);
     expr.type = expr.castType;
 
-    // Special case for single char strings if casting to int
-    if (expr.expr.type.is(STRING) && expr.type.is(INT)) {
+    // Special case for single char strings if casting to int or byte
+    if (expr.expr.type.is(STRING) && expr.type.is(BYTE,INT)) {
       if (expr.expr.isConst && expr.expr.constValue instanceof String) {
         String value = (String)expr.expr.constValue;
         if (value.length() != 1) {
           error((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.location);
         }
         expr.isConst = true;
-        expr.constValue = (int)(value.charAt(0));
+        int charVal = value.charAt(0);
+        if (expr.type.is(INT)) {
+          expr.constValue = charVal;
+        }
+        else {
+          expr.constValue = (byte)charVal;
+        }
       }
       return expr.type;
     }
@@ -853,6 +862,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.constValue = expr.value.getValue();
 
     switch (expr.value.getType()) {
+      case BYTE_CONST:    return expr.type = BYTE;
       case INTEGER_CONST: return expr.type = INT;
       case LONG_CONST:    return expr.type = LONG;
       case DOUBLE_CONST:  return expr.type = JactlType.DOUBLE;
@@ -1487,7 +1497,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (rightValue == null) { error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
 
     switch (expr.type.getType()) {
-      case INT: {
+      case BYTE: case INT: {
         int left  = Utils.toInt(leftValue);
         int right = Utils.toInt(rightValue);
         throwIf(expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0, "Divide by zero error", expr.right.location);
@@ -1505,6 +1515,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           case DOUBLE_GREATER_THAN: expr.constValue = left >> right;  break;
           case TRIPLE_GREATER_THAN: expr.constValue = left >>> right; break;
           default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
+        }
+        if (expr.type.is(BYTE)) {
+          expr.constValue = (byte)(int)expr.constValue;
         }
         break;
       }
@@ -1592,6 +1605,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private static Object incOrDec(boolean isInc, JactlType type, Object val) {
     int incAmount = isInc ? 1 : -1;
     switch (type.getType()) {
+      case BYTE:    return (byte)(((byte)val) + incAmount);
       case INT:     return ((int)val) + incAmount;
       case LONG:    return ((long)val) + incAmount;
       case DOUBLE:  return ((double)val) + incAmount;
@@ -2611,6 +2625,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Expr literalDefaultValue(Token location, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN: return new Expr.Literal(new Token(FALSE, location).setValue(false));
+      case BYTE:    return new Expr.Literal(new Token(BYTE_CONST, location).setValue(0));
       case INT:     return new Expr.Literal(new Token(INTEGER_CONST, location).setValue(0));
       case LONG:    return new Expr.Literal(new Token(LONG_CONST, location).setValue(0));
       case DOUBLE:  return new Expr.Literal(new Token(DOUBLE_CONST, location).setValue(0));

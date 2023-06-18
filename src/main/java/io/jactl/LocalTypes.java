@@ -437,7 +437,7 @@ public class LocalTypes {
         Utils.loadConst(mv, i);
         _loadLocal(i);
         if (type.isPrimitive()) {
-          if (type.is(BOOLEAN,INT)) { mv.visitInsn(I2L); }
+          if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
           if (type.is(DOUBLE)) {
             mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
                                "doubleToRawLongBits",
@@ -549,6 +549,7 @@ public class LocalTypes {
     if (type.isPrimitive()) {
       switch (type.getType()) {
         case BOOLEAN:   mv.visitVarInsn(ILOAD, slot); break;
+        case BYTE:      mv.visitVarInsn(ILOAD, slot); break;
         case INT:       mv.visitVarInsn(ILOAD, slot); break;
         case LONG:      mv.visitVarInsn(LLOAD, slot); break;
         case DOUBLE:    mv.visitVarInsn(DLOAD, slot); break;
@@ -573,6 +574,7 @@ public class LocalTypes {
     if (type.isPrimitive()) {
       switch (type.getType()) {
         case BOOLEAN:   mv.visitVarInsn(ISTORE, slot); break;
+        case BYTE:      mv.visitVarInsn(ISTORE, slot); break;
         case INT:       mv.visitVarInsn(ISTORE, slot); break;
         case LONG:      mv.visitVarInsn(LSTORE, slot); break;
         case DOUBLE:    mv.visitVarInsn(DSTORE, slot); break;

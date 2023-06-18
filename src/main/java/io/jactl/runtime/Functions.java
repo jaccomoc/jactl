@@ -115,10 +115,10 @@ public class Functions {
     if (match.isEmpty() && type.is(ARRAY) && type.isCastableTo(OBJECT_ARR)) {
       match = functions.stream().filter(f -> f.type.is(OBJECT_ARR)).findFirst();
     }
-    if (match.isEmpty() && type.is(LIST,MAP,STRING,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
+    if (match.isEmpty() && type.is(LIST,MAP,STRING,BYTE,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
       match = functions.stream().filter(f -> f.type.is(ITERATOR)).findFirst();
     }
-    if (match.isEmpty() && type.is(INT,LONG,DOUBLE,DECIMAL)) {
+    if (match.isEmpty() && type.is(BYTE,INT,LONG,DOUBLE,DECIMAL)) {
       match = functions.stream().filter(f -> f.type.is(NUMBER)).findFirst();
     }
     // Final check is for ANY

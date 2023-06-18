@@ -117,12 +117,14 @@ public class Utils {
     if (type1.is(DECIMAL)  || type2.is(DECIMAL))  { return DECIMAL; }
     if (type1.is(DOUBLE)   || type2.is(DOUBLE))   { return DOUBLE;  }
     if (type1.is(LONG)     || type2.is(LONG))     { return LONG;    }
-    if (type1.is(INT)      && type2.is(INT))      { return INT;     }
+    if (type1.is(INT)      || type2.is(INT))      { return INT;     }
+    if (type1.is(BYTE)     && type2.is(BYTE))     { return BYTE;    }
     return null;
   }
 
   static Object convertNumberTo(JactlType type, Object number) {
     switch (type.getType()) {
+      case BYTE:    return toByte(number);
       case INT:     return toInt(number);
       case LONG:    return toLong(number);
       case DOUBLE:  return toDouble(number);
@@ -134,6 +136,7 @@ public class Utils {
   static boolean toBoolean(Object value) {
     if (value == null)               { return false;              }
     if (value instanceof Boolean)    { return (boolean)value;     }
+    if (value instanceof Byte)       { return (byte)value != 0;    }
     if (value instanceof Integer)    { return (int)value != 0;    }
     if (value instanceof Long)       { return (long)value != 0;   }
     if (value instanceof Double)     { return (double)value != 0; }
@@ -142,8 +145,14 @@ public class Utils {
     return true;
   }
 
+  static byte toByte(Object value) {
+    if (value instanceof Byte) { return (byte)value; }
+    return (byte)toInt(value);
+  }
+
   static int toInt(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;         }
+    if (value instanceof Byte)       { return (byte)value;                    }
     if (value instanceof Integer)    { return (int)value;                     }
     if (value instanceof Long)       { return (int)(long)value;               }
     if (value instanceof Double)     { return ((Double)value).intValue();     }
@@ -153,6 +162,7 @@ public class Utils {
 
   static long toLong(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;          }
+    if (value instanceof Byte)       { return (byte)value;                     }
     if (value instanceof Integer)    { return (int)value;                      }
     if (value instanceof Long)       { return (long)value;                     }
     if (value instanceof Double)     { return ((Double)value).longValue();     }
@@ -162,6 +172,7 @@ public class Utils {
 
   static double toDouble(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;            }
+    if (value instanceof Byte)       { return (byte)value;                       }
     if (value instanceof Integer)    { return (int)value;                        }
     if (value instanceof Long)       { return (long)value;                       }
     if (value instanceof Double)     { return (double)value;                     }
@@ -171,6 +182,7 @@ public class Utils {
 
   static BigDecimal toDecimal(Object value) {
     if (value instanceof Boolean)    { return new BigDecimal((boolean)value ? 1 : 0); }
+    if (value instanceof Byte)       { return new BigDecimal((byte)value);            }
     if (value instanceof Integer)    { return new BigDecimal((int)value);             }
     if (value instanceof Long)       { return new BigDecimal((long)value);            }
     if (value instanceof Double)     { return BigDecimal.valueOf((double)value);      }
@@ -194,7 +206,7 @@ public class Utils {
       return BOOLEAN;
     }
     else
-    if (obj instanceof Integer || obj instanceof Short || obj instanceof Character) {
+    if (obj instanceof Byte || obj instanceof Integer || obj instanceof Short || obj instanceof Character) {
       int value = obj instanceof Character ? (char)obj : ((Number)obj).intValue();
       switch (value) {
         case -1:  mv.visitInsn(ICONST_M1);   break;
@@ -209,6 +221,10 @@ public class Utils {
           if (value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) { mv.visitIntInsn(SIPUSH, value); break; }
           mv.visitLdcInsn(value);
           break;
+      }
+      if (obj instanceof Byte) {
+        mv.visitInsn(I2B);
+        return BYTE;
       }
       return INT;
     }
@@ -309,6 +325,7 @@ public class Utils {
   public static void newArray(MethodVisitor mv, JactlType type, int numDimensions) {
     switch (type.getArrayType().getType()) {
       case BOOLEAN:  mv.visitIntInsn(NEWARRAY, T_BOOLEAN);                         break;
+      case BYTE:     mv.visitIntInsn(NEWARRAY, T_BYTE);                            break;
       case INT:      mv.visitIntInsn(NEWARRAY, T_INT);                             break;
       case LONG:     mv.visitIntInsn(NEWARRAY, T_LONG);                            break;
       case DOUBLE:   mv.visitIntInsn(NEWARRAY, T_DOUBLE);                          break;
@@ -322,6 +339,7 @@ public class Utils {
   public static void storeArrayElement(MethodVisitor mv, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN:  mv.visitInsn(BASTORE); break;
+      case BYTE:     mv.visitInsn(BASTORE); break;
       case INT:      mv.visitInsn(IASTORE); break;
       case LONG:     mv.visitInsn(LASTORE); break;
       case DOUBLE:   mv.visitInsn(DASTORE); break;
@@ -332,6 +350,7 @@ public class Utils {
   public static void loadArrayElement(MethodVisitor mv, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN:  mv.visitInsn(BALOAD); break;
+      case BYTE:     mv.visitInsn(BALOAD); break;
       case INT:      mv.visitInsn(IALOAD); break;
       case LONG:     mv.visitInsn(LALOAD); break;
       case DOUBLE:   mv.visitInsn(DALOAD); break;
@@ -347,6 +366,9 @@ public class Utils {
     switch (type.getType()) {
       case BOOLEAN:
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+        break;
+      case BYTE:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false);
         break;
       case INT:
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
@@ -372,10 +394,14 @@ public class Utils {
       }
     }
     else {
-      if (type.is(JactlType.BOOLEAN, JactlType.INT)) {
+      if (type.is(BYTE)) {
         mv.visitInsn(L2I);
-      }
-      if (type.is(JactlType.DOUBLE)) {
+        Utils.loadConst(mv, 255);
+        mv.visitInsn(IAND);
+        mv.visitInsn(I2B);
+      } else if (type.is(JactlType.BOOLEAN, JactlType.INT)) {
+        mv.visitInsn(L2I);
+      } else if (type.is(JactlType.DOUBLE)) {
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "longBitsToDouble", "(J)D", false);
       }
     }

@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
+import static io.jactl.JactlType.BYTE;
 import static io.jactl.JactlType.DECIMAL;
 import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.INT;
@@ -1173,7 +1174,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         convertToStringOrNull();
         return null;
       }
-      if (peek().unboxed().is(BOOLEAN, INT, LONG, DOUBLE, DECIMAL) && expr.type.is(BOOLEAN, INT, LONG, DOUBLE, DECIMAL) ||
+      if (peek().unboxed().is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) && expr.type.is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) ||
           peek().is(ANY, INSTANCE, MAP, LIST) && expr.type.is(INSTANCE)) {
         convertTo(expr.type, expr.left, !peek().isPrimitive(), expr.location);
         return null;
@@ -1248,7 +1249,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var maxType = Utils.maxNumericType(expr.left.type, expr.right.type);
       if (maxType != null || expr.left.type.is(BOOLEAN) && expr.right.type.is(BOOLEAN)) {
         // If we have numeric types or boolean
-        if (maxType == null || maxType.is(INT)) {
+        if (maxType == null || maxType.is(BYTE,INT)) {
           // There is no ICMP instruction so we turn int and boolean into longs so we can use LCMP
           maxType = LONG;
         }
@@ -1259,8 +1260,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         expect(2);
         switch (maxType.getType()) {
           case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
-          case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   push(INT);                           break;
-          case LONG:    mv.visitInsn(LCMP);     popType(2);   push(INT);                           break;
+          case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   push(INT);                break;
+          case LONG:    mv.visitInsn(LCMP);     popType(2);   push(INT);                break;
           default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
         }
         return null;
@@ -1307,11 +1308,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
       }
 
-      // We have two booleans or two numbers (int,long, or double)
-      JactlType operandType = expr.left.type.is(BOOLEAN) ? INT :
-                               expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
-                               expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
-                               INT;
+      // We have two booleans or two numbers (int, byte, long, or double)
+      JactlType operandType = expr.left.type.is(BOOLEAN,BYTE) ? INT :
+                              expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
+                              expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
+                              INT;
       compile(expr.left);
       convertTo(operandType, expr.left, false, expr.left.location);
       unbox();
@@ -1345,6 +1346,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Everything else
     compile(expr.left);
+    // Don't sign extend if doing bitwise operations
+    if (expr.left.type.is(BYTE) && expr.operator.getType().isBitOperator()) {
+      // If >> then don't mask as we want sign extension to take place so that we get 1s shifted in from the left.
+      // For all other operators, mask to prevent sign extension.
+      if (!expr.operator.is(DOUBLE_GREATER_THAN)) {
+        _loadConst(255);
+        mv.visitInsn(IAND);
+      }
+    }
     if (expr.operator.getType().isBitOperator() && expr.left.type.is(ANY)) {
       // Don't do any conversion yet for bit manipulation ops since if we have ANY we don't know whether
       // we want to an int or long manipulation yet. We need to box any primitives, however, if result
@@ -1355,6 +1365,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertTo(expr.type, expr.left, true, expr.left.location);
     }
     compile(expr.right);
+    if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN, DOUBLE_LESS_THAN)) {
+      // Since byte shift actually happens after promotion to int we restrict number of shifts to 0..7
+      _loadConst(7);
+      mv.visitInsn(IAND);
+    }
+    else
+    if (expr.right.type.is(BYTE) && expr.operator.getType().isBitOperator()) {
+      _loadConst(255);
+      mv.visitInsn(IAND);
+    }
     if (expr.operator.getType().isBitShift()) {
       // Right-hand side of shift has to be an integer if we know we aren't doing list << elem or list <<= elem
       if (!expr.left.type.is(LIST, ANY)) {
@@ -1381,9 +1401,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throw new UnsupportedOperationException("Unsupported operator " + expr.operator.getType());
     }
     else
-    if (expr.type.isBoxedOrUnboxed(INT, LONG, DOUBLE)) {
+    if (expr.type.isBoxedOrUnboxed(INT, BYTE, LONG, DOUBLE)) {
       expect(2);
-      int index = expr.type.isBoxedOrUnboxed(INT) ? intIdx :
+      int index = expr.type.isBoxedOrUnboxed(INT,BYTE) ? intIdx :
                   expr.type.isBoxedOrUnboxed(LONG) ? longIdx
                                                    : doubleIdx;
       List<Integer> ops = (List<Integer>) opCodes.get(index);
@@ -1402,6 +1422,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       ops.forEach(op -> mv.visitInsn(op));
       popType(2);
+      if (expr.type.is(BYTE)) {
+        mv.visitInsn(I2B);
+      }
       push(expr.type);
     }
     else
@@ -2569,6 +2592,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     switch (returnType.getType()) {
       case BOOLEAN:
+      case BYTE:
       case INT:
         mv.visitInsn(IRETURN);
         break;
@@ -2771,6 +2795,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case BOOLEAN:
         invokeMethod(Boolean.class, "booleanValue");
         break;
+      case BYTE:
+        invokeMethod(Byte.class, "byteValue");
+        break;
       case INT:
         invokeMethod(Integer.class, "intValue");
         break;
@@ -2823,6 +2850,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadDefaultValue(JactlType type) {
     switch (type.getType()) {
       case BOOLEAN:     loadConst(Boolean.FALSE);     break;
+      case BYTE:        loadConst((byte)0);           break;
       case INT:         loadConst(0);            break;
       case LONG:        loadConst(0L);           break;
       case DOUBLE:      loadConst( 0D);          break;
@@ -2858,6 +2886,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private Object valueOf(JactlType type, int value) {
     switch (type.getType()) {
+      case BYTE:     return (byte)value;
       case INT:      return value;
       case LONG:     return (long)value;
       case DOUBLE:   return (double)value;
@@ -2871,7 +2900,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // = Conversions
 
   private void castToIntOrLong(JactlType type, Location location) {
-    if (peek().isBoxedOrUnboxed(INT, LONG)) {
+    if (peek().isBoxedOrUnboxed(BYTE, INT, LONG)) {
       // If we already have a primitive int/long then we can convert using standard mechanism
       convertTo(type, null, false, location);
       return;
@@ -2894,6 +2923,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throwIfNull("Cannot convert null value to " + type, location);
     }
     switch (type.getType()) {
+      case BYTE:       return convertToByte(location);
       case INT:        return convertToInt(location);
       case LONG:       return convertToLong(location);
       case DOUBLE:     return convertToDouble(location);
@@ -2978,8 +3008,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     switch (peek().getType()) {
-      case BOOLEAN:  if (negated) { _booleanNot(); }      break;
-      case INT:      emitConvertToBoolean.accept(IFEQ);   break;
+      case BOOLEAN:
+        if (negated) {
+          _booleanNot();
+        }
+        break;
+      case BYTE:
+      case INT:
+        emitConvertToBoolean.accept(IFEQ);
+        break;
       case LONG: {
         _loadConst((long)0);
         mv.visitInsn(LCMP);      // Leave 0 on stack if equal to 0
@@ -3001,8 +3038,39 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private Void convertToByte(SourceLocation location) {
+    if (peek().isBoxedOrUnboxed(BYTE,BOOLEAN)) {
+      unbox();
+      setStackType(BYTE);
+      return null;
+    }
+
+    expect(1);
+    if (peek().is(ANY, STRING)) {
+      loadLocation(location);
+      invokeMethod(RuntimeUtils.class, "castToByte", Object.class, String.class, Integer.TYPE);
+    }
+    else
+    if (peek().isBoxed() || peek().is(DECIMAL)) {
+      mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
+      invokeMethod(Number.class, "byteValue");
+    }
+    else {
+      switch (peek().getType()) {
+        case INT:     break;
+        case LONG:    mv.visitInsn(L2I);   break;
+        case DOUBLE:  mv.visitInsn(D2I);   break;
+        default:      throw new CompileError("Cannot convert " + peek() + " to byte", (Token)location);
+      }
+      mv.visitInsn(I2B);
+    }
+    popType();
+    push(BYTE);
+    return null;
+  }
+
   private Void convertToInt(SourceLocation location) {
-    if (peek().isBoxedOrUnboxed(INT, BOOLEAN)) {
+    if (peek().isBoxedOrUnboxed(INT,BYTE,BOOLEAN)) {
       unbox();
       setStackType(INT);
       return null;
@@ -3048,6 +3116,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       switch (peek().getType()) {
+        case BYTE:
         case INT:     mv.visitInsn(I2L);   break;
         case DOUBLE:  mv.visitInsn(D2L);   break;
         default:      throw new CompileError("Cannot convert " + peek() + " to long", (Token)location);
@@ -3076,6 +3145,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       switch (peek().getType()) {
+        case BYTE:
         case INT:     mv.visitInsn(I2D);   break;
         case LONG:    mv.visitInsn(L2D);   break;
         default:      throw new CompileError("Cannot convert " + peek() + " to double", (Token)location);
@@ -3097,6 +3167,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else
     switch (peek().getType()) {
+      case BYTE:
       case INT:
       case LONG:
         convertToLong(location);
@@ -3167,7 +3238,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(type)) {
       return null;
     }
-    if (peek().is(ANY,LIST,ARRAY)) {
+    if (peek().is(ANY,LIST,ARRAY) || (peek().is(STRING) && type.getArrayType().is(BYTE))) {
       expect(1);
       loadConst(type);
       loadLocation(location);
@@ -3193,6 +3264,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     unbox();
     switch (peek().getType()) {
+      case BYTE:
+        _loadConst((int)-1);
+        mv.visitInsn(IXOR);
+        mv.visitInsn(I2B);
+        break;
       case INT:
         _loadConst((int)-1);
         mv.visitInsn(IXOR);
@@ -3213,6 +3289,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     unbox();
     switch (peek().getType()) {
+      case BYTE:    mv.visitInsn(INEG);  mv.visitInsn(I2B); break;
       case INT:     mv.visitInsn(INEG);  break;
       case LONG:    mv.visitInsn(LNEG);  break;
       case DOUBLE:  mv.visitInsn(DNEG);  break;
@@ -3290,9 +3367,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     };
 
     switch (varDecl.type.getType()) {
+      case BYTE:
       case INT:
         if (varDecl.type.isBoxed() || varDecl.isHeapLocal || varDecl.isField || amount == null) {
-          incOrDec.accept(() -> { mv.visitInsn(isInc ? IADD : ISUB); popType(); });
+          incOrDec.accept(() -> {
+            mv.visitInsn(isInc ? IADD : ISUB);
+            popType();
+            if (varDecl.type.is(BYTE)) { mv.visitInsn(I2B); }
+          });
         }
         else {
           int intAmt = (int)Utils.convertNumberTo(INT, amount);
@@ -3369,9 +3451,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(valueOf(peek(), 1));
     }
     switch (peek().getType()) {
-      case INT:     mv.visitInsn(isInc ? IADD : ISUB);   popType();                                    break;
-      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);   popType();                                    break;
-      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);   popType();                                    break;
+      case BYTE:    mv.visitInsn(isInc ? IADD : ISUB); mv.visitInsn(I2B); popType();              break;
+      case INT:     mv.visitInsn(isInc ? IADD : ISUB);                    popType();              break;
+      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);                    popType();              break;
+      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);                    popType();              break;
       case DECIMAL: invokeMethod(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class); break;
       default:      throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
@@ -4163,6 +4246,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadLocal(varDecl.slot);
       String methodName;
       switch (varDecl.type.getType()) {
+        case BYTE:         methodName = "byteValue";         break;
         case INT:          methodName = "intValue";          break;
         case LONG:         methodName = "longValue";         break;
         case DOUBLE:       methodName = "doubleValue";       break;
@@ -4485,6 +4569,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
                else {
                  switch (parentType.getArrayType().getType()) {
                    case BOOLEAN:  mv.visitInsn(BALOAD); break;
+                   case BYTE:     mv.visitInsn(BALOAD); break;
                    case INT:      mv.visitInsn(IALOAD); break;
                    case LONG:     mv.visitInsn(LALOAD); break;
                    case DOUBLE:   mv.visitInsn(DALOAD); break;

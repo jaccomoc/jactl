@@ -196,6 +196,10 @@ public class BaseTest {
           assertTrue(result instanceof boolean[]);
           assertArrayEquals((boolean[]) expected, (boolean[]) result);
           break;
+        case "[B":
+          assertTrue(result instanceof byte[]);
+          assertArrayEquals((byte[]) expected, (byte[]) result);
+          break;
         case "[I":
           assertTrue(result instanceof int[]);
           assertArrayEquals((int[]) expected, (int[]) result);
@@ -324,7 +328,7 @@ public class BaseTest {
   private static Expr.Call sleepify(Expr expr) {
     return new Expr.Call(expr.location,
                          new Expr.Identifier(expr.location.newIdent("sleep")),
-                         List.of(new Expr.Literal(new Token(TokenType.INTEGER_CONST, expr.location).setValue(0)),
+                         List.of(new Expr.Literal(new Token(TokenType.LONG_CONST, expr.location).setValue(0)),
                                  expr));
   }
 

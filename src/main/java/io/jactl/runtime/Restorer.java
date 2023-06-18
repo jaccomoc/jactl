@@ -127,6 +127,10 @@ public class Restorer {
     }
   }
 
+  public byte readByte() {
+    return buf[idx++];
+  }
+
   public int readCint() {
     int num = 0;
     int i = 0;
@@ -205,6 +209,7 @@ public class Restorer {
     // need to be restored.
     switch (JactlType.TypeEnum.values()[ordinal]) {
       case BOOLEAN:      return buf[idx++] == 0 ? false : true;
+      case BYTE:         return readByte();
       case INT:          return readCint();
       case LONG:         return readClong();
       case DOUBLE:       return readDouble();
@@ -307,6 +312,12 @@ public class Restorer {
     }
   }
 
+  private void readByteArr(byte[] arr) {
+    int size = readCint();
+    System.arraycopy(buf, idx, arr, 0, size);
+    idx += size;
+  }
+
   private void readIntArr(int[] arr) {
     int size = readCint();
     for (int i = 0; i < size; i++) {
@@ -343,6 +354,7 @@ public class Restorer {
     dimensions[0] = size;
     switch (type.getType()) {
       case BOOLEAN:    return Array.newInstance(boolean.class, dimensions);
+      case BYTE:       return Array.newInstance(byte.class, dimensions);
       case INT:        return Array.newInstance(int.class, dimensions);
       case LONG:       return Array.newInstance(long.class, dimensions);
       case DOUBLE:     return Array.newInstance(double.class, dimensions);
@@ -361,6 +373,7 @@ public class Restorer {
     if (numDimensions == 1) {
       switch (type.getType()) {
         case BOOLEAN:    readBooleanArr((boolean[])arr);     break;
+        case BYTE:       readByteArr((byte[])arr);           break;
         case INT:        readIntArr((int[])arr);             break;
         case LONG:       readLongArr((long[])arr);           break;
         case DOUBLE:     readDoubleArr((double[])arr);       break;

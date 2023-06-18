@@ -29,6 +29,18 @@ import static org.objectweb.asm.Opcodes.ARRAYLENGTH;
 public class BuiltinArrayFunctions {
 
   public static void registerFunctions() {
+    Jactl.method(JactlType.arrayOf(BOOLEAN))
+         .name("size")
+         .impl(BuiltinArrayFunctions.class, "booleanArrSize")
+         .inline("arrSizeInline")
+         .register();
+
+    Jactl.method(JactlType.arrayOf(BYTE))
+         .name("size")
+         .impl(BuiltinArrayFunctions.class, "byteArrSize")
+         .inline("arrSizeInline")
+         .register();
+
     Jactl.method(JactlType.arrayOf(INT))
          .name("size")
          .impl(BuiltinArrayFunctions.class, "intArrSize")
@@ -74,6 +86,12 @@ public class BuiltinArrayFunctions {
   public static void arrSizeInline(MethodVisitor mv) {
     mv.visitInsn(ARRAYLENGTH);
   }
+
+  public static Object booleanArrSizeData;
+  public static int booleanArrSize(boolean[] arr) { return arr.length; }
+
+  public static Object byteArrSizeData;
+  public static int byteArrSize(byte[] arr) { return arr.length; }
 
   public static Object intArrSizeData;
   public static int intArrSize(int[] arr) { return arr.length; }

@@ -443,6 +443,15 @@ public class JsonDecoder {
     return false;
   }
 
+  public byte getByte() {
+    int start = offset;
+    int value = getInt();
+    if (value >= 256 || value < -128) {
+      error("Value " + value + " does not fit in byte", start);
+    }
+    return (byte)value;
+  }
+
   public int getInt() {
     char c = nextChar();
     int start = offset - 1;

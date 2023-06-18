@@ -46,6 +46,7 @@ public class JactlType {
 
   public enum TypeEnum {
     BOOLEAN,
+    BYTE,
     INT,
     LONG,
     DOUBLE,
@@ -74,6 +75,8 @@ public class JactlType {
 
   public static JactlType BOOLEAN       = createPrimitive(TypeEnum.BOOLEAN);
   public static JactlType BOXED_BOOLEAN = createBoxedType(TypeEnum.BOOLEAN);
+  public static JactlType BYTE          = createPrimitive(TypeEnum.BYTE);
+  public static JactlType BOXED_BYTE    = createBoxedType(TypeEnum.BYTE);
   public static JactlType INT           = createPrimitive(TypeEnum.INT);
   public static JactlType BOXED_INT     = createBoxedType(TypeEnum.INT);
   public static JactlType LONG          = createPrimitive(TypeEnum.LONG);
@@ -215,6 +218,7 @@ public class JactlType {
   public static JactlType valueOf(TokenType tokenType) {
     switch (tokenType) {
       case BOOLEAN:    return BOOLEAN;
+      case BYTE:       return BYTE;
       case INT:        return INT;
       case LONG:       return LONG;
       case DOUBLE:     return DOUBLE;
@@ -236,6 +240,7 @@ public class JactlType {
   public TokenType tokenType() {
     switch (this.type) {
       case BOOLEAN:    return TokenType.BOOLEAN;
+      case BYTE:       return TokenType.BYTE;
       case INT:        return TokenType.INT;
       case LONG:       return TokenType.LONG;
       case DOUBLE:     return TokenType.DOUBLE;
@@ -255,6 +260,7 @@ public class JactlType {
   public static JactlType valueOf(TypeEnum type) {
     switch (type) {
       case BOOLEAN:      return BOOLEAN;
+      case BYTE:         return BYTE;
       case INT:          return INT;
       case LONG:         return LONG;
       case DOUBLE:       return DOUBLE;
@@ -283,11 +289,7 @@ public class JactlType {
 
   public boolean isNumeric() {
     switch (this.type) {
-      case INT:
-      case LONG:
-      case DOUBLE:
-      case DECIMAL:
-      case NUMBER:
+      case BYTE: case INT: case LONG: case DOUBLE: case DECIMAL: case NUMBER:
         return true;
       default:
         return false;
@@ -301,6 +303,7 @@ public class JactlType {
   public JactlType boxed() {
     switch (getType()) {
       case BOOLEAN:   return BOXED_BOOLEAN;
+      case BYTE:      return BOXED_BYTE;
       case INT:       return BOXED_INT;
       case LONG:      return BOXED_LONG;
       case DOUBLE:    return BOXED_DOUBLE;
@@ -311,6 +314,7 @@ public class JactlType {
   public JactlType unboxed() {
     switch (getType()) {
       case BOOLEAN:   return BOOLEAN;
+      case BYTE:      return BYTE;
       case INT:       return INT;
       case LONG:      return LONG;
       case DOUBLE:    return DOUBLE;
@@ -393,6 +397,13 @@ public class JactlType {
   }
 
   private static List                            resultTypes = List.of(
+    new TypePair(BYTE,    INT),       INT,
+    new TypePair(BYTE,    LONG),      LONG,
+    new TypePair(BYTE,    DOUBLE),    DOUBLE,
+    new TypePair(BYTE,    DECIMAL),   DECIMAL,
+    new TypePair(BYTE,    STRING),    STRING,
+    new TypePair(BYTE,    ANY),       ANY,
+
     new TypePair(INT,     LONG),      LONG,
     new TypePair(INT,     DOUBLE),    DOUBLE,
     new TypePair(INT,     DECIMAL),   DECIMAL,
@@ -507,18 +518,19 @@ public class JactlType {
     checkIsNumeric(type1, "left", operator);
     checkIsNumeric(type2, "right", operator);
 
-    // Check for bit manipulation operations which only work on int/long values
+    // Check for bit manipulation operations which only work on int/byte/long values
     if (operator.getType().isBitOperator()) {
-      if (!type1.is(INT,LONG,ANY)) {
-        throw new CompileError("Left-hand operand for '" + operator.getChars() + "' must be int or long", operator);
+      if (!type1.is(BYTE,INT,LONG,ANY)) {
+        throw new CompileError("Left-hand operand for '" + operator.getChars() + "' must be int, byte, or long", operator);
       }
-      if (!type2.is(INT,LONG,ANY)) {
-        throw new CompileError("Right-hand operand for '" + operator.getChars() + "' must be int or long", operator);
+      if (!type2.is(BYTE,INT,LONG,ANY)) {
+        throw new CompileError("Right-hand operand for '" + operator.getChars() + "' must be int, byte, or long", operator);
       }
       if (operator.getType().isBitShift()) { return type1;  }  // Result of bit shift is always type on lhs
       if (type1.is(ANY) || type2.is(ANY))  { return ANY;    }
-      // If both args are ints then result is int. Otherwise default to long.
-      return type1.is(LONG) || type2.is(LONG) ? LONG: INT;
+      return type1.is(LONG) || type2.is(LONG) ? LONG :
+             type1.is(INT)  || type2.is(INT)  ? INT :
+             BYTE;
     }
 
     if (type1.is(type2))                { return type1.unboxed(); }
@@ -558,6 +570,8 @@ public class JactlType {
       return JactlType.arrayOf(commonSuperType(type1.getArrayType(), type2.getArrayType()));
     }
     if (type1.isNumeric() && type2.isNumeric()) {
+      if (type1.is(BYTE))   { return type2; }
+      if (type2.is(BYTE))   { return type1; }
       if (type1.is(INT))    { return type2; }
       if (type2.is(INT))    { return type1; }
       if (type1.is(LONG))   { return type2; }
@@ -598,7 +612,7 @@ public class JactlType {
   public boolean isConvertibleTo(JactlType otherType, boolean isCast) {
     if (otherType.isBoxedOrUnboxed(BOOLEAN))                                    { return true; }
     if (!isCast) {
-      // Even if not normally convertible for "as" we support these conversions:
+      // Even if not normally convertible, when using "as" we support these conversions:
       //  - Anything can be converted to STRING or BOOLEAN
       //  - String can be converted to any numeric
       //  - String can be converted to List (of chars)
@@ -611,6 +625,10 @@ public class JactlType {
       if (is(MAP, LIST, ITERATOR) && otherType.is(MAP, LIST))                   { return true; }
       if (is(MAP, INSTANCE) && otherType.is(MAP, INSTANCE))                     { return true; }
     }
+    // Allow conversion between Strings and byte[]
+    if (is(STRING) && otherType.is(ARRAY) && otherType.arrayType.is(BYTE))      { return true; }
+    if (is(ARRAY) && arrayType.is(BYTE) && otherType.is(STRING))                { return true; }
+
     if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE)  { return otherType.isAssignableFrom(this); }
     if (is(CLASS) || otherType.is(CLASS))                                       { return false; }
     if (is(ANY) || otherType.is(ANY))                                           { return true; }
@@ -636,6 +654,7 @@ public class JactlType {
   public String descriptor() {
     switch (this.type) {
       case BOOLEAN:        return Type.getDescriptor(isBoxed() ? Boolean.class : boolean.class);
+      case BYTE:           return Type.getDescriptor(isBoxed() ? Byte.class : byte.class);
       case INT:            return Type.getDescriptor(isBoxed() ? Integer.class : int.class);
       case LONG:           return Type.getDescriptor(isBoxed() ? Long.class    : long.class);
       case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class  : double.class);
@@ -659,6 +678,7 @@ public class JactlType {
   public Type descriptorType() {
     switch (this.type) {
       case BOOLEAN:        return Type.getType(isBoxed() ? Boolean.class : boolean.class);
+      case BYTE:           return Type.getType(isBoxed() ? Byte.class : byte.class);
       case INT:            return Type.getType(isBoxed() ? Integer.class : int.class);
       case LONG:           return Type.getType(isBoxed() ? Long.class    : long.class);
       case DOUBLE:         return Type.getType(isBoxed() ? Double.class  : double.class);
@@ -683,6 +703,7 @@ public class JactlType {
   public String getInternalName() {
     switch (this.type) {
       case BOOLEAN:      return Type.getInternalName(isBoxed() ? Boolean.class : boolean.class);
+      case BYTE:         return Type.getInternalName(isBoxed() ? Byte.class : byte.class);
       case INT:          return Type.getInternalName(isBoxed() ? Integer.class : int.class);
       case LONG:         return Type.getInternalName(isBoxed() ? Long.class    : long.class);
       case DOUBLE:       return Type.getInternalName(isBoxed() ? Double.class  : double.class);
@@ -719,6 +740,7 @@ public class JactlType {
 
   public static JactlType typeOf(Object obj) {
     if (obj instanceof Boolean)      return BOOLEAN;
+    if (obj instanceof Byte)         return BYTE;
     if (obj instanceof Integer)      return INT;
     if (obj instanceof Long)         return LONG;
     if (obj instanceof Double)       return DOUBLE;
@@ -731,6 +753,7 @@ public class JactlType {
     if (obj instanceof long[])       return LONG_ARR;
     if (obj instanceof String[])     return STRING_ARR;
     if (obj instanceof Object[])     return OBJECT_ARR;
+    if (obj instanceof byte[])       return JactlType.arrayOf(BYTE);
     if (obj instanceof int[])        return JactlType.arrayOf(INT);
     if (obj instanceof boolean[])    return JactlType.arrayOf(BOOLEAN);
     if (obj instanceof double[])     return JactlType.arrayOf(DOUBLE);
@@ -741,6 +764,8 @@ public class JactlType {
   public static JactlType typeFromClass(Class clss) {
     if (clss == boolean.class)      { return BOOLEAN;       }
     if (clss == Boolean.class)      { return BOXED_BOOLEAN; }
+    if (clss == byte.class)         { return BYTE;          }
+    if (clss == Byte.class)         { return BOXED_BYTE;    }
     if (clss == int.class)          { return INT;           }
     if (clss == Integer.class)      { return BOXED_INT;     }
     if (clss == long.class)         { return LONG;          }
@@ -772,6 +797,7 @@ public class JactlType {
     try {
       switch (this.type) {
         case BOOLEAN:       return isBoxed() ? Boolean.class : boolean.class;
+        case BYTE:          return isBoxed() ? Byte.class : byte.class;
         case INT:           return isBoxed() ? Integer.class : int.class;
         case LONG:          return isBoxed() ? Long.class    : long.class;
         case DOUBLE:        return isBoxed() ? Double.class  : double.class;
@@ -806,9 +832,10 @@ public class JactlType {
   public String typeName() {
     switch (type) {
       case BOOLEAN:      return isBoxed() ? "Boolean" : "boolean";
+      case BYTE:         return isBoxed() ? "Byte"    : "byte";
       case INT:          return isBoxed() ? "Integer" : "int";
-      case LONG:         return isBoxed() ? "Long" : "long";
-      case DOUBLE:       return isBoxed() ? "Double" : "double";
+      case LONG:         return isBoxed() ? "Long"    : "long";
+      case DOUBLE:       return isBoxed() ? "Double"  : "double";
       case DECIMAL:      return "Decimal";
       case STRING:       return "String";
       case MAP:          return "Map";

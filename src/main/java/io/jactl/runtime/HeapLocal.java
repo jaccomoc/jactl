@@ -36,6 +36,7 @@ public class HeapLocal extends Number implements Checkpointable {
   public void   setValue(Object value) { this.value = value; }
   public Object getValue()             { return value; }
 
+  @Override public byte   byteValue()   { return ((Number)value).byteValue();   }
   @Override public int    intValue()    { return ((Number)value).intValue();    }
   @Override public long   longValue()   { return ((Number)value).longValue();   }
   @Override public float  floatValue()  { return ((Number)value).floatValue();  }

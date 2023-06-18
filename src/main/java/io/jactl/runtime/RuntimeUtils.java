@@ -30,6 +30,7 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -247,10 +248,7 @@ public class RuntimeUtils {
       if (obj1 instanceof Double || obj2 instanceof Double) {
         return Double.compare(n1.doubleValue(), n2.doubleValue());
       }
-      if (obj1 instanceof Long || obj2 instanceof Long) {
-        return Long.compare(n1.longValue(), n2.longValue());
-      }
-      return Integer.compare(n1.intValue(), n2.intValue());
+      return Long.compare(n1.longValue(), n2.longValue());
     }
     if (obj1 instanceof Boolean && obj2 instanceof Boolean) {
       return Boolean.compare((boolean) obj1, (boolean) obj2);
@@ -378,10 +376,15 @@ public class RuntimeUtils {
       return lhs + rhs;
     }
 
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
-    return lhs + rhs;
+    if (left instanceof Integer || right instanceof Integer) {
+      var lhs = ((Number) left).intValue();
+      var rhs = ((Number) right).intValue();
+      return lhs + rhs;
+    }
+
+    var lhs = (byte)left;
+    var rhs = (byte)right;
+    return (byte)(lhs + rhs);
   }
 
   public static Object plus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -410,10 +413,15 @@ public class RuntimeUtils {
       return lhs + rhs;
     }
 
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
-    return lhs + rhs;
+    if (left instanceof Integer || right instanceof Integer) {
+      var lhs = ((Number) left).intValue();
+      var rhs = ((Number) right).intValue();
+      return lhs + rhs;
+    }
+
+    var lhs = (byte)left;
+    var rhs = (byte)right;
+    return (byte)(lhs + rhs);
   }
 
   public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -445,10 +453,15 @@ public class RuntimeUtils {
       return lhs * rhs;
     }
 
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
-    return lhs * rhs;
+    if (left instanceof Integer || right instanceof Integer) {
+      var lhs = ((Number) left).intValue();
+      var rhs = ((Number) right).intValue();
+      return lhs * rhs;
+    }
+
+    var lhs = (byte)left;
+    var rhs = (byte)right;
+    return (byte)(lhs * rhs);
   }
 
   public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -479,10 +492,15 @@ public class RuntimeUtils {
       return lhs - rhs;
     }
 
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
-    return lhs - rhs;
+    if (left instanceof Integer || right instanceof Integer) {
+      var lhs = ((Number) left).intValue();
+      var rhs = ((Number) right).intValue();
+      return lhs - rhs;
+    }
+
+    var lhs = (byte)left;
+    var rhs = (byte)right;
+    return (byte)(lhs - rhs);
   }
 
   public static Object divide(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -504,22 +522,22 @@ public class RuntimeUtils {
       return lhs / rhs;
     }
 
-    if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number) left).longValue();
-      long rhs = ((Number) right).longValue();
-      try {
+    try {
+      if (left instanceof Long || right instanceof Long) {
+        long lhs = ((Number) left).longValue();
+        long rhs = ((Number) right).longValue();
         return lhs / rhs;
       }
-      catch (ArithmeticException e) {
-        throw new RuntimeError("Divide by zero", source, offset);
-      }
-    }
 
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
-    try {
-      return lhs / rhs;
+      if (left instanceof Integer || right instanceof Integer) {
+        var lhs = ((Number) left).intValue();
+        var rhs = ((Number) right).intValue();
+        return lhs / rhs;
+      }
+
+      var lhs = (byte) left;
+      var rhs = (byte) right;
+      return (byte) (lhs / rhs);
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
@@ -545,22 +563,22 @@ public class RuntimeUtils {
       return lhs % rhs;
     }
 
-    if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number) left).longValue();
-      long rhs = ((Number) right).longValue();
-      try {
+    try {
+      if (left instanceof Long || right instanceof Long) {
+        long lhs = ((Number) left).longValue();
+        long rhs = ((Number) right).longValue();
         return lhs % rhs;
       }
-      catch (ArithmeticException e) {
-        throw new RuntimeError("Divide by zero", source, offset);
-      }
-    }
 
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
-    try {
-      return lhs % rhs;
+      if (left instanceof Integer || right instanceof Integer) {
+        var lhs = ((Number) left).intValue();
+        var rhs = ((Number) right).intValue();
+        return lhs % rhs;
+      }
+
+      var lhs = (byte)left;
+      var rhs = (byte)right;
+      return (byte)(lhs % rhs);
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
@@ -586,22 +604,22 @@ public class RuntimeUtils {
       return ((lhs % rhs)+rhs) % rhs;
     }
 
-    if (left instanceof Long || right instanceof Long) {
-      long lhs = ((Number) left).longValue();
-      long rhs = ((Number) right).longValue();
-      try {
-        return ((lhs % rhs)+rhs) % rhs;
-      }
-      catch (ArithmeticException e) {
-        throw new RuntimeError("Divide by zero", source, offset);
-      }
-    }
-
-    // Must be integers
-    int lhs = (int) left;
-    int rhs = (int) right;
     try {
-      return ((lhs % rhs)+rhs) % rhs;
+      if (left instanceof Long || right instanceof Long) {
+        long lhs = ((Number) left).longValue();
+        long rhs = ((Number) right).longValue();
+        return ((lhs % rhs) + rhs) % rhs;
+      }
+
+      if (left instanceof Integer || right instanceof Integer) {
+        var lhs = ((Number) left).intValue();
+        var rhs = ((Number) right).intValue();
+        return ((lhs % rhs) + rhs) % rhs;
+      }
+
+      var lhs = (byte)left;
+      var rhs = (byte)right;
+      return (byte)(((lhs % rhs)+rhs) % rhs);
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
@@ -617,6 +635,7 @@ public class RuntimeUtils {
 
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
     if (operator == TRIPLE_EQUAL) {
+      if (left == right)                                        { return true;  }
       if (left instanceof Boolean || left instanceof String)    { return left.equals(right); }
       if (!(left instanceof Number && right instanceof Number)) { return left == right; }
       // If both Number then fall through...
@@ -658,7 +677,7 @@ public class RuntimeUtils {
     throw new IllegalStateException("Internal error: unexpected operator " + operator);
   }
 
-  private static boolean isEquals(Object left, Object right, String source, int offset) {
+  public static boolean isEquals(Object left, Object right, String source, int offset) {
     return booleanOp(left, right, EQUAL_EQUAL, source, offset);
   }
 
@@ -768,124 +787,102 @@ public class RuntimeUtils {
       return listAddSingle((List)left, right, isAssignment);
     }
 
+    boolean isShift = operator == DOUBLE_LESS_THAN || operator == DOUBLE_GREATER_THAN || operator == TRIPLE_GREATER_THAN;
+
     boolean leftIsLong = false;
     if (left instanceof Long) {
       leftIsLong = true;
     }
-    else if (!(left instanceof Integer)) {
-      throw new RuntimeError("Left-hand side of '" + operator + "' must be int or long (not " + className(left) + ")", source, offset);
+    else if (!(left instanceof Integer || left instanceof Byte)) {
+      throw new RuntimeError("Left-hand side of '" + operator + "' must be int, byte, or long (not " + className(left) + ")", source, offset);
     }
 
-    if (!(right instanceof Long) && !(right instanceof Integer)) {
-      throw new RuntimeError("Right-hand side of '" + operator + "' must be int or long (not " + className(right) + ")", source, offset);
+    if (!(right instanceof Long) && !(right instanceof Integer || right instanceof Byte)) {
+      throw new RuntimeError("Right-hand side of '" + operator + "' must be int, byte, or long (not " + className(right) + ")", source, offset);
     }
 
-    switch (operator) {
-      case DOUBLE_LESS_THAN:
-        if (leftIsLong) {
-          return ((long) left) << ((Number) right).intValue();
-        }
-        return ((int) left) << ((Number) right).intValue();
-      case DOUBLE_GREATER_THAN:
-        if (leftIsLong) {
-          return ((long) left) >> ((Number) right).intValue();
-        }
-        return ((int) left) >> ((Number) right).intValue();
-      case TRIPLE_GREATER_THAN:
-        if (leftIsLong) {
-          return ((long) left) >>> ((Number) right).intValue();
-        }
-        return ((int) left) >>> ((Number) right).intValue();
+    long rhs = ((Number) right).longValue();
+    if (isShift) {
+      // Maximum shift amount based on size of lhs
+      rhs = leftIsLong ? rhs : left instanceof Integer ? rhs & 0x1f : rhs & 0x7;
     }
-
-    if (leftIsLong || right instanceof Long) {
-      long lhs = ((Number) left).longValue();
-      long rhs = ((Number) right).longValue();
-      switch (operator) {
-        case AMPERSAND:
-          return lhs & rhs;
-        case PIPE:
-          return lhs | rhs;
-        case ACCENT:
-          return lhs ^ rhs;
-        default:
-          throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+    else if (rhs < 0) {
+      // For non-shift don't sign extend ints and bytes
+      if (right instanceof Integer) {
+        rhs &= 0xffffffff;
+      }
+      if (right instanceof Byte) {
+        rhs &= 0xff;
       }
     }
 
-    int lhs = (int) left;
-    int rhs = (int) right;
-    switch (operator) {
-      case AMPERSAND:
-        return lhs & rhs;
-      case PIPE:
-        return lhs | rhs;
-      case ACCENT:
-        return lhs ^ rhs;
-      default:
-        throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+    long result;
+
+    // >> is special since it works differently for negative numbers
+    if (operator == DOUBLE_GREATER_THAN) {
+      long lhs = ((Number) left).longValue();
+      result = lhs >> rhs;
     }
+    else {
+      long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((byte)left) & 0xff : (long)(int)left & 0xffffffffL;
+      switch (operator) {
+        case DOUBLE_LESS_THAN:    result = lhs << rhs;  break;
+        case TRIPLE_GREATER_THAN: result = lhs >>> rhs; break;
+        case AMPERSAND:           result = lhs & rhs;   break;
+        case PIPE:                result = lhs | rhs;   break;
+        case ACCENT:              result = lhs ^ rhs;   break;
+        default:                  throw new IllegalStateException("Internal error: operator " + operator + " not supported");
+      }
+    }
+    if (isShift) {
+      // Only left hand side matters for return type when shifting since shift amount is not relevant
+      if (leftIsLong)              { return result; }
+      if (left instanceof Integer) { return (int)result; }
+      return (byte)result;
+    }
+
+    if (leftIsLong || right instanceof Long)                 { return result; }
+    if (left instanceof Integer || right instanceof Integer) { return (int)result; }
+    return (byte)result;
   }
 
   public static Object arithmeticNot(Object obj, String source, int offset) {
-    if (!(obj instanceof Long) && !(obj instanceof Integer)) {
-      throw new RuntimeError("Operand for '~' must be int or long (not " + className(obj) + ")", source, offset);
+    if (!(obj instanceof Long) && !(obj instanceof Integer || obj instanceof Byte)) {
+      throw new RuntimeError("Operand for '~' must be int, byte, or long (not " + className(obj) + ")", source, offset);
     }
 
-    if (obj instanceof Integer) {
-      return ~(int) obj;
-    }
-    return ~(long) obj;
+    if (obj instanceof Integer) { return ~(int)obj;   }
+    if (obj instanceof Long)    { return ~(long)obj;   }
+    return (byte)~(byte)obj;
   }
 
   public static Object negateNumber(Object obj, String source, int offset) {
     ensureNonNull(obj, source, offset);
-    if (obj instanceof BigDecimal) {
-      return ((BigDecimal) obj).negate();
-    }
-    if (obj instanceof Double) {
-      return -(double) obj;
-    }
-    if (obj instanceof Long) {
-      return -(long) obj;
-    }
-    if (obj instanceof Integer) {
-      return -(int) obj;
-    }
+    if (obj instanceof BigDecimal) { return ((BigDecimal) obj).negate(); }
+    if (obj instanceof Double)     { return -(double) obj; }
+    if (obj instanceof Long)       { return -(long) obj; }
+    if (obj instanceof Integer)    { return -(int) obj; }
+    if (obj instanceof Byte)       { return (byte)-(byte)obj; }
     throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset);
   }
 
   public static Object incNumber(Object obj, String operator, String source, int offset) {
     ensureNonNull(obj, source, offset);
-    if (obj instanceof BigDecimal) {
-      return ((BigDecimal) obj).add(BigDecimal.ONE);
-    }
-    if (obj instanceof Double) {
-      return (double) obj + 1;
-    }
-    if (obj instanceof Long) {
-      return (long) obj + 1;
-    }
-    if (obj instanceof Integer) {
-      return (int) obj + 1;
-    }
+    if (obj instanceof BigDecimal) { return ((BigDecimal) obj).add(BigDecimal.ONE);  }
+    if (obj instanceof Double)     { return (double) obj + 1;                        }
+    if (obj instanceof Long)       { return (long) obj + 1;                          }
+    if (obj instanceof Integer)    { return (int) obj + 1;                           }
+    if (obj instanceof Byte)       { return (byte)((byte)obj + 1);                   }
     return binaryOp(obj, 1, PLUS, operator, -1, source, offset);
   }
 
   public static Object decNumber(Object obj, String operator, String source, int offset) {
     ensureNonNull(obj, source, offset);
-    if (obj instanceof BigDecimal) {
-      return ((BigDecimal) obj).subtract(BigDecimal.ONE);
-    }
-    if (obj instanceof Double) {
-      return (double) obj - 1;
-    }
-    if (obj instanceof Long) {
-      return (long) obj - 1;
-    }
-    if (obj instanceof Integer) {
-      return (int) obj - 1;
-    }
+    if (obj instanceof BigDecimal) { return ((BigDecimal) obj).subtract(BigDecimal.ONE); }
+    if (obj instanceof Double)     { return (double) obj - 1;                            }
+    if (obj instanceof Long)       { return (long) obj - 1;                              }
+    if (obj instanceof Integer)    { return (int) obj - 1;                               }
+    if (obj instanceof Byte)       { return (byte)((byte)obj - 1);                       }
     return binaryOp(obj, 1, MINUS, operator, -1, source, offset);
   }
 
@@ -974,42 +971,27 @@ public class RuntimeUtils {
    * @return negated if object is "true" and !negated otherwise
    */
   public static boolean isTruth(Object value, boolean negated) {
-    if (value == null) {
-      return negated;
-    }
-    if (value instanceof Boolean) {
-      return negated != (boolean) value;
-    }
-    if (value instanceof String) {
-      return negated == ((String) value).isEmpty();
-    }
-    if (value instanceof Integer) {
-      return negated == ((int) value == 0);
-    }
-    if (value instanceof Long) {
-      return negated == ((long) value == 0);
-    }
-    if (value instanceof Double) {
-      return negated == ((double) value == 0);
-    }
-    if (value instanceof BigDecimal) {
-      return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO);
-    }
-    if (value instanceof List) {
-      return negated == ((List) value).isEmpty();
-    }
-    if (value instanceof Map) {
-      return negated == ((Map) value).isEmpty();
-    }
-    if (value instanceof Object[]) {
-      return negated == (((Object[]) value).length == 0);
-    }
+    if (value == null)               { return negated; }
+    if (value instanceof Boolean)    { return negated != (boolean) value; }
+    if (value instanceof String)     { return negated == ((String) value).isEmpty(); }
+    if (value instanceof Integer)    { return negated == ((int) value == 0); }
+    if (value instanceof Byte)       { return negated == ((byte) value == 0); }
+    if (value instanceof Long)       { return negated == ((long) value == 0); }
+    if (value instanceof Double)     { return negated == ((double) value == 0); }
+    if (value instanceof BigDecimal) { return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO); }
+    if (value instanceof List)       { return negated == ((List) value).isEmpty(); }
+    if (value instanceof Map)        { return negated == ((Map) value).isEmpty(); }
+    if (value instanceof Object[])    { return negated == (((Object[]) value).length == 0); }
     return !negated;
   }
 
   public static String toStringOrNull(Object obj) {
     if (obj == null) {
       return null;
+    }
+    // Special case for byte[]
+    if (obj instanceof byte[]) {
+      return new String((byte[])obj, StandardCharsets.UTF_8);
     }
     return toString(obj);
   }
@@ -1046,6 +1028,7 @@ public class RuntimeUtils {
       obj = Arrays.asList((Object[]) obj);
     }
     if (obj instanceof boolean[]) { return Arrays.toString((boolean[])obj); }
+    if (obj instanceof byte[])    { return Arrays.toString((byte[])obj); }
     if (obj instanceof int[])     { return Arrays.toString((int[])obj); }
     if (obj instanceof long[])    { return Arrays.toString((long[])obj); }
     if (obj instanceof double[])  { return Arrays.toString((double[])obj); }
@@ -1446,6 +1429,10 @@ public class RuntimeUtils {
         int[] arr = (int[])parent;
         return arr[idx >= 0 ? idx : idx + arr.length];
       }
+      if (parent instanceof byte[]) {
+        byte[] arr = (byte[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length];
+      }
       if (parent instanceof Object[]) {
         Object[] arr = (Object[])parent;
         return arr[idx >= 0 ? idx : idx + arr.length];
@@ -1490,6 +1477,10 @@ public class RuntimeUtils {
       if (parent instanceof Object[]) {
         Object[] arr = (Object[])parent;
         return arr[idx >= 0 ? idx : idx + arr.length] = value;
+      }
+      if (parent instanceof byte[]) {
+        byte[] arr = (byte[])parent;
+        return arr[idx >= 0 ? idx : idx + arr.length] = ((Number)value).byteValue();
       }
       if (parent instanceof long[]) {
         long[] arr = (long[])parent;
@@ -1651,6 +1642,7 @@ public class RuntimeUtils {
     }
 
     if (!isDot && parent.getClass().isArray()) {
+      value = castTo(parent.getClass().getComponentType(), value, source, offset);
       storeArrayField(parent, field, value, source, offset);
       return value;
     }
@@ -1753,6 +1745,7 @@ public class RuntimeUtils {
     if (obj instanceof Map)           { return JactlIterator.of((Map)obj);       }
     if (obj instanceof Object[])      { return JactlIterator.of((Object[])obj);  }
     if (obj instanceof int[])         { return JactlIterator.of((int[])obj);     }
+    if (obj instanceof byte[])        { return JactlIterator.of((byte[])obj);    }
     if (obj instanceof long[])        { return JactlIterator.of((long[])obj);    }
     if (obj instanceof boolean[])     { return JactlIterator.of((boolean[])obj); }
     if (obj instanceof double[])      { return JactlIterator.of((double[])obj);  }
@@ -1778,6 +1771,7 @@ public class RuntimeUtils {
 
   private enum FieldType {
     BOOLEAN,
+    BYTE,
     INT,
     LONG,
     DOUBLE,
@@ -1790,6 +1784,7 @@ public class RuntimeUtils {
 
   private static Map<Class, FieldType> classToType = Map.of(
     boolean.class, FieldType.BOOLEAN,
+    byte.class, FieldType.BYTE,
     int.class, FieldType.INT,
     long.class, FieldType.LONG,
     double.class, FieldType.DOUBLE,
@@ -1801,6 +1796,9 @@ public class RuntimeUtils {
   );
 
   public static Object castTo(Class clss, Object value, String source, int offset) {
+    if (clss.isArray()) {
+      return castToArray(value, clss, source, offset);
+    }
     FieldType type = classToType.get(clss);
     if (type == null) {
       if (value == null || clss.isAssignableFrom(value.getClass())) {
@@ -1811,6 +1809,8 @@ public class RuntimeUtils {
       switch (type) {
         case BOOLEAN:
           return isTruth(value, false);
+        case BYTE:
+          return castToByte(value, source, offset);
         case INT:
           return castToInt(value, source, offset);
         case LONG:
@@ -1833,28 +1833,18 @@ public class RuntimeUtils {
   }
 
   public static int castToIntValue(Object obj, String source, int offset) {
-    if (obj instanceof Integer) {
-      return (int) obj;
-    }
-    if (obj instanceof Long) {
-      return (int) (long) obj;
-    }
-    if (obj == null) {
-      throw new NullError("Null value for int", source, offset);
-    }
+    if (obj instanceof Integer) { return (int) obj; }
+    if (obj instanceof Long)    { return (int)(long) obj; }
+    if (obj instanceof Byte)    { return (byte)obj; }
+    if (obj == null)            { throw new NullError("Null value for int", source, offset); }
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to int", source, offset);
   }
 
   public static long castToLongValue(Object obj, String source, int offset) {
-    if (obj instanceof Long) {
-      return (long) obj;
-    }
-    if (obj instanceof Integer) {
-      return (long) (int) obj;
-    }
-    if (obj == null) {
-      throw new NullError("Null value for long", source, offset);
-    }
+    if (obj instanceof Long)    { return (long) obj; }
+    if (obj instanceof Integer) { return (int) obj; }
+    if (obj instanceof Byte)    { return (byte) obj; }
+    if (obj == null)            { throw new NullError("Null value for long", source, offset); }
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to long", source, offset);
   }
 
@@ -1864,6 +1854,9 @@ public class RuntimeUtils {
     }
     if (obj == null) {
       return null;
+    }
+    if (obj instanceof byte[]) {
+      return new String((byte[])obj, StandardCharsets.UTF_8);
     }
     throw new RuntimeError("Cannot convert object of type " + className(obj) + " to String", source, offset);
   }
@@ -1950,6 +1943,23 @@ public class RuntimeUtils {
     catch (Continuation cont) {
       throw new Continuation(cont, convertIteratorToList$cHandle,methodLocation + 1, null, new Object[]{ result, iterable });
     }
+  }
+
+  public static byte castToByte(Object obj, String source, int offset) {
+    if (obj instanceof Number) {
+      return ((Number) obj).byteValue();
+    }
+    if (obj instanceof String) {
+      String value = (String) obj;
+      if (value.length() != 1) {
+        throw new RuntimeError((value.isEmpty() ? "Empty String" : "String with multiple chars") + " cannot be cast to byte", source, offset);
+      }
+      return (byte) (value.charAt(0));
+    }
+    if (obj == null) {
+      throw new NullError("Cannot convert null value to byte", source, offset);
+    }
+    throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to byte", source, offset);
   }
 
   public static int castToInt(Object obj, String source, int offset) {
@@ -2053,6 +2063,9 @@ public class RuntimeUtils {
       }
       return arr;
     }
+    if (obj instanceof String && componentType == byte.class) {
+      return ((String)obj).getBytes(StandardCharsets.UTF_8);
+    }
     throw new RuntimeError("Cannot cast from " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
   }
 
@@ -2066,6 +2079,7 @@ public class RuntimeUtils {
       }
       if (obj instanceof Number) {
         Number num = (Number)obj;
+        if (clss == byte.class)                { return num.byteValue(); }
         if (clss == int.class)                 { return num.intValue(); }
         if (clss == long.class)                { return num.longValue(); }
         if (clss == double.class)              { return num.doubleValue(); }
@@ -2114,6 +2128,7 @@ public class RuntimeUtils {
     if (val instanceof Integer)    { return BigDecimal.valueOf((int)val); }
     if (val instanceof Long)       { return BigDecimal.valueOf((long)val); }
     if (val instanceof Double)     { return BigDecimal.valueOf((double)val); }
+    if (val instanceof Byte)       { return BigDecimal.valueOf((byte)val); }
     return null;
   }
 
@@ -2123,6 +2138,7 @@ public class RuntimeUtils {
     if (obj instanceof BigDecimal)        { return "Decimal"; }
     if (obj instanceof Double)            { return "double"; }
     if (obj instanceof Long)              { return "long"; }
+    if (obj instanceof Byte)              { return "byte"; }
     if (obj instanceof Integer)           { return "int"; }
     if (obj instanceof Boolean)           { return "boolean"; }
     if (obj instanceof Map)               { return "Map"; }
@@ -2291,7 +2307,14 @@ public class RuntimeUtils {
       return ((String)collection).contains((String)elem) == isIn;
     }
     if (collection instanceof List) {
-      return ((List)collection).contains(elem) == isIn;
+      List list = (List)collection;
+      int size = list.size();
+      for (int i = 0; i < size; i++) {
+        if (isEquals(list.get(i), elem, source, offset)) {
+          return isIn;
+        }
+      }
+      return !isIn;
     }
     if (collection instanceof Map) {
       return ((Map)collection).containsKey(elem) == isIn;
@@ -2306,6 +2329,16 @@ public class RuntimeUtils {
   // This conversion is used by the "as" operator which is much more forgiving than a straight cast. The
   // "as" operator tries to convert anything where it makes sense to do so whereas with cast the object
   // must already be the right type (or very close to it - e.g for numbers).
+
+  public static byte asByte(Object obj, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to byte", source, offset); }
+    if (obj instanceof Number)    { return ((Number)obj).byteValue(); }
+    if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to byte", source, offset); }
+    try {
+      return (byte)Integer.parseInt((String)obj);
+    }
+    catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid number", source, offset, e); }
+  }
 
   public static int asInt(Object obj, String source, int offset) {
     if (obj == null)              { throw new NullError("Null value cannot be coerced to int", source, offset); }
@@ -2368,6 +2401,14 @@ public class RuntimeUtils {
     }
     if (obj instanceof int[]) {
       int[] arr = (int[])obj;
+      List list = new ArrayList(arr.length);
+      for (int i = 0; i < arr.length; i++) {
+        list.add(arr[i]);
+      }
+      return list;
+    }
+    if (obj instanceof byte[]) {
+      byte[] arr = (byte[])obj;
       List list = new ArrayList(arr.length);
       for (int i = 0; i < arr.length; i++) {
         list.add(arr[i]);

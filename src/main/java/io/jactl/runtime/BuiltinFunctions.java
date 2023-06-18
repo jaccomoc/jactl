@@ -328,6 +328,28 @@ public class BuiltinFunctions {
            .impl(Json.class, "fromJson")
            .register();
 
+      // byte methods
+      Jactl.method(BYTE)
+           .name("asChar")
+           .impl(BuiltinFunctions.class, "byteAsChar")
+           .register();
+
+      Jactl.method(BYTE)
+           .name("sqr")
+           .impl(BuiltinFunctions.class, "byteSqr")
+           .register();
+
+      Jactl.method(BYTE)
+           .name("abs")
+           .impl(BuiltinFunctions.class, "byteAbs")
+           .register();
+
+      Jactl.method(BYTE)
+           .name("toBase")
+           .param("base")
+           .impl(BuiltinFunctions.class, "byteToBase")
+           .register();
+
       // int methods
       Jactl.method(INT)
            .name("asChar")
@@ -682,6 +704,8 @@ public class BuiltinFunctions {
   /////////////////////////////////////
 
   // = abs
+  public static Object byteAbsData;
+  public static byte byteAbs(byte n)                { return n < 0 ? (byte)-n : (byte)n; }
   public static Object intAbsData;
   public static int intAbs(int n)                   { return n < 0 ? -n : n; }
   public static Object longAbsData;
@@ -694,6 +718,8 @@ public class BuiltinFunctions {
   // = asChar
   public static Object intAsCharData;
   public static String intAsChar(int c) { return String.valueOf((char)c); }
+  public static Object byteAsCharData;
+  public static String byteAsChar(byte c) { return String.valueOf((char)c); }
 
   // = toBase
   public static Object longToBaseData;
@@ -710,6 +736,14 @@ public class BuiltinFunctions {
       throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
     }
     return Integer.toUnsignedString(num, base).toUpperCase();
+  }
+
+  public static Object byteToBaseData;
+  public static String byteToBase(byte num, String source, int offset, int base) {
+    if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
+      throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
+    }
+    return Integer.toUnsignedString(num & 0xff, base).toUpperCase();
   }
 
   // = sqrt
@@ -733,6 +767,8 @@ public class BuiltinFunctions {
   }
 
   // = sqr
+  public static Object byteSqrData;
+  public static int byteSqr(byte num, String source, int offset) { return num * num; }
   public static Object intSqrData;
   public static int intSqr(int num, String source, int offset) { return num * num; }
   public static Object longSqrData;
@@ -745,9 +781,13 @@ public class BuiltinFunctions {
   // = pow
   public static Object numberPowData;
   public static Object numberPow(Number num, String source, int offset, Number power) {
-    if (num instanceof BigDecimal && power instanceof Integer && (int)power >= 0) {
+    if (num instanceof BigDecimal && !(power instanceof Double || power instanceof BigDecimal) && power.longValue() >= 0) {
       try {
-        return ((BigDecimal)num).pow((int)power);
+        long exponent = power.longValue();
+        if (exponent > Integer.MAX_VALUE) {
+          throw new RuntimeError("Illegal request: exponent (" + exponent + ") too large", source, offset);
+        }
+        return ((BigDecimal)num).pow((int)exponent);
       }
       catch (Exception e) {
         throw new RuntimeError("Illegal request: raising " + num + " to " + power, source, offset);
@@ -938,7 +978,7 @@ public class BuiltinFunctions {
   public static Object iteratorUniqueData;
   public static JactlIterator iteratorUnique(Object iterable, Continuation c, String source, int offset) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
-    return new UniqueIterator(iter);
+    return new UniqueIterator(iter, source, offset);
   }
 
   ////////////////////////////////
@@ -1224,8 +1264,8 @@ public class BuiltinFunctions {
       throw new RuntimeError("Empty list for avg() function", source, offset);
     }
     Object value = listSum(list, source, offset);
-    if (value instanceof Double)                           { value = BigDecimal.valueOf((double)value); }
-    if (value instanceof Integer || value instanceof Long) { value = BigDecimal.valueOf(((Number)value).longValue()); }
+    if (value instanceof Double)             { value = BigDecimal.valueOf((double)value); }
+    else if (!(value instanceof BigDecimal)) { value = BigDecimal.valueOf(((Number)value).longValue()); }
     return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(size), Utils.DEFAULT_MIN_SCALE, source, offset);
   }
 

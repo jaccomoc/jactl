@@ -643,8 +643,9 @@ public class ClassCompiler {
     final int ARR_IDX_SLOT = arraySlots;
     final int ARR_SLOT     = arraySlots + 1;
     switch (type.getType()) {
-      case BOOLEAN: invoke.accept("writeBoolean", boolean.class);   break;
+      case BYTE:
       case INT:     invoke.accept("writeInt", int.class);           break;
+      case BOOLEAN: invoke.accept("writeBoolean", boolean.class);   break;
       case LONG:    invoke.accept("writeLong", long.class);         break;
       case DOUBLE:  invoke.accept("writeDouble", double.class);     break;
       case STRING: {
@@ -1044,7 +1045,7 @@ END: mv.visitLabel(END);
   private void readJsonField(MethodVisitor mv, JactlType type, String fieldName, Label ERROR, int DECODER_SLOT, int TMP_OBJ, int ARR_SLOTS) {
     String typeName = type.getType().toString().charAt(0) + type.getType().toString().toLowerCase().substring(1);
     switch (type.getType()) {
-      case BOOLEAN: case INT: case LONG: case DOUBLE: case DECIMAL: case STRING: case MAP: case LIST: case ANY:
+      case BOOLEAN: case BYTE: case INT: case LONG: case DOUBLE: case DECIMAL: case STRING: case MAP: case LIST: case ANY:
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
         mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class),
                            type.is(ANY) ? "_decode" : "get" + typeName,
@@ -1253,6 +1254,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       BiConsumer<String,String> writer = (name, type) -> mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", name, "(" + type + ")V", false);
       switch (f.declExpr.type.getType()) {
         case BOOLEAN: writer.accept("writeBoolean", "Z");                      break;
+        case BYTE:    writer.accept("writeByte", "B");                         break;
         case INT:     writer.accept("writeCint", "I");                         break;
         case LONG:    writer.accept("writeClong", "J");                        break;
         case DOUBLE:  writer.accept("writeDouble", "D");                       break;
@@ -1309,6 +1311,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitVarInsn(ALOAD, RESTORER_SLOT);
       switch (f.declExpr.type.getType()) {
         case BOOLEAN: reader.accept("readBoolean", "Z");                      break;
+        case BYTE:    reader.accept("readByte", "B");                         break;
         case INT:     reader.accept("readCint", "I");                         break;
         case LONG:    reader.accept("readClong", "J");                        break;
         case DOUBLE:  reader.accept("readDouble", "D");                       break;

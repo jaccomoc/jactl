@@ -122,7 +122,7 @@ public class Parser {
 
   // = Stmt
 
-  private static final TokenType[] types = new TokenType[] { DEF, OBJECT, BOOLEAN, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, OBJECT };
+  private static final TokenType[] types = new TokenType[] { DEF, OBJECT, BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, OBJECT };
   private static final List<TokenType> typesAndVar = RuntimeUtils.concat(types, VAR);
 
   /**
@@ -1089,7 +1089,7 @@ public class Parser {
         //   --a.b.c ==> a.b.c -= 1
         // That way we can use the lvalue mechanism of creating missing fields if
         // necessary.
-        expr = convertToLValue(unary, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)), false, true);
+        expr = convertToLValue(unary, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
       }
       else {
         expr = new Expr.PrefixUnary(operator, unary);
@@ -1109,7 +1109,7 @@ public class Parser {
         // That way we can use the lvalue mechanism of creating missing fields if
         // necessary.
         // NOTE: for postfix we need the beforeValue if result is being used.
-        expr = convertToLValue(expr, operator, new Expr.Literal(new Token(INTEGER_CONST, operator).setValue(1)), true, true);
+        expr = convertToLValue(expr, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), true, true);
       }
       else {
         expr = new Expr.PostfixUnary(expr, previous());
@@ -1119,7 +1119,7 @@ public class Parser {
   }
 
   private boolean isPlusMinusNumber() {
-    return lookahead(() -> matchAny(PLUS, MINUS) && matchAny(INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
+    return lookahead(() -> matchAny(PLUS, MINUS) && matchAny(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
   }
 
   /**
@@ -1253,7 +1253,7 @@ public class Parser {
     Token prev = previous();
     matchAny(EOL);
     if (isPlusMinusNumber())                               { return getPlusMinusNumber();                 }
-    if (matchAny(INTEGER_CONST, LONG_CONST,
+    if (matchAny(BYTE_CONST, INTEGER_CONST, LONG_CONST,
                  DECIMAL_CONST, DOUBLE_CONST,
                  STRING_CONST, TRUE, FALSE, NULL))         { return literal(prev, previous());            }
     if (peek().is(SLASH, SLASH_EQUAL, EXPR_STRING_START))  { return exprString();                         }
@@ -1287,7 +1287,7 @@ public class Parser {
 
   private Expr.Literal getPlusMinusNumber() {
     Token sign = expect(PLUS,MINUS);
-    Token num  = expect(INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
+    Token num  = expect(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
     if (sign.is(MINUS)) {
       num = new Token(num.getType(), num).setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
     }

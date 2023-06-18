@@ -176,7 +176,8 @@ public class Checkpointer {
     }
     else
     if (value instanceof Number && !(value instanceof HeapLocal)) {
-      if      (value instanceof Integer)    { writeIntObj((int)value);                        }
+      if      (value instanceof Byte)       { writeByteObj((byte)value);                      }
+      else if (value instanceof Integer)    { writeIntObj((int)value);                        }
       else if (value instanceof Long)       { writeLongObj((long)value);                      }
       else if (value instanceof BigDecimal) { writeDecimalObj((BigDecimal)value);             }
       else /*  value instanceof Double */   { writeDoubleObj(((Number)value).doubleValue());  }
@@ -225,6 +226,7 @@ public class Checkpointer {
 
   private void writeArray(Object value) {
     if (value instanceof boolean[])         { writeBooleanArr((boolean[])value); }
+    else if (value instanceof byte[])       { writeByteArr((byte[])value);       }
     else if (value instanceof int[])        { writeIntArr((int[])value);         }
     else if (value instanceof long[])       { writeLongArr((long[])value);       }
     else if (value instanceof double[])     { writeDoubleArr((double[])value);   }
@@ -234,7 +236,7 @@ public class Checkpointer {
   private void writeBooleanArr(boolean[] arr) {
     ensureCapacity(1 + 3 + 5 + arr.length/8 + 1);
     buf[idx++] = (byte)ARRAY.getType().ordinal();
-    buf[idx++] = 1;
+    buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)BOOLEAN.getType().ordinal();
     _writeCint(arr.length);
     for (int i = 0, mask = 1, bits = 0; i < arr.length; i++) {
@@ -248,10 +250,20 @@ public class Checkpointer {
     }
   }
 
+  private void writeByteArr(byte[] arr) {
+    ensureCapacity(3 + 5 + arr.length);
+    buf[idx++] = (byte)ARRAY.getType().ordinal();
+    buf[idx++] = 1;   // number of dimensions
+    buf[idx++] = (byte)BYTE.getType().ordinal();
+    _writeCint(arr.length);
+    System.arraycopy(arr, 0, buf, idx, arr.length);
+    idx += arr.length;
+  }
+
   private void writeIntArr(int[] arr) {
     ensureCapacity(3 + 5 + arr.length * 5);
     buf[idx++] = (byte)ARRAY.getType().ordinal();
-    buf[idx++] = 1;
+    buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)INT.getType().ordinal();
     _writeCint(arr.length);
     for (int i = 0; i < arr.length; i++) {
@@ -262,7 +274,7 @@ public class Checkpointer {
   private void writeLongArr(long[] arr) {
     ensureCapacity(3 + 5 + arr.length * 10);
     buf[idx++] = (byte)ARRAY.getType().ordinal();
-    buf[idx++] = 1;
+    buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)LONG.getType().ordinal();
     _writeCint(arr.length);
     for (int i = 0; i < arr.length; i++) {
@@ -274,7 +286,7 @@ public class Checkpointer {
   private void writeDoubleArr(double[] arr) {
     ensureCapacity(1 + 3 + 5 + arr.length * 8);
     buf[idx++] = (byte)ARRAY.getType().ordinal();
-    buf[idx++] = 1;
+    buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)DOUBLE.getType().ordinal();
     _writeCint(arr.length);
     for (int i = 0; i < arr.length; i++) {
@@ -298,13 +310,19 @@ public class Checkpointer {
     }
   }
 
-  public void writeIntObj(Integer i) {
+  public void writeByteObj(byte b) {
+    ensureCapacity(2);
+    _writeType(BYTE);
+    writeByte(b);
+  }
+
+  public void writeIntObj(int i) {
     ensureCapacity(6);
     _writeType(INT);
     _writeCint(i);
   }
 
-  public void writeLongObj(Long v) {
+  public void writeLongObj(long v) {
     ensureCapacity(6);
     _writeType(LONG);
     _writeLongc(v);

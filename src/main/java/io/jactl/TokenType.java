@@ -98,6 +98,7 @@ public enum TokenType {
   //= Literals
   IDENTIFIER(),
   STRING_CONST(),
+  BYTE_CONST(),
   INTEGER_CONST(),
   LONG_CONST(),
   DOUBLE_CONST(),
@@ -113,6 +114,7 @@ public enum TokenType {
   DEF("def"),
   VAR("var"),
   BOOLEAN("boolean"),
+  BYTE("byte"),
   INT("int"),
   LONG("long"),
   DOUBLE("double"),

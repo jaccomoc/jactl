@@ -106,6 +106,7 @@ class TokeniserTest {
     doTest.accept("def", TokenType.DEF);
     doTest.accept("var", TokenType.VAR);
     doTest.accept("int", TokenType.INT);
+    doTest.accept("byte", TokenType.BYTE);
     doTest.accept("boolean", TokenType.BOOLEAN);
     doTest.accept("long", TokenType.LONG);
     doTest.accept("double", TokenType.DOUBLE);

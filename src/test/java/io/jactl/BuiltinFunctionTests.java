@@ -53,6 +53,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = 'abacad'.filter; f{it != 'a'}.join()", "bcd");
     test("def x = 'abc'; x.filter().join()", "abc");
     testError("def x = null; x.filter()", "null value");
+    test("[(byte)1,(byte)2,(byte)3].filter()", List.of((byte)1,(byte)2,(byte)3));
+    test("[(byte)1,(byte)2,(byte)3].filter{it>1}", List.of((byte)2,(byte)3));
     test("[1,2,3].filter()", List.of(1,2,3));
     test("[1,2,3].filter{it>1}", List.of(2,3));
     test("[a:true,b:false,c:true].filter{it[1]}.map{it[0]}", List.of("a","c"));
@@ -226,6 +228,9 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void minMax() {
+    test("[(byte)1,2,3].min{ it }", (byte)1);
+    test("[(byte)1,(byte)2,(byte)3].min{ it }", (byte)1);
+    test("[1,(byte)2,(byte)3].min{ it }", 1);
     test("[1,2,3].min{ it }", 1);
     test("[1,2,3].min()", 1);
     test("'zxyab'.min()", "a");
@@ -248,6 +253,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = ['123.5','244','124']; x.min{ it as double }", "123.5");
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.min{ it as double }", "123.5");
     test("def x = ['123.5','244','124']; def f = x.map{sleep(0,it)+sleep(0,'')}.min; f{ it as double }", "123.5");
+    test("((byte)1).min()", 0);
     test("1.min()", 0);
 
     test("[1,2,3].max()", 3);
@@ -269,12 +275,16 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.max{ it as double }", "244");
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.max(closure:{ it as double })", "244");
     test("def x = ['123.5','244','124']; def f = x.map{sleep(0,it)+sleep(0,'')}.max; f{ it as double }", "244");
+    test("((byte)1).max()", 0);
+    test("((byte)3).max()", 2);
     test("1.max()", 0);
     test("3.max()", 2);
   }
 
   @Test public void testSumAvg() {
+    test("[(byte)1,(byte)2,(byte)3].sum()", 6);
     test("[1,2,3].sum()", 6);
+    test("[(byte)1,(byte)2,(byte)3].avg()", "#2");
     test("[1,2,3].avg()", "#2");
     test("[].sum()", 0);
     testError("[].avg()", "empty list for avg");
@@ -437,7 +447,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = ['x']; x.join()", "x");
     test("def x = ['x']; x.join(',')", "x");
     test("def x = ['x','y']; x.join(',')", "x,y");
+    test("byte[] x = [1,2,3]; x.join(',')", "1,2,3");
+    test("byte[] x = [1,2,3] as byte[]; x.join(',')", "1,2,3");
     test("int[] x = [1,2,3] as int[]; x.join(',')", "1,2,3");
+    test("byte[][] x = [[1],[2,3],[4]] as byte[][]; x.join(',')", "[1],[2, 3],[4]");
     test("int[][] x = [[1],[2,3],[4]] as int[][]; x.join(',')", "[1],[2, 3],[4]");
     test("def x = [[1],[2,3],[4]] as int[][]; x.join(',')", "[1],[2, 3],[4]");
     test("def x = [[1],[2,3],[4]] as int[][]; def f = x.join; f(',')", "[1],[2, 3],[4]");
@@ -485,6 +498,7 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void asChar() {
+    test("((byte)97).asChar()", "a");
     test("97.asChar()", "a");
     test("def x = 97; x.asChar()", "a");
     test("def x = 97; def f = x.asChar; f()", "a");
@@ -497,8 +511,10 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void className() {
+    test("((byte)1).className()", "byte");
     test("1.className()", "int");
     test("'abc'.className()", "String");
+    test("new byte[10].className()", "byte[]");
     test("new int[10].className()", "int[]");
     test("new long[10].className()", "long[]");
     test("new double[10][].className()", "double[][]");
@@ -510,6 +526,7 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void size() {
+    test("((byte)2).size()", 2);
     test("2.size()", 2);
     test("def x = 2; x.size()", 2);
     test("def x = 2; def f = x.size; f()", 2);
@@ -545,6 +562,27 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void arraySize() {
+    test("([1,2,3] as byte[]).size()", 3);
+    test("def x = [1,2,3] as byte[]; x.size()", 3);
+    test("def f = ([1,2,3] as byte[]).size; f()", 3);
+    test("def f = ([1,2,3] as byte[]).\"${'size'}\"; f()", 3);
+    testError("def f = ([1,2,3] as byte[]).sizexxx; f()", "invalid object type");
+    test("def x = [1,2,3] as byte[]; def f = x.size; f()", 3);
+    test("def x = [1,2,3] as byte[]; def f = x.\"${'size'}\"; f()", 3);
+    testError("def x = [1,2,3] as byte[]; def f = x.sizexxx; f()", "invalid parent");
+    test("([[1,2],[2],[3,4,5]] as byte[][]).size()", 3);
+    test("def x = [[1,2],[2],[3,4,5]] as byte[][]; x.size()", 3);
+    test("byte[][] x = [[1,2],[2],[3,4,5]] as byte[][]; x.size()", 3);
+    test("byte[][] x = [[1,2],[2],[3,4,5]] as byte[][]; x[2].size()", 3);
+    test("byte[][] x = [[1,2],[2],[3,4,5]] as byte[][]; def f = x[2].size; f()", 3);
+    test("byte[][] x = [[1,2],[2],[3,4,5]] as byte[][]; def f = x[2].\"${'size'}\"; f()", 3);
+    test("def x = [[1,2],[2],[3,4,5]] as byte[][]; x[2].size()", 3);
+    test("def f = ([[1,2],[2],[3,4,5]] as byte[][]).size; f()", 3);
+    test("def f = ([[1,2],[2],[3,4,5]] as byte[][]).\"${'size'}\"; f()", 3);
+    testError("def f = ([[1,2],[2],[3,4,5]] as byte[][]).sizexxx; f()", "invalid object type");
+    test("def x = [[1,2],[2],[3,4,5]] as byte[][]; def f = x.size; f()", 3);
+    test("def x = [[1,2],[2],[3,4,5]] as byte[][]; def f = x.\"${'size'}\"; f()", 3);
+    testError("def x = [[1,2],[2],[3,4,5]] as byte[][]; def f = x.sizexxx; f()", "field access not supported");
     test("([1,2,3] as int[]).size()", 3);
     test("def x = [1,2,3] as int[]; x.size()", 3);
     test("def f = ([1,2,3] as int[]).size; f()", 3);
@@ -674,6 +712,10 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void abs() {
+    test("((byte)0).abs()", (byte)0);
+    test("((byte)-0).abs()", (byte)0);
+    test("((byte)-1).abs()", (byte)1);
+    test("((byte)1).abs()", (byte)1);
     test("0.abs()", 0);
     test("-0.abs()", 0);
     test("-1.abs()", 1);
@@ -1160,6 +1202,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = []; x.unique()", List.of());
     test("[1].unique()", List.of(1));
     test("[1,1].unique()", List.of(1));
+    test("[2L,2,1,1,(byte)2].unique()", List.of(2L,1,(byte)2));
     test("[2,2,1,1,2].unique()", List.of(2,1,2));
     test("def x = [1]; x.unique()", List.of(1));
     test("def x = [1,1]; x.unique()", List.of(1));
@@ -1176,7 +1219,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1].sort{it[1] <=> it[0]}", List.of(1));
     test("[1,2].sort{it[1] <=> it[0]}", List.of(2, 1));
     test("[3,2,1].sort()", List.of(1, 2, 3));
-    test("[3,3,4,1,2,2,5].sort()", List.of(1, 2, 2, 3, 3, 4, 5));
+    test("[3,3,(byte)2,4,1,2,5].sort()", List.of(1, (byte)2, 2, 3, 3, 4, 5));
     test("[3,3,4,1,2,2,5].sort{ a,b -> a <=> b }", List.of(1, 2, 2, 3, 3, 4, 5));
     test("def f = [3,2,1].sort; f()", List.of(1, 2, 3));
     test("def f = [3,2,1].sort; f{a,b -> b <=> a}", List.of(3, 2, 1));
@@ -1465,8 +1508,10 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void toBase() {
-    test("1L.toBase(10)", "1");
+    test("((byte)1).toBase(10)", "1");
+    test("((byte)255).toBase(16)", "FF");
     test("1.toBase(10)", "1");
+    test("1L.toBase(10)", "1");
     testError("1.0.toBase(10)", "no such method");
     testError("1.0D.toBase(10)", "no such method");
     test("0b1010101.toBase(2)", "1010101");
@@ -1475,6 +1520,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = 0xAbCdEf012345L; x.toBase(16)", "ABCDEF012345");
     test("def x = 0xAbCdEf012345L; def f = x.toBase; f(16)", "ABCDEF012345");
     test("-6.toBase(16)", "FFFFFFFA");
+    test("def x = (byte)-6; x.toBase(16)", "FA");
     test("def x = -6; x.toBase(16)", "FFFFFFFA");
     test("def x = -6; x.toBase(base:16)", "FFFFFFFA");
     testError("def x = -6; x.toBase(basex:16)", "missing value");
@@ -1506,6 +1552,7 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void sqrt() {
+    test("((byte)4).sqrt()", 2);
     test("4.sqrt()", 2);
     test("4.sqrt() + 4.sqrt()", 4);
     test("(123456789L*123456789L).sqrt()", 123456789);
@@ -1531,6 +1578,7 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void sqr() {
     test("2.sqr().sqrt()", 2);
     test("2.sqr() + 2.sqr()", 8);
+    test("((byte)2).sqr() + ((byte)2).sqr()", 8);
     test("123456789L.sqr().sqrt()", 123456789);
     test("12345678901.0.sqr().sqrt()", "#12345678901.0");
     test("0.1234D.sqr().sqrt()", 0.1234D);
@@ -1555,7 +1603,9 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void pow() {
+    test("((byte)4).pow(0)", 1);
     test("4.pow(0)", 1);
+    test("((byte)4).pow(0.5)", 2);
     test("4.pow(0.5)", 2);
     test("4.pow(3)", 64);
     test("16.pow(-0.5)", 0.25);
@@ -1642,6 +1692,9 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void toStringTest() {
     testError("null.toString()", "tried to invoke method on null");
+    test("((byte)1).toString()", "1");
+    test("((byte)123).toString()", "123");
+    test("((byte)255).toString()", "-1");
     test("1.toString()", "1");
     test("def x = 1; x.toString()", "1");
     test("def x = 1; def f = x.toString; f()", "1");
@@ -1676,6 +1729,9 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void toJson() {
+    test("((byte)0).toJson()", "0");
+    test("((byte)123).toJson()", "123");
+    test("((byte)255).toJson()", "-1");
     test("0.toJson()", "0");
     test("1.toJson()", "1");
     test("1L.toJson()", "1");
@@ -1694,6 +1750,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("class X { int i = 1; long j = 2; double d = 1.23D; var b = 1.2345; var s = 'abc'; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":\"abc\",\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
     test("class X { int i = 1; long j = 2; double d = 1.23D; Decimal b = 1.2345; String s = null; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":null,\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
     test("class X { List l = []; int i = 1; long j = 2; double d = 1.23D; var b = 1.2345; var s = 'abc'; def m = [a:1]; List list =[1,2,3]; Map m2=[a:1,b:2] }; new X().toJson()", "{\"l\":[],\"i\":1,\"j\":2,\"d\":1.23,\"b\":1.2345,\"s\":\"abc\",\"m\":{\"a\":1},\"list\":[1,2,3],\"m2\":{\"a\":1,\"b\":2}}");
+    test("class X { byte i = 1, j = 2; def m = [a:1] }; [x:new X()].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1}}}");
     test("class X { int i = 1, j = 2; def m = [a:1] }; [x:new X()].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1}}}");
     test("class X { int i = 1, j = 2; def m = [a:1]; X x = null }; [x:new X(x:new X())].toJson()", "{\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1},\"x\":{\"i\":1,\"j\":2,\"m\":{\"a\":1},\"x\":null}}}");
     testError("class X { int i = 1, j = 2; def m = [a:1]; X x = null }; def x = new X(); x.x = x; x.toJson()", "StackOverflow");
@@ -1772,6 +1829,8 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void classFromJson() {
     useAsyncDecorator = false;
+    test("class X { byte i; }; X.fromJson('{\"i\":3}').i", (byte)3);
+    testError("class X { byte i; }; X.fromJson('{\"i\":333}').i", "does not fit");
     test("class X { int i; }; X.fromJson('{\"i\":3}').i", 3);
     test("class X { int i; long j }; X x = X.fromJson('{\"i\":3,\"j\":4}'); x.i + x.j", 7L);
     test("class X { int i; long j }; X x = X.fromJson('{\"i\":3 , \"j\" : 4 }'); x.i + x.j", 7L);
@@ -1807,6 +1866,8 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void arrayFieldsToJson() {
+    test("class X { byte[] a = new byte[4] }; new X().toJson()", "{\"a\":[0,0,0,0]}");
+    test("class X { byte[] a = new byte[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
     test("class X { int[] a = new int[4] }; new X().toJson()", "{\"a\":[0,0,0,0]}");
     test("class X { int[] a = new int[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
     test("class X { long[] a = new long[4] }; def x = new X(); x.a[0] = 1; x.a[3] = 4; x.toJson()", "{\"a\":[1,0,0,4]}");
@@ -1844,6 +1905,11 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void arrayFieldsFromJson() {
     useAsyncDecorator = false;
     test("class X { boolean[] a }; X.fromJson('{\"a\":[false,true,true]}').a", new boolean[]{false,true,true});
+    test("class X { byte[] a }; X.fromJson('{\"a\":[1,2,3]}').a", new byte[]{1,2,3});
+    test("class X { byte[] a }; X.fromJson('{\"a\":[]}').a", new byte[0]);
+    test("class X { byte[] Aa,BB }; X.fromJson('{\"BB\":[1,2,3],\"Aa\":[4,5,6]}').Aa", new byte[]{4,5,6});
+    test("class X { byte[] Aa,BB }; X.fromJson('{\"BB\":[1,2,3],\"Aa\":[4,5,6]}').BB", new byte[]{1,2,3});
+    test("class X { byte[] a }; X.fromJson('{\"a\":null}').a", null);
     test("class X { int[] a }; X.fromJson('{\"a\":[1,2,3]}').a", new int[]{1,2,3});
     test("class X { int[] a }; X.fromJson('{\"a\":[]}').a", new int[0]);
     test("class X { int[] Aa,BB }; X.fromJson('{\"BB\":[1,2,3],\"Aa\":[4,5,6]}').Aa", new int[]{4,5,6});

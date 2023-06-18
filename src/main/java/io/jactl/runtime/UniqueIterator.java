@@ -24,6 +24,8 @@ import static io.jactl.JactlType.ITERATOR;
 public class UniqueIterator extends JactlIterator {
   private static int VERSION = 1;
   JactlIterator iter;
+  String        source;
+  int           offset;
   Object        current    = null;
   boolean       reachedEnd = false;
   boolean       hasValue   = false;
@@ -34,6 +36,8 @@ public class UniqueIterator extends JactlIterator {
     checkpointer.writeCint(IteratorType.UNIQUE.ordinal());
     checkpointer.writeCint(VERSION);
     checkpointer.writeObject(iter);
+    checkpointer.writeObject(source);
+    checkpointer.writeCint(offset);
     checkpointer.writeObject(current);
     checkpointer._writeBoolean(reachedEnd);
     checkpointer._writeBoolean(hasValue);
@@ -45,6 +49,8 @@ public class UniqueIterator extends JactlIterator {
     restorer.expectCint(IteratorType.UNIQUE.ordinal(), "Expected UNIQUE");
     restorer.expectCint(VERSION, "Bad version");
     iter       = (JactlIterator)restorer.readObject();
+    source     = (String)restorer.readObject();
+    offset     = restorer.readCint();
     current    = restorer.readObject();
     reachedEnd = restorer.readBoolean();
     hasValue   = restorer.readBoolean();
@@ -53,8 +59,10 @@ public class UniqueIterator extends JactlIterator {
 
   UniqueIterator() {}
 
-  UniqueIterator(JactlIterator iter) {
+  UniqueIterator(JactlIterator iter, String source, int offset) {
     this.iter = iter;
+    this.source = source;
+    this.offset = offset;
   }
 
   public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(UniqueIterator.class, IteratorType.UNIQUE, "hasNext$c", Object.class, Continuation.class);
@@ -105,7 +113,7 @@ public class UniqueIterator extends JactlIterator {
             location = 4;
             break;
           case 4:
-            if (first || !RuntimeUtils.equals(current, nextElem)) {
+            if (first || !RuntimeUtils.isEquals(current, nextElem, source, offset)) {
               current = nextElem;
               first = false;
               hasValue = true;
