@@ -119,13 +119,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * Resolve variables, references, etc
    * @param globals  map of global variables (which themselves can be Maps or Lists or simple values)
    */
-  Resolver(JactlContext jactlContext, Map<String,Object> globals) {
+  Resolver(JactlContext jactlContext, Map<String,Object> globals, Token location) {
     this.jactlContext = jactlContext;
     this.globals        = globals == null ? Map.of() : globals;
     this.globals.keySet().forEach(name -> {
       if (!jactlContext.globalVars.containsKey(name)) {
-        //Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY);
+        Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
+        if (varDecl.type.is(INSTANCE)) {
+          ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
+          if (classDescriptor == null) {
+            throw new CompileError("Unknown class " + varDecl.type.getInternalName() + " for global var " + name, location);
+          }
+          varDecl.type.setClassDescriptor(classDescriptor);
+        }
         jactlContext.globalVars.put(name, varDecl);
       }
     });

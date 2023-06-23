@@ -51,7 +51,7 @@ public class Compiler {
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
     var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);
     var script   = parser.parseScript(className);
-    var resolver = new Resolver(jactlContext, bindings);
+    var resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);
     var analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);
@@ -63,7 +63,7 @@ public class Compiler {
     String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);
     var script   = parser.parseScript(className);
-    var resolver = new Resolver(jactlContext, bindings);
+    var resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);
     var analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);
@@ -74,7 +74,7 @@ public class Compiler {
   public static void compileClass(String source, JactlContext jactlContext, String packageName) {
     var parser      = new Parser(new Tokeniser(source), jactlContext, packageName);
     var scriptClass = parser.parseClass();
-    var resolver = new Resolver(jactlContext, Map.of());
+    var resolver = new Resolver(jactlContext, Map.of(), scriptClass.location);
     resolver.resolveClass(scriptClass);
     var analyser = new Analyser(jactlContext);
     analyser.analyseClass(scriptClass);

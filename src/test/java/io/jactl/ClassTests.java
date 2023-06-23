@@ -1138,8 +1138,8 @@ public class ClassTests extends BaseTest {
     test("class X { Y y }; class Y { def z = null }; X x = new X(null); x['y']['z'][2].i += 4; x.y.z[2].i", 4);
     testError("class X { Y y }; class Y { int j = 3 }; def x = new X(null); x.y.z[2].i += 4; x.y.z[2].i", "no such field 'z'");
     testError("class X { Y y }; class Y { int j =3 }; def x = new X(null); x.y.j.i += 4", "expected map/list");
-    testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j.i += 4", "cannot set field to map");
-    testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j[2].i += 4", "cannot set field to list");
+    testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j.i += 4", "cannot be set to map");
+    testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j[2].i += 4", "cannot be set to list");
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i ?= 4; x.y.z.i", 4);
     testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z = 4; x.y.z", "cannot convert from int");
     testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "could not auto-create");
@@ -1252,6 +1252,11 @@ public class ClassTests extends BaseTest {
     testError("class X { int i = 3 }; class Y extends X { def i(x){x} }; Y y = new Y(); y.i + y.j", "method name 'i' clashes");
     testError("class X { int i = 2 }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", "too many arguments");
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
+  }
+
+  @Test public void baseClassesToBeFixed() {
+    //test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(k:4); y.j", 2);
+    //test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(j:7,k:4); y.j", 7);
   }
 
   @Test public void baseClasses2() {

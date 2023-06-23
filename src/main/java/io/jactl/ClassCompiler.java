@@ -748,10 +748,10 @@ NEXT:   mv.visitLabel(NEXT);
 
     // We need to build a list of field hashCodes in sort order with each entry being a list of fields that map
     // to that hash. This will be used to build the lookupTable for our switch on field name.
-    var fieldNames = classDecl.fields.stream()
-                                     .map(f -> f.name.getStringValue())
-                                     .sorted(Comparator.comparingInt(Object::hashCode))
-                                     .collect(Collectors.toList());
+    var fieldNames = classDecl.classDescriptor.getAllFieldNames()
+                                              .stream()
+                                              .sorted(Comparator.comparingInt(Object::hashCode))
+                                              .collect(Collectors.toList());
     var hashCodeList = new ArrayList<Pair<Integer,List<String>>>();
     int currentHash = 0;
     Pair<Integer,List<String>> entry = null;
@@ -873,7 +873,7 @@ NO_DUP: mv.visitLabel(NO_DUP);
         Utils.loadConst(mv, ':');
         mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expect", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(char.class)), false);
         mv.visitVarInsn(ALOAD, THIS_SLOT);
-        var type = classDecl.fieldVars.get(fieldName).type;
+        var type = getField(fieldName);
         readJsonField(mv, type, fieldName, ERROR, DECODER_SLOT, TMP_OBJ, ARR_SLOTS);
         mv.visitFieldInsn(PUTFIELD, internalName, fieldName, type.descriptor());
         mv.visitJumpInsn(GOTO, LOOP);
@@ -913,8 +913,7 @@ END_LOOP: mv.visitLabel(END_LOOP);
       int          m           = i / 64;
       int          b           = i % 64;
       String       fieldName   = fieldNames.get(i);
-      Expr.VarDecl field       = classDecl.fieldVars.get(fieldName);
-      boolean      isMandatory = field.initialiser == null;
+      boolean      isMandatory = isMandatory(fieldName);
       if (isMandatory) {
         mandatoryFlags[m] |= (1 << b);
         mandatoryCount++;
@@ -1040,6 +1039,14 @@ END: mv.visitLabel(END);
     }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
+  }
+
+  private JactlType getField(String fieldName) {
+    return classDescriptor.getField(fieldName);
+  }
+
+  private boolean isMandatory(String fieldName) {
+    return classDescriptor.getAllMandatoryFields().containsKey(fieldName);
   }
 
   private void readJsonField(MethodVisitor mv, JactlType type, String fieldName, Label ERROR, int DECODER_SLOT, int TMP_OBJ, int ARR_SLOTS) {

@@ -36,11 +36,10 @@ public class AsyncTest {
     return JactlContext.create().build().autoCreateAsync();
   }
 
-  private boolean isAsync(String source) {
-    var context  = JactlContext.create().debug(debugLevel).build();
+  private boolean isAsync(String source, JactlContext context) {
     var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACTL_PKG);
     var script   = parser.parseScript("AsyncScriptTest");
-    var resolver = new Resolver(context, Map.of());
+    var resolver = new Resolver(context, Map.of(), script.location);
     resolver.resolveScript(script);
     var analyser = new Analyser(context);
     analyser.analyseClass(script);
@@ -51,25 +50,29 @@ public class AsyncTest {
     sync(source, "", expected);
   }
   private void sync(String source, String input, Object expected) {
-    assertFalse(isAsync(source));
-    runTest(source, input, expected);
+    sync(List.of(), source, input, expected);
+  }
+  private void sync(List<String> classSources, String source, String input, Object expected) {
+    runTest(classSources, source, input, expected, false);
   }
 
   private void async(String source, Object expected) {
     async(source,"", expected);
   }
   private void async(String source, String input, Object expected) {
-    assertTrue(isAsync(source));
-    runTest(source, input, expected);
+    runTest(List.of(), source, input, expected, true);
   }
 
-  private void runTest(String source, String input, Object expected) {
+  private void runTest(List<String> classSources, String source, String input, Object expected, boolean isAsync) {
     var context = JactlContext.create().debug(debugLevel).build();
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String)((String) expected).substring(1)));
     }
+    classSources.forEach(s -> Jactl.compileClass(s, context));
+    assertEquals(isAsync, isAsync(source, context));
     RuntimeState.setInput(new BufferedReader(new StringReader(input)));
-    assertEquals(expected, Compiler.eval(source, context, Utils.mapOf()));
+    JactlScript script = Jactl.compileScript(source, Map.of(), context);
+    assertEquals(expected, script.runSync(Utils.mapOf()));
   }
 
   @Test public void asyncTests() {
@@ -154,6 +157,12 @@ public class AsyncTest {
     async("class X { Y y = null; def f(x){ y = sleep(0,new Y(x)) } }; class Y { int i }; X x = new X(); x.f(3); x.y.i", 3);
     async("class X { int i = sleep(0,1) }; new X().i", 1);
     sync("class X { int i = 1 }; new X().i", 1);
+  }
+
+
+  @Test public void classesToBeFixed() {
+    //sync("class X { int i = 1 }; X.fromJson('{\"i\":2}').i", 2);
+    //sync(List.of("class X { int i = 1 }", "class Y extends X { int j = 2; int k = 3 }"), "new Y(j:2).i", "", 1);
   }
 
   @Test public void builtinFunctions() {

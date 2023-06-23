@@ -36,12 +36,10 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 import static io.jactl.runtime.JactlIterator.of;
+import static java.util.stream.Collectors.toMap;
 
 public class RuntimeUtils {
 
@@ -1192,7 +1190,7 @@ public class RuntimeUtils {
 
     Object value = null;
     if (parent instanceof JactlObject) {
-      value = getJactlFieldOrMethod((JactlObject) parent, field, source, offset, false, false);
+      value = loadInstanceField((JactlObject) parent, field, source, offset);
     }
     else {
       // Fields of a map cannot override built-in methods so look up method first
@@ -1233,39 +1231,61 @@ public class RuntimeUtils {
    * @return the field value or null
    */
   public static Object loadField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
-    return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, false, false);
-  }
-
-  /**
-   * Load method or field. Parent can be of any type in which case we first look for a method of given name (in
-   * BuiltinFunctions) and return a method handle to that method. If that returns nothing we invoke the usual loadField
-   * method to get the field value.
-   *
-   * @param parent     parent
-   * @param field      field (field name or list index)
-   * @param isDot      always true
-   * @param isOptional true if access type is '?.' or '?['
-   * @param source     source code
-   * @param offset     offset into source for operation
-   * @return the field value or null
-   */
-  public static Object loadMethodOrField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
       }
-      throw new NullError("Null value for Map/List during field access", source, offset);
+      throw new NullError("Null value for parent during field access", source, offset);
     }
 
-    if (field == null) {
-      throw new NullError("Null value for field name", source, offset);
+    if (parent instanceof Map) {
+      return loadMapField(parent, field, source, offset);
     }
 
-    JactlMethodHandle handle = Functions.lookupWrapper(parent, field.toString());
-    if (handle != null) {
-      return handle;
+    if (parent instanceof JactlObject) {
+      return loadInstanceField((JactlObject) parent, field, source, offset);
     }
-    return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, false, false);
+
+    return loadOther(parent, field, isDot, source, offset);
+  }
+
+  private static Object loadOther(Object parent, Object field, boolean isDot, String source, int offset) {
+    if (parent instanceof Class) {
+      return loadStaticMethod(parent, field, source, offset);
+    }
+
+    // Check for accessing method by name
+    String fieldString = castToString(field);
+    if (isDot && fieldString != null) {
+      var method = Functions.lookupWrapper(parent, fieldString);
+      if (method != null) {
+        return method;
+      }
+    }
+
+    String parentString = null;
+    if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
+      throw new RuntimeError("Invalid parent object type (" + className(parent) + "): expected Map/List" +
+                             (isDot ? "" : " or String"), source, offset);
+    }
+
+    // Check that we are doing a list operation
+    if (isDot) {
+      throw new RuntimeError("Field access not supported for " + className(parent), source, offset);
+    }
+
+    int index = -1;
+    try { index = ((Number) field).intValue(); }  catch (ClassCastException e) { throw new RuntimeError("Non-numeric value for indexed access", source, offset); }
+
+    if (parent instanceof List) {
+      return loadListElem((List) parent, index, source, offset);
+    }
+
+    if (parentString != null) {
+      return loadStringChar(parentString, index, source, offset);
+    }
+
+    return loadObjectArrElem((Object[]) parent, index, source, offset);
   }
 
   /**
@@ -1282,11 +1302,6 @@ public class RuntimeUtils {
    */
   public static Object loadOrCreateField(Object parent, Object field, boolean isDot, boolean isOptional,
                                          boolean isMap, String source, int offset) {
-    return doLoadOrCreateField(parent, field, isDot, isOptional, source, offset, true, isMap);
-  }
-
-  private static Object doLoadOrCreateField(Object parent, Object field, boolean isDot, boolean isOptional,
-                                            String source, int offset, boolean createIfMissing, boolean isMap) {
     if (parent == null) {
       if (isOptional) {
         return null;
@@ -1295,58 +1310,15 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof Map) {
-      if (field == null) {
-        throw new NullError("Null value for field name", source, offset);
-      }
-      String fieldName = field.toString();
-      Map    map       = (Map) parent;
-      Object value     = map.get(fieldName);
-      if (createIfMissing && value == null) {
-        value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
-        map.put(fieldName, value);
-      }
-      if (value == null) {
-        // If we still can't find a field then if we have a method of the name return
-        // its method handle
-        value = Functions.lookupWrapper(parent, fieldName);
-      }
-
-      return value;
+      return loadOrCreateMapField(parent, field, source, offset, isMap);
     }
 
     if (parent instanceof Class) {
-      Class clss = (Class) parent;
-      // For classes, we only support runtime lookup of static methods
-      if (JactlObject.class.isAssignableFrom(clss)) {
-        try {
-          // Need to get map of static methods via getter rather than directly accessing the
-          // _$j$StaticMethods field because the field exists in the parent JactlObject class
-          // which means we can't guarantee that class init for the actual class (which populates
-          // the map) has been run yet.
-          Method staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
-          var    map           = (Map<String, JactlMethodHandle>) staticMethods.invoke(null);
-          return map.get(field.toString());
-        }
-        catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
-          throw new RuntimeException(e);
-        }
-      }
-      else {
-        throw new RuntimeError("No static method '" + field.toString() + "' for class " + parent, source, offset);
-      }
+      return loadStaticMethod(parent, field, source, offset);
     }
 
     if (parent instanceof JactlObject) {
-      return getJactlFieldOrMethod((JactlObject) parent, field, source, offset, createIfMissing, isMap);
-    }
-
-    // Check for accessing method by name
-    String fieldString = castToString(field);
-    if (isDot && !createIfMissing && fieldString != null) {
-      var method = Functions.lookupWrapper(parent, fieldString);
-      if (method != null) {
-        return method;
-      }
+      return loadOrCreateInstanceField((JactlObject) parent, field, source, offset, isMap);
     }
 
     String parentString = null;
@@ -1367,36 +1339,18 @@ public class RuntimeUtils {
 
     int index = ((Number) field).intValue();
     if (parentString != null) {
-      if (index < 0) {
-        int newIndex = parentString.length() + index;
-        if (newIndex < 0) {
-          throw new RuntimeError("Index (" + index + ") out of range for String (length=" + parentString.length() + ")", source, offset);
-        }
-        index = newIndex;
-      }
-      else
-      if (index >= parentString.length()) {
-        throw new RuntimeError("Index (" + index + ") too large for String (length=" + parentString.length() + ")", source, offset);
-      }
-      return Character.toString(parentString.charAt(index));
+      return loadStringChar(parentString, index, source, offset);
     }
 
     if (parent instanceof Object[]) {
-      Object[] arr = (Object[]) parent;
-      if (index < 0) {
-        int newIndex = arr.length + index;
-        if (newIndex < 0) {
-          throw new RuntimeError("Index (" + index + ") out of range for Object[] (length=" + arr.length + ")", source, offset);
-        }
-        index = newIndex;
-      }
-      if (index < arr.length) {
-        return arr[index];
-      }
-      return null;
+      return loadObjectArrElem((Object[]) parent, index, source, offset);
     }
 
-    List   list  = (List) parent;
+    return loadOrCreateListElem((List) parent, index, isMap, source, offset);
+  }
+
+  private static Object loadOrCreateListElem(List parent, int index, boolean isMap, String source, int offset) {
+    List   list  = parent;
     Object value = null;
     if (index < 0) {
       int newIndex = list.size() + index;
@@ -1409,13 +1363,127 @@ public class RuntimeUtils {
       value = list.get(index);
     }
 
-    if (createIfMissing && value == null) {
+    if (value == null) {
       value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
       for (int i = list.size(); i < index + 1; i++) {
         list.add(null);
       }
       list.set(index, value);
     }
+    return value;
+  }
+
+  private static Object loadListElem(List parent, int index, String source, int offset) {
+    List   list  = parent;
+    Object value = null;
+    if (index < 0) {
+      int newIndex = list.size() + index;
+      if (newIndex < 0) {
+        throw new RuntimeError("Index (" + index + ") out of range for List (size=" + list.size() + ")", source, offset);
+      }
+      index = newIndex;
+    }
+    if (index < list.size()) {
+      value = list.get(index);
+    }
+    return value;
+  }
+
+  private static Object loadObjectArrElem(Object[] parent, int index, String source, int offset) {
+    Object[] arr = parent;
+    if (index < 0) {
+      int newIndex = arr.length + index;
+      if (newIndex < 0) {
+        throw new RuntimeError("Index (" + index + ") out of range for Object[] (length=" + arr.length + ")", source, offset);
+      }
+      index = newIndex;
+    }
+    if (index < arr.length) {
+      return arr[index];
+    }
+    return null;
+  }
+
+  private static String loadStringChar(String parentString, int index, String source, int offset) {
+    if (index < 0) {
+      int newIndex = parentString.length() + index;
+      if (newIndex < 0) {
+        throw new RuntimeError("Index (" + index + ") out of range for String (length=" + parentString.length() + ")", source, offset);
+      }
+      index = newIndex;
+    }
+    else
+    if (index >= parentString.length()) {
+      throw new RuntimeError("Index (" + index + ") too large for String (length=" + parentString.length() + ")", source, offset);
+    }
+    return Character.toString(parentString.charAt(index));
+  }
+
+  private static JactlMethodHandle loadStaticMethod(Object parent, Object field, String source, int offset) {
+    Class clss = (Class) parent;
+    // For classes, we only support runtime lookup of static methods
+    if (JactlObject.class.isAssignableFrom(clss)) {
+      try {
+        // Need to get map of static methods via getter rather than directly accessing the
+        // _$j$StaticMethods field because the field exists in the parent JactlObject class
+        // which means we can't guarantee that class init for the actual class (which populates
+        // the map) has been run yet.
+        Method staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
+        var    map           = (Map<String, JactlMethodHandle>) staticMethods.invoke(null);
+        return map.get(field.toString());
+      }
+      catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    else {
+      throw new RuntimeError("No static method '" + field.toString() + "' for class " + parent, source, offset);
+    }
+  }
+
+  private static Object loadOrCreateMapField(Object parent, Object field, String source, int offset, boolean isMap) {
+    if (field == null) {
+      throw new NullError("Null value for field name", source, offset);
+    }
+    String fieldName = field.toString();
+    Map    map       = (Map) parent;
+    Object value     = map.get(fieldName);
+    if (value == null) {
+      value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
+      map.put(fieldName, value);
+    }
+    if (value == null) {
+      // If we still can't find a field then if we have a method of the name return
+      // its method handle
+      value = Functions.lookupWrapper(parent, fieldName);
+    }
+
+    return value;
+  }
+
+  public static Object loadMapField(Object parent, Object field, boolean isOptional, String source, int offset) {
+    if (parent == null) {
+      if (isOptional) {
+        return null;
+      }
+      throw new NullError("Null value for parent during field access", source, offset);
+    }
+    return loadMapField(parent, field, source, offset);
+  }
+
+  private static Object loadMapField(Object parent, Object field, String source, int offset) {
+    if (field == null) {
+      throw new NullError("Null value for field name", source, offset);
+    }
+    Map map = (Map) parent;
+    String fieldName = field.toString();
+    Object value = map.get(fieldName);
+    if (value == null) {
+      // If we still can't find a field then if we have a method of the name return
+      // its method handle
+      value = Functions.lookupWrapper(parent, fieldName);
+    }
+
     return value;
   }
 
@@ -1510,7 +1578,7 @@ public class RuntimeUtils {
    * create a Map or List based on the isMap field. NOTE: createIfMissing is only ever set in a Map/List context on lhs
    * of assignment or assignment-like expression so we know that we want something that looks like a Map/List.
    */
-  private static Object getJactlFieldOrMethod(JactlObject parent, Object field, String source, int offset, boolean createIfMissing, boolean isMap) {
+  private static Object loadOrCreateInstanceField(JactlObject parent, Object field, String source, int offset, boolean isMap) {
     // Check for field, instance method, static method, and then if that fails check if there
     // is a generic built-in method that applies
     String fieldName     = field.toString();
@@ -1518,13 +1586,6 @@ public class RuntimeUtils {
     if (fieldOrMethod instanceof JactlMethodHandle) {
       // Need to bind method handle to instance
       fieldOrMethod = ((JactlMethodHandle) fieldOrMethod).bindTo(parent);
-    }
-    if (fieldOrMethod == null && !createIfMissing) {
-      // If createIfMissing is not set we can search for matching method
-      fieldOrMethod = parent._$j$getStaticMethods().get(fieldName);
-      if (fieldOrMethod == null) {
-        fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
-      }
     }
     if (fieldOrMethod == null) {
       throw new RuntimeError("No such field '" + fieldName + "' for type " + parent.getClass().getName(), source, offset);
@@ -1534,11 +1595,16 @@ public class RuntimeUtils {
       var classField = (Field) fieldOrMethod;
       try {
         Object value = classField.get(parent);
-        if (value == null && createIfMissing) {
+        if (value == null) {
           Class<?> fieldType = classField.getType();
           if (JactlObject.class.isAssignableFrom(fieldType)) {
             JactlObject fieldObj = (JactlObject) fieldType.getConstructor().newInstance();
-            fieldObj._$j$init$$w(null, source, offset, new Object[0]);
+            try {
+              fieldObj._$j$init$$w(null, source, offset, new Object[0]);
+            }
+            catch (Continuation c) {
+              throw new RuntimeError("Detected async code in field initialiser for " + fieldName + " in type " + parent.getClass().getName(), source, offset);
+            }
             classField.set(parent, fieldObj);
             value = fieldObj;
           }
@@ -1559,6 +1625,40 @@ public class RuntimeUtils {
         return value;
       }
       catch (IllegalAccessException | InvocationTargetException | InstantiationException | NoSuchMethodException e) {
+        throw new IllegalStateException("Internal error: " + e, e);
+      }
+    }
+    else {
+      return fieldOrMethod;
+    }
+  }
+
+  private static Object loadInstanceField(JactlObject parent, Object field, String source, int offset) {
+    // Check for field, instance method, static method, and then if that fails check if there
+    // is a generic built-in method that applies
+    String fieldName     = field.toString();
+    Object fieldOrMethod = parent._$j$getFieldsAndMethods().get(fieldName);
+    if (fieldOrMethod instanceof JactlMethodHandle) {
+      // Need to bind method handle to instance
+      fieldOrMethod = ((JactlMethodHandle) fieldOrMethod).bindTo(parent);
+    }
+    if (fieldOrMethod == null) {
+      // search for matching method
+      fieldOrMethod = parent._$j$getStaticMethods().get(fieldName);
+      if (fieldOrMethod == null) {
+        fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
+      }
+    }
+    if (fieldOrMethod == null) {
+      throw new RuntimeError("No such field '" + fieldName + "' for type " + parent.getClass().getName(), source, offset);
+    }
+    // If we have a field handle then we need to get the field value
+    if (fieldOrMethod instanceof Field) {
+      var classField = (Field) fieldOrMethod;
+      try {
+        return classField.get(parent);
+      }
+      catch (IllegalAccessException e) {
         throw new IllegalStateException("Internal error: " + e, e);
       }
     }
@@ -1614,28 +1714,14 @@ public class RuntimeUtils {
     throw new RuntimeError("Default value for " + clss.getName() + " not supported", source, offset);
   }
 
-  /**
-   * Store value into map/list field. Note that first three args are either value,parent,field or parent,field,value
-   * depending on whether valueFirst is set to true or not.
-   * <pre>
-   * parent        parent (map or list)
-   * field         field  (field name or list index)
-   * value         the value to store
-   * </pre>
-   * @param arg1       value or parent depending on valueFirst
-   * @param arg2       parent or field/index depending on valueFirst
-   * @param arg3       field or value depending on valueFirst
-   * @param valueFirst true if args are value,parent,field and false if args are parent,field,value
-   * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
-   * @param source     source code
-   * @param offset     offset into source for operation
-   * @return the value of the field after assignment (can be different to value when storing int into long field, for
-   * example)
-   */
-  public static Object storeField(Object arg1, Object arg2, Object arg3, boolean valueFirst, boolean isDot, String source, int offset) {
-    Object parent = valueFirst ? arg2 : arg1;
-    Object field  = valueFirst ? arg3 : arg2;
-    Object value  = valueFirst ? arg1 : arg3;
+  public static Object storeParentFieldValue(Object parent, Object field, Object value, boolean isDot, String source, int offset) {
+    return storeValueParentField(value, parent, field, isDot, source, offset);
+  }
+
+  public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, String source, int offset) {
+    if (parent instanceof Map) {
+      return storeMapField(value, (Map)parent, field, source, offset);
+    }
 
     if (parent == null) {
       throw new NullError("Null value for Map/List/Object storing field value", source, offset);
@@ -1647,34 +1733,8 @@ public class RuntimeUtils {
       return value;
     }
 
-    if (parent instanceof Map) {
-      if (field == null) {
-        throw new NullError("Null value for field name", source, offset);
-      }
-      String fieldName = field.toString();
-      ((Map) parent).put(fieldName, value);
-      return value;
-    }
-
     if (parent instanceof JactlObject) {
-      String       fieldName     = field.toString();
-      JactlObject jactlObj     = (JactlObject) parent;
-      Object       fieldOrMethod = jactlObj._$j$getFieldsAndMethods().get(fieldName);
-      if (fieldOrMethod == null) {
-        throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
-      }
-      if (!(fieldOrMethod instanceof Field)) {
-        throw new RuntimeError("Found method " + fieldName + "() for class " + className(parent) + " where field expected", source, offset);
-      }
-      try {
-        Field fieldRef = (Field) fieldOrMethod;
-        value = castTo(fieldRef.getType(), value, source, offset);
-        fieldRef.set(parent, value);
-        return value;
-      }
-      catch (IllegalAccessException e) {
-        throw new IllegalStateException("Internal error: " + e, e);
-      }
+      return storeInstanceField(parent, field, value, source, offset);
     }
 
     if (!(parent instanceof List)) {
@@ -1686,26 +1746,60 @@ public class RuntimeUtils {
       throw new RuntimeError("Field access not supported for object of type " + className(parent), source, offset);
     }
 
-    if (!(field instanceof Number)) {
-      throw new RuntimeError("Non-numeric value for index during List access", source, offset);
-    }
+    return storeListField((List) parent, field, value, source, offset);
+  }
 
-    int  index = ((Number) field).intValue();
-    List list  = (List) parent;
+  private static Object storeListField(List parent, Object field, Object value, String source, int offset) {
+    int index = -1;
+    try { index = ((Number)field).intValue(); } catch (ClassCastException e) { throw new RuntimeError("Non-numeric value for index during List access", source, offset); }
     if (index < 0) {
       int originalIndex = index;
-      index += list.size();
+      index += parent.size();
       if (index < 0) {
-        throw new RuntimeError("Negative index (" + originalIndex + ") out of range (list size is " + list.size() + ")", source, offset);
+        throw new RuntimeError("Negative index (" + originalIndex + ") out of range (list size is " + parent.size() + ")", source, offset);
       }
     }
-    if (index >= list.size()) {
+    if (index >= parent.size()) {
       // Grow list to required size
-      for (int i = list.size(); i < index + 1; i++) {
-        list.add(null);
+      for (int i = parent.size(); i < index + 1; i++) {
+        parent.add(null);
       }
     }
-    ((List) parent).set(index, value);
+    parent.set(index, value);
+    return value;
+  }
+
+  private static Object storeInstanceField(Object parent, Object field, Object value, String source, int offset) {
+    String       fieldName     = field.toString();
+    JactlObject jactlObj     = (JactlObject) parent;
+    Object       fieldOrMethod = jactlObj._$j$getFieldsAndMethods().get(fieldName);
+    if (fieldOrMethod == null) {
+      throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
+    }
+    if (!(fieldOrMethod instanceof Field)) {
+      throw new RuntimeError("Found method " + fieldName + "() for class " + className(parent) + " where field expected", source, offset);
+    }
+    try {
+      Field fieldRef = (Field) fieldOrMethod;
+      value = castTo(fieldRef.getType(), value, source, offset);
+      fieldRef.set(parent, value);
+      return value;
+    }
+    catch (IllegalAccessException e) {
+      throw new IllegalStateException("Internal error: " + e, e);
+    }
+  }
+
+  public static Object storeMapField(Object value, Map parent, Object field, String source, int offset) {
+    if (parent == null) {
+      throw new NullError("Null value for Map/List/Object storing field value", source, offset);
+    }
+
+    if (field == null) {
+      throw new NullError("Null value for field name", source, offset);
+    }
+    String fieldName = field.toString();
+    parent.put(fieldName, value);
     return value;
   }
 
@@ -2568,7 +2662,14 @@ public class RuntimeUtils {
   private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
     var script = evalScriptCache.get(code);
     if (script == null) {
-      script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACTL_PKG, bindings);
+      // For eval we want to be able to cache the scripts but the problem is that if the bindings
+      // are typed (e.g. x is an Integer) but then when script is rerun a global has had its type
+      // changed (e.g. x is now a Long) the script will fail because the types don't match. So
+      // we erase all types and make everything ANY. This is obviously less efficient but for eval()
+      // efficiency should not be a big issue.
+      var erasedBindings = new HashMap();
+      bindings.keySet().forEach(k -> erasedBindings.put(k, null));
+      script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACTL_PKG, erasedBindings);
       evalScriptCache.put(code, script);
     }
     return script;

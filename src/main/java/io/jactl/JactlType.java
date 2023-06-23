@@ -739,55 +739,62 @@ public class JactlType {
   }
 
   public static JactlType typeOf(Object obj) {
-    if (obj instanceof Boolean)      return BOOLEAN;
-    if (obj instanceof Byte)         return BYTE;
-    if (obj instanceof Integer)      return INT;
-    if (obj instanceof Long)         return LONG;
-    if (obj instanceof Double)       return DOUBLE;
-    if (obj instanceof BigDecimal)   return DECIMAL;
-    if (obj instanceof String)       return STRING;
-    if (obj instanceof Map)          return MAP;
-    if (obj instanceof List)         return LIST;
+    if (obj instanceof Boolean)           return BOOLEAN;
+    if (obj instanceof Byte)              return BYTE;
+    if (obj instanceof Integer)           return INT;
+    if (obj instanceof Long)              return LONG;
+    if (obj instanceof Double)            return DOUBLE;
+    if (obj instanceof BigDecimal)        return DECIMAL;
+    if (obj instanceof String)            return STRING;
+    if (obj instanceof Map)               return MAP;
+    if (obj instanceof List)              return LIST;
     if (obj instanceof JactlMethodHandle) return FUNCTION;
-    if (obj instanceof HeapLocal)    return HEAPLOCAL;
-    if (obj instanceof long[])       return LONG_ARR;
-    if (obj instanceof String[])     return STRING_ARR;
-    if (obj instanceof Object[])     return OBJECT_ARR;
-    if (obj instanceof byte[])       return JactlType.arrayOf(BYTE);
-    if (obj instanceof int[])        return JactlType.arrayOf(INT);
-    if (obj instanceof boolean[])    return JactlType.arrayOf(BOOLEAN);
-    if (obj instanceof double[])     return JactlType.arrayOf(DOUBLE);
+    if (obj instanceof HeapLocal)         return HEAPLOCAL;
+    if (obj instanceof long[])            return LONG_ARR;
+    if (obj instanceof String[])          return STRING_ARR;
+    if (obj instanceof Object[])          return OBJECT_ARR;
+    if (obj instanceof byte[])            return JactlType.arrayOf(BYTE);
+    if (obj instanceof int[])             return JactlType.arrayOf(INT);
+    if (obj instanceof boolean[])         return JactlType.arrayOf(BOOLEAN);
+    if (obj instanceof double[])          return JactlType.arrayOf(DOUBLE);
     if (obj instanceof JactlIterator)     return ITERATOR;
+    if (obj == null)                      return ANY;
+    if (obj instanceof JactlObject) {
+      return typeFromClass(obj.getClass());
+    }
+    if (obj.getClass().isArray()) {
+      return typeFromClass(obj.getClass());
+    }
     return ANY;
   }
 
   public static JactlType typeFromClass(Class clss) {
-    if (clss == boolean.class)      { return BOOLEAN;       }
-    if (clss == Boolean.class)      { return BOXED_BOOLEAN; }
-    if (clss == byte.class)         { return BYTE;          }
-    if (clss == Byte.class)         { return BOXED_BYTE;    }
-    if (clss == int.class)          { return INT;           }
-    if (clss == Integer.class)      { return BOXED_INT;     }
-    if (clss == long.class)         { return LONG;          }
-    if (clss == Long.class)         { return BOXED_LONG;    }
-    if (clss == double.class)       { return DOUBLE;        }
-    if (clss == Double.class)       { return BOXED_DOUBLE;  }
-    if (clss == BigDecimal.class)   { return DECIMAL;       }
-    if (clss == String.class)       { return STRING;        }
-    if (clss == Map.class)          { return MAP;           }
-    if (clss == List.class)         { return LIST;          }
-    if (clss == JactlMethodHandle.class) { return FUNCTION;      }
-    if (clss == HeapLocal.class)    { return HEAPLOCAL;     }
-    if (clss == JactlIterator.class)     { return ITERATOR;      }
-    if (clss == Number.class)       { return NUMBER;        }
-    if (clss == RegexMatcher.class) { return MATCHER;       }
-    if (clss == Continuation.class) { return CONTINUATION;  }
-    if (clss == Object.class)       { return ANY;           }
-    if (clss == Class.class)        { return CLASS;         }
+    if (clss == boolean.class)             { return BOOLEAN;       }
+    if (clss == Boolean.class)             { return BOXED_BOOLEAN; }
+    if (clss == byte.class)                { return BYTE;          }
+    if (clss == Byte.class)                { return BOXED_BYTE;    }
+    if (clss == int.class)                 { return INT;           }
+    if (clss == Integer.class)             { return BOXED_INT;     }
+    if (clss == long.class)                { return LONG;          }
+    if (clss == Long.class)                { return BOXED_LONG;    }
+    if (clss == double.class)              { return DOUBLE;        }
+    if (clss == Double.class)              { return BOXED_DOUBLE;  }
+    if (clss == BigDecimal.class)          { return DECIMAL;       }
+    if (clss == String.class)              { return STRING;        }
+    if (Map.class.isAssignableFrom(clss))  { return MAP;           }
+    if (List.class.isAssignableFrom(clss)) { return LIST;          }
+    if (clss == JactlMethodHandle.class)   { return FUNCTION;      }
+    if (clss == HeapLocal.class)           { return HEAPLOCAL;     }
+    if (clss == JactlIterator.class)       { return ITERATOR;      }
+    if (clss == Number.class)              { return NUMBER;        }
+    if (clss == RegexMatcher.class)        { return MATCHER;       }
+    if (clss == Continuation.class)        { return CONTINUATION;  }
+    if (clss == Object.class)              { return ANY;           }
+    if (clss == Class.class)               { return CLASS;         }
     if (clss == JactlObject.class || JactlObject.class.isAssignableFrom(clss))  {
       return createInstanceType(clss);
     }
-    if (clss.isArray())             {
+    if (clss.isArray()) {
       return JactlType.arrayOf(typeFromClass(clss.getComponentType()));
     }
     return ANY;

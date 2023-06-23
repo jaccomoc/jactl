@@ -46,8 +46,9 @@ class JactlTest {
   @Test void eval2() {
     var globals = new HashMap<String,Object>();
     globals.put("x", null);
-    Jactl.eval("class X { int x; def f(n) { x * n } }; x = new X(2)", globals);
-    int result = (int)Jactl.eval("x.f(3)", globals);         // result will be 6
+    var context = JactlContext.create().build();
+    Jactl.eval("class X { int x; def f(n) { x * n } }; x = new X(2)", globals, context);
+    int result = (int)Jactl.eval("x.f(3)", globals, context);         // result will be 6
     assertEquals(6, result);
   }
 

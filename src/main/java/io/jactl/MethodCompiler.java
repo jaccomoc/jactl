@@ -197,6 +197,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   void compile() {
+    _compile();
+
+    if (classCompiler.debug(2)) {
+      mv.visitEnd();
+      classCompiler.cv.visitEnd();
+    }
+    mv.visitMaxs(0, 0);
+  }
+
+  void _compile() {
     // Allow room for object instance at idx 0 and optional heap vars array at idx 1.
     // We know we need heap vars array passed to us if our top level access level is
     // less than our current level (i.e. we access vars from one of our parents).
@@ -270,12 +280,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitLabel(defaultLabel);
       throwError("Internal error: Invalid location in continuation", methodFunDecl.location);
     }
-
-    if (classCompiler.debug(2)) {
-      mv.visitEnd();
-      classCompiler.cv.visitEnd();
-    }
-    mv.visitMaxs(0, 0);
 
     check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
   }
@@ -1092,15 +1096,24 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           // that we might end up invoking an instance initialiser here since parent could be an instance and since
           // we don't know the type we assume that the initialiser could be async so we wrap in appropriate code to
           // handle async invocation.
-          dupVal();
-          emitIf(true,  // loadOrCreateInstanceField uses try/catch to protect against errors setting field
-                 IfTest.IS_TRUE,
-                 () -> isInstanceOf(JactlObject.class),
-                 () -> loadOrCreateInstanceField(expr),
-                 () -> {
-                   compile(expr.right);
-                   loadOrCreateField(expr.operator, expr.type, expr.right.location);
-                 });
+          if (classCompiler.context.autoCreateAsync()) {
+            // This calls loadOrCreateInstanceField which creates way too much code.
+            // If we really want to support async during auto-create (which I don't think is needed)
+            // then we need to rewrite to generate less code.
+            emitIf(true,  // loadOrCreateInstanceField uses try/catch to protect against errors setting field
+                   IfTest.IS_TRUE,
+                   () -> { dupVal(); isInstanceOf(JactlObject.class); },
+                   () -> loadOrCreateInstanceField(expr),
+                   () -> {
+                     compile(expr.right);
+                     loadOrCreateField(expr.operator, expr.type, expr.right.location);
+                   });
+          }
+          else {
+            // No async allowed so can revert to loadOrCreateField for all types
+            compile(expr.right);
+            loadOrCreateField(expr.operator, expr.type, expr.right.location);
+          }
         }
         else {
           if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
@@ -2671,6 +2684,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private JactlType peek() {
     return stack.peek().type;
+  }
+
+  private JactlType peek2() {
+    return stack.peekType2();
   }
 
   /**
@@ -4332,9 +4349,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadField(Token accessOperator, Object defaultValue, Location location) {
     expect(2);
     box();                        // Field name/index passed as Object
-    loadConst(accessOperator.is(DOT, QUESTION_DOT));
-    loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
     if (defaultValue != null) {
+      loadConst(accessOperator.is(DOT, QUESTION_DOT));
+      loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
       // Special case for RuntimeUtils.DEFAULT_VALUE
       if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
         mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "DEFAULT_VALUE", "Ljava/lang/Object;");
@@ -4348,9 +4365,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "loadFieldOrDefault", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, String.class, Integer.TYPE);
     }
     else {
-      loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+      if (peek2().is(MAP)) {
+        loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
+        loadLocation(location);
+        invokeMethod(RuntimeUtils.class, "loadMapField", Object.class, Object.class, Boolean.TYPE, String.class, Integer.TYPE);
+      }
+      else {
+        loadConst(accessOperator.is(DOT, QUESTION_DOT));
+        loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
+        loadLocation(location);
+        invokeMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+      }
     }
+  }
+
+  /**
+   * Expect to have on stack: ... parent,field
+   */
+  private void loadMethodOrField(Token accessOperator) {
+    expect(2);
+    box();                        // Field name/index passed as Object
+    loadConst(accessOperator.is(DOT, QUESTION_DOT));
+    loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
+    loadLocation(accessOperator);
+    invokeMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
   }
 
   /**
@@ -4522,18 +4560,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Expect to have on stack: ... parent,field
-   */
-  private void loadMethodOrField(Token accessOperator) {
-    expect(2);
-    box();                        // Field name/index passed as Object
-    loadConst(accessOperator.is(DOT, QUESTION_DOT));
-    loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
-    loadLocation(accessOperator);
-    invokeMethod(RuntimeUtils.class, "loadMethodOrField", Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
-  }
-
-  /**
    * Load array element or string char
    * <p>Expect on stack: ...,parent
    * @param expr the binary expression for parent[index]
@@ -4677,8 +4703,15 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
    */
   private void storeValueParentField(Token accessOperator) {
     expect(3);
-    loadConst(true);
-    doStoreField(accessOperator);
+    if (peek2().is(MAP)) {
+      loadLocation(accessOperator);
+      invokeMethod(RuntimeUtils.class, "storeMapField", Object.class, Map.class, Object.class, String.class, int.class);
+    }
+    else {
+      loadConst(accessOperator.is(DOT, QUESTION_DOT));
+      loadLocation(accessOperator);
+      invokeMethod(RuntimeUtils.class, "storeValueParentField", Object.class, Object.class, Object.class, boolean.class, String.class, int.class);
+    }
   }
 
   /**
@@ -4686,14 +4719,9 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
    */
   private void storeParentFieldValue(Token accessOperator) {
     expect(3);
-    loadConst(false);
-    doStoreField(accessOperator);
-  }
-
-  private void doStoreField(Token accessOperator) {
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadLocation(accessOperator);
-    invokeMethod(RuntimeUtils.class, "storeField", Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.class, "storeParentFieldValue", Object.class, Object.class, Object.class, boolean.class, String.class, int.class);
   }
 
   private Void loadLocal(int slot) {

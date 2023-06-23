@@ -7096,6 +7096,7 @@ class CompilerTest extends BaseTest {
   @Test public void eval() {
     test("eval('1',[:])", 1);
     test("eval('1')", 1);
+    test("eval('x',[x:null])", null);
     test("eval('x + (byte)1',[x:(byte)3])", (byte)4);
     test("eval('x + 1',[x:3])", 4);
     test("eval('x + 1L',[x:3])", 4L);
@@ -7232,7 +7233,12 @@ class CompilerTest extends BaseTest {
                                                .replMode(true)
                                                .debug(debugLevel)
                                                .build();
+
+    Jactl.compileClass("class Z { int i }", jactlContext);
+    var z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
+
     Map<String,Object> globals = createGlobals();
+    globals.put("z", z);
     BiConsumer<String,Object> runtest = (code,expected) -> {
       Object result = Compiler.eval(code, jactlContext, globals);
       assertEquals(expected, result);
@@ -7243,6 +7249,8 @@ class CompilerTest extends BaseTest {
     runtest.accept("x", 1);
     runtest.accept("def f(x){x*x}; f(2)", 4);
     runtest.accept("f(3)", 9);
+    runtest.accept("z instanceof Z", true);
+    runtest.accept("z.i", 2);
   }
 
   @Test public void endOfLine() {

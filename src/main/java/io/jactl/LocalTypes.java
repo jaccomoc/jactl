@@ -74,6 +74,13 @@ public class LocalTypes {
     return stack.peek();
   }
 
+  public JactlType peekType2() {
+    StackEntry top = stack.pop();
+    JactlType result = stack.peek().type;
+    stack.push(top);
+    return result;
+  }
+
   public void push(Class clss) {
     push(JactlType.typeFromClass(clss));
   }

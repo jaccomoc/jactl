@@ -1846,6 +1846,7 @@ public class BuiltinFunctionTests extends BaseTest {
               "X.fromJson('''{'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i33':1,'i34':1,'i35':1,'i37':1,'i38':1,'i39':1}''' =~ s/'/\"/rg)",
               "missing field(s): i32");
     test("class X { int i; Y y }; class Y { Map m }; X.fromJson('{\"i\":3,\"y\":{\"m\":null}}').i", 3);
+    test("class X { int i; int j }; class Y extends X { Map m }; Y.fromJson('{\"i\":3,\"j\":4,\"m\":null}').i", 3);
     test("class X { int i; Y y }; class Y { List a }; X.fromJson('{\"i\":3,\"y\":{\"a\":null}}').i", 3);
     test("class X { int i; X x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
     test("class X { int i; String x }; X.fromJson('{\"i\":3,\"x\":null}').i", 3);
@@ -1863,6 +1864,11 @@ public class BuiltinFunctionTests extends BaseTest {
     // Test with fields that map to same hashCode:
     test("class X { int Aa; String BB }; X.fromJson('{\"Aa\":3,\"BB\":null}').Aa", 3);
     test("class X { int Aa; String BB }; def x = X.fromJson('{\"Aa\":3,\"BB\":\"xxx\"}'); x.BB + x.Aa", "xxx3");
+  }
+
+  @Test public void classFromJsonToBeFixed() {
+    useAsyncDecorator = false;
+    //test("class X { int i; int j =2 }; class Y extends X { Map m }; Y.fromJson('{\"i\":3,\"m\":null}').j", 2);
   }
 
   @Test public void arrayFieldsToJson() {

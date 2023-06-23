@@ -314,7 +314,7 @@ public class BaseTest {
           return newExpr;
         });
     decorator.decorate(code);
-    var resolver = new Resolver(jactlContext, bindings);
+    var resolver = new Resolver(jactlContext, bindings, code.location);
     resolver.resolveScript(code);
     var analyser = new Analyser(jactlContext);
     analyser.analyseClass(code);
