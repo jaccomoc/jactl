@@ -2625,6 +2625,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return getMethodDescriptor(funDecl.returnType, methodParamTypes(funDecl));
   }
 
+  public static String getMethodDescriptor(FunctionDescriptor func) {
+    return getMethodDescriptor(func.returnType, func.paramTypes);
+  }
+
   private static String getMethodDescriptor(JactlType returnType, List<JactlType> paramTypes) {
     // Method descriptor is return type followed by array of parameter types.
     return Type.getMethodDescriptor(returnType.descriptorType(),
@@ -4531,25 +4535,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            });
         }
         else {
-          Label blockStart = new Label();
-          Label blockEnd   = new Label();
-          Label catchLabel = new Label();
-          Label afterCatch = new Label();
-          mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
-          mv.visitLabel(blockStart);
           newInstance(type);
-          if (initMethod.isAsync) {
-            loadNullContinuation();
-          }
-          if (initMethod.needsLocation) {
-            loadLocation(expr.location);
-          }
-          invokeMethod(initMethod, false);
-          mv.visitJumpInsn(GOTO, afterCatch);
-          mv.visitLabel(blockEnd);
-          mv.visitLabel(catchLabel);
-          throwError("Detected async function invocation during instance auto-creation (which is not permitted)", expr.location);
-          mv.visitLabel(afterCatch);
+          loadLocation(expr.location);
+          invokeMethod(false, false, type.getClassDescriptor().getInternalName(), Utils.JACTL_INIT_NOASYNC, type, List.of(STRING, INT));
         }
       }
       return;

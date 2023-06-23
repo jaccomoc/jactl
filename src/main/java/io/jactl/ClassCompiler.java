@@ -553,6 +553,7 @@ public class ClassCompiler {
     compileReadJsonFunction();
     compileCheckpointFunction();
     compileRestoreFunction();
+    compileInitNoAsync();
   }
 
   private void compileToJsonFunction() {
@@ -1332,6 +1333,53 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     });
 
     mv.visitInsn(RETURN);
+
+    if (debug(3)) {
+      mv.visitEnd();
+      cv.visitEnd();
+    }
+    mv.visitMaxs(0, 0);
+    mv.visitEnd();
+  }
+
+  private void compileInitNoAsync() {
+    final int THIS_SLOT         = 0;
+    final int SOURCE_SLOT       = 1;
+    final int OFFSET_SLOT       = 2;
+
+    Type classType = Type.getType(classDecl.classDescriptor.getClassType().descriptor());
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_INIT_NOASYNC,
+                                      Type.getMethodDescriptor(classType, Type.getType(String.class), Type.getType(int.class)),
+                                      null, null);
+
+    Label blockStart = new Label();
+    Label blockEnd   = new Label();
+    Label catchLabel = new Label();
+    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+    mv.visitLabel(blockStart);
+
+    mv.visitVarInsn(ALOAD, THIS_SLOT);
+    mv.visitInsn(ACONST_NULL);      // Continuation
+    mv.visitVarInsn(ALOAD, SOURCE_SLOT);
+    mv.visitVarInsn(ILOAD, OFFSET_SLOT);
+    mv.visitInsn(ACONST_NULL);
+    mv.visitMethodInsn(INVOKEVIRTUAL, internalName, Utils.JACTL_INIT_WRAPPER,
+                       Type.getMethodDescriptor(Type.getType(Object.class),
+                                                Type.getType(Continuation.class), Type.getType(String.class),
+                                                Type.getType(int.class), Type.getType(Object[].class)),
+                       false);
+    mv.visitTypeInsn(CHECKCAST, internalName);
+    mv.visitInsn(ARETURN);
+    mv.visitLabel(blockEnd);
+
+    mv.visitLabel(catchLabel);
+    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+    mv.visitInsn(DUP);
+    Utils.loadConst(mv, "Detected async function invocation during instance auto-creation (which is not allowed)");
+    mv.visitVarInsn(ALOAD, SOURCE_SLOT);
+    mv.visitVarInsn(ILOAD, OFFSET_SLOT);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
 
     if (debug(3)) {
       mv.visitEnd();
