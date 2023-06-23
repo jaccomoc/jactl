@@ -1150,6 +1150,7 @@ public class ClassTests extends BaseTest {
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.\"${'f'}\"()", "null value");
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; def x = new X(null); x.y.\"${'f'}\"()", "null value");
     testError("class X { Y y }; class Y { Z z = null; int i = 2 }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.i = 4; x.y.z.f()", "null object");
+    testError("class X { Y y }; class Y2 { int i }; class Y extends Y2 { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "could not auto-create");
   }
 
   @Test public void newlinesInClassDecl() {

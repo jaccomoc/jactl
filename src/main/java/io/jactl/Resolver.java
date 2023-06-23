@@ -200,9 +200,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     //       not then be accessible in subsequent lines being compiled in the repl.
     var outerClass = outerClassDecl == null || outerClassDecl.isScriptClass() && jactlContext.replMode ? null : outerClassDecl.classDescriptor;
     var interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
-    var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, baseClass, interfaces)
-                                             : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, baseClass, interfaces);
-
+    boolean allFieldsAreDefaults = classDecl.fields.stream().allMatch(field -> Utils.isDefaultValue(field.declExpr));
+    var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, baseClass, interfaces, allFieldsAreDefaults)
+                                             : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, baseClass, interfaces, allFieldsAreDefaults);
     classDecl.classDescriptor = classDescriptor;
 
     if (localClasses.put(classDescriptor.getNamePath(), classDescriptor) != null) {

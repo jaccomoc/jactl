@@ -40,16 +40,17 @@ public class ClassDescriptor {
   Map<String, FunctionDescriptor> methods         = new LinkedHashMap<>();
   Map<String, ClassDescriptor>    innerClasses    = new LinkedHashMap<>();
   FunctionDescriptor              initMethod;
+  boolean                         allFieldsAreDefaults;
 
-  public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces) {
-    this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces);
+  public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
+    this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces, allFieldsAreDefaults);
   }
 
-  public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, JactlType baseClass, List<ClassDescriptor> interfaces) {
-    this(name, outerClass.getNamePath() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces);
+  public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
+    this(name, outerClass.getNamePath() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces, allFieldsAreDefaults);
   }
 
-  ClassDescriptor(String name, String namePath, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces) {
+  ClassDescriptor(String name, String namePath, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
     this.className    = name;
     this.namePath     = namePath;
     this.baseClass    = baseClass;
@@ -72,6 +73,7 @@ public class ClassDescriptor {
     this.prettyName = (pkgName.equals("")?"":(pkgName + ".")) + prettyName;
     this.packagedName = (pkgName.equals("")?"":(pkgName + ".")) + namePath;
     this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
+    this.allFieldsAreDefaults = allFieldsAreDefaults;
   }
 
   public String     getClassName()    { return className; }
@@ -164,6 +166,11 @@ public class ClassDescriptor {
     return allMandatoryFields;
   }
 
+  public boolean allFieldsAreDefaults() {
+    boolean baseFieldsAreDefaults = baseClass == null || baseClass.getClassDescriptor().allFieldsAreDefaults();
+    return baseFieldsAreDefaults && allFieldsAreDefaults;
+  }
+
   public void addInnerClasses(List<ClassDescriptor> classes) {
     innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.namePath, desc -> desc)));
   }
@@ -206,7 +213,7 @@ public class ClassDescriptor {
     return false;
   }
 
-  private static ClassDescriptor JACTL_OBJECT_DESCRIPTOR = new ClassDescriptor("JactlObject", "JactlObject", true, "", "", null, List.of());
+  private static ClassDescriptor JACTL_OBJECT_DESCRIPTOR = new ClassDescriptor("JactlObject", "JactlObject", true, "", "", null, List.of(), true);
   public static ClassDescriptor getJactlObjectDescriptor() {
     return JACTL_OBJECT_DESCRIPTOR;
   }

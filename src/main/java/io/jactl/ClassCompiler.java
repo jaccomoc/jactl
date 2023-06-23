@@ -1342,6 +1342,11 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     mv.visitEnd();
   }
 
+  /**
+   * Compile initNoAsync method which initialises an instance created via auto-creation
+   * (e.g. x.y.z = ...). Needs to make sure that no Continuation is thrown and needs to
+   * make sure that there are no mandatory fields for this class (or parent class).
+   */
   private void compileInitNoAsync() {
     final int THIS_SLOT         = 0;
     final int SOURCE_SLOT       = 1;
@@ -1352,34 +1357,52 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
                                       Type.getMethodDescriptor(classType, Type.getType(String.class), Type.getType(int.class)),
                                       null, null);
 
-    Label blockStart = new Label();
-    Label blockEnd   = new Label();
-    Label catchLabel = new Label();
-    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
-    mv.visitLabel(blockStart);
+    mv.visitCode();
 
-    mv.visitVarInsn(ALOAD, THIS_SLOT);
-    mv.visitInsn(ACONST_NULL);      // Continuation
-    mv.visitVarInsn(ALOAD, SOURCE_SLOT);
-    mv.visitVarInsn(ILOAD, OFFSET_SLOT);
-    mv.visitInsn(ACONST_NULL);
-    mv.visitMethodInsn(INVOKEVIRTUAL, internalName, Utils.JACTL_INIT_WRAPPER,
-                       Type.getMethodDescriptor(Type.getType(Object.class),
-                                                Type.getType(Continuation.class), Type.getType(String.class),
-                                                Type.getType(int.class), Type.getType(Object[].class)),
-                       false);
-    mv.visitTypeInsn(CHECKCAST, internalName);
-    mv.visitInsn(ARETURN);
-    mv.visitLabel(blockEnd);
+    Consumer<String> error = msg -> {
+      mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+      mv.visitInsn(DUP);
+      Utils.loadConst(mv, msg);
+      mv.visitVarInsn(ALOAD, SOURCE_SLOT);
+      mv.visitVarInsn(ILOAD, OFFSET_SLOT);
+      mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+      mv.visitInsn(ATHROW);
+    };
 
-    mv.visitLabel(catchLabel);
-    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
-    mv.visitInsn(DUP);
-    Utils.loadConst(mv, "Detected async function invocation during instance auto-creation (which is not allowed)");
-    mv.visitVarInsn(ALOAD, SOURCE_SLOT);
-    mv.visitVarInsn(ILOAD, OFFSET_SLOT);
-    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
-    mv.visitInsn(ATHROW);
+    if (!classDescriptor.getAllMandatoryFields().isEmpty()) {
+      error.accept("Cannot auto-create instance of " + className + " since it has mandatory fields");
+    }
+    else if (classDescriptor.allFieldsAreDefaults()) {
+      // If we all fields are just default values then we have nothing to do
+      mv.visitVarInsn(ALOAD, THIS_SLOT);
+      mv.visitInsn(ARETURN);
+    }
+    else {
+      // NOTE: since we are invoking our init wrapper we will also initialise fields in our base class
+
+      // Invoke init wrapper and if it throws a Continuation turn it into an error
+      Label blockStart = new Label();
+      Label blockEnd   = new Label();
+      Label catchLabel = new Label();
+      mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+      mv.visitLabel(blockStart);
+      mv.visitVarInsn(ALOAD, THIS_SLOT);
+      mv.visitInsn(ACONST_NULL);      // Continuation
+      mv.visitVarInsn(ALOAD, SOURCE_SLOT);
+      mv.visitVarInsn(ILOAD, OFFSET_SLOT);
+      mv.visitInsn(ACONST_NULL);
+      mv.visitMethodInsn(INVOKEVIRTUAL, internalName, Utils.JACTL_INIT_WRAPPER,
+                         Type.getMethodDescriptor(Type.getType(Object.class),
+                                                  Type.getType(Continuation.class), Type.getType(String.class),
+                                                  Type.getType(int.class), Type.getType(Object[].class)),
+                         false);
+      mv.visitTypeInsn(CHECKCAST, internalName);
+      mv.visitInsn(ARETURN);
+      mv.visitLabel(blockEnd);
+
+      mv.visitLabel(catchLabel);
+      error.accept("Detected async function invocation during instance auto-creation (which is not allowed)");
+    }
 
     if (debug(3)) {
       mv.visitEnd();

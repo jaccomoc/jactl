@@ -44,6 +44,7 @@ public class Utils {
   public static final String JACTL_SCRIPT_MAIN   = JACTL_PREFIX + "main";
   public static final String JACTL_INIT          = JACTL_PREFIX + "init";
   public static final String JACTL_INIT_WRAPPER  = Utils.wrapperName(JACTL_PREFIX + "init");
+  public static final String JACTL_INIT_NOASYNC  = JACTL_PREFIX + "initNoAsync";
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
 
   public static final String JACTL_FIELDS_METHODS_MAP           = "_$j$FieldsAndMethods";
@@ -401,7 +402,7 @@ public class Utils {
         mv.visitInsn(I2B);
       } else if (type.is(JactlType.BOOLEAN, JactlType.INT)) {
         mv.visitInsn(L2I);
-      } else if (type.is(JactlType.DOUBLE)) {
+      } else if (type.is(DOUBLE)) {
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "longBitsToDouble", "(J)D", false);
       }
     }
@@ -746,5 +747,19 @@ public class Utils {
 
   public static String md5Hash(String source) {
     return Utils.toHexString(md5.get().digest(source.getBytes()));
+  }
+
+  public static boolean isDefaultValue(Expr.VarDecl declExpr) {
+    if (declExpr.initialiser == null || !(declExpr.initialiser instanceof Expr.Literal)) {
+      return false;
+    }
+    Object value = ((Expr.Literal) declExpr.initialiser).value.getValue();
+    switch (declExpr.type.getType()) {
+      case BOOLEAN:        return Boolean.FALSE.equals(value);
+      case BYTE: case INT: return Integer.valueOf(0).equals(value);
+      case LONG:           return Long.valueOf(0).equals(value);
+      case DOUBLE:         return Double.valueOf(0).equals(value);
+      default:             return value == null;
+    }
   }
 }

@@ -1991,7 +1991,7 @@ public class Parser {
     // set and invoke their initialisers
     for (int i = 0; i < fieldCount; i++) {
       var field = classDecl.fields.get(i);
-      if (field.declExpr.initialiser == null) {
+      if (field.declExpr.initialiser == null || Utils.isDefaultValue(field.declExpr)) {
         // Not optional so nothing to do
         continue;
       }

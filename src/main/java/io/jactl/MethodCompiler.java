@@ -2236,7 +2236,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       var    node = iter.previous();
       if (checkForNull && !node.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
         throwIfNull("Trying to access field/element of null object" +
-                    (lastNode.createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
+                    (lastNode.createIfMissing ? " (could not auto-create parent due to mandatory fields)" : ""),
                     node.operator);
       }
       if (node.right.isSuper()) {
