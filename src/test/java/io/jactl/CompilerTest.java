@@ -7101,6 +7101,7 @@ class CompilerTest extends BaseTest {
     test("eval('x + 1',[x:3])", 4);
     test("eval('x + 1L',[x:3])", 4L);
     test("eval('x + 1',[x:3L])", 4L);
+    test("eval('x + 1',[x:'3'])", "31");
     test("eval('x + 1',[x:3]) + eval('x+3',[x:3])", 10);
     test("eval('x x + 1',[x:3])", null);
     test("def vars = [x:3]; eval('x x + 1',vars); vars.'$error' =~ /unexpected token/i", true);
@@ -7300,6 +7301,22 @@ class CompilerTest extends BaseTest {
   @Test public void eof() {
     testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected eof");
   }
+
+  @Test public void globalsOptimisation() {
+    globals.put("x", "abc");
+    test("sleep(0,x) + sleep(0,'d')", "abcd");
+    globals.put("x", 123);
+    test("x", 123);
+    test("x + 1", 124);
+    test("def f(n) { x = n }; x = 1; x + 'abc'.size() + x", 5);
+    test("def f(n) { x = n }; x = 1; x + f(3) + x", 7);
+    test("def f(n) { x = n }; x = 1; def y = x + f(3) + x; x = 3; y + x", 10);
+    test("def f(n) { x = n }; x = 1; def y = ++x + x + f(3) + x; x = 3; y + x", 13);
+    test("def f(n) { x = n }; x = 1; def y = (x += 1) + x + f(3) + x; x = 3; y += x; f(1); y + x", 14);
+    test("def g(n) { x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
+    test("def g(n) { x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
+  }
+
 
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
     Runnable setInput = () -> RuntimeState.setInput(input == null ? null: new BufferedReader(new StringReader(input)));

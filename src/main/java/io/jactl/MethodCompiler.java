@@ -28,7 +28,6 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -179,8 +178,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private       int           longArr = -1;
   private       int           objArr  = -1;
 
-  private List<Label>      asyncLocations         = new ArrayList<>();
-  private List<Runnable>   asyncStateRestorations = new ArrayList<>();
+  private static boolean      localAliasForGlobals   = Boolean.parseBoolean(System.getProperty("jactl.opt.aliasedGlobals", "true"));
+  private List<Label>         asyncLocations         = new ArrayList<>();
+  private List<Runnable>      asyncStateRestorations = new ArrayList<>();
 
   private static final BigDecimal DECIMAL_MINUS_1 = BigDecimal.valueOf(-1);
 
@@ -246,6 +246,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitJumpInsn(IFNONNULL, isContinuation);
     }
 
+    // Allocate slots for our long[] and Object[] that we will use when saving state during suspension.
+    if (methodFunDecl.functionDescriptor.isAsync) {
+      longArr = stack.allocateSlot(LONG_ARR);
+      objArr  = stack.allocateSlot(OBJECT_ARR);
+    }
+
     // If main script method then initialise our globals field
     if (methodFunDecl.isScriptMain) {
       // FieldAssign globals map to field so we can access it from anywhere
@@ -254,11 +260,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class));
     }
 
-    // Allocate slots for our long[] and Object[] that we will use when saving state during suspension.
-    if (methodFunDecl.functionDescriptor.isAsync) {
-      longArr = stack.allocateSlot(LONG_ARR);
-      objArr  = stack.allocateSlot(OBJECT_ARR);
-   }
+    if (classCompiler.classDecl.isScriptClass()) {
+      // Allocate slot for all globals if using local alias optimisation (and not in repl mode)
+      if (globalAliases()) {
+        methodFunDecl.globals.forEach((name, varDecl) -> {
+          createAlias(name, varDecl);
+        });
+      }
+    }
 
     // Compile statements.
     compile(methodFunDecl.block);
@@ -282,6 +291,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
+  }
+
+  private boolean globalAliases() {
+    return localAliasForGlobals && !classCompiler.context.replMode;
   }
 
   /////////////////////////////////////////////
@@ -1733,6 +1746,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // If user defined function we need to take care of HeapLocals
         invokeUserFunction(expr, funDecl, functionDescriptor);
       }
+      if (!functionDescriptor.isBuiltin) {
+        // If not builtin then we might have reassigned a global var in another script local function
+        invalidateGlobalAliases();
+      }
       return null;
     }
 
@@ -1753,6 +1770,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        loadArgsAsObjectArr(expr.args);
                      },
                      () -> invokeMethodHandle());
+
+    // We don't know if function was script local or not since we invoked
+    // via method handle so we need to clear aliases
+    invalidateGlobalAliases();
 
     // Since we might be invoking a function that returns an Iterator (def f = x.map; f()), then
     // we need to check that if not immediately invoking another method call (f().each()) we must
@@ -3852,7 +3873,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     popType();
 
+    // Clear out cache of global vars since async call might invalidate values in situation where global
+    // alias created during arg compilation for async call.
+    invalidateGlobalAliases();
+
     mv.visitLabel(after);              // :after
+  }
+
+  private void invalidateGlobalAliases() {
+    stack.markGlobalAliasesAsStale();
   }
 
   private void insertDebug(String info) {
@@ -4230,16 +4259,51 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
+   * Create local alias for a global variable and store the value in the local
+   * @param varName  variable name
+   * @param varDecl  Expr.VarDecl
+   */
+  private void createAlias(String varName, Expr.VarDecl varDecl) {
+    stack.allocateGlobalVarSlot(varName, varDecl.type);
+    int slot = stack.globalVarSlot(varName);
+    loadGlobals();
+    loadConst(varName);
+    invokeMethod(Map.class, "get", Object.class);
+    checkCast(varDecl.type);
+    popType();
+    push(varDecl.type.boxed());
+    storeLocal(slot);
+    stack.refresh(varName);
+  }
+
+  /**
    * Load variable from slot or globals or HeapLocal as required.
    */
   private void loadVar(Expr.VarDecl varDecl) {
+    String varName = varDecl.name.getStringValue();
     if (varDecl.isGlobal) {
+      int slot = -1;
+      if (globalAliases()) {
+        slot = stack.globalVarSlot(varName);
+        if (!stack.isStale(varName)) {
+          loadLocal(slot);
+//          // Cannot work out why this is needed but without this the first test in ClassTests.instanceof2() fails.
+//          // From looking at decompiled code it seems that the value should already be of the right type.
+//          checkCast(varDecl.type);
+          return;
+        }
+      }
       loadGlobals();
-      loadConst(varDecl.name.getValue());
+      loadConst(varName);
       invokeMethod(Map.class, "get", Object.class);
       checkCast(varDecl.type);
       popType();
       push(varDecl.type.boxed());
+      if (slot != -1) {
+        storeLocal(slot);
+        loadLocal(slot);
+        stack.refresh(varName);
+      }
       return;
     }
 
@@ -4247,7 +4311,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (varDecl.funDecl == null) {
         // Actual field
         loadLocal(0);
-        loadClassField(classCompiler.internalName, varDecl.name.getStringValue(), varDecl.type, false);
+        loadClassField(classCompiler.internalName, varName, varDecl.type, false);
       }
       else {
         // Method
@@ -4300,11 +4364,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void storeVar(Expr.VarDecl varDecl) {
     expect(1);
+    String varName = varDecl.name.getStringValue();
     if (varDecl.isGlobal) {
       box();
+      if (globalAliases()) {
+        int slot = stack.globalVarSlot(varName);
+        if (!stack.isStale(varName)) {
+          storeLocal(slot);
+          loadLocal(slot);
+        }
+      }
       loadGlobals();
       swap();
-      loadConst(varDecl.name.getValue());
+      loadConst(varName);
       swap();
       invokeMethod(Map.class, "put", Object.class, Object.class);
       // Pop result of put since we are not interested in previous value

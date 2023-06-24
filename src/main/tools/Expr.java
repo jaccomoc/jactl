@@ -301,6 +301,8 @@ class Expr {
     LinkedHashMap<String,Expr.VarDecl>       @heapLocalsByName = new LinkedHashMap<>();
     LinkedHashMap<Expr.VarDecl,Expr.VarDecl> @heapLocals       = new LinkedHashMap<>();
 
+    HashMap<String,Expr.VarDecl> @globals = new HashMap<>();   // global vars accessed by this function
+
     // Remember earliest (in the code) forward reference to us so we can make sure that
     // no variables we close over are declared after that reference
     Token @earliestForwardReference;
@@ -312,7 +314,6 @@ class Expr {
 
     void allocateLocals(int n) { localsCnt += n; maxLocals = maxLocals > localsCnt ? maxLocals : localsCnt; }
     void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0;}
-
 
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }

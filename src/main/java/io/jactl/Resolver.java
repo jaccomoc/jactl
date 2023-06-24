@@ -1880,7 +1880,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
     // if value does not already exist.
-    if (varDecl == null) { varDecl = lookupGlobals(name, location); }
+    if (varDecl == null) {
+      varDecl = lookupGlobals(name, location);
+      if (varDecl != null) {
+        currentFunction().globals.put(name, varDecl);
+      }
+    }
 
     if (existenceCheckOnly) {
       return varDecl;

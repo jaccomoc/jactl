@@ -24,6 +24,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
@@ -35,7 +36,8 @@ import static org.objectweb.asm.Opcodes.*;
  */
 public class LocalTypes {
 
-  private List<LocalEntry>  locals = new ArrayList<>();
+  private List<LocalEntry>       locals        = new ArrayList<>();
+  private Map<String,LocalEntry> globalAliases = new HashMap<>();
   private int minimumSlot = 0;
   private int maxIndex    = -1;
 
@@ -67,6 +69,7 @@ public class LocalTypes {
     copy.locals = copyLocals();
     copy.minimumSlot = minimumSlot;
     copy.maxIndex = maxIndex;
+    copy.globalAliases = new HashMap<>(globalAliases);
     return copy;
   }
 
@@ -401,14 +404,14 @@ public class LocalTypes {
   public void saveLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
     Function<Integer,Boolean>    ignoreEntry = i -> i == continuationVar || i == globalsVar || i == longArr || i == objArr;
     int  startSlot = isStatic ? 0 : 1;
-    boolean savePrimitives = IntStream.range(startSlot, locals.size())
-                                      .filter(i -> !ignoreEntry.apply(i))
-                                      .mapToObj(i -> locals.get(i))
-                                      .anyMatch(entry -> entry != null && entry.type.isPrimitive());
-    boolean saveObjects = IntStream.range(startSlot, locals.size())
-                                   .filter(i -> !ignoreEntry.apply(i))
-                                   .mapToObj(i -> locals.get(i))
-                                   .anyMatch(entry -> entry != null && !entry.type.isPrimitive());
+    var entries = IntStream.range(startSlot, locals.size())
+                           .filter(i -> !ignoreEntry.apply(i))
+                           .mapToObj(i -> locals.get(i))
+                           .filter(entry -> entry != null)
+                           .filter(entry -> !entry.isGlobalVar)
+                           .collect(Collectors.toList());
+    boolean savePrimitives = entries.stream().anyMatch(entry -> entry.type.isPrimitive());
+    boolean saveObjects    = entries.stream().anyMatch(entry -> !entry.type.isPrimitive());
 
     if (!savePrimitives) {
       mv.visitInsn(ACONST_NULL);
@@ -439,7 +442,7 @@ public class LocalTypes {
     for (int i = startSlot; i < locals.size(); ) {
       var       entry = locals.get(i);
       JactlType type  = entry == null ? null : entry.type;
-      if (entry != null && !ignoreEntry.apply(i)) {
+      if (entry != null && !ignoreEntry.apply(i) && !entry.isGlobalVar) {
         _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
         Utils.loadConst(mv, i);
         _loadLocal(i);
@@ -459,10 +462,10 @@ public class LocalTypes {
   }
 
   public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
-    int startSlot = isStatic ? 0 : 1;
+    int  startSlot = isStatic ? 0 : 1;
     for (int i = startSlot; i < locals.size(); i++) {
       var entry = locals.get(i);
-      if (entry == null || i == continuationVar || i == globalsVar || i == longArr || i == objArr) {
+      if (entry == null || entry.isGlobalVar || i == continuationVar || i == globalsVar || i == longArr || i == objArr) {
         continue;
       }
       var type = entry.type;
@@ -538,6 +541,31 @@ public class LocalTypes {
       minimumSlot = locals.size();
     }
     return slot;
+  }
+
+  public void allocateGlobalVarSlot(String name, JactlType type) {
+    int slot = allocateSlot(type);
+    LocalEntry localEntry = locals.get(slot);
+    localEntry.isGlobalVar = true;
+    localEntry.isStale = true;
+    minimumSlot = locals.size();
+    globalAliases.put(name, localEntry);
+  }
+
+  public void markGlobalAliasesAsStale() {
+    globalAliases.values().forEach(entry -> entry.isStale = true);
+  }
+
+  public boolean isStale(String name) {
+    return globalAliases.get(name).isStale;
+  }
+
+  public void refresh(String name) {
+    globalAliases.get(name).isStale = false;
+  }
+
+  public int globalVarSlot(String name) {
+    return globalAliases.get(name).slot;
   }
 
   public void loadLocal(int slot) {
@@ -622,7 +650,7 @@ public class LocalTypes {
 
     // Set first slot to type. For multi-slot types others are marked as ANY.
     for(int i = 0; i < slotsNeeded(type); i++) {
-      var entry = new LocalEntry(i == 0 ? type : ANY);
+      var entry = new LocalEntry(i == 0 ? type : ANY, idx);
       locals.set(idx + i, entry);
     }
   }
@@ -719,11 +747,24 @@ public class LocalTypes {
 
   private static class LocalEntry {
     JactlType type;
-    int refCount = 1;
-    LocalEntry(JactlType type)  { this.type = type; }
-    LocalEntry(LocalEntry entry) { this.type = entry.type; this.refCount = entry.refCount; }
-    @Override public boolean equals(Object that) { return type.equals(((LocalEntry)that).type) && refCount == ((LocalEntry)that).refCount; }
-    @Override public String toString() { return "[" + type + "," + refCount + "]"; }
+    int       slot = -1;
+    int       refCount = 1;
+    boolean   isGlobalVar;
+    boolean   isStale;      // For global vars whether local alias needs refreshing
+
+    LocalEntry(JactlType type, int slot)  { this.type = type; this.slot = slot; }
+    LocalEntry(LocalEntry entry) {
+      this.type = entry.type;
+      this.refCount = entry.refCount;
+      this.isGlobalVar = entry.isGlobalVar;
+      this.isStale = entry.isStale;
+      this.slot = entry.slot;
+    }
+    @Override public boolean equals(Object that) {
+      return type.equals(((LocalEntry)that).type) && refCount == ((LocalEntry)that).refCount &&
+             isGlobalVar == ((LocalEntry)that).isGlobalVar;
+    }
+    @Override public String toString() { return "[" + type + "," + refCount + ",global=" + isGlobalVar + "]"; }
   }
 
   /**
@@ -739,7 +780,7 @@ public class LocalTypes {
    */
   public class StackEntry {
     JactlType type;
-    int slot = -1;
+    int       slot = -1;
 
     StackEntry(JactlType type)            { this.type = type; }
     StackEntry(JactlType type, int slot)  { this.type = type; this.slot = slot; }

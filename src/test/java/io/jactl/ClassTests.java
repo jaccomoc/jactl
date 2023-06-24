@@ -1100,6 +1100,7 @@ public class ClassTests extends BaseTest {
     }
     else {
       useAsyncDecorator = false;
+      skipCheckpointTests = true;
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", "detected async");
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
     }
