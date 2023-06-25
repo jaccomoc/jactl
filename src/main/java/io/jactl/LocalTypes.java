@@ -547,25 +547,16 @@ public class LocalTypes {
     int slot = allocateSlot(type);
     LocalEntry localEntry = locals.get(slot);
     localEntry.isGlobalVar = true;
-    localEntry.isStale = true;
     minimumSlot = locals.size();
     globalAliases.put(name, localEntry);
   }
 
-  public void markGlobalAliasesAsStale() {
-    globalAliases.values().forEach(entry -> entry.isStale = true);
-  }
-
-  public boolean isStale(String name) {
-    return globalAliases.get(name).isStale;
-  }
-
-  public void refresh(String name) {
-    globalAliases.get(name).isStale = false;
-  }
-
   public int globalVarSlot(String name) {
-    return globalAliases.get(name).slot;
+    LocalEntry localEntry = globalAliases.get(name);
+    if (localEntry == null) {
+      throw new IllegalStateException("Could not find local alias for global var " + name);
+    }
+    return localEntry.slot;
   }
 
   public void loadLocal(int slot) {
@@ -750,14 +741,12 @@ public class LocalTypes {
     int       slot = -1;
     int       refCount = 1;
     boolean   isGlobalVar;
-    boolean   isStale;      // For global vars whether local alias needs refreshing
 
     LocalEntry(JactlType type, int slot)  { this.type = type; this.slot = slot; }
     LocalEntry(LocalEntry entry) {
       this.type = entry.type;
       this.refCount = entry.refCount;
       this.isGlobalVar = entry.isGlobalVar;
-      this.isStale = entry.isStale;
       this.slot = entry.slot;
     }
     @Override public boolean equals(Object that) {

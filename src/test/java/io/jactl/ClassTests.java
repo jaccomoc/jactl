@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ClassTests extends BaseTest {
 
   @Test public void nameScoping() {
-    replMode = false;
+    replModeEnabled = false;
     test("class X{}; int X = 1; X", 1);
     test("class X{static def f(){2}}; Map X = [f:{3}]; X.f()", 3);
     test("class X{static def f(){2}}; def X = [f:{3}]; X.f()", 3);
@@ -1100,7 +1100,6 @@ public class ClassTests extends BaseTest {
     }
     else {
       useAsyncDecorator = false;
-      skipCheckpointTests = true;
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", "detected async");
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
     }

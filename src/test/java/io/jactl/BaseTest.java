@@ -38,8 +38,8 @@ public class BaseTest {
   protected int                debugLevel  = 0;
   protected String             packageName = Utils.DEFAULT_JACTL_PKG;
   protected Map<String,Object> globals     = new HashMap<>();
-  protected boolean            useAsyncDecorator = true;
-  protected boolean            replMode = true;
+  protected boolean            useAsyncDecorator   = true;
+  protected boolean            replModeEnabled     = true;
   protected boolean            skipCheckpointTests = false;
   protected JactlEnv           jactlEnv = new DefaultEnv();
 
@@ -144,8 +144,8 @@ public class BaseTest {
         }
       };
 
-      JactlContext jactlContext1 = getJactlContext(true, replMode, false);
-      JactlContext jactlContext2 = getJactlContext(true, replMode, false);
+      JactlContext jactlContext1 = getJactlContext(true, false, false);
+      JactlContext jactlContext2 = getJactlContext(true, false, false);
 
       var    bindings = createGlobals();
 
@@ -346,7 +346,7 @@ public class BaseTest {
       doTest(List.of(), code, true, false, true, true, expected);
       doTestCheckpoint(List.of(), code, expected);
     }
-    if (replMode) {
+    if (replModeEnabled) {
       doTest(code, true, true, false, expected);
       doTest(code, false, true, false, expected);
       doTest(code, true, true, true, expected);
@@ -364,7 +364,7 @@ public class BaseTest {
       doTest(classCode, scriptCode, true, false, true, true, expected);
       doTestCheckpoint(classCode, scriptCode, expected);
     }
-    if (replMode) {
+    if (replModeEnabled) {
       doTest(classCode, scriptCode, true, true, false, expected);
       doTest(classCode, scriptCode, false, true, false, expected);
       doTest(classCode, scriptCode, true, true, true, expected);

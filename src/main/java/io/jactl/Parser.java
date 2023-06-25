@@ -48,7 +48,6 @@ import static io.jactl.TokenType.*;
  */
 public class Parser {
   Tokeniser tokeniser;
-  Token                 firstToken  = null;
   List<CompileError>    errors      = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes     = new ArrayDeque<>();
   boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
@@ -132,6 +131,10 @@ public class Parser {
    */
   private Stmt.FunDecl script() {
     Token start = peek();
+    if (start.is(EOL)) {
+      advance();
+      start = peek();
+    }
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
     // Script take a single parameter which is a Map of globals
     var globalsParam           = createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
@@ -2053,17 +2056,11 @@ public class Parser {
 
   private Token advance() {
     Token token = tokeniser.next();
-    if (firstToken == null) {
-      firstToken = token;
-    }
     return token;
   }
 
   private Token peek() {
     Token token = tokeniser.peek();
-    if (firstToken == null) {
-      firstToken = token;
-    }
     if (ignoreEol && token.is(EOL)) {
       // If ignoring EOL then we need to get following token but not consume existing
       // one so save state and then restore after fetching following token

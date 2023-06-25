@@ -1883,6 +1883,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (varDecl == null) {
       varDecl = lookupGlobals(name, location);
       if (varDecl != null) {
+        // Keep track of which globals are used in this function so that we can create local var
+        // aliases for them as an optimisation in MethodCompiler
         currentFunction().globals.put(name, varDecl);
       }
     }

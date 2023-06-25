@@ -84,7 +84,7 @@ public class Location implements SourceLocation {
       }
     }
     if (i == lines.size()) {
-      throw new IllegalStateException("Internal error: offset of " + offset + " too large for source of length " + source.length());
+      i = lines.size() - 1;
     }
 
     // Remember the line and the line number/column number (which both start at 1, not 0)

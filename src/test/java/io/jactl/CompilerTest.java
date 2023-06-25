@@ -7305,6 +7305,7 @@ class CompilerTest extends BaseTest {
   @Test public void globalsOptimisation() {
     globals.put("x", "abc");
     test("sleep(0,x) + sleep(0,'d')", "abcd");
+    test("sleep(0,x) + sleep(0,'d') + sleep(0,x)", "abcdabc");
     globals.put("x", 123);
     test("x", 123);
     test("x + 1", 124);
@@ -7315,8 +7316,9 @@ class CompilerTest extends BaseTest {
     test("def f(n) { x = n }; x = 1; def y = (x += 1) + x + f(3) + x; x = 3; y += x; f(1); y + x", 14);
     test("def g(n) { x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
     test("def g(n) { x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
+    test("def g(n) { if (false) { sleep(0) }; x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
+    test("sleep(0); x if true; sleep(0,x)", 123);
   }
-
 
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
     Runnable setInput = () -> RuntimeState.setInput(input == null ? null: new BufferedReader(new StringReader(input)));

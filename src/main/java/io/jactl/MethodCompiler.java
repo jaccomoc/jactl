@@ -262,11 +262,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (classCompiler.classDecl.isScriptClass()) {
       // Allocate slot for all globals if using local alias optimisation (and not in repl mode)
-      if (globalAliases()) {
-        methodFunDecl.globals.forEach((name, varDecl) -> {
-          createAlias(name, varDecl);
-        });
-      }
+      createAliases(true);
     }
 
     // Compile statements.
@@ -1748,7 +1744,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       if (!functionDescriptor.isBuiltin) {
         // If not builtin then we might have reassigned a global var in another script local function
-        invalidateGlobalAliases();
+        refreshAliases();
       }
       return null;
     }
@@ -1772,8 +1768,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      () -> invokeMethodHandle());
 
     // We don't know if function was script local or not since we invoked
-    // via method handle so we need to clear aliases
-    invalidateGlobalAliases();
+    // via method handle so we need to refresh aliases just in case
+    refreshAliases();
 
     // Since we might be invoking a function that returns an Iterator (def f = x.map; f()), then
     // we need to check that if not immediately invoking another method call (f().each()) we must
@@ -3861,8 +3857,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(ATHROW);
 
     mv.visitLabel(continuation);       // :continuation
-
-    // Check for exeption and rethrow. Otherwise convert result to return type of function we invoked.
+    // Reload local aliases for any globals used
+    refreshAliases();
+    // Convert result to return type of function we invoked.
     loadLocal(continuationVar);
     invokeMethod(Continuation.class, "getResult");
     if (returnType.isPrimitive()) {
@@ -3873,15 +3870,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     popType();
 
-    // Clear out cache of global vars since async call might invalidate values in situation where global
-    // alias created during arg compilation for async call.
-    invalidateGlobalAliases();
+    // Refresh out local aliases for globals since call may have reset some values unbeknownst to us
+    refreshAliases();
 
     mv.visitLabel(after);              // :after
-  }
-
-  private void invalidateGlobalAliases() {
-    stack.markGlobalAliasesAsStale();
   }
 
   private void insertDebug(String info) {
@@ -4258,22 +4250,42 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private void refreshAliases() {
+    createAliases(false);
+  }
+
+  private void createAliases(boolean create) {
+    if (globalAliases()) {
+      methodFunDecl.globals.forEach((name, varDecl) -> {
+        createAlias(name, varDecl, create);
+      });
+    }
+  }
+
   /**
-   * Create local alias for a global variable and store the value in the local
+   * Create or refresh local alias for a global variable and store the value in the local
    * @param varName  variable name
    * @param varDecl  Expr.VarDecl
    */
-  private void createAlias(String varName, Expr.VarDecl varDecl) {
-    stack.allocateGlobalVarSlot(varName, varDecl.type);
+  private void createAlias(String varName, Expr.VarDecl varDecl, boolean create) {
+    if (create) {
+      stack.allocateGlobalVarSlot(varName, varDecl.type);
+    }
     int slot = stack.globalVarSlot(varName);
     loadGlobals();
     loadConst(varName);
     invokeMethod(Map.class, "get", Object.class);
-    checkCast(varDecl.type);
+    if (create) {
+      tryCatch(ClassCastException.class, false,
+               () -> Utils.checkCast(mv, varDecl.type),
+               () -> throwError("Global var " + varName + " not of type " + varDecl.type.toString(), methodFunDecl.location));
+    }
+    else {
+      Utils.checkCast(mv, varDecl.type);
+    }
     popType();
-    push(varDecl.type.boxed());
+    push(varDecl.type);
     storeLocal(slot);
-    stack.refresh(varName);
   }
 
   /**
@@ -4285,13 +4297,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       int slot = -1;
       if (globalAliases()) {
         slot = stack.globalVarSlot(varName);
-        if (!stack.isStale(varName)) {
-          loadLocal(slot);
-//          // Cannot work out why this is needed but without this the first test in ClassTests.instanceof2() fails.
-//          // From looking at decompiled code it seems that the value should already be of the right type.
-//          checkCast(varDecl.type);
-          return;
-        }
+        loadLocal(slot);
+        return;
       }
       loadGlobals();
       loadConst(varName);
@@ -4302,7 +4309,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (slot != -1) {
         storeLocal(slot);
         loadLocal(slot);
-        stack.refresh(varName);
       }
       return;
     }
@@ -4369,10 +4375,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();
       if (globalAliases()) {
         int slot = stack.globalVarSlot(varName);
-        if (!stack.isStale(varName)) {
-          storeLocal(slot);
-          loadLocal(slot);
-        }
+        storeLocal(slot);
+        loadLocal(slot);
       }
       loadGlobals();
       swap();
@@ -4830,7 +4834,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     if (sourceLocation instanceof Location) {
       Location location = (Location) sourceLocation;
       _loadConst(location.getLine());
-      _loadConst(location.getColumn());
+      _loadConst(location.getColumn() - 1);  // turn column into offset within line
       return;
     }
     throw new IllegalStateException("Unexpected SourceLocation type " + sourceLocation.getClass().getName());
