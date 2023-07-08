@@ -13,6 +13,9 @@ It is especially suited to event-loop/reactive applications due to its built-in 
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
+It also allows the execution state of scripts to be checkpointed and persisted or distributed over a network
+to allow scripts to be recovered and resumed after a failure.
+
 # Why?
 
 I wrote Jactl because I wanted a scripting language that Java applications could embed to allow their users

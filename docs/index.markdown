@@ -35,8 +35,9 @@ embedded.
 
 <div class="row">
   <div class="column" markdown="1">
-### **Easy to Integrate**
-Easy to integrate with any Java-based application.
+### **Checkpointing Execution State**
+Execution state can be checkpointed and persisted or distributed over a network to allow scripts to be recovered
+and resumed from where they left off after a failure.
   </div>
   <div class="column" markdown="1">
 ### **No Dependencies**

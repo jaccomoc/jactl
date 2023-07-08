@@ -53,6 +53,11 @@ script such as the value of all local variables and the current call stack.
 When the long-running operation completes, the script state is restored and the script continues
 from where it left off.
 
+### Checkpointing
+
+The execution state of a script can be checkpointed when needed and this checkpointed state can be persisted or
+distibuted over a network in order to recover and resume scripts after a failure.
+
 ### Extendable
 Easy to integrate additional functions and methods into the language for application-specific needs.
 

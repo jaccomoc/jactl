@@ -3286,6 +3286,40 @@ list:
 3.6666666667
 ```
 
+# Checkpointing
+
+Jactl provides a `checkpoint()` function that allows a Jactl script to checkpoint its current execution state and
+provides a hook that allows these checkpoints to be persisted (to file system or a database) or to be distributed
+over the network to another server.
+
+The checkpoint state can later be recovered and the script will continue from where the `checkpoint()` function had
+been invoked.
+
+The saving and recovering of checkpoints is done via the `JactlEnv` implementation provided to the Jactl runtime.
+The idea is to provide a custom implementation of this class and implement the `saveCheckpoint()` and `deleteCheckpoint()`
+methods as appropriate to the environment in which the scripts are running.
+To recover a checkpoint and trigger the script to continue from where it had been checkpointed, the
+`JactlContext.recoverCheckpoint()` method should be used.
+See [Integration Guide](integration-guide.md) for more details.
+
+The `checkpoint()` function optionally takes two parameters which are closures.
+The first one (with parameter name `commit`) is invoked when the `checkpoint()` function is called, while the second
+one (with parameter name `recover`) is invoked if the script is recovered.
+This allows the script to have slightly different behaviour after a failure and subsequent recovery.
+For example, if the script sends a message to a downstream system, it might need to set a "repeat" flag in the message
+after a recovery to indicate that it is a possible repeat of an earlier message:
+```groovy
+def response = checkpoint(commit: {
+                            sendReceiveMsg(destUrl, [request:req, possibleRepeat:false])
+                          },
+                          recover: {
+                            sendReceiveMsg(destUrl, [request:req, possibleRepeat:true])
+                          })
+```
+
+The `checkpoint()` function returns whatever the `commit` or `recover` closure returns (whichever one is the one
+that is invoked).
+
 # Classes
 
 Like Java, Jactl supports user defined classes but in a more simplified form.
@@ -4580,7 +4614,8 @@ The value of the exponent passed to `pow()` can be fractional and can be negativ
 
 ## Object Methods
 
-The only method that applies to objects of all types is the `toString()` method.
+### toString()
+
 If passed no argument it prints the string representation of the object:
 ```groovy
 > 1234.toString()
@@ -4604,4 +4639,25 @@ and class instances:
     d:[1, 2, 3]
   ]
 ]
+```
+
+### className()
+
+The `className()` method returns a String with the name of the class of the object it is invoked on:
+```groovy
+> class X{}
+> def x = new X()
+[:]
+> x.className()
+X
+```
+
+It can be used on any type of object, including primitives and arrays:
+```groovy
+> 123.className()
+int
+> > def x = ['a','b','c'] as String[]
+['a', 'b', 'c']
+> x.className()
+String[]
 ```
