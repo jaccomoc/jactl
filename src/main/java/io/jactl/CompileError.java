@@ -34,6 +34,10 @@ public class CompileError extends JactlError {
     super(error, token, true);
   }
 
+  public CompileError(String error, Location token, boolean captureStackTrace) {
+    super(error, token, captureStackTrace);
+  }
+
   public CompileError(List<CompileError> errors) {
     super(null, null, true);
     this.errors = errors;

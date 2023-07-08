@@ -96,6 +96,9 @@ public class ClassDescriptor {
     if (func == null && baseClass != null) {
       func = baseClass.getClassDescriptor().getMethod(name);
     }
+    if (func == null) {
+      func = Functions.lookupMethod(getInstanceType(), name);
+    }
     return func;
   }
 

@@ -1070,18 +1070,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           // We need to find the method handle for the given method
           var method = clss.getMethod(name);
           check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
-          // If method is static then we don't need the instance
-          if (method.isStatic && expr.left.type.is(INSTANCE)) {
-            popVal();
-          }
           // We want the handle to the wrapper method.
-          String handleName = Utils.staticHandleName(Utils.wrapperName(name));
-          loadClassField(clss.getInternalName(), handleName, FUNCTION, true);
-          // If not static then bind to instance
-          if (!method.isStatic) {
-            swap();
-            invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
-          }
+          loadWrapperHandle(method, expr);
           return null;
         }
 
@@ -1461,6 +1451,29 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       throw new IllegalStateException("Internal error: unexpected type " + expr.type + " for operator " + expr.operator.getType());
     }
     return null;
+  }
+
+  private void loadWrapperHandle(FunctionDescriptor method, Expr.Binary expr) {
+    // If method is static then we don't need the instance
+    // NOTE: built-in methods are always static since they are implemented via a static class method
+    //       but they are treated as instance methods so we have to make sure it is static but not built-in
+    if (!method.isBuiltin && method.isStatic && expr.left.type.is(INSTANCE)) {
+      popVal();
+    }
+    String handleName = method.isBuiltin ? method.wrapperHandleField : Utils.staticHandleName(Utils.wrapperName(method.name));
+    if (method.isBuiltin) {
+      // Field for builtins is of type Object
+      loadClassField(method.implementingClassName, handleName, ANY, true);
+      checkCast(FUNCTION);
+    }
+    else {
+      loadClassField(method.implementingClassName, handleName, FUNCTION, true);
+    }
+    // If not static then bind to instance
+    if (method.isBuiltin || !method.isStatic) {
+      swap();
+      invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
+    }
   }
 
   private static boolean couldBeNull(Expr expr) {

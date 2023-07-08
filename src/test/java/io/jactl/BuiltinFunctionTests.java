@@ -500,8 +500,10 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void asChar() {
     test("((byte)97).asChar()", "a");
     test("97.asChar()", "a");
+    test("def f = 97.asChar; f()", "a");
     test("def x = 97; x.asChar()", "a");
     test("def x = 97; def f = x.asChar; f()", "a");
+    test("int x = 97; def f = x.asChar; f()", "a");
     test("def x = ((int)'X').asChar(); x", "X");
     test("def f = ((int)'X').asChar; f()", "X");
     testError("'a'.asChar()", "no such method");
@@ -521,8 +523,12 @@ public class BuiltinFunctionTests extends BaseTest {
     test("new Object[10][].className()", "Object[][]");
     test("new String[10][].className()", "String[][]");
     test("new Decimal[10][].className()", "Decimal[][]");
+    test("class X{}; def f = new X().className; f()", "X");
+    test("class X{}; def x = new X(); def f = x.className; f()", "X");
+    test("class X{}; X x = new X(); def f = x.className; f()", "X");
     test("class X { class Y{} }; new X.Y[10].className()", "X.Y[]");
     test("class X { class Y{} }; def x = new X.Y[10]; x.className()", "X.Y[]");
+    test("class X { class Y{} }; def x = new X.Y[10]; def f = x.className; f()", "X.Y[]");
   }
 
   @Test public void size() {

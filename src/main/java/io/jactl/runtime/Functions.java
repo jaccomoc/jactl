@@ -103,7 +103,8 @@ public class Functions {
     return function.wrapperHandle.bindTo(parent);
   }
 
-  private static FunctionDescriptor findMatching(JactlType type, String methodName) {
+  private static FunctionDescriptor findMatching(JactlType objType, String methodName) {
+    var type = objType.unboxed();
     var functions = methods.get(methodName);
     if (functions == null) {
       return NO_SUCH_METHOD;

@@ -22,4 +22,8 @@ public class EOFError extends CompileError {
   public EOFError(String error, Token token) {
     super(error, token);
   }
+
+  public EOFError(String error, Token token, boolean captureStackTrace) {
+    super(error, token, captureStackTrace);
+  }
 }
