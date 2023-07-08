@@ -208,13 +208,13 @@ public class Parser {
       } while (matchAny(DOT));
       String pkg = String.join(".", packagePath);
       if (packageName != null && !packageName.isEmpty() && !pkg.equals(packageName)) {
-        throw new CompileError("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
+        error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
       }
       packageName = pkg;
       matchAnyIgnoreEOL(SEMICOLON);
     }
     if (packageName == null) {
-      throw new CompileError("Package name not declared or otherwise supplied", peek());
+      error("Package name not declared or otherwise supplied");
     }
   }
 
@@ -288,7 +288,7 @@ public class Parser {
         if (declaration != null) {
           stmts.stmts.add(declaration);
           if (previousStmt instanceof Stmt.Return) {
-            throw new CompileError("Unreachable statement", location);
+            error("Unreachable statement", location);
           }
           previousStmt = declaration;
 
@@ -474,10 +474,10 @@ public class Parser {
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
     if (inClassDecl && !isStatic && name.getStringValue().equals(Utils.TO_STRING)) {
       if (!returnType.is(JactlType.STRING, ANY)) {
-        throw new CompileError(Utils.TO_STRING + "() must return String or use 'def'", start);
+        error(Utils.TO_STRING + "() must return String or use 'def'", start);
       }
       if (parameters.size() > 0) {
-        throw new CompileError(Utils.TO_STRING + "() cannot have parameters", parameters.get(0).name);
+        error(Utils.TO_STRING + "() cannot have parameters", parameters.get(0).name);
       }
     }
     matchAny(EOL);
@@ -734,7 +734,7 @@ public class Parser {
    */
   private Stmt.ClassDecl classDecl() {
     if (!isClassDeclAllowed()) {
-      throw new CompileError("Class declaration not allowed here", previous());
+      error("Class declaration not allowed here", previous());
     }
     var className = expect(IDENTIFIER);
     Token baseClassToken = null;
@@ -1017,7 +1017,7 @@ public class Parser {
         if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
           if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
             if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
-              throw new CompileError("Operator '!~' cannot be used with regex substitution", operator);
+              error("Operator '!~' cannot be used with regex substitution", operator);
             }
             var regex = (Expr.RegexMatch) rhs;
             regex.string = expr;
@@ -1028,7 +1028,7 @@ public class Parser {
           else
           if (isImplicitRegexSubstitute(rhs)) {
             if (operator.is(BANG_GRAVE)) {
-              throw new CompileError("Operator '!~' cannot be used with regex substitution", operator);
+              error("Operator '!~' cannot be used with regex substitution", operator);
             }
             var regexSubst = (Expr.RegexSubst)((Expr.VarOpAssign)rhs).expr;
             regexSubst.implicitItMatch = false;
@@ -1450,16 +1450,16 @@ public class Parser {
         if (key instanceof Expr.Literal) {
           Object value = ((Expr.Literal) key).value.getValue();
           if (!(value instanceof String)) {
-            throw new CompileError(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location);
+            error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location);
           }
           keyString = ((Expr.Literal)key).value.getStringValue();
           if (literalKeyMap.containsKey(keyString)) {
-            throw new CompileError(paramOrKey + " '" + keyString + "' occurs multiple times", key.location);
+            error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location);
           }
         }
         else {
           if (isNamedArgs) {
-            throw new CompileError("Invalid parameter name", previous());
+            error("Invalid parameter name", previous());
           }
         }
         expect(COLON);
@@ -2230,10 +2230,10 @@ public class Parser {
   @SafeVarargs
   private boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
-    Token previous           = previous();
-    Token current            = tokeniser.peek();
-    boolean currentIgnoreEol = ignoreEol;
-    List<CompileError>    currentErrors    = new ArrayList<>(errors);
+    Token previous                   = previous();
+    Token current                    = tokeniser.peek();
+    boolean currentIgnoreEol         = ignoreEol;
+    List<CompileError> currentErrors = new ArrayList<>(errors);
 
     // Set flag so that we know not to collect state such as functions per block etc
     // while doing a lookahead
@@ -2279,12 +2279,18 @@ public class Parser {
   /////////////////////////////////////
 
   private Expr error(String msg) {
-    throw new CompileError(msg, peek());
+    error(msg, peek());
+    return null;
+  }
+
+  private Expr error(String msg, Token token) {
+    // Don't bother with stack trace when doing lookahead
+    throw new CompileError(msg, token, lookaheadCount == 0);
   }
 
   private Expr unexpected(String msg) {
     if (peek().getType().is(EOF)) {
-      throw new EOFError("Unexpected EOF: " + msg, peek());
+      throw new EOFError("Unexpected EOF: " + msg, peek(), lookaheadCount == 0);
     }
     final var chars = peekIsEOL() ? "EOL" : "'" + peek().getChars() + "'";
     error("Unexpected token " + chars + ": " + msg);
@@ -2506,7 +2512,7 @@ public class Parser {
     // (map or list lookup), or fieldPath is just an identifier for a simple variable.
     if (variable instanceof Expr.Identifier) {
       if (((Expr.Identifier)variable).identifier.getStringValue().charAt(0) == '$') {
-        throw new CompileError("Capture variable cannot be modified (invalid lvalue)", variable.location);
+        error("Capture variable cannot be modified (invalid lvalue)", variable.location);
       }
       if (arithmeticOp == null) {
         // Just a standard = or ?=
@@ -2526,14 +2532,14 @@ public class Parser {
     }
 
     if (!(variable instanceof Expr.Binary)) {
-      throw new CompileError("Invalid left-hand side for '" + assignmentOperator.getChars() + "' operator (invalid lvalue)", variable.location);
+      error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' operator (invalid lvalue)", variable.location);
     }
 
     Expr.Binary fieldPath = (Expr.Binary)variable;
 
     // Make sure lhs is a valid lvalue
     if (!fieldPath.operator.is(fieldAccessOp)) {
-      throw new CompileError("Invalid left-hand side for '" + assignmentOperator.getChars() + "' (invalid lvalue)", fieldPath.operator);
+      error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' (invalid lvalue)", fieldPath.operator);
     }
 
     Expr parent = fieldPath.left;
