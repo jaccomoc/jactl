@@ -3532,14 +3532,14 @@ Classes can even have fields of the same type as the class they are embedded in:
 class Tree {
   Tree left  = null
   Tree right = null
-  def        data
+  def  data
 }
 ```
 
 ## Auto-Creation
 
 Just as for Maps, Jactl supports "auto-creation" of fields when a field reference appears as a left-hand side of an
-assignment like operator such as `=`, `?=`, `+=`, `-=`, etc., as long as the types of the fields are types that can
+assignment-like operator such as `=`, `?=`, `+=`, `-=`, etc., as long as the types of the fields are types that can
 be created with no arguments.
 In other words, the types must not have any mandatory fields.
 
@@ -3568,8 +3568,6 @@ x.y.z.i = 4
         ^
 ```
 
-
-
 ## Instance Methods
 
 We have seen classes with fields but classes are more than just a data structure for grouping related pieces of
@@ -3589,7 +3587,7 @@ Classes can also have instance methods defined for them:
   }
 ```
 
-Instance methods are associated with an instance of the class and reference to the fields within a method
+Instance methods are associated with an instance of the class and references to the fields within a method
 access the fields of that instance.
 
 Methods are accessed the same way as fields and then invoked using `()` just as for functions:
@@ -3646,11 +3644,9 @@ or method:
 ## Final Methods
 
 Instance methods can be marked as `final` which means that they cannot be overridden by a child class.
-In addition, in situations where we know the type of the object and we know that the method is final, there
-are optimisations that the compiler can make if it can also determine that the invocation cannot invoke something 
-that will suspend due to an asynchronous function being invoked.
-
-There are also optimisations that the Java Virtual Machine can do when invoking `final` methods.
+Where needed, this gives the parent class more control how the parent class can be used. 
+Final methods allow the Jactl compiler to perform some optimisations that cannot do for non-final methods and
+there are also optimisations that the Java Virtual Machine itself can do for `final` methods.
 
 Here is an example of the use of `final`:
 ```groovy
@@ -3711,20 +3707,22 @@ Invoking a static method via an instance works even if the type of the variable 
 ## No Static Fields
 
 In Jactl, there is no support for static fields.
-This differs from Java and Groovy which support static fields that exist at the class level rather than the class
-instance level.
+This differs from Java and Groovy which support static fields which are field that exist at the class level rather
+than the class instance level.
 
 The reason that Jactl has this restriction is to do with the intended use of the language.
-The language is intended to be used in event driven/reactive programming applications to provide a way for
-customers of these applications to provide their own extensions and customisations.
+The language is intended to be used in distributed event driven/reactive programming applications in order for
+users of these applications to be able to provide their own extensions and customisations.
 
-Jactl scripts are intended to be run in a distributed multithreaded application where multiple threads in multiple
-application instances can be running the same script at the same time.
-It makes no sense in such a scenario to have class level fields since they would not be global fields but would 
-be per application instance.
-So rather than offering the illusion of global state, Jactl has taken the decision to not offer this feature at all.
+Since Jactl scripts are intended to be run in a distributed multithreaded application where multiple threads in multiple
+application instances can be running the same script at the same time,
+it makes no sense to have class level fields since they would not be global fields but would exist per application
+instance.
+Rather than offering the illusion of global state, Jactl has taken the decision to not offer this feature at all.
+This also means not having to introduce the complexity, performance, and deadlock issues of dealing with 
+locking/synchronisation between multiple threads.
 
-If global state is really required then it is up to the application to provide its own functions for its Jactl
+If global state is really required then it is up to the application to provide its own functions for Jactl
 scripts to use that can update/read some global state, potentially in a database, or in a distributed in-memory
 key/value store of some sort.
 
@@ -3875,11 +3873,11 @@ The `toString()` method must have no mandatory arguments and must have a return 
 
 ## Duck Typing
 
-Jactl allows you to use strong typing, where fields, variables, and parameters are given an expicit type, or dynamic
+Jactl allows you to use strong typing, where fields, variables, and parameters are given an explicit type, or dynamic
 typing where fields, variables, and parameters can be defined as `def` which allows them to hold values of any type.
 
 If you use strong typing then in most cases the Jactl compiler can determine at compile time what method is being
-invoked and can do complile time checking of argument count and argument types.
+invoked and can do compile time checking of argument count and argument types.
 
 Dynamic typing (or weak typing) means that the method invocation can only be checked at runtime and a runtime error
 will be produced if the method doesn't exist or the argument types don't match.
@@ -3942,8 +3940,7 @@ When using packages, classes in the same package can be accessed directly via th
 If a class exists in a different package then you can refer to the class using its fully qualified name which is
 the package name followed by a `.` and then the classname.
 
-For example if there is a class `X` in package `a.b.c` then you access the class using `a.b.c.X`.
-For example:
+For example if there is a class `X` in package `a.b.c` then you access the class using `a.b.c.X`:
 ```groovy
 new a.b.c.X(1,2)
 ```
@@ -4074,7 +4071,7 @@ The `nanoTime()` function returns the value of the system timer in nanoseconds.
 It is equivalent in Java to `System.nanoTime()`.
 It is a number that can be used for timing but has no correlation with system or wall-clock time.
 It has no value except within the currently running Java Virtual Machine instance, so it cannot be compared
-to values from other processes even ones running on the same machine.
+to values from other processes, even ones running on the same machine.
 
 For example:
 ```groovy
@@ -4128,17 +4125,17 @@ For example:
 
 Note that the script is suspended during this pause time and resumed once the time period has expired.
 The event loop thread on which the script is executing does not block.
-The REPL waits for the entire script to complete so in the REPL the next prompt won't show until the sleep
-has completed.
+(When running in the REPL, the REPL waits for the entire script to complete, so in the REPL the next prompt
+won't show until the sleep has completed).
 
-There is a second optional argument which is the value returned by `sleep()` once it has finished.
-This is mainly just used for internal testing of Jactl for testing the suspending and resuming works correctly:
+There is a second optional argument which is the value returned by `sleep()` once it has finished:
 ```groovy
 > sleep(500, 3) + sleep(500, 2)
 5
 > sleep(500, 'ab') + sleep(500, 'c')
 abc
 ```
+This is mainly just used for internal testing of Jactl when validating that the suspending and resuming works correctly.
 
 ## eval()
 
@@ -4149,16 +4146,16 @@ The [Eval Function](#Eval Function) section describes how this function works.
 When running Jactl scripts from the [command line](#command-line-scripts) this function reads the next line from
 the input.
 
-When [integrated](integration-guide.md) into a Java application, this function will read the next line from the input that the application
-provides to the script.
+When [integrated](integration-guide.md) into a Java application, this function will read the next line from the input
+that the application provides to the script.
 This is one way to pass information to a script.
 
-If reading the next line of input would block then the script is suspended and resumed when the next line becomes
+If reading the next line of input would block, then the script is suspended and resumed when the next line becomes
 available.
 
 The function will return `null` when there are no more lines to read.
 
-For example here is a command line script that assumes each line is a number and adds them all together and
+For example, here is a command line script that assumes each line is a number and adds them all together and
 prints out the result:
 ```groovy
 def n, sum = 0
