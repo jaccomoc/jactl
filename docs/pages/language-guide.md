@@ -27,10 +27,12 @@ permalink: /language-guide
 * [Functions](#functions)
 * [Closures](#closures)
 * [Collection Methods](#collection-methods)
+* [Checkpointing](#checkpointing)
 * [Classes](#classes)
+* [JSON Support](#json-support)
 * [Built-in Global Functions](#built-in-global-functions)
 * [Built-in Methods](#built-in-methods)
- 
+* 
 # The REPL
 
 The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
@@ -3310,10 +3312,10 @@ For example, if the script sends a message to a downstream system, it might need
 after a recovery to indicate that it is a possible repeat of an earlier message:
 ```groovy
 def response = checkpoint(commit: {
-                            sendReceiveMsg(destUrl, [request:req, possibleRepeat:false])
+                            sendReceiveJson(destUrl, [request:req, possibleRepeat:false])
                           },
                           recover: {
-                            sendReceiveMsg(destUrl, [request:req, possibleRepeat:true])
+                            sendReceiveJson(destUrl, [request:req, possibleRepeat:true])
                           })
 ```
 
