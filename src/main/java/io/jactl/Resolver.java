@@ -1639,8 +1639,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  static private void error(String msg, Token location) {
-    throw new CompileError(msg, location);
+  static private void error(String msg, SourceLocation location) {
+    if (!(location instanceof Location)) {
+      throw new IllegalStateException("Internal error: Expected location of type Location but got " + location.getClass().getName());
+    }
+    throw new CompileError(msg, (Location)location);
   }
 
   private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null, null);
@@ -2410,7 +2413,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                         .stream()
                                                         .map(e -> Utils.createParam(token.newIdent(e.getKey()), e.getValue(), null))
                                                         .collect(Collectors.toList());
-    JactlType   classType     = createClass(classDescriptor);
+    JactlType    classType     = createClass(classDescriptor);
     Token        initNameToken = token.newIdent(Utils.JACTL_INIT);
     Expr.FunDecl initFunc      = Utils.createFunDecl(token, initNameToken, classType.createInstanceType(), mandatoryParams, false, true, false);
     Stmt.Stmts initStmts       = new Stmt.Stmts();
@@ -2484,60 +2487,78 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // NOTE: we also support invocation with null for the Object[] args value which is used when auto-creating
     // fields in lvalues like "x.y.z = a". If the Object[] is null we want to invoke the normal init method with
     // no args. If there are mandatory fields then we generate an error.
-    var classDecl             = initMethod.classDecl;
-    var classType             = JactlType.createClass(classDecl.classDescriptor);
-    String sourceName         = "_$source";
-    String offsetName         = "_$offset";
-    String objectArrName      = "_$objArr";             // Wrapper funcs always have Object[] parameter type.
-    Token  sourceToken        = classDecl.name.newIdent(sourceName);
-    Token  offsetToken        = classDecl.name.newIdent(offsetName);
-    Token  objectArrToken     = classDecl.name.newIdent(objectArrName);
-    var sourceParam           = Utils.createParam(sourceToken, STRING, null);
-    var offsetParam           = Utils.createParam(offsetToken, INT, null);
-    var objectArrParam        = Utils.createParam(objectArrToken, OBJECT_ARR, null);
-    Expr.FunDecl initWrapper  = Utils.createFunDecl(classDecl.name, classDecl.name.newIdent(Utils.wrapperName(Utils.JACTL_INIT)),
-                                                    ANY,   /* wrappers always return Object */
-                                                    List.of(sourceParam,offsetParam,objectArrParam),
-                                                    false, true, false);
+    var    classDecl      = initMethod.classDecl;
+    var    classType      = JactlType.createClass(classDecl.classDescriptor);
+    String sourceName     = "_$source";
+    int    SOURCE_SLOT    = 2;
+    String offsetName     = "_$offset";
+    int    OFFSET_SLOT    = 3;
+    String objectArrName  = "_$objArr";             // Wrapper funcs always have Object[] parameter type.
+    Token  classToken     = classDecl.name;
+    Token  sourceToken    = classToken.newIdent(sourceName);
+    Token  offsetToken    = classToken.newIdent(offsetName);
+    Token  objectArrToken = classToken.newIdent(objectArrName);
+    var    sourceParam    = Utils.createParam(sourceToken, STRING, null);
+    var    offsetParam    = Utils.createParam(offsetToken, INT, null);
+    var    objectArrParam = Utils.createParam(objectArrToken, OBJECT_ARR, null);
+    Expr.FunDecl initWrapper = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_WRAPPER),
+                                                   ANY,   /* wrappers always return Object */
+                                                   List.of(sourceParam,offsetParam,objectArrParam),
+                                                   false, true, false);
     initWrapper.functionDescriptor.isWrapper = true;
     initWrapper.isWrapper     = true;
     Stmt.Stmts wrapperSmts    = new Stmt.Stmts();
-    initWrapper.block         = new Stmt.Block(classDecl.name, wrapperSmts);
+    initWrapper.block         = new Stmt.Block(classToken, wrapperSmts);
     wrapperSmts.stmts.addAll(List.of(objectArrParam, sourceParam, offsetParam));
 
     // If null value for args or empty array, and we have no mandatory fields then invoke normal init method.
     // Otherwise, generate error.
-    Expr.Literal zero = new Expr.Literal(new Token(INTEGER_CONST, classDecl.name).setValue(0));
+    Expr.Literal zero = new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(0));
     var mandatoryFields = initMethod.functionDescriptor.mandatoryArgCount > 0;
-    var ifNullArgArr = new Stmt.If(classDecl.name,
+    var ifNullArgArr = new Stmt.If(classToken,
                                    new Expr.Binary(new Expr.Binary(new Expr.Identifier(objectArrToken),
-                                                                   new Token(EQUAL_EQUAL, classDecl.name),
-                                                                   new Expr.Literal(new Token(NULL, classDecl.name).setValue(null))),
-                                                   new Token(PIPE_PIPE, classDecl.name),
-                                                   new Expr.Binary(new Expr.ArrayLength(classDecl.name, new Expr.Identifier(objectArrToken)),
-                                                                   new Token(EQUAL_EQUAL, classDecl.name), zero)),
-                                   mandatoryFields ? new Stmt.ThrowError(classDecl.name,
+                                                                   new Token(EQUAL_EQUAL, classToken),
+                                                                   new Expr.Literal(new Token(NULL, classToken).setValue(null))),
+                                                   new Token(PIPE_PIPE, classToken),
+                                                   new Expr.Binary(new Expr.ArrayLength(classToken, new Expr.Identifier(objectArrToken)),
+                                                                   new Token(EQUAL_EQUAL, classToken), zero)),
+                                   mandatoryFields ? new Stmt.ThrowError(classToken,
                                                                          new Expr.Identifier(sourceToken),
                                                                          new Expr.Identifier(offsetToken),
                                                                          "Cannot auto-create instance of type " + classType + " as there are mandatory fields")
-                                                   : returnStmt(classDecl.name, new Expr.InvokeFunDecl(classDecl.name, initMethod, List.of()), initMethod.returnType),
+                                                   : returnStmt(classToken, new Expr.InvokeFunDecl(classToken, initMethod, List.of()), initMethod.returnType),
                                    null);
     wrapperSmts.stmts.add(ifNullArgArr);
 
-    Expr.ArrayGet arg0        = new Expr.ArrayGet(classDecl.name, new Expr.Identifier(objectArrToken), zero);
-    var instanceOfNamedArgs   = new Expr.InstanceOf(classDecl.name, arg0, Type.getInternalName(NamedArgsMapCopy.class));
+    Expr.ArrayGet arg0        = new Expr.ArrayGet(classToken, new Expr.Identifier(objectArrToken), zero);
+    var instanceOfNamedArgs   = new Expr.InstanceOf(classToken, arg0, Type.getInternalName(NamedArgsMapCopy.class));
 
     String argMapName         = "_$argMap";
-    var argMapIdent           = new Expr.Identifier(classDecl.name.newIdent(argMapName));
+    var argMapIdent           = new Expr.Identifier(classToken.newIdent(argMapName));
     var initialiser           = new Expr.Ternary(instanceOfNamedArgs,
-                                                 new Token(QUESTION, classDecl.name),
-                                                 new Expr.CheckCast(classDecl.name, arg0, MAP),
-                                                 new Token(COLON, classDecl.name),
-                                                 new Expr.InvokeUtility(classDecl.name, RuntimeUtils.class, "copyNamedArgs", List.of(Object.class), List.of(arg0)));
-    wrapperSmts.stmts.add(createVarDecl(classDecl.name, initWrapper, argMapName, MAP, initialiser));
+                                                 new Token(QUESTION, classToken),
+                                                 new Expr.CheckCast(classToken, arg0, MAP),
+                                                 new Token(COLON, classToken),
+                                                 new Expr.InvokeUtility(classToken, RuntimeUtils.class, "copyNamedArgs", List.of(Object.class), List.of(arg0)));
+    wrapperSmts.stmts.add(createVarDecl(classToken, initWrapper, argMapName, MAP, initialiser));
+
+    // Invoke base class init wrapper first
+    ClassDescriptor classDescriptor = classDecl.classDescriptor;
+    if (classDescriptor.getBaseClass() != null) {
+      // Invoke super._$j$init$$w() if we have a base class
+      var invokeSuperInitWrapper = new Expr.MethodCall(classToken,
+                                                       new Expr.Identifier(classToken.newIdent(Utils.SUPER_VAR)),
+                                                       new Token(DOT, classToken),
+                                                       Utils.JACTL_INIT,
+                                                       new LocalLocation(SOURCE_SLOT, OFFSET_SLOT),
+                                                       List.of(argMapIdent));
+      invokeSuperInitWrapper.isResultUsed              = false;
+      invokeSuperInitWrapper.validateArgsAtCompileTime = false;
+      wrapperSmts.stmts.add(new Stmt.ExprStmt(classToken, invokeSuperInitWrapper));
+    }
 
     // Assign value to each field from map or from initialiser
-    var trueLiteral      = new Expr.Literal(new Token(TRUE, classDecl.name).setValue(true));
+    var trueLiteral      = new Expr.Literal(new Token(TRUE, classToken).setValue(true));
     classDecl.fieldVars.forEach((field,varDecl) -> {
       var fieldToken       = varDecl.name;
       var fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
@@ -2564,27 +2585,27 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     });
 
     // If we created arg map copy (arg0 isn't NamedArgsMapCopy) then check that there are no additional arg values left in named args map
-    var checkForExtraArgs = new Expr.InvokeUtility(classDecl.name, RuntimeUtils.class, "checkForExtraArgs",
+    var checkForExtraArgs = new Expr.InvokeUtility(classToken, RuntimeUtils.class, "checkForExtraArgs",
                                                    List.of(Map.class, boolean.class, String.class, int.class),
                                                    List.of(argMapIdent, trueLiteral, new Expr.Identifier(sourceToken),
                                                            new Expr.Identifier(offsetToken)));
     checkForExtraArgs.isResultUsed = false;
-    var ifStmt = new Stmt.If(classDecl.name,
-                             new Expr.PrefixUnary(new Token(BANG, classDecl.name), instanceOfNamedArgs),
-                             new Stmt.ExprStmt(classDecl.name, checkForExtraArgs),
+    var ifStmt = new Stmt.If(classToken,
+                             new Expr.PrefixUnary(new Token(BANG, classToken), instanceOfNamedArgs),
+                             new Stmt.ExprStmt(classToken, checkForExtraArgs),
                              null);
     wrapperSmts.stmts.add(ifStmt);
 
-    // Add initMethod as statement in wrapper so it will get resolved when wrapper is resolved
-    Stmt.FunDecl realFunction = new Stmt.FunDecl(classDecl.name, initMethod);
+    // Add initMethod as statement in wrapper, so it will get resolved when wrapper is resolved
+    Stmt.FunDecl realFunction = new Stmt.FunDecl(classToken, initMethod);
     realFunction.createVar = false;   // When in wrapper don't create a variable for the MethodHandle
     wrapperSmts.stmts.add(realFunction);
 
     // Finally, return "this"
-    wrapperSmts.stmts.add(new Stmt.Return(classDecl.name,
-                                        new Expr.Return(classDecl.name,
-                                                        new Expr.Identifier(classDecl.name.newIdent(Utils.THIS_VAR)),
-                                                        classType.createInstanceType())));
+    wrapperSmts.stmts.add(new Stmt.Return(classToken,
+                                          new Expr.Return(classToken,
+                                                          new Expr.Identifier(classToken.newIdent(Utils.THIS_VAR)),
+                                                          classType.createInstanceType())));
     return initWrapper;
   }
 

@@ -1255,9 +1255,11 @@ public class ClassTests extends BaseTest {
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
   }
 
-  @Test public void baseClassesToBeFixed() {
-    //test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(k:4); y.j", 2);
-    //test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(j:7,k:4); y.j", 7);
+  @Test public void baseClassesNamedArgContructors() {
+    test("class X { int i = 1; int j = 2 }; class Y extends X { int k }; Y y = new Y(4); y.j", 2);
+    test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(k:4); y.j", 2);
+    test("class X { int i = sleep(0,1); int j = sleep(0,2) }; class Y extends X { int k = 3 }; Y y = new Y(k:4); y.j", 2);
+    test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(j:7,k:4); y.j", 7);
   }
 
   @Test public void baseClasses2() {

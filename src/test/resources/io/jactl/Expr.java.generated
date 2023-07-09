@@ -27,6 +27,7 @@ import java.util.*;
 
 import io.jactl.Utils;
 import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.SourceLocation;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -233,15 +234,15 @@ abstract class Expr {
   }
 
   static class MethodCall extends Expr {
-    Token      leftParen;
-    Expr       parent;
-    Token      accessOperator; // Either '.' or '?.'
-    String     methodName;     // Either the method name or field name that holds a MethodHandle
-    Token      methodNameLocation;
+    Token          leftParen;
+    Expr           parent;
+    Token          accessOperator; // Either '.' or '?.'
+    String         methodName;     // Either the method name or field name that holds a MethodHandle
+    SourceLocation methodNameLocation;
     List<Expr> args;
 
     FunctionDescriptor methodDescriptor;
-    boolean validateArgsAtCompileTime;     // true if we should validate args at compile time rather than at runtime
+    boolean validateArgsAtCompileTime = true;   // true if we should validate args at compile time rather than at runtime
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used
@@ -256,7 +257,7 @@ abstract class Expr {
     // a side effect will still run and cause the side effects to happen even though the end result
     // is not actually used.
     boolean isMethodCallTarget = false;
-    MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, Token methodNameLocation, List<Expr> args) {
+    MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, SourceLocation methodNameLocation, List<Expr> args) {
       this.leftParen = leftParen;
       this.parent = parent;
       this.accessOperator = accessOperator;

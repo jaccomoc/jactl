@@ -29,7 +29,10 @@ import java.util.Map;
  * If the base class init sees a type of NamedArgsMapCopy it knows not to copy and not
  * to check for additional args.
  */
-public class NamedArgsMapCopy extends LinkedHashMap {
+public class NamedArgsMapCopy extends NamedArgsMap {
+
+  // For Restorer
+  public NamedArgsMapCopy() {}
 
   public NamedArgsMapCopy(Map arg) {
     super(arg);

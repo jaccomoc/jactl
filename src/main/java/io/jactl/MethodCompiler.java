@@ -1799,7 +1799,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.methodDescriptor != null) {
       var method = expr.methodDescriptor;
 
-      expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.isInitMethod, method.returnType);
+      if (expr.validateArgsAtCompileTime) {
+        expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.isInitMethod, method.returnType);
+      }
 
       // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
       boolean invokeSpecial = expr.parent.isSuper();
@@ -2109,9 +2111,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     FunctionDescriptor initMethod = expr.classDescriptor.getInitMethod();
     invokeMaybeAsync(initMethod.isAsync, expr.type, 0, expr.location,
                      () -> {
-                       if (!initMethod.isStatic) {
-                         loadLocal(0);    // this
-                       }
+                       loadLocal(0);    // this
 
                        if (initMethod.isAsync) {
                          loadNullContinuation();
@@ -4821,15 +4821,6 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
   }
 
   ///////////////////////////////////
-
-  private static class LocalLocation implements SourceLocation {
-    int sourceSlot;
-    int offsetSlot;
-    LocalLocation(int sourceSlot, int offsetSlot) {
-      this.sourceSlot = sourceSlot;
-      this.offsetSlot = offsetSlot;
-    }
-  }
 
   private void loadLocation(SourceLocation location) {
     _loadLocation(location);

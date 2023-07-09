@@ -44,6 +44,7 @@ public class BuiltinFunctions {
     allocateId(Reducer.class);
     allocateId(CircularBuffer.class);
     allocateId(NamedArgsMap.class);
+    allocateId(NamedArgsMapCopy.class);
     BuiltinFunctions.registerBuiltinFunctions();
   }
 

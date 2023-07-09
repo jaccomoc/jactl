@@ -20,6 +20,7 @@ package io.jactl.runtime;
 import io.jactl.JactlType;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Used a bit like a marker interface to indicate to runtime argument handling that the Map
@@ -30,9 +31,13 @@ public class NamedArgsMap extends LinkedHashMap implements Checkpointable {
 
   public NamedArgsMap() {}
 
+  protected NamedArgsMap(Map map) {
+    super(map);
+  }
+
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeTypeEnum(JactlType.TypeEnum.BUILTIN);
-    checkpointer.writeCint(BuiltinFunctions.getClassId(NamedArgsMap.class));
+    checkpointer.writeCint(BuiltinFunctions.getClassId(this.getClass()));
     checkpointer.writeCint(VERSION);
     checkpointer.writeMap(this);
   }
@@ -40,7 +45,7 @@ public class NamedArgsMap extends LinkedHashMap implements Checkpointable {
   @Override
   public void _$j$restore(Restorer restorer) {
     restorer.skipType();
-    restorer.expectCint(BuiltinFunctions.getClassId(NamedArgsMap.class), "Bad class id - expecting NamedArgsMap");
+    restorer.expectCint(BuiltinFunctions.getClassId(this.getClass()), "Bad class id - expecting NamedArgsMap");
     restorer.expectCint(VERSION, "Bad version");
     restorer.skipType();
     restorer.restoreMap(this);

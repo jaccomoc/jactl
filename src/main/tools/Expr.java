@@ -32,6 +32,7 @@ import java.util.*;
 
 import io.jactl.Utils;
 import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.SourceLocation;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -170,15 +171,15 @@ class Expr {
   }
 
   class MethodCall extends Expr {
-    Token      leftParen;
-    Expr       parent;
-    Token      accessOperator; // Either '.' or '?.'
-    String     methodName;     // Either the method name or field name that holds a MethodHandle
-    Token      methodNameLocation;
+    Token          leftParen;
+    Expr           parent;
+    Token          accessOperator; // Either '.' or '?.'
+    String         methodName;     // Either the method name or field name that holds a MethodHandle
+    SourceLocation methodNameLocation;
     List<Expr> args;
 
     FunctionDescriptor @methodDescriptor;
-    boolean @validateArgsAtCompileTime;     // true if we should validate args at compile time rather than at runtime
+    boolean @validateArgsAtCompileTime = true;   // true if we should validate args at compile time rather than at runtime
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used
