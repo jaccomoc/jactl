@@ -17,6 +17,8 @@
 
 package io.jactl.runtime;
 
+import io.jactl.Utils;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -54,7 +56,7 @@ public class JsonDecoder {
     return result;
   }
 
-  public static Object decodeJactlObj(String json, String source, int sourceOffset, JactlObject obj) {
+  public static long[] decodeJactlObj(String json, String source, int sourceOffset, JactlObject obj) {
     JsonDecoder decoder = get(json, source, sourceOffset);
     try {
       // Return flags indicating which optional fields still need to be initialised or null if
@@ -370,13 +372,13 @@ public class JsonDecoder {
 
   public void missingFields(int flag, long value, JactlObject obj) {
     //error("DEBUG: missing fields: flag=" + flag + ", value=" + value);
-    List<Field> fields = Arrays.stream(obj.getClass().getDeclaredFields()).filter(f -> !Modifier.isStatic(f.getModifiers())).collect(Collectors.toList());
+    List<Field> fields = Utils.getFields(obj.getClass());
     int count = fields.size() >= (flag + 1) * 64 ? 64 : fields.size() % 64;
     String missingFields = IntStream.range(0,count)
                                     .filter(i -> (value & (1L << i)) != 0)
                                     .mapToObj(i -> fields.get(flag*64 + i).getName())
                                     .collect(Collectors.joining(","));
-    error("For class " + obj.getClass().getName() + ", missing field(s): " + missingFields);
+    error("For class " + obj.getClass().getName() + ", missing mandatory field(s): " + missingFields);
   }
 
   public char skipWhitespace() {

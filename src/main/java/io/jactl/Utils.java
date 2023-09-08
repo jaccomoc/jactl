@@ -21,6 +21,8 @@ import io.jactl.runtime.FunctionDescriptor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -761,5 +763,24 @@ public class Utils {
       case DOUBLE:         return Double.valueOf(0).equals(value);
       default:             return value == null;
     }
+  }
+
+  public static Stmt.VarDecl createParam(Token name, JactlType type) {
+    Expr.VarDecl declExpr = new Expr.VarDecl(name, null, null);
+    declExpr.type         = type;
+    declExpr.isParam      = true;
+    declExpr.isResultUsed = false;
+    return new Stmt.VarDecl(name, declExpr);
+  }
+
+  public static List<Field> getFields(Class clss) {
+    List<Field> fields = new ArrayList<Field>();
+    if (clss.getSuperclass() != null) {
+      fields.addAll(getFields(clss.getSuperclass()));
+    }
+    fields.addAll(Arrays.stream(clss.getFields())
+                        .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                        .collect(Collectors.toList()));
+    return fields;
   }
 }

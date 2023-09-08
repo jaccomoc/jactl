@@ -33,6 +33,7 @@ import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.LONG;
+import static java.util.stream.Collectors.groupingBy;
 import static org.objectweb.asm.ClassWriter.*;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -735,7 +736,7 @@ NEXT:   mv.visitLabel(NEXT);
     // Need for array and array index. If multi-dimensions we use extra two slots for each dimension
     final int ARR_SLOTS      = DUP_FLAGS + 2 + classDecl.fields.size() / 64;
 
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(Type.getType(Object.class), Type.getType(JsonDecoder.class)),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(Type.getType(long[].class), Type.getType(JsonDecoder.class)),
                                       null, null);
 
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
@@ -749,23 +750,11 @@ NEXT:   mv.visitLabel(NEXT);
 
     // We need to build a list of field hashCodes in sort order with each entry being a list of fields that map
     // to that hash. This will be used to build the lookupTable for our switch on field name.
-    var fieldNames = classDecl.classDescriptor.getAllFieldNames()
-                                              .stream()
-                                              .sorted(Comparator.comparingInt(Object::hashCode))
-                                              .collect(Collectors.toList());
-    var hashCodeList = new ArrayList<Pair<Integer,List<String>>>();
-    int currentHash = 0;
-    Pair<Integer,List<String>> entry = null;
-    for (int i = 0; i < fieldNames.size(); i++) {
-      String fieldName = fieldNames.get(i);
-      if (i == 0 || fieldName.hashCode() != currentHash) {
-        entry = Pair.create(fieldName.hashCode(), new ArrayList<>());
-        hashCodeList.add(entry);
-        currentHash = fieldName.hashCode();
-      }
-      entry.second.add(fieldName);
-    }
-    var fieldLabels = IntStream.range(0,hashCodeList.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
+    // We get all fields, including fields from our base classes.
+    var fieldNames   = classDecl.classDescriptor.getAllFieldNames();
+    var fieldNameMap = fieldNames.stream().collect(groupingBy(Object::hashCode));
+    var hashCodeList = fieldNameMap.keySet().stream().sorted().collect(Collectors.toList());
+    var fieldLabels  = IntStream.range(0,fieldNameMap.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
 
 BRACE: mv.visitLabel(BRACE);
     int numFlagSlots = fieldNames.size() / 64 + 1;
@@ -834,19 +823,20 @@ QUOTE: mv.visitLabel(QUOTE);
     Label   DEFAULT_LABEL = new Label();
     Label   DUP_FOUND     = new Label();
 
-    mv.visitLookupSwitchInsn(DEFAULT_LABEL, hashCodeList.stream().mapToInt(h -> h.first).toArray(), fieldLabels);
-    int fidx = -1;
+    mv.visitLookupSwitchInsn(DEFAULT_LABEL, hashCodeList.stream().mapToInt(i -> i).toArray(), fieldLabels);
     for (int h = 0; h < hashCodeList.size(); h++) {
       mv.visitLabel(fieldLabels[h]);
-      var     hashEntry = hashCodeList.get(h).second;
+      var     hashFields = fieldNameMap.get(hashCodeList.get(h));   // Fields with same hash
       Label   NEXT      = null;
-      for (int hashIdx = 0; hashIdx < hashEntry.size(); hashIdx++) {
+      for (int hashIdx = 0; hashIdx < hashFields.size(); hashIdx++) {
         if (NEXT != null && NEXT != DEFAULT_LABEL) {
 NEXT:     mv.visitLabel(NEXT);
         }
-        NEXT = hashIdx == hashEntry.size() - 1 ? DEFAULT_LABEL : new Label();
-        fidx++;
-        String fieldName = hashEntry.get(hashIdx);
+        NEXT = hashIdx == hashFields.size() - 1 ? DEFAULT_LABEL : new Label();
+        String fieldName = hashFields.get(hashIdx);
+        // Find field index by searching for field name in list of field names
+        // (TODO: optimise if necessary to eliminate linear search to improve compile time performance)
+        int fidx = fieldNames.indexOf(fieldName);
         mv.visitInsn(DUP);
         Utils.loadConst(mv, fieldName);
         mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z", false);
@@ -911,16 +901,16 @@ END_LOOP: mv.visitLabel(END_LOOP);
     long[] optionalFlags  = new long[fieldNames.size() / 64 + 1];
     int optionalCount = 0;
     for (int i = 0; i < fieldNames.size(); i++) {
-      int          m           = i / 64;
-      int          b           = i % 64;
-      String       fieldName   = fieldNames.get(i);
-      boolean      isMandatory = isMandatory(fieldName);
+      int     m           = i / 64;
+      int     b           = i % 64;
+      String  fieldName   = fieldNames.get(i);
+      boolean isMandatory = isMandatory(fieldName);
       if (isMandatory) {
-        mandatoryFlags[m] |= (1 << b);
+        mandatoryFlags[m] |= (1L << b);
         mandatoryCount++;
       }
       else {
-        optionalFlags[m] |= (1 << b);
+        optionalFlags[m] |= (1L << b);
         optionalCount++;
       }
     }
@@ -963,73 +953,32 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
     }
 
     if (optionalCount > 0) {
-      // Work out what optional fields are missing and return either:
-      //  - single long with flags set for missing fields (if <= 64 fields), or
-      //  - array of longs with flags (if > 64 fields)
-      // If there are no missing fields then we return 0.
+      // Work out what optional fields are missing and return array of longs with flags
       // NOTE: We reserve a bit in the flags for each field whether optional or not.
       //       We could be smarter and only use bits for optional fields but that would
       //       require generating code to iterate through the field flags to then set
       //       these other flags. Easier just to return the field flags we have.
-      Label MISSING_OPTIONAL = new Label();
+      Utils.loadConst(mv, optionalFlags.length);
+      mv.visitIntInsn(NEWARRAY, T_LONG);
       for (int flag = 0; flag < optionalFlags.length; flag++) {
+        mv.visitInsn(DUP);
+        Utils.loadConst(mv, flag);
         if (optionalFlags[flag] == 0) {
-          continue;
+          Utils.loadConst(mv, 0L);
         }
-        mv.visitVarInsn(LLOAD, DUP_FLAGS + flag*2);
-        Utils.loadConst(mv, optionalFlags[flag]);
-        mv.visitInsn(LAND);
-        Utils.loadConst(mv, optionalFlags[flag]);
-        mv.visitInsn(LXOR);
-        mv.visitInsn(LCONST_0);
-        mv.visitInsn(LCMP);
-        mv.visitJumpInsn(IFNE, MISSING_OPTIONAL);
-      }
-
-      // Return 0 since there are no missing fields
-      mv.visitInsn(LCONST_0);
-      Utils.box(mv, JactlType.LONG);
-      Label END = new Label();
-      mv.visitJumpInsn(GOTO, END);
-
-MISSING_OPTIONAL: mv.visitLabel(MISSING_OPTIONAL);
-      // Return flags for missing optional fields
-      if (optionalFlags.length == 1) {
-        // Only one int to return
-        mv.visitVarInsn(LLOAD, DUP_FLAGS);
-        Utils.loadConst(mv, optionalFlags[0]);
-        mv.visitInsn(LAND);
-        Utils.loadConst(mv, optionalFlags[0]);
-        mv.visitInsn(LXOR);
-        Utils.box(mv, LONG);
-      }
-      else {
-        // Return array of longs
-        Utils.loadConst(mv, optionalFlags.length);
-        mv.visitIntInsn(NEWARRAY, T_LONG);
-        for (int flag = 0; flag < optionalFlags.length; flag++) {
-          mv.visitInsn(DUP);
-          Utils.loadConst(mv, flag);
-          if (optionalFlags[flag] == 0) {
-            Utils.loadConst(mv, 0L);
-          }
-          else {
-            mv.visitVarInsn(LLOAD, DUP_FLAGS + flag*2);
-            Utils.loadConst(mv, optionalFlags[flag]);
-            mv.visitInsn(LAND);
-            Utils.loadConst(mv, optionalFlags[flag]);
-            mv.visitInsn(LXOR);
-          }
-          mv.visitInsn(LASTORE);
+        else {
+          mv.visitVarInsn(LLOAD, DUP_FLAGS + flag*2);
+          Utils.loadConst(mv, optionalFlags[flag]);
+          mv.visitInsn(LAND);
+          Utils.loadConst(mv, optionalFlags[flag]);
+          mv.visitInsn(LXOR);
         }
+        mv.visitInsn(LASTORE);
       }
-
-END: mv.visitLabel(END);
     }
     else {
       // No flags to return
-      mv.visitInsn(LCONST_0);
-      Utils.box(mv, LONG);
+      mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "EMPTY_LONG_ARR", Type.getInternalName(long[].class));
     }
 
     mv.visitInsn(ARETURN);
@@ -1068,7 +1017,7 @@ END: mv.visitLabel(END);
         mv.visitVarInsn(ASTORE, TMP_OBJ);
         mv.visitInsn(SWAP);
         mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_READ_JSON,
-                           Type.getMethodDescriptor(Type.getType(Object.class),
+                           Type.getMethodDescriptor(Type.getType(long[].class),
                                                     Type.getType(JsonDecoder.class)),
                            true);
         mv.visitInsn(DUP);
@@ -1085,8 +1034,8 @@ END: mv.visitLabel(END);
           mv.visitInsn(SWAP);
         }
         mv.visitMethodInsn(INVOKEVIRTUAL, type.getInternalName(), Utils.JACTL_INIT_MISSING,
-                           async ? Type.getMethodDescriptor(type.descriptorType(), Type.getType(Continuation.class), Type.getType(Object.class))
-                                 : Type.getMethodDescriptor(type.descriptorType(), Type.getType(Object.class)),
+                           async ? Type.getMethodDescriptor(type.descriptorType(), Type.getType(Continuation.class), Type.getType(long[].class))
+                                 : Type.getMethodDescriptor(type.descriptorType(), Type.getType(long[].class)),
                            false);
 NULL_CHILD: mv.visitLabel(NULL_CHILD);
         Utils.checkCast(mv, type);

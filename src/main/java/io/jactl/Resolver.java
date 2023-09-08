@@ -218,7 +218,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     var classDescriptor = classDecl.classDescriptor;
     var classType = JactlType.createClass(classDescriptor);
 
-
     // Make sure we don't have circular extends relationship somewhere
     String previousBaseClass = null;
     for (var baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType()) {
@@ -252,6 +251,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       initFuncDescriptor.firstArgtype = classType.createInstanceType();
       classDescriptor.setInitMethod(initFuncDescriptor);
 
+      // Add JSON parsing methods if not script class
+      if (!classDecl.isScriptClass()) {
+        classDecl.methods.add(createFromJsonFunc(classDecl));
+        classDecl.methods.add(createMissingFieldsFunc(classDecl));
+      }
+
       classDecl.methods.forEach(funDeclStmt -> {
         var    funDecl    = funDeclStmt.declExpr;
         String methodName = funDecl.nameToken.getStringValue();
@@ -260,14 +265,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
           error("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
-//        // Make sure that if overriding a base class method we have same signature (including param names)
-//        var baseClass = classDescriptor.getBaseClass();
-//        var method = baseClass != null ? baseClass.getMethod(methodName) : null;
-//        if (baseClass != null) {
-//          if (method != null) {
-//            validateSignatures(funDecl, baseClass, method);
-//          }
-//        }
         // Instance method
         if (!funDecl.isStatic()) {
           // We have to treat all non-final instance methods as async since we might later be overridden by a
@@ -1343,7 +1340,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public JactlType visitArrayGet(Expr.ArrayGet expr) {
     resolve(expr.array);
     resolve(expr.index);
-    return expr.type = ANY;
+    return expr.type = expr.array.type.getArrayType();
   }
 
   @Override public JactlType visitInvokeFunDecl(Expr.InvokeFunDecl expr) {
@@ -2690,5 +2687,103 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     varDecl.type = type;
     varDecl.isGlobal = true;
     return varDecl;
+  }
+
+  private Stmt.FunDecl createFromJsonFunc(Stmt.ClassDecl classDecl) {
+    Token classToken       = classDecl.name;
+    JactlType instanceType = JactlType.createInstanceType(List.of(new Expr.Identifier(classToken)));
+    Token paramName        = classToken.newIdent("json");
+    var param              = Utils.createParam(paramName, JactlType.STRING);
+    var funDecl            = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_FROM_JSON), instanceType, List.of(param), true, false, true);
+    var funDeclStmt        = new Stmt.FunDecl(classToken, funDecl);
+    Stmt.Stmts stmts       = new Stmt.Stmts();
+    stmts.stmts.add(param);
+    Token objIdent         = classToken.newIdent("obj");
+    stmts.stmts.add(Utils.createVarDecl(funDecl, objIdent, instanceType, new Expr.InvokeNew(classToken, instanceType)));
+    Token retValIdent      = classToken.newIdent("retVal");
+    JactlType flagsType    = JactlType.LONG_ARR;
+    stmts.stmts.add(Utils.createVarDecl(funDecl, retValIdent, ANY, new Expr.InvokeUtility(classToken, JsonDecoder.class, "decodeJactlObj",
+                                                                                          List.of(String.class, String.class, int.class, JactlObject.class),
+                                                                                          List.of(new Expr.Identifier(paramName),
+                                                                                                  new Expr.SpecialVar(classToken.newIdent(Utils.SOURCE_VAR_NAME)),
+                                                                                                  new Expr.SpecialVar(classToken.newIdent(Utils.OFFSET_VAR_NAME)),
+                                                                                                  new Expr.Identifier(objIdent)))));
+    stmts.stmts.add(new Stmt.Return(classToken,
+                                    new Expr.Return(classToken,
+                                                    new Expr.Ternary(new Expr.Identifier(retValIdent),
+                                                                     new Token(QUESTION, classToken),
+                                                                     new Expr.MethodCall(classToken,
+                                                                                         new Expr.Identifier(objIdent),
+                                                                                         new Token(DOT, classToken),
+                                                                                         Utils.JACTL_INIT_MISSING,
+                                                                                         classToken,
+                                                                                         List.of(new Expr.CheckCast(classToken, new Expr.Identifier(retValIdent), flagsType))),
+                                                                     new Token(COLON, classToken),
+                                                                     new Expr.Literal(new Token(NULL, classToken))),
+                                                    instanceType)));
+    var block = new Stmt.Block(classToken, stmts);
+    funDecl.block = block;
+    funDecl.functionDescriptor.needsLocation = true;
+    Utils.createVariableForFunction(funDeclStmt);
+    return funDeclStmt;
+  }
+
+  private Stmt.FunDecl createMissingFieldsFunc(Stmt.ClassDecl classDecl) {
+    final String FLAGS     = "flags";
+    Token classToken       = classDecl.name;
+    JactlType flagsType    = JactlType.LONG_ARR;
+    JactlType instanceType = JactlType.createInstanceType(List.of(new Expr.Identifier(classToken)));
+    var flagsParam         = classToken.newIdent(FLAGS);
+    var flagsVarDecl       = Utils.createParam(flagsParam, flagsType);
+    var funDecl            = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_MISSING), instanceType, List.of(flagsVarDecl), false, false, false);
+    var funDeclStmt        = new Stmt.FunDecl(classToken, funDecl);
+    Stmt.Stmts stmts = new Stmt.Stmts();
+    stmts.stmts.add(flagsVarDecl);
+    Token     thisIdent    = classToken.newIdent(Utils.THIS_VAR);
+
+    // Iterate over flags returned from decodeJactlObj and work out which optional fields have not been
+    // set and invoke their initialisers
+
+    // First invoke base class version of the method (if it exists)
+    var baseFieldsCount = 0;
+    if (classDecl.baseClass != null) {
+      var superMethodCall = new Expr.MethodCall(classToken, new Expr.Identifier(classToken.newIdent(Utils.SUPER_VAR)),
+                                                new Token(DOT, classToken), Utils.JACTL_INIT_MISSING, classToken, List.of(new Expr.Identifier(classToken.newIdent(FLAGS))));
+      superMethodCall.isResultUsed = false;
+      stmts.stmts.add(new Stmt.ExprStmt(classToken, superMethodCall));
+      baseFieldsCount = classDecl.classDescriptor.getBaseClass().getFields().size();
+    }
+
+    // Only deal with fields in this class since base class invocation will take care of base class fields
+    var fields          = classDecl.classDescriptor.getFields();
+    for (int i = 0; i < fields.size(); i++) {
+      var fieldIdx = i + baseFieldsCount;
+      var field = classDecl.fieldVars.get(fields.get(i).getKey());
+      if (field.initialiser == null || Utils.isDefaultValue(field)) {
+        // Not optional so nothing to do
+        continue;
+      }
+      long flag = 1L << (fieldIdx % 64);
+      var flags = new Expr.ArrayGet(classToken,
+                                    new Expr.Identifier(classToken.newIdent(FLAGS)),
+                                    new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(fieldIdx / 64)));
+      Expr.FieldAssign assignField = new Expr.FieldAssign(new Expr.Identifier(thisIdent),
+                                                          new Token(DOT, classToken),
+                                                          new Expr.Literal(classToken.newLiteral(field.name.getStringValue())),
+                                                          new Token(EQUAL, classToken),
+                                                          field.initialiser);
+      assignField.isResultUsed = false;
+      stmts.stmts.add(new Stmt.If(classToken,
+                                  new Expr.Binary(new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(flag)),
+                                                  new Token(AMPERSAND, classToken),
+                                                  flags),
+                                  new Stmt.ExprStmt(classToken, assignField),
+                                  null));
+    }
+    stmts.stmts.add(new Stmt.Return(classToken, new Expr.Return(classToken, new Expr.Identifier(thisIdent), instanceType)));
+    var block = new Stmt.Block(classToken, stmts);
+    funDecl.block = block;
+    Utils.createVariableForFunction(funDeclStmt);
+    return funDeclStmt;
   }
 }

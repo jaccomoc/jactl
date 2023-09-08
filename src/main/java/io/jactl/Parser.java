@@ -17,8 +17,6 @@
 
 package io.jactl;
 
-import io.jactl.runtime.JactlObject;
-import io.jactl.runtime.JsonDecoder;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
@@ -137,7 +135,7 @@ public class Parser {
     }
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
     // Script take a single parameter which is a Map of globals
-    var globalsParam           = createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
+    var globalsParam           = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
     Stmt.FunDecl funDecl       = parseFunDecl(scriptName, scriptName, ANY, List.of(globalsParam), EOF, true, false, false);
     Stmt.ClassDecl scriptClass = classes.peek();
     scriptClass.scriptMain     = funDecl;
@@ -768,9 +766,6 @@ public class Parser {
                                    .map(stmt -> (Stmt.VarDecl) stmt)
                                    .collect(Collectors.toList());
       classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
-
-      classBlock.stmts.stmts.add(createFromJsonFunc(classDecl));
-      classBlock.stmts.stmts.add(createMissingFieldsFunc(classDecl));
       classBlock.functions   = classDecl.methods;
       classDecl.innerClasses = innerClasses;
       return classDecl;
@@ -1922,105 +1917,6 @@ public class Parser {
     finally {
       popFunDecl();
     }
-  }
-
-  private Stmt.VarDecl createParam(Token name, JactlType type) {
-    Expr.VarDecl declExpr = new Expr.VarDecl(name, null, null);
-    declExpr.type         = type;
-    declExpr.isParam      = true;
-    declExpr.isResultUsed = false;
-    return new Stmt.VarDecl(name, declExpr);
-  }
-
-  private Stmt.FunDecl createFromJsonFunc(Stmt.ClassDecl classDecl) {
-    Token classToken       = classDecl.name;
-    JactlType instanceType = JactlType.createInstanceType(List.of(new Expr.Identifier(classToken)));
-    Token paramName        = classToken.newIdent("json");
-    var param              = createParam(paramName, JactlType.STRING);
-    var funDecl            = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_FROM_JSON), instanceType, List.of(param), true, false, true);
-    var funDeclStmt        = new Stmt.FunDecl(classToken, funDecl);
-    addFunDecl(funDeclStmt);
-    Stmt.Stmts stmts    = new Stmt.Stmts();
-    stmts.stmts.add(param);
-    Token objIdent      = classToken.newIdent("obj");
-    stmts.stmts.add(Utils.createVarDecl(funDecl, objIdent, instanceType, new Expr.InvokeNew(classToken, instanceType)));
-    int fieldCount      = classDecl.fields.size();
-    Token retValIdent   = classToken.newIdent("retVal");
-    JactlType flagsType = fieldCount > 64 ? JactlType.LONG_ARR : JactlType.LONG;
-    stmts.stmts.add(Utils.createVarDecl(funDecl, retValIdent, ANY, new Expr.InvokeUtility(classToken, JsonDecoder.class, "decodeJactlObj",
-                                                                                          List.of(String.class, String.class, int.class, JactlObject.class),
-                                                                                          List.of(new Expr.Identifier(paramName),
-                                                                                                  new Expr.SpecialVar(classToken.newIdent(Utils.SOURCE_VAR_NAME)),
-                                                                                                  new Expr.SpecialVar(classToken.newIdent(Utils.OFFSET_VAR_NAME)),
-                                                                                                  new Expr.Identifier(objIdent)))));
-    stmts.stmts.add(new Stmt.Return(classToken,
-                                    new Expr.Return(classToken,
-                                                    new Expr.Ternary(new Expr.Binary(new Expr.Identifier(retValIdent),
-                                                                                     new Token(BANG_EQUAL, classToken),
-                                                                                     new Expr.Literal(new Token(NULL, classToken).setValue(null))),
-                                                                     new Token(QUESTION, classToken),
-                                                                     new Expr.MethodCall(classToken,
-                                                                                         new Expr.Identifier(objIdent),
-                                                                                         new Token(DOT, classToken),
-                                                                                         Utils.JACTL_INIT_MISSING,
-                                                                                         classToken,
-                                                                                         List.of(new Expr.CheckCast(classToken, new Expr.Identifier(retValIdent), flagsType))),
-                                                                     new Token(COLON, classToken),
-                                                                     new Expr.Literal(new Token(NULL, classToken).setValue(null))),
-                                                    instanceType)));
-    var block = new Stmt.Block(classToken, stmts);
-    funDecl.block = block;
-    funDecl.functionDescriptor.needsLocation = true;
-    Utils.createVariableForFunction(funDeclStmt);
-    return funDeclStmt;
-  }
-
-  private Stmt.FunDecl createMissingFieldsFunc(Stmt.ClassDecl classDecl) {
-    Token classToken       = classDecl.name;
-    JactlType instanceType = JactlType.createInstanceType(List.of(new Expr.Identifier(classToken)));
-    int fieldCount         = classDecl.fields.size();
-    var flagsParam         = classToken.newIdent("flagsParam");
-    var param              = createParam(flagsParam, ANY);
-    var funDecl            = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_MISSING), instanceType, List.of(param), false, false, false);
-    var funDeclStmt        = new Stmt.FunDecl(classToken, funDecl);
-    addFunDecl(funDeclStmt);
-    Stmt.Stmts stmts = new Stmt.Stmts();
-    stmts.stmts.add(param);
-    Token     flagsIdent   = classToken.newIdent("flags");
-    JactlType flagsType    = fieldCount > 64 ? JactlType.LONG_ARR : JactlType.LONG;
-    stmts.stmts.add(Utils.createVarDecl(funDecl, flagsIdent, flagsType, new Expr.CheckCast(classToken, new Expr.Identifier(flagsParam), flagsType)));
-    Token     thisIdent    = classToken.newIdent(Utils.THIS_VAR);
-    // Iterate over flags returned from decodeJactlObj and work out which optional fields have not been
-    // set and invoke their initialisers
-    for (int i = 0; i < fieldCount; i++) {
-      var field = classDecl.fields.get(i);
-      if (field.declExpr.initialiser == null || Utils.isDefaultValue(field.declExpr)) {
-        // Not optional so nothing to do
-        continue;
-      }
-      long flag = 1L << (i % 64);
-      var flags = fieldCount <= 64 ? new Expr.Identifier(flagsIdent)
-                                   : new Expr.ArrayGet(classToken,
-                                                       new Expr.Identifier(flagsIdent),
-                                                       new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(i / 64)));
-      Expr.FieldAssign assignField = new Expr.FieldAssign(new Expr.Identifier(thisIdent),
-                                                   new Token(DOT, classToken),
-                                                   new Expr.Literal(classToken.newLiteral(field.name.getStringValue())),
-                                                   new Token(EQUAL, classToken),
-                                                   field.declExpr.initialiser);
-      assignField.isResultUsed = false;
-      stmts.stmts.add(new Stmt.If(classToken,
-                                  new Expr.Binary(new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(flag)),
-                                                  new Token(AMPERSAND, classToken),
-                                                  flags),
-                                  new Stmt.ExprStmt(classToken, assignField),
-                                  null));
-    }
-    stmts.stmts.add(new Stmt.Return(classToken, new Expr.Return(classToken, new Expr.Identifier(thisIdent), instanceType)));
-    var block = new Stmt.Block(classToken, stmts);
-    funDecl.block = block;
-    Utils.createVariableForFunction(funDeclStmt);
-    return funDeclStmt;
   }
 
   /**

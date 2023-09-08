@@ -1952,9 +1952,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.array);
     compile(expr.index);
     expect(2);
-    mv.visitInsn(AALOAD);
     popType(2);
-    push(ANY);
+    loadArrayElem(expr.array.type);
     return null;
   }
 
@@ -4670,22 +4669,26 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
                  invokeMethod(String.class, "valueOf", char.class);
                }
                else {
-                 switch (parentType.getArrayType().getType()) {
-                   case BOOLEAN:  mv.visitInsn(BALOAD); break;
-                   case BYTE:     mv.visitInsn(BALOAD); break;
-                   case INT:      mv.visitInsn(IALOAD); break;
-                   case LONG:     mv.visitInsn(LALOAD); break;
-                   case DOUBLE:   mv.visitInsn(DALOAD); break;
-                   default:       mv.visitInsn(AALOAD); break;
-                 }
                  popType(2);
-                 push(parentType.getArrayType());
+                 loadArrayElem(parentType);
                }
              },
              () -> {
                invokeMethod(Throwable.class, "getMessage");
                _throwErrorWithString("Index out of bounds: ", expr.right.location);
              });
+  }
+
+  private void loadArrayElem(JactlType parentType) {
+    switch (parentType.getArrayType().getType()) {
+      case BOOLEAN:  mv.visitInsn(BALOAD); break;
+      case BYTE:     mv.visitInsn(BALOAD); break;
+      case INT:      mv.visitInsn(IALOAD); break;
+      case LONG:     mv.visitInsn(LALOAD); break;
+      case DOUBLE:   mv.visitInsn(DALOAD); break;
+      default:       mv.visitInsn(AALOAD); break;
+    }
+    push(parentType.getArrayType());
   }
 
   /**

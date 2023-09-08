@@ -140,6 +140,10 @@ public class ClassDescriptor {
     return getAllFields().map(Map.Entry::getValue).collect(Collectors.toList());
   }
 
+  public List<Map.Entry<String,JactlType>> getFields() {
+    return new ArrayList<>(fields.entrySet());
+  }
+
   public Stream<Map.Entry<String,JactlType>> getAllFields() {
     Stream<Map.Entry<String,JactlType>> allFields = Stream.of();
     if (getBaseClass() != null) {

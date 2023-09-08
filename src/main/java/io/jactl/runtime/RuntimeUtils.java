@@ -38,10 +38,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static io.jactl.runtime.JactlIterator.of;
-import static java.util.stream.Collectors.toMap;
-
 public class RuntimeUtils {
+
+  public static final long[] EMPTY_LONG_ARR = new long[0];
 
   public static final String PLUS_PLUS             = "++";
   public static final String MINUS_MINUS           = "--";
@@ -2628,8 +2627,8 @@ public class RuntimeUtils {
     return true;
   }
 
-  public static int debugBreakPoint(int data, String info) {
-    System.out.println("DEBUG: " + info + ": " + data);
+  public static long debugBreakPoint(long data, String info) {
+    System.out.println("DEBUG: " + info + ": " + Long.toHexString(data));
     return data;
   }
 
