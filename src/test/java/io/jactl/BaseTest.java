@@ -19,6 +19,7 @@ package io.jactl;
 
 import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.RuntimeUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -80,6 +81,7 @@ public class BaseTest {
   }
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
+    RuntimeUtils.clearScriptCache();
     testCounter++;
     try {
       JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint);

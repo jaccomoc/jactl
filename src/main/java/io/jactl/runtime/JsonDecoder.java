@@ -69,8 +69,6 @@ public class JsonDecoder {
   }
 
   public Object _decode() {
-    //char c = skipWhitespace();
-
     char c = offset < length ? json.charAt(offset++) : 0;
     if (c == '"') return decodeString();
     if (c == '{') return decodeMap();
@@ -81,16 +79,7 @@ public class JsonDecoder {
       case EOS:
         return null;
       case '-':
-      case '0':
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-      case '6':
-      case '7':
-      case '8':
-      case '9':
+      case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
         return decodeNumber(c);
       case '"':
         return decodeString();

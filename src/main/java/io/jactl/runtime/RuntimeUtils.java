@@ -88,6 +88,10 @@ public class RuntimeUtils {
 
   public static int scriptCacheSize = 100;  // Total number of compiled scripts we keep for use by eval() function
 
+  public static void clearScriptCache() {
+    evalScriptCache.clear();
+  }
+
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
   // as a special marker since that way when we need the before value of an inc/dec it will

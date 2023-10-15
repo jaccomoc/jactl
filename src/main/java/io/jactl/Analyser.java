@@ -19,6 +19,7 @@ package io.jactl;
 
 import io.jactl.runtime.FunctionDescriptor;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 
@@ -78,6 +79,17 @@ import static io.jactl.JactlType.INSTANCE;
 public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   boolean testAsync = false;         // Used in testing to simulate what happens if every call is potentially async
+
+  public static int debugLevel = 0;
+  static SimpleDateFormat timeFmt = new SimpleDateFormat("hh:mm:ss.SSS");
+  private static void debug(String msg) {
+    if (debugLevel > 0) {
+      _log("debug", msg);
+    }
+  }
+  private static void _log(String level, String msg) {
+    System.out.println("[" + level + "]:" + Thread.currentThread().getName() + ":" + timeFmt.format(new Date()) + ": " + msg);
+  }
 
   private final Deque<Stmt.ClassDecl>   classStack        = new ArrayDeque<>();
 
@@ -341,9 +353,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     getFunctions().push(expr);
+    debug("+ Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
     analyse(expr.block);
     assert funDecl.localsCnt == 0;
     getFunctions().pop();
+    debug("- Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
 
     // If still not marked async then we must be sync...
     if (expr.functionDescriptor.isAsync == null) {
@@ -417,6 +431,16 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Expr.Return expr) {
     analyse(expr.expr);
+    // If return type not same as expression type then we might need to cast and if instance
+    // type has async initialisers then we are therefore potentially async...
+    if (expr.expr != null && !expr.expr.isNull() && !expr.expr.type.is(expr.returnType)) {
+      if (expr.returnType.is(INSTANCE) && !expr.expr.type.isCastableTo(expr.returnType)) {
+        FunctionDescriptor initMethod = expr.returnType.getClassDescriptor().getMethod(Utils.JACTL_INIT);
+        if (initMethod.isAsync) {
+          async(expr);
+        }
+      }
+    }
     freeLocals(1);
     return null;
   }
@@ -643,12 +667,15 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // We don't support async toString() in order to support toString() invocations if object leaks into Java
     // domain (by being stored in the globals Map) and to save on the extra generated code needed for invoking
     // async functions and handling suspend/resume.
-    if (Utils.TO_STRING.equals(currentFunction().functionDescriptor.name)) {
+    FunctionDescriptor functionDescriptor = currentFunction().functionDescriptor;
+    if (Utils.TO_STRING.equals(functionDescriptor.name)) {
       throw new CompileError(Utils.TO_STRING + "() cannot invoke anything that is async or potentially async", expr.location);
     }
 
-    currentFunction().functionDescriptor.isAsync = true;
+    functionDescriptor.isAsync = true;
     expr.isAsync = true;
+
+    debug("Set " + functionDescriptor.implementingClassName + "." + functionDescriptor.name + " is async");
   }
 
   private void asyncIfTypeIsAsync(Expr expr) {
@@ -717,9 +744,16 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!func.isAsync)              { return false; }
     if (func.asyncArgs.size() == 0) {
       // If function has not specified any async args but has flagged itself as async then all calls to it are async
+      debug("Test " + func.implementingClassName + "." + func.name + " --> async func with no async args");
       return true;
     }
 
+    boolean result = hasAsyncArg(func, arg0, args);
+    debug("Test " + func.implementingClassName + "." + func.name + " --> async args = " + result);
+    return result;
+  }
+
+  private boolean hasAsyncArg(FunctionDescriptor func, Expr arg0, List<Expr> args) {
     // If function is only async if passed an async arg then check the args.
     // For methods note that index 0 means the object on whom we are performing the method call so other
     // arguments start at index 1 so args.get(index-1) gets the arg value for that index.
@@ -874,6 +908,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           if (callee.isAsync != null) {
             if (callee.isAsync) {
               caller.functionDescriptor.isAsync = true;
+              debug("Set " + caller.functionDescriptor.implementingClassName + "." + caller.functionDescriptor.name + " is async (call to " + callee.implementingClassName + "." + callee.name + " is async)");
               callSite.isAsync = true;
               resolvedAsyncCall = true;
             }

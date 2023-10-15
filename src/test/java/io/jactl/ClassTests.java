@@ -852,6 +852,7 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void fieldsOfOtherClasses() {
+    test("class Y { var d = (Decimal)sleep(0,2.0) }; class X { Y y }; def x = new X(null); x.y = new Y(); x.y.d", "#2.0");
     test("class Y { var d=2.0 }; class X { Y y = new Y() }; new X().y.d", "#2.0");
     test("class Y { var d=2.0 }; class X { Y y = null }; def x = new X(); x.y = new Y(); x.y.d", "#2.0");
     test("class Y { var d=2.0 }; class X { Y y }; def x = new X(null); x.y = new Y(); x.y.d", "#2.0");
@@ -938,7 +939,7 @@ public class ClassTests extends BaseTest {
 
   @Test public void assignmentsAndEquality2() {
     useAsyncDecorator = false;
-    test("class X { byte i = 1}; X x; x = [i:2]; x.i", (byte)2);
+    test("class X { byte i = 1}; X x; x = [i:2]; x.i", (byte) 2);
     test("class X { byte i=1; byte j=2 }; new X() == [i:1,j:2]", true);
     test("class X { byte i=1; byte j=2 }; new X() != [i:1,j:2]", false);
     test("class X { byte i=1; byte j=2 }; new X() == [i:1,j:2,k:3]", false);
@@ -1077,6 +1078,10 @@ public class ClassTests extends BaseTest {
     test("class X { int i; class Y { int i; def f(){ this instanceof Y && this instanceof X.Y && this !instanceof Z.ZZ and return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f().i", 3);
     testError("class X { int i = 2; class Y { int j = i+1 }}; new X.Y().j", "reference to unknown variable 'i'");
     testError("class X { int i = 2; class Y { def f(){i} }}; new X.Y().f()", "reference to unknown variable 'i'");
+  }
+
+  public void innerClassesToBeFixed() {
+    test("class X { int i; class Y { int i; def f() {i} }}; class Z extends X { int g(){ new Y(4).f() } }; new Z().g()", 4);
   }
 
   @Test public void innerClassesStaticMethod() {

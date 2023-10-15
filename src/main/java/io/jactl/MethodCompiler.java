@@ -440,6 +440,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.isConst) {
       if (expr.isResultUsed) {
         loadConst(expr.constValue);
+        if (expr.constValue == null) {
+          popType();
+          push(expr.type);
+        }
       }
       return null;
     }
@@ -1600,7 +1604,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitLiteral(Expr.Literal expr) {
-    return loadConst(expr.value.getValue());
+    loadConst(expr.value.getValue());
+    if (expr.isNull()) {
+      popType();
+      push(expr.type);
+    }
+    return null;
   }
 
   @Override public Void visitListLiteral(Expr.ListLiteral expr) {
@@ -2189,7 +2198,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     JactlType valueType = peek();
 
     if (valueType.is(INSTANCE) && valueType.isCastableTo(varType)) { return; }  // We have a compatible instance type
-    if (expr != null && expr.isNull())                                { return; }  // Null is valid for an Instance
+    if (expr != null && expr.isNull())                             { return; }  // Null is valid for an Instance
 
     if (!valueType.is(ANY, MAP)) {
       throw new CompileError("Cannot convert from type " + valueType + " to " + varType, compileTimeLocation);

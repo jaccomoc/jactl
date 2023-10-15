@@ -266,7 +266,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           error("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
         // Instance method
-        if (!funDecl.isStatic()) {
+        // NOTE: JACTL_INIT_MISSING method is special since it not invoked as a virtual method (it is always
+        // invoked through implementing class or via super when it is an INVOKESPECIAL call)
+        if (!funDecl.isStatic() && !functionDescriptor.name.equals(Utils.JACTL_INIT_MISSING)) {
           // We have to treat all non-final instance methods as async since we might later be overridden by a
           // child class that is async and we need the signatures to match (i.e. passing in of continuation).
           // Furthermore, callers may not know what type of subclass an object is and whether its implementation of
@@ -2702,12 +2704,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     stmts.stmts.add(Utils.createVarDecl(funDecl, objIdent, instanceType, new Expr.InvokeNew(classToken, instanceType)));
     Token retValIdent      = classToken.newIdent("retVal");
     JactlType flagsType    = JactlType.LONG_ARR;
+
+    // Decode JSON and store in "retVal"
     stmts.stmts.add(Utils.createVarDecl(funDecl, retValIdent, ANY, new Expr.InvokeUtility(classToken, JsonDecoder.class, "decodeJactlObj",
                                                                                           List.of(String.class, String.class, int.class, JactlObject.class),
                                                                                           List.of(new Expr.Identifier(paramName),
                                                                                                   new Expr.SpecialVar(classToken.newIdent(Utils.SOURCE_VAR_NAME)),
                                                                                                   new Expr.SpecialVar(classToken.newIdent(Utils.OFFSET_VAR_NAME)),
                                                                                                   new Expr.Identifier(objIdent)))));
+
+    // If retVal is not null then invoke initMissing() and return value, otherwise return null
     stmts.stmts.add(new Stmt.Return(classToken,
                                     new Expr.Return(classToken,
                                                     new Expr.Ternary(new Expr.Identifier(retValIdent),
@@ -2774,7 +2780,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                           field.initialiser);
       assignField.isResultUsed = false;
       stmts.stmts.add(new Stmt.If(classToken,
-                                  new Expr.Binary(new Expr.Literal(new Token(INTEGER_CONST, classToken).setValue(flag)),
+                                  new Expr.Binary(new Expr.Literal(new Token(LONG_CONST, classToken).setValue(flag)),
                                                   new Token(AMPERSAND, classToken),
                                                   flags),
                                   new Stmt.ExprStmt(classToken, assignField),

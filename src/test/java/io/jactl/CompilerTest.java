@@ -7111,12 +7111,17 @@ class CompilerTest extends BaseTest {
     test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", List.of(List.of(1, 2), List.of(3)));
   }
 
+  @Test public void evalWithAsync() {
+    test("eval('sleep(0,1)')", 1);
+    test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
+    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", List.of(List.of(1, 2), List.of(3)));
+    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
+    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
+  }
+
   @Test public void evalToBeFixed() {
+//    test("class X { static def f(){1} }; def m = [:]; eval('X.f()', m); m", 1);
 //    test("def f(){1}; eval('f()')", 1);
-//    test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
-//    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", List.of(List.of(1,2), List.of(3)));
-//    test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
-//    test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
 
   @Test public void asyncFunctions() {

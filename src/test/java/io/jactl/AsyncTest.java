@@ -159,10 +159,17 @@ public class AsyncTest {
     sync("class X { int i = 1 }; new X().i", 1);
   }
 
-
-  @Test public void classesToBeFixed() {
-    //sync("class X { int i = 1 }; X.fromJson('{\"i\":2}').i", 2);
-    //sync(List.of("class X { int i = 1 }", "class Y extends X { int j = 2; int k = 3 }"), "new Y(j:2).i", "", 1);
+  @Test public void classesFromJson() {
+    sync("class X { int i = 1 }; X.fromJson('{\"i\":2}').i", 2);
+    sync(List.of("class X { int i = 1 }", "class Y extends X { int j = 2; int k = 3 }"), "new Y(j:2).i", "", 1);
+    async("class X { int i = sleep(0,1); long j = sleep(0,2) }; X.fromJson('{\"i\":4}').i", 4);
+    async("class X { int i = sleep(0,1); long j = sleep(0,2) }; X.fromJson('{\"i\":4}').j", 2L);
+    async("class X { int i = sleep(0,1); long j = sleep(0,2) }; class Y extends X {}; Y.fromJson('{\"i\":4}').j", 2L);
+    sync("class X { int i = 1; long j = 2 }; class Y extends X { int k = 5 }; def y = Y.fromJson('{\"i\":4}'); y.i + y.k", 9);
+    async("class X { int i = 1; long j = 2 }; class Y extends X { int k = sleep(0,5) }; def y = Y.fromJson('{\"i\":4}'); y.j + y.k", 7L);
+    async("class X { int i = sleep(0,1); long j = sleep(0,2) }; class Y extends X { String s = sleep(0,'abc') }; Y.fromJson('{\"i\":4}').s", "abc");
+    async("class X { int i = sleep(0,1); long j = sleep(0,2) }; class Y extends X { String s = sleep(0,'abc') }; Y.fromJson('{\"i\":4,\"s\":\"xyz\"}').s", "xyz");
+    async("class Y { var d = (Decimal)sleep(0,2.0) }; class X { Y y }; def x = new X(null); x.y", null);
   }
 
   @Test public void builtinFunctions() {
