@@ -1078,10 +1078,15 @@ public class ClassTests extends BaseTest {
     test("class X { int i; class Y { int i; def f(){ this instanceof Y && this instanceof X.Y && this !instanceof Z.ZZ and return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f().i", 3);
     testError("class X { int i = 2; class Y { int j = i+1 }}; new X.Y().j", "reference to unknown variable 'i'");
     testError("class X { int i = 2; class Y { def f(){i} }}; new X.Y().f()", "reference to unknown variable 'i'");
-  }
-
-  public void innerClassesToBeFixed() {
-    test("class X { int i; class Y { int i; def f() {i} }}; class Z extends X { int g(){ new Y(4).f() } }; new Z().g()", 4);
+    test("class A { class X { }\n" + " class Z extends X { int g() {1} } }; new A.Z().g()", 1);
+    test("class A { class Z extends X { int g() {1} }\n class X {}\n }; new A.Z().g()", 1);
+    test("class A { class X { class Y { def f() {1} }}\n" + " class Z extends X { int g(){ new Y().f() } } }; new A.Z().g()", 1);
+    test("class X { class Y { def f() {1} }}\n" + " class Z extends X { int g(){ new X.Y().f() } }; new Z().g()", 1);
+    test("class X { class Y { def f() {1} }}\n" + " class Z extends X { int g(){ new Y().f() } }; new Z().g()", 1);
+    test("class A { class Y { def f() {3} }; class X { class Y { def f() {1} }}\n" + " class Z extends X { int g(){ new Y().f() } } }; new A.Z().g()", 1);
+    test("class A { class B { class Y { def f() {3} } }; class X extends B { class Y { def f() {1} }}\n" + " class Z extends X { int g(){ new Y().f() } } }; new A.Z().g()", 1);
+    test("class A { class B { class Y { def f() {3} } }; class X extends B { }\n" + " class Z extends X { int g(){ new Y().f() } } }; new A.Z().g()", 3);
+    test("class X { int i; class Y { int i; def f() {i} }}; class Z extends X { int g(){ new Y(4).f() } }; new Z(3).g()", 4);
   }
 
   @Test public void innerClassesStaticMethod() {

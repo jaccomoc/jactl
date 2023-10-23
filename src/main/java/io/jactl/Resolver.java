@@ -193,16 +193,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   //////////////////////////////////////////////////////////
 
   private void createClassDescriptors(Stmt.ClassDecl classDecl, Stmt.ClassDecl outerClassDecl) {
-    var baseClass = classDecl.baseClass != null ? classDecl.baseClass : null;
-
     // NOTE: we only support class declarations at top level of script or directly within another class decl.
     // NOTE: When in repl mode we don't nest classes within the script itself since they will
     //       not then be accessible in subsequent lines being compiled in the repl.
     var outerClass = outerClassDecl == null || outerClassDecl.isScriptClass() && jactlContext.replMode ? null : outerClassDecl.classDescriptor;
     var interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
     boolean allFieldsAreDefaults = classDecl.fields.stream().allMatch(field -> Utils.isDefaultValue(field.declExpr));
-    var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, baseClass, interfaces, allFieldsAreDefaults)
-                                             : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, baseClass, interfaces, allFieldsAreDefaults);
+    var classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, classDecl.baseClass, interfaces, allFieldsAreDefaults)
+                                             : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, classDecl.baseClass, interfaces, allFieldsAreDefaults);
     classDecl.classDescriptor = classDescriptor;
 
     if (localClasses.put(classDescriptor.getNamePath(), classDescriptor) != null) {
@@ -215,6 +213,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void prepareClass(Stmt.ClassDecl classDecl) {
+    classStack.push(classDecl);
+
     var classDescriptor = classDecl.classDescriptor;
     var classType = JactlType.createClass(classDescriptor);
 
@@ -333,6 +333,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Now declare our inner classes
     classDecl.innerClasses.forEach(innerClass -> prepareClass(innerClass));
+
+    classStack.pop();
   }
 
   private Stmt.VarDecl fieldDecl(Token token, String name, JactlType instanceType) {
@@ -1765,6 +1767,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (classPkg == null) {
       // Class could be any class (inner or top level) from current class scope upwards or
       // a path that starts from any class in the hierarchy.
+      boolean currentScope = true;
       for (var classStmt : classStack) {
         if (classStmt.name.getStringValue().equals(firstClass)) {
           className = classStmt.classDescriptor.getNamePath() + subPath;
@@ -1774,6 +1777,20 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           className = classStmt.classDescriptor.getNamePath() + '$' + firstClass + subPath;
           break;
         }
+        if (currentScope) {
+          // Check for innerclass of base class if we are in current scope (haven't started to check
+          // enclosing scope)
+          for (var baseClass = classStmt.baseClass; baseClass != null && baseClass.getClassDescriptor() != null; baseClass = baseClass.getClassDescriptor().getBaseClassType()) {
+            if (baseClass.getClassDescriptor().getInnerClass(firstClass) != null) {
+              className = baseClass.getClassDescriptor().getNamePath() + '$' + firstClass + subPath;
+              break;
+            }
+          }
+          if (className != null) {
+            break;
+          }
+        }
+        currentScope = false;
       }
       // If not in current hierarchy and in a script then look for a top level class of that name
       if (className == null && isScript) {
