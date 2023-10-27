@@ -7119,11 +7119,6 @@ class CompilerTest extends BaseTest {
     test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
 
-  @Test public void evalToBeFixed() {
-//    test("class X { static def f(){1} }; def m = [:]; eval('X.f()', m); m", 1);
-//    test("def f(){1}; eval('f()')", 1);
-  }
-
   @Test public void asyncFunctions() {
     useAsyncDecorator = false;
     test("sleep(1,2)", 2);
