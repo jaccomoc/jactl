@@ -381,33 +381,33 @@ arg: args
 
 ## `.jactlrc` File
 
-At start up time the contents of `~/.jactlrc` are read.
+At start up time, the contents of `~/.jactlrc` are read.
 This file, if it exists, is itself a Jactl script and allows you to customise the behaviour of the Jactl command
 line scripts by setting the values of some global variables.
 This file is also used by the Jactl REPL.
 
-At the moment, all the variables are to do with allowing you to customise Jactl by providing your own
+At the moment, all the variables relate to allowing you to customise Jactl by providing your own
 execution environment (for your event-loop specific application environment) and your own functions/methods.
 The values of the following variables can be set:
 
-| Variable            | Type   |    Default Value    | Description                                                                                                                                                                                                                    |
-|:--------------------|:-------|:-------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `environmentClass`  | String | `io.jactl.DefaultEnv` | The name of the class which will is used to encapsulate the Jactl runtime environment. See [Integration Guide](integration-guide) for more details.                                                                            |
-| `extraJars`         | List   |        `[]`         | A list of file names for any additional JARs that should be added to the classpath.                                                                                                                                            |  
-| `functionClasses`   | List   |       `[]`          | A list of classes having a static method called `registerFunctions(JactlEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jactl runtime. |
+| Variable            | Type   |     Default Value     | Description                                                                                                                                                                                                                      |
+|:--------------------|:-------|:---------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `environmentClass`  | String | `io.jactl.DefaultEnv` | The name of the class which will is used to encapsulate the Jactl runtime environment. See [Integration Guide](integration-guide) for more details.                                                                              |
+| `extraJars`         | List   |         `[]`          | A list of file names for any additional JARs that should be added to the classpath.                                                                                                                                              |  
+| `functionClasses`   | List   |         `[]`          | A list of classes having a static method called `registerFunctions(JactlEnv env)` that will be invoked at start up. This allows you to dynamically add new functions (from one of the `extraJars` files) to the Jactl runtime. |
 
 For example, there is a [jactl-vertx project](https://github.com/jaccomoc/jactl-vertx) for use when integrating
 with a [Vert.x](https://vertx.io/) based application.
 It uses a specific `JactlVertxEnv` environment that delegates event scheduling to Vert.x and provides some 
-Json methods for converting to/from JSON and an example function for sending/receiving JSON messages over HTTP.
+global functions that deal with distributed maps and an example function for sending/receiving JSON messages over HTTP.
 
 Since the `sendReceiveJson()` functions is provided as an example, it lives in the test jar of the jactl-vertx
 project.
-So to include these additional functions in your Jactl REPL or Jactl command line scripts you need to list
+So to include all of these additional functions in your Jactl REPL or Jactl command line scripts you need to list
 these two jars in the `extraJars` list.
 
 > **Note**<br/>
-> The `jactl-vertx` test jar is built as an "uber" jar and includes the dependencies it needs (including the
+> The `jactl-vertx` test jar is built as a "fat" jar and includes the dependencies it needs (including the
 > Vert.x libraries) so we don't need to separately list the Vert.x jars as well.
 
 To register these additional functions with the Jactl runtime we need to have created classes that have
@@ -416,8 +416,8 @@ We then need to tell the runtime the name of these classes so that these static 
 will in turn register the functions.
 
 For the `jactl-vertx` library, there are two classes that handle the registration of these functions/methods:
-* `jactl.vertx.JsonFunctions`
-* `jactl.vertx.example.VertxFunctions`
+* `jactl.vertx.VertxFunctions`
+* `jactl.vertx.example.ExampleFunctions`
 
 We therefore need to list these classes in the `functionClasses` list of our `.jactlrc` file.
 
@@ -427,8 +427,8 @@ the Jactl REPL and the Jactl commandline script execution to use Vert.x and thes
 environmentClass = 'jactl.vertx.JactlVertxEnv'
 extraJars        = [ '~/projects/jactl-vertx/build/libs/jactl-vertx-{{ site.content.jactl_version }}.jar',
                      '~/projects/jactl-vertx/build/libs/jactl-vertx-{{ site.content.jactl_version }}-tests.jar' ]
-functionClasses  = [ 'jactl.vertx.JsonFunctions',
-                     'jactl.vertx.example.VertxFunctions' ]
+functionClasses  = [ 'jactl.vertx.VertxFunctions',
+                     'jactl.vertx.example.ExampleFunctions' ]
 ```
 
 > **Note**<br/>
@@ -447,12 +447,12 @@ extraJars        = [ "$LIBS/jactl-vertx-${VERSION}.jar",
                      "$LIBS/jactl-vertx-${VERSION}-tests.jar" ]
 
 // List the function registration classes
-functionClasses  = [ 'jactl.vertx.JsonFunctions',
-                     'jactl.vertx.example.VertxFunctions' ]
+functionClasses  = [ 'jactl.vertx.VertxFunctions',
+                     'jactl.vertx.example.ExampleFunctions' ]
 ```
 
 > **Note**<br/>
-> The extra jars can also be provided via the normal way of specifying in them your Java classpath if you
+> The extra jars can also be provided via the normal way of specifying them in your Java classpath if you
 > prefer to do it that way.
 
 To integrate with additional libraries, just add the jars to the `extraJars` list and add any function

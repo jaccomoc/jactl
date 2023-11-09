@@ -45,11 +45,15 @@ to provide customisations and extensions that had the following characteristics:
   I wanted a language that looked completely synchronous but which, under the covers, took care of all the asynchronous
   behaviour. 
 
+* **Checkpointing**
+
+  Ability for script execution state to be checkpointed where necessary and for this state to be able to be persisted
+  or replicated so that scripts can be restored and resumed from where they were up to when a failure occurs.
+
 The final motivation for writing a new language compiler was that I was looking for something fun to work on and
-at some point I had stumbled across a marvellous book called _Crafting Interpreters_ by Robert Nystrom
-and this inspired me to want to write my own compiler.
-I highly recommend the book and there is even a free web version available from the
-[Crafting Interpreters site](https://craftinginterpreters.com/).
+at some point I had stumbled across a marvellous book called [Crafting Interpreters](https://craftinginterpreters.com/)
+by Robert Nystrom and this inspired me to want to write my own compiler.
+I highly recommend the book: as well as being a good introduction to compiler design, it is also a fun read. 
 
 # Who is it for?
 
@@ -61,22 +65,26 @@ For example, the Jactl commandline scripts and REPL assume a `.jactlrc` [configu
 which contains Jactl code that is read and executed at startup to set the values of some properties in a Map.
 
 Other uses would be to provide a customisation mechanism for:
-* **Database engine extensions**
-* **Real-time applications**
+* **Game Engines**
+* **Database Engine extensions**
+* **Real-time Applications**
 * **Backend customisations for complex multi-tenant web applications**
 * **FaaS (Function as a Service)**
 
   Scripts could act as functions and their secure nature means that many functions can be served from the same process
-  to avoid having to spin up instancesor processes for each function
+  to avoid having to spin up instances or processes for each function
 
 # Getting Started
 
+To get a feel for how the language looks and the type of language features that Jactl offers 
+see the [Language Features](/language-features) page.
+
 You can download the Jactl library and find the source code for Jactl at GitHub: [jactl](https://github.com/jaccomoc/jactl)
 
-The to start playing wth Jactl you can look at running some simple scripts using the [command line scripts](/command-line-scripts)
-facility.
+To start playing with Jactl and for testing out code interactively, you can use
+the [Read-Evaluate-Print-Loop (REPL) utility](https://github.com/jaccomoc/jactl-repl).
 
-For testing out code interactively, you can also use the [Read-Evaluate-Print-Loop (REPL) utility](https://github.com/jaccomoc/jactl-repl).
+To see how to use Jactl from the command line see the page about [command line scripts](/command-line-scripts).
 
 To learn how to integrate Jactl into your application see the [Integration Guide](/integration-guide).
 

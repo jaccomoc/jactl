@@ -1,6 +1,6 @@
 ---
 layout: page
-title: "Jactl Language Guide"
+title: "Language Guide"
 permalink: /language-guide
 ---
 
@@ -32,7 +32,7 @@ permalink: /language-guide
 * [JSON Support](#json-support)
 * [Built-in Global Functions](#built-in-global-functions)
 * [Built-in Methods](#built-in-methods)
-* 
+
 # The REPL
 
 The easiest way to start learning about the Jactl language is to use the REPL (read-evaluate-print-loop) that comes
@@ -1134,7 +1134,7 @@ division:
 ```
 Remember that `*` and `/` have higher precedence and are evaluated before any addition or subtraction. 
 
-## Prefix `+` and `-`
+## Prefix _+_ and _-_
 
 The `+` and `-` operators can also be used as prefix operators:
 ```groovy
@@ -1223,7 +1223,7 @@ For example:
 1111111100001111
 ```
 
-## Modulo `%` and Remainder `%%` operators
+## Modulo _%_ and Remainder _%%_ operators
 
 In addition to the basic four operators, Jactl also has `%` (modulo) and `%%` (remainder) operators.
 Both operators perform similar functions in that they calculate the "remainder" after dividing by some number.
@@ -2531,7 +2531,7 @@ die unless f('ab', 3) == 'ababab'
 die unless f('ab') == 'abab'
 ```
 
-## Implicit `it` Parameter
+## Implicit _it_ Parameter
 
 It is common enough for a closure to have a single argument and Jactl follows the Groovy convention of creating an
 implicit `it` parameter if there is no `->` at the start of the closure:
@@ -3307,7 +3307,7 @@ See [Integration Guide](integration-guide.md) for more details.
 The `checkpoint()` function optionally takes two parameters which are closures.
 The first one (with parameter name `commit`) is invoked when the `checkpoint()` function is called, while the second
 one (with parameter name `recover`) is invoked if the script is recovered.
-This allows the script to have slightly different behaviour after a failure and subsequent recovery.
+This allows the script to have different behaviour after a failure and subsequent recovery.
 For example, if the script sends a message to a downstream system, it might need to set a "repeat" flag in the message
 after a recovery to indicate that it is a possible repeat of an earlier message:
 ```groovy
@@ -3467,7 +3467,7 @@ default value is for the type of field:
 [x:0, y:7]
 ```
 
-## Named Argument Passing for `new`
+## Named Argument Passing for _new_
 
 To set values for non-mandatory fields you can use the named argument way of invoking `new` which allows you set
 the values of any fields (as long as all mandatory fields are given a value):

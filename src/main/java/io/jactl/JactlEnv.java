@@ -69,15 +69,18 @@ public interface JactlEnv {
   Object getThreadContext();
 
   /**
-   * Save checkpoint with given id.
-   * <p>NOTE: the checkpointId is an incrementing value and must be one more than the last checkpoint
-   * we stored. This method should generate a RuntimeError and pass it to the resumer if an error occurs
-   * during the save.</p>
-   * <p>The resumer object should be invoked on a non-blocking scheduler thread so if saving requires
-   * doing anything on a blocking thread then it is up to the implementation to make sure the resume
-   * is scheduled back onto a non-blocking thread (potentially same one as the one that invoked the save).</p>
+   * <p>Save checkpoint with given id.</p>
+   * <p>NOTE: the checkpointId indicates which checkpoint for the script instance identified by id we are up to so
+   * that if the script invokes checkpoint() multiple times we can uniquely identify the different checkpoints.
+   * It is an incrementing value and must be one more than the last checkpoint stored for this script instance.
+   * This method should generate a RuntimeError and pass it to the resumer if an error occurs during the save.</p>
+   * <p>The call to saveCheckpoint() is invoked from an event-loop thread so implementations need to be careful
+   * not to block this thread while saving the checkpoint.</p>
+   * <p>Once the checkpoint has been saved, the resumer object should be invoked back on an event-loop (non-blocking)
+   * thread. It is up to the implementation to make sure the resume is scheduled back onto a non-blocking thread
+   * (potentially same one as the one that invoked the save).</p>
    * @param id           unique id that identifies script instance
-   * @param checkpointId the checkpoint id for this instance
+   * @param checkpointId the checkpoint id for this script instance (guaranteed to be incrementing with no gaps)
    * @param checkpoint   the checkpointed state to be saved
    * @param source       source code line (for error reporting)
    * @param offset       offset where checkpointing occurring (for errors)

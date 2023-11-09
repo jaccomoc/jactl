@@ -32,6 +32,19 @@ def fib(x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 println "fib(20) = ${fib(20)}"
 ```
 
+A more advance example that takes a file of markdown and extracts the top level headings to generate a table 
+of contents:
+```groovy
+// Sanitise text to make suitable for a link
+def linkify = { s/ /-/g;  s/[^\w-]//g }
+
+// Find all top level headings in input and generate markdown for table of contents:
+stream(nextLine).filter{ /^# /r }
+                .map{ s/# // }
+                .map{ "* [$it](#${ linkify(it.toLowerCase()) })" }
+                .each{ println it }
+```
+
 ### Compiles to Java bytecode
 Jactl scripts compile to bytecode to take advantage of the performance capabilities of the JVM.
 
@@ -103,10 +116,12 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 * Regex matching syntax
 * Regex capture variables
 
+See [Language Features](https://jactl.io/language-features) for an overview of the language features.
+
 ## Download
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/1.2.0/jactl-1.2.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.2.0/jactl-1.2.0.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/1.3.0/jactl-1.3.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.3.0/jactl-1.3.0.jar)
 
 To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
 [jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
@@ -117,7 +132,7 @@ To download the Jactl REPL, which gives you an interactive shell for trying out 
 
 * Java 11+
 * Gradle 8.0.2
-* ASM 9.3
+* ASM 9.6
 
 ### Build
 
@@ -144,7 +159,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '1.1.0'
+implementation group: 'io.jactl', name: 'jactl', version: '1.3.0'
 ```
 
 ### Maven
@@ -154,20 +169,18 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>1.1.0</version>
+ <version>1.3.0</version>
 </dependency>
 ```
 
 ## Learn More
 
-See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL.
+The [Jactl Documentation Site](https://jactl.io) has the complete documentation including a language guide, and 
+an integration guide.
+It should be your first port of call.
 
-The [Jactl Language Guide](https://jaccomoc.github.io/jactl/language-guide) describes the Jactl Language.
+Related GitHub projects:
 
-The [Jactl Commandline Scripts Guide](https://jaccomoc.github.io/jactl/command-line-scripts) describes how to run Jactl scripts at the commandline.
+* The [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) provides a simple Read-Eval-Print-Loop shell for running Jactl code interactively.
+* The [Jactl-Vertx library](https://github.com/jaccomoc/jactl-vertx) provides some basic Vert.x integration capabilities.
 
-The [Jactl Integration Guide](https://jaccomoc.github.io/jactl/integration-guide) describes how to integrate Jactl into an application and how
-to provide additional functions and methods to extend the language.
-
-The [Jactl-Vertx library](https://github.com/jaccomoc/jactl-vertx) provides some basic Vert.x integration capabilities
-as well as JSON functions, a function for sending a web request, and an example application.

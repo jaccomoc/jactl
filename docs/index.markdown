@@ -6,6 +6,9 @@ layout: home
 
 Jactl is a powerful scripting language for Java-based applications whose syntax is a combination of bits
 borrowed from Java and Groovy, with a dash of Perl thrown in for good measure.
+See [Jactl Language Features](/language-features) for a quick overview of some of the language features
+or [Jactl Language Guide](/language-guide) for a full description of the language.
+
 
 <div class="row">
   <div class="column" markdown="1">
@@ -67,7 +70,7 @@ It is especially suited to event-loop/reactive applications due to its built-in 
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
-## Example
+## Simple Example
 
 Here is some simple Jactl code:
 ```groovy
@@ -86,19 +89,36 @@ def fib(x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 println "fib(20) = ${fib(20)}"
 ```
 
+## More Advanced Example
+
+Here is a more advanced example which streams the input as lines, searches for markdown headings and generates
+a table of contents:
+```groovy
+// Sanitise text to make suitable for a link
+def linkify = { s/ /-/g;  s/[^\w-]//g }
+
+// Find all top level headings in input and generate markdown for table of contents:
+stream(nextLine).filter{ /^# /r }
+                .map{ s/# // }
+                .map{ "* [$it](#${ linkify(it.toLowerCase()) })" }
+                .each{ println it }
+```
+
 ## Getting Started
 
-See the [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) for how to download and run the Jactl REPL
-which provides a quick, interactive, way to run Jactl code.
+To get a feel for how the language looks and the type of language features that Jactl offers
+see the [Language Features](/language-features) page.
 
-The [Jactl Language Guide](/language-guide) describes the Jactl Language.
+You can download the Jactl library and find the source code for Jactl at GitHub: [jactl](https://github.com/jaccomoc/jactl)
 
-The [Jactl Commandline Scripts Guide](/command-line-scripts) describes how to run Jactl scripts at the commandline.
+To start playing with Jactl and for testing out code interactively, you can use
+the [Read-Evaluate-Print-Loop (REPL) utility](https://github.com/jaccomoc/jactl-repl).
 
-The [Jactl Integration Guide](/integration-guide) describes how to integrate Jactl into an application and how
-to provide additional functions and methods to extend the language.
+To see how to use Jactl from the command line see the page about [command line scripts](/command-line-scripts).
 
-The [Jactl-Vertx library](https://github.com/jaccomoc/jactl-vertx) provides some basic Vert.x integration capabilities
-as well as JSON functions, a function for sending a web request, and an example application.
+To learn how to integrate Jactl into your application see the [Integration Guide](/integration-guide).
 
-You can find the source code for Jactl at GitHub: [jactl](https://github.com/jaccomoc/jactl)
+To integrate Jactl into a [Vert.x](https://vertx.io) based application have a look at the
+[jactl-vertx library](https://github.com/jaccomoc/jactl-vertx).
+
+To learn more about the language itself read the [Language Guide](/language-guide).
