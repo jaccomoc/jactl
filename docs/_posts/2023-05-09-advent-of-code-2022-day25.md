@@ -37,9 +37,9 @@ In the end, not a lot of code for this challenge.
 
 ```groovy
 def n = stream(nextLine).map{ it.reduce(0L){ v,d -> v*5 + ['2':2,'1':1,'0':0,'-':-1,'=':-2][d] } }.sum()
-for (def dval = 0, value = ''; ; n /= 5) {
+for (def dval=0, value=''; ; n /= 5) {
+  return value if n <= 0 && dval <= 2;
   dval = (n % 5) + (dval > 2 ? 1 : 0)
   value = '012=-'[dval % 5] + value
-  return value unless n > 0 || dval > 2
 }
 ```

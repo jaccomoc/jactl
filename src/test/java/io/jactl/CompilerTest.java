@@ -3297,7 +3297,7 @@ class CompilerTest extends BaseTest {
     test("def x = ''; 'abc' =~ /$x/", true);
     test ("def x = 'abc'; x =~ /${''}/", true);
     testError("def x; 'abc' =~ x", "null regex");
-    testError("def x; x =~ /abc/", "null string");
+    test("def x; x =~ /abc/", false);
     test("'abcaaxy' =~ /(a+)/", true);
     test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
     test("def it = 'bcaaxy'; /(a+)/r and return $1", "aa");
@@ -3351,7 +3351,10 @@ class CompilerTest extends BaseTest {
     test("def x = 'abcd'; def y = ''; for (int i = 0; x =~/([A-Z])./ig && i < 10; i++) { y += $1 }; y", "ac");
     test("def it = 'abcd'; def x = ''; while (/([a-z])/gr) { x += $1 }; while (/([A-Z])/ig) { x += $1 }; x", "abcdabcd");
     test("def it = 'abc'; def x = ''; while (/([a-z])/gr) { x += $1; while (/([A-Z])/ig) { x += $1 } }; x", "aabcbabccabc");
+    test("def it = null; def x = 'empty'; while (/([a-z])/gr) { x += $1; while (/([A-Z])/ig) { x += $1 } }; x", "empty");
     test("def x = 'abcde'; int i = 0; while (x =~ /([ace])/g) { i++; x = 'aaaa' }; i", 5);
+    test("def x = 0; def f() { '123' }; while(f() =~ /(\\d)/ng) { x+= $1 }; x", 6L);
+    testError("def x = 0; int i = 0; def f() { die if i++ > 0; '123' }; while(f() =~ /(\\d)/ng) { x+= $1 }; x", "script death");
   }
 
   @Test public void regexSubstitute() {
@@ -7370,6 +7373,16 @@ class CompilerTest extends BaseTest {
     replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", List.of(List.of(1,2), List.of(3)), "");
     replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
                     "[1,2]\n[3]\n\n", List.of(3), "");
+    try {
+      replTest.accept("def x = 0; while(nextLine() =~ /(\\d)/ng) { x+= $1 }; x", null, 0, "");
+      fail("Expected error");
+    }
+    catch (AssertionError e) {
+      // We expect error
+    }
+    replTest.accept("def x = 0; while(nextLine() =~ /(\\d)/ng) { x+= $1 }; x", "", 0, "");
+    replTest.accept("def x = 0; while(nextLine() =~ /(\\d)/ng) { x+= $1 }; x", "1\n2\n3\n", 6L, "");
+    replTest.accept("def x = 0; while(nextLine() =~ /(\\d)/ng) { x+= $1 }; x", "123\n666\n", 7L, "");
   }
 
   @Test public void stream() {

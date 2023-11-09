@@ -43,7 +43,7 @@ Then we process each move and adjust the current position and direction.
 def grid = stream{ it = nextLine(); it ? it : null }
 def width = grid.map{ it.size() }.max(), height = grid.size()
 def moves = []
-while (nextLine() =~ /(\d+|[RL])/ng) { moves <<= $1 }
+for (def line = nextLine(); line =~ /(\d+|[RL])/ng; ) { moves <<= $1 }
 
 def moveCount(pos, num) {
   def lastGoodPos = pos
@@ -158,7 +158,7 @@ def facex = faceCoords.filter{ x,y -> y == facey }.map{ x,y -> x}.min()
 def pos = [face:faces[facex][facey], x:0, y:0, d:RIGHT]
 
 def moves = []
-while (nextLine() =~ /(\d+|[RL])/ng) { moves <<= $1 }
+for (def line = nextLine(); line =~ /(\d+|[RL])/ng; ) { moves <<= $1 }
 moves.each{ move ->
   pos   = moveCount(pos, move)           if move !in ['R', 'L']
   pos.d = (pos.d + [R:1,L:-1][move]) % 4 if move  in ['R', 'L']
