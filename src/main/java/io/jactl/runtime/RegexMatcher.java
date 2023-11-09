@@ -294,6 +294,10 @@ public class RegexMatcher implements Checkpointable {
 
   private static class GlobalMatcher extends JactlMatcher {
     @Override public boolean regexFind(String str, String regex, String modifiers, String source, int offset) {
+      if (str == null) {
+        return false;      // null never matches anything
+      }
+
       // Check to see if the Matcher has the same source string (note we use == not .equals())
       if (!str.equals(this.originalStr) || !regex.equals(matcher.pattern().pattern()) || lastPos == -1) {
         lastPos = -1;
@@ -340,6 +344,9 @@ public class RegexMatcher implements Checkpointable {
 
   private static class NonGlobalMatcher extends JactlMatcher {
     @Override public boolean regexFind(String str, String regex, String modifiers, String source, int offset) {
+      if (str == null) {
+        return false;       // null never matches
+      }
       initMatcher(str, regex, modifiers, source, offset);
       return matched = matcher.find();
     }
