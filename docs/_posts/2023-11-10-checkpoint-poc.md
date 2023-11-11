@@ -131,7 +131,9 @@ Here is a snapshot of the Grafana dashboard showing the payment processing rate 
 
 The TPS graph shows a sawtooth-like pattern during around 3 minutes where the TPS momentarily dips slightly every 30 seconds or so.
 This is the period during which I was randomly killing a `Jactl-x` pod every 30 seconds.
-As the graph shows, the impact of the pod failures on the throughput was pretty minor.
+As the graph shows, the impact of the pod failures on the throughput was pretty minor:
+![](/assets/checkpoint_poc_grafana2.png)
+
 
 There is also a graph showing if there are any long-running payments (from the payment load generator's point of view).
 This shows the number of payments where the early acknowledgement has been received but for which the final response
