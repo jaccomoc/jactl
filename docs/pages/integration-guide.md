@@ -882,7 +882,7 @@ register its own handler with Vert.x to be invoked when the response is received
 > `Continuation.suspendNonBlocking()` and not before, in order to guard against race conditions where the 
 > response might be received before we have finished suspending our execution.
 
-The handler that we pass to `Continuation.8suspendNonBlocking()` accepts two arguments:
+The handler that we pass to `Continuation.suspendNonBlocking()` accepts two arguments:
 1. a `JactlContext` in case we need it, and
 2. a resume handler that will take care of resuming the execution and that must be passed the result once available.
 
