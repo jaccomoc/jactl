@@ -172,12 +172,10 @@ If the last parameter to a function is a closure then the closure can be written
 arguments:
 ```groovy
 def logResult(prefix, clos) { "$prefix: result is ${ clos() }"}
+
 logResult("Addition", { 2 + 3 })   // Pass closure as 2nd argument
-```
-is the same as:
-```groovy
-def logResult(prefix, clos) { "$prefix: result is ${ clos() }"}
-logResult("Addition"){ 2 + 3 }
+
+logResult("Addition"){ 2 + 3 }     // Closure arg can be provided after the ')'
 ```
 
 If there are no other arguments then the parentheses are optional:
