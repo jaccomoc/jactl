@@ -7,6 +7,7 @@ permalink: /language-features
 # Language Features
 
 This page describes a few of the language features that Jactl offers.
+Jactl syntax is largely based on Java with parts also liberally borrowed from Groovy and Perl.
 
 ## Semi-Colon Optional
 
@@ -198,7 +199,12 @@ totalTime = measure{ 40.each{ i -> fib(i + 1) } }
 ## Regex Support with Capture Variables $1, $2, ...
 
 Regular expression matching is part of the language rather than being delegated to library calls.
-Capture expressions in a regex pattern cause variables `$1`, `$2`, etc to get populated with the corresponding
+The `=~` operator performs searches a string for a substring that matches the given pattern:
+```groovy
+'abcxdef' =~ /x/     // Result is true
+```
+
+Capture expressions in a regex pattern cause variables `$1`, `$2`, and so on to get populated with the corresponding
 values from the string being matched:
 ```groovy
 if ('Total: 14ms' =~ /: (\d+)(.*)$/) {
@@ -328,7 +334,7 @@ format(base:8,  num:400)       // any order supported for named args
 ## _eval()_ Statement
 
 Jactl has a built-in `eval` statement which will compile and execute a string of Jactl code at run-time.
-A map of values for variables that the script references:
+A map of values for variables that the script references can be passed in as an optional argument:
 ```groovy
 eval('3 + 4')                                        // returns 7
 eval('x + y', [x:3, y:4])                            // returns 7
@@ -360,6 +366,7 @@ x = X.fromJson('{"i":3,"s":"abc"}')
 ## Decimal Number Support
 
 Jactl uses `BigDecimal` for "floating point" numbers by default (known as `Decimal` numbers in Jactl).
+This makes it suitable for manipulating currency amounts where arbitrary precision is required.
 Jactl also offers `double` numbers for situations where speed is more important than accuracy.
 For example:
 ```groovy
