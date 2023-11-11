@@ -810,7 +810,7 @@ For global functions that are asynchronous, the `Continuation` parameter of the 
 For methods that perform asynchronous operations, the `Continuation` parameters must be the second parameter after the
 parameter that represents the object on which the method is being invoked:
 ```java
-  public static Object someAsyncFunction(Continiuation c, Object param1, String param2) { 
+  public static Object someAsyncFunction(Continuation c, Object param1, String param2) { 
     ...
   }
 
@@ -824,7 +824,7 @@ the usual signature for an asynchronous function will have the `Continuation` pa
 parameter for the source code, and the `int` parameter for the offset into the source where the invocation is taking
 place so the example above would more likely look like this:
 ```java
-  public static Object someAsyncFunction(Continiuation c, String source, int offset, Object param1, String param2) { 
+  public static Object someAsyncFunction(Continuation c, String source, int offset, Object param1, String param2) { 
     ...
   }
 
