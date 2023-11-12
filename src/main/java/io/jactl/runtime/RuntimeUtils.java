@@ -1240,6 +1240,14 @@ public class RuntimeUtils {
       }
       throw new NullError("Null value for parent during field access", source, offset);
     }
+    if (field == null) {
+      if (parent instanceof Map || parent instanceof JactlObject) {
+        throw new NullError("Null value for field", source, offset);
+      }
+      else {
+        throw new NullError("Null value for index", source, offset);
+      }
+    }
 
     if (parent instanceof Map) {
       return loadMapField(parent, field, source, offset);

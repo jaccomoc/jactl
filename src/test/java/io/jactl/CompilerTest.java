@@ -3472,6 +3472,52 @@ class CompilerTest extends BaseTest {
     testError("List x = [1,2,3]; x[-4] = 4; x", "out of range");
   }
 
+  @Test public void nullIndexes() {
+    testError("String s; s[null]", "null value");
+    testError("''[null]", "null value");
+    testError("def y; ''[y]", "null value");
+    testError("String x = ''; x[null]", "null value");
+    testError("String x = ''; def y; x[y]", "null value");
+    testError("'3'[null]", "null value");
+    testError("def y; '3'[y]", "null value");
+    testError("String x = 'a'; x[null]", "null value");
+    testError("String x = 'a'; def y; x[y]", "null value");
+    testError("def x = 'a'; x[null]", "null value");
+    testError("def x = 'a'; def y; x[y]", "null value");
+    testError("def x; x[0]", "null parent");
+    testError("def x; x[null]", "null parent");
+    testError("[][null]", "null value for index");
+    testError("def y; [][y]", "null value for index");
+    testError("List x = []; x[null]", "null value for index");
+    testError("List x = []; def y; x[y]", "null value for index");
+    testError("[1,2,3][null]", "null value for index");
+    testError("def y; [1,2,3][y]", "null value for index");
+    testError("List x = [1,2,3]; x[null]", "null value for index");
+    testError("List x = [1,2,3]; def y; x[y]", "null value for index");
+    testError("def x = [1,2,3]; x[null]", "null value for index");
+    testError("def x = [1,2,3]; def y; x[y]", "null value for index");
+    testError("[:][null]", "null value for field");
+    testError("def y; [:][y]", "null value for field");
+    testError("Map x = [:]; x[null]", "null value for field");
+    testError("Map x = [:]; def y; x[y]", "null value for field");
+    testError("[a:1,b:2][null]", "null value for field");
+    testError("def y; [a:1,b:2,c:3][y]", "null value for field");
+    testError("Map x = [a:1,b:2,c:3]; x[null]", "null value for field");
+    testError("Map x = [a:1,b:2,c:3]; def y; x[y]", "null value for field");
+    testError("def x = [a:1,b:2,c:3]; x[null]", "null value for field");
+    testError("def x = [a:1,b:2,c:3]; def y; x[y]", "null value for field");
+    testError("([] as int[])[null]", "null value");
+    testError("def y; ([] as int[])[y]", "null value");
+    testError("int[] x = []; x[null]", "null value");
+    testError("int[] x = []; def y; x[y]", "null value");
+    testError("([1,2,3] as int[])[null]", "null value");
+    testError("def y; ([1,2,3] as int[])[y]", "null value");
+    testError("int[] x = [1,2,3]; x[null]", "null value");
+    testError("int[] x = [1,2,3]; def y; x[y]", "null value");
+    testError("def x = [1,2,3] as int[]; x[null]", "null value");
+    testError("def x = [1,2,3] as int[]; def y; x[y]", "null value");
+  }
+
   @Test public void mapLiterals() {
     test("[:]", new HashMap<>());
     test("[a:(byte)1]", Map.of("a",(byte)1));
