@@ -1,5 +1,6 @@
 ---
 layout: home
+image: /assets/logo-picture.jpg
 ---
 
 <h1 style="text-align:center;color:#2240aa;">A scripting language for Java-based applications</h1>
