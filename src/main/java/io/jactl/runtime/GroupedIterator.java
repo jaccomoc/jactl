@@ -30,11 +30,12 @@ import static io.jactl.runtime.JactlIterator.IteratorType.GROUPED;
  * E.g. turning a list into a list of pairs.
  */
 public class GroupedIterator extends JactlIterator {
-  private static int VERSION = 1;
+  private static int VERSION = 2;
   JactlIterator iter;
   String        source;
   int           offset;
   int           size;
+  boolean       sliding = false;
   boolean       haveNext = false;
   boolean       finished = false;
   List<Object>  group = null;
@@ -47,6 +48,7 @@ public class GroupedIterator extends JactlIterator {
     checkpointer.writeObject(source);
     checkpointer.writeCint(offset);
     checkpointer.writeCint(size);
+    checkpointer.writeBoolean(sliding);
     checkpointer._writeBoolean(haveNext);
     checkpointer._writeBoolean(finished);
     checkpointer.writeObject(group);
@@ -60,6 +62,7 @@ public class GroupedIterator extends JactlIterator {
     source   = (String)restorer.readObject();
     offset   = restorer.readCint();
     size     = restorer.readCint();
+    sliding  = restorer.readBoolean();
     haveNext = restorer.readBoolean();
     finished = restorer.readBoolean();
     group    = (List<Object>)restorer.readObject();
@@ -67,11 +70,12 @@ public class GroupedIterator extends JactlIterator {
 
   GroupedIterator() {}
 
-  GroupedIterator(JactlIterator iter, String source, int offset, int size) {
+  GroupedIterator(JactlIterator iter, String source, int offset, int size, boolean sliding) {
     this.iter   = iter;
     this.source = source;
     this.offset = offset;
     this.size   = size;
+    this.sliding= size > 1 ? sliding : false;
   }
 
   public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, GROUPED, "hasNext$c", Object.class, Continuation.class);
@@ -85,7 +89,7 @@ public class GroupedIterator extends JactlIterator {
 
   @Override public boolean hasNext() {
     try {
-      if (group != null) {
+      if (group != null && group.size() == size) {
         return true;
       }
       if (finished) {
@@ -139,7 +143,8 @@ public class GroupedIterator extends JactlIterator {
         }
       }
       var result = group;
-      group = null;
+      // If sliding window then save list starting after first element
+      group = sliding ? new ArrayList<>(group.subList(1,group.size())) : null;
       return result;
     }
     catch (Continuation cont) {

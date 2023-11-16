@@ -238,6 +238,13 @@ public class BuiltinFunctions {
            .register();
 
       Jactl.method(ITERATOR)
+           .name("windowSliding")
+           .asyncInstance(true)
+           .param("size")
+           .impl(BuiltinFunctions.class, "iteratorWindowSliding")
+           .register();
+
+      Jactl.method(ITERATOR)
            .name("filter")
            .asyncInstance(true)
            .asyncParam("predicate", null)
@@ -1028,7 +1035,23 @@ public class BuiltinFunctions {
     if (size < 0) {
       throw new RuntimeError("Value for grouped() must be >= 0 (was " + size + ")", source, offset);
     }
-    return new GroupedIterator(iter, source, offset, size);
+    return new GroupedIterator(iter, source, offset, size, false);
+  }
+
+  ////////////////////////////////
+
+  // = windowSliding
+
+  public static Object iteratorWindowSlidingData;
+  public static JactlIterator iteratorWindowSliding(Object iterable, Continuation c, String source, int offset, int size) {
+    JactlIterator iter = RuntimeUtils.createIterator(iterable);
+    if (size == 0) {
+      return iter;
+    }
+    if (size < 0) {
+      throw new RuntimeError("Value for windowSliding() must be >= 0 (was " + size + ")", source, offset);
+    }
+    return new GroupedIterator(iter, source, offset, size, true);
   }
 
   ////////////////////////////////

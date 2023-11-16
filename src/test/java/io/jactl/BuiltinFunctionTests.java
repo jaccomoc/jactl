@@ -1547,6 +1547,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[].grouped(2)", List.of());
     test("[a:1,b:2,c:3,d:4].grouped(2)", List.of(List.of(List.of("a",1),List.of("b",2)),List.of(List.of("c",3),List.of("d",4))));
     test("[1,2].grouped(0)", List.of(1,2));
+    testError("[1,2].grouped(-1)", "value for grouped() must be >= 0");
     test("[1,2].grouped(1)", List.of(List.of(1),List.of(2)));
     test("[1,2].grouped(2)", List.of(List.of(1,2)));
     test("[1].grouped(2)", List.of(List.of(1)));
@@ -1555,6 +1556,29 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3,4)));
     test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.grouped(2)", List.of(List.of(1,2),List.of(3)));
     test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
+    test("def f = [1,2,3,4].map{sleep(0,it)+sleep(0,0)}.grouped; f(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(3,4)));
+  }
+
+  @Test public void windowSliding() {
+    testError("[].windowSliding(-1)", "value for windowSliding() must be >= 0");
+    test("[].windowSliding(0)", List.of());
+    test("def f = [].windowSliding; f(0)", List.of());
+    test("[].windowSliding(1)", List.of());
+    test("[].windowSliding(2)", List.of());
+    test("[1,2].windowSliding(0)", List.of(1,2));
+    test("[1,2].windowSliding(1)", List.of(List.of(1),List.of(2)));
+    test("[1,2].windowSliding(2)", List.of(List.of(1,2)));
+    test("[1,2].windowSliding(5)", List.of(List.of(1,2)));
+    test("[1,2,3].windowSliding(2)", List.of(List.of(1,2),List.of(2,3)));
+    test("[1,2,3].windowSliding(4)", List.of(List.of(1,2,3)));
+    test("[1].windowSliding(2)", List.of(List.of(1)));
+    test("[1,2,3,4].windowSliding(2)", List.of(List.of(1,2),List.of(2,3),List.of(3,4)));
+    test("[1,2,3,4].windowSliding(3)", List.of(List.of(1,2,3),List.of(2,3,4)));
+    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.windowSliding(2)", List.of(List.of(1,2),List.of(2,3),List.of(3,4)));
+    test("[1,2,3].map{sleep(0,it)+sleep(0,0)}.windowSliding(2)", List.of(List.of(1,2),List.of(2,3)));
+    test("[1,2,3,4].map{sleep(0,it)+sleep(0,0)}.windowSliding(2).map{sleep(0,it)}", List.of(List.of(1,2),List.of(2,3),List.of(3,4)));
+    test("[a:1,b:2,c:3,d:4].windowSliding(2)", List.of(List.of(List.of("a",1),List.of("b",2)),List.of(List.of("b",2),List.of("c",3)),List.of(List.of("c",3),List.of("d",4))));
+    test("def f = [a:1,b:2,c:3,d:4].windowSliding; f(2)", List.of(List.of(List.of("a",1),List.of("b",2)),List.of(List.of("b",2),List.of("c",3)),List.of(List.of("c",3),List.of("d",4))));
   }
 
   @Test public void sqrt() {
