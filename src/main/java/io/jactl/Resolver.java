@@ -1832,6 +1832,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     if (classPkg.equals(packageName)) {
       descriptor = localClasses.get(className);
+      if (descriptor == null && isScript && !jactlContext.replMode) {
+        // Could be a.b.c.X in a script where script is the owner of the class so look for a top
+        // level class within the script
+        descriptor = localClasses.get(scriptName + '$' + className);
+      }
     }
     if (descriptor == null) {
       if (jactlContext.packageExists(classPkg)) {

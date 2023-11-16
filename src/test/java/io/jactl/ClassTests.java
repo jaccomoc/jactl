@@ -1437,6 +1437,7 @@ public class ClassTests extends BaseTest {
     test(List.of("class Y { def f(){3} }", "class X { Y y = null }"), "new x.y.z.X(y:new Y()).y.f()", 3);
     test(List.of("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new x.y.z.X(y:new x.y.z.Y()).y.f()", 3);
     test(List.of("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new X(y:new Y()).y.f()", 3);
+    test("package x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", 3);
   }
 
   @Test public void packageStaticMethods() {
