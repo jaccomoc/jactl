@@ -54,6 +54,12 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   // = Expr
 
+
+  @Override public Expr visitExprList(Expr.ExprList expr) {
+    expr.exprs = expr.exprs.stream().map(this::decorate).collect(Collectors.toList());
+    return expr;
+  }
+
   @Override public Expr visitCall(Expr.Call expr) {
     //expr.callee = decorate(expr.callee);
     expr.args = decorate(expr.args);

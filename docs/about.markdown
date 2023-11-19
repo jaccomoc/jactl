@@ -13,7 +13,7 @@ It is especially suited to event-loop/reactive applications due to its built-in 
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
-It also allows the execution state of scripts to be checkpointed and persisted or distributed over a network
+It provides a way for the execution state of scripts to be checkpointed and persisted or distributed over a network
 to allow scripts to be recovered and resumed after a failure.
 
 # Why?

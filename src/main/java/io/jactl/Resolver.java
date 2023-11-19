@@ -517,6 +517,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   // = Expr
 
 
+  @Override public JactlType visitExprList(Expr.ExprList expr) {
+    error("Expression lists not supported", expr.location);
+    return null;
+  }
+
   @Override public JactlType visitRegexMatch(Expr.RegexMatch expr) {
     expr.isConst = false;
 
@@ -1367,7 +1372,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitBlock(Expr.Block expr) {
     resolve(expr.block);
-    return expr.type = BOOLEAN;
+    JactlType type = BOOLEAN;
+    if (!expr.resultIsTrue) {
+      // Type will be type of last assignment in the multi-assignment block
+      List<Stmt> stmts = expr.block.stmts.stmts;
+      Stmt       last  = stmts.get(stmts.size() - 1);
+      assert last instanceof Stmt.ExprStmt;
+      type = ((Stmt.ExprStmt) last).expr.type;
+    }
+    return expr.type = type;
   }
 
   @Override public JactlType visitInvokeNew(Expr.InvokeNew expr) {

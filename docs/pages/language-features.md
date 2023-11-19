@@ -382,6 +382,20 @@ def x
 x ?: 123    // value will be 123 since x is null
 ```
 
+## Spaceship Operator _<=>_
+
+The `<=>` operator is a comparator operator that returns `-1`, `0`, or `1` if the
+left-hand side is less than, equal, or greater than the right-hand side respectively.
+This makes it easy to create a comparator function for sorting things:
+```groovy
+def employees = [[name:'Mary', salary:10000], [name:'Susan', salary:5000], [name:'Fred', salary:7000]]
+
+// Sort according to salary
+employees.sort{ a,b -> a.salary <=> b.salary }
+
+// Result: [[name:'Susan', salary:5000], [name:'Fred', salary:7000], [name:'Mary', salary:10000]]
+```
+
 ## Field Access _?._ and _?[_ Operators
 
 When accessing fields of a map or a list/array the `?.` operator (for maps) and the `?[` operator (for lists) allows
@@ -407,9 +421,28 @@ x                 // x now has a value of: [a:[b:[c:'123']]]
 x.d.e[2] = 'abc'  // x now has a value of: [a:[b:[c:'123']], d:[e:[null, null, 'abc']]]
 ```
 
+## Multi-Assignments
+_(New feature: available on trunk.)_
+
+Multiple variables can be declared and initialised in one statement and multiple assignments
+can also be done in one statement:
+```groovy
+def (x,y,z) = [4,5,6]                    // initialisation
+(x,y,z) = [0,1,2]                        // assignment
+(x,y) += [2,3]                           // supports all assignment operators +=, -=, *=, etc
+
+def a = [:]
+(a.b.c[x], a.b.c[y]) = [x + y, y + z]    // multi-assign with auto-creation of subfields
+```
+
+You can a multi-assignment to swap the values of two variables:
+```groovy
+(x,y) = [y,x]      // swaps x and y
+```
+
 ## Classes
 
-Users can define their own classes using a simplfied syntax that is a subset of Java syntax:
+Users can define their own classes using a simplified syntax that is a subset of Java syntax:
 ```groovy
 class X {
   int i

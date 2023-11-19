@@ -1026,6 +1026,76 @@ false
 false
 ```
 
+# Variable Declarations
+
+In Jactl, variables must be declared before they are used.
+A variable declaration has a type followed by the variable name and then optionally an initialiser that is used
+to initialise the variable:
+```groovy
+> int i = 3
+3
+> int j      // defaults to 0
+0
+```
+
+You can use `def` to define an untyped variable (equivalent to using `Object` in Java):
+```groovy
+> def x
+> def y = 'abc'
+abc
+> def z = 1.234
+1.234
+```
+
+Multiple variables can be declared at the same time if they are of the same type:
+```groovy
+> int i, j   // i and j will default to 0
+0
+> String s1 = 'abc', s2 = 'xyz'
+xyz
+> def x,y    // x and y default to null
+```
+
+When using an initialiser, you can specify the variable type as `var` and the type will be inferred from the
+type of the initialiser:
+```groovy
+> var i = 1         // i will be an int
+1
+> var s = 'abc'     // s will be a String
+abc
+```
+
+Another way to declare multiple variables in the same statement is to surround the variables with `(` and `)` and
+then provide the optional initialisers in a separate list after a `=` symbol:
+```groovy
+> def (x,y) = [1,2]
+2
+```
+The right-hand side can be any expression that evaluates to a list (or something that supports subscripting such as
+a String or an array):
+```groovy
+> def stats = { x -> [x.sum(), x.size(), x.avg()] }
+Function@511354923
+> def values = [1, 4, 7, 4, 5, 13]
+[1, 4, 7, 4, 5, 13]
+> def (sum, count, avg) = stats(values)
+5.6666666667
+> sum
+34
+> count
+6
+> avg
+5.6666666667
+> def (first, second, third) = 'a string value'    // grab first, second, and third letters from the string
+s
+```
+
+This multi-declaration form supports the type being specified per variable:
+```groovy
+> def (int i, String s) = [123, 'abc']
+abc
+```
+
 # Expressions and Operators
 
 ## Operator Precedence
@@ -1484,6 +1554,72 @@ For example:
 32
 > x |= 15
 47
+```
+
+## Multi-Assignment
+
+You assign to multiple variables at the same time by listing the variables within `(` and `)` and providing
+a list of values on the right-hand side of the assignment operator:
+```groovy
+> def x; def y
+> (x,y) = [3,4]
+4
+> println "x=$x, y=$y"
+x=3, y=4
+```
+Note that the value of a multi-assignment is the value of the last assignment in the list (which is why `4` is
+printed by the REPL as the value of the `(x,y) = [3,4]` expression).
+
+The right-hand side can be another variable or expression that evaluates to a list:
+```groovy
+> def x,y
+> def str = 'abc'
+abc
+> (x,y) = str           // extract the first and second characters of our string
+b
+> "x=$x, y=$y"
+x=a, y=b
+```
+
+You can use any of the assignment operators such as `+=` or `-=`:
+```groovy
+> def (x,y) = [1,2]
+2
+> (x,y) += [3,4]; println "x=$x, y=$y"
+x=4, y=6
+```
+
+Any expression that can appear on the left-hand side of a normal assignment can appear in a multi-assignment (not just
+simple variable names):
+```groovy
+> def x = [:]
+[:]
+> (x.('a' + '1').b, x.a1.c) = ['xab', 'xac']
+xac
+> x
+[a1:[b:'xab', c:'xac']]
+```
+
+The conditional assignment operator `?=` is also supported.
+In a multi-assignment, each of the individual assignments is evaluated to see if the value in the list on
+the right-hand side is null or not so some values can be assigned while others aren't:
+```groovy
+> def (x,y) = [1,2]
+2        
+> def z        
+> (x,y) ?= [3,z]       // y unchanged since z has no value
+> "x=$x, y=$y"
+x=3, y=2
+```
+
+Multi-assignment can be used to swap the values of two variables:
+```groovy
+> def (x,y) = [1,2]
+2
+> (x,y) = [y,x]       // swap x and y
+1
+> "x=$x, y=$y"
+x=2, y=1
 ```
 
 ## Instance Of
@@ -2499,7 +2635,7 @@ die unless f(y) == 'xabc123'   // since parameters are untyped we can pass strin
 
 Closures in Jactl are modelled after the closure syntax of Groovy.
 Closures are similar to functions in that they take one or more parameters and return a result.
-They are decalred with slightly different syntax:
+They are declared with slightly different syntax:
 ```groovy
 def sqr = { int x -> return x * x }        // Assign closure to sqr
 

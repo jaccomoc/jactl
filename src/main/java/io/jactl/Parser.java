@@ -50,7 +50,8 @@ public class Parser {
   Deque<Stmt.ClassDecl> classes     = new ArrayDeque<>();
   boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
   String                packageName = null;
-  JactlContext         context;
+  JactlContext          context;
+  int                   uniqueVarCnt = 0;
 
   // Whether we are currently doing a lookahead in which case we don't bother keeping
   // track of state such as functions declared per block and nested functions.
@@ -303,7 +304,8 @@ public class Parser {
 
   /**
    * <pre>
-   *# declaration -&gt; funDecl
+   *# declaration -&gt; multiVarDecl
+   *#              | funDecl
    *#              | varDecl
    *#              | classDecl
    *#              | statement;
@@ -314,6 +316,12 @@ public class Parser {
   }
 
   private Stmt declaration(boolean inClassDecl) {
+    // Look for multi var declaration: def (x, y) = [1,2]
+    //                             or: def (int x, def y) = [1,2]
+    if (lookahead(() -> expect(DEF) != null, () -> expect(LEFT_PAREN) != null)) {
+      return multiVarDecl(inClassDecl);
+    }
+
     // Look for function declaration: <type> <identifier> "(" ...
     if (isFunDecl(inClassDecl)) {
       return funDecl(inClassDecl);
@@ -500,17 +508,7 @@ public class Parser {
         matchAny(EOL);
       }
       // Check for optional type. Default to "def".
-      JactlType type = ANY;
-      if (peek().is(typesAndVar)) {
-        type = type(true, false, false);
-      }
-      if (!peek().is(IDENTIFIER)) {
-        unexpected("Expected valid type or parameter name");
-      }
-      // We have an identifier but we don't yet know if it is a parameter name or a class name
-      if (lookahead(() -> className() != null, () -> matchAny(IDENTIFIER))) {
-        type = JactlType.createInstanceType(className());   // we have a class name
-      }
+      JactlType type = optionalType();
 
       // Note that unlike a normal varDecl where commas separate different vars of the same type,
       // with parameters we expect a separate comma for parameter with a separate type for each one
@@ -523,6 +521,26 @@ public class Parser {
     return parameters;
   }
 
+  /**
+   * This is used in situations where we either have a type followed by an identifier or an identifier
+   * on its own.
+   * @return the type or ANY if no type specified
+   */
+  private JactlType optionalType() {
+    JactlType type = ANY;
+    if (peek().is(typesAndVar)) {
+      type = type(true, false, false);
+    }
+    if (!peek().is(IDENTIFIER)) {
+      unexpected("Expected valid type or parameter name");
+    }
+    // We have an identifier but we don't yet know if it is a parameter name or a class name
+    if (lookahead(() -> className() != null, () -> matchAny(IDENTIFIER))) {
+      type = JactlType.createInstanceType(className());   // we have a class name
+    }
+    return type;
+  }
+
   private boolean isVarDecl() {
     return lookahead(() -> type(true, false, true) != null,
                      () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE) || matchKeywordIgnoreEOL());
@@ -530,10 +548,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# varDecl -&gt; ("var" | "boolean" | "int" | "long" | "double" | "Decimal" |
-   *#                "String" | "Map" | "List" )
-   *#                 IDENTIFIER ( "=" expression ) ?
-   *#                       ( "," IDENTIFIER ( "=" expression ) ? ) * ;
+   *# varDecl -&gt; type IDENTIFIER ( "=" expression ) ? ( "," IDENTIFIER ( "=" expression ) ? ) * ;
    * </pre>
    * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
    *       a list of VarDecls if multiple variables declared.
@@ -579,14 +594,91 @@ public class Parser {
     // convert rhs into instance of X.
     //   X x = [i:1,j:2]  ==> X x = [i:1,j:2] as X
     if (type.is(JactlType.INSTANCE) && initialiser != null && !initialiser.isNull() && !initialiser.isNewInstance()) {
-      initialiser = new Expr.Binary(initialiser, new Token(AS, initialiser.location), new Expr.TypeExpr(initialiser.location, type));
+      initialiser = asExpr(type, initialiser);
     }
 
-    Expr.VarDecl varDecl = new Expr.VarDecl(identifier, equalsToken, initialiser);
+    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl);
+  }
+
+  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl) {
+    Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
     varDecl.isField = inClassDecl;
     return new Stmt.VarDecl(identifier, varDecl);
+  }
+
+  private static Expr.Binary asExpr(JactlType type, Expr expr) {
+    return new Expr.Binary(expr, new Token(AS, expr.location), new Expr.TypeExpr(expr.location, type));
+  }
+
+  /**
+   * <pre>
+   *# multiVarDecl -&gt; "def" "(" type? IDENTIFIER ( , type? IDENTIFIER ) * ")" "=" "[" expression (, expression)* "]
+   * </pre>
+   */
+  private Stmt multiVarDecl(boolean isInClassDecl) {
+    expect(DEF);
+    expect(LEFT_PAREN);
+    List<JactlType> types       = new ArrayList<>();
+    List<Token>     identifiers = new ArrayList<>();
+    Token           firstVarTok = null;
+    while (types.isEmpty() || !matchAny(RIGHT_PAREN)) {
+      if (!types.isEmpty()) {
+        expect(COMMA);
+      }
+      JactlType type = optionalType();
+      firstVarTok = type.is(UNKNOWN) && firstVarTok == null ? previous() : firstVarTok;
+      types.add(type);
+      identifiers.add(expect(IDENTIFIER));
+    }
+    matchAny(EOL);
+    Stmt.Stmts stmts      = new Stmt.Stmts();
+    if (peek().is(EQUAL)) {
+      Token      equalToken = expect(EQUAL);
+      Token      rhsToken   = peek();
+      Token      rhsName    = rhsToken.newIdent(Utils.JACTL_PREFIX + "multiAssign" + uniqueVarCnt++);
+
+      Expr rhsExpr = expression();
+      if (firstVarTok != null) {
+        if (!(rhsExpr instanceof Expr.ListLiteral)) {
+          error("Cannot infer type in multi-assignment (right-hand side is non-list type)", firstVarTok);
+        }
+        // Add a type dependency on type of subexpr of rhs for each "var"
+        var list = ((Expr.ListLiteral) rhsExpr).exprs;
+        for (int i = 0; i < types.size(); i++) {
+          JactlType type = types.get(i);
+          if (type.is(UNKNOWN)) {
+            if (i >= list.size()) {
+              error("Cannot infer type in multi-assignment from given right-hand side (not enough entries in list)", firstVarTok);
+            }
+            type.typeDependsOn(list.get(i));
+          }
+        }
+      }
+
+      // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
+      // end of current scope - could handle this better but not a high priority since not an actual leak.
+      //: def _$jmultiAssignN = expression() as List
+      stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, isInClassDecl));
+      for (int i = 0; i < identifiers.size(); i++) {
+        Token varName = identifiers.get(i);
+        // def variable = _$jmultiAssignN[i]
+        stmts.stmts.add(createVarDecl(varName, types.get(i), equalToken,
+                                      new Expr.Binary(new Expr.Identifier(rhsName),
+                                                      new Token(LEFT_SQUARE, equalToken),
+                                                      new Expr.Literal(new Token(INTEGER_CONST, equalToken).setValue(i))),
+                                      isInClassDecl));
+      }
+    }
+    else {
+      // No initialisers
+      for (int i = 0; i < identifiers.size(); i++) {
+        Token varName = identifiers.get(i);
+        stmts.stmts.add(createVarDecl(varName, types.get(i), null, null, isInClassDecl));
+      }
+    }
+    return stmts;
   }
 
   /**
@@ -702,13 +794,17 @@ public class Parser {
    * </pre>
    */
   private Stmt.ExprStmt exprStmt() {
-    Token location = peek();
     Expr  expr     = expression();
-    expr.isResultUsed = false;    // Expression is a statement so result not used
-    Stmt.ExprStmt stmt = new Stmt.ExprStmt(location, expr);
-//    if (peek().isNot(EOF, EOL, SEMICOLON, RIGHT_BRACE)) {
+    Stmt.ExprStmt stmt = createStmtExpr(expr);
+    //    if (peek().isNot(EOF, EOL, SEMICOLON, RIGHT_BRACE)) {
 //      unexpected("Expected end of expression");
 //    }
+    return stmt;
+  }
+
+  private Stmt.ExprStmt createStmtExpr(Expr expr) {
+    expr.isResultUsed = false;    // Expression is a statement so result not used
+    Stmt.ExprStmt stmt = new Stmt.ExprStmt(expr.location, expr);
     return stmt;
   }
 
@@ -915,7 +1011,8 @@ public class Parser {
 
   /**
    * <pre>
-   *# expr -&gt; expr operator expr
+   *# expr -&gt; "(" expr ( "," expr ) * ")" = expr
+   *#       | expr operator expr
    *#       | expr "?" expr ":"" expr
    *#       | unary
    *#       | primary;
@@ -1232,7 +1329,7 @@ public class Parser {
    *#          | regexSubstitute
    *#          | (IDENTIFIER | classPath)
    *#          | listOrMapLiteral
-   *#          | "(" expression ")"
+   *#          | nestedExpr
    *#          | "do" "{" block "}"
    *#          | "{" closure "}"
    *#          | evalExpr
@@ -1241,13 +1338,6 @@ public class Parser {
    * </pre>
    */
   private Expr primary() {
-    Supplier<Expr> nestedExpression = () -> {
-      Expr nested = expression(true);  // parseExpression(0);
-      matchAny(EOL);
-      expect(RIGHT_PAREN);
-      return nested;
-    };
-
     Token prev = previous();
     matchAny(EOL);
     if (isPlusMinusNumber())                               { return getPlusMinusNumber();                 }
@@ -1259,20 +1349,46 @@ public class Parser {
     if (peek().is(IDENTIFIER))                             { return classPathOrIdentifier();              }
     if (peek().is(LEFT_SQUARE,LEFT_BRACE))                 { if (isMapLiteral()) { return mapLiteral(); } }
     if (matchAny(LEFT_SQUARE))                             { return listLiteral();                        }
-    if (matchAny(LEFT_PAREN))                              { return nestedExpression.get();               }
+    if (matchAny(LEFT_PAREN))                              { return nestedExpr();                         }
     if (matchAny(LEFT_BRACE))                              { return closure();                            }
     if (matchAny(EVAL))                                    { return evalExpr();                           }
     if (matchAny(NEW))                                     { return newInstance();                        }
     if (matchAny(DO)) {
       matchAny(EOL);
       Token leftBrace = expect(LEFT_BRACE);
-      return new Expr.Block(leftBrace, block(RIGHT_BRACE));
+      return new Expr.Block(leftBrace, block(RIGHT_BRACE), true);
     }
     if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
       // Allow keywords to be used in dotted paths. E.g: x.y.while.z
       return new Expr.Literal(new Token(STRING_CONST, advance()).setValue(previous().getChars()));
     }
     return unexpected("Expected start of expression");
+  }
+
+  /**
+   *# nestedExpOr -&gt; "(" expression ( "," expression ) * ")"
+   *#              | "(" expression ")"
+   * Returns a single expression or an ExprList if comma separated.
+   * Comma-separated expressions can be used in LHS of multi-assignments.
+   */
+  private Expr nestedExpr() {
+    Token      lparen = previous();
+    List<Expr> exprs    = new ArrayList<>();
+    // Keep building list while we have COMMA
+    do {
+      exprs.add(expression(true));
+    } while (matchAnyIgnoreEOL(COMMA));
+    matchAny(EOL);
+    expect(RIGHT_PAREN);
+    matchAny(EOL);
+
+    // If only one expression then return it but flag it as having been inside parentheses
+    if (exprs.size() == 1) {
+      Expr expr = exprs.get(0);
+      expr.wasNested = true;
+      return expr;
+    }
+    return new Expr.ExprList(lparen, exprs);
   }
 
   private Expr.Literal literal(Token previous, Token current) {
@@ -2281,6 +2397,7 @@ public class Parser {
       @Override public Boolean visitTypeExpr(Expr.TypeExpr expr)     { return true; }
       @Override public Boolean visitInstanceOf(Expr.InstanceOf expr) { return true; }
 
+      @Override public Boolean visitExprList(Expr.ExprList expr)           { return expr.exprs.stream().allMatch(this::isSimple); }
       @Override public Boolean visitCall(Expr.Call expr)                   { return isSimple(expr.callee) && expr.args.stream().allMatch(this::isSimple); }
       @Override public Boolean visitMethodCall(Expr.MethodCall expr)       { return isSimple(expr.parent) && expr.args.stream().allMatch(this::isSimple); }
       @Override public Boolean visitBinary(Expr.Binary expr)               { return isSimple(expr.left) && isSimple(expr.right);  }
@@ -2400,6 +2517,16 @@ public class Parser {
    * @param createIfMissing     true if missing fields in field path should be created
    */
   private Expr convertToLValue(Expr variable, Token assignmentOperator, Expr rhs, boolean beforeValue, boolean createIfMissing) {
+    if (variable instanceof Expr.ExprList) {
+      return convertToLvalue((Expr.ExprList)variable, assignmentOperator, rhs);
+    }
+    if (variable.wasNested) {
+      // If we had "(x)" instead of "x" then we need to treat as a multi-assign to make sure
+      // we treat rhs as a list of values in order that "(x) = [1]" gives x a value of 1 rather than [1].
+      variable.wasNested = false;
+      return convertToLvalue(new Expr.ExprList(variable.location, List.of(variable)), assignmentOperator, rhs);
+    }
+
     // Get the arithmetic operator type for assignments such as +=, -=
     // If assignment is just = or ?= then arithmeticOp will be null.
     TokenType arithmeticOp   = arithmeticOperator.get(assignmentOperator.getType());
@@ -2474,6 +2601,36 @@ public class Parser {
     // (before the inc/dec) as the result
     expr.isPreIncOrDec = beforeValue;
     return expr;
+  }
+
+  private Expr convertToLvalue(Expr.ExprList lhsExprs, Token equalToken, Expr rhsExpr) {
+    Token rhsToken   = rhsExpr.location;
+    Token rhsName    = rhsToken.newIdent(Utils.JACTL_PREFIX + "multiAssign" + uniqueVarCnt++);
+
+    Stmt.Stmts stmts = new Stmt.Stmts();
+
+    // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
+    // end of current scope - could handle this better but not a high priority since not an actual leak.
+    //: def _$jmultiAssignN = expression()
+    stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, false));
+
+    List<Expr> lhs = lhsExprs.exprs;
+    // For each expression in lhs create a "lvalue = _$jmultiAssignN[i]"
+    for (int i = 0; i < lhs.size(); i++) {
+      var assignExpr = convertToLValue(lhs.get(i),
+                                       equalToken,
+                                       new Expr.Binary(new Expr.Identifier(rhsName),
+                                                       new Token(LEFT_SQUARE, equalToken),
+                                                       new Expr.Literal(new Token(INTEGER_CONST, equalToken).setValue(i))),
+                                       false,
+                                       true);
+      assignExpr.isResultUsed = i == lhs.size() - 1;     // Use result of last assignment
+      stmts.stmts.add(new Stmt.ExprStmt(lhs.get(i).location, assignExpr));
+    }
+
+    Token lparen = lhsExprs.token;
+    var block = new Expr.Block(lparen, new Stmt.Block(lparen, stmts), false);
+    return block;
   }
 
   private void setCreateIfMissing(Expr expr) {

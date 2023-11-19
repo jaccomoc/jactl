@@ -460,15 +460,18 @@ public class ClassCompiler {
     var fieldVisitor = cv.visitField(ACC_PUBLIC, name, type.descriptor(), null, null);
     fieldVisitor.visitEnd();
 
-    // Add code to class initialiser to find a VarHandle and add to our static fieldsAndMethods map
-    classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
-    Utils.loadConst(classInit, name);
+    // If not an internal field
+    if (!name.startsWith(Utils.JACTL_PREFIX)) {
+      // Add code to class initialiser to find a VarHandle and add to our static fieldsAndMethods map
+      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
+      Utils.loadConst(classInit, name);
 
-    classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
-    classInit.visitLdcInsn(name);
-    classInit.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getField", "(Ljava/lang/String;)Ljava/lang/reflect/Field;", false);
+      classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
+      classInit.visitLdcInsn(name);
+      classInit.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getField", "(Ljava/lang/String;)Ljava/lang/reflect/Field;", false);
 
-    classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
+      classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
+    }
   }
 
   boolean debug() {

@@ -64,6 +64,9 @@ abstract class Expr {
   // the stack or not.
   boolean isResultUsed = true;
 
+  boolean wasNested = false;      // Set if expression was inside parentheses.
+                                  // So we can tell difference between "x = 1" and "(x) = [1]"
+
   // Marker interface to indicate whether MethodCompiler visitor for that element type
   // handles leaving result on stack or not (based on isResultUsed flag) or whether
   // result management needs to be done for it.
@@ -657,13 +660,15 @@ abstract class Expr {
   static class Block extends Expr {
     Token      token;
     Stmt.Block block;
-    Block(Token token, Stmt.Block block) {
+    boolean    resultIsTrue;     // for "do" blocks always return true
+    Block(Token token, Stmt.Block block, boolean resultIsTrue) {
       this.token = token;
       this.block = block;
+      this.resultIsTrue = resultIsTrue;
       this.location = token;
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
-    @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + "]"; }
+    @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + ", " + "resultIsTrue=" + resultIsTrue + "]"; }
   }
 
   /**
@@ -679,6 +684,23 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitTypeExpr(this); }
     @Override public String toString() { return "TypeExpr[" + "token=" + token + ", " + "typeVal=" + typeVal + "]"; }
+  }
+
+  /**
+   * Comma-separated list of expressions in parentheses.
+   * Used for multi-assignments: (x,y,z) = [1,2,3]
+   * Only used within Parser at the moment (unless we eventually support comma as an operator)
+   */
+  static class ExprList extends Expr {
+    Token      token;
+    List<Expr> exprs;
+    ExprList(Token token, List<Expr> exprs) {
+      this.token = token;
+      this.exprs = exprs;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitExprList(this); }
+    @Override public String toString() { return "ExprList[" + "token=" + token + ", " + "exprs=" + exprs + "]"; }
   }
 
   ////////////////////////////////////////////////////////////////////
@@ -928,6 +950,7 @@ abstract class Expr {
     T visitEval(Eval expr);
     T visitBlock(Block expr);
     T visitTypeExpr(TypeExpr expr);
+    T visitExprList(ExprList expr);
     T visitArrayLength(ArrayLength expr);
     T visitArrayGet(ArrayGet expr);
     T visitLoadParamValue(LoadParamValue expr);

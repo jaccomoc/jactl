@@ -1421,6 +1421,78 @@ class CompilerTest extends BaseTest {
     test("int x = 1; int y = 2; def z = 5; 4 + (x = y = z = 3) + y; x", 3);
   }
 
+  @Test public void multiDeclarations() {
+    test("def (x) = [1]; x", 1);
+    testError("def (x) = 1; x", "invalid parent object type");
+    test("def (def x) = [1]; x", 1);
+    test("def (def x, var y) = [1,2]; x + y", 3);
+    test("def f = {[1,2]}; def (def x, def y) = f(); x + y", 3);
+    test("def f = {[1,2]}; def (int x, int y) = f(); x + y", 3);
+    test("def f = {[1,2]}; def (x,y) = f(); x + y", 3);
+    testError("def f = {[1,2]}; def (def x, var y) = f(); x + y", "cannot infer type");
+    test("class X { def (x,y) = [1,2] }; def x = new X(); x.x + x.y", 3);
+    test("class X { def (x, var y) = [1,2] }; def x = new X(); x.x + x.y", 3);
+    test("class X { def f = {[1,2]}; def (x,y) = f() }; def x = new X(); x.x + x.y", 3);
+    testError("class X { def (x,y) }; def x = new X(); x.x + x.y", "missing mandatory fields");
+    test("class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; def x = new X(); x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; def (x,y) = [new X()]; x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; def (X x,y) = [new X()]; x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("package x.y.z; class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; x.y.z.X x = new X(); x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("package x.y.z; class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; def (x.y.z.X x,y) = [new X()]; x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; def (var x,y) = [new X()]; x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("class X { def f = {[1,2]}; def (x,y) = f(); def (a,b,c) = f() }; def (def x,y) = [new X()]; x.x + x.y + x.a + x.b == 6 && x.c == null", true);
+    test("def (x,y) = [a:1, b:2]; x == null && y == null", true);
+    testError("def (x,var y) = [a:1, b:2]; x == ['a',1] && y == ['b',2]", "right-hand side is non-list type");
+    test("def (x,y) = [1,2,3]", 2);
+    test("def (int x, int y) = ([1,2,3] as int[])", 2);
+    test("def (int x, int y) = ([1,2,3] as int[]); x + y", 3);
+    test("def (x,y); x == null && y == null", true);
+    test("def (int x, int y); x == 0 && y == 0", true);
+    testError("def (int x = 1, int y)", "unexpected token '='");
+  }
+
+  @Test public void multiAssignments() {
+    test("def a = [:]; a.('a' + 'b') = 1; a.ab", 1);
+    testError("def x; (x) = 1; x", "invalid parent object type");
+    test("def x; (x) = [1]; x", 1);
+    test("def x; return (x) = [1]", 1);
+    test("def x; (x) = [1]", 1);
+    test("def x,y; (x, y) = [1,2]; x + y", 3);
+    test("def x = []; (x[0], x[1]) = [1,2]; x[0] + x[1]", 3);
+    test("def x = [:]; (x.b.c[0], x.y.z) = [1,2]; x.b.c[0] + x.y.z", 3);
+    test("def x = [:]; (x.b.c[0], x.y.z) = 'abc'; x.b.c[0] + x.y.z", "ab");
+    testError("def x = [:]; (x.b.c[0], x.y.z) = 'a'; x.b.c[0] + x.y.z", "index out of bounds");
+    test("def f = {[1,2]}; def x; def y; (x,y) = f(); x + y", 3);
+    test("def f = {[1,2]}; def x; def y; ((x,y) = f()) + x + y", 5);
+    test("def (x,y) = [1,2]; (x,y) = [y,x]; \"x=$x,y=$y\"", "x=2,y=1");
+    test("int[] a = [1,2,3] as int[]; int x; int y; ((x,y) = a) + x + y", 5);
+    test("def a = [1,2,3]; int x; int y; (a[1],y) = a; y", 1);
+    test("List a = [1,2,3]; int y; (a[1],y) = a; y", 1);
+    test("int[] a = [1,2,3]; int y; (a[1],y) = a; y", 1);
+    test("def (x,y) = [1,2]; (x,y) = [y,x]; \"$x:$y\"", "2:1");
+    test("def (x,y) = [1,2]; ((x,y) = [y,x])", 1);
+    test("def (x,y) = [1,2]; ((x,y) = [y,x]) as String", "1");
+
+    test("def (a,b) = [[x:1,y:2], [x:3,y:4]]; ((a,b) = [b,a]) as String", "[x:1, y:2]");
+    test("class X { def (x,y) = [1,2] }; def (a,b) = [new X(x:1,y:2), new X(x:3,y:4)]; ((a,b) = [b,a]) as String", "[x:1, y:2]");
+    test("class X { def (x,y) = [1,2] }; def (a,b) = [new X(x:1,y:2), new X(x:3,y:4)]; def r = ((a,b) = [b,a]); r as String", "[x:1, y:2]");
+    test("class X { def (x,y) = [1,2] }; def (a,b) = [new X(x:1,y:2), new X(x:3,y:4)]; (a,b) = [b,a]; \"a=$a, b=$b\"", "a=[x:3, y:4], b=[x:1, y:2]");
+    test("def x,y; (x,y) = [1,2,3]", 2);
+
+    test("def a = [:]; def x; a.(x='b') = 1; a.b", 1);
+    test("def a = [:]; def (x,y)=['x','y']; a.((x,y) = ['a','b']) = 1; x + y + a.b", "ab1");
+    testError("(1,2,3)", "expression lists not supported");
+    testError("1 + (1,2,3)", "expression lists not supported");
+    testError("def x = 1; x + (1,2,3)", "expression lists not supported");
+
+    test("def a,b,c; (a,b) = [1,2]; (a,b) ?= [3,c]; a + b", 5);
+    test("def a,b,c; (a,b,c) = [1,[:],4]; (a,b.x.y) ?= [3,c]; \"$a:$b\"", "3:[x:[y:4]]");
+    test("def a,b,c; (a,b) = [1,[:]]; (a,b.x.y) ?= [3,c]; \"$a:$b\"", "3:[:]");
+    test("def (x,y) = [1,2]; (x,y) += [2,3]; x + y", 8);
+    testError("def (x,y) = [1,2]; (x,y)++; x + y", "expression lists not supported");
+    testError("def (x,y) = [1,2]; --(x,y); x + y", "expression lists not supported");
+  }
+
   @Test public void questionColon() {
     useAsyncDecorator = false;
     test("null ?: 1", 1);
@@ -3437,6 +3509,11 @@ class CompilerTest extends BaseTest {
     test("true and do { for(int i=0;i<10;i++); return false } and return true", false);
     test("def it = 'abc'; /ab/r and do { /c/r and return false } and return true", false);
     test("def x; def it = 'abc'; /ab/r and do { it = 'xyz'; x = 'x' } and return \"$it$x\"", "xyzx");
+    test("do { 1 }", true);
+    test("{ do { 1 } }", true);
+    test("def f = { do { 1 } }; f()", true);
+    test("def f() { do { 1 } }; f()", true);
+    test("do { int x = 1 }", true);
   }
 
   @Test public void listLiterals() {
@@ -5000,6 +5077,8 @@ class CompilerTest extends BaseTest {
     test("Map m; sleep(0,m).(sleep(0,'a')).b = 1", 1);
     test("def x; (x?:[:]).a = 2", 2);
     test("Map x; (x?:[:]).a = 2", 2);
+    test("Map x; x.('a' + 'b') = 2; x.ab", 2);
+    test("Map x; x.(true ? 'a' : 'b') = 2; x.a", 2);
   }
 
   @Test public void conditionalAssignment() {

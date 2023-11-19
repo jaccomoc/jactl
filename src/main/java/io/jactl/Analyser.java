@@ -174,6 +174,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Expr
 
+
+  @Override public Void visitExprList(Expr.ExprList expr) {
+    throw new UnsupportedOperationException("Internal error: expression lists not supported");
+  }
+
   @Override public Void visitCall(Expr.Call expr) {
     analyse(expr.callee);
     expr.args.forEach(this::analyse);
@@ -470,6 +475,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitBlock(Expr.Block expr) {
     analyse(expr.block);
+    if (!expr.resultIsTrue) {
+      // Our result will be result of last statement in block so compensate for additional slot
+      // created for us by adjusting automatic tally
+      freeLocals(1);
+    }
     return null;
   }
 

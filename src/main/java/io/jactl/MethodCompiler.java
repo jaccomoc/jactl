@@ -479,6 +479,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  @Override public Void visitExprList(Expr.ExprList expr) {
+    expr.exprs.forEach(this::compile);
+    return null;
+  }
+
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
     if (expr.isParam) {
       defineVar(expr);
@@ -2061,7 +2066,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitBlock(Expr.Block expr) {
     compile(expr.block);
-    loadConst(true);
+    if (expr.resultIsTrue) {
+      loadConst(true);
+    }
     return null;
   }
 
@@ -4654,21 +4661,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     convertToInt(expr.right.location);
     expect(2);        // in case parent has been stored in a local due to async in index expression
 
-    // Check for negative value (offset from length)
     Label NOT_NEGATIVE = new Label();
-    _dupVal();
-    mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
-    mv.visitInsn(SWAP);
-    mv.visitInsn(DUP_X1);
-    if (parentType.is(STRING)) {
-      push(STRING);
-      invokeMethod(String.class, "length");
-      popType();
+    // Check for negative value (offset from length) unless we have a constant value that is already >= 0
+    if (!expr.right.isConst || !(expr.right.constValue instanceof Number) || ((Number) expr.right.constValue).intValue() < 0) {
+      _dupVal();
+      mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
+      mv.visitInsn(SWAP);
+      mv.visitInsn(DUP_X1);
+      if (parentType.is(STRING)) {
+        push(STRING);
+        invokeMethod(String.class, "length");
+        popType();
+      }
+      else {
+        mv.visitInsn(ARRAYLENGTH);
+      }
+      mv.visitInsn(IADD);
     }
-    else {
-      mv.visitInsn(ARRAYLENGTH);
-    }
-    mv.visitInsn(IADD);
 NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
     tryCatch(IndexOutOfBoundsException.class, false,

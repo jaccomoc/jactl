@@ -66,6 +66,9 @@ class Expr {
   // the stack or not.
   boolean isResultUsed = true;
 
+  boolean wasNested = false;      // Set if expression was inside parentheses.
+                                  // So we can tell difference between "x = 1" and "(x) = [1]"
+
   // Marker interface to indicate whether MethodCompiler visitor for that element type
   // handles leaving result on stack or not (based on isResultUsed flag) or whether
   // result management needs to be done for it.
@@ -434,6 +437,7 @@ class Expr {
   class Block extends Expr {
     Token      token;
     Stmt.Block block;
+    boolean    resultIsTrue;     // for "do" blocks always return true
   }
 
   /**
@@ -442,6 +446,16 @@ class Expr {
   class TypeExpr extends Expr {
     Token      token;
     JactlType typeVal;
+  }
+
+  /**
+   * Comma-separated list of expressions in parentheses.
+   * Used for multi-assignments: (x,y,z) = [1,2,3]
+   * Only used within Parser at the moment (unless we eventually support comma as an operator)
+   */
+  class ExprList extends Expr {
+    Token      token;
+    List<Expr> exprs;
   }
 
   ////////////////////////////////////////////////////////////////////
