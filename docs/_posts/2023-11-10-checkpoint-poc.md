@@ -1,25 +1,25 @@
 ---
 layout:     post
-title:      "Checkpoint Replication Proof Of Concept"
+title:      "Proof of Concept: 20,000 Payments per Second with Checkpoint Replication"
 date:       2023-11-10 15:11:44 +1100
 categories: blog
 author:     "James Crawford"
 image:      /assets/logo2-picture.jpg
 ---
 
-Jactl 1.3.0 introduces the ability to checkpoint the current execution state of a script and have it restored and
+[Jactl](https://jactl.io) 1.3.0 introduces the ability to checkpoint the current execution state of a script and have it restored and
 resumed elsewhere after a failure.
 In order to test this new feature, I implemented a proof-of-concept project that simulates a payment processing
 system that accepts payment requests, performs some operations by interacting with multiple external systems and then
 returns a response.
-The payment processing checkpoints its state when required and if a failure occurs payments in flight will have their
+The payment processing system checkpoints its state when required and if a failure occurs, payments in flight will have their
 state restored and resumed to make sure that no payment is lost.
 
 ## Jactl Checkpoints
 
-Jactl is a scripting language intended to be embedded into real-time Java applications and doesn't itself offer
-any mechanism for persisting or replicating the checkpoint state.
-Instead, it provides hooks that need to be implemented by the application if the checkpoints are to be persisted or 
+Jactl is a open source scripting language intended to be embedded into real-time Java applications.
+It doesn't itself offer any mechanism for persisting or replicating the checkpoint state but,
+instead, provides hooks that need to be implemented by the application if the checkpoints are to be persisted or 
 replicated.
 These hooks allow the application to know when a new checkpoint has been generated for a running script and when a
 running script instance has finished (which allows the application to then delete any checkpoints for that instance
@@ -28,7 +28,7 @@ There is also a hook for the application to use when recovering after a failure 
 instance and resume its execution from where it left off.
 
 Since Jactl scripts never block (from a Java thread point of view), whenever a script invokes a function that would
-otherwise block such as sending a request to a remote system and needing to wait for a response, or reading some
+otherwise block, such as sending a request to a remote system and needing to wait for a response, or reading some
 data from a database, Jactl captures the current execution state in a `Continuation` object (actually a chain of
 `Continuation` objects; one per stack frame) and when the response is ready to be processed the execution state is
 resumed.
@@ -46,13 +46,13 @@ the script instance state and continue execution from where it had been checkpoi
 To implement a proof-of-concept of the checkpoint facility, I used the publish/subscribe mechanism provided by the 
 [NATS](https://nats.io) messaging infrastructure.
 I wrote a generic Jactl Server that takes a directory of Jactl scripts and for each script listens on a NATS topic of
-the same name.
+the same name and then provided it with a Jactl script for processing payment requests.
 
 NATS allows multiple instances of an application to listen on the same topic and will automatically spread the load
 across those instances.
 Clients can then send requests to a topic and NATS will forward it to one of the instances subscribed to that topic.
 
-> NATS also supports reliable message streams (called JetStream) but this was not used for this project.
+> Note that although NATS also supports reliable message streams (called JetStream), this was not used for this project.
 > Since we are checkpointing our state when necessary, we rely on the checkpointing to provide reliability and use
 > standard NATS messaging without any reliability guarantees.
 
@@ -60,15 +60,15 @@ All messages between the different components were encoded in JSON using the nat
 
 ## Kubernetes
 
-To make it easy to scale up multiple application instances, I deployed all the simulators (including the
-load generator, the simulators for the external systems, and the payment processing simulator itself) in a Kubernetes
+To make it easy to scale up multiple application instances, I deployed the payment processor instances and the simulators
+(including the load generator and the simulators for the external systems) in a Kubernetes
 cluster and captured metrics in Prometheus that I could then view in Grafana.
 
 ## Checkpoint Persistence, Replication, and Recovery
 
 For the proof-of-concept I decided to write the checkpoints locally to volumes attached to each application instance.
 The volumes are handled by Kubernetes and are attached to the pods (the application instances) when they are started.
-If a pod dies, it will be restarted by Kubernetes, and it will be given the same persistent volume as the before.
+If a pod dies, it will be restarted by Kubernetes, and it will be given the same persistent volume as before.
 
 In order to provide additional fault tolerance, the checkpoints, as well as being written locally to the file system
 belonging to that pod instance, are replicated to another pod instance where they are also stored in the file system
@@ -102,8 +102,9 @@ an Alias Lookup via a callout to another external system to find the destination
 needs to be sent, sends the authorisation, and then responds back with the result.
 
 The payment application does an early acknowledgement back to the requester once it has a token and has done the alias
-lookup and we checkpoint our state at this point so that the caller knows that once it gets that early acknowledgement 
-that there is a guarantee that the payment will be processed even if a failure later occurs.
+lookup and we checkpoint our state at this point.
+The caller therefore knows that once it gets that early acknowledgement there is a guarantee that the payment
+will be processed even if a failure later occurs.
 
 We also checkpoint our state after getting the response from the bank.
 
@@ -136,10 +137,17 @@ As the graph shows, the impact of the pod failures on the throughput was pretty 
 ![](/assets/checkpoint_poc_grafana2.png)
 
 
-There is also a graph showing if there are any long-running payments (from the payment load generator's point of view).
+On the dashboard shown there is also a graph of "Long Running Requests" showing if there are any long-running payments
+(from the payment load generator's point of view).
 This shows the number of payments where the early acknowledgement has been received but for which the final response
 has still not been received after 2 seconds.
 If there was a problem with recovering script execution state after a failure then we would expect to see this count
 be non-zero.
 Given that it remains at zero for the entire run it shows that all such payments were recovered and 
 completed successfully.
+
+## Further Reading
+
+For information about Jactl, see the Jactl documentation [web-site](https://jactl.io).
+
+The project is hosted on [github](https://github.com/jaccomoc/jactl).
