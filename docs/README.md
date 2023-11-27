@@ -12,6 +12,9 @@ It is especially suited to event-loop/reactive applications due to its built-in 
 mechanism based on continuations that ensures it never blocks the execution thread on which it is
 running.
 
+:star: Please consider giving this project a star as a way to encourage me to continue making improvements
+to Jactl. Thanks!
+
 ## Features
 
 ### Familiar Syntax
