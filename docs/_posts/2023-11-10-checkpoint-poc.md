@@ -4,7 +4,7 @@ title:      "Proof of Concept: 20,000 Payments per Second with Checkpoint Replic
 date:       2023-11-10 15:11:44 +1100
 categories: blog
 author:     "James Crawford"
-image:      /assets/logo2-picture.jpg
+image:      /assets/logo-picture.jpg
 ---
 
 [Jactl](https://jactl.io) 1.3.0 introduces the ability to checkpoint the current execution state of a script and have it restored and
