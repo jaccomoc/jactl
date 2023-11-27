@@ -13,7 +13,7 @@ mechanism based on continuations that ensures it never blocks the execution thre
 running.
 
 :star: Please consider giving this project a star as a way to encourage me to continue making improvements
-to Jactl. Thanks!
+to Jactl.
 
 ## Features
 
