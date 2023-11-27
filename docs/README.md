@@ -1,6 +1,6 @@
 # Jactl Programming Language
 
-![logo](docs/assets/logo-picture.jpg "Jactl")
+![logo](https://jactl.io/assets/logo-picture.jpg "Jactl")
 
 [Jactl](https://jactl.io) is a powerful scripting language for the JVM platform whose syntax is a combination of bits
 from Java, Groovy, and Perl.
