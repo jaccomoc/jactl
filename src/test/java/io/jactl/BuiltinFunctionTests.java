@@ -783,6 +783,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = 3\n[[1],[2]].size()", 2);
   }
 
+  @Test public void testStuff() {
+    test("[a:'abc'].each{ it[1] =~ s/b/x/ }", null);
+  }
+
   @Test public void mapEach() {
     test("[:].each{ x,y -> ; }", null);
     test("[:].each{}", null);

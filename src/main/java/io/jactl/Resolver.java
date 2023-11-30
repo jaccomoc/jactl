@@ -96,7 +96,7 @@ import static io.jactl.TokenType.*;
  */
 public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
-  private final JactlContext            jactlContext;
+  private final JactlContext             jactlContext;
   private final Map<String,Object>       globals;
   private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
   private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
@@ -172,7 +172,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  JactlType resolveClassAllowed(Expr expr) {
+    return doResolve(expr);
+  }
+
   JactlType resolve(Expr expr) {
+    var type = doResolve(expr);
+    classNameValidation(expr);
+    return type;
+  }
+
+  JactlType doResolve(Expr expr) {
     if (expr != null) {
       if (!expr.isResolved) {
         var        result = expr.accept(this);
@@ -393,6 +403,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   // = Stmt
 
+
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
     stmt.nestedFunctions = new ArrayDeque<>();
     // Create a dummy function to hold class block
@@ -516,7 +527,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   // = Expr
 
-
   @Override public JactlType visitExprList(Expr.ExprList expr) {
     error("Expression lists not supported", expr.location);
     return null;
@@ -596,7 +606,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitBinary(Expr.Binary expr) {
-    resolve(expr.left);
+    if (expr.operator.is(DOT,QUESTION_DOT)) {
+      resolveClassAllowed(expr.left);
+    }
+    else {
+      resolve(expr.left);
+    }
     resolve(expr.right);
 
     expr.isConst = expr.left.isConst && expr.right.isConst;
@@ -653,10 +668,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr.operator.is(AS)) {
       assert expr.right instanceof Expr.TypeExpr;
       expr.isConst = false;
-      if (!expr.left.type.isConvertibleTo(expr.right.type)) {
-        error("Cannot coerce from " + expr.left.type + " to " + expr.right.type, expr.operator);
+      assert expr.right instanceof Expr.TypeExpr;
+      var typeExpr = (Expr.TypeExpr)expr.right;
+      if (!expr.left.type.isConvertibleTo(typeExpr.typeVal)) {
+        error("Cannot coerce from " + expr.left.type + " to " + typeExpr.typeVal, expr.operator);
       }
-      return expr.type = expr.right.type;
+      return expr.type = typeExpr.typeVal;
     }
 
     expr.type = JactlType.result(expr.left.type, expr.operator, expr.right.type);
@@ -870,8 +887,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public JactlType visitLiteral(Expr.Literal expr) {
     // Whether we optimise const expressions by evaluating at compile time
     // is controlled by CompileContext (defaults to true).
-    expr.isConst    = jactlContext.evaluateConstExprs;
-    expr.constValue = expr.value.getValue();
+      expr.isConst = jactlContext.evaluateConstExprs;
+      expr.constValue = expr.value.getValue();
 
     switch (expr.value.getType()) {
       case BYTE_CONST:    return expr.type = BYTE;
@@ -896,15 +913,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitListLiteral(Expr.ListLiteral expr) {
-    expr.exprs.forEach(this::resolve);
+      expr.exprs.forEach(this::resolve);
     return expr.type = LIST;
   }
 
   @Override public JactlType visitMapLiteral(Expr.MapLiteral expr) {
-    expr.entries.forEach(entry -> {
-      resolve(entry.first);
-      resolve(entry.second);
-    });
+      expr.entries.forEach(entry -> {
+        resolve(entry.first);
+        resolve(entry.second);
+      });
     return expr.type = MAP;
   }
 
@@ -1291,7 +1308,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitMethodCall(Expr.MethodCall expr) {
-    resolve(expr.parent);
+    resolveClassAllowed(expr.parent);
     // Flag as chained method call so that if parent call has a result of Iterator
     // it can remain as an Iterator. Otherwise, calls that result in Iterators have
     // the result converted to a List. It is only if we are chaining method calls
@@ -1457,8 +1474,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private void insertStmt(Stmt.VarDecl declStmt) {
     var currentStmts = getBlock().currentResolvingStmts;
-    currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
-    currentStmts.currentIdx++;
+      currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
+      currentStmts.currentIdx++;
   }
 
   private JactlType evaluateConstExpr(Expr.Binary expr) {
@@ -1507,9 +1524,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (expr.operator.getType().isBooleanOperator()) {
-      expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
-                                               RuntimeUtils.getOperatorType(expr.operator.getType()),
-                                               expr.operator.getSource(), expr.operator.getOffset());
+        expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
+                                                 RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                                 expr.operator.getSource(), expr.operator.getOffset());
       return expr.type = BOOLEAN;
     }
 
@@ -2078,7 +2095,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * implicit returns in functions into explicit returns to simplify the job of the Resolver and Compiler phases.
    */
   private Stmt explicitReturn(Stmt stmt, JactlType returnType) {
-      return doExplicitReturn(stmt, returnType);
+    return doExplicitReturn(stmt, returnType);
   }
 
   private Stmt doExplicitReturn(Stmt stmt, JactlType returnType) {
@@ -2095,36 +2112,36 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (stmt instanceof Stmt.Block || stmt instanceof Stmt.Stmts) {
       List<Stmt> stmts = stmt instanceof Stmt.Block ? ((Stmt.Block) stmt).stmts.stmts : ((Stmt.Stmts) stmt).stmts;
       if (stmts.size() == 0) {
-        if (returnType.isPrimitive()) {
-          error("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
+          if (returnType.isPrimitive()) {
+            error("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
+          }
+          stmts.add(returnStmt(stmt.location, returnType));
         }
-        stmts.add(returnStmt(stmt.location, returnType));
+        else {
+          Stmt newStmt = explicitReturn(stmts.get(stmts.size() - 1), returnType);
+          stmts.set(stmts.size() - 1, newStmt);   // Replace implicit return with explicit if necessary
+        }
+        return stmt;
       }
-      else {
-        Stmt newStmt = explicitReturn(stmts.get(stmts.size() - 1), returnType);
-        stmts.set(stmts.size() - 1, newStmt);   // Replace implicit return with explicit if necessary
-      }
-      return stmt;
-    }
 
     if (stmt instanceof Stmt.If) {
       Stmt.If ifStmt = (Stmt.If) stmt;
       if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
-        if (returnType.isPrimitive()) {
-          error("Implicit return of null for " +
+          if (returnType.isPrimitive()) {
+            error("Implicit return of null for " +
                                  (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
-        }
+          }
         if (ifStmt.trueStmt == null) {
           ifStmt.trueStmt = returnStmt(ifStmt.ifToken, returnType);
-        }
+          }
         if (ifStmt.falseStmt == null) {
           ifStmt.falseStmt = returnStmt(ifStmt.ifToken, returnType);
+          }
         }
-      }
       ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
       ifStmt.falseStmt = doExplicitReturn(((Stmt.If) stmt).falseStmt, returnType);
-      return stmt;
-    }
+        return stmt;
+      }
 
     // Turn implicit return into explicit return
     if (stmt instanceof Stmt.ExprStmt) {
@@ -2140,25 +2157,25 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // and replace the assignment statement with a return wrapping the assignment expression.
     if (stmt instanceof Stmt.VarDecl) {
       Expr.VarDecl declExpr = ((Stmt.VarDecl) stmt).declExpr;
-      // Don't use parameter declarations as value to return
-      if (!declExpr.isExplicitParam) {
+        // Don't use parameter declarations as value to return
+        if (!declExpr.isExplicitParam) {
+          declExpr.isResultUsed = true;
+          Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
+          return returnStmt;
+        }
+      }
+
+        // If last statement is a function declaration then we return the MethodHandle for the
+        // function as the return value of our function
+        // We set a flag on the statement so that Compiler knows to leave result on the stack
+        // and replace the assignment statement with a return wrapping the assignment expression.
+    if (stmt instanceof Stmt.FunDecl) {
+      Expr.FunDecl declExpr = ((Stmt.FunDecl)stmt).declExpr;
         declExpr.isResultUsed = true;
+        declExpr.varDecl.isResultUsed = true;
         Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
         return returnStmt;
       }
-    }
-
-    // If last statement is a function declaration then we return the MethodHandle for the
-    // function as the return value of our function
-    // We set a flag on the statement so that Compiler knows to leave result on the stack
-    // and replace the assignment statement with a return wrapping the assignment expression.
-    if (stmt instanceof Stmt.FunDecl) {
-      Expr.FunDecl declExpr = ((Stmt.FunDecl)stmt).declExpr;
-      declExpr.isResultUsed = true;
-      declExpr.varDecl.isResultUsed = true;
-      Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
-      return returnStmt;
-    }
 
     // For functions that return an object (i.e. not a primitive) there is an implicit "return null"
     // even if last statement does not have a value so replace stmt with list of statements that
@@ -2826,5 +2843,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     funDecl.block = block;
     Utils.createVariableForFunction(funDeclStmt);
     return funDeclStmt;
+  }
+
+  private void classNameValidation(Expr expr) {
+    if (expr == null || expr instanceof Expr.Noop) {
+      return;
+    }
+    if (!(expr instanceof Expr.TypeExpr) && !(expr instanceof Expr.InvokeInit) && expr.type.is(CLASS)) {
+      error("Class name not allowed here", expr.location);
+    }
   }
 }

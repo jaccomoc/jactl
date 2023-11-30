@@ -7174,6 +7174,21 @@ class CompilerTest extends BaseTest {
     testError("def x = [a:1]; x - 1", "cannot subtract");
   }
 
+  @Test public void classNameErrors() {
+    testError("class X{}\nX\n1", "class name not allowed");
+    testError("class X{}; ++X", "class name not allowed");
+    testError("class X{ class Y{} }; ++X.Y", "class name not allowed");
+    testError("class X{}; X++", "class name not allowed");
+    testError("class X{}; !X", "class name not allowed");
+    testError("class X{ class Y{} }; !X.Y", "class name not allowed");
+    testError("class X{}; X == 1", "class name not allowed");
+    testError("class X{}; X; 1", "class name not allowed");
+    testError("class X{}; X", "class name not allowed");
+    testError("class X{}; def x = X; 1", "class name not allowed");
+    testError("int; 1", "unexpected token 'int'");
+    testError("def x = int; 1", "unexpected token 'int'");
+  }
+
   @Test public void andOrNot() {
     test("not true", false);
     test("not false", true);

@@ -39,9 +39,9 @@ public class ClassTests extends BaseTest {
     test("class X{int i}; {def X = new X(2); return X.i}", 2);
     testError("def x = 1; class A { static def f(){x} }; A.f()", "unknown variable");
     testError("def x = 1; class A { def f(){x} }; A.f()", "unknown variable");
-    testError("class X {}; def x = X", "cannot convert");
-    testError("class X {}; def x; x = X", "cannot convert");
-    testError("class X {}; def f(){X}; def x; x = f()", "not compatible");
+    testError("class X {}; def x = X", "class name not allowed");
+    testError("class X {}; def x; x = X", "class name not allowed");
+    testError("class X {}; def f(){X}; def x; x = f()", "class name not allowed");
   }
 
   @Test public void asyncInitialisers() {
