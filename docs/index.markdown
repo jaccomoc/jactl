@@ -5,7 +5,7 @@ image: /assets/logo-picture.jpg
 
 <h1 style="text-align:center;color:#2240aa;">A scripting language for Java-based applications</h1>
 
-Jactl is a powerful scripting language for Java-based applications whose syntax is a combination of bits
+[Jactl](https://github.com/jaccomoc/jactl) is a powerful scripting language for Java-based applications whose syntax is a combination of bits
 borrowed from Java and Groovy, with a dash of Perl thrown in for good measure.
 See [Jactl Language Features](/language-features) for a quick overview of some of the language features
 or [Jactl Language Guide](/language-guide) for a full description of the language.
