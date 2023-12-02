@@ -266,6 +266,9 @@ public class RegexMatcher implements Checkpointable {
 
       // See if we have a number we can parse
       String value = matcher.group(group);
+      if (value == null) {
+        return null;
+      }
       if (value.indexOf('.') == -1) {
         try {
           return Long.parseLong(value);
