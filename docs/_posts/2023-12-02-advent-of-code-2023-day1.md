@@ -1,9 +1,10 @@
 ---
-layout: post
-title:  "Advent Of Code 2023 - Day 1"
-date:   2023-12-02T13:53:36+11:00
+layout:     post
+title:      "Advent Of Code 2023 - Day 1"
+date:       2023-12-02T13:53:36+11:00
 categories: blog
-author: "James Crawford"
+image:      /assets/logo-picture.jpg
+author:     "James Crawford"
 ---
 
 Another year has come around quickly and so another chance to have some fun solving the Advent Of Code puzzles for 2023.
