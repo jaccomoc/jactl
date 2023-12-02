@@ -67,9 +67,6 @@ So assuming we have a line like this:
 
 We then need to convert that to `12` rather than `32`.
 
-I was determined to make this work with regular expressions, but I have to say that it was not a trivial job to
-get the right regular expression.
-
 One of the problems I encountered is that making it work for examples like the one above was not too hard but
 if the line was instead something like this:
 
@@ -78,11 +75,23 @@ if the line was instead something like this:
 we have to get `31` but my initial naive approach would return `32` because the `two` was matched even though
 `one` was actually the match we wanted.
 
+The other issue is support input like:
+
+    threeight
+
+In theory this should return `38` as the value.
+It is not clear from the problem description whether this is possible or not but I decided to make the solution
+cater for this type of input anyway.
+While it probably possible to make a single regex which can support overlapping digits like this, it was easier
+to split it up into one regex for the first digit and one for the second.
+
 In the end this is the solution I came up with:
 ```groovy
 def vals = [zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9] + (10.map{ ["$it",it] } as Map)
 def n = vals.map{it[0]}.join('|')      // number pattern
-stream(nextLine).map{ /^.*?($n)(.*($n)((?!($n)).)*$)?/r; 10*vals[$1] + vals[$3 ?: $1] }.sum()
+stream(nextLine).map{ [/^.*?($n)/r, vals[$1], /.*($n)((?!($n)).)*$/r, vals[$1]] }
+                .map{ 10 * it[1] + it[3] }
+                .sum()
 ```
 
 The approach I took was to construct a map of words to numeric values, including the digits themselves as keys in
@@ -92,11 +101,20 @@ It ends up being:
 
     zero|one|two|three|four|five|six|seven|eight|nine|0|1|2|3|4|5|6|7|8|9
 
-I then plug this string into the actual pattern in three different places in the pattern `/^.*?($n)(.*($n)((?!($n)).)*$)?/`
-1. where we match the first "digit",
-2. the match for the second digit, and
-3. where we use a pattern to indicate anything that does not match this digit pattern.
+We then use two patterns.
+One for the first digit `/^.*?($n)/` which uses a non-greedy match for characters at the beginning of the line to
+therefore find the first set of characters that matches our digits pattern stored in `n`.
+The `$1` value then ends up being the matching value which we look up in `vals` to get the numeric value.
 
-By using a greedy match at the start of the second group (the optional matching group) we make sure that in situations
-where we have `twone` or `oneight`, for example, we skip the first number and use the last characters as the ones to
-match on.
+The second regex is `/.*($n)((?!($n)).)*$/` where we use a greedy match to grab everything possible at the start of
+the line and then find the characters matching `$n` where there are no further matches for `$n` that occur after.
+Again `$1` will have the result.
+
+The `map` method converts each line to a list of four values being:
+1. Regex match value for first digit (always `true`)
+2. The numeric value of the matched digit characters,
+3. The regex match value for the second digit (always `true`), and
+4. The numeric value of the matched second digit characters.
+
+Then we calculate the number by multiplying the first digit by 10 and adding the second one and finally, sum all of
+these numbers together.
