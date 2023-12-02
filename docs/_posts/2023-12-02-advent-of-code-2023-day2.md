@@ -65,7 +65,8 @@ Then we multiply these counts together for each game and sum these products for 
 
 ```groovy
 stream(nextLine).map{ it.split(/: /)[1].split(/;/)
-                        .flatMap{ it.split(/,/).map{ /(\d+) (.*)/n; [$2,$1] } }.sort() as Map }
+                        .flatMap{ it.split(/,/).map{ /(\d+) (.*)/n; [$2,$1] } }
+                        .sort() as Map }
                 .map{ it.reduce(1){ prod,entry -> prod * entry[1] } }.sum()
 ```
 
