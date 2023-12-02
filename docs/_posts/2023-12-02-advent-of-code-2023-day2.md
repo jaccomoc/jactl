@@ -64,12 +64,9 @@ Each game, therefore, gets its own minimum bag with a count per colour.
 Then we multiply these counts together for each game and sum these products for the final solution:
 
 ```groovy
-stream(nextLine).map{ /Game (\d+): (.*)$/n;
-                      $2.split(/;/)
-                        .flatMap{ it.split(/,/).map{ /(\d+) (.*)/n; [$2,$1] } }
-                        .sort() as Map }
-                .map{ it.reduce(1){ prod,entry -> prod * entry[1] } }
-                .sum()
+stream(nextLine).map{ it.split(/: /)[1].split(/;/)
+                        .flatMap{ it.split(/,/).map{ /(\d+) (.*)/n; [$2,$1] } }.sort() as Map }
+                .map{ it.reduce(1){ prod,entry -> prod * entry[1] } }.sum()
 ```
 
 The only trick here is to generate a simple list of [colour, count] for each game and then sort these so that
