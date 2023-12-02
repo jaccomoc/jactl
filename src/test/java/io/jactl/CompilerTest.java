@@ -17,10 +17,7 @@
 
 package io.jactl;
 
-import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.RuntimeState;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -1544,6 +1541,13 @@ class CompilerTest extends BaseTest {
     test("def x = (byte)1; def y = (byte)2; true ? x : y", (byte)1);
     test("def x = (byte)1; def y = 2; true ? x : y", (byte)1);
     test("def x = (byte)1; def y = 2; true ? x : (int)y", (byte)1);
+    test("(2 ?: 1)\n 1+2\n", 3);
+  }
+
+  @Test public void bracketedExpressionsEndOfStatment() {
+    test("(2)\n 1+2\n", 3);
+    test("(2 + 1)\n 1+2\n", 3);
+    test("(2 + 1); 1+2\n", 3);
   }
 
   @Test public void plusEquals(){

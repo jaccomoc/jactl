@@ -1329,7 +1329,7 @@ public class Parser {
    *#          | regexSubstitute
    *#          | (IDENTIFIER | classPath)
    *#          | listOrMapLiteral
-   *#          | nestedExpr
+   *#          | "(" nestedExpr ")"
    *#          | "do" "{" block "}"
    *#          | "{" closure "}"
    *#          | evalExpr
@@ -1380,7 +1380,6 @@ public class Parser {
     } while (matchAnyIgnoreEOL(COMMA));
     matchAny(EOL);
     expect(RIGHT_PAREN);
-    matchAny(EOL);
 
     // If only one expression then return it but flag it as having been inside parentheses
     if (exprs.size() == 1) {
