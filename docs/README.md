@@ -126,7 +126,7 @@ See [Language Features](https://jactl.io/language-features) for an overview of t
 ## Download
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/1.3.0/jactl-1.3.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.3.0/jactl-1.3.0.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/1.3.1/jactl-1.3.1.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.3.1/jactl-1.3.1.jar)
 
 To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
 [jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
@@ -164,7 +164,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '1.3.0'
+implementation group: 'io.jactl', name: 'jactl', version: '1.3.1'
 ```
 
 ### Maven
@@ -174,7 +174,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>1.3.0</version>
+ <version>1.3.1</version>
 </dependency>
 ```
 

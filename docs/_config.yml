@@ -36,7 +36,7 @@ plugins:
   - jekyll-feed
 
 content:
-  jactl_version: 1.3.0
+  jactl_version: 1.3.1
 
 # Exclude from processing.
 # The following items will not be processed, by default.
