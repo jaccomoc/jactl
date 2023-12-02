@@ -48,21 +48,21 @@ $ java -cp jactl-repl-{{ site.content.jactl_version }}.jar jactl.Repl
 To exit the REPL use the `:q` command or `ctrl-D`.
 
 Anything that does not start with `:` is interpreted as Jactl code and is evaluated immediately and the result
-of the evaluation is printed before prompting again (hence the term read-evaluate-print-loop). For each line that 
+of the evaluation is printed before prompting again (hence the term read-evaluate-print-loop). For each line that
 is read, if the code does not look like it is complete the REPL will keep reading until it gets a complete
 expression or statement that can be executed:
 ```groovy
 > 3 * 4
 12
-> int x = (17 * 13) % 6
-5        
-> if (x < 4) {
-    println 'x is less than 4'
-  } else {
-    println 'x is not less than 4'
-  }
+        > int x = (17 * 13) % 6
+5
+        > if (x < 4) {
+ println 'x is less than 4'
+} else {
+ println 'x is not less than 4'
+}
 x is not less than 4
->
+                           >
 ```
 
 See [Jactl REPL](https://github.com/jaccomoc/jactl-repl) for more details on how to run the REPL.
@@ -125,14 +125,14 @@ Jactl will treat the newline as whitespace. For example:
 ```groovy
 def x = [1,2,3]
 if (
-  x
-  [0]
+        x
+ [0]
 ) {
-  x = [4,5,6]
+ x = [4,5,6]
 }
 ```
 In this case, the newlines within the `if` statement condition will be treated as whitespace and the expression
-will be interpreted as `x[0]`.  
+will be interpreted as `x[0]`.
 
 # Comments
 
@@ -142,9 +142,9 @@ can be either embeeded within a single line or span multiple lines:
 ```groovy
 > int x = 3         // define a new variable x
 3
-> int y = /* comment */ x * 4
+        > int y = /* comment */ x * 4
 12
-> int /* this
+        > int /* this
     is a multi-line comment
   */ z = x * y // another comment at the end of the line
 36
@@ -162,11 +162,11 @@ current value is retrieved and used within that expression:
 ```groovy
 > int x = 4
 4
-> x = 3 * 8
+        > x = 3 * 8
 24
-> int y    // gets default value of 0
+        > int y    // gets default value of 0
 0
-> y = x / 6
+        > y = x / 6
 4
 ```
 
@@ -181,7 +181,7 @@ Variable names cannot clash with any built-in language [keywords](/language-guid
 > int for = 3
 Unexpected token 'for': Expecting identifier @ line 1, column 5
 int for = 3
-    ^
+        ^
 ```
 
 > **Note**<br/>
@@ -247,11 +247,11 @@ Jactl will then create a variable of the same type as the initialisation express
 ```groovy
 > var x = 1       // x will have type int
 1
-> var y = 2L      // y will have type long
+        > var y = 2L      // y will have type long
 2
-> var z = x + y   // z will have type long since adding int and long results in a long
+        > var z = x + y   // z will have type long since adding int and long results in a long
 3
-> var label = 'some place'  // label has type String
+        > var label = 'some place'  // label has type String
 some place
 ```
 
@@ -264,7 +264,7 @@ types at different points in time:
 ```groovy
 > def x = 123
 123
-> x = 'string value'
+        > x = 'string value'
 string value
 ```
 
@@ -273,14 +273,14 @@ parameter type are specified as `int`:
 ```groovy
 > int fib(int x) { x < 2 ? x : fib(x-1) + fib(x-2) }
 Function@1534755892
-> fib(20)
+        > fib(20)
 6765
 ```
 Here is the same function where we use `def` instead:
 ```groovy
 > def fib(def x) { x < 2 ? x : fib(x-1) + fib(x-2) }
 Function@26757919
-> fib(20)
+        > fib(20)
 6765
 ```
 
@@ -288,7 +288,7 @@ For parameters, the type is optional and if not present it is as though `def` we
 ```groovy
 > def fib(x) { x < 2 ? x : fib(x-1) + fib(x-2) }
 Function@45822040
-> fib(20)
+        > fib(20)
 6765
 ```
 
@@ -312,8 +312,8 @@ To force a literal value to be a `long` rather than an `int` append `L` to the n
 > 9223372036854775807
 Error at line 1, column 1: Integer literal too large for int
 9223372036854775807
-^
-> 9223372036854775807L
+        ^
+        > 9223372036854775807L
 9223372036854775807
 ```
 
@@ -337,7 +337,7 @@ To illustrate how Decimal values and double values behave differently, consider 
 ```groovy
 > 12.12D + 12.11D     // floating point double values give approximate value
 24.229999999999997
-> 12.12 + 12.11       // Decimal values give exact value
+        > 12.12 + 12.11       // Decimal values give exact value
 24.23
 ```
 
@@ -411,9 +411,9 @@ To convert back from a Unicode number to a single character string use the `asCh
 ```groovy
 > 97.asChar()
 a
-> def x = (int)'X'
+        > def x = (int)'X'
 88
-> x.asChar()
+        > x.asChar()
 X
 ```
 
@@ -440,11 +440,11 @@ The `in` and `!in` operators can be used to check for substrings within a string
 ```groovy
 > 'x' in 'xyz'
 true
-> 'bc' in 'abcd'
+        > 'bc' in 'abcd'
 true
-> 'xy' in 'abc'
+        > 'xy' in 'abc'
 false
-> 'ab' !in 'xyz'
+        > 'ab' !in 'xyz'
 true
 ```
 
@@ -456,20 +456,20 @@ expanded in the string:
 ```groovy
 > def x = 5
 5
-> "x = $x"
+        > "x = $x"
 x = 5
-> def msg = 'some message'
+        > def msg = 'some message'
 some message
-> "Received message '$msg' from sender"
+             > "Received message '$msg' from sender"
 Received message 'some message' from sender
 ```
 If the expression is surrounded in `{}` then any arbitrary Jactl expression can be included:
 ```groovy
 > def str = 'xyz'
 xyz
-> def i = 3
+        > def i = 3
 3
-> "Here are $i copies of $str: ${str * i}"
+        > "Here are $i copies of $str: ${str * i}"
 Here are 3 copies of xyz: xyzxyzxyz
 ```
 You can, of course, have further nested interpolated strings within the expression itself:
@@ -482,9 +482,9 @@ quotes:
 ```groovy
 > def x = 'pol'
 pol
-> def y = 'ate'
+        > def y = 'ate'
 ate
-> """This is a multi-line
+        > """This is a multi-line
   inter${x + y + 'abcd'[3]} string"""
 This is a multi-line
 interpolated string
@@ -518,9 +518,9 @@ them be interpreted as regex syntax:
 ```groovy
 > String x = 'abc.d[123]'
 abc[123]
-> String pattern = /c\.d\[12[0-9]]/
+        > String pattern = /c\.d\[12[0-9]]/
 c\.d\[12[0-9]]
-> x =~ pattern     // check if x matches pattern using =~ regex operator
+        > x =~ pattern     // check if x matches pattern using =~ regex operator
 true
 ```
 
@@ -529,7 +529,7 @@ string:
 ```groovy
 > def x = 'abc.d[123]'
 abc.d[123]
-> x =~ /abc\.d\[${100+23}]/
+        > x =~ /abc\.d\[${100+23}]/
 true
 ```
 
@@ -549,10 +549,10 @@ A Jactl `List` represents a list of values of any type. Lists can have a mixture
 created using the `[]` syntax where the elements are a list of comma separated values:
 ```groovy
 > []            // empty list
-[]        
-> [1,2,3]
+[]
+        > [1,2,3]
 [1, 2, 3]
-> ['value1', 2, ['a','b']]
+        > ['value1', 2, ['a','b']]
 ['value1', 2, ['a', 'b']]
 ```
 The elements of a `List` can themseles be a `List` (as shown) or a `Map` or any type supported by Jactl (including
@@ -563,9 +563,9 @@ can be used as a method call on the list by placing the call after the list:
 ```groovy
 > List x = ['value1', 2, ['a', 'b']]
 ['value1', 2, ['a', 'b']]
-> size(x)
+        > size(x)
 3
-> x.size()
+        > x.size()
 3
 ```
 
@@ -583,13 +583,13 @@ Single elements can be added to a list:
 ```groovy
 > ['a','b','c'] + 'd'
 ['a', 'b', 'c', 'd']
-> def x = 'e'
+        > def x = 'e'
 e
-> ['a','b','c'] + 'd' + x
+        > ['a','b','c'] + 'd' + x
 ['a', 'b', 'c', 'd', 'e']
-> def y = ['a','b','c'] + 'd' + x    // Can use a 'def' variable to hold a list
+        > def y = ['a','b','c'] + 'd' + x    // Can use a 'def' variable to hold a list
 ['a', 'b', 'c', 'd', 'e']
-> y += 'f'
+        > y += 'f'
 ['a', 'b', 'c', 'd', 'e', 'f']
 ```
 
@@ -597,7 +597,7 @@ Consider this example:
 ```groovy
 > def x = [3]
 [3]
-> [1,2] + x
+        > [1,2] + x
 [1, 2, 3]
 ```
 We are adding two lists so the result is the list of all the elements but what if we wanted to add `x` itself to the
@@ -619,13 +619,13 @@ There are also corresponding `+=` and `<<=` operators for appending to an existi
 ```groovy
 > def y = [1,2]
 [1, 2]
-> y += 3
+        > y += 3
 [1, 2, 3]
-> y
+        > y
 [1, 2, 3]
-> y <<= ['a']
+        > y <<= ['a']
 [1, 2, 3, ['a']]
-> y
+        > y
 [1, 2, 3, ['a']]
 ```
 Note that both `+=` and `<<=` append to the existing list rather than creating a new list.
@@ -635,11 +635,11 @@ checks for an element not being in a list:
 ```groovy
 > def x = ['a', 'b']
 ['a', 'b']
-> def y = 'b'
+        > def y = 'b'
 b
-> y in x
+        > y in x
 true
-> 'a' !in x
+        > 'a' !in x
 false
 ```
 
@@ -653,13 +653,13 @@ in `[]` immediately after the list and indexes start at `0` (so the first elemen
 ```groovy
 > def x = ['value1', 2, ['a', 'b']]
 ['value1', 2, ['a', 'b']]
-> x[0] 
+        > x[0]
 value1
-> x[1]
+        > x[1]
 2
-> x[2]
+        > x[2]
 ['a', 'b']
-> x[2][1]
+        > x[2][1]
 b
 ```
 Note how the last example retrieves an element from the list nested within `x`.
@@ -670,14 +670,14 @@ value:
 ```groovy
 > def x = [1,2,3]
 [1, 2, 3]
-> x?[1]
+        > x?[1]
 2
-> x = null
-> x[1]
+        > x = null
+        > x[1]
 Null value for parent during field access @ line 1, column 3
 x[1]
-  ^
-> x?[1] == null
+        ^
+        > x?[1] == null
 true
 ```
 
@@ -686,13 +686,13 @@ current size of the list which will fill any gaps with `null`:
 ```groovy
 > def x = ['value1', 2, ['a', 'b']]
 ['value1', 2, ['a', 'b']]
-> x[1] = 3
+        > x[1] = 3
 3
-> x
+        > x
 ['value1', 3, ['a', 'b']]
-> x[10] = 10
+        > x[10] = 10
 10
-> x
+        > x
 ['value1', 3, ['a', 'b'], null, null, null, null, null, null, null, 10]
 ```
 
@@ -713,9 +713,9 @@ If the key is a valid identifier (or keyword) then the key does not need to be q
 ```groovy
 > def x = [a:1, b:2]
 [a:1, b:2]
-> def y = [for:1, while:2, import:3]    // keywords allowed as keys
+        > def y = [for:1, while:2, import:3]    // keywords allowed as keys
 [for:1, while:2, import:3]
-> y.while
+        > y.while
 2
 ```
 
@@ -725,14 +725,14 @@ to tell the compiler to use the variable value and not the identifier as the key
 ```groovy
 > def a = 'my key'
 my key
-> def x = [(a):1, b:2]
+           > def x = [(a):1, b:2]
 ['my key':1, b:2]
 ```
 You could also use an interpolated string as another way to achieve the same thing:
 ```groovy
 > def a = 'my key'
 my key
-> def x = ["$a":1, b:2]
+           > def x = ["$a":1, b:2]
 ['my key':1, b:2]
 ```
 
@@ -753,9 +753,9 @@ The `+=` operator adds the values to an existing map rather than creating a new 
 ```groovy
 > def x = [a:1,b:2]
 [a:1, b:2]
-> x += [c:3,a:2]
+        > x += [c:3,a:2]
 [a:2, b:2, c:3]
-> x
+        > x
 [a:2, b:2, c:3]
 ```
 
@@ -794,20 +794,20 @@ Maps can be used to build up complex, nested data structures. The normal `toStri
 standard compact form but if you specify an indent amount it will provide a more readable form:
 ```groovy
 > def employee = [ name:'Fred Smith', employeeId:1234, dateOfBirth:'1-Jan-1970',
-                   address:[street:'123 High St', suburb:'Freetown', postcode:'1234'], 
+                   address:[street:'123 High St', suburb:'Freetown', postcode:'1234'],
                    phone:'555-555-555']
 [name:'Fred Smith', employeeId:1234, dateOfBirth:'1-Jan-1970', address:[street:'123 High St', suburb:'Freetown', postcode:'1234'], phone:'555-555-555']
-> employee.toString(2)
+        > employee.toString(2)
 [
-  name: 'Fred Smith',
-  employeeId: 1234,
-  dateOfBirth: '1-Jan-1970',
-  address: [
-    street: '123 High St',
-    suburb: 'Freetown',
-    postcode: '1234'
-  ],
-  phone: '555-555-555'
+        name: 'Fred Smith',
+        employeeId: 1234,
+        dateOfBirth: '1-Jan-1970',
+        address: [
+                street: '123 High St',
+                suburb: 'Freetown',
+                postcode: '1234'
+        ],
+        phone: '555-555-555'
 ]
 ```
 > The `toString()` Jactl function outputs values in a form that is legal, executable
@@ -819,14 +819,14 @@ Maps can be used as though they are objects with fields using `.`:
 ```groovy
 > def x = [a:1, b:2]
 [a:1, b:2]
-> x.a
+        > x.a
 1
 ```
 The value of the field could itself be another map so you can chain the access as needed:
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
 [a:1, b:2, c:[d:4, e:5]]
-> x.c.d
+        > x.c.d
 4
 ```
 If you want the field name (the key) to itself be the value of another variable or expression then you can either use
@@ -834,9 +834,9 @@ subscript notation (see below) or use an interpolated string expression:
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
 [a:1, b:2, c:[d:4, e:5]]
-> def y = 'c'
+        > def y = 'c'
 c
-> x."$y".e
+        > x."$y".e
 5
 ```
 
@@ -847,13 +847,13 @@ This makes it easy to retrieve nested fields without having to check at each lev
 ```groovy
 > def x = [:]
 [:]
-> x.a.b
+        > x.a.b
 Null value for parent during field access @ line 1, column 5
 x.a.b
-    ^
-> x.a?.b == null
+        ^
+        > x.a?.b == null
 true
-> x?.a?.b?.c == null
+        > x?.a?.b?.c == null
 true
 ```
 
@@ -862,17 +862,17 @@ update the value of a field within the map:
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
 [a:1, b:2, c:[d:4, e:5]]
-> x.b = 4
+        > x.b = 4
 4
-> x
+        > x
 [a:1, b:4, c:[d:4, e:5]]
-> x.c.e = [gg:2, hh:3]
+        > x.c.e = [gg:2, hh:3]
 [gg:2, hh:3]
-> x
+        > x
 [a:1, b:4, c:[d:4, e:[gg:2, hh:3]]]
-> x.c.f = [1,2,3]
+        > x.c.f = [1,2,3]
 [1, 2, 3]
-> x
+        > x
 [a:1, b:4, c:[d:4, e:[gg:2, hh:3], f:[1, 2, 3]]]
 ```
 
@@ -882,9 +882,9 @@ Maps can also be accessed using subscript notation:
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
 [a:1, b:2, c:[d:4, e:5]]
-> x['b']
+        > x['b']
 2
-> x['c']['d']
+        > x['c']['d']
 4
 ```
 With subscript based access the value of the "index" within the `[]` is an expression that evaluates to the field (key)
@@ -892,9 +892,9 @@ name to be looked up. This makes accessing a field whose name comes from a varia
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
 [a:1, b:2, c:[d:4, e:5]]
-> def y = 'c'
+        > def y = 'c'
 c
-> x[y]
+        > x[y]
 [d:4, e:5]
 ```
 
@@ -905,11 +905,11 @@ As with the field notation access, new fields can be added and values for existi
 ```groovy
 > def x = [a:1, b:2, c:[d:4,e:5]]
 [a:1, b:2, c:[d:4, e:5]]
-> x['b'] = 'abc'
+        > x['b'] = 'abc'
 abc
-> x['zz'] = '123'
+        > x['zz'] = '123'
 123
-> x
+        > x
 [a:1, b:'abc', c:[d:4, e:5], zz:'123']
 ```
 
@@ -928,15 +928,15 @@ something like this:
 ```groovy
 > if (x == null) { x = [:] }
 [:]
-> if (x.a == null) { x.a = [:] }
+        > if (x.a == null) { x.a = [:] }
 [:]
-> if (x.a.b == null) { x.a.b = [:] }
+        > if (x.a.b == null) { x.a.b = [:] }
 [:]
-> if (x.a.b.c == null) { x.a.b.c = [:] }
+        > if (x.a.b.c == null) { x.a.b.c = [:] }
 [:]
-> x.a.b.c.d = 1
+        > x.a.b.c.d = 1
 1
-> x
+        > x
 [a:[b:[c:[d:1]]]]
 ```
 With Jactl these intermediate fields will be automatically created if they don't exist so we only need write
@@ -944,7 +944,7 @@ the last line of script:
 ```groovy
 > x.a.b.c.d = 1
 1
-> x
+        > x
 [a:[b:[c:[d:1]]]]
 ```
 
@@ -955,18 +955,18 @@ have a value. In this case, for example:
 > x.a.b.c.d = 1
 Null value for Map/List during field access @ line 1, column 2
 x.a.b.c.d.e = 1
- ^
+        ^
 ```
 
 If part of the context of the field assignment looks like a List rather than a Map then a List will be
 created as required:
 ```groovy
 > def x = [:]
-> x.a.b[0].c.d = 1
+        > x.a.b[0].c.d = 1
 1
-> x.a.b[1].c.d = 2
+        > x.a.b[1].c.d = 2
 2
-> x
+        > x
 [a:[b:[[c:[d:1]], [c:[d:2]]]]]
 ```
 Note that in this case `x.a.b` is an embedded List, not a Map.
@@ -977,10 +977,10 @@ missing, rather than a Map:
 ```groovy
 > def x = [:]
 [:]
-> x.a['b'] = 1
+        > x.a['b'] = 1
 Non-numeric value for index during List access @ line 1, column 4
 x.a['b'] = 1
-   ^
+        ^
 ```
 
 # Truthiness
@@ -1000,30 +1000,100 @@ The rules are:
 * `0` is `false`
 * `null` values are `false`
 * Empty list or empty map is `false`
-* All other values are `true` 
+* All other values are `true`
 
 For example:
 ```groovy
 > [] && true
 false
-> [[]] && true
+        > [[]] && true
 true
-> [:] && true
+        > [:] && true
 false
-> [false] && true
+        > [false] && true
 true
-> [a:1] && true
+        > [a:1] && true
 true
-> '' && true
+        > '' && true
 false
-> 'abc' && true
+        > 'abc' && true
 true
-> 1 && true
+        > 1 && true
 true
-> 0 && true
+        > 0 && true
 false
-> null && true
+        > null && true
 false
+```
+
+# Variable Declarations
+
+In Jactl, variables must be declared before they are used.
+A variable declaration has a type followed by the variable name and then optionally an initialiser that is used
+to initialise the variable:
+```groovy
+> int i = 3
+3
+> int j      // defaults to 0
+0
+```
+
+You can use `def` to define an untyped variable (equivalent to using `Object` in Java):
+```groovy
+> def x
+> def y = 'abc'
+abc
+> def z = 1.234
+1.234
+```
+
+Multiple variables can be declared at the same time if they are of the same type:
+```groovy
+> int i, j   // i and j will default to 0
+0
+> String s1 = 'abc', s2 = 'xyz'
+xyz
+> def x,y    // x and y default to null
+```
+
+When using an initialiser, you can specify the variable type as `var` and the type will be inferred from the
+type of the initialiser:
+```groovy
+> var i = 1         // i will be an int
+1
+> var s = 'abc'     // s will be a String
+abc
+```
+
+Another way to declare multiple variables in the same statement is to surround the variables with `(` and `)` and
+then provide the optional initialisers in a separate list after a `=` symbol:
+```groovy
+> def (x,y) = [1,2]
+2
+```
+The right-hand side can be any expression that evaluates to a list (or something that supports subscripting such as
+a String or an array):
+```groovy
+> def stats = { x -> [x.sum(), x.size(), x.avg()] }
+Function@511354923
+> def values = [1, 4, 7, 4, 5, 13]
+[1, 4, 7, 4, 5, 13]
+> def (sum, count, avg) = stats(values)
+5.6666666667
+> sum
+34
+> count
+6
+> avg
+5.6666666667
+> def (first, second, third) = 'a string value'    // grab first, second, and third letters from the string
+s
+```
+
+This multi-declaration form supports the type being specified per variable:
+```groovy
+> def (int i, String s) = [123, 'abc']
+abc
 ```
 
 # Expressions and Operators
@@ -1046,16 +1116,16 @@ precedence are shown with the same precedence value:
 |        5         |             `? :`              | Ternary conditional opeartor                        |
 |                  |              `?:`              | Default value operator                              |
 |        6         |   <code>&#124;&#124;</code>    | Boolean or                                          |
- |        7         |              `&&`              | Boolean and                                         |
- |        8         |      <code>&#124;</code>       | Bitwise or                                          |
+|        7         |              `&&`              | Boolean and                                         |
+|        8         |      <code>&#124;</code>       | Bitwise or                                          |
 |        9         |              `^`               | Bitwise xor                                         |
 |        10        |              `&`               | Bitwise and                                         |
 |        11        |     `==` `!=` `===` `!==`      | Equality and inequality operators                   |
 |                  |             `<=>`              | Compator operator                                   |
 |                  |           `=~` `!~`            | Regex compare and regex not compare                 |
- |        12        |       `<` `<=` `>` `>=`        | Less than and greater than operators                |
+|        12        |       `<` `<=` `>` `>=`        | Less than and greater than operators                |
 |                  |   `instanceof` `!instanceof`   | Instance of and not instance of operators           |
- |                  |           `in` `!in`           | In and not in operators                             |
+|                  |           `in` `!in`           | In and not in operators                             |
 |                  |              `as`              | Conversion operator                                 |
 |        13        |        `<<` `>>` `>>>`         | Shift operators                                     |
 |        14        |            `+` `-`             | Addition and subtraction                            |
@@ -1132,7 +1202,7 @@ division:
 > 3 * 4 + 6 / 2 + 5 - 10
 10
 ```
-Remember that `*` and `/` have higher precedence and are evaluated before any addition or subtraction. 
+Remember that `*` and `/` have higher precedence and are evaluated before any addition or subtraction.
 
 ## Prefix _+_ and _-_
 
@@ -1466,7 +1536,7 @@ An expression such as `x += 5` is just shorthand for `x = x + 5`.
 
 The full list of assignment operators is:
 
-> `+=` `-=` `*=` `/=` `%=` `%%=` `<<=` `>>=` `>>>=` `&=` `|=` `^=`  
+> `+=` `-=` `*=` `/=` `%=` `%%=` `<<=` `>>=` `>>>=` `&=` `|=` `^=`
 
 For example:
 ```groovy
@@ -1484,6 +1554,72 @@ For example:
 32
 > x |= 15
 47
+```
+
+## Multi-Assignment
+
+You assign to multiple variables at the same time by listing the variables within `(` and `)` and providing
+a list of values on the right-hand side of the assignment operator:
+```groovy
+> def x; def y
+> (x,y) = [3,4]
+4
+> println "x=$x, y=$y"
+x=3, y=4
+```
+Note that the value of a multi-assignment is the value of the last assignment in the list (which is why `4` is
+printed by the REPL as the value of the `(x,y) = [3,4]` expression).
+
+The right-hand side can be another variable or expression that evaluates to a list:
+```groovy
+> def x,y
+> def str = 'abc'
+abc
+> (x,y) = str           // extract the first and second characters of our string
+b
+> "x=$x, y=$y"
+x=a, y=b
+```
+
+You can use any of the assignment operators such as `+=` or `-=`:
+```groovy
+> def (x,y) = [1,2]
+2
+> (x,y) += [3,4]; println "x=$x, y=$y"
+x=4, y=6
+```
+
+Any expression that can appear on the left-hand side of a normal assignment can appear in a multi-assignment (not just
+simple variable names):
+```groovy
+> def x = [:]
+[:]
+> (x.('a' + '1').b, x.a1.c) = ['xab', 'xac']
+xac
+> x
+[a1:[b:'xab', c:'xac']]
+```
+
+The conditional assignment operator `?=` is also supported.
+In a multi-assignment, each of the individual assignments is evaluated to see if the value in the list on
+the right-hand side is null or not so some values can be assigned while others aren't:
+```groovy
+> def (x,y) = [1,2]
+2        
+> def z        
+> (x,y) ?= [3,z]       // y unchanged since z has no value
+> "x=$x, y=$y"
+x=3, y=2
+```
+
+Multi-assignment can be used to swap the values of two variables:
+```groovy
+> def (x,y) = [1,2]
+2
+> (x,y) = [y,x]       // swap x and y
+1
+> "x=$x, y=$y"
+x=2, y=1
 ```
 
 ## Instance Of
@@ -1516,7 +1652,7 @@ true
 In Java, type casting is done for two reasons:
 1. You are passed an object of some generic type but you know it is actually a sepcific type and you want to treat it as that specific type (to invoke a method on it, for example), or
 2. You need to convert a primitive number type to another number type (for example, converting a long value to an int)
- 
+
 In Jactl there is less need to cast for the first reason since if the object supports the method you can always invoke
 that method even if the reference to the object is a `def` type.
 The reason why you may still wish to cast to the specific type in this case is for readability to make it clear what type
@@ -1537,7 +1673,7 @@ Whereas in Java the cast would be required, since Jactl supports dynamic typing,
 necessary (but might make the execution slightly faster).
 
 The other use for casts is to convert primitive number types to one another.
-For example, you can use casts to convert a double or decimal value to its corresponding integer representation 
+For example, you can use casts to convert a double or decimal value to its corresponding integer representation
 (discarding anything after the decimal point):
 ```groovy
 > def hoursOwed = 175.15
@@ -1894,7 +2030,7 @@ This variable is the default variable passed in to _closures_ (see later) when n
 
 The following example takes some input, splits it into lines, and then uses `filter` with a regex to filter the lines
 that match `/Evac.*Pause/` and then uses `map` to perform a regex substitute to transform these lines into a different
-form: 
+form:
 ```groovy
 > def data = '''[251.993s][info][gc] GC(281) Pause Young (Normal) (G1 Evacuation Pause) 2486M->35M(4096M) 6.630ms
   [252.576s][info][gc] GC(282) Pause Young (Concurrent Start) (Metadata GC Threshold) 1584M->34M(4096M) 10.571ms
@@ -2038,7 +2174,7 @@ it, so if it is to be used it should be used judiciously.
 # If/Else Statements
 
 Jactl `if` statements work in the same way as Java and Groovy `if` statements.
-The syntax is: 
+The syntax is:
 > `if (<cond>) <trueStmts> [ else <falseStmts> ]`
 
 The `<cond>` condition will be evalauted as `true` or `false` based on the [truthiness](#Truthiness) of the expression.
@@ -2056,7 +2192,7 @@ Valid name: Fred Smith
 ```
 
 Since the Jactl REPL will execute code as soon as a valid statement is parsed, it is difficult to show some multi-line
-examples by capturing REPL interactions so here is an example Jactl script showing a multi-line `if/else`: 
+examples by capturing REPL interactions so here is an example Jactl script showing a multi-line `if/else`:
 ```groovy
 def x = 'abc'
 if (x.size() > 3) {
@@ -2499,7 +2635,7 @@ die unless f(y) == 'xabc123'   // since parameters are untyped we can pass strin
 
 Closures in Jactl are modelled after the closure syntax of Groovy.
 Closures are similar to functions in that they take one or more parameters and return a result.
-They are decalred with slightly different syntax:
+They are declared with slightly different syntax:
 ```groovy
 def sqr = { int x -> return x * x }        // Assign closure to sqr
 
@@ -2660,7 +2796,7 @@ since it is a function.
 In fact, `c` is not a closure but happens to have a closure as its value until it is assigned a different value.
 
 Closures have an implicit parameter `it` decalared for them if they don't define any expicit parameters.
-This is not the case for functions. 
+This is not the case for functions.
 
 Functions can be invoked before they are declared (as long as they are in the same scope):
 ```groovy
@@ -2721,7 +2857,7 @@ def countThings(x) {
 > This just an example. A better way to count items matching a regex would be something like:
 > `x.filter{ /thing/i }.size()`
 
-Now consider the following code where a function returns a closure that closes over a variable `count` which is 
+Now consider the following code where a function returns a closure that closes over a variable `count` which is
 local to the scope of the function:
 ```groovy
 def counter() {
@@ -2750,7 +2886,7 @@ remains in existence.
 In the example, `x` and `y` are two different instances of the closure which each have their own `counter` variable.
 
 > **Note**<br/>
-> In functional programming, side effects such as modifying variables outside the scope of the closure are 
+> In functional programming, side effects such as modifying variables outside the scope of the closure are
 > generally frowned upon since pure functions don't modify state, they just return values.
 
 # Collection Methods
@@ -2893,7 +3029,7 @@ It is passed a closure that should evaluate to `true` if the element should be r
 should be discarded.
 The [truthiness](#Truthiness) of the result is used to determine whether the result is `true` or not.
 
-For example, to find which of the first 40 Fibonacci numbers are odd multiples of 3:  
+For example, to find which of the first 40 Fibonacci numbers are odd multiples of 3:
 ```groovy
 > int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 Function@124888672
@@ -3090,7 +3226,7 @@ In Jactl, the `collect()` also takes an optional closure like the Groovy form an
 [['a1', 3], ['b2', 3], ['c3', 3]]
 ```
 
-Note that in Java, when using streams, it is necessary to invoke `collect()` to convert the final stream of 
+Note that in Java, when using streams, it is necessary to invoke `collect()` to convert the final stream of
 values back into a list.
 In Jactl, this is not necessary since this will automatically be done when the last method in the chain has
 finished.
@@ -3128,6 +3264,34 @@ sub-lists:
 [[1], [2], [3]]
 ```
 
+## windowSliding()
+
+The `windowSliding()` method groups the elements into a list of sliding windows of a given size.
+So `windowSliding(2)` will advance through the list producing sub-lists containing each element paired with the
+subsequent element:
+```groovy
+> ['a','b','c','d'].windowSliding(2)
+[['a', 'b'], ['b', 'c'], ['c', 'd']]
+> 'abc'.windowSliding(2)
+[['a', 'b'], ['b', 'c']]        
+> [a:1, b:2, c:3].windowSliding(2)           // Maps can also be treated as lists
+[[['a', 1], ['b', 2]], [['b', 2], ['c', 3]]]
+```
+
+A size of `3` for the window will produce sub-lists with each element followed by the next 2 elements in the original
+list:
+```groovy
+> ['a','b','c','d','e'].windowSliding(3)
+[['a', 'b', 'c'], ['b', 'c', 'd'], ['c', 'd', 'e']]
+```
+
+If there are not enough elements to complete the first sub-list then the result will be a single element list
+where the element is the original list:
+```groovy
+> [1,2,3].windowSliding(4)
+[[1, 2, 3]]
+```
+
 ## sort()
 
 The `sort()` method will sort a list of elements.
@@ -3135,7 +3299,7 @@ With no argument it will sort based on natural sort order if one exists:
 ```groovy
 > [3, 4, -1, 1, 10, 5].sort()
 [-1, 1, 3, 4, 5, 10]
-> ['this', 'is', 'a', 'list', 'of', 'words'].sort()
+        > ['this', 'is', 'a', 'list', 'of', 'words'].sort()
 ['a', 'is', 'list', 'of', 'this', 'words']
 ```
 
@@ -3144,10 +3308,10 @@ If elements have not natural ordering then you will get an error:
 > [[1,2,3],[1,2]].sort()
 Unexpected error: Cannot compare objects of type List and List @ line 1, column 17
 [[1,2,3],[1,2]].sort()
-                ^ (RuntimeError) @ line 1, column 17
+        ^ (RuntimeError) @ line 1, column 17
 [[1,2,3],[1,2]].sort()
-                ^
-> [1,'a'].sort()
+        ^
+        > [1,'a'].sort()
 Unexpected error: Cannot compare objects of type String and int @ line 1, column 9
 [1,'a'].sort()
         ^ (RuntimeError) @ line 1, column 9
@@ -3186,7 +3350,7 @@ Since you can sort based on arbitrary criteria, you can sort arbitrary objects:
 ```groovy
 > def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
 [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
-> employees.sort{ a,b -> a.salary <=> b.salary }      // sort by salary increasing
+        > employees.sort{ a,b -> a.salary <=> b.salary }      // sort by salary increasing
 [[name:'Joe', salary:1500], [name:'Frank', salary:2000], [name:'Daisy', salary:3000]]
 ```
 
@@ -3196,7 +3360,7 @@ The `unique()` method allows you to eliminate duplicate elements in a list.
 It works like the Unix `uniq` command in that it only considers elements next to each other in the list to determine
 what is unique.
 
-For example: 
+For example:
 ```groovy
 > ['a','a','b','c','c','c','a'].unique()
 ['a', 'b', 'c', 'a']
@@ -3216,7 +3380,7 @@ The `reverse()` method will reverse the order of the elements being iterated ove
 ```groovy
 > [1, 2, 3].reverse()
 [3, 2, 1]
-> 10.map{ it+1 }.map{ it*it }.reverse()
+        > 10.map{ it+1 }.map{ it*it }.reverse()
 [100, 81, 64, 49, 36, 25, 16, 9, 4, 1]
 ```
 
@@ -3240,7 +3404,7 @@ Note that `reduce()` takes two arguments: the initial value to pass in, and the 
 The closure can have one or two parameters.
 If it has one parameter it is passed a list of two values with the first being the previous value calculated (or the
 initial value) and the second being the current element of the list.
-If it takes two parameters then the first one is the previous value and second one is the element. 
+If it takes two parameters then the first one is the previous value and second one is the element.
 
 Here is another example where we want to count the letter frequency in some text and print out the top 5 letters.
 We use reduce to build a Map keyed on the letter with the value being the number of occurrences:
@@ -3257,11 +3421,11 @@ You can use `min()` and `max()` to find the minimum or maximum element from a li
 ```groovy
 > [3, 4, -1, 1, 10, 5].min()
 -1
-> [3, 4, -1, 1, 10, 5].max()
+        > [3, 4, -1, 1, 10, 5].max()
 10
-> ['this', 'is', 'a', 'list', 'of', 'words'].min()
+        > ['this', 'is', 'a', 'list', 'of', 'words'].min()
 a
-> ['this', 'is', 'a', 'list', 'of', 'words'].max()
+        > ['this', 'is', 'a', 'list', 'of', 'words'].max()
 words
 ```
 
@@ -3271,9 +3435,9 @@ For example, to find the employee with the smallest or biggest salary:
 ```groovy
 > def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
 [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
-> employees.min{ it.salary }
+        > employees.min{ it.salary }
 [name:'Joe', salary:1500]
-> employees.max{ it.salary }
+        > employees.max{ it.salary }
 [name:'Daisy', salary:3000]
 ```
 
@@ -3284,7 +3448,7 @@ list:
 ```groovy
 > [3, 4, -1, 1, 10, 5].sum()
 22
-> [3, 4, -1, 1, 10, 5].avg()
+        > [3, 4, -1, 1, 10, 5].avg()
 3.6666666667
 ```
 
@@ -3312,10 +3476,10 @@ For example, if the script sends a message to a downstream system, it might need
 after a recovery to indicate that it is a possible repeat of an earlier message:
 ```groovy
 def response = checkpoint(commit: {
-                            sendReceiveJson(destUrl, [request:req, possibleRepeat:false])
-                          },
+ sendReceiveJson(destUrl, [request:req, possibleRepeat:false])
+},
                           recover: {
-                            sendReceiveJson(destUrl, [request:req, possibleRepeat:true])
+                           sendReceiveJson(destUrl, [request:req, possibleRepeat:true])
                           })
 ```
 
@@ -3327,13 +3491,13 @@ that is invoked).
 Like Java, Jactl supports user defined classes but in a more simplified form.
 Jactl uses a syntax that (mostly) follows that of Java.
 
-Classes provide a way to encapsulate state with fields, and behaviour with methods. 
+Classes provide a way to encapsulate state with fields, and behaviour with methods.
 
 Here is an example of a simple class:
 ```groovy
 class Point {
-  int x
-  int y
+ int x
+ int y
 }
 ```
 
@@ -3342,9 +3506,9 @@ The class declares two fields `x` and `y` of type `int`.
 If we enter the above class into the REPL we can then instantiate instances of the class:
 ```groovy
 > class Point {
-    int x
-    int y
-  }
+ int x
+ int y
+}
 > def point = new Point(1,2)
 [x:1, y:2]
 ```
@@ -3362,7 +3526,7 @@ To access the fields of the class object you use `.` or `?.` just as for Maps:
 ```groovy
 > point.x
 1
-> point.y
+        > point.y
 2
 ```
 
@@ -3370,7 +3534,7 @@ You can use expressions that evaluate to the field name:
 ```groovy
 > point.('xyz'[0])
 1
-> point."${('x' + 'y').skip(1)[0]}"
+        > point."${('x' + 'y').skip(1)[0]}"
 2
 ```
 
@@ -3378,7 +3542,7 @@ You can also use '[]' and '?[]' to access the fields:
 ```groovy
 > point['x']
 1
-> point['y']
+        > point['y']
 2
 ```
 
@@ -3392,9 +3556,9 @@ If you then try to assign something else to the variable that is not a Point you
 ```groovy
 > Point point = new Point(3,4)
 [x:3, y:4]
-> point = new Point(5,5)
+        > point = new Point(5,5)
 [x:5, y:5]
-> point = 'abc'
+        > point = 'abc'
 Cannot convert from type of right-hand side (String) to Instance<Point> @ line 1, column 7
 point = 'abc'
         ^
@@ -3404,10 +3568,10 @@ You can use the class name wherever a type would normally be expected such as fo
 of functions:
 ```groovy
 > Point midPoint(Point p1, Point p2) {
-    new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
-  }
+ new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+}
 Function@375457936
-> midPoint(new Point(1,2), new Point(4,4))
+        > midPoint(new Point(1,2), new Point(4,4))
 [x:2, y:3]
 ```
 
@@ -3426,13 +3590,13 @@ Like variables, fields can be declared with initialisers:
 Fields without intialisers are mandatory and a value must be supplied when instantiating instances with `new`:
 ```groovy
 > class Point {
-    int x
-    int y = 0
-  }
+ int x
+ int y = 0
+}
 > new Point()
 Missing mandatory field: x @ line 1, column 10
 new Point()
-         ^
+        ^
 ```
 
 Only values for mandatory fields can be supplied this way:
@@ -3440,8 +3604,8 @@ Only values for mandatory fields can be supplied this way:
 > new Point(1,2)
 Too many arguments for constructor (passed 2 but there is only 1 mandatory field) @ line 1, column 10
 new Point(1,2)
-         ^
-> new Point(1)
+        ^
+        > new Point(1)
 [x:1, y:0]
 ```
 
@@ -3460,9 +3624,9 @@ but if it refers to a later field, since that field has not yet been initialised
 default value is for the type of field:
 ```groovy
 > class Point {
-    int x = y
-    int y
-  }
+ int x = y
+ int y
+}
 > new Point(7)
 [x:0, y:7]
 ```
@@ -3473,12 +3637,12 @@ To set values for non-mandatory fields you can use the named argument way of inv
 the values of any fields (as long as all mandatory fields are given a value):
 ```groovy
 > class Point {
-    int x
-    int y = 0
-  }
+ int x
+ int y = 0
+}
 > new Point(x:3, y:4)
 [x:3, y:4]
-> new Point(x:4)
+        > new Point(x:4)
 [x:4, y:0]
 ```
 
@@ -3505,8 +3669,8 @@ for the non-mandatory fields:
 > [y:5] as Point
 Missing value for mandatory field 'x' @ line 1, column 7
 [y:5] as Point
-      ^
-> [x:6] as Point
+        ^
+        > [x:6] as Point
 [x:6, y:0]
 ```
 
@@ -3516,13 +3680,13 @@ We have shown, so far, only examples of fields with type `int` but, as for varia
 fields can have any type:
 ```groovy
 > class X {
-    int i = 0, j = i
-    String str = 'a string'
-    long longField = i * j
-    var decimalField = 3.5
-    double d = 1.23D
-    def closure = { it * it }
-  }
+ int i = 0, j = i
+ String str = 'a string'
+ long longField = i * j
+ var decimalField = 3.5
+ double d = 1.23D
+ def closure = { it * it }
+}
 > new X()
 [i:0, j:0, str:'a string', longField:0, decimalField:3.5, d:1.23, closure:Function@33533830]
 ```
@@ -3530,9 +3694,9 @@ fields can have any type:
 Classes can even have fields of the same type as the class they are embedded in:
 ```groovy
 class Tree {
-  Tree left  = null
-  Tree right = null
-  def  data
+ Tree left  = null
+ Tree right = null
+ def  data
 }
 ```
 
@@ -3548,9 +3712,9 @@ For example:
 > class X { Y y = null }; class Y { Z z = null }; class Z { int i = 3 }
 > def x = new X()
 [y:null]
-> x.y.z.i = 4
+        > x.y.z.i = 4
 4
-> x
+        > x
 [y:[z:[i:4]]]
 ```
 
@@ -3562,7 +3726,7 @@ If a type has a mandatory field then the auto-create will fail:
 > class X { Y y = null }; class Y { int j; Z z = null }; class Z { int i = 3 }
 > def x = new X()
 [y:null]
-> x.y.z.i = 4
+        > x.y.z.i = 4
 Cannot auto-create instance of type Class<Y> as there are mandatory fields @ line 1, column 3
 x.y.z.i = 4
         ^
@@ -3576,15 +3740,15 @@ Classes can also have instance methods defined for them:
 ```groovy
 > class Point { int x,y }class Point { int x,y }
 > class Rect {
-    Point p1, p2
+ Point p1, p2
 
-    int area() { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
+ int area() { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
 
-    boolean contains(Point p) {
-      p.x >= [p1.x, p2.x].min() && p.x <= [p1.x, p2.x].max() &&
-      p.y >= [p1.y, p2.y].min() && p.y <= [p1.y, p2.y].max()
-    }
-  }
+ boolean contains(Point p) {
+  p.x >= [p1.x, p2.x].min() && p.x <= [p1.x, p2.x].max() &&
+  p.y >= [p1.y, p2.y].min() && p.y <= [p1.y, p2.y].max()
+ }
+}
 ```
 
 Instance methods are associated with an instance of the class and references to the fields within a method
@@ -3594,11 +3758,11 @@ Methods are accessed the same way as fields and then invoked using `()` just as 
 ```groovy
 > Rect rect = new Rect(new Point(3,4), new Point(7,8))
 [p1:[x:3, y:4], p2:[x:7, y:8]]
-> rect.area()
+        > rect.area()
 16
-> rect.contains(new Point(0,2))
+        > rect.contains(new Point(0,2))
 false
-> rect.contains(new Point(5,6))
+        > rect.contains(new Point(5,6))
 true
 ```
 
@@ -3606,7 +3770,7 @@ Since methods can be accessed like they are fields you can use `?.` and `[]` and
 ```groovy
 > rect?."${'contains'}"(new Point(5,6))
 true
-> rect['are' + 'a']()
+        > rect['are' + 'a']()
 16
 ```
 
@@ -3614,10 +3778,10 @@ true
 
 Within instance methods instance fields are accessed by referring directly to their names:
 ```groovy
-> class X { 
-    int i = 3
-    int f() { i }       // return the value of the i field
-  }
+> class X {
+ int i = 3
+ int f() { i }       // return the value of the i field
+}
 > new X().f()
 3
 ```
@@ -3626,9 +3790,9 @@ There is an implicit variable `this` for the instance that can also be used to r
 This is handy if there are local variables or parameters that have the same name as on of the fields:
 ```groovy
 > class X {
-    int i = 3
-    int add(int i) { this.i + i }   // Add this.i to the parameter i
-  }
+ int i = 3
+ int add(int i) { this.i + i }   // Add this.i to the parameter i
+}
 > new X().add(4)
 7
 ```
@@ -3644,7 +3808,7 @@ or method:
 ## Final Methods
 
 Instance methods can be marked as `final` which means that they cannot be overridden by a child class.
-Where needed, this gives the parent class more control how the parent class can be used. 
+Where needed, this gives the parent class more control how the parent class can be used.
 Final methods allow the Jactl compiler to perform some optimisations that cannot do for non-final methods and
 there are also optimisations that the Java Virtual Machine itself can do for `final` methods.
 
@@ -3654,7 +3818,7 @@ Here is an example of the use of `final`:
 > class Y extends X { def func() { 'trying to override final function' } }
 Method func() is final in base class X and cannot be overridden @ line 1, column 21
 class Y extends X { def func() { 'trying to override final function' } }
-                    ^
+^
 ```
 
 ## Static Methods
@@ -3666,33 +3830,33 @@ not associated with any specific instance of the class.
 
 For example:
 ```groovy
-> class Point { 
-    int x, y
- 
-    static Point midPoint(Point p1, Point p2) {
-      new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
-    }
-  }
+> class Point {
+ int x, y
+
+ static Point midPoint(Point p1, Point p2) {
+  new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+ }
+}
 > def mid = Point.midPoint(new Point(1,2), new Point(3,4))
 [x:2, y:3]
 ```
 
 If you try to access an instance field from within a static method you will get a compile error:
 ```groovy
-> class X { 
-    int i = 0
-    static def staticMethod() { i++ }
-  }
+> class X {
+ int i = 0
+ static def staticMethod() { i++ }
+}
 Reference to field in static function @ line 3, column 33
 static def staticMethod() { i++ }
-                            ^
+^
 ```
 
 As well as using the classname with the method invocation, you can invoke static methods through a class instance:
 ```groovy
 > Point p = new Point(15,16)
 [x:15, y:16]
-> p.midPoint(new Point(1,2), new Point(3,4))
+        > p.midPoint(new Point(1,2), new Point(3,4))
 [x:2, y:3]
 ```
 
@@ -3700,7 +3864,7 @@ Invoking a static method via an instance works even if the type of the variable 
 ```groovy
 > def x = new Point(10,11)
 [x:10, y:11]
-> x.midPoint(new Point(1,2), new Point(3,4))
+        > x.midPoint(new Point(1,2), new Point(3,4))
 [x:2, y:3]
 ```
 
@@ -3719,7 +3883,7 @@ application instances can be running the same script at the same time,
 it makes no sense to have class level fields since they would not be global fields but would exist per application
 instance.
 Rather than offering the illusion of global state, Jactl has taken the decision to not offer this feature at all.
-This also means not having to introduce the complexity, performance, and deadlock issues of dealing with 
+This also means not having to introduce the complexity, performance, and deadlock issues of dealing with
 locking/synchronisation between multiple threads.
 
 If global state is really required then it is up to the application to provide its own functions for Jactl
@@ -3731,24 +3895,24 @@ key/value store of some sort.
 Like normal functions, methods can be assigned as values to variables and passed as values to other function/methods:
 ```groovy
 > class Point {
-    int x, y
+ int x, y
 
-    static Point midPoint(Point p1, Point p2) {
-      new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
-    }
-  }
+ static Point midPoint(Point p1, Point p2) {
+  new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+ }
+}
 > class Rect {
-    Point p1, p2
+ Point p1, p2
 
-    int area() { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
-  }
+ int area() { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
+}
 ```
 
 We can get the value of the `midPoint` static method and invoke it through a different variable:
 ```groovy
 > def mp = Point.midPoint
 Function@438589491
-> mp(new Point(1,2), new Point(3,4))
+        > mp(new Point(1,2), new Point(3,4))
 [x:2, y:3]
 ```
 
@@ -3757,16 +3921,16 @@ If we try to get the `area` instance method of the `Rect` class the same way we 
 > def a = Rect.area
 Static access to non-static method 'area' for class Class<Rect> @ line 1, column 14
 def a = Rect.area
-             ^
+        ^
 ```
 
 We need to access it through an instance:
 ```groovy
 > def rect = new Rect(new Point(1,2), new Point(3,4))
 [p1:[x:1, y:2], p2:[x:3, y:4]]
-> def area = rect.area
+        > def area = rect.area
 Function@597307515
-> area()
+        > area()
 4
 ```
 
@@ -3774,9 +3938,9 @@ Note what happens if we now change the value of the `rect` variable:
 ```groovy
 > rect = new Rect(new Point(2,3), new Point(10,12))
 [p1:[x:2, y:3], p2:[x:10, y:12]]
-> rect.area()
+        > rect.area()
 72
-> area()
+        > area()
 4
 ```
 
@@ -3788,44 +3952,44 @@ The `area` variable points to the `area()` method bound to the original instance
 Inner classes can be defined within a class if desired:
 ```groovy
 > class Shapes {
-    class Point  { def x,y }
-    class Rect   { 
-      Point p1, p2
-      def area()   { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
-      def centre() { new Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2) }
-    }
-    class Circle { 
-      Point centrePoint
-      def radius
-      def area() { radius * radius * 3.1415926536 }
-      def centre() { centrePoint }
-    }
+ class Point  { def x,y }
+ class Rect   {
+  Point p1, p2
+  def area()   { (p1.x - p2.x).abs() * (p1.y - p2.y).abs() }
+  def centre() { new Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2) }
+ }
+ class Circle {
+  Point centrePoint
+  def radius
+  def area() { radius * radius * 3.1415926536 }
+  def centre() { centrePoint }
+ }
 
-    List shapes = []
- 
-    Rect   createRect(x1,y1,x2,y2) {
-      def rect = new Rect(new Point(x1,y1),new Point(x2,y2))
-      shapes <<= rect
-      return rect
-    }
-    Circle createCircle(x,y,radius) {
-      def circ = new Circle(new Point(x,y),radius)
-      shapes <<= circ
-      return circ
-    }
- 
-    def areas()   { shapes.map{ it.area() }   }
-    def centres() { shapes.map{ it.centre() } }
-  }
+ List shapes = []
+
+ Rect   createRect(x1,y1,x2,y2) {
+  def rect = new Rect(new Point(x1,y1),new Point(x2,y2))
+  shapes <<= rect
+  return rect
+ }
+ Circle createCircle(x,y,radius) {
+  def circ = new Circle(new Point(x,y),radius)
+  shapes <<= circ
+  return circ
+ }
+
+ def areas()   { shapes.map{ it.area() }   }
+ def centres() { shapes.map{ it.centre() } }
+}
 > def shapes = new Shapes()
 [shapes:[]]
-> shapes.createRect(1,2,5,6)
+        > shapes.createRect(1,2,5,6)
 [p1:[x:1, y:2], p2:[x:5, y:6]]
-> shapes.createCircle(3,4,5)
+        > shapes.createCircle(3,4,5)
 [centrePoint:[x:3, y:4], radius:5]
-> shapes.areas()
+        > shapes.areas()
 [16, 78.5398163400]
-> shapes.centres()
+        > shapes.centres()
 [[x:3, y:4], [x:3, y:4]]
 ```
 
@@ -3844,7 +4008,7 @@ You can, of course, also nest inner classes within inner classes:
 ```
 
 Note that Jactl inner classes are always "static inner classes" in Java terminology.
-This means that instances of inner classes are not implicitly bound to an instance of an outer class. 
+This means that instances of inner classes are not implicitly bound to an instance of an outer class.
 There is no way in Jactl to declare a non-static inner class.
 
 ## toString()
@@ -3855,7 +4019,7 @@ into a string use `as` then the output is shown as though the instance were a Ma
 > class X { int i,j }
 > def x = new X(3,4)
 [i:3, j:4]
-> x as String
+        > x as String
 [i:3, j:4]
 ```
 
@@ -3882,7 +4046,7 @@ invoked and can do compile time checking of argument count and argument types.
 Dynamic typing (or weak typing) means that the method invocation can only be checked at runtime and a runtime error
 will be produced if the method doesn't exist or the argument types don't match.
 This is also known as "duck typing" which means that we don't actually care if the object is a duck, we only want to
-know that it "talks like a duck" in that it has a method of the given name we are looking for. 
+know that it "talks like a duck" in that it has a method of the given name we are looking for.
 
 For example the function `func()` doesn't care what type of object it is given as long as there is a method called
 `f()` it can invoke on it:
@@ -3891,9 +4055,9 @@ For example the function `func()` doesn't care what type of object it is given a
 > class Y { def f() { 'invoked Y.f()' } }
 > def func(x) { x.f() }
 Function@2130192211
-> func(new X())
+        > func(new X())
 invoked X.f()
-> func(new Y())
+                > func(new Y())
 invoked Y.f()
 ```
 
@@ -3920,11 +4084,11 @@ what package the script or class should be compiled into:
 package a.b.c
 
 class X {
-  int i,j
- 
-  class Y {
-    static def someMethod() { 'some string' }
-  }
+ int i,j
+
+ class Y {
+  static def someMethod() { 'some string' }
+ }
 }
 ```
 
@@ -3994,11 +4158,11 @@ This method acts on any object type, including primitives:
 ```groovy
 > 123.toJson()
 123
-> 'abc'.toJson()
+        > 'abc'.toJson()
 "abc"
-> [1,2,3].toJson()
+        > [1,2,3].toJson()
 [1,2,3]
-> [a:1,b:2,c:[1,2,[x:1,y:4]]].toJson()
+        > [a:1,b:2,c:[1,2,[x:1,y:4]]].toJson()
 {"a":1,"b":2,"c":[1,2,{"x":1,"y":4}]}
 ```
 
@@ -4008,7 +4172,7 @@ It can also be used on class instances:
 > class Employee { String name; int employeeId; Address homeAddress }
 > def jim = new Employee('Jim Henderson', 1234, [street:'123 High St', suburb:'Downtown', state:'South Australia'])
 [name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
-> jim.toJson()
+        > jim.toJson()
 {"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
 ```
 
@@ -4018,19 +4182,19 @@ There is also a `fromJson()` method that acts on strings to convert from a JSON 
 ```groovy
 > '"abc"'.fromJson()
 abc
-> '"[1,2,3]"'.fromJson()
+        > '"[1,2,3]"'.fromJson()
 [1,2,3]
-> '{"a":1,"b":2,"c":[1,2,{"x":1,"y":4}]}'.fromJson()
+        > '{"a":1,"b":2,"c":[1,2,{"x":1,"y":4}]}'.fromJson()
 [a:1, b:2, c:[1, 2, [x:1, y:4]]]
 ```
 
 By default, when converting from a JSON string, it will create Maps and Lists where appropriate:
 ```groovy
 > def json = '{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}'
-{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
-> def jim = json.fromJson()
+                     {"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
+        > def jim = json.fromJson()
 [name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
-> jim instanceof Map
+        > jim instanceof Map
 true
 ```
 
@@ -4040,10 +4204,10 @@ every class:
 > class Address { String street; String suburb; String state }
 > class Employee { String name; int employeeId; Address homeAddress }
 > def json = '{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}'
-{"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
-> def jim = Employee.fromJson(json)
+                     {"name":"Jim Henderson","employeeId":1234,"homeAddress":{"street":"123 High St","suburb":"Downtown","state":"South Australia"}}
+        > def jim = Employee.fromJson(json)
 [name:'Jim Henderson', employeeId:1234, homeAddress:[street:'123 High St', suburb:'Downtown', state:'South Australia']]
-> jim instanceof Employee
+        > jim instanceof Employee
 true
 ```
 
@@ -4077,13 +4241,13 @@ For example:
 ```groovy
 > long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 Function@1000966072
-> def time(closure) {
-    def start  = nanoTime()
-    def result = closure()
-    println "Result: $result, duration: ${nanoTime() - start} nanoseconds" 
-  }
+        > def time(closure) {
+ def start  = nanoTime()
+ def result = closure()
+ println "Result: $result, duration: ${nanoTime() - start} nanoseconds"
+}
 Function@2050339061
-> time{ fib(40) }
+        > time{ fib(40) }
 Result: 102334155, duration: 199072125 nanoseconds
 ```
 
@@ -4104,9 +4268,9 @@ Here is an example:
 ```groovy
 > def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
 [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
-> println sprintf('%-10s %-10s   %s', 'Name', 'Salary', 'Hourly Rate'); employees.each{
-    println sprintf('%-10s $%-10d  $%.2f', it.name, it.salary, it.salary / 4.333333 / 37.5)
-  }
+        > println sprintf('%-10s %-10s   %s', 'Name', 'Salary', 'Hourly Rate'); employees.each{
+ println sprintf('%-10s $%-10d  $%.2f', it.name, it.salary, it.salary / 4.333333 / 37.5)
+}
 Name       Salary       Hourly Rate
 Frank      $2000        $12.31
 Daisy      $3000        $18.46
@@ -4132,7 +4296,7 @@ There is a second optional argument which is the value returned by `sleep()` onc
 ```groovy
 > sleep(500, 3) + sleep(500, 2)
 5
-> sleep(500, 'ab') + sleep(500, 'c')
+        > sleep(500, 'ab') + sleep(500, 'c')
 abc
 ```
 This is mainly just used for internal testing of Jactl when validating that the suspending and resuming works correctly.
@@ -4160,7 +4324,7 @@ prints out the result:
 ```groovy
 def n, sum = 0
 while ((n = nextLine()) != null) {
-  sum += n as Decimal
+ sum += n as Decimal
 }
 println sum
 ```
@@ -4175,9 +4339,9 @@ For example, here is a complicated way to print the numbers 0 to 4:
 ```groovy
 > def i = 0
 0
-> def incrementer = { -> i < 5 ? i++ : null }
+        > def incrementer = { -> i < 5 ? i++ : null }
 Function@1787189503
-> stream(incrementer).each{ println it }
+        > stream(incrementer).each{ println it }
 0
 1
 2
@@ -4257,13 +4421,13 @@ It works like the `<<=` operator:
 ```groovy
 > def x = [1,2,3]
 [1, 2, 3]
-> x.add(4)
+        > x.add(4)
 [1, 2, 3, 4]
-> x
+        > x
 [1, 2, 3, 4]
-> x <<= 5
+        > x <<= 5
 [1, 2, 3, 4, 5]
-> x
+        > x
 [1, 2, 3, 4, 5]
 ```
 
@@ -4275,11 +4439,11 @@ the first position in the list):
 ```groovy
 >  def x = ['a', 'b', 'c']
 ['a', 'b', 'c']
-> x.addAt(0,'z')
+        > x.addAt(0,'z')
 ['z', 'a', 'b', 'c']
-> x.addAt(1, 'y')
+        > x.addAt(1, 'y')
 ['z', 'y', 'a', 'b', 'c']
-> x
+        > x
 ['z', 'y', 'a', 'b', 'c']
 ```
 
@@ -4288,7 +4452,7 @@ value:
 ```groovy
 > def x = ['a', 'b', 'c']
 ['a', 'b', 'c']
-> x.addAt(3, 'z')
+        > x.addAt(3, 'z')
 ['a', 'b', 'c', 'z']
 ```
 
@@ -4296,23 +4460,23 @@ If you add an element beyond the size of the list, then you will get an error:
 ```groovy
 > def x = ['a', 'b', 'c']
 ['a', 'b', 'c']
-> x.addAt(10, 'z')
+        > x.addAt(10, 'z')
 Index out of bounds: (10 is too large) @ line 1, column 3
 x.addAt(10, 'z')
-  ^
+        ^
 ```
 
 Note that `x.addAt(3, 'z')` is different to `x[3] = 'z'`:
 ```groovy
 > def x = ['a', 'b', 'c', 'd']
 ['a', 'b', 'c', 'd']
-> x.addAt(3, 'z')
+        > x.addAt(3, 'z')
 ['a', 'b', 'c', 'z', 'd']
-> def x = ['a', 'b', 'c', 'd']
+        > def x = ['a', 'b', 'c', 'd']
 ['a', 'b', 'c', 'd']
-> x[3] = 'z'
+        > x[3] = 'z'
 z
-> x
+        > x
 ['a', 'b', 'c', 'z']
 ```
 
@@ -4324,9 +4488,9 @@ The `remove()` method removes the element at the given position from the list:
 ```groovy
 > def x = ['a', 'b', 'c', 'd']
 ['a', 'b', 'c', 'd']
-> x.remove(3)
+        > x.remove(3)
 d
-> x
+        > x
 ['a', 'b', 'c'] 
 ```
 
@@ -4341,7 +4505,7 @@ With one argument it returns the sub-list from the given position until the end 
 ```groovy
 > [1, 2, 3, 4].subList(2)
 [3, 4]
-> ['a', 'b', 'c'].subList(1)
+        > ['a', 'b', 'c'].subList(1)
 ['b', 'c']
 ```
 
@@ -4362,7 +4526,7 @@ If the index value is negative it will be treated as an offset from the end of t
 ```groovy
 > [1,2,3,4].subList(-1)
 [4]
-> [1,2,3,4].subList(-3,3)
+        > [1,2,3,4].subList(-3,3)
 [2, 3]
 ```
 
@@ -4370,11 +4534,11 @@ Since Maps, Strings, and numbers can be iterated over, `subList()` can also be a
 ```groovy
 > 'abcdef'.subList(2,4)
 ['c', 'd']
-> [a:1,b:2,c:3].subList(2)
+        > [a:1,b:2,c:3].subList(2)
 [['c', 3]]
-> [a:1,b:2,c:3].subList(1,3)
+        > [a:1,b:2,c:3].subList(1,3)
 [['b', 2], ['c', 3]]
-> 10.subList(5,8)
+        > 10.subList(5,8)
 [5, 6, 7]
 ```
 
@@ -4394,9 +4558,9 @@ The `remove()` method removes the entry with the given key from the Map and retu
 ```groovy
 > def x = ['a':1, 'b':2, 'c':3]
 [a:1, b:2, c:3]
-> x.remove('b')
+        > x.remove('b')
 2
-> x
+        > x
 [a:1, c:3]
 ```
 
@@ -4404,9 +4568,9 @@ If there is no such entry that matches the key, `remove()` will return `null`:
 ```groovy
 > def x = ['a':1, 'b':2, 'c':3]
 [a:1, b:2, c:3]
-> x.remove('z') == null
+        > x.remove('z') == null
 true
-> x
+        > x
 [a:1, b:2, c:3]
 ```
 
@@ -4420,7 +4584,7 @@ while `size()` is supported for consitency in naming across Lists, Maps, and Str
 ```groovy
 > 'abcde'.size()
 5
-> 'abcde'.length()
+        > 'abcde'.length()
 5
 ```
 
@@ -4436,9 +4600,9 @@ multi-line
 string
 on
 four lines
-> data.lines()
+             > data.lines()
 ['multi-line', 'string', 'on ', 'four lines']
-> ''.lines()
+        > ''.lines()
 ['']
 ```
 
@@ -4448,7 +4612,7 @@ These methods turn a string into all upper case or all lower case:
 ```groovy
 > 'abc'.toUpperCase()
 ABC
-> 'A String With Capitals'.toLowerCase()
+        > 'A String With Capitals'.toLowerCase()
 a string with capitals
 ```
 
@@ -4478,9 +4642,9 @@ Negative values for the indexes are treated as an offset from the end of the str
 ```groovy
 > 'abcdef'.substring(-2)
 ef
-> 'abcdef'.substring(-4,-2)
+        > 'abcdef'.substring(-4,-2)
 cd
-> 'abcdef'.substring(-4,5)
+        > 'abcdef'.substring(-4,5)
 cde
 ```
 
@@ -4498,9 +4662,9 @@ For example:
 ```groovy
 > '1234'.asNum()
 1234
-> 'ff14'.asNum(16)
+        > 'ff14'.asNum(16)
 65300
-> '101011100110'.asNum(2)
+        > '101011100110'.asNum(2)
 2790
 ```
 
@@ -4508,17 +4672,17 @@ A base of up to 36 is supported:
 ```groovy
 > 'abzyAj13'.asNum(36)
 809760160983
-> 'abzyAj13'.asNum(37)
+        > 'abzyAj13'.asNum(37)
 Base was 37 but must be no more than 36 @ line 1, column 12
 'abzyAj13'.asNum(37)
-           ^
+        ^
 ```
 
 Both lowercase and uppercase letters are supported for bases greater than 10:
 ```groovy
 > 'abcdef99'.asNum(16)
 2882400153
-> 'ABCDEF99'.asNum(16)
+        > 'ABCDEF99'.asNum(16)
 2882400153
 ```
 
@@ -4538,7 +4702,7 @@ To convert from a character to its Unicode value, cast the single-character stri
 ```groovy
 > (int)'Z'
 90
-> 90.asChar()
+        > 90.asChar()
 Z
 ```
 
@@ -4552,7 +4716,7 @@ The `toBase()` method converts an `int` or `long` to its character representatio
 ```groovy
 > 1234.toBase(16)
 4D2
-> '4D2'.asNum(16)
+          > '4D2'.asNum(16)
 1234
 ```
 
@@ -4561,7 +4725,7 @@ Bases between 2 and 36 are supported:
 > 1234567879.toBase(37)
 Base must be between 2 and 36 @ line 1, column 12
 1234567879.toBase(37)
-           ^
+        ^
 ```
 
 ### Number.abs()
@@ -4570,9 +4734,9 @@ The `abs()` method returns the absolute value of the number:
 ```groovy
 > -15.abs()
 15
-> def distance(x1, x2) { (x1 - x2).abs() }
+        > def distance(x1, x2) { (x1 - x2).abs() }
 Function@1987169128
-> distance(11, 121)
+        > distance(11, 121)
 110
 ```
 
@@ -4599,7 +4763,7 @@ For example, to calculate the cube of a number:
 ```groovy
 > def x = 123
 123
-> x.pow(3)   // cube of x
+        > x.pow(3)   // cube of x
 1860867
 ```
 
@@ -4607,7 +4771,7 @@ The value of the exponent passed to `pow()` can be fractional and can be negativ
 ```groovy
 > 16.pow(0.5)    // another way to get square root
 4
-> 16.pow(-1.5)
+        > 16.pow(-1.5)
 0.015625
 ```
 
@@ -4619,9 +4783,9 @@ If passed no argument it prints the string representation of the object:
 ```groovy
 > 1234.toString()
 1234
-> def x = [a:1, b:[c:3,d:[1,2,3]]]
+        > def x = [a:1, b:[c:3,d:[1,2,3]]]
 [a:1, b:[c:3, d:[1, 2, 3]]]
-> x.toString()
+        > x.toString()
 [a:1, b:[c:3, d:[1, 2, 3]]]
 ```
 
@@ -4630,13 +4794,13 @@ and class instances:
 ```groovy
 > def x = [a:1, b:[c:3,d:[1,2,3]]]
 [a:1, b:[c:3, d:[1, 2, 3]]]
-> x.toString(2)
+        > x.toString(2)
 [
-  a:1,
-  b:[
-    c:3,
-    d:[1, 2, 3]
-  ]
+        a:1,
+        b:[
+                c:3,
+                d:[1, 2, 3]
+        ]
 ]
 ```
 
@@ -4647,7 +4811,7 @@ The `className()` method returns a String with the name of the class of the obje
 > class X{}
 > def x = new X()
 [:]
-> x.className()
+        > x.className()
 X
 ```
 
@@ -4655,8 +4819,8 @@ It can be used on any type of object, including primitives and arrays:
 ```groovy
 > 123.className()
 int
-> > def x = ['a','b','c'] as String[]
+        > > def x = ['a','b','c'] as String[]
 ['a', 'b', 'c']
-> x.className()
+        > x.className()
 String[]
 ```
