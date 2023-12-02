@@ -89,7 +89,7 @@ In the end this is the solution I came up with:
 ```groovy
 def vals = [zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9] + (10.map{ ["$it",it] } as Map)
 def n = vals.map{it[0]}.join('|')      // number pattern
-stream(nextLine).map{ [/^.*?($n)/r, vals[$1], /.*($n)((?!($n)).)*$/r, vals[$1]] }
+stream(nextLine).map{ [/^.*?($n)/r, vals[$1], /.*($n).*$/r, vals[$1]] }
                 .map{ 10 * it[1] + it[3] }
                 .sum()
 ```
@@ -106,8 +106,9 @@ One for the first digit `/^.*?($n)/` which uses a non-greedy match for character
 therefore find the first set of characters that matches our digits pattern stored in `n`.
 The `$1` value then ends up being the matching value which we look up in `vals` to get the numeric value.
 
-The second regex is `/.*($n)((?!($n)).)*$/` where we use a greedy match to grab everything possible at the start of
-the line and then find the characters matching `$n` where there are no further matches for `$n` that occur after.
+The second regex is `/.*($n).*$/` where we use a greedy match to grab everything possible at the start of
+the line and then find the characters matching `$n`.
+Since we used a greedy match we know that there are no matches earlier in the line.
 Again `$1` will have the result.
 
 The `map` method converts each line to a list of four values being:
