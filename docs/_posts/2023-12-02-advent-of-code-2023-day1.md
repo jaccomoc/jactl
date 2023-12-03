@@ -37,24 +37,20 @@ Would produce `23` for the first line and `44` for the second line.
 
 A nice simple problem for day 1 as they usually are:
 ```groovy
-stream(nextLine).map{ /^[^\d]*(\d).*?((\d)[^\d]*)?$/n; $1*10 + ($3 ?: $1) }.sum()
+stream(nextLine).map{ /^.*?(\d)(.*(\d))?/n; 10*$1+($3?:$1) }.sum()
 ```
 I just used a regex to extract both the digits and then multiply the first digit by 10 before adding the second
 digit.
 The only tricky part was getting the optional matching for the last digit to work.
 
-The first part of the pattern `^[^\d]*(\d)` is pretty straightforward.
-It says to match from the beginning of the line any number of non-digits followed by a digit which we then capture
-in a capture group so `$1` will end up having the value of this digit.
+The first part of the pattern `^.*?(\d)` is pretty straightforward.
+It says to match any character from the beginning of the line until a digit is found.
+The digit will be in the first capture group so `$1` will end up having the value of this digit.
+The non-greedy match `.*?` means that it will stop on at the first digit.
 
-The next part of the pattern is `.*?` which is a non-greedy match for any characters.
-If we had a greedy match instead then it would always grab all characters until the end of line and our second
-match would never find anything.
-By using non-greedy matching here we allow the optional second match to take place if it can.
-
-The next part of the pattern is `((\d)[^\d]*)?$`.
-This says to optionally match a digit followed by any number of non-digits up until the end of the string (in this
-case the end of the line).
+The next part of the pattern is `(.*(\d))?`.
+This says to optionally do a greedy match on any character followed by a digit.
+Since we use a greedy match we will only match a digit when it is the last digit on the line.
 There are two groups here and the inner group will capture the value of the last digit (if it exists) as `$3`.
 If there is no match for a second digit then `$3` will be null so we use `$3 ?: $1` to get the value of `$3`
 if it exists or return `$1` when `$3` is null.
