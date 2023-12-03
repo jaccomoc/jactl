@@ -659,7 +659,8 @@ public class RuntimeUtils {
     // We are left with the comparison operators
     if ((operator == EQUAL_EQUAL || operator == BANG_EQUAL)) {
       if (left instanceof List || left instanceof Map || left instanceof JactlObject ||
-          right instanceof List || right instanceof Map || right instanceof JactlObject) {
+          right instanceof List || right instanceof Map || right instanceof JactlObject ||
+          left.getClass().isArray() || right.getClass().isArray()) {
         return equality(left, right, operator, source, offset);
       }
       // Deal with Numbers below. Everything else reverts to Object.equals():
@@ -692,16 +693,8 @@ public class RuntimeUtils {
     if (leftObj == rightObj)                 { return operator == EQUAL_EQUAL; }
     if (leftObj == null || rightObj == null) { return operator == BANG_EQUAL; }
 
-    if (leftObj instanceof List && rightObj instanceof List) {
-      List left = (List)leftObj;
-      List right = (List)rightObj;
-      if (left.size() != right.size()) { return operator == BANG_EQUAL; }
-      for (int i = 0; i < left.size(); i++) {
-        if (!isEquals(left.get(i), right.get(i), source, offset)) {
-          return operator == BANG_EQUAL;
-        }
-      }
-      return operator == EQUAL_EQUAL;
+    if (leftObj instanceof List || rightObj instanceof List || leftObj.getClass().isArray() || rightObj.getClass().isArray()) {
+      return listEquals(leftObj, rightObj, operator, source, offset);
     }
 
     if (leftObj instanceof Map && rightObj instanceof Map) {
@@ -770,6 +763,56 @@ public class RuntimeUtils {
     }
 
     return leftObj.equals(rightObj) == (operator == EQUAL_EQUAL);
+  }
+
+  /**
+   * Compare lists or arrays
+   */
+  private static boolean listEquals(Object leftObj, Object rightObj, String operator, String source, int offset) {
+    boolean leftIsList     = leftObj  instanceof List;
+    boolean rightIsList    = rightObj instanceof List;
+    List    left  = leftIsList  ? (List)leftObj  : null;
+    List    right = rightIsList ? (List)rightObj : null;
+
+    if (leftIsList && rightIsList) {
+      if (left.size() != right.size()) { return operator == BANG_EQUAL; }
+      for (int i = 0; i < left.size(); i++) {
+        if (!isEquals(left.get(i), right.get(i), source, offset)) {
+          return operator == BANG_EQUAL;
+        }
+      }
+      return operator == EQUAL_EQUAL;
+    }
+
+    if (leftIsList || rightIsList) {
+      List   list = leftIsList ? left : right;
+      Object obj  = leftIsList ? rightObj : leftObj;
+      if (!obj.getClass().isArray())           { return operator == BANG_EQUAL; }
+      if (list.size() != Array.getLength(obj)) { return operator == BANG_EQUAL; }
+      for (int i = 0; i < list.size(); i++) {
+        if (!isEquals(list.get(i), Array.get(obj, i), source, offset)) {
+          return operator == BANG_EQUAL;
+        }
+      }
+      return operator == EQUAL_EQUAL;
+    }
+
+    // Both arrays
+    if (leftObj.getClass().isArray() && rightObj.getClass().isArray()) {
+      int length = Array.getLength(leftObj);
+      if (length != Array.getLength(rightObj)) {
+        return operator == BANG_EQUAL;
+      }
+      for (int i = 0; i < length; i++) {
+        if (!isEquals(Array.get(leftObj, i), Array.get(rightObj, i), source, offset)) {
+          return operator == BANG_EQUAL;
+        }
+      }
+      return operator == EQUAL_EQUAL;
+    }
+
+    // One of them is not a list and not an array so can't be equal
+    return operator == BANG_EQUAL;
   }
 
   /**

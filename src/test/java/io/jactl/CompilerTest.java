@@ -5000,6 +5000,62 @@ class CompilerTest extends BaseTest {
     test("boolean[] x = [true,false,true]; x as List", List.of(true,false,true));
   }
 
+  @Test public void arrayComparisons() {
+    test("new int[0] == []", true);
+    test("int[] x = new int[0]; x == []", true);
+    test("def x = new int[0]; x == []", true);
+    test("([1,2,3] as int[]) == ([1,2,3] as int[])", true);
+    test("([1,2,3] as int[]) == [1,2,3]", true);
+    test("def x = [1,2,3] as int[]; x == ([1,2,3] as int[])", true);
+    test("int[] x = [1,2,3]; x == ([1,2,3] as int[])", true);
+    test("def x = [1,2,3] as int[]; x == [1,2,3]", true);
+    test("int[] x = [1,2,3]; x == [1,2,3]", true);
+    test("new int[0] === []", false);
+    test("int[] x = new int[0]; x === []", false);
+    test("def x = new int[0]; x === []", false);
+    test("([1,2,3] as int[]) === ([1,2,3] as int[])", false);
+    test("([1,2,3] as int[]) === [1,2,3]", false);
+    test("def x = [1,2,3] as int[]; x === ([1,2,3] as int[])", false);
+    test("int[] x = [1,2,3]; x === ([1,2,3] as int[])", false);
+    test("def x = [1,2,3] as int[]; x === [1,2,3]", false);
+    test("int[] x = [1,2,3]; x === [1,2,3]", false);
+    test("new int[0] != []", false);
+    test("int[] x = new int[0]; x != []", false);
+    test("def x = new int[0]; x != []", false);
+    test("([1,2,3] as int[]) != ([1,2,3] as int[])", false);
+    test("([1,2,3] as int[]) != [1,2,3]", false);
+    test("def x = [1,2,3] as int[]; x != ([1,2,3] as int[])", false);
+    test("int[] x = [1,2,3]; x != ([1,2,3] as int[])", false);
+    test("def x = [1,2,3] as int[]; x != [1,2,3]", false);
+    test("int[] x = [1,2,3]; x != [1,2,3]", false);
+    test("([1,2,3] as int[]) == ([1,2,3] as long[])", true);
+    test("([1,2,3] as long[]) == [1,2,3]", true);
+    test("def x = [1,2,3] as long[]; x == ([1,2,3] as int[])", true);
+    test("int[] x = [1,2,3]; x == ([1,2,3] as long[])", true);
+    test("def x = [1,2,3] as long[]; x == [1,2,3]", true);
+    test("long[] x = [1,2,3]; x == [1,2,3]", true);
+    test("long[][] x = [[1],[2],[3]]; x == [1,2,3]", false);
+    test("long[][] x = [[1],[2],[3]]; x == [[1],[2],[3]]", true);
+    test("long[][] x = [[1],[2],[3]]; x == [[1],[2] as int[],[3]]", true);
+    test("String a = 'abc'; a == ['a','b','c']", false);
+    test("String[] a = ['abc']; a == ['abc']", true);
+    test("String[] a = ['abc']; a == ['abc'] as String[]", true);
+    test("def a = ['abc']; a == ['abc'] as String[]", true);
+    test("def a = ['abc'] as String[]; a == ['abc']", true);
+    test("def a = ['abc',['x',['y']]] as String[]; a == ['abc', ['x',['y']]]", false);
+    test("def a = ['abc',['x',['y']]] as String[]; a == ['abc', '''['x', ['y']]''']", true);
+    test("([true, false] as boolean[]) == [true, false]", true);
+    test("([true, false] as boolean[]) == [true, false]", true);
+    test("def x = [true, false] as boolean[]; x == [true, false]", true);
+    test("boolean[] x = [true, false]; x == [true, false]", true);
+    test("boolean[] x = [true, false]; x == [1,0]", false);
+    test("Decimal[] x = [1, 2]; x == [1,2]", true);
+    test("Decimal[] x = [1, 2]; x == [1.0,2.0]", true);
+    test("double[] x = [1, 2]; x == [1.0,2.0]", true);
+    test("double[] x = [1, 2]; x == [1,2]", true);
+    test("double[] x = [1, 2]; x == [1,2] as int[]", true);
+  }
+
   @Test public void fieldAssignments() {
     testError("Map m = [a:1]; m*a = 2", "invalid lvalue");
     test("Map m = [:]; m.a = 1", 1);
