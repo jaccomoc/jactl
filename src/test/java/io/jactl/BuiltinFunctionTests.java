@@ -1098,6 +1098,9 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[a:1,b:2].reduce(''){ it[0] + it[1] }", "['a', 1]['b', 2]");
     test("def x = [a:1,b:2]; def f = x.reduce; f(''){ v,e -> v + e }", "['a', 1]['b', 2]");
     test("'abcasfiieefaeiihsaiggaaasdh'.reduce([:]){m,c -> m[c]++; m}.sort{a,b -> b[1] <=> a[1]}.join(':')", "['a', 7]:['i', 5]:['s', 3]:['e', 3]:['f', 2]:['h', 2]:['g', 2]:['b', 1]:['c', 1]:['d', 1]");
+// TO BE FIXED:
+//    test("[['a',1],['b',2],['c',3]].reduce([:]){ m,it -> println \"$m:${it[0]}\"; m[it[0]] = 0 }", "xxx");
+//    test("[['a',1],['b',2],['c',3]].reduce([:]){ it,m -> m[it[0]] = 0 }", "xxx");
   }
 
   @Test public void skipLimit() {

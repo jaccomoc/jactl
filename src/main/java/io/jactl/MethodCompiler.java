@@ -4858,8 +4858,8 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     }
     if (sourceLocation instanceof Location) {
       Location location = (Location) sourceLocation;
-      _loadConst(location.getLine());
-      _loadConst(location.getColumn() - 1);  // turn column into offset within line
+      _loadConst(location.getSource());
+      _loadConst(location.getOffset());
       return;
     }
     throw new IllegalStateException("Unexpected SourceLocation type " + sourceLocation.getClass().getName());

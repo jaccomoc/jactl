@@ -5599,6 +5599,10 @@ class CompilerTest extends BaseTest {
     test("def x = []; def y = [:]; x !== y", true);
   }
 
+  @Test public void errorLineNumber() {
+    testError("def a = true\ndef b = 1\n a <=> b", "@ line 3");
+  }
+
   @Test public void constBooleanComparisons() {
     test("null == null", true);
     test("null == true", false);
