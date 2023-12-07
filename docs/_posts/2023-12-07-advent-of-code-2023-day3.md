@@ -11,7 +11,7 @@ After an easyish day 2, the difficulty level bumped up a bit again for day 3.
 
 # Day 3 - Gear Ratios
 
-See [Day 2](https://adventofcode.com/2023/day/3) for a detailed description of the problem.
+See [Day 3](https://adventofcode.com/2023/day/3) for a detailed description of the problem.
 
 To run the Jactl shown here save the code into a file (e.g. `advent03.jactl`) and run it like this (where advent03.txt
 is your input file from the Advent of Code site for Day 3):
@@ -25,6 +25,15 @@ In part 1 we are given a grid consisting of digits, dots, and symbols (such as '
 The idea is to find in the grid sequences of digits and treat these sequences as a number and sum all numbers in
 the grid that match the criteria that one of the digits in the number must be adjacent to a symbol.
 Adjacent, for this puzzle, means any neighbour in the 8 surrounding squares of the grid.
+
+For example:
+```
+..123..44.
+..+3..*...
+.32..677..
+..111.....
+.......$9.
+```
 
 As usual, for puzzles involving grids, I added a border of dots around the grid to avoid having to check for
 out-of-bounds conditions when looking for neighbours at the edge of the grid.
