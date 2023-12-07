@@ -14,7 +14,7 @@ Day 2 - Easier than day 1. Mostly a parsing exercise.
 See [Day 2](https://adventofcode.com/2023/day/2) for a detailed description of the problem.
 
 To run the Jactl shown here save the code into a file (e.g. `advent02.jactl`) and run it like this (where advent02.txt
-is your input file from the Advent of Code site for Day 1):
+is your input file from the Advent of Code site for Day 2):
 ```shell
 $ cat advent02.txt | java -jar jactl-{{ site.content.jactl_version }}.jar advent02.jactl 
 ```
