@@ -72,7 +72,7 @@ Here is the code:
 ```groovy
 01  def (T,D) = 2.map{ (nextLine().split(/: +/)[1] =~ s/ //gr) as long }
 02  def bin(a,b,fn) { def m = (a+b)/2.0; b-a < 1 ? (long)m : fn(m) < 0 ? bin(a,m,fn) : bin(m,b,fn) }
-03  bin(T/2, T, { it * (T-it) <=> D }) - bin(0, T/2, { D <=> it * (T-it) })
+03  bin(T/2,T,{ it*(T-it) <=> D }) - bin(0,T/2,{ D <=> it*(T-it) })
 ```
 
 Line 1 reads in the data and removes the spaces before converting the time and distance to a long value.
