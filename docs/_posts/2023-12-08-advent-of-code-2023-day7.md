@@ -122,6 +122,10 @@ We still have a function for returning a map of card counts at line 5.
 We use this function to calculate the counts for `a` and `b` in the maps `ca` and `cb` (after stripping out all
 the jokers) at line 6.
 
+Note that `a =~ s/J//gr` is a regex expression that substitutes all occurrences of `'J'` with `''`.
+The `r` after the expressions means that it returns the value after substitutions and doesn't modify the value `a`
+as it would normally.
+
 Line 7 is where we find the best card to use in case we have any jokers.
 We use the card counts in `ca` and `cb` to find the card with the highest count and return it
 as `aBest` for hand `a` and `bBest` for hand `b`.
