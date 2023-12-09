@@ -805,8 +805,17 @@ public class BuiltinFunctions {
     if (Double.isNaN(result)) {
       throw new RuntimeError("Illegal request: raising " + num + " to " + power, source, offset);
     }
-    long   longResult = (long) result;
+    if (num instanceof BigDecimal) {
+      return BigDecimal.valueOf(result);
+    }
+    if (num instanceof Double) {
+      return result;
+    }
+    long longResult = (long) result;
     if ((double)longResult == result) {
+      if (num instanceof Long) {
+        return longResult;
+      }
       if ((long)(int)longResult == longResult) {
         return (int)longResult;
       }

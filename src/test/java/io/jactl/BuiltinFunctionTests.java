@@ -1067,6 +1067,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[a:1,b:2,c:3].flatMap(mapper:{ x,y -> sleep(0,x) + sleep(0,y) })", List.of("a1","b2","c3"));
     testError("[a:1,b:2,c:3].flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     testError("def f = [a:1,b:2,c:3]; f.flatMap(closurex:{ x,y -> x + y })", "no such parameter");
+    test("[3,3,3,3,3].flatMap{ [it,it] }", List.of(3,3,3,3,3,3,3,3,3,3));
   }
 
   @Test public void mapEntryAsList() {
@@ -1648,50 +1649,51 @@ public class BuiltinFunctionTests extends BaseTest {
     test("16.pow(-0.5)", 0.25);
     test("def f = 16.pow; f(-0.5)", 0.25);
     test("-4.pow(-1)", -0.25);
-    test("4L.pow(0)", 1);
-    test("4L.pow(0.5)", 2);
-    test("4L.pow(3)", 64);
-    test("def f = 4L.pow; f(3)", 64);
+    test("4L.pow(0)", 1L);
+    test("4L.pow(0.5)", 2L);
+    test("4L.pow(3)", 64L);
+    test("def f = 4L.pow; f(3)", 64L);
     test("16L.pow(-0.5)", 0.25);
     test("-4L.pow(-1)", -0.25);
-    test("4.0.pow(0.5)", 2);
+    test("4.0.pow(0.5)", "#2.0");
     test("4.0.pow(3)", "#64.000");
-    test("16.0.pow(-0.5)", 0.25);
+    test("16.0.pow(-0.5)", "#0.25");
     test("-4.0.pow(0)", "#1");
-    test("-4.0.pow(-1)", -0.25);
-    test("0.0D.pow(0)", 1);
-    test("4.0D.pow(0.5)", 2);
-    test("4.0D.pow(3)", 64);
-    test("4.0D.pow(3) + 4.0D.pow(3)", 128);
+    test("-4.0.pow(-1)", "#-0.25");
+    test("0.0D.pow(0)", 1.0);
+    test("4.0D.pow(0.5)", 2.0);
+    test("4.0D.pow(3)", 64.0);
+    test("4.0D.pow(3) + 4.0D.pow(3)", 128.0);
     test("16.0D.pow(-0.5)", 0.25);
     test("def f = 16.0D.pow; f(-0.5)", 0.25);
     test("-4.0D.pow(-1)", -0.25);
-    test("(1234567890.0*1234567890.0).pow(0.5)", 1234567890);
-    test("(1234567890L*1234567890L).pow(0.5)", 1234567890);
+    test("(1234567890.0*1234567890.0).pow(0.5) == 1234567890.0", true);
+    test("(1234567890L*1234567890L).pow(0.5)", 1234567890L);
     test("def x = 4; x.pow(0.5)", 2);
     test("def x = 4; x.pow(3)", 64);
     test("def x = 16; x.pow(-0.5)", 0.25);
     test("def x = -4; x.pow(-1)", -0.25);
-    test("def x = 4L; x.pow(0.5)", 2);
-    test("def x = 4L; x.pow(3)", 64);
+    test("def x = 4L; x.pow(0.5)", 2L);
+    test("def x = 4L; x.pow(3)", 64L);
     test("def x = 16L; x.pow(-0.5)", 0.25);
     test("def x = 16L; def f = x.pow; f(-0.5)", 0.25);
     test("def x = -4L; x.pow(-1)", -0.25);
-    test("def x = 4.0; x.pow(0.5)", 2);
+    test("def x = 4.0; x.pow(0.5)", "#2.0");
     test("def x = 4.0; x.pow(3)", "#64.000");
-    test("def x = 16.0; x.pow(-0.5)", 0.25);
-    test("def x = -4.0; x.pow(-1)", -0.25);
-    test("def x = 4.0D; x.pow(0.5)", 2);
-    test("def x = 4.0D; x.pow(3)", 64);
+    test("def x = 16.0; x.pow(-0.5)", "#0.25");
+    test("def x = -4.0; x.pow(-1)", "#-0.25");
+    test("def x = 4.0D; x.pow(0.5)", 2.0);
+    test("def x = 4.0D; x.pow(3)", 64.0);
     test("def x = 16.0D; x.pow(-0.5)", 0.25);
     test("def x = -4.0D; x.pow(-1)", -0.25);
-    test("def x = (1234567890.0*1234567890.0); x.pow(0.5)", 1234567890);
-    test("def x = (1234567890L*1234567890L); x.pow(0.5)", 1234567890);
+    test("def x = (1234567890.0*1234567890.0); x.pow(0.5) == 1234567890.0", true);
+    test("def x = (1234567890L*1234567890L); x.pow(0.5)", 1234567890L);
     testError("-4.pow(0.5)", "illegal request");
     testError("-4.pow(-0.5)", "illegal request");
     testError("-4.0.pow(0.5)", "illegal request");
     testError("-4.0D.pow(0.5)", "illegal request");
     testError("-4L.pow(0.5)", "illegal request");
+    test("6.map{ it as long }.map{ (it+1).pow(4) }.reduce(1){ p,it -> p * it }", 268738560000L);
   }
 
   @Test public void asyncCollectionClosures() {
