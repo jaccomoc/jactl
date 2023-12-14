@@ -167,7 +167,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '1.3.1'
+implementation group: 'io.jactl', name: 'jactl', version: '1.4.0'
 ```
 
 ### Maven
@@ -177,7 +177,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>1.3.1</version>
+ <version>1.4.0</version>
 </dependency>
 ```
 
