@@ -19,6 +19,7 @@ Subset of Java/Groovy syntax with a touch of Perl mixed in.
   <div class="column" markdown="1">
 ### **Compiles to Java Bytecode**
 Compiles to bytecode for fast execution times.
+Supports Java 8 (and later).
   </div>
 </div>
 
@@ -100,7 +101,7 @@ def linkify = { s/ /-/g;  s/[^\w-]//g }
 
 // Find all top level headings in input and generate markdown for table of contents:
 stream(nextLine).filter{ /^# /r }
-                .map{ s/# // }
+                .map{ $1 if /^# (.*)/r }
                 .map{ "* [$it](#${ linkify(it.toLowerCase()) })" }
                 .each{ println it }
 ```
