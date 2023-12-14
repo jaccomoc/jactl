@@ -129,7 +129,7 @@ See [Language Features](https://jactl.io/language-features) for an overview of t
 ## Download
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/1.3.1/jactl-1.3.1.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.3.1/jactl-1.3.1.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/1.4.0/jactl-1.4.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/1.4.0/jactl-1.4.0.jar)
 
 To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
 [jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
