@@ -306,14 +306,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     try {
       if (classCompiler.annotate()) {
         // Annotate output with where we are by loading and immediately popping a string
-        _loadConst("  ".repeat(indent++) + "==> " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
+        _loadConst(Utils.repeat("  ", indent++) + "==> " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
         mv.visitInsn(POP);
       }
       return stmt.accept(this);
     }
     finally {
       if (classCompiler.annotate()) {
-        _loadConst("  ".repeat(--indent) + "<== " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
+        _loadConst(Utils.repeat("  ", --indent) + "<== " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
         mv.visitInsn(POP);
       }
     }
@@ -456,7 +456,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     try {
       if (classCompiler.annotate()) {
-        _loadConst("  ".repeat(indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
+        _loadConst(Utils.repeat("  ", indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
         mv.visitInsn(POP);
       }
       expr.accept(this);
@@ -473,7 +473,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     finally {
       if (classCompiler.annotate()) {
-        _loadConst("  ".repeat(--indent) + "<== " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
+        _loadConst(Utils.repeat("  ", --indent) + "<== " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
         mv.visitInsn(POP);
       }
     }
@@ -611,7 +611,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // (especially if local variable of type int).
     if (expr.operator.is(PLUS_EQUAL, MINUS_EQUAL, PLUS_PLUS, MINUS_MINUS) &&
         !expr.identifierExpr.varDecl.isGlobal && expr.expr instanceof Expr.Binary) {
-      var binary = (Expr.Binary)expr.expr;
+      Expr.Binary binary = (Expr.Binary)expr.expr;
       if (binary.right.isConst) {
         incOrDecVar(true,
                     expr.operator.is(PLUS_EQUAL, PLUS_PLUS),
@@ -797,7 +797,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT, PERCENT_PERCENT};
-  private static Map<TokenType,String> methodNames = Map.of(PLUS, "plus",
+  private static Map<TokenType,String> methodNames = Utils.mapOf(PLUS, "plus",
                                                             MINUS, "minus",
                                                             STAR, "multiply",
                                                             SLASH, "divide",
@@ -868,8 +868,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Complex replacement string so we need to iterate ourselves and re-evaluate the replacement
     // string each time (with the new capture vars)
 
-    // Create a StringBuilder to store result into
-    _newInstance(StringBuilder.class);
+    // Create a StringBuffer to store result into
+    _newInstance(StringBuffer.class);
     int sbVar = stack.allocateSlot(ANY);
     _storeLocal(sbVar);
 
@@ -899,9 +899,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadVar(expr.captureArrVarDecl);
     swap();
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
     swap();
-    invokeMethod(RegexMatcher.class, "appendReplacement", StringBuilder.class, String.class);
+    invokeMethod(RegexMatcher.class, "appendReplacement", StringBuffer.class, String.class);
 
     // If in loop
     if (globalModifier) {
@@ -914,12 +914,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(done);      // :done
     loadVar(expr.captureArrVarDecl);
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
-    invokeMethod(RegexMatcher.class, "appendTail", StringBuilder.class);
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
+    invokeMethod(RegexMatcher.class, "appendTail", StringBuffer.class);
 
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuilder.class));
-    invokeMethod(StringBuilder.class, "toString");
+    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
+    invokeMethod(StringBuffer.class, "toString");
 
     stack.freeSlot(sbVar);
     return null;
@@ -927,20 +927,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // Map of which opcode to use for common binary operations based on type
   private static final Map<TokenType,List<Object>> opCodesByOperator = Utils.mapOf(
-    PLUS, List.of(List.of(IADD), List.of(LADD), List.of(DADD), RuntimeUtils.PLUS),
-    MINUS, List.of(List.of(ISUB), List.of(LSUB), List.of(DSUB), RuntimeUtils.MINUS),
-    STAR, List.of(List.of(IMUL), List.of(LMUL), List.of(DMUL), RuntimeUtils.STAR),
-    SLASH, List.of(List.of(IDIV), List.of(LDIV), List.of(DDIV), RuntimeUtils.SLASH),
-    PERCENT_PERCENT, List.of(List.of(IREM), List.of(LREM), List.of(DREM), RuntimeUtils.PERCENT_PERCENT),
-    AMPERSAND, List.of(List.of(IAND), List.of(LAND), List.of(), List.of()),
-    PIPE, List.of(List.of(IOR), List.of(LOR), List.of(), List.of()),
-    ACCENT, List.of(List.of(IXOR), List.of(LXOR), List.of(), List.of()),
-    DOUBLE_LESS_THAN, List.of(List.of(ISHL), List.of(LSHL), List.of(), List.of()),
-    DOUBLE_GREATER_THAN, List.of(List.of(ISHR), List.of(LSHR), List.of(), List.of()),
-    TRIPLE_GREATER_THAN, List.of(List.of(IUSHR), List.of(LUSHR), List.of(), List.of()),
-    PERCENT, List.of(List.of(DUP_X1, IREM, SWAP, DUP_X1, IADD, SWAP, IREM),
-                               List.of(DUP2_X2, LREM,  DUP2_X2, POP2, DUP2_X2, LADD, DUP2_X2, POP2, LREM),
-                               List.of(DUP2_X2, DREM,  DUP2_X2, POP2, DUP2_X2, DADD, DUP2_X2, POP2, DREM),
+    PLUS, Utils.listOf(Utils.listOf(IADD), Utils.listOf(LADD), Utils.listOf(DADD), RuntimeUtils.PLUS),
+    MINUS, Utils.listOf(Utils.listOf(ISUB), Utils.listOf(LSUB), Utils.listOf(DSUB), RuntimeUtils.MINUS),
+    STAR, Utils.listOf(Utils.listOf(IMUL), Utils.listOf(LMUL), Utils.listOf(DMUL), RuntimeUtils.STAR),
+    SLASH, Utils.listOf(Utils.listOf(IDIV), Utils.listOf(LDIV), Utils.listOf(DDIV), RuntimeUtils.SLASH),
+    PERCENT_PERCENT, Utils.listOf(Utils.listOf(IREM), Utils.listOf(LREM), Utils.listOf(DREM), RuntimeUtils.PERCENT_PERCENT),
+    AMPERSAND, Utils.listOf(Utils.listOf(IAND), Utils.listOf(LAND), Utils.listOf(), Utils.listOf()),
+    PIPE, Utils.listOf(Utils.listOf(IOR), Utils.listOf(LOR), Utils.listOf(), Utils.listOf()),
+    ACCENT, Utils.listOf(Utils.listOf(IXOR), Utils.listOf(LXOR), Utils.listOf(), Utils.listOf()),
+    DOUBLE_LESS_THAN, Utils.listOf(Utils.listOf(ISHL), Utils.listOf(LSHL), Utils.listOf(), Utils.listOf()),
+    DOUBLE_GREATER_THAN, Utils.listOf(Utils.listOf(ISHR), Utils.listOf(LSHR), Utils.listOf(), Utils.listOf()),
+    TRIPLE_GREATER_THAN, Utils.listOf(Utils.listOf(IUSHR), Utils.listOf(LUSHR), Utils.listOf(), Utils.listOf()),
+    PERCENT, Utils.listOf(Utils.listOf(DUP_X1, IREM, SWAP, DUP_X1, IADD, SWAP, IREM),
+                               Utils.listOf(DUP2_X2, LREM,  DUP2_X2, POP2, DUP2_X2, LADD, DUP2_X2, POP2, LREM),
+                               Utils.listOf(DUP2_X2, DREM,  DUP2_X2, POP2, DUP2_X2, DADD, DUP2_X2, POP2, DREM),
                                RuntimeUtils.PERCENT)
   );
   private static final int intIdx = 0;
@@ -1067,17 +1067,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (expr.right instanceof Expr.Literal) {
           // We know the type so get the field/method directly.
           // Note: we know that Resolver has already checked for valid field/method name.
-          String     name      = literalString(expr.right);
-          var        clss      = expr.left.type.getClassDescriptor();
+          String          name = literalString(expr.right);
+          ClassDescriptor clss = expr.left.type.getClassDescriptor();
 
           // Check for inner class
-          var innerClass = clss.getInnerClass(name);
+          ClassDescriptor innerClass = clss.getInnerClass(name);
           if (innerClass != null) {
             return null;
           }
 
           // We need to find the method handle for the given method
-          var method = clss.getMethod(name);
+          FunctionDescriptor method = clss.getMethod(name);
           check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
           // We want the handle to the wrapper method.
           loadWrapperHandle(method, expr);
@@ -1125,8 +1125,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         else {
           if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
-            var   parentType = peek();
-            Label FINISH     = new Label();
+            JactlType parentType = peek();
+            Label     FINISH     = new Label();
             // Check for array type for efficient access
             if (expr.operator.is(LEFT_SQUARE)) {
               if (couldBeNull(expr.left)) {
@@ -1267,7 +1267,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Compare operator <=>
     if (expr.operator.is(COMPARE)) {
-      var maxType = Utils.maxNumericType(expr.left.type, expr.right.type);
+      JactlType maxType = Utils.maxNumericType(expr.left.type, expr.right.type);
       if (maxType != null || expr.left.type.is(BOOLEAN) && expr.right.type.is(BOOLEAN)) {
         // If we have numeric types or boolean
         if (maxType == null || maxType.is(BYTE,INT)) {
@@ -1494,7 +1494,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return true;
     }
     if (expr instanceof Expr.Identifier) {
-      var ident = (Expr.Identifier)expr;
+      Expr.Identifier ident = (Expr.Identifier)expr;
       if (ident.varDecl.isFinal && ident.varDecl.initialiser != null && !couldBeNull(ident.varDecl.initialiser)) {
         return false;
       }
@@ -1654,8 +1654,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    final var name = expr.identifier.getStringValue();
-    final var isBuiltinFunction = expr.varDecl.funDecl != null && expr.varDecl.funDecl.functionDescriptor.isBuiltin;
+    final String  name              = expr.identifier.getStringValue();
+    final boolean isBuiltinFunction = expr.varDecl.funDecl != null && expr.varDecl.funDecl.functionDescriptor.isBuiltin;
     if (!expr.varDecl.isGlobal && expr.varDecl.slot == -1 && !isBuiltinFunction && !expr.varDecl.isField) {
       throw new CompileError("Forward reference to uninitialised value", expr.location);
     }
@@ -1748,8 +1748,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       isFunctionCall = functionDescriptor.isStatic || functionDescriptor.implementingClassName == null || functionDescriptor.implementingClassName.equals(classCompiler.internalName);
     }
     if (isFunctionCall) {
-      var callee = (Expr.Identifier)expr.callee;
-      Expr.FunDecl funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
+      Expr.Identifier callee  = (Expr.Identifier)expr.callee;
+      Expr.FunDecl    funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
       expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
 
@@ -1811,7 +1811,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
     // If we know what method to invoke
     if (expr.methodDescriptor != null) {
-      var method = expr.methodDescriptor;
+      FunctionDescriptor method = expr.methodDescriptor;
 
       if (expr.validateArgsAtCompileTime) {
         expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.isInitMethod, method.returnType);
@@ -1820,7 +1820,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
       boolean invokeSpecial = expr.parent.isSuper();
 
-      var methodClass = method.isStatic ? method.implementingClassName : expr.parent.type.getInternalName();
+      String methodClass = method.isStatic ? method.implementingClassName : expr.parent.type.getInternalName();
 
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
@@ -1897,7 +1897,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            loadArgsAsObjectArr(expr.args);
                          },
                          () -> {
-                           var paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
+                           List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
                            if (method.isBuiltin && !method.isGlobalFunction) {
                              paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
                            }
@@ -1997,7 +1997,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInvokeUtility(Expr.InvokeUtility expr) {
     expr.args.forEach(this::compile);
-    invokeMethod(expr.clss, expr.methodName, expr.paramTypes.toArray(Class[]::new));
+    invokeMethod(expr.clss, expr.methodName, expr.paramTypes.toArray(new Class[0]));
     return null;
   }
 
@@ -2073,8 +2073,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
-    var type = expr.type;
-    int maybeNegative = (int)expr.dimensions.stream().filter(d -> !compilePositiveInt(d)).count();
+    JactlType type          = expr.type;
+    int       maybeNegative = (int)expr.dimensions.stream().filter(d -> !compilePositiveInt(d)).count();
     if (maybeNegative == 0) {
       // Guaranteed that all dimensions are positive
       newInstance(expr.type, expr.dimensions.size());
@@ -2085,7 +2085,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> newInstance(expr.type, expr.dimensions.size()),
                () -> {
                  invokeMethod(Throwable.class, "getMessage");
-                 _throwErrorWithString("Negative array index: ", expr.location);
+                 throwErrorWithStringOrNull("Negative array index", expr.location);
                });
     }
     return null;
@@ -2111,8 +2111,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitConvertTo(Expr.ConvertTo expr) {
     int sourceSlot = ((Expr.Identifier) expr.source).varDecl.slot;
-    int offsetSlot = ((Expr.Identifier) expr.offset).varDecl.slot;
-    var location   = new LocalLocation(sourceSlot, offsetSlot);
+    int           offsetSlot = ((Expr.Identifier) expr.offset).varDecl.slot;
+    LocalLocation location   = new LocalLocation(sourceSlot, offsetSlot);
     compile(expr.expr);
     convertToInstance(expr.varType, expr.expr, expr.expr.location, location);
     return null;
@@ -2164,7 +2164,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private boolean compilePositiveInt(Expr expr) {
     boolean isDefinitelyPositive = false;
     if (expr.isConst) {
-      var value = expr.constValue;
+      Object value = expr.constValue;
       if (value instanceof Number) {
         if (((Number) value).intValue() < 0) {
           throw new CompileError("Invalid array size (" + value + "): cannot be negative", expr.location);
@@ -2247,7 +2247,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      () -> {
                        // Note: wrapper always has continuation since when invoking as a handle we have
                        // no idea about whether it is async or not.
-                       List<JactlType> paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
+                       List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
                        invokeMethod(false, false, method.implementingClassName, method.wrapperMethod, ANY,
                                     paramTypes);
                      });
@@ -2263,7 +2263,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void compileFieldAccess(Expr.Binary expr) {
     // Generate a list of our parent nodes from current node up to top most one
-    var nodes = new ArrayList<Expr.Binary>();
+    ArrayList<Expr.Binary> nodes = new ArrayList<Expr.Binary>();
     for (Expr node = expr;
          node instanceof Expr.Binary && ((Expr.Binary)node).isFieldAccess;
          node = ((Expr.Binary)node).left) {
@@ -2275,10 +2275,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (couldBeNull(leftMost.left) && !leftMost.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
       throwIfNull("Trying to access field/element of null object", leftMost.operator);
     }
-    boolean checkForNull = false;
-    var     lastNode     = leftMost;
+    boolean     checkForNull = false;
+    Expr.Binary lastNode     = leftMost;
     for (ListIterator<Expr.Binary> iter = nodes.listIterator(nodes.size()); iter.hasPrevious(); ) {
-      var    node = iter.previous();
+      Expr.Binary node = iter.previous();
       if (checkForNull && !node.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
         throwIfNull("Trying to access field/element of null object" +
                     (lastNode.createIfMissing ? " (could not auto-create parent due to mandatory fields)" : ""),
@@ -2287,9 +2287,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (node.right.isSuper()) {
         continue;
       }
-      String fieldName = literalString(node.right);
-      var    parentClass = node.left.type.getClassDescriptor();
-      var    childType   = parentClass.getField(fieldName);
+      String          fieldName   = literalString(node.right);
+      ClassDescriptor parentClass = node.left.type.getClassDescriptor();
+      JactlType       childType   = parentClass.getField(fieldName);
       // Can only create if createIfMissing flag set and if there are no mandatory fields (i.e. init method
       // has 0 parameters).
       boolean createIfMissing = node.createIfMissing && !(childType.is(INSTANCE) && childType.getClassDescriptor().getInitMethod().paramCount > 0);
@@ -2355,8 +2355,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @return true if args validated and false if validation should be deferred to runtime
    */
   private static boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
-    int argCount = args.size();
-    var arg0Type = argCount > 0 ? args.get(0).type : null;
+    int       argCount = args.size();
+    JactlType arg0Type = argCount > 0 ? args.get(0).type : null;
     if (!isInitMethod && argCount == 1 && arg0Type.is(ANY, LIST)) {
       if (func.paramCount != 1 && func.mandatoryArgCount != 1) {
         if (func.mandatoryArgCount > 1 ||
@@ -2368,9 +2368,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
       }
     }
-    boolean namedArgs = Utils.isNamedArgs(args);
-    var paramTypes = func.paramTypes;
-    var paramNames = func.paramNames;
+    boolean         namedArgs  = Utils.isNamedArgs(args);
+    List<JactlType> paramTypes = func.paramTypes;
+    List<String>    paramNames = func.paramNames;
     if (namedArgs && paramNames == null) {
       throw new CompileError(func.name + " does not support invocation with named arguments", location);
     }
@@ -2422,17 +2422,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // For init methods the parameter names and types come from the ClassDescriptor because the init method only
     // has the mandatory parameters while the wrapper (the one taking named arg values) accepts values for all fields.
-    var paramNames = isInitMethod ? initClass.getClassDescriptor().getAllFieldNames() : func.paramNames;
-    var paramTypes = isInitMethod ? initClass.getClassDescriptor().getAllFieldTypes() : func.paramTypes;
+    List<String>    paramNames = isInitMethod ? initClass.getClassDescriptor().getAllFieldNames() : func.paramNames;
+    List<JactlType> paramTypes = isInitMethod ? initClass.getClassDescriptor().getAllFieldTypes() : func.paramTypes;
 
-    Function<Expr,String> argName = expr -> ((Expr.Literal)expr).value.getStringValue();
-    var mapEntries  = ((Expr.MapLiteral) args.get(0)).entries;
-    var namedArgMap = mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
+    Function<Expr,String>  argName     = expr -> ((Expr.Literal)expr).value.getStringValue();
+    List<Pair<Expr, Expr>> mapEntries  = ((Expr.MapLiteral) args.get(0)).entries;
+    Map<String, Expr>      namedArgMap = mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
 
     for (int i = 0; i < paramNames.size(); i++) {
       String     paramName = paramNames.get(i);
       JactlType paramType = paramTypes.get(i);
-      var        argExpr   = namedArgMap.get(paramName);
+      Expr      argExpr   = namedArgMap.get(paramName);
       if (argExpr == null) {
         if (func.mandatoryParams.contains(paramName)) {
           missingArgs.add(paramName);
@@ -2446,10 +2446,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (namedArgMap.size() > 0) {
       // Use location of first extraneous argument for error
-      var keys = mapEntries.stream()
-                           .filter(entry -> namedArgMap.containsKey(argName.apply(entry.first)))
-                           .map(entry -> entry.first)
-                           .collect(Collectors.toList());
+      List<Expr> keys = mapEntries.stream()
+                                  .filter(entry -> namedArgMap.containsKey(argName.apply(entry.first)))
+                                  .map(entry -> entry.first)
+                                  .collect(Collectors.toList());
       throw new CompileError("No such " + Utils.plural(isInitMethod ? "field" : "parameter", namedArgMap.size()) + ": "
                              + keys.stream().map(expr -> argName.apply(expr)).collect(Collectors.joining(", ")) +
                              (isInitMethod ? " in object of type " + initClass : ""),
@@ -2464,7 +2464,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (argExpr.type.is(MAP) && paramType.is(INSTANCE)) {
       FunctionDescriptor initMethod = paramType.getClassDescriptor().getInitMethod();
       if (argExpr.isConstMap()) {
-        validateNamedArgs(List.of(argExpr), initMethod, argExpr.location, true, paramType);
+        validateNamedArgs(Utils.listOf(argExpr), initMethod, argExpr.location, true, paramType);
       }
     }
     else
@@ -2511,7 +2511,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     popType();
 
     // Save stack and locals
-    var savedState = stack.copy();
+    LocalTypes savedState = stack.copy();
 
     if (trueStmts != null) {
       trueStmts.run();
@@ -2524,7 +2524,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(ifFalse);               // :ifFalse
     if (falseStmts != null) {
       // Restore stack to how it was before trueStmts ran
-      var trueState = stack;
+      LocalTypes trueState = stack;
       stack = savedState;
       falseStmts.run();
       // Make sure that both branches leave stack the same
@@ -2625,16 +2625,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // them every time
 
     // First check that we don't have forward references to variables that have not yet been initialised
-    var badVars = wrapperFunDecl.heapLocals.values()
-                                           .stream()
-                                           .filter(p -> p.parentVarDecl.slot == -1)
-                                           .map(p -> p.name.getStringValue())
-                                           .collect(Collectors.toList());
+    List<String> badVars = wrapperFunDecl.heapLocals.values()
+                                                    .stream()
+                                                    .filter(p -> p.parentVarDecl.slot == -1)
+                                                    .map(p -> p.name.getStringValue())
+                                                    .collect(Collectors.toList());
 
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
       throw new CompileError("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
-                             (plural?"s ":" ") + String.join(",", badVars.toArray(String[]::new)) +
+                             (plural?"s ":" ") + String.join(",", badVars.toArray(new String[badVars.size()])) +
                              " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
     }
 
@@ -2690,7 +2690,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private static List<JactlType> methodParamTypes(Expr.FunDecl funDecl) {
     // We include a HeapLocal object for each heap var param that the function needs
     // before adding a type for each actual parameter.
-    var params = Collections.nCopies(funDecl.heapLocals.size(), HEAPLOCAL).stream();
+    Stream<JactlType> params = Collections.nCopies(funDecl.heapLocals.size(), HEAPLOCAL).stream();
     // Add Continuation after HeapLocals for async functions and for wrappers
     if (funDecl.functionDescriptor.isAsync || funDecl.isWrapper) {
       params = Stream.concat(params, Stream.of(CONTINUATION));
@@ -2711,7 +2711,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       types.add(method.firstArgtype);
     }
     if (method.isAsync || method.isWrapper) { types.add(CONTINUATION); }
-    if (method.needsLocation)               { types.addAll(List.of(STRING, INT)); }
+    if (method.needsLocation)               { types.addAll(Utils.listOf(STRING, INT)); }
     types.addAll(method.paramTypes);
     return types;
   }
@@ -3662,6 +3662,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(ATHROW);
   }
 
+  /**
+   * Throw RuntimeError with given message prepended to string that is on stack.
+   * String on stack may be null in which case we don't concatenate it.
+   * <p>Expect stack: ...,string</p>
+   * @param msg       message to prepend to string
+   * @param location
+   */
+  private void throwErrorWithStringOrNull(String msg, SourceLocation location) {
+    _loadConst(msg);
+    _loadLocation(location);
+    mv.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/RuntimeUtils", RuntimeUtils.ERROR_WITH_MSG,
+                       "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)Lio/jactl/runtime/RuntimeError;", false);
+    mv.visitInsn(ATHROW);
+  }
+
   private void _throwErrorWithInt(String msg, SourceLocation location) {
     int intSlot = stack.allocateSlot(INT);
     _storeLocal(intSlot);
@@ -3722,9 +3737,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // a NOP just to make sure that this can't happen.
     mv.visitInsn(NOP);
 
-    var preTryState = stack.copy();
+    LocalTypes preTryState = stack.copy();
     tryBlock.run();
-    var postTryState = stack.copy();
+    LocalTypes postTryState = stack.copy();
 
     TryCatch myTryCatch = tryCatches.pop();
 
@@ -3824,7 +3839,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // object since the method handle will be bound to "this" and the Continuation is supplied
     // when resuming so the current value (usually null) is irrelevant.
     stack.convertStackToLocalsExcept(numArgsAlreadyOnStack);
-    var savedState = stack.copy();
+    LocalTypes savedState = stack.copy();
 
     // Compile the args to the function before starting the try/catch block since the async part is in the
     // invocation of the function. If the args compilation requires async behaviour then it will take care
@@ -3837,8 +3852,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
 
     mv.visitLabel(blockStart);   // :blockStart
-    final var methodLocation = asyncLocations.size();
-    Label continuation = new Label();
+    final int methodLocation = asyncLocations.size();
+    Label     continuation   = new Label();
     asyncLocations.add(continuation);
 
     // If we are script main then we have globalVars param which we don't need to restore
@@ -3936,7 +3951,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean invokeWrapper = Utils.isInvokeWrapper(expr, func);
 
     // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
-    var heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocals : funDecl.heapLocals).values();
+    Collection<Expr.VarDecl> heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocals : funDecl.heapLocals).values();
 
     // Get varDecl for location of HeapLocal that we need for the function we are invoking
     Function<Expr.VarDecl,Pair<String,Expr.VarDecl>> getVarDecl = p -> {
@@ -3945,16 +3960,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                       : new Pair(name, methodFunDecl.heapLocals.get(p.originalVarDecl));
     };
 
-    var varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
+    List<Pair<String, Expr.VarDecl>> varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
 
     // Make sure either we have variable already in our heap local params or we are the function where
     // the heap local param we need was declared.
-    var badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
+    List<String> badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
       throw new CompileError("Invocation of " + funDecl.nameToken.getStringValue() +
                              " requires forward reference to closed over variable" + (plural?"s ":" ") +
-                             String.join(",", badVars.toArray(String[]::new)) +
+                             String.join(",", badVars.toArray(new String[badVars.size()])) +
                              (plural ? " that have" : " that has") +
                              " not yet been initialised",
                              expr.location);
@@ -4007,15 +4022,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // We invoke wrapper for named args or if we don't have enough args since it will fill
     // in missing values for optional parameters. We need last param to be of type Object[]
     // since this means varArgs.
-    var     paramTypes = func.paramTypes;
-    boolean varArgs    = func.isVarArgs;
-    var nonVarArgCount = varArgs ? paramTypes.size() - 1
+    List<JactlType> paramTypes = func.paramTypes;
+    boolean         varArgs    = func.isVarArgs;
+    int nonVarArgCount = varArgs ? paramTypes.size() - 1
                                  : paramTypes.size();
     boolean invokeWrapper = Utils.isNamedArgs(expr.args) || expr.args.size() < nonVarArgCount;
 
     if (invokeWrapper) {
       // Add location types to the front
-      paramTypes = List.of(CONTINUATION, STRING, INT, OBJECT_ARR);
+      paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
       List<JactlType> finalParamTypes = paramTypes;
 
       invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
@@ -4641,7 +4656,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         else {
           newInstance(type);
           loadLocation(expr.location);
-          invokeMethod(false, false, type.getClassDescriptor().getInternalName(), Utils.JACTL_INIT_NOASYNC, type, List.of(STRING, INT));
+          invokeMethod(false, false, type.getClassDescriptor().getInternalName(), Utils.JACTL_INIT_NOASYNC, type, Utils.listOf(STRING, INT));
         }
       }
       return;

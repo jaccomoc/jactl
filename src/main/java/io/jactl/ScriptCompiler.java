@@ -43,7 +43,7 @@ public class ScriptCompiler extends ClassCompiler {
    * @return the script
    */
   JactlScript compileWithCompletion() {
-    var scriptMain = compile();
+    Function<Map<String, Object>, Object> scriptMain = compile();
 
     return new JactlScript(context, (map,completion) -> {
       try {
@@ -103,8 +103,8 @@ public class ScriptCompiler extends ClassCompiler {
   }
 
   private void compileScriptMain() {
-    var method = classDecl.scriptMain.declExpr;
-    String methodName =  method.functionDescriptor.implementingMethod;
+    Expr.FunDecl method     = classDecl.scriptMain.declExpr;
+    String       methodName =  method.functionDescriptor.implementingMethod;
 
     doCompileMethod(method, methodName, true);
     addHandleToClass(method);

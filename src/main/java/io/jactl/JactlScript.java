@@ -89,7 +89,7 @@ public class JactlScript {
    * @return the result returned from the script
    */
   public Object runSync(Map<String,Object> globals) {
-    var future = new CompletableFuture<Object>();
+    CompletableFuture<Object> future = new CompletableFuture<Object>();
     jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, future::complete));
     try {
       Object result = future.get();

@@ -73,7 +73,7 @@ public class BaseTest {
   }
 
   protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
-    doTest(List.of(), code, evalConsts, replMode, testAsync, testCheckpoint, expected);
+    doTest(Utils.listOf(), code, evalConsts, replMode, testAsync, testCheckpoint, expected);
   }
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
@@ -86,12 +86,12 @@ public class BaseTest {
     try {
       JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint);
 
-      var    bindings = createGlobals();
+      Map<String, Object> bindings = createGlobals();
 
       Function<Expr,Expr> asyncDecorator = testAsync ? expr -> sleepify(expr) : null;
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, asyncDecorator));
 
-      var compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
+      JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
 
       Object result   = compiled.runSync(bindings);
       checkEqual(expected, result);
@@ -103,7 +103,7 @@ public class BaseTest {
   }
 
   protected void doTestCheckpoint(String scriptCode, Object expected) {
-    doTestCheckpoint(List.of(), scriptCode, expected);
+    doTestCheckpoint(Utils.listOf(), scriptCode, expected);
   }
 
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected) {
@@ -149,13 +149,13 @@ public class BaseTest {
       JactlContext jactlContext1 = getJactlContext(true, false, false);
       JactlContext jactlContext2 = getJactlContext(true, false, false);
 
-      var    bindings = createGlobals();
+      Map<String, Object> bindings = createGlobals();
 
       Function<Expr,Expr> asyncDecorator = expr -> checkpointify(expr);
       classCode.forEach(code -> compileClass(code, jactlContext1, packageName, asyncDecorator));
       classCode.forEach(code -> compileClass(code, jactlContext2, packageName, asyncDecorator));
 
-      var compiled = compileScript(scriptCode, jactlContext1, packageName, asyncDecorator, bindings);
+      JactlScript compiled = compileScript(scriptCode, jactlContext1, packageName, asyncDecorator, bindings);
       compileScript(scriptCode, jactlContext2, packageName, asyncDecorator, bindings);
 
       Object result   = compiled.runSync(bindings);
@@ -169,7 +169,7 @@ public class BaseTest {
         assertNotNull(deletedId[0]);
         assertEquals(savedId[0], deletedId[0]);
         savedId[0] = deletedId[0] = null;
-        var checkpoint = savedCheckpoint[0];
+        byte[] checkpoint = savedCheckpoint[0];
         lastCheckpointId[0] = savedCheckpointId[0];
         savedCheckpoint[0] = null;
         savedCheckpointId[0] = 0;
@@ -287,11 +287,11 @@ public class BaseTest {
       return null;
     }
 
-    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
-    var parser = new Parser(new Tokeniser(source), jactlContext, packageName);
-    var code   = isScript ? parser.parseScript(className) : parser.parseClass();
-    var decorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
-                                       : new ExprDecorator(
+    String         className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
+    Parser         parser    = new Parser(new Tokeniser(source), jactlContext, packageName);
+    Stmt.ClassDecl code      = isScript ? parser.parseScript(className) : parser.parseClass();
+    ExprDecorator decorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
+                                                 : new ExprDecorator(
         expr -> {
           assert expr != null;
           if (expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
@@ -316,9 +316,9 @@ public class BaseTest {
           return newExpr;
         });
     decorator.decorate(code);
-    var resolver = new Resolver(jactlContext, bindings, code.location);
+    Resolver resolver = new Resolver(jactlContext, bindings, code.location);
     resolver.resolveScript(code);
-    var analyser = new Analyser(jactlContext);
+    Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(code);
     if (isScript) {
       return Compiler.compileWithCompletion(source, jactlContext, code);
@@ -330,14 +330,14 @@ public class BaseTest {
   private static Expr.Call sleepify(Expr expr) {
     return new Expr.Call(expr.location,
                          new Expr.Identifier(expr.location.newIdent("sleep")),
-                         List.of(new Expr.Literal(new Token(TokenType.LONG_CONST, expr.location).setValue(0)),
+                         Utils.listOf(new Expr.Literal(new Token(TokenType.LONG_CONST, expr.location).setValue(0)),
                                  expr));
   }
 
   private static Expr.Call checkpointify(Expr expr) {
     return new Expr.Call(expr.location,
                          new Expr.Identifier(expr.location.newIdent("_checkpoint")),
-                         List.of(expr));
+                         Utils.listOf(expr));
   }
 
   protected void test(String code, Object expected) {
@@ -345,15 +345,15 @@ public class BaseTest {
     doTest(code, false, false, false, expected);
     doTest(code, true, false, true, expected);
     if (!skipCheckpointTests) {
-      doTest(List.of(), code, true, false, true, true, expected);
-      doTestCheckpoint(List.of(), code, expected);
+      doTest(Utils.listOf(), code, true, false, true, true, expected);
+      doTestCheckpoint(Utils.listOf(), code, expected);
     }
     if (replModeEnabled) {
       doTest(code, true, true, false, expected);
       doTest(code, false, true, false, expected);
       doTest(code, true, true, true, expected);
       if (!skipCheckpointTests) {
-        doTest(List.of(), code, true, true, true, true, expected);
+        doTest(Utils.listOf(), code, true, true, true, true, expected);
       }
     }
   }
@@ -377,7 +377,7 @@ public class BaseTest {
   }
 
   protected void testError(String code, String expectedError) {
-    testError(List.of(), code, expectedError);
+    testError(Utils.listOf(), code, expectedError);
   }
 
   protected void testError(List<String> classCode, String scriptCode, String expectedError) {
@@ -392,7 +392,7 @@ public class BaseTest {
   }
 
   protected void replError(String code, String expectedError) {
-    doTestError(List.of(), code, true, true, expectedError);
+    doTestError(Utils.listOf(), code, true, true, expectedError);
   }
 
   protected void replTest(Object expected, String... code) {
@@ -406,10 +406,10 @@ public class BaseTest {
                                                  .debug(debugLevel)
                                                  .build();
 
-      var    bindings = createGlobals();
-      Object result[] = new Object[1];
+      Map<String, Object> bindings = createGlobals();
+      Object              result[] = new Object[1];
       Arrays.stream(code).forEach(scriptCode -> {
-        var compiled = compileScript(scriptCode, jactlContext, packageName, null, bindings);
+        JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, null, bindings);
         result[0]    = compiled.runSync(bindings);
       });
       if (expected instanceof Object[]) {
@@ -448,7 +448,7 @@ public class BaseTest {
   }
 
   protected Map<String, Object> createGlobals() {
-    var map = new HashMap<String, Object>();
+    HashMap<String, Object> map = new HashMap<String, Object>();
     map.putAll(globals);
     return map;
   }

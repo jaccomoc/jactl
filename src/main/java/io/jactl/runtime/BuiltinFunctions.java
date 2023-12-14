@@ -556,7 +556,7 @@ public class BuiltinFunctions {
   }
 
   public static void deregisterFunction(String name) {
-    var fn = globalFunctions.remove(name);
+    FunctionDescriptor fn = globalFunctions.remove(name);
     if (fn instanceof JactlFunction) {
       ((JactlFunction)fn).cleanUp();
     }
@@ -671,7 +671,7 @@ public class BuiltinFunctions {
   // = nextLine()
   public static Object nextLineData;
   public static String nextLine(Continuation c, String source, int offset) {
-    var input = RuntimeState.getState().input;
+    BufferedReader input = RuntimeState.getState().input;
     if (input == null) {
       return null;
     }
@@ -760,10 +760,16 @@ public class BuiltinFunctions {
     if (num.doubleValue() < 0) {
       throw new RuntimeError("Attempt to take square root of negative number: " + num, source, offset);
     }
-    if (num instanceof BigDecimal) {
-      return ((BigDecimal)num).sqrt(MathContext.DECIMAL64);
-    }
+//    if (num instanceof BigDecimal) {
+//      return ((BigDecimal)num).sqrt(MathContext.DECIMAL64);
+//    }
     double result = Math.sqrt(num.doubleValue());
+    if (num instanceof BigDecimal) {
+      return BigDecimal.valueOf(result);
+    }
+    if (num instanceof Double) {
+      return result;
+    }
     long   longResult = (long) result;
     if ((double)longResult == result) {
       if ((long)(int)longResult == longResult) {
@@ -1454,7 +1460,7 @@ public class BuiltinFunctions {
       int i = c == null ? 0 : (int)c.localPrimitives[1] + 2 * width;
       c = null;
       for (; i <= size; i += 2 * width) {
-        final var start2 = Math.min(i + width, size);
+        final int start2 = Math.min(i + width, size);
         try {
           merge(src, dst, i, start2, start2, Math.min(i + 2 * width, size), closure, source, offset, null);
         }
@@ -1514,7 +1520,7 @@ public class BuiltinFunctions {
         Object elem2 = src.get(i2);
         if (comparison == null) {
           try {
-            comparison = comparator.invoke((Continuation) null, source, (int)offset, new Object[]{ List.of(elem1, elem2) });
+            comparison = comparator.invoke((Continuation) null, source, (int)offset, new Object[]{ Utils.listOf(elem1, elem2) });
           }
           catch (Continuation cont) {
             throw new Continuation(cont, merge$cHandle,

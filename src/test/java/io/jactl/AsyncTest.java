@@ -37,11 +37,11 @@ public class AsyncTest {
   }
 
   private boolean isAsync(String source, JactlContext context) {
-    var parser   = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACTL_PKG);
-    var script   = parser.parseScript("AsyncScriptTest");
-    var resolver = new Resolver(context, Map.of(), script.location);
+    Parser         parser = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACTL_PKG);
+    Stmt.ClassDecl script = parser.parseScript("AsyncScriptTest");
+    Resolver       resolver = new Resolver(context, Utils.mapOf(), script.location);
     resolver.resolveScript(script);
-    var analyser = new Analyser(context);
+    Analyser analyser = new Analyser(context);
     analyser.analyseClass(script);
     return script.scriptMain.declExpr.functionDescriptor.isAsync;
   }
@@ -50,7 +50,7 @@ public class AsyncTest {
     sync(source, "", expected);
   }
   private void sync(String source, String input, Object expected) {
-    sync(List.of(), source, input, expected);
+    sync(Utils.listOf(), source, input, expected);
   }
   private void sync(List<String> classSources, String source, String input, Object expected) {
     runTest(classSources, source, input, expected, false);
@@ -60,18 +60,18 @@ public class AsyncTest {
     async(source,"", expected);
   }
   private void async(String source, String input, Object expected) {
-    runTest(List.of(), source, input, expected, true);
+    runTest(Utils.listOf(), source, input, expected, true);
   }
 
   private void runTest(List<String> classSources, String source, String input, Object expected, boolean isAsync) {
-    var context = JactlContext.create().debug(debugLevel).build();
+    JactlContext context = JactlContext.create().debug(debugLevel).build();
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String)((String) expected).substring(1)));
     }
     classSources.forEach(s -> Jactl.compileClass(s, context));
     assertEquals(isAsync, isAsync(source, context));
     RuntimeState.setInput(new BufferedReader(new StringReader(input)));
-    JactlScript script = Jactl.compileScript(source, Map.of(), context);
+    JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
     assertEquals(expected, script.runSync(Utils.mapOf()));
   }
 
@@ -161,7 +161,7 @@ public class AsyncTest {
 
   @Test public void classesFromJson() {
     sync("class X { int i = 1 }; X.fromJson('{\"i\":2}').i", 2);
-    sync(List.of("class X { int i = 1 }", "class Y extends X { int j = 2; int k = 3 }"), "new Y(j:2).i", "", 1);
+    sync(Utils.listOf("class X { int i = 1 }", "class Y extends X { int j = 2; int k = 3 }"), "new Y(j:2).i", "", 1);
     async("class X { int i = sleep(0,1); long j = sleep(0,2) }; X.fromJson('{\"i\":4}').i", 4);
     async("class X { int i = sleep(0,1); long j = sleep(0,2) }; X.fromJson('{\"i\":4}').j", 2L);
     async("class X { int i = sleep(0,1); long j = sleep(0,2) }; class Y extends X {}; Y.fromJson('{\"i\":4}').j", 2L);
@@ -178,29 +178,29 @@ public class AsyncTest {
     sync("def s = sprintf; s('%03d',1)", "001");
     sync("[1,2,3].size()", 3);
     sync("[{it},{it*it}].size()", 2);
-    sync("[1,2].map{it*it}", List.of(1,4));
-    async("[{it},{it*it}].map{it(2)}", List.of(2,4));
+    sync("[1,2].map{it*it}", Utils.listOf(1,4));
+    async("[{it},{it*it}].map{it(2)}", Utils.listOf(2,4));
     async("[{it},{it*it}].map{it(2)}.size()", 2);
     async("def f = [1,2,3].size; f()", 3);
     async("def f = [1,2,3].map{sleep(0,it)}.size; f()", 3);
-    sync("[1,2,3,4,5].filter{it>2}.map{it+it}", List.of(6,8,10));
-    async("[1,2,3,4,5].filter{sleep(0,it)>2}.map{it+it}", List.of(6,8,10));
+    sync("[1,2,3,4,5].filter{it>2}.map{it+it}", Utils.listOf(6,8,10));
+    async("[1,2,3,4,5].filter{sleep(0,it)>2}.map{it+it}", Utils.listOf(6,8,10));
     sync("[1,2,3].size()", 3);
     sync("[1,2,3].map{it}.size()", 3);
     async("[1,2,3].map{sleep(0,it)}.size()", 3);
-    sync("[3,2,1].sort()", List.of(1,2,3));
-    sync("[3,2,1].map{it}.sort()", List.of(1,2,3));
-    async("[3,2,1].map{sleep(0,it)}.sort()", List.of(1,2,3));
-    async("[3,2,1].map{it}.sort{a,b -> sleep(0,a) <=> sleep(0,b) }", List.of(1,2,3));
+    sync("[3,2,1].sort()", Utils.listOf(1,2,3));
+    sync("[3,2,1].map{it}.sort()", Utils.listOf(1,2,3));
+    async("[3,2,1].map{sleep(0,it)}.sort()", Utils.listOf(1,2,3));
+    async("[3,2,1].map{it}.sort{a,b -> sleep(0,a) <=> sleep(0,b) }", Utils.listOf(1,2,3));
     sync("[1,2,3].join(':')", "1:2:3");
     sync("[1,2,3].map{it}.join(':')", "1:2:3");
-    sync("[].collectEntries()", Map.of());
+    sync("[].collectEntries()", Utils.mapOf());
     sync("[3,6,4,2,3,5].sort().toString()", "[2, 3, 3, 4, 5, 6]");
-    async("[1,2,3].map{sleep(0,it)}.collectEntries{[sleep(0,it.toString()),sleep(0,it)*sleep(0,it)]}", Map.of("1",1,"2",4,"3",9));
+    async("[1,2,3].map{sleep(0,it)}.collectEntries{[sleep(0,it.toString()),sleep(0,it)*sleep(0,it)]}", Utils.mapOf("1",1,"2",4,"3",9));
     async("[1,2,3].map{sleep(0,it)}.join(':')", "1:2:3");
-    sync("[1,2,3].reduce([]){v,e -> v + e}", List.of(1,2,3));
-    async("[1,2,3].map{sleep(0,it) + sleep(0,it)}.reduce([]){v,e -> v + e}", List.of(2,4,6));
-    async("[1,2,3].reduce([]){v,e -> sleep(0,v) + sleep(0,e)}", List.of(1,2,3));
+    sync("[1,2,3].reduce([]){v,e -> v + e}", Utils.listOf(1,2,3));
+    async("[1,2,3].map{sleep(0,it) + sleep(0,it)}.reduce([]){v,e -> v + e}", Utils.listOf(2,4,6));
+    async("[1,2,3].reduce([]){v,e -> sleep(0,v) + sleep(0,e)}", Utils.listOf(1,2,3));
     sync("[1,2,3].sum()", 6);
     sync("[1,2,3].avg()", "#2");
     async("[1,2,3].map{sleep(0,it)}.sum()", 6);
@@ -208,14 +208,14 @@ public class AsyncTest {
     async("[1,2,3].map{it.size()}.sum()", 6);   // don't know type of it so have to assume async
     sync("[1,2,3].map{int it -> it.size()}.sum()", 6);
     async("[1,2,3].map{sleep(0,it)}.avg()", "#2");
-    async("stream{nextLine()}", "1\n2\n3", List.of("1","2","3"));
-    async("stream(nextLine)", "1\n2\n3", List.of("1","2","3"));
-    async("def f = nextLine; stream(f)", "1\n2\n3", List.of("1","2","3"));
-    async("def f = null; f = nextLine; stream(f)", "1\n2\n3", List.of("1","2","3"));
-    sync("def i = 0; stream{ i++ < 3 ? i : null }", List.of(1,2,3));
+    async("stream{nextLine()}", "1\n2\n3", Utils.listOf("1","2","3"));
+    async("stream(nextLine)", "1\n2\n3", Utils.listOf("1","2","3"));
+    async("def f = nextLine; stream(f)", "1\n2\n3", Utils.listOf("1","2","3"));
+    async("def f = null; f = nextLine; stream(f)", "1\n2\n3", Utils.listOf("1","2","3"));
+    sync("def i = 0; stream{ i++ < 3 ? i : null }", Utils.listOf(1,2,3));
     async("eval('1 + 2')", 3);
     async("eval('sleep(0,3) + sleep(0,2)') + sleep(0,-3) + sleep(0,2)", 4);
-    sync("[[1,2,3],[1],[2,3]].min(closure:{List it -> it.size()})", List.of(1));
-    async("[[1,2,3],[1],[2,3]].min(closure:{it.size()})", List.of(1));
+    sync("[[1,2,3],[1],[2,3]].min(closure:{List it -> it.size()})", Utils.listOf(1));
+    async("[[1,2,3],[1],[2,3]].min(closure:{it.size()})", Utils.listOf(1));
   }
 }

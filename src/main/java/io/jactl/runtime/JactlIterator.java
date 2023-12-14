@@ -102,7 +102,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static JactlIterator<Object> of(Object... objects) {
-    var iter = new ObjArrIterator();
+    ObjArrIterator iter = new ObjArrIterator();
     iter.arr = objects;
     return iter;
   }
@@ -129,7 +129,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static <T> JactlIterator<T> of(List<T> list) {
-    var iter = new ListIterator<T>();
+    ListIterator<T> iter = new ListIterator<T>();
     iter.list = list;
     return iter;
   }
@@ -204,7 +204,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static JactlIterator<Byte> of(byte[] arr) {
-    var iter = new ByteArrIterator();
+    ByteArrIterator iter = new ByteArrIterator();
     iter.arr = arr;
     return iter;
   }
@@ -231,7 +231,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static JactlIterator<Integer> of(int[] arr) {
-    var iter = new IntArrIterator();
+    IntArrIterator iter = new IntArrIterator();
     iter.arr = arr;
     return iter;
   }
@@ -258,7 +258,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static JactlIterator<Long> of(long[] arr) {
-    var iter = new LongArrIterator();
+    LongArrIterator iter = new LongArrIterator();
     iter.arr = arr;
     return iter;
   }
@@ -285,7 +285,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static JactlIterator<Double> of(double[] arr) {
-    var iter = new DoubleArrIterator();
+    DoubleArrIterator iter = new DoubleArrIterator();
     iter.arr = arr;
     return iter;
   }
@@ -312,7 +312,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static JactlIterator<Boolean> of(boolean[] arr) {
-    var iter = new BooleanArrIterator();
+    BooleanArrIterator iter = new BooleanArrIterator();
     iter.arr = arr;
     return iter;
   }
@@ -339,7 +339,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static NumberIterator numberIterator(Number value) {
-    var iter = new NumberIterator();
+    NumberIterator iter = new NumberIterator();
     iter.num = value.longValue();
     return iter;
   }
@@ -366,7 +366,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   }
 
   public static StringIterator stringIterator(String str) {
-    var iter = new StringIterator();
+    StringIterator iter = new StringIterator();
     iter.str = str;
     return iter;
   }

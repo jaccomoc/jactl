@@ -45,13 +45,16 @@ def linkify = { s/ /-/g;  s/[^\w-]//g }
 
 // Find all top level headings in input and generate markdown for table of contents:
 stream(nextLine).filter{ /^# /r }
-                .map{ s/# // }
+                .map{ $1 if /^# (.*)/r }
                 .map{ "* [$it](#${ linkify(it.toLowerCase()) })" }
                 .each{ println it }
 ```
 
 ### Compiles to Java bytecode
 Jactl scripts compile to bytecode to take advantage of the performance capabilities of the JVM.
+
+### Supports Java 8+
+Compatible with Java 8 and later versions.
 
 ### Never blocks
 Jactl never blocks the execution thread on which a script is running.
@@ -135,7 +138,7 @@ To download the Jactl REPL, which gives you an interactive shell for trying out 
 
 ### Requirements
 
-* Java 11+
+* Java 8+
 * Gradle 8.0.2
 * ASM 9.6
 

@@ -202,7 +202,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
       restorer.expectCint(VERSION, "Bad version");
       type = restorer.readType();
       name = (String)restorer.readObject();
-      var func = type == null ? BuiltinFunctions.lookupGlobalFunction(name) : Functions.lookupMethod(type, name);
+      FunctionDescriptor func = type == null ? BuiltinFunctions.lookupGlobalFunction(name) : Functions.lookupMethod(type, name);
       if (func == null) {
         throw new IllegalStateException("Could not find function " + name + " for type " + type);
       }

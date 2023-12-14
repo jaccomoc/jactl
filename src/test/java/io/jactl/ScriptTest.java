@@ -27,6 +27,8 @@ import java.io.PrintStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,7 +41,7 @@ public class ScriptTest {
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
     RuntimeState.setOutput(out);
-    Jactl.eval(script, Map.of("source", source));
+    Jactl.eval(script, Utils.mapOf("source", source));
     String actualOutput = baos.toString().trim();
     diff(expected, actualOutput);
   }
@@ -52,7 +54,7 @@ public class ScriptTest {
     PrintStream           out    = new PrintStream(baos);
     RuntimeState.setOutput(out);
 
-    Jactl.eval(script, Map.of("source", source));
+    Jactl.eval(script, Utils.mapOf("source", source));
     String actualOutput = baos.toString().trim();
 
     diff(expected, actualOutput);
@@ -60,8 +62,8 @@ public class ScriptTest {
 
   private void diff(String expected, String actualOutput) {
     if (!expected.equals(actualOutput)) {
-      var expectedIter = expected.lines().iterator();
-      var actualIter   = actualOutput.lines().iterator();
+      Iterator<String> expectedIter = Arrays.asList(expected.split("\n")).iterator();
+      Iterator<String> actualIter   = Arrays.asList(actualOutput.split("\n")).iterator();
 
       int line = 1;
       while (expectedIter.hasNext() && actualIter.hasNext()) {
@@ -94,6 +96,6 @@ public class ScriptTest {
   }
 
   String readResource(String resource) throws URISyntaxException, IOException {
-    return Files.readString(Paths.get(getClass().getResource(resource).toURI()));
+    return new String(Files.readAllBytes(Paths.get(getClass().getResource(resource).toURI())));
   }
 }

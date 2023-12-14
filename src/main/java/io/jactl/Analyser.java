@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.runtime.ClassDescriptor;
 import io.jactl.runtime.FunctionDescriptor;
 
 import java.text.SimpleDateFormat;
@@ -150,8 +151,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       finally {
         currentExpr.pop();
-        var parent = currentExpr.peek();
-        var stmt   = currentStmt.peek();
+        Expr parent = currentExpr.peek();
+        Stmt stmt   = currentStmt.peek();
         if (parent != null && expr.isAsync) {
           parent.isAsync = true;
         }
@@ -182,8 +183,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitCall(Expr.Call expr) {
     analyse(expr.callee);
     expr.args.forEach(this::analyse);
-    var funDecl  = getFunDecl(expr.callee);
-    var function = getFunction(expr.callee);
+    Expr.FunDecl       funDecl  = getFunDecl(expr.callee);
+    FunctionDescriptor function = getFunction(expr.callee);
 
     if (function != null) {
       if (function.isAsync == null) {
@@ -690,8 +691,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void asyncIfTypeIsAsync(Expr expr) {
     if (!expr.type.is(INSTANCE)) { return; }
-    var classDescriptor = expr.type.getClassDescriptor();
-    var existingClass = context.getClassDescriptor(classDescriptor.getInternalName());
+    ClassDescriptor classDescriptor = expr.type.getClassDescriptor();
+    ClassDescriptor existingClass   = context.getClassDescriptor(classDescriptor.getInternalName());
     if (existingClass != null) {
       if (existingClass.getInitMethod().isAsync) {
         async(expr);
@@ -710,7 +711,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private FunctionDescriptor getFunction(Expr expr) {
-    var funDecl = getFunDecl(expr);
+    Expr.FunDecl funDecl = getFunDecl(expr);
     if (funDecl == null) {
       return null;
     }
@@ -769,7 +770,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // arguments start at index 1 so args.get(index-1) gets the arg value for that index.
     // For calls to built-in functions arg0 is null and counting is as per args list indexing.
     if (Utils.isNamedArgs(args)) {
-      var namedArgs = Utils.getNamedArgs(args);
+      Map<String, Expr> namedArgs = Utils.getNamedArgs(args);
       // Lambda to extract ith arg. For methods arg0 is 0th arg and param counting starts at 1:
       Function<Integer, Expr> getrArg = i -> arg0 != null ? (i == 0 ? arg0 : namedArgs.get(func.paramNames.get(i - 1)))
                                                           : namedArgs.get(func.paramNames.get(i));
@@ -808,7 +809,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (arg instanceof Expr.VarDecl) {
-      var decl = (Expr.VarDecl)arg;
+      Expr.VarDecl decl = (Expr.VarDecl)arg;
 
       // If not final then we can't assume anything about it
       if (!decl.isFinal) {
@@ -868,11 +869,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      .filter(entry -> !isOwnerOrHeapLocal(caller, entry.getValue()))
                      .forEach(entry -> {
                        Expr.VarDecl varDecl = entry.getValue();
-                       String       name    = varDecl.name.getStringValue();
-                       var childDecl= Utils.createVarDecl(name, varDecl, caller);
-                       var funDecl = caller.owner;
+                       String       name      = varDecl.name.getStringValue();
+                       Expr.VarDecl childDecl = Utils.createVarDecl(name, varDecl, caller);
+                       Expr.FunDecl funDecl   = caller.owner;
                        for (; !isOwnerOrHeapLocal(funDecl, varDecl); funDecl = funDecl.owner) {
-                         var parentDecl = Utils.createVarDecl(name, varDecl, funDecl);
+                         Expr.VarDecl parentDecl = Utils.createVarDecl(name, varDecl, funDecl);
                          childDecl.parentVarDecl = parentDecl;
                          childDecl = parentDecl;
                        }
@@ -894,7 +895,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void addAsyncCallDependency(Expr.FunDecl caller, Expr callSite, FunctionDescriptor callee) {
-    var callees = asyncCallDependencies.get(caller);
+    List<Pair<Expr, FunctionDescriptor>> callees = asyncCallDependencies.get(caller);
     if (callees == null) {
       callees = new ArrayList<>();
       asyncCallDependencies.put(caller, callees);
@@ -909,12 +910,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // dependency map so if none of them have yet been marked async then none of them are async.
     while (true) {
       boolean resolvedAsyncCall = false;
-      for (var caller : asyncCallDependencies.keySet()) {
-        var callSites    = asyncCallDependencies.get(caller);
-        var newCallSites = new ArrayList<Pair<Expr,FunctionDescriptor>>();
-        for (var call: callSites) {
-          var callSite = call.first;
-          var callee   = call.second;
+      for (Expr.FunDecl caller : asyncCallDependencies.keySet()) {
+        List<Pair<Expr, FunctionDescriptor>>      callSites    = asyncCallDependencies.get(caller);
+        ArrayList<Pair<Expr, FunctionDescriptor>> newCallSites = new ArrayList<Pair<Expr,FunctionDescriptor>>();
+        for (Pair<Expr, FunctionDescriptor> call: callSites) {
+          Expr               callSite = call.first;
+          FunctionDescriptor callee   = call.second;
           if (callee.isAsync != null) {
             if (callee.isAsync) {
               caller.functionDescriptor.isAsync = true;
@@ -937,8 +938,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     // Mark all remaining functions as not async
-    for (var callSites: asyncCallDependencies.values()) {
-      for (var callSite: callSites) {
+    for (List<Pair<Expr, FunctionDescriptor>> callSites: asyncCallDependencies.values()) {
+      for (Pair<Expr, FunctionDescriptor> callSite: callSites) {
         callSite.second.isAsync = false;
       }
     }

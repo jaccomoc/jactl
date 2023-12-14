@@ -107,7 +107,7 @@ public class JactlContext {
       // want to refer to the old version of the class to continue working.
       classLoader = new DynamicClassLoader(classLoader);
     }
-    var clss = classLoader.defineClass(descriptor.getInternalName(), className, bytes);
+    Class<?> clss = classLoader.defineClass(descriptor.getInternalName(), className, bytes);
     addClass(descriptor);
     return clss;
   }
@@ -218,7 +218,7 @@ public class JactlContext {
   public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler) {
     Continuation cont = (Continuation)Restorer.restore(this, checkpoint);
     // If two args then we have commit closure and recovery closure so return recovery closure on recover
-    var result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
+    Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
     scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance));
   }
 
@@ -229,7 +229,7 @@ public class JactlContext {
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
     // the same thread as we are on).
     try {
-      final var asyncTask = c.getAsyncTask();
+      final AsyncTask asyncTask = c.getAsyncTask();
 
       Continuation asyncTaskCont = asyncTask.getContinuation();
 

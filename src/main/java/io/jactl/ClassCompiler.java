@@ -80,7 +80,9 @@ public class ClassCompiler {
       internalBaseName = Type.getInternalName(JactlScriptObject.class);
     }
     String superName = internalBaseName == null ? Type.getInternalName(Object.class) : internalBaseName;
-    cv.visit(V11, ACC_PUBLIC, internalName, null,
+
+    // Supporting Java 8 at the moment so passing V1_8. Change to later version once we no longe support Java 8.
+    cv.visit(V1_8, ACC_PUBLIC, internalName, null,
              superName, new String[] {Type.getInternalName(JactlObject.class) });
     cv.visitSource(sourceName, null);
 
@@ -93,7 +95,7 @@ public class ClassCompiler {
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, superName, "<init>", "()V", false);
 
-    var fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
     classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
     classInit.visitInsn(DUP);
@@ -164,10 +166,10 @@ public class ClassCompiler {
   }
 
   protected void compileInnerClasses() {
-    var orderedInnerClasses = allInnerClasses(classDecl).sorted((a,b) -> Integer.compare(ancestorCount(a), ancestorCount(b))).collect(Collectors.toList());
+    List<Stmt.ClassDecl> orderedInnerClasses = allInnerClasses(classDecl).sorted((a, b) -> Integer.compare(ancestorCount(a), ancestorCount(b))).collect(Collectors.toList());
     orderedInnerClasses.forEach(clss -> {
       if (clss != classDecl) {
-        var compiler = new ClassCompiler(source, context, pkg, clss, sourceName);
+        ClassCompiler compiler = new ClassCompiler(source, context, pkg, clss, sourceName);
         compiler.compileSingleClass();
       }
     });
@@ -179,7 +181,7 @@ public class ClassCompiler {
 
   private int ancestorCount(Stmt.ClassDecl classDecl) {
     int count = 0;
-    for (var baseClass = classDecl.classDescriptor.getBaseClass(); baseClass != null; baseClass = baseClass.getBaseClass()) {
+    for (ClassDescriptor baseClass = classDecl.classDescriptor.getBaseClass(); baseClass != null; baseClass = baseClass.getBaseClass()) {
       count++;
     }
     return count;
@@ -265,7 +267,7 @@ public class ClassCompiler {
     };
 
     if (!funDecl.isScriptMain) {
-      var wrapper = funDecl.wrapper;
+      Expr.FunDecl wrapper = funDecl.wrapper;
       // Create the method descriptor for the method to be looked up.
       // Since we create a handle to the wrapper method the signature will be based on
       // the closed over vars it needs plus the source, offset, and then an Object that
@@ -435,8 +437,8 @@ public class ClassCompiler {
         Utils.loadConst(mv, null);       // no need to restore globals since we previously stored it in a field
         continue;
       }
-      final var  declExpr = funDecl.parameters.get(i).declExpr;
-      JactlType type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
+      final Expr.VarDecl declExpr = funDecl.parameters.get(i).declExpr;
+      JactlType          type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
       Utils.loadStoredValue(mv, continuationSlot, slot, type);
       if (type.is(JactlType.LONG, JactlType.DOUBLE)) {
         slot++;
@@ -457,7 +459,7 @@ public class ClassCompiler {
   }
 
   public void defineField(String name, JactlType type) {
-    var fieldVisitor = cv.visitField(ACC_PUBLIC, name, type.descriptor(), null, null);
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC, name, type.descriptor(), null, null);
     fieldVisitor.visitEnd();
 
     // If not an internal field
@@ -515,8 +517,8 @@ public class ClassCompiler {
       }
       try {
         if (type1.startsWith(context.internalJavaPackage) && type2.startsWith(context.internalJavaPackage)) {
-          var clss1 = context.getClassDescriptor(type1);
-          var clss2 = context.getClassDescriptor(type2);
+          ClassDescriptor clss1 = context.getClassDescriptor(type1);
+          ClassDescriptor clss2 = context.getClassDescriptor(type2);
           if (clss1 != null && clss2 != null) {
             if (clss1.isAssignableFrom(clss2)) {
               return type1;
@@ -577,9 +579,9 @@ public class ClassCompiler {
     boolean notFirstOutput = false;
     boolean first = true;
     boolean usingFirstSlot = false;
-    for (var iter = classDescriptor.getAllFields().iterator(); iter.hasNext(); ) {
-      var       f     = iter.next();
-      String    field = f.getKey();
+    for (Iterator<Map.Entry<String, JactlType>> iter = classDescriptor.getAllFields().iterator(); iter.hasNext(); ) {
+      Map.Entry<String, JactlType> f     = iter.next();
+      String                       field = f.getKey();
       JactlType type  = f.getValue();
       if (!type.isPrimitive()) {
         if (first) {
@@ -754,10 +756,10 @@ NEXT:   mv.visitLabel(NEXT);
     // We need to build a list of field hashCodes in sort order with each entry being a list of fields that map
     // to that hash. This will be used to build the lookupTable for our switch on field name.
     // We get all fields, including fields from our base classes.
-    var fieldNames   = classDecl.classDescriptor.getAllFieldNames();
-    var fieldNameMap = fieldNames.stream().collect(groupingBy(Object::hashCode));
-    var hashCodeList = fieldNameMap.keySet().stream().sorted().collect(Collectors.toList());
-    var fieldLabels  = IntStream.range(0,fieldNameMap.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
+    List<String>               fieldNames   = classDecl.classDescriptor.getAllFieldNames();
+    Map<Integer, List<String>> fieldNameMap = fieldNames.stream().collect(groupingBy(Object::hashCode));
+    List<Integer>              hashCodeList = fieldNameMap.keySet().stream().sorted().collect(Collectors.toList());
+    Label[]       fieldLabels  = IntStream.range(0, fieldNameMap.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
 
 BRACE: mv.visitLabel(BRACE);
     int numFlagSlots = fieldNames.size() / 64 + 1;
@@ -829,8 +831,8 @@ QUOTE: mv.visitLabel(QUOTE);
     mv.visitLookupSwitchInsn(DEFAULT_LABEL, hashCodeList.stream().mapToInt(i -> i).toArray(), fieldLabels);
     for (int h = 0; h < hashCodeList.size(); h++) {
       mv.visitLabel(fieldLabels[h]);
-      var     hashFields = fieldNameMap.get(hashCodeList.get(h));   // Fields with same hash
-      Label   NEXT      = null;
+      List<String> hashFields = fieldNameMap.get(hashCodeList.get(h));   // Fields with same hash
+      Label        NEXT       = null;
       for (int hashIdx = 0; hashIdx < hashFields.size(); hashIdx++) {
         if (NEXT != null && NEXT != DEFAULT_LABEL) {
 NEXT:     mv.visitLabel(NEXT);
@@ -867,7 +869,7 @@ NO_DUP: mv.visitLabel(NO_DUP);
         Utils.loadConst(mv, ':');
         mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expect", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(char.class)), false);
         mv.visitVarInsn(ALOAD, THIS_SLOT);
-        var type = getField(fieldName);
+        JactlType type = getField(fieldName);
         readJsonField(mv, type, fieldName, ERROR, DECODER_SLOT, TMP_OBJ, ARR_SLOTS);
         mv.visitFieldInsn(PUTFIELD, internalName, fieldName, type.descriptor());
         mv.visitJumpInsn(GOTO, LOOP);

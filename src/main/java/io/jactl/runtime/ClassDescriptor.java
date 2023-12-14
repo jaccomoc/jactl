@@ -92,7 +92,7 @@ public class ClassDescriptor {
     if (name.equals(Utils.JACTL_INIT)) {
       return getInitMethod();
     }
-    var func = methods.get(name);
+    FunctionDescriptor func = methods.get(name);
     if (func == null && baseClass != null) {
       func = baseClass.getClassDescriptor().getMethod(name);
     }
@@ -116,7 +116,7 @@ public class ClassDescriptor {
   }
 
   public JactlType getField(String name) {
-    var type = fields.get(name);
+    JactlType type = fields.get(name);
     if (type == null && baseClass != null) {
       type = getBaseClass().getField(name);
     }
@@ -220,7 +220,7 @@ public class ClassDescriptor {
     return false;
   }
 
-  private static ClassDescriptor JACTL_OBJECT_DESCRIPTOR = new ClassDescriptor("JactlObject", "JactlObject", true, "", "", null, List.of(), true);
+  private static ClassDescriptor JACTL_OBJECT_DESCRIPTOR = new ClassDescriptor("JactlObject", "JactlObject", true, "", "", null, Utils.listOf(), true);
   public static ClassDescriptor getJactlObjectDescriptor() {
     return JACTL_OBJECT_DESCRIPTOR;
   }

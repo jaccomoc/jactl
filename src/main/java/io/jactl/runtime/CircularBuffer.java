@@ -91,7 +91,7 @@ public class CircularBuffer<T> implements Checkpointable {
       return null;
     }
 
-    var elem = (T)buffer[head];
+    T elem = (T)buffer[head];
     buffer[head] = null;
     head = (head + 1) % bufferSize;
     return elem;

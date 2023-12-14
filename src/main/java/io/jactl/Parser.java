@@ -136,8 +136,8 @@ public class Parser {
     }
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
     // Script take a single parameter which is a Map of globals
-    var globalsParam           = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
-    Stmt.FunDecl funDecl       = parseFunDecl(scriptName, scriptName, ANY, List.of(globalsParam), EOF, true, false, false);
+    Stmt.VarDecl globalsParam = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
+    Stmt.FunDecl funDecl      = parseFunDecl(scriptName, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
     Stmt.ClassDecl scriptClass = classes.peek();
     scriptClass.scriptMain     = funDecl;
     List<Stmt> scriptStmts     = scriptClass.scriptMain.declExpr.block.stmts.stmts;
@@ -146,29 +146,29 @@ public class Parser {
                                             .map(stmt -> (Stmt.ClassDecl)stmt)
                                             .collect(Collectors.toList());
     // Find all BEGIN blocks and move to start and END blocks and move to the end
-    var beginBlocks = scriptStmts.stream()
-                                 .filter(stmt -> stmt instanceof Stmt.Block)
-                                 .filter(stmt -> ((Stmt.Block) stmt).isBeginBlock)
-                                 .collect(Collectors.toList());
-    var endBlocks = scriptStmts.stream()
-                               .filter(stmt -> stmt instanceof Stmt.Block)
-                               .filter(stmt -> ((Stmt.Block) stmt).isEndBlock)
-                               .collect(Collectors.toList());
+    List<Stmt> beginBlocks = scriptStmts.stream()
+                                        .filter(stmt -> stmt instanceof Stmt.Block)
+                                        .filter(stmt -> ((Stmt.Block) stmt).isBeginBlock)
+                                        .collect(Collectors.toList());
+    List<Stmt> endBlocks = scriptStmts.stream()
+                                      .filter(stmt -> stmt instanceof Stmt.Block)
+                                      .filter(stmt -> ((Stmt.Block) stmt).isEndBlock)
+                                      .collect(Collectors.toList());
 
     // If we have begin/end blocks or have to wrap script in a while loop for reading from input
     if (beginBlocks.size() > 0 || endBlocks.size() > 0 || context.printLoop() || context.nonPrintLoop()) {
       Stream<Stmt> bodyStream = scriptStmts.stream().filter(this::isNotBeginEndBlock).filter(stmt -> stmt != globalsParam);
       if (context.nonPrintLoop() || context.printLoop()) {
-        var body = bodyStream.collect(Collectors.toList());
-        Token whileToken = body.size() > 0 ? body.get(0).location : start;
+        List<Stmt> body       = bodyStream.collect(Collectors.toList());
+        Token      whileToken = body.size() > 0 ? body.get(0).location : start;
         // : while ((it = nextLine()) != null)
-        var whileStmt = new Stmt.While(whileToken,
-                                       new Expr.Binary(
+        Stmt.While whileStmt = new Stmt.While(whileToken,
+                                              new Expr.Binary(
                                          new Expr.VarAssign(new Expr.Identifier(whileToken.newIdent(Utils.IT_VAR)),
                                                             new Token(EQUAL,whileToken),
                                                             new Expr.Call(whileToken,
                                                                           new Expr.Identifier(whileToken.newIdent("nextLine")),
-                                                                          List.of())),
+                                                                          Utils.listOf())),
                                          new Token(BANG_EQUAL, whileToken),
                                          new Expr.Literal(new Token(NULL, whileToken).setValue(null))), null);
         if (context.printLoop()) {
@@ -405,7 +405,7 @@ public class Parser {
 
     // If we have a solitary return expression then convert to return statement
     if (stmt.expr instanceof Expr.Return) {
-      final var returnExpr = (Expr.Return) stmt.expr;
+      final Expr.Return returnExpr = (Expr.Return) stmt.expr;
       returnExpr.isResultUsed = true;
       return new Stmt.Return(returnExpr.returnToken, returnExpr);
     }
@@ -645,7 +645,7 @@ public class Parser {
           error("Cannot infer type in multi-assignment (right-hand side is non-list type)", firstVarTok);
         }
         // Add a type dependency on type of subexpr of rhs for each "var"
-        var list = ((Expr.ListLiteral) rhsExpr).exprs;
+        List<Expr> list = ((Expr.ListLiteral) rhsExpr).exprs;
         for (int i = 0; i < types.size(); i++) {
           JactlType type = types.get(i);
           if (type.is(UNKNOWN)) {
@@ -707,8 +707,8 @@ public class Parser {
   private Stmt whileStmt(Token label) {
     Token whileToken = previous();
     expect(LEFT_PAREN);
-    var cond       = condition(false, RIGHT_PAREN);
-    var whileStmt  = new Stmt.While(whileToken, cond, label);
+    Expr       cond      = condition(false, RIGHT_PAREN);
+    Stmt.While whileStmt = new Stmt.While(whileToken, cond, label);
     whileStmt.body = statement();
     return stmtBlock(whileToken, whileStmt);
   }
@@ -815,7 +815,7 @@ public class Parser {
    */
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
     Stmt.Stmts stmts = new Stmt.Stmts();
-    stmts.stmts.addAll(List.of(statements));
+    stmts.stmts.addAll(Arrays.asList(statements));
     return new Stmt.Block(startToken, stmts);
   }
 
@@ -830,16 +830,16 @@ public class Parser {
     if (!isClassDeclAllowed()) {
       error("Class declaration not allowed here", previous());
     }
-    var className = expect(IDENTIFIER);
+    Token className      = expect(IDENTIFIER);
     Token baseClassToken = null;
     JactlType baseClass = null;
     if (matchAny(EXTENDS)) {
       baseClassToken = peek();
       baseClass = JactlType.createClass(className());
     }
-    var leftBrace = expect(LEFT_BRACE);
+    Token leftBrace = expect(LEFT_BRACE);
 
-    var classDecl = new Stmt.ClassDecl(className, packageName, baseClassToken, baseClass, false);
+    Stmt.ClassDecl classDecl = new Stmt.ClassDecl(className, packageName, baseClassToken, baseClass, false);
     pushClass(classDecl);
     try {
       Stmt.Block classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
@@ -878,34 +878,34 @@ public class Parser {
   private static TokenType[] fieldAccessOp = new TokenType[] { DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
   // NOTE: type cast also has same precedence as unaryOps but has no specific operator
-  private static List<TokenType> unaryOps = List.of(QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
+  private static List<TokenType> unaryOps = Utils.listOf(QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
 
   // Operators from least precedence to highest precedence. Each entry in list is
   // a pair of a boolean and a list of the operators at that level of precedence.
   // The boolean indicates whether the operators are left-associative (true) or
   // right-associative (false).
   private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
-    List.of(
+    Utils.listOf(
       // These are handled separately in separate productions to parseExpression:
-      //      new Pair(true, List.of(OR)),
-      //      new Pair(true, List.of(AND)),
-      //      new Pair(true, List.of(NOT)),
+      //      new Pair(true, Utils.listOf(OR)),
+      //      new Pair(true, Utils.listOf(AND)),
+      //      new Pair(true, Utils.listOf(NOT)),
 
-      new Pair(false, List.of(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
+      new Pair(false, Utils.listOf(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
       /* STAR_STAR_EQUAL, */ DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
          PIPE_EQUAL, ACCENT_EQUAL)),
-      new Pair(true, List.of(QUESTION, QUESTION_COLON)),
-      new Pair(true, List.of(PIPE_PIPE)),
-      new Pair(true, List.of(AMPERSAND_AMPERSAND)),
-      new Pair(true, List.of(PIPE)),
-      new Pair(true, List.of(ACCENT)),
-      new Pair(true, List.of(AMPERSAND)),
-      new Pair(true, List.of(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL)),
-      new Pair(true, List.of(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
-      new Pair(true, List.of(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
-      new Pair(true, List.of(MINUS, PLUS)),
-      new Pair(true, List.of(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
-      //      List.of(STAR_STAR)
+      new Pair(true, Utils.listOf(QUESTION, QUESTION_COLON)),
+      new Pair(true, Utils.listOf(PIPE_PIPE)),
+      new Pair(true, Utils.listOf(AMPERSAND_AMPERSAND)),
+      new Pair(true, Utils.listOf(PIPE)),
+      new Pair(true, Utils.listOf(ACCENT)),
+      new Pair(true, Utils.listOf(AMPERSAND)),
+      new Pair(true, Utils.listOf(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL)),
+      new Pair(true, Utils.listOf(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
+      new Pair(true, Utils.listOf(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
+      new Pair(true, Utils.listOf(MINUS, PLUS)),
+      new Pair(true, Utils.listOf(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
+      //      Utils.listOf(STAR_STAR)
       new Pair(true, unaryOps),
       new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
     );
@@ -915,7 +915,7 @@ public class Parser {
   // should be treated as part of the current expression or the start of a new one.
   // NOTE: we include '/' and '/=' since they could indicate start of a regex.
   //       '-' is also included since it can be the start of a negative number
-  private static Set<TokenType> exprStartingOps = Set.of(LEFT_SQUARE, LEFT_PAREN, LEFT_BRACE, SLASH, SLASH_EQUAL, MINUS);
+  private static Set<TokenType> exprStartingOps = Utils.setOf(LEFT_SQUARE, LEFT_PAREN, LEFT_BRACE, SLASH, SLASH_EQUAL, MINUS);
 
   /**
    *# condition -&gt; expression ;
@@ -1039,8 +1039,8 @@ public class Parser {
 
     // Get list of operators at this level of precedence along with flag
     // indicating whether they are left-associative or not.
-    var operatorsPair = operatorsByPrecedence.get(level);
-    boolean isLeftAssociative = operatorsPair.first;
+    Pair<Boolean, List<TokenType>> operatorsPair     = operatorsByPrecedence.get(level);
+    boolean                        isLeftAssociative = operatorsPair.first;
     List<TokenType> operators = operatorsPair.second;
 
     // If this level of precedence is for our unary operators (includes type cast)
@@ -1111,7 +1111,7 @@ public class Parser {
             if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
               error("Operator '!~' cannot be used with regex substitution", operator);
             }
-            var regex = (Expr.RegexMatch) rhs;
+            Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
             regex.string = expr;
             regex.operator = operator;
             regex.implicitItMatch = false;
@@ -1122,7 +1122,7 @@ public class Parser {
             if (operator.is(BANG_GRAVE)) {
               error("Operator '!~' cannot be used with regex substitution", operator);
             }
-            var regexSubst = (Expr.RegexSubst)((Expr.VarOpAssign)rhs).expr;
+            Expr.RegexSubst regexSubst = (Expr.RegexSubst)((Expr.VarOpAssign)rhs).expr;
             regexSubst.implicitItMatch = false;
             expr = convertToLValue(expr, operator, regexSubst, false, false);
           }
@@ -1158,8 +1158,8 @@ public class Parser {
       // token for the type as the operator if we detect a type cast.
       expect(LEFT_PAREN);
       matchAny(EOL);
-      Token typeToken = peek();
-      var castType = type(false, false, false);
+      Token     typeToken = peek();
+      JactlType castType  = type(false, false, false);
       matchAny(EOL);
       expect(RIGHT_PAREN);
       Expr unary = unary(precedenceLevel);
@@ -1225,12 +1225,12 @@ public class Parser {
    * </pre>
    */
   private Expr newInstance() {
-    var token     = previous();
-    var type      = type(true, true, false);   // get the type and ignore the square brackets for now
+    Token     token = previous();
+    JactlType type  = type(true, true, false);   // get the type and ignore the square brackets for now
     if (type.is(JactlType.INSTANCE)) {
       if (matchAnyIgnoreEOL(LEFT_PAREN)) {
-        var leftParen = previous();
-        var args      = arguments();
+        Token      leftParen = previous();
+        List<Expr> args      = arguments();
         return Utils.createNewInstance(token, type, leftParen, args);
       }
     }
@@ -1284,7 +1284,7 @@ public class Parser {
       // For named args we create a list with single entry being the map literal that represents
       // the name:value pairs.
       Expr.MapLiteral mapEntries = mapEntries(RIGHT_PAREN);
-      return List.of(mapEntries);
+      return Utils.listOf(mapEntries);
     }
     else {
       return argList();
@@ -1718,10 +1718,10 @@ public class Parser {
       isComplexReplacement = true;
     }
 
-    final var itVar       = new Expr.Identifier(start.newIdent(Utils.IT_VAR));
-    final var operator    = new Token(EQUAL_GRAVE, start);
-    final var modifiers   = previous().getStringValue();
-    final var regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace, isComplexReplacement);
+    final Expr.Identifier itVar    = new Expr.Identifier(start.newIdent(Utils.IT_VAR));
+    final Token           operator = new Token(EQUAL_GRAVE, start);
+    final String modifiers = previous().getStringValue();
+    final Expr.RegexSubst regexSubst = new Expr.RegexSubst(itVar, operator, pattern, modifiers, true, replace, isComplexReplacement);
     // Modifier 'r' forces the substitute to be a value and not override the original variable
     if (modifiers.indexOf(Utils.REGEX_NON_DESTRUCTIVE) != -1) {
       return regexSubst;
@@ -1761,7 +1761,7 @@ public class Parser {
       // then we don't have to bother with a separate closure for the block.
       // If there are regex matches or substitutes we create a closure since they might need their own RegexMatcher.
       if (stmt instanceof Stmt.ExprStmt) {
-        var expr = ((Stmt.ExprStmt) stmt).expr;
+        Expr expr = ((Stmt.ExprStmt) stmt).expr;
         if (isSimple(expr)) {
           expr.isResultUsed = true;
           return expr;
@@ -1774,7 +1774,7 @@ public class Parser {
     Stmt.FunDecl closureFunDecl = convertBlockToClosure(leftBrace, block);
     closureFunDecl.declExpr.isResultUsed = true;
     Expr closure = new Expr.Closure(leftBrace, closureFunDecl.declExpr, true);
-    return createCallExpr(closure, leftBrace, List.of());
+    return createCallExpr(closure, leftBrace, Utils.listOf());
   }
 
   /**
@@ -1794,7 +1794,7 @@ public class Parser {
     else {
       // No parameter and no "->" so fill in with default "it" parameter
       noParamsDefined = true;
-      parameters = List.of(createItParam(openBrace));
+      parameters = Utils.listOf(createItParam(openBrace));
     }
     Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false, false, true);
     funDecl.declExpr.isResultUsed = true;
@@ -1918,8 +1918,8 @@ public class Parser {
   private boolean isSimpleIdentOrLiteral(Expr expr) {
     if (expr instanceof Expr.Literal)    { return true; }
     if (expr instanceof Expr.Identifier) {
-      var       ident = (Expr.Identifier)expr;
-      final var name  = ident.identifier.getStringValue();
+      Expr.Identifier ident = (Expr.Identifier)expr;
+      final String    name  = ident.identifier.getStringValue();
       if (name.charAt(0) == '$') {
         // Check if capture arg is greater than $9
         return name.length() <= 2;
@@ -2039,7 +2039,7 @@ public class Parser {
    * This is used in expression strings when the embedded expression is more than a simple expression.
    */
   private Stmt.FunDecl convertBlockToClosure(Token start, Stmt.Block block) {
-    return convertBlockToFunction(start, block, ANY, List.of(), false);
+    return convertBlockToFunction(start, block, ANY, Utils.listOf(), false);
   }
 
   private Stmt.FunDecl convertBlockToFunction(Token name, Stmt.Block block, JactlType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
@@ -2054,7 +2054,7 @@ public class Parser {
     // a Map literal using '{' and '}' and a statement block or a closure.
     return lookahead(() -> {
                        if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
-                       var close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
+      TokenType close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
                        return matchAnyIgnoreEOL(COLON) ||
                               mapKey() != null &&
                               matchAnyIgnoreEOL(COLON) &&
@@ -2134,7 +2134,7 @@ public class Parser {
    * unchanged (EOL is not consumed).
    */
   private boolean matchAnyIgnoreEOL(List<TokenType> types) {
-    return matchAnyIgnoreEOL(types.toArray(TokenType[]::new));
+    return matchAnyIgnoreEOL(types.toArray(new TokenType[types.size()]));
   }
 
   private boolean matchAnyNoEOL(TokenType... types) {
@@ -2239,7 +2239,7 @@ public class Parser {
    * @param lambdas  array of lambdas returning true/false
    */
   @SafeVarargs
-  private boolean lookahead(Supplier<Boolean>... lambdas) {
+  private final boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
     Token previous                   = previous();
     Token current                    = tokeniser.peek();
@@ -2303,7 +2303,7 @@ public class Parser {
     if (peek().getType().is(EOF)) {
       throw new EOFError("Unexpected EOF: " + msg, peek(), lookaheadCount == 0);
     }
-    final var chars = peekIsEOL() ? "EOL" : "'" + peek().getChars() + "'";
+    final String chars = peekIsEOL() ? "EOL" : "'" + peek().getChars() + "'";
     error("Unexpected token " + chars + ": " + msg);
     return null;
   }
@@ -2331,13 +2331,13 @@ public class Parser {
                        .collect(Collectors.joining(", ")));
     }
     else {
-      var expected = types[0].is(IDENTIFIER) ? "identifier" : "'" + types[0] + "'";
+      String expected = types[0].is(IDENTIFIER) ? "identifier" : "'" + types[0] + "'";
       unexpected("Expecting " + expected);
     }
   }
 
   private Token expect(List<TokenType> types) {
-    return expect(types.toArray(TokenType[]::new));
+    return expect(types.toArray(new TokenType[types.size()]));
   }
 
   private Token peekExpect(TokenType ...types) {
@@ -2523,7 +2523,7 @@ public class Parser {
       // If we had "(x)" instead of "x" then we need to treat as a multi-assign to make sure
       // we treat rhs as a list of values in order that "(x) = [1]" gives x a value of 1 rather than [1].
       variable.wasNested = false;
-      return convertToLvalue(new Expr.ExprList(variable.location, List.of(variable)), assignmentOperator, rhs);
+      return convertToLvalue(new Expr.ExprList(variable.location, Utils.listOf(variable)), assignmentOperator, rhs);
     }
 
     // Get the arithmetic operator type for assignments such as +=, -=
@@ -2540,13 +2540,13 @@ public class Parser {
         // Just a standard = or ?=
         return new Expr.VarAssign((Expr.Identifier) variable, assignmentOperator, rhs);
       }
-      final var leftNoop = new Expr.Noop(assignmentOperator);
+      final Expr.Noop leftNoop = new Expr.Noop(assignmentOperator);
       if (assignmentOperator.is(EQUAL_GRAVE)) {
         ((Expr.RegexSubst)rhs).string = leftNoop;
         leftNoop.type = JactlType.STRING;
       }
       else {
-        var expr = new Expr.Binary(leftNoop, new Token(arithmeticOp, assignmentOperator), rhs);
+        Expr.Binary expr = new Expr.Binary(leftNoop, new Token(arithmeticOp, assignmentOperator), rhs);
         expr.originalOperator = assignmentOperator;
         rhs = expr;
       }
@@ -2584,8 +2584,8 @@ public class Parser {
     // (+, -, *, ...) and create a new Binary expression with null as lhs (since value
     // will come from the field value) and with the arithmetic op as the operation and
     // the original rhs as the new rhs of the binary operation
-    Token operator = new Token(arithmeticOp, assignmentOperator);
-    final var   leftNoop       = new Expr.Noop(operator);
+    Token           operator = new Token(arithmeticOp, assignmentOperator);
+    final Expr.Noop leftNoop = new Expr.Noop(operator);
     if (operator.is(EQUAL_GRAVE)) {
       ((Expr.RegexSubst)rhs).string = leftNoop;
     }
@@ -2616,19 +2616,19 @@ public class Parser {
     List<Expr> lhs = lhsExprs.exprs;
     // For each expression in lhs create a "lvalue = _$jmultiAssignN[i]"
     for (int i = 0; i < lhs.size(); i++) {
-      var assignExpr = convertToLValue(lhs.get(i),
-                                       equalToken,
-                                       new Expr.Binary(new Expr.Identifier(rhsName),
+      Expr assignExpr = convertToLValue(lhs.get(i),
+                                        equalToken,
+                                        new Expr.Binary(new Expr.Identifier(rhsName),
                                                        new Token(LEFT_SQUARE, equalToken),
                                                        new Expr.Literal(new Token(INTEGER_CONST, equalToken).setValue(i))),
-                                       false,
-                                       true);
+                                        false,
+                                        true);
       assignExpr.isResultUsed = i == lhs.size() - 1;     // Use result of last assignment
       stmts.stmts.add(new Stmt.ExprStmt(lhs.get(i).location, assignExpr));
     }
 
-    Token lparen = lhsExprs.token;
-    var block = new Expr.Block(lparen, new Stmt.Block(lparen, stmts), false);
+    Token      lparen = lhsExprs.token;
+    Expr.Block block  = new Expr.Block(lparen, new Stmt.Block(lparen, stmts), false);
     return block;
   }
 

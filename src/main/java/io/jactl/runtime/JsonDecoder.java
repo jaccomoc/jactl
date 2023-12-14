@@ -112,8 +112,8 @@ public class JsonDecoder {
 
   List decodeList() {
     if (offset >= length) error("Unexpected end of JSON decoding list");
-    var     list  = new ArrayList<Object>();
-    boolean first = true;
+    ArrayList<Object> list  = new ArrayList<Object>();
+    boolean           first = true;
     while (true) {
       char c = skipWhitespace();
       if (c == EOS) error("Unexpected end of JSON decoding list");
@@ -133,8 +133,8 @@ public class JsonDecoder {
 
   Map decodeMap() {
     if (offset >= length) error("Unexpected end of JSON decoding map");
-    var     map   = new LinkedHashMap<String, Object>();
-    boolean first = true;
+    LinkedHashMap<String, Object> map   = new LinkedHashMap<String, Object>();
+    boolean                       first = true;
     while (true) {
       char c = nextChar();
       if (c == EOS) error("Unexpected end of JSON decoding map");

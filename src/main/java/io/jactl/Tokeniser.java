@@ -257,7 +257,7 @@ public class Tokeniser {
 
     // If we did not find matching symbol or we have an underscore then we must have an identifier
     // (or an unknown token character)
-    if (symbolOptional.isEmpty() || symbolOptional.get().type.is(UNDERSCORE)) {
+    if (!symbolOptional.isPresent() || symbolOptional.get().type.is(UNDERSCORE)) {
       return parseIdentifier(token, remaining);
     }
 
@@ -408,13 +408,13 @@ public class Tokeniser {
             StringBuilder modifierSb = new StringBuilder();
             // Check for modifiers after '/'
             while (available(1) && Character.isAlphabetic(charAt(0))) {
-              final var modifier = (char) charAt(0);
+              final char modifier = (char) charAt(0);
               modifierSb.append(modifier);
               advance(1);
             }
             stringState.pop();
             inString = false;
-            final var modifiers = modifierSb.toString();
+            final String modifiers = modifierSb.toString();
             for (int i = 0; i < modifiers.length(); i++) {
               if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
                 throw new CompileError("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
@@ -462,7 +462,7 @@ public class Tokeniser {
     // Search for first char that is not a valid identifier char
     int i = 1;
     for (; i < remaining; i++) {
-      final var c = charAt(i);
+      final int c = charAt(i);
       if (startChar == '$' && !Character.isDigit(c)) {
           break;
       }
@@ -854,7 +854,7 @@ public class Tokeniser {
 
     IntStream.range(0, 256).forEach(i -> symbolLookup[i].sort((a, b) -> b.symbol.compareTo(a.symbol)));
     // Map digits to INT for the moment
-    IntStream.range(0, 10).forEach(i -> symbolLookup[Integer.toString(i).charAt(0)] = List.of(new Symbol(Integer.toString(i), INTEGER_CONST)));
+    IntStream.range(0, 10).forEach(i -> symbolLookup[Integer.toString(i).charAt(0)] = Utils.listOf(new Symbol(Integer.toString(i), INTEGER_CONST)));
 
     keyWords = symbols.stream()
                       .filter(sym -> sym.isKeyword)

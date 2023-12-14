@@ -24,6 +24,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 /**
@@ -60,7 +61,7 @@ public class JactlOptions {
 
   public static JactlOptions initOptions() {
     String defaultEnvClass = DefaultEnv.class.getName();
-    Map<String,Object> options = new LinkedHashMap<>(Map.of(ENV_CLASS, defaultEnvClass,
+    Map<String,Object> options = new LinkedHashMap<>(Utils.mapOf(ENV_CLASS, defaultEnvClass,
                                                             FUNC_CLASSES, new ArrayList(),
                                                             EXTRA_JARS, new ArrayList()));
     if (!new File(OPTIONS_FILE).exists()) {
@@ -68,7 +69,7 @@ public class JactlOptions {
     }
     try {
       // Run options file as a Jactl script
-      Jactl.eval(Files.readString(Path.of(OPTIONS_FILE)), options);
+      Jactl.eval(new String(Files.readAllBytes(Paths.get(OPTIONS_FILE))), options);
 
       List<String> extraJars = (List<String>) options.get(EXTRA_JARS);
       ClassLoader classLoader = JactlOptions.class.getClassLoader();
@@ -78,7 +79,7 @@ public class JactlOptions {
         for (String jar : extraJars) {
           jar = jar.replaceAll("~", System.getProperty("user.home"));
           //extendableClassLoader.addJar(jar);
-          extendableClassLoader.addURL(Path.of(jar).toUri().toURL());
+          extendableClassLoader.addURL(Paths.get(jar).toUri().toURL());
         }
         classLoader = extendableClassLoader;
         Thread.currentThread().setContextClassLoader(classLoader);
@@ -100,7 +101,7 @@ public class JactlOptions {
       Optional<Method> optMethod = Arrays.stream(clss.getDeclaredMethods())
                                          .filter(m -> m.getName().equals(REGISTER_FUNCTIONS))
                                          .findFirst();
-      if (optMethod.isEmpty()) {
+      if (!optMethod.isPresent()) {
         throw new IllegalArgumentException("Could not find method called " + REGISTER_FUNCTIONS + " in class " + className);
       }
       Method method = optMethod.get();

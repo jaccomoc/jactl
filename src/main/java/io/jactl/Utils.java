@@ -319,7 +319,7 @@ public class Utils {
     if (type.is(ANY)) {
       return;          // No point in casting to Object
     }
-    final var internalName = type.getInternalName();
+    final String internalName = type.getInternalName();
     if (internalName != null) {
       mv.visitTypeInsn(CHECKCAST, internalName);
     }
@@ -471,6 +471,14 @@ public class Utils {
     return s.substring(0,1).toUpperCase() + s.substring(1);
   }
 
+  public static Set setOf(Object... elems) {
+    return new HashSet(Arrays.asList(elems));
+  }
+
+  public static List listOf(Object... elems) {
+    return Arrays.asList(elems);
+  }
+
   public static Map mapOf(Object... elems) {
     Map result = new HashMap();
     if ((elems.length % 2) != 0) {
@@ -509,8 +517,8 @@ public class Utils {
   }
 
   public static Map<String,Expr> getNamedArgs(List<Expr> args) {
-    Function<Expr,String> argName    = expr -> ((Expr.Literal)expr).value.getStringValue();
-    var                   mapEntries = ((Expr.MapLiteral) args.get(0)).entries;
+    Function<Expr,String>  argName    = expr -> ((Expr.Literal)expr).value.getStringValue();
+    List<Pair<Expr, Expr>> mapEntries = ((Expr.MapLiteral) args.get(0)).entries;
     return mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
   }
 
@@ -520,14 +528,14 @@ public class Utils {
 
   public static Expr createNewInstance(Token newToken, JactlType className, Token leftParen, List<Expr> args) {
     // We create the instance and then invoke _$j$init on it
-    var invokeNew  = new Expr.InvokeNew(newToken, className);
-    var invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, args);
+    Expr.InvokeNew  invokeNew  = new Expr.InvokeNew(newToken, className);
+    Expr.MethodCall invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, args);
     invokeInit.couldBeNull = false;
     return invokeInit;
   }
 
   public static Expr createNewInstance(Token newToken, JactlType type, List<Expr> dimensions) {
-    var invokeNew = new Expr.InvokeNew(newToken, type);
+    Expr.InvokeNew invokeNew = new Expr.InvokeNew(newToken, type);
     invokeNew.dimensions  = dimensions;
     invokeNew.couldBeNull = false;
     return invokeNew;
@@ -633,8 +641,8 @@ public class Utils {
         files.add(args[i]);
       }
     }
-    result.put('*', files);                                                 // List of files
-    result.put('@', List.of(Arrays.copyOfRange(args, i, args.length)));     // List of arguments
+    result.put('*', files);                                                     // List of files
+    result.put('@', Arrays.asList(Arrays.copyOfRange(args, i, args.length)));   // List of arguments
     return result;
   }
 
@@ -717,7 +725,7 @@ public class Utils {
     for (int i = 0; i < length / 16 + 1; i++) {
       for (int j = 0; j < 16; j++) {
         hex += idx < length ? String.format("%02x ", buf[idx]) : "   ";
-        readable += (idx < length ? (Character.isISOControl(buf[idx]) ? "." : Character.toString(buf[idx] & 0xff)) : " ") + " ";
+        readable += (idx < length ? (Character.isISOControl(buf[idx]) ? "." : Character.toString((char)(buf[idx] & 0xff))) : " ") + " ";
         idx++;
       }
       result += String.format("%04x: ", i * 16) + hex + "    " + readable + "\n";
@@ -782,5 +790,19 @@ public class Utils {
                         .filter(f -> !Modifier.isStatic(f.getModifiers()))
                         .collect(Collectors.toList()));
     return fields;
+  }
+
+  public static String repeat(String str, int count) {
+    if (count == 0) {
+      return "";
+    }
+    if (count < 0) {
+      throw new IllegalArgumentException("Count cannot be negative");
+    }
+    StringBuilder sb = new StringBuilder(count * str.length());
+    for (int i = 0; i < count; i++) {
+      sb.append(str);
+    }
+    return sb.toString();
   }
 }

@@ -32,9 +32,9 @@ class CompilerTest extends BaseTest {
 
   @Test public void comments() {
     test("  // Strip '#' comments\n1", 1);
-    test("[1,2,3].map{it}", List.of(1,2,3));
-    test("[1,2,3].map{\n\nit}", List.of(1,2,3));
-    test("[1,2,3].map{\n // Strip '#' comments\nit}", List.of(1,2,3));
+    test("[1,2,3].map{it}", Utils.listOf(1,2,3));
+    test("[1,2,3].map{\n\nit}", Utils.listOf(1,2,3));
+    test("[1,2,3].map{\n // Strip '#' comments\nit}", Utils.listOf(1,2,3));
   }
 
   @Test public void literals() {
@@ -1523,10 +1523,10 @@ class CompilerTest extends BaseTest {
     test("def x = 1; true ? 1 : 2L", 1L);
     test("def x = 1; x ?: 2L", 1);
     test("Map m = true ? null : [:]", null);
-    test("def x = [1]; true ? x.map() : [x]", List.of(1));
-    test("def x = [1]; false ? x.flatMap() : [x]", List.of(List.of(1)));
-    test("List x = [1]; true ? x : x.map()", List.of(1));
-    test("List x = [1]; false ? x : x.flatMap()", List.of(1));
+    test("def x = [1]; true ? x.map() : [x]", Utils.listOf(1));
+    test("def x = [1]; false ? x.flatMap() : [x]", Utils.listOf(Utils.listOf(1)));
+    test("List x = [1]; true ? x : x.map()", Utils.listOf(1));
+    test("List x = [1]; false ? x : x.flatMap()", Utils.listOf(1));
     test("(null?:sleep(0,5))", 5);
     test("(null?:sleep(0,[:])).i = 5", 5);
     test("true ? (byte)1 : (byte)2", (byte)1);
@@ -3333,9 +3333,9 @@ class CompilerTest extends BaseTest {
     test("def it = 'xyz'; def x = /x/r; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
     test("def it = 'xyz'; def x = /X/i; { x ? 'match' : 'nomatch' }()", "match");
     test("def it = 'xyz'; def x = /X/i; { x == 'x' ? 'match' : 'nomatch' }()", "nomatch");
-    test("['abc','xzt','sas',''].map{/a/r ? true : false}", List.of(true,false,true,false));
-    test("['abc','xzt','sas',''].map{ if (/a/r) true else false}", List.of(true,false,true,false));
-    test("['abc','xzt','sas',''].map{ /a/r and return true; false}", List.of(true,false,true,false));
+    test("['abc','xzt','sas',''].map{/a/r ? true : false}", Utils.listOf(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ if (/a/r) true else false}", Utils.listOf(true,false,true,false));
+    test("['abc','xzt','sas',''].map{ /a/r and return true; false}", Utils.listOf(true,false,true,false));
 
     testError("def it = 'abc'; def x; /a/ and x = 'x'; x", "regex string used in boolean context");
     testError("def it = 'abc'; def x; /a/ ? true : false", "regex string used in boolean context");
@@ -3352,8 +3352,8 @@ class CompilerTest extends BaseTest {
     test("def x = 'aa'; 'abc$x' =~ /\\$x/", true);
     test("def x = 'aa'; 'abc$x' =~ /\\$x$/", true);
 
-    test("['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}", List.of("a","b","c"));
-    test("def x = ['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}; x", List.of("a","b","c"));
+    test("['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}", Utils.listOf("a","b","c"));
+    test("def x = ['a','b','c'].map{/(.)/r\n[name:$1]\n }.map{it.name}; x", Utils.listOf("a","b","c"));
 
     test("def it = 'ab\\ncd'; /b$/mr", true);
     test("def it = 'ab\\n#d'; /b$\\n#/mr", true);
@@ -3522,19 +3522,19 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void listLiterals() {
-    test("[]", List.of());
-    test("[1]", List.of(1));
+    test("[]", Utils.listOf());
+    test("[1]", Utils.listOf(1));
     testError("[1,", "unexpected EOF");
-    test("[(byte)1,2,3]", List.of((byte)1,2,3));
-    test("[1,2,3]", List.of(1,2,3));
-    test("[1,2+3,3]", List.of(1,5,3));
-    test("[[]]", List.of(List.of()));
-    test("[[1]]", List.of(List.of(1)));
-    test("[[1],2]", List.of(List.of(1),2));
+    test("[(byte)1,2,3]", Utils.listOf((byte)1,2,3));
+    test("[1,2,3]", Utils.listOf(1,2,3));
+    test("[1,2+3,3]", Utils.listOf(1,5,3));
+    test("[[]]", Utils.listOf(Utils.listOf()));
+    test("[[1]]", Utils.listOf(Utils.listOf(1)));
+    test("[[1],2]", Utils.listOf(Utils.listOf(1),2));
     test("[][0]", null);
     test("[1,2,3][0]", 1);
     test("[1,2,3][3]", null);
-    test("[1,[2,3,4],5][1]", List.of(2,3,4));
+    test("[1,[2,3,4],5][1]", Utils.listOf(2,3,4));
     testError("String x = []", "cannot convert");
     testError("String x = [1,2,3]", "cannot convert");
     testError("def y = []; String x = y", "cannot convert");
@@ -3547,10 +3547,10 @@ class CompilerTest extends BaseTest {
     test("def x = [1,[2,3]]; ''+x", "[1, [2, 3]]");
     test("def x = []; x[2] = 2; x[0] == null && x[1] == null && x[2] == 2", true);
     test("def x = []; x[2] = 2; x.filter{!it}.size()", 2);
-    test("def x = [1,2,3]; x[(byte)-1] = 4; x", List.of(1,2,4));
-    test("def x = [1,2,3]; x[-(byte)1] = 4; x", List.of(1,2,4));
-    test("def x = [1,2,3]; x[-1] = 4; x", List.of(1,2,4));
-    test("List x = [1,2,3]; x[-1] = 4; x", List.of(1,2,4));
+    test("def x = [1,2,3]; x[(byte)-1] = 4; x", Utils.listOf(1,2,4));
+    test("def x = [1,2,3]; x[-(byte)1] = 4; x", Utils.listOf(1,2,4));
+    test("def x = [1,2,3]; x[-1] = 4; x", Utils.listOf(1,2,4));
+    test("List x = [1,2,3]; x[-1] = 4; x", Utils.listOf(1,2,4));
     testError("List x = [1,2,3]; x[-4] = 4; x", "out of range");
   }
 
@@ -3602,24 +3602,24 @@ class CompilerTest extends BaseTest {
 
   @Test public void mapLiterals() {
     test("[:]", new HashMap<>());
-    test("[a:(byte)1]", Map.of("a",(byte)1));
-    test("[a:1]", Map.of("a",1));
+    test("[a:(byte)1]", Utils.mapOf("a",(byte)1));
+    test("[a:1]", Utils.mapOf("a",1));
     testError("[:", "unexpected EOF");
     testError("[:123]", "unexpected token");
-    test("[for:1]", Map.of("for",1));
-    test("['for':1]", Map.of("for",1));
-    test("[a:1,b:2]", Map.of("a",1, "b", 2));
-    test("['a':1,'b':2]", Map.of("a",1, "b", 2));
-    test("[('a'+'b'):1,b:2]", Map.of("ab",1, "b", 2));
-    test("[\"ab\":1,b:2]", Map.of("ab",1, "b", 2));
-    test("[a:1,b:[c:2]]", Map.of("a",1, "b", Map.of("c",2)));
+    test("[for:1]", Utils.mapOf("for",1));
+    test("['for':1]", Utils.mapOf("for",1));
+    test("[a:1,b:2]", Utils.mapOf("a",1, "b", 2));
+    test("['a':1,'b':2]", Utils.mapOf("a",1, "b", 2));
+    test("[('a'+'b'):1,b:2]", Utils.mapOf("ab",1, "b", 2));
+    test("[\"ab\":1,b:2]", Utils.mapOf("ab",1, "b", 2));
+    test("[a:1,b:[c:2]]", Utils.mapOf("a",1, "b", Utils.mapOf("c",2)));
     test("{:}", new HashMap<>());
-    test("{a:1}", Map.of("a",1));
+    test("{a:1}", Utils.mapOf("a",1));
     testError("{:", "unexpected EOF");
-    test("{for:1}", Map.of("for",1));
-    test("{'for':1}", Map.of("for",1));
-    test("{a:1,b:2}", Map.of("a",1, "b", 2));
-    test("{a:1,b:{c:2}}", Map.of("a",1, "b", Map.of("c",2)));
+    test("{for:1}", Utils.mapOf("for",1));
+    test("{'for':1}", Utils.mapOf("for",1));
+    test("{a:1,b:2}", Utils.mapOf("a",1, "b", 2));
+    test("{a:1,b:{c:2}}", Utils.mapOf("a",1, "b", Utils.mapOf("c",2)));
     test("[a:1].a", 1);
     test("[a:[b:2]].a.b", 2);
     test("[a:[b:2]]?.a?.b", 2);
@@ -3640,7 +3640,7 @@ class CompilerTest extends BaseTest {
     testError("['1':[null:['2':3]].(1).(null).2", "unexpected EOF");
     testError("['1':[null:['2':3]]].(1).(null).2", "null value for field");
     test("['1':[null:['2':3]]].(1).null.2", 3);
-    test("[\"a${1+2}\":1,b:2]", Map.of("a3",1, "b", 2));
+    test("[\"a${1+2}\":1,b:2]", Utils.mapOf("a3",1, "b", 2));
     test("[this:1, if:2, while:[if:[z:3],for:3]].while.if.z", 3);
     test("[true:[false:[null:[if:[z:3],for:3]]]].true.false.null.if.z", 3);
     test("[true:[false:[null:[if:[z:3],for:3]]]]?.true?.false?.null?.if?.z", 3);
@@ -3667,7 +3667,7 @@ class CompilerTest extends BaseTest {
     testError("{'1':{null:{'2':3}}.(1).(null).2", "unexpected EOF");
     testError("{'1':{null:{'2':3}}}.(1).(null).2", "null value for field");
     test("{'1':{null:{'2':3}}}.(1).null.2", 3);
-    test("{\"a${1+2}\":1,b:2}", Map.of("a3",1, "b", 2));
+    test("{\"a${1+2}\":1,b:2}", Utils.mapOf("a3",1, "b", 2));
     test("{this:1, if:2, while:{if:{z:3},for:3}}.while.if.z", 3);
     test("{true:{false:{null:{if:{z:3},for:3}}}}.true.false.null.if.z", 3);
     test("{true:{false:{null:{if:{z:3},for:3}}}}?.true?.false?.null?.if?.z", 3);
@@ -3681,7 +3681,7 @@ class CompilerTest extends BaseTest {
     testError("Map x = 1", "cannot convert");
     testError("List x = 1", "cannot convert");
     test("Map x = [a:1]; x.a", 1);
-    test("Map x = [a:1]", Map.of("a", 1));
+    test("Map x = [a:1]", Utils.mapOf("a", 1));
     test("Map x = [a:1]; 1", 1);
     testError("List list = [1]; list.a", "invalid object type");
     testError("int x = 1; x.a", "invalid object type");
@@ -3691,7 +3691,7 @@ class CompilerTest extends BaseTest {
     testError("List list = []; list = 1", "cannot convert from int to list");
 
     test("var x = [a:1]; x.a", 1);
-    test("var x = [a:1]", Map.of("a", 1));
+    test("var x = [a:1]", Utils.mapOf("a", 1));
     test("var x = [a:1]; 1", 1);
     testError("var list = [1]; list.a", "invalid object type");
     testError("var x = 1; x.a", "invalid object type");
@@ -3700,8 +3700,8 @@ class CompilerTest extends BaseTest {
     testError("var map = [:]; map = 1", "cannot convert");
     testError("var list = []; list = 1", "cannot convert");
 
-    test("def m = [a:1]", Map.of("a",1));
-    test("def m = [1]", List.of(1));
+    test("def m = [a:1]", Utils.mapOf("a",1));
+    test("def m = [1]", Utils.listOf(1));
     test("def m = [a:1]; m.a", 1);
     test("def m = [a:1]; m.b", null);
     test("def m = [a:[b:2]]; m.a.b", 2);
@@ -3711,8 +3711,8 @@ class CompilerTest extends BaseTest {
     test("def m = [a:[b:2]]; m.a.x?.y", null);
     testError("def m = [a:[b:2]]; m.a.x?.y.z", "null value");
 
-    test("def x = [1,2,3]", List.of(1,2,3));
-    test("def x = []", List.of());
+    test("def x = [1,2,3]", Utils.listOf(1,2,3));
+    test("def x = []", Utils.listOf());
     test("def x = []; x[0]", null);
     test("def x = [1,2,3][4]; x", null);
     test("def x = [1,2,3]; x[1]", 2);
@@ -3758,8 +3758,8 @@ class CompilerTest extends BaseTest {
     test("Map x = [a:1]; x['a'] = 2; x.a", 2);
     test("Map x = [a:1]; def f = 'a'; x[f]", 1);
     test("Map x = [a:1]; def f = 'a'; x[f] = 2; x.a", 2);
-    test("[a:1,b:2].map{ it[-1] }", List.of(1,2));
-    test("[a:1,b:2].map{ it[-2] }", List.of("a","b"));
+    test("[a:1,b:2].map{ it[-1] }", Utils.listOf(1,2));
+    test("[a:1,b:2].map{ it[-2] }", Utils.listOf("a","b"));
     testError("[a:1,b:2].map{ it[-3] }", "out of range");
     test("[for:1].for", 1);
     test("[true:1].true", 1);
@@ -4259,9 +4259,18 @@ class CompilerTest extends BaseTest {
     test("var a = new long[1];  var x = a[0]; x instanceof long", true);
   }
 
-  @Test public void longArrayMultipleDimensions() {
+  @Test public void longArrayMultipleDimensionsErrors() {
     testError("long[][] a = new long[{ -> 7}][-4]; a[0][0]", "cannot convert");
     testError("long[][] a = new long[10][-4]; a[0][0]", "negative");
+    testError("long[][] a = new long[]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
+    testError("long[][] a = new long[][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
+    testError("long[][] a = new long[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot convert");
+    testError("long[][][] a = new long[10][][4]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "unexpected token");
+    testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
+    testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = new long[4]; a[i][0] = x; a[i][0]", "cannot be cast");
+  }
+
+  @Test public void longArrayMultipleDimensions() {
     test("long[][] a = new long[10][4]; a[0][0]", 0L);
     test("long[][] a = new long[10][4]; def i = 0; a[i][i] = 3; a[i][i]", 3L);
     test("long[][] a = new long[10][4]; def i = -1; a[i][i] = 3; a[i][i]", 3L);
@@ -4320,12 +4329,6 @@ class CompilerTest extends BaseTest {
     test("def x = 3.2D; def a = new long[10][4]; Decimal i = -1; a[i][i] = x; a[i][i]", 3L);
     test("def x = 3.2D; def a = new long[10][4]; def i = 0; a[i][i] = x; a[i][i]", 3L);
     test("def x = 3.2D; def a = new long[10][4]; def i = -1; a[i][i] = x; a[i][i]", 3L);
-    testError("long[][] a = new long[]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
-    testError("long[][] a = new long[][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
-    testError("long[][] a = new long[10][4][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot convert");
-    testError("long[][][] a = new long[10][][4]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "unexpected token");
-    testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "cannot cast");
-    testError("long[][] a = new long[10][]; def i = -1; def x = 'abc'; a[i] = new long[4]; a[i][0] = x; a[i][0]", "cannot be cast");
     test("var a = new long[10][1]; a[0][0] = 3; a[0][0]", 3L);
     test("var a = new long[10][1]; a[-1][0] = 3; a[-1][0]", 3L);
     test("var a = new long[10][1]; def i = 0; a[i][0] = 3; a[i][0]", 3L);
@@ -4987,17 +4990,17 @@ class CompilerTest extends BaseTest {
     test("Object[][] a = new Object[10][]; a = [[1L,2D,3.0]]; a[0]", new Object[]{1L,2D,BigDecimal.valueOf(3.0)});
     test("Object[][] a = new Object[10][]; int[][] x = [[1L,2D,3.0]]; a = x; a[0]", new Object[]{1,2,3});
     test("Object[][] a = new Object[10][]; int[][] x = [[1L,2D,3.0]]; a = (Object[][])x; a[0]", new Object[]{1,2,3});
-    test("Object[] a = [[1L,2D,3.0]]; a", new Object[]{List.of(1L,2D,BigDecimal.valueOf(3.0))});
+    test("Object[] a = [[1L,2D,3.0]]; a", new Object[]{Utils.listOf(1L,2D,BigDecimal.valueOf(3.0))});
     test("Object[] a = [[1],[1,1],[4]]; int[] x = [2,3]; a[1] = x; int[][] i = a", new int[][]{new int[]{1}, new int[]{2,3}, new int[]{4}});
     test("[1,2,3] as int[]", new int[]{1,2,3});
     test("String[][] a = new String[10][]; int[][] x = [[1L,2D,3.0]]; a = x as String[][]; a[0]", new String[]{"1","2","3"});
     test("String[][] a = new String[10][]; def x = [[1L,2D,3.0]]; a = x as String[][]; a[0]", new String[]{"1","2.0","3.0"});
     test("String[] a = new String[10]; def x = [[1L,2D,3.0]]; a = x as String[]; a", new String[]{"[1, 2.0, 3.0]"});
-    test("int[] x = [1,2,3]; x as List", List.of(1,2,3));
+    test("int[] x = [1,2,3]; x as List", Utils.listOf(1,2,3));
     test("int[][] x = [[1,2],[2],[3]]; def y = x as List; y[0] instanceof int[] && y[0].sum() == 3 && y[1] instanceof int[]", true);
-    test("long[] x = [1,2,3]; x as List", List.of(1L,2L,3L));
-    test("double[] x = [1,2,3]; x as List", List.of(1D,2D,3D));
-    test("boolean[] x = [true,false,true]; x as List", List.of(true,false,true));
+    test("long[] x = [1,2,3]; x as List", Utils.listOf(1L,2L,3L));
+    test("double[] x = [1,2,3]; x as List", Utils.listOf(1D,2D,3D));
+    test("boolean[] x = [true,false,true]; x as List", Utils.listOf(true,false,true));
   }
 
   @Test public void arrayComparisons() {
@@ -5075,8 +5078,8 @@ class CompilerTest extends BaseTest {
     test("Map m; m.a.b = (byte)1", (byte)1);
     test("Map m; m.a.b = (byte)1; m.a.b", (byte)1);
     test("Map m; m.a.b = 1", 1);
-    test("Map m; m.a.b = 1; m.a", Map.of("b",1));
-    test("Map m; m.a.b.c = 1; m.a.b", Map.of("c",1));
+    test("Map m; m.a.b = 1; m.a", Utils.mapOf("b",1));
+    test("Map m; m.a.b.c = 1; m.a.b", Utils.mapOf("c",1));
     test("Map m; m.a.b.c = 1", 1);
 
     test("Map m; m.a[2] = 1", 1);
@@ -5084,8 +5087,8 @@ class CompilerTest extends BaseTest {
     test("Map m; m.a[2] = 1; m.a", Arrays.asList(null, null, 1));
     test("Map m; m.a[3].b[2].c = 1", 1);
 
-    test("var m = [:]; m.a.b.c = 1; m.a.b", Map.of("c",1));
-    test("def m = [:]; m.a.b.c = 1; m.a.b", Map.of("c",1));
+    test("var m = [:]; m.a.b.c = 1; m.a.b", Utils.mapOf("c",1));
+    test("def m = [:]; m.a.b.c = 1; m.a.b", Utils.mapOf("c",1));
     test("Map m = [:]; m.('a' + 'b').c = 1; m.ab.c", 1);
     test("Map m = [:]; def x = 'ab'; m.(x).c = 1; m.ab.c", 1);
     test("Map m = [:]; def x = 'ab'; m.('a'+'b').c = 1; m.(x).c", 1);
@@ -5154,14 +5157,14 @@ class CompilerTest extends BaseTest {
     test("Map x = [a:[:]]; int i = 5; i ?= x.a.b[0].c; i", 5);
     test("Map x = [a:[]]; int i = 5; i ?= x.a[2].b[0].c; i", 5);
     test("Map x = [a:[]]; int i = 5; i ?= x.a[2]?.b?[0].c; i", 5);
-    test("Map m = [a:[]]; m.a ?= m.a", List.of());
+    test("Map m = [a:[]]; m.a ?= m.a", Utils.listOf());
     test("Map m = [a:[]]; m.a ?= m.b", null);
     test("Map m = [a:3]; m.a ?= m.b; m.a", 3);
     test("Map m = [a:[]]; def x; m.a ?= x", null);
     test("Map m; def x; m.a.b.c ?= x.a", null);
     test("Map m; def x; m.a.b.c ?= x.a; m.a", null);
     test("Map m; def x; m.a.b.c ?= x.a; m.a?.b", null);
-    test("Map m; def x = [a:3]; m.a.b.c ?= x.a; m.a?.b", Map.of("c",3));
+    test("Map m; def x = [a:3]; m.a.b.c ?= x.a; m.a?.b", Utils.mapOf("c",3));
     test("Map m; def x = [a:3]; m.a.b ?= 3", 3);
     test("def x; x ?= 2", 2);
     test("def x; x ?= 2L", 2L);
@@ -5239,9 +5242,9 @@ class CompilerTest extends BaseTest {
   @Test public void nullValues() {
     test("String s; s", "");
     test("String s = null", null);
-    test("Map x; x", Map.of());
+    test("Map x; x", Utils.mapOf());
     test("Map x = null; x", null);
-    test("List x; x", List.of());
+    test("List x; x", Utils.listOf());
     test("List x = null; x", null);
     testError("int i = null", "cannot convert null");
     testError("1.0 + null", "null operand");
@@ -6436,14 +6439,14 @@ class CompilerTest extends BaseTest {
     test("def x = 1L; x as String as long", 1L);
     test("def x = 1L; x as String as byte", (byte)1);
 
-    test("[:] as List", List.of());
-    test("[a:1] as List", List.of(List.of("a",1)));
-    test("[a:1,b:2] as List", List.of(List.of("a",1), List.of("b",2)));
-    test("[a:1,b:2] as List as Map", Map.of("a",1,"b",2));
-    test("[1,2,3].map{it*it}.map{[it.toString(),it]} as Map", Map.of("1",1,"4",4,"9",9));
+    test("[:] as List", Utils.listOf());
+    test("[a:1] as List", Utils.listOf(Utils.listOf("a",1)));
+    test("[a:1,b:2] as List", Utils.listOf(Utils.listOf("a",1), Utils.listOf("b",2)));
+    test("[a:1,b:2] as List as Map", Utils.mapOf("a",1,"b",2));
+    test("[1,2,3].map{it*it}.map{[it.toString(),it]} as Map", Utils.mapOf("1",1,"4",4,"9",9));
     testError("'abc' as Map", "cannot coerce");
-    test("'abc' as List", List.of("a","b","c"));
-    test("'' as List", List.of());
+    test("'abc' as List", Utils.listOf("a","b","c"));
+    test("'' as List", Utils.listOf());
     test("('abc' as List).join()", "abc");
     testError("'123456789123456789123456789' as long", "not a valid long");
     testError("'89.123.123' as double", "not a valid double");
@@ -6592,7 +6595,7 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and continue; sum += i }; sum", 15);
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and sleep(0,continue); sum += i }; sum", 15);
     test("def f(x){x}; int sum = 0; double i = 0; while (i++ < 10) { i > 5 and f(continue); sum += i }; sum", 15);
-    test("def s=[1]; while (s.size())\n{\nfalse and continue\n(0 + (2*3) - 10 < s.size()) and s.remove(0) and continue\n}\ns", List.of());
+    test("def s=[1]; while (s.size())\n{\nfalse and continue\n(0 + (2*3) - 10 < s.size()) and s.remove(0) and continue\n}\ns", Utils.listOf());
     test("int i = 0; int sum = 0; while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
     test("if (true) { LABEL: while(false){}; 17 }", 17);
     testError("def x = 0; if (true) { LABEL: x++; while(false){}; 17 }", "label applied to statement that is not for/while");
@@ -6670,10 +6673,10 @@ class CompilerTest extends BaseTest {
     testError("def f(){1}; def g(){2}; f += g; f()", "non-numeric operand");
 
     test("def f(x) { if (x == 1) 1 else x + f(x-1) }; f(4)", 10);
-    test("def f() { int i = 1; return {++i}}; def x=f(); def y=f(); [x()+x()+x(),y()]", List.of(9,2));
+    test("def f() { int i = 1; return {++i}}; def x=f(); def y=f(); [x()+x()+x(),y()]", Utils.listOf(9,2));
     test("String f(x) { x.toString() }; f(1)", "1");
-    test("List f(x) { [x] }; f(1)", List.of(1));
-    test("Map f(x) { [x:x] }; f(1)", Map.of("x",1));
+    test("List f(x) { [x] }; f(1)", Utils.listOf(1));
+    test("Map f(x) { [x:x] }; f(1)", Utils.mapOf("x",1));
 
     test("def f(int x) { x }; f(1L)", 1);
     test("def f(byte x) { x }; f(1L)", (byte)1);
@@ -6690,8 +6693,8 @@ class CompilerTest extends BaseTest {
     test("def x = [:]; int f(x){x*x}; x.a = f; x.a(2)", 4);
     testError("def f(int x) { x*x }; def g = f; g('abc')", "cannot be cast");
     testError("def f(String x) { x + x }; def g = f; g(1)", "cannot convert");
-    test("def x = [1,2,3]; def f = x.map; f{it+it}", List.of(2,4,6));
-    test("def x = [1,2,3]; def f = x.map; x = [4,5]; f{it+it}", List.of(2,4,6));
+    test("def x = [1,2,3]; def f = x.map; f{it+it}", Utils.listOf(2,4,6));
+    test("def x = [1,2,3]; def f = x.map; x = [4,5]; f{it+it}", Utils.listOf(2,4,6));
     test("def f(x){x*x}; def m = [g:f, '1':f, true:f, false:f, null:f]; m.g(2) + m.1(3) + m.true(4) + m.false(5) + m.null(6)", 4+9+16+25+36);
     test("def f(x){x*x}; def m = [g:f, if:f, true:f, false:f, null:f]; m.g(2) + m.if(3) + m.true(4) + m.false(5) + m.null(6)", 4+9+16+25+36);
   }
@@ -6782,17 +6785,17 @@ class CompilerTest extends BaseTest {
     testError("def f(int x, int y, int z) { x + y }; f(1,2)", "missing mandatory argument");
     testError("def f(int x, int y, int z) { x + y }; f([1,2])", "missing mandatory argument");
     testError("def f(List x, int y) { x + y }; def a = [[1,2]]; def g = f; g(a)", "missing mandatory arguments");
-    test("def f(List x, byte y) { x + y }; f([[1,2],3])", List.of(1,2,(byte)3));
-    test("def f(List x, int y) { x + y }; f([[1,2],3])", List.of(1,2,3));
-    test("def f = { List x, int y -> x + y }; f([[1,2],3])", List.of(1,2,3));
-    test("def f = { List x, int y -> x + y }; def a = [[1,2],3]; f(a)", List.of(1,2,3));
-    test("def f(List x, int y) { x + y }; def a = [[1,2],3]; f(a)", List.of(1,2,3));
-    test("def f(List x, int y) { x + y }; def a = [[1,2],3]; def g = f; g(a)", List.of(1,2,3));
-    test("def f(List x, int y = 4) { x + y }; f([[1,2],3])", List.of(List.of(1,2),3,4));
-    test("def f = {List x, int y = 4 -> x + y }; f([[1,2],3])", List.of(List.of(1,2),3,4));
-    test("def f = {List x, int y = 4 -> x + y }; def a = [[1,2],3]; f(a)", List.of(List.of(1,2),3,4));
-    test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; f(a)", List.of(List.of(1,2),3,4));
-    test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; def g = f; g(a)", List.of(List.of(1,2),3,4));
+    test("def f(List x, byte y) { x + y }; f([[1,2],3])", Utils.listOf(1,2,(byte)3));
+    test("def f(List x, int y) { x + y }; f([[1,2],3])", Utils.listOf(1,2,3));
+    test("def f = { List x, int y -> x + y }; f([[1,2],3])", Utils.listOf(1,2,3));
+    test("def f = { List x, int y -> x + y }; def a = [[1,2],3]; f(a)", Utils.listOf(1,2,3));
+    test("def f(List x, int y) { x + y }; def a = [[1,2],3]; f(a)", Utils.listOf(1,2,3));
+    test("def f(List x, int y) { x + y }; def a = [[1,2],3]; def g = f; g(a)", Utils.listOf(1,2,3));
+    test("def f(List x, int y = 4) { x + y }; f([[1,2],3])", Utils.listOf(Utils.listOf(1,2),3,4));
+    test("def f = {List x, int y = 4 -> x + y }; f([[1,2],3])", Utils.listOf(Utils.listOf(1,2),3,4));
+    test("def f = {List x, int y = 4 -> x + y }; def a = [[1,2],3]; f(a)", Utils.listOf(Utils.listOf(1,2),3,4));
+    test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; f(a)", Utils.listOf(Utils.listOf(1,2),3,4));
+    test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; def g = f; g(a)", Utils.listOf(Utils.listOf(1,2),3,4));
     test("def f(int x, int y) { x + y }; f([1,2])", 3);
     test("def f(int x, int y) { x + y }; def g = f; g([1,2])", 3);
     testError("def f = {int x, int y = 4 -> x + y }; f([1,2])", "cannot be cast to int");
@@ -6812,14 +6815,14 @@ class CompilerTest extends BaseTest {
     testError("def f(long t, def x) { sleep(t,x) }; f(['123',2])", "cannot be cast to number");
     test("def f(long t, def x) { sleep(t,x) }; def a = [1,2]; f(a)", 2);
     testError("def f(long t, def x) { sleep(t,x) }; def a = ['123',2]; f(a)", "cannot be cast to number");
-    test("def f(long t, def x) { sleep(t,x) }; [[1,2],[3,4]].map{ a,b -> f([a,b]) }", List.of(2,4));
-    test("def f(long t, def x) { sleep(t,x) }; [a:2,b:4].map{ a,b -> f([b,a]) }", List.of("a","b"));
-    test("def f(long t, def x) { sleep(t,x) }; def x = [[1,2],[3,4]]; x.map{ a,b -> f([a,b]) }", List.of(2,4));
+    test("def f(long t, def x) { sleep(t,x) }; [[1,2],[3,4]].map{ a,b -> f([a,b]) }", Utils.listOf(2,4));
+    test("def f(long t, def x) { sleep(t,x) }; [a:2,b:4].map{ a,b -> f([b,a]) }", Utils.listOf("a","b"));
+    test("def f(long t, def x) { sleep(t,x) }; def x = [[1,2],[3,4]]; x.map{ a,b -> f([a,b]) }", Utils.listOf(2,4));
     testError("def f(long t, def x) { sleep(t,x) }; def x = [a:2,b:4]; x.map([{ a,b -> f([b,a]) }])", "cannot be cast");
     testError("def f(long t, def x) { sleep(t,x) }; def g = [[1,2],[3,4]].map; g([{ a,b -> f([a,b]) }])", "cannot be cast");
     testError("def f(long t, def x) { sleep(t,x) }; def g = [a:2,b:4].map; g([{ a,b -> f([b,a]) }])", "cannot be cast");
     test("def a = [1,2,3]; def f(x,y=7,z) { x + y + z }; f(1,2,3) + f(a)", 12);
-    test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; def f(x,y=7,z=8) { x + y + z }; f(a)", Utils.listOf(1,2,3,7,8));
     test("def f(String x, int y) { x + y }; def a = ['x',2]; f(a)", "x2");
     test("def f = {String x, int y -> x + y }; def a = ['x',2]; f(a)", "x2");
     testError("def f = {String x, int y -> x + y }; def a = [2,'x']; f(a)", "cannot convert object of type int to string");
@@ -6828,11 +6831,11 @@ class CompilerTest extends BaseTest {
     test("def f = { x,y,z -> x + y + z }; def a = [1,2,3]; f(1,2,3) + f(a)", 12);
     test("def f = { x,y,z=3 -> x + y + z }; def a = [1,2]; f(1,2,3) + f(a)", 12);
     test("def f(x, y) { x + y }; f([1,2])", 3);
-    test("def f(x, y=3) { x + y }; f([1,2])", List.of(1,2,3));
+    test("def f(x, y=3) { x + y }; f([1,2])", Utils.listOf(1,2,3));
     test("def f(x, y) { x + y }; def a = [1,2]; f(a)", 3);
-    test("def f(x, y=3) { x + y }; def a = [1,2]; f(a)", List.of(1,2,3));
+    test("def f(x, y=3) { x + y }; def a = [1,2]; f(a)", Utils.listOf(1,2,3));
     test("def f(x, y=3) { x + y }; f(1,2)", 3);
-    test("def f(List x, y=3) { x + y }; f([1,2])", List.of(1,2,3));
+    test("def f(List x, y=3) { x + y }; f([1,2])", Utils.listOf(1,2,3));
     testError("def f(List x, y=4, z) { x + y + z }; f([1, 2, 3])", "int cannot be cast to List");
   }
 
@@ -6843,28 +6846,28 @@ class CompilerTest extends BaseTest {
     testError("def f(x, y=[a:3]) { x + y }; f(x:1,(''+'y'):2)", "invalid parameter name");
     test("def f(x, y=[a:3]) { x + y }; f(x:1,y:2)", 3);
     testError("def f(x, y) { x + y }; f([x:1,y:2])", "missing mandatory argument: y");
-    test("def f(x, y=[a:3]) { x + y }; f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("def f(x, y=[a:3]) { x + y }; f([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("def f(x,y) { x*y }; f(x:2,y:3)", 6);
     test("def f(byte x, byte y) { x*y }; f(x:2,y:3)", (byte)6);
     test("def f(int x, int y) { x*y }; f(x:2,y:3)", 6);
     test("def f(int x, int y=3) { x*y }; f(x:2)", 6);
-    test("def f(Map x, int y=3) { x.y = y; x }; f([x:2])", Map.of("x",2,"y",3));
+    test("def f(Map x, int y=3) { x.y = y; x }; f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("def f(Map x, int y=3) { x.y = y; x }; f(x:2)", "cannot convert argument of type int to parameter type of Map");
-    test("def f(def x, int y=3) { x.y = y; x }; f([x:2])", Map.of("x",2,"y",3));
+    test("def f(def x, int y=3) { x.y = y; x }; f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("def f(def x, int y=3) { x.y = y; x }; f(x:2)", "invalid object type");
-    test("def f(Map x, int y=3) { x.y = y; x }; f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("def f(def x, int y=3) { x.y = y; x }; f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("def f(Map x, int y=3) { x.y = y; x }; f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("def f(def x, int y=3) { x.y = y; x }; f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("def f(int x) { x*3 }; f(x:2)", 6);
     test("def f(int x=2) { x*3 }; f(x:2)", 6);
     test("def f(x,y) { x + y }; f(x:2,y:3)", 5);
-    test("def f(x,y=[a:1]) { x + y }; f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("def f(x,y=[a:1]) { x + y }; f([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("def f(x,y=[a:1]) { x + y }; f(x:2,y:3)", 5);
     testError("def f(x,y,z) {x + y + z}; f(x:2,y:3)", "missing mandatory argument: z");
     testError("def f(x,y,z) {x + y + z}; f(y:3)", "missing mandatory arguments");
     testError("def f(x,y,z) {x + y + z}; f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
     testError("def f(x,y,z) {x + y + z}; f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("def f = { x,y -> x*y }; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
-    test("def f = { x,y=[a:1] -> x + y }; def a = [x:2,y:3]; f(a)", Map.of("x",2,"y",3,"a",1));
+    test("def f = { x,y=[a:1] -> x + y }; def a = [x:2,y:3]; f(a)", Utils.mapOf("x",2,"y",3,"a",1));
     test("def f = { x,y=[a:1] -> x + y }; f(x:2,y:3)", 5);
     testError("def f = { x,y,z -> x + y + z}; def a = [x:2,y:3]; f(a)", "missing mandatory arguments");
     testError("def f = { x,y,z -> x + y + z}; def a = [y:3]; f(a)", "missing mandatory arguments");
@@ -7092,42 +7095,42 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void listAdd() {
-    test("[]+[]", List.of());
-    test("def x = []; x + x", List.of());
-    test("[] + (byte)1", List.of((byte)1));
-    test("[] + 1", List.of(1));
-    test("[] + [a:1]", List.of(Map.of("a",1)));
-    test("[1] + 2", List.of(1,2));
-    test("[1] + [2]", List.of(1,2));
-    test("[1,2] + [3,4]", List.of(1,2,3,4));
-    test("def x = [1,2]; x + [3,4]", List.of(1,2,3,4));
-    test("def x = [1,2]; x + [[3,4]]", List.of(1,2,List.of(3,4)));
-    test("def x = ['a','b']; x + [[3,4]]", List.of("a","b",List.of(3,4)));
-    test("def x = [1,2]; def y = [3,4]; x + y", List.of(1,2,3,4));
-    test("['a','b'] + 'c'", List.of("a","b","c"));
-    test("['a','b'] + 1", List.of("a","b",1));
-    test("def x = ['a','b']; def y = 'c'; x + y", List.of("a","b","c"));
-    test("var x = ['a','b']; x += 'c'", List.of("a","b","c"));
-    test("def x = ['a','b']; x += 'c'", List.of("a","b","c"));
-    test("var x = ['a','b']; x += ['c','d']", List.of("a","b","c","d"));
-    test("def x = ['a','b']; x += ['c','d']", List.of("a","b","c","d"));
-    test("var x = ['a','b']; x += x", List.of("a","b","a","b"));
-    test("def x = ['a','b']; x += x", List.of("a","b","a","b"));
-    test("var x = ['a','b']; def y = 'c'; x += y", List.of("a","b","c"));
-    test("var x = ['a','b']; var y = 'c'; x += y", List.of("a","b","c"));
-    test("var x = ['a','b']; def y = 'c'; x += y; x", List.of("a","b","c"));
-    test("def x = ['a','b']; def y = 'c'; x += y", List.of("a","b","c"));
-    test("def x = ['a','b']; var y = 'c'; x += y", List.of("a","b","c"));
-    test("var x = ['a','b']; def y = ['c','d']; x += y", List.of("a","b","c","d"));
-    test("var x = ['a','b']; var y = ['c','d']; x += y", List.of("a","b","c","d"));
-    test("def x = ['a','b']; var y = ['c','d']; x += y", List.of("a","b","c","d"));
-    test("var x = ['a','b']; x += x", List.of("a","b","a","b"));
-    test("def x = ['a','b']; x += x", List.of("a","b","a","b"));
-    test("var x = ['a','b']; x += x; x", List.of("a","b","a","b"));
-    test("def x = ['a','b']; x += x; x", List.of("a","b","a","b"));
-    test("var x = ['a','b']; x += 1; x", List.of("a","b",1));
-    test("def x = ['a','b']; x += 1; x", List.of("a","b",1));
-    test("'abc'.map{it} + 'd'", List.of("a","b","c","d"));
+    test("[]+[]", Utils.listOf());
+    test("def x = []; x + x", Utils.listOf());
+    test("[] + (byte)1", Utils.listOf((byte)1));
+    test("[] + 1", Utils.listOf(1));
+    test("[] + [a:1]", Utils.listOf(Utils.mapOf("a",1)));
+    test("[1] + 2", Utils.listOf(1,2));
+    test("[1] + [2]", Utils.listOf(1,2));
+    test("[1,2] + [3,4]", Utils.listOf(1,2,3,4));
+    test("def x = [1,2]; x + [3,4]", Utils.listOf(1,2,3,4));
+    test("def x = [1,2]; x + [[3,4]]", Utils.listOf(1,2,Utils.listOf(3,4)));
+    test("def x = ['a','b']; x + [[3,4]]", Utils.listOf("a","b",Utils.listOf(3,4)));
+    test("def x = [1,2]; def y = [3,4]; x + y", Utils.listOf(1,2,3,4));
+    test("['a','b'] + 'c'", Utils.listOf("a","b","c"));
+    test("['a','b'] + 1", Utils.listOf("a","b",1));
+    test("def x = ['a','b']; def y = 'c'; x + y", Utils.listOf("a","b","c"));
+    test("var x = ['a','b']; x += 'c'", Utils.listOf("a","b","c"));
+    test("def x = ['a','b']; x += 'c'", Utils.listOf("a","b","c"));
+    test("var x = ['a','b']; x += ['c','d']", Utils.listOf("a","b","c","d"));
+    test("def x = ['a','b']; x += ['c','d']", Utils.listOf("a","b","c","d"));
+    test("var x = ['a','b']; x += x", Utils.listOf("a","b","a","b"));
+    test("def x = ['a','b']; x += x", Utils.listOf("a","b","a","b"));
+    test("var x = ['a','b']; def y = 'c'; x += y", Utils.listOf("a","b","c"));
+    test("var x = ['a','b']; var y = 'c'; x += y", Utils.listOf("a","b","c"));
+    test("var x = ['a','b']; def y = 'c'; x += y; x", Utils.listOf("a","b","c"));
+    test("def x = ['a','b']; def y = 'c'; x += y", Utils.listOf("a","b","c"));
+    test("def x = ['a','b']; var y = 'c'; x += y", Utils.listOf("a","b","c"));
+    test("var x = ['a','b']; def y = ['c','d']; x += y", Utils.listOf("a","b","c","d"));
+    test("var x = ['a','b']; var y = ['c','d']; x += y", Utils.listOf("a","b","c","d"));
+    test("def x = ['a','b']; var y = ['c','d']; x += y", Utils.listOf("a","b","c","d"));
+    test("var x = ['a','b']; x += x", Utils.listOf("a","b","a","b"));
+    test("def x = ['a','b']; x += x", Utils.listOf("a","b","a","b"));
+    test("var x = ['a','b']; x += x; x", Utils.listOf("a","b","a","b"));
+    test("def x = ['a','b']; x += x; x", Utils.listOf("a","b","a","b"));
+    test("var x = ['a','b']; x += 1; x", Utils.listOf("a","b",1));
+    test("def x = ['a','b']; x += 1; x", Utils.listOf("a","b",1));
+    test("'abc'.map{it} + 'd'", Utils.listOf("a","b","c","d"));
     testError("var x = ['a','b']; x -= 1; x", "non-numeric operand");
     testError("def x = ['a','b']; x -= 1; x", "non-numeric operand");
     testError("var x = ['a','b']; x++", "unary operator '++' cannot be applied to type list");
@@ -7141,43 +7144,43 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void listAddSingle() {
-    test("[] << 1", List.of(1));
+    test("[] << 1", Utils.listOf(1));
     testError("[] <<= 1", "invalid lvalue");
-    test("def x = []; x << (byte)1", List.of((byte)1));
-    test("def x = []; x << 1", List.of(1));
-    test("def x = []; x << 1; x", List.of());
-    test("List x = []; x << 1; x", List.of());
-    test("def x = []; x <<= 1; x", List.of(1));
-    test("List x = []; x <<= 1; x", List.of(1));
-    test("List x = []; x <<= 1 << 2; x", List.of(4));
-    test("List x = []; x <<= [1] << 2; x", List.of(List.of(1,2)));
-    test("List x = ['a','b']; x <<= [1] << 2", List.of("a","b",List.of(1,2)));
-    test("List x = ['a','b']; x <<= [1] << 2; x", List.of("a","b",List.of(1,2)));
-    test("def x = ['a','b']; def y = [1] << 2; x <<= y", List.of("a","b",List.of(1,2)));
-    test("def x = ['a','b']; def y = [1] << 2; x <<= y; x", List.of("a","b",List.of(1,2)));
-    test("[1,2] << [a:1]", List.of(1,2,Map.of("a",1)));
-    test("[1,2].flatMap{ [it,it] } << [a:1]", List.of(1,1,2,2,Map.of("a",1)));
+    test("def x = []; x << (byte)1", Utils.listOf((byte)1));
+    test("def x = []; x << 1", Utils.listOf(1));
+    test("def x = []; x << 1; x", Utils.listOf());
+    test("List x = []; x << 1; x", Utils.listOf());
+    test("def x = []; x <<= 1; x", Utils.listOf(1));
+    test("List x = []; x <<= 1; x", Utils.listOf(1));
+    test("List x = []; x <<= 1 << 2; x", Utils.listOf(4));
+    test("List x = []; x <<= [1] << 2; x", Utils.listOf(Utils.listOf(1,2)));
+    test("List x = ['a','b']; x <<= [1] << 2", Utils.listOf("a","b",Utils.listOf(1,2)));
+    test("List x = ['a','b']; x <<= [1] << 2; x", Utils.listOf("a","b",Utils.listOf(1,2)));
+    test("def x = ['a','b']; def y = [1] << 2; x <<= y", Utils.listOf("a","b",Utils.listOf(1,2)));
+    test("def x = ['a','b']; def y = [1] << 2; x <<= y; x", Utils.listOf("a","b",Utils.listOf(1,2)));
+    test("[1,2] << [a:1]", Utils.listOf(1,2,Utils.mapOf("a",1)));
+    test("[1,2].flatMap{ [it,it] } << [a:1]", Utils.listOf(1,1,2,2,Utils.mapOf("a",1)));
   }
 
 
   @Test public void mapAdd() {
-    test("[:] + [:]", Map.of());
-    test("def x = [:]; x + x", Map.of());
-    test("[:] + [a:1]", Map.of("a",1));
-    test("def x = [a:1]; [:] + x", Map.of("a",1));
-    test("def x = [a:1]; x + x", Map.of("a",1));
-    test("[a:1] + [b:2]", Map.of("a",1,"b",2));
-    test("def x = [a:1]; def y = [b:2]; x + y", Map.of("a",1,"b",2));
-    test("def x = [a:1]; def y = [a:2]; x + y", Map.of("a",2));
-    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x + y", Map.of("a",2,"b",2,"c",3));
-    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y", Map.of("a",2,"b",2,"c",3));
-    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y", Map.of("a",2,"b",2,"c",3));
-    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x", Map.of("a",2,"b",2,"c",3));
-    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x", Map.of("a",2,"b",2,"c",3));
-    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x", Map.of("a",2,"b",2,"c",3));
-    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x", Map.of("a",2,"b",2,"c",3));
-    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x; x", Map.of("a",2,"b",2,"c",3));
-    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x; x", Map.of("a",2,"b",2,"c",3));
+    test("[:] + [:]", Utils.mapOf());
+    test("def x = [:]; x + x", Utils.mapOf());
+    test("[:] + [a:1]", Utils.mapOf("a",1));
+    test("def x = [a:1]; [:] + x", Utils.mapOf("a",1));
+    test("def x = [a:1]; x + x", Utils.mapOf("a",1));
+    test("[a:1] + [b:2]", Utils.mapOf("a",1,"b",2));
+    test("def x = [a:1]; def y = [b:2]; x + y", Utils.mapOf("a",1,"b",2));
+    test("def x = [a:1]; def y = [a:2]; x + y", Utils.mapOf("a",2));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x + y", Utils.mapOf("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y", Utils.mapOf("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y", Utils.mapOf("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x", Utils.mapOf("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x", Utils.mapOf("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x", Utils.mapOf("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x", Utils.mapOf("a",2,"b",2,"c",3));
+    test("def x = [a:1,b:2]; def y = [a:2,c:3]; x += y; x += x; x", Utils.mapOf("a",2,"b",2,"c",3));
+    test("var x = [a:1,b:2]; var y = [a:2,c:3]; x += y; x += x; x", Utils.mapOf("a",2,"b",2,"c",3));
     testError("var x = [a:1,b:2]; x -= 1; x", "cannot subtract int from map");
     testError("def x = [a:1,b:2]; x -= 1; x", "cannot subtract");
     testError("var x = [a:1,b:2]; x++", "unary operator '++' cannot be applied to type map");
@@ -7193,48 +7196,48 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void mapSubtract() {
-    test("[:] - [:]", Map.of());
-    test("[a:1] - [:]", Map.of("a",1));
-    test("[:] - [a:1]", Map.of());
-    test("[a:1,b:2,c:[a:1]] - [c:1]", Map.of("a",1,"b",2));
-    test("Map x = [:]; x - [:]", Map.of());
-    test("Map x = [a:1]; x - [:]", Map.of("a",1));
-    test("Map x = [:]; x - [a:1]", Map.of());
-    test("Map x = [a:1,b:2,c:[a:1]]; x - [c:1]", Map.of("a",1,"b",2));
-    test("Map x = [a:1,b:2,c:[a:1]]; x -= [c:1]; x", Map.of("a",1,"b",2));
-    test("Map x = [a:1,b:2,c:[a:1]]; x - [c:1] - [b:4]", Map.of("a",1));
-    test("def x = [:]; x - [:]", Map.of());
-    test("def x = [a:1]; x - [:]", Map.of("a",1));
-    test("def x = [:]; x - [a:1]", Map.of());
-    test("def x = [a:1,b:2,c:[a:1]]; x - [c:1]", Map.of("a",1,"b",2));
-    test("def x = [a:1,b:2,c:[a:1]]; x - [c:1] - [b:4]", Map.of("a",1));
-    test("def x = [:]; def y = [:]; x - y", Map.of());
-    test("def x = [a:1]; def y = [:]; x - y", Map.of("a",1));
-    test("def x = [:]; def y = [a:1]; x - y", Map.of());
-    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x - y", Map.of("a",1,"b",2));
-    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x = x - y; x - [b:4]", Map.of("a",1));
-    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x -= y; x - [b:4]", Map.of("a",1));
-    test("[:] - []", Map.of());
-    test("[a:1] - []", Map.of("a",1));
-    test("[:] - ['a']", Map.of());
-    test("[a:1,b:2,c:[a:1]] - ['c']", Map.of("a",1,"b",2));
-    test("Map x = [:]; x - []", Map.of());
-    test("Map x = [a:1]; x - []", Map.of("a",1));
-    test("Map x = [:]; x - ['a']", Map.of());
-    test("Map x = [a:1,b:2,c:[a:1]]; x - ['c']", Map.of("a",1,"b",2));
-    test("Map x = [a:1,b:2,c:[a:1]]; x -= ['c']; x", Map.of("a",1,"b",2));
-    test("Map x = [a:1,b:2,c:[a:1]]; x - ['c'] - [b:4]", Map.of("a",1));
-    test("def x = [:]; x - []", Map.of());
-    test("def x = [a:1]; x - []", Map.of("a",1));
-    test("def x = [:]; x - ['a']", Map.of());
-    test("def x = [a:1,b:2,c:[a:1]]; x - ['c']", Map.of("a",1,"b",2));
-    test("def x = [a:1,b:2,c:[a:1]]; x - ['c'] - [b:4]", Map.of("a",1));
-    test("def x = [:]; def y = []; x - y", Map.of());
-    test("def x = [a:1]; def y = []; x - y", Map.of("a",1));
-    test("def x = [:]; def y = ['a']; x - y", Map.of());
-    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x - y", Map.of("a",1,"b",2));
-    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x = x - y; x - [b:4]", Map.of("a",1));
-    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x -= y; x - [b:4]", Map.of("a",1));
+    test("[:] - [:]", Utils.mapOf());
+    test("[a:1] - [:]", Utils.mapOf("a",1));
+    test("[:] - [a:1]", Utils.mapOf());
+    test("[a:1,b:2,c:[a:1]] - [c:1]", Utils.mapOf("a",1,"b",2));
+    test("Map x = [:]; x - [:]", Utils.mapOf());
+    test("Map x = [a:1]; x - [:]", Utils.mapOf("a",1));
+    test("Map x = [:]; x - [a:1]", Utils.mapOf());
+    test("Map x = [a:1,b:2,c:[a:1]]; x - [c:1]", Utils.mapOf("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x -= [c:1]; x", Utils.mapOf("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x - [c:1] - [b:4]", Utils.mapOf("a",1));
+    test("def x = [:]; x - [:]", Utils.mapOf());
+    test("def x = [a:1]; x - [:]", Utils.mapOf("a",1));
+    test("def x = [:]; x - [a:1]", Utils.mapOf());
+    test("def x = [a:1,b:2,c:[a:1]]; x - [c:1]", Utils.mapOf("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; x - [c:1] - [b:4]", Utils.mapOf("a",1));
+    test("def x = [:]; def y = [:]; x - y", Utils.mapOf());
+    test("def x = [a:1]; def y = [:]; x - y", Utils.mapOf("a",1));
+    test("def x = [:]; def y = [a:1]; x - y", Utils.mapOf());
+    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x - y", Utils.mapOf("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x = x - y; x - [b:4]", Utils.mapOf("a",1));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = [c:1]; x -= y; x - [b:4]", Utils.mapOf("a",1));
+    test("[:] - []", Utils.mapOf());
+    test("[a:1] - []", Utils.mapOf("a",1));
+    test("[:] - ['a']", Utils.mapOf());
+    test("[a:1,b:2,c:[a:1]] - ['c']", Utils.mapOf("a",1,"b",2));
+    test("Map x = [:]; x - []", Utils.mapOf());
+    test("Map x = [a:1]; x - []", Utils.mapOf("a",1));
+    test("Map x = [:]; x - ['a']", Utils.mapOf());
+    test("Map x = [a:1,b:2,c:[a:1]]; x - ['c']", Utils.mapOf("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x -= ['c']; x", Utils.mapOf("a",1,"b",2));
+    test("Map x = [a:1,b:2,c:[a:1]]; x - ['c'] - [b:4]", Utils.mapOf("a",1));
+    test("def x = [:]; x - []", Utils.mapOf());
+    test("def x = [a:1]; x - []", Utils.mapOf("a",1));
+    test("def x = [:]; x - ['a']", Utils.mapOf());
+    test("def x = [a:1,b:2,c:[a:1]]; x - ['c']", Utils.mapOf("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; x - ['c'] - [b:4]", Utils.mapOf("a",1));
+    test("def x = [:]; def y = []; x - y", Utils.mapOf());
+    test("def x = [a:1]; def y = []; x - y", Utils.mapOf("a",1));
+    test("def x = [:]; def y = ['a']; x - y", Utils.mapOf());
+    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x - y", Utils.mapOf("a",1,"b",2));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x = x - y; x - [b:4]", Utils.mapOf("a",1));
+    test("def x = [a:1,b:2,c:[a:1]]; def y = ['c']; x -= y; x - [b:4]", Utils.mapOf("a",1));
     testError("[a:1] - 1", "cannot subtract");
     testError("def x = [a:1]; x - 1", "cannot subtract");
   }
@@ -7315,14 +7318,14 @@ class CompilerTest extends BaseTest {
     test("def vars = [x:3]; eval('x x + 1',vars); vars.'$error' =~ /unexpected token/i", true);
     test("def vars = [output:null]; eval('''def x = 'abc'; output = x.size()''',vars); vars.output", 3);
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[result:null])", 10);
-    test("['[1,2]','[3]'].map{ eval(it,[:]) }", List.of(List.of(1, 2), List.of(3)));
-    test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", List.of(List.of(1, 2), List.of(3)));
+    test("['[1,2]','[3]'].map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
+    test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
   }
 
   @Test public void evalWithAsync() {
     test("eval('sleep(0,1)')", 1);
     test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
-    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", List.of(List.of(1, 2), List.of(3)));
+    test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
     test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
@@ -7339,8 +7342,8 @@ class CompilerTest extends BaseTest {
     test("sleep(1,2L)", 2L);
     test("sleep(1,2D)", 2D);
     test("sleep(1,2.0)", "#2.0");
-    test("sleep(1,[])", List.of());
-    test("sleep(1,[:])", Map.of());
+    test("sleep(1,[])", Utils.listOf());
+    test("sleep(1,[:])", Utils.mapOf());
     test("sleep(1,{it*it})(2)", 4);
     test("var x=1L; var y=1D; sleep(1,2)", 2);
     test("sleep(1,2) + sleep(1,3)", 5);
@@ -7448,7 +7451,7 @@ class CompilerTest extends BaseTest {
                                                .build();
 
     Jactl.compileClass("class Z { int i }", jactlContext);
-    var z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
+    Object z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
 
     Map<String,Object> globals = createGlobals();
     globals.put("z", z);
@@ -7472,13 +7475,13 @@ class CompilerTest extends BaseTest {
     test("def x =\n1 + \n(2\n)", 3);
     test("def x =\n1 + (\n2)\n", 3);
     test("def x =\n1 + (\n2)\n", 3);
-    test("[1,2,3].map{\n\nit}", List.of(1,2,3));
+    test("[1,2,3].map{\n\nit}", Utils.listOf(1,2,3));
     test("['a','b'].map{\n\n\"\"\"\"$it=\" + $it\"\"\" }.\n\njoin(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
     test("def f = {\nreturn }; f()", null);
     test("def f = {\nreturn\n}; f()", null);
     test("while (false) { 1 }\n2", 2);
-    test("if (true) {\n if (true) \n1\n\n [1].map{ it }\n}\n", List.of(1));
-    test("if (true) {\n if (true) {\n1\n}\n [1].map{ it }\n}\n", List.of(1));
+    test("if (true) {\n if (true) \n1\n\n [1].map{ it }\n}\n", Utils.listOf(1));
+    test("if (true) {\n if (true) {\n1\n}\n [1].map{ it }\n}\n", Utils.listOf(1));
     test("true or false\nand true", true);
     test("true \nor \nreturn", true);
     test("true \nor \nnot return", true);
@@ -7489,16 +7492,16 @@ class CompilerTest extends BaseTest {
     test("true &&\n!\n!\n!\nfalse", true);
     test("def x=1; ++\nx", 2);
     test("def x=1; ++\n++\nx", 3);
-    test("[a\n:\n1\n]", Map.of("a",1));
-    test("1\n[1].map{ it }", List.of(1));
+    test("[a\n:\n1\n]", Utils.mapOf("a",1));
+    test("1\n[1].map{ it }", Utils.listOf(1));
     test("'123'[2]", "3");
-    test("'123'\n[2]", List.of(2));
+    test("'123'\n[2]", Utils.listOf(2));
     test("('123'\n[2])", "3");
-    test("def x=[1,2,3]; x\n[2]", List.of(2));
+    test("def x=[1,2,3]; x\n[2]", Utils.listOf(2));
     test("def x=[1,2,3]; def f={it}; f(x\n[2])", 3);
     test("def x = 1; ++\n++\nx\n++\n++\nx\nx", 3);
     testError("def x = 1; ++\n++\nx\n++\n++", "expected start of expression");
-    test("[\n1\n,\n2\n,\n3\n]", List.of(1,2,3));
+    test("[\n1\n,\n2\n,\n3\n]", Utils.listOf(1,2,3));
     test("def f(x\n,\ny\n)\n{\nx\n+\ny\n}\nf(1,2)", 3);
     testError("4\n/2", "unexpected end of file in string");
     test("4\n-3*2", -6);
@@ -7575,9 +7578,9 @@ class CompilerTest extends BaseTest {
     replTest.accept("nextLine() == 'x' && nextLine() == null", "x",true, "");
     replTest.accept("while (it = nextLine()) println it", "x",null, "x\n");
     replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n",null, "x\ny\n\nz\n");
-    replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", List.of(List.of(1,2), List.of(3)), "");
+    replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3)), "");
     replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
-                    "[1,2]\n[3]\n\n", List.of(3), "");
+                    "[1,2]\n[3]\n\n", Utils.listOf(3), "");
     try {
       replTest.accept("def x = 0; while(nextLine() =~ /(\\d)/ng) { x+= $1 }; x", null, 0, "");
       fail("Expected error");
@@ -7591,9 +7594,9 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void stream() {
-    replTest.accept("stream{nextLine()}", "1\n4\n3\n", List.of("1","4","3"), "");
+    replTest.accept("stream{nextLine()}", "1\n4\n3\n", Utils.listOf("1","4","3"), "");
     replTest.accept("stream{nextLine()}.size()", "1\n4\n3\n", 3, "");
-    replTest.accept("stream{nextLine() as int}", "1\n4\n3\n", List.of(1,4,3), "");
+    replTest.accept("stream{nextLine() as int}", "1\n4\n3\n", Utils.listOf(1,4,3), "");
     replTest.accept("stream(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
     replTest.accept("stream(closure:nextLine).max{it as int}", "1\n4\n3\n", "4", "");
     replTest.accept("def f = stream; f(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
@@ -7601,7 +7604,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void groupedRepl() {
-    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", List.of(), "");
+    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", Utils.listOf(), "");
   }
 
   @Test public void globalVars() {
@@ -7636,11 +7639,11 @@ class CompilerTest extends BaseTest {
     BiConsumer<Integer,Runnable> ntimes = (n,runnable) -> IntStream.range(0,n).forEach(i -> runnable.run());
 
     final int ITERATIONS = 0;
-    Map<String,Object> globals  = new HashMap<>();
-    var scriptDef = compile(fibDef + "; fib(40)");
-    var scriptInt = compile(fibInt + "; fib(40)");
-    var scriptSleepDef = compile(fibDefSleep + "; fib(20)");
-    var scriptSleepInt = compile(fibIntSleep + "; fib(20)");
+    Map<String,Object> globals   = new HashMap<>();
+    JactlScript        scriptDef = compile(fibDef + "; fib(40)");
+    JactlScript        scriptInt = compile(fibInt + "; fib(40)");
+    JactlScript scriptSleepDef = compile(fibDefSleep + "; fib(20)");
+    JactlScript scriptSleepInt = compile(fibIntSleep + "; fib(20)");
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
       scriptDef.runSync(globals);

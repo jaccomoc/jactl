@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import java.math.BigDecimal;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +34,7 @@ public class JsonEncoder {
   int    offset = 0;
 
   public static JsonEncoder get(String source, int sourceOffset) {
-    var buffer = threadBuffer.get();
+    JsonEncoder buffer = threadBuffer.get();
     buffer.source = source;
     buffer.sourceOffset = sourceOffset;
     buffer.offset = 0;
@@ -119,8 +120,8 @@ public class JsonEncoder {
     }
     if (obj instanceof Map) {
       writeByte('{');
-      var iterator = ((Map<String, Object>) obj).entrySet().iterator();
-      boolean first = true;
+      Iterator<Map.Entry<String, Object>> iterator = ((Map<String, Object>) obj).entrySet().iterator();
+      boolean                             first    = true;
       while (iterator.hasNext()) {
         if (!first) {
           writeByte(',');
@@ -128,8 +129,8 @@ public class JsonEncoder {
         else {
           first = false;
         }
-        var entry = iterator.next();
-        Object value = entry.getValue();
+        Map.Entry<String, Object> entry = iterator.next();
+        Object                    value = entry.getValue();
         writeString(entry.getKey(), true);
         writeByte(':');
         writeObj(value);

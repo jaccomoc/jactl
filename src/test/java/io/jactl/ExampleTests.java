@@ -32,28 +32,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class ExampleTests {
   @Test public void example1() {
-    var context = JactlContext.create().build();
-    var x = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Map.of(), context);
-    var globals = new HashMap<String,Object>();
+    JactlContext context = JactlContext.create().build();
+    Object       x       = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Utils.mapOf(), context);
+    HashMap<String, Object> globals = new HashMap<String,Object>();
     globals.put("x", x);
     int result = (int)Jactl.eval("x.f(3)", globals, context);         // result will be 6
     assertEquals(6, result);
   }
 
   @Test public void example2() {
-    var globals        = new HashMap<String,Object>();
-    JactlScript script = Jactl.compileScript("3 + 4", globals);
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlScript             script  = Jactl.compileScript("3 + 4", globals);
     Object result      = script.runSync(globals);          // result will be 7
     assertEquals(7, result);
   }
 
   @Test public void example3() {
-    var globals = new HashMap<String,Object>();
+    HashMap<String, Object> globals = new HashMap<String,Object>();
     globals.put("x", null);
     globals.put("y", null);
-    var script  = Jactl.compileScript("x + y", globals);
+    JactlScript script = Jactl.compileScript("x + y", globals);
 
-    var globalValues = new HashMap<String,Object>();
+    HashMap<String, Object> globalValues = new HashMap<String,Object>();
     globalValues.put("x", 7);
     globalValues.put("y", 3);
     script.run(globalValues, result -> System.out.println("Result is " + result));
@@ -63,8 +63,8 @@ public class ExampleTests {
     JactlContext context = JactlContext.create()
                                        .build();
 
-    var globals = new HashMap<String,Object>();
-    var script  = Jactl.compileScript("13 * 17", globals, context);
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlScript             script  = Jactl.compileScript("13 * 17", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));    // Output will be: "Result is 221"
 
     Object result = Jactl.eval("13 * 17", globals, context);            // returns value of 221
@@ -72,20 +72,20 @@ public class ExampleTests {
   }
 
   @Test public void example5() {
-    var context = JactlContext.create().build();
+    JactlContext context = JactlContext.create().build();
     Jactl.compileClass("class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    var globals = new HashMap<String,Object>();
-    var script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlScript             script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));
   }
 
   @Test public void example6() {
-    var context = JactlContext.create().build();
+    JactlContext context = JactlContext.create().build();
     Jactl.compileClass("package a.b.c; class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    var globals = new HashMap<String,Object>();
-    var script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlScript             script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));
 
     // Or import the class

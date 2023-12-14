@@ -17,6 +17,8 @@
 
 package io.jactl.runtime;
 
+import io.jactl.Utils;
+
 import java.util.List;
 
 public class Location implements SourceLocation {
@@ -67,7 +69,7 @@ public class Location implements SourceLocation {
    */
   public String getMarkedSourceLine() {
     calculateLineAndColumn();
-    return String.format("%s%n%s^", line, " ".repeat(column - 1));
+    return String.format("%s%n%s^", line, Utils.repeat(" ", column - 1));
   }
 
   private void calculateLineAndColumn() {

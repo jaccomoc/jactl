@@ -80,7 +80,7 @@ public class GroupedIterator extends JactlIterator {
 
   public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(GroupedIterator.class, GROUPED, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
-    var iter = (GroupedIterator)c.localObjects[0];
+    GroupedIterator iter = (GroupedIterator)c.localObjects[0];
     iter.haveNext = true;
     boolean result = (boolean)c.getResult();
     iter.finished = !result;
@@ -142,7 +142,7 @@ public class GroupedIterator extends JactlIterator {
             break;
         }
       }
-      var result = group;
+      List<Object> result = group;
       // If sliding window then save list starting after first element
       group = sliding ? new ArrayList<>(group.subList(1,group.size())) : null;
       return result;

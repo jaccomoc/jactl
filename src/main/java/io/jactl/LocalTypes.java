@@ -64,7 +64,7 @@ public class LocalTypes {
   }
 
   public LocalTypes copy() {
-    var copy = new LocalTypes(mv, isStatic);
+    LocalTypes copy = new LocalTypes(mv, isStatic);
     copy.stack = copyStack(copy);
     copy.locals = copyLocals();
     copy.minimumSlot = minimumSlot;
@@ -93,7 +93,7 @@ public class LocalTypes {
   }
 
   public JactlType pop() {
-    var entry = stack.pop();
+    StackEntry entry = stack.pop();
     freeSlot(entry.slot);
     return entry.type;
   }
@@ -109,11 +109,11 @@ public class LocalTypes {
   }
 
   public void dup() {
-    var entry = stack.peek();
+    StackEntry entry = stack.peek();
     if (entry.slot >= 0) {
       locals.get(entry.slot).refCount++;
     }
-    var dup = new StackEntry(entry);
+    StackEntry dup = new StackEntry(entry);
     stack.push(dup);
   }
 
@@ -121,8 +121,8 @@ public class LocalTypes {
    * Swap types on type stack and also swap values on JVM stack
    */
   public void swap() {
-    var entry1 = stack.pop();
-    var entry2 = stack.pop();
+    StackEntry entry1 = stack.pop();
+    StackEntry entry2 = stack.pop();
     if (entry1.slot == -1 && entry2.slot == -1) {
       if (slotsNeeded(entry1.type) == 1 && slotsNeeded(entry2.type) == 1) {
         mv.visitInsn(SWAP);
@@ -168,8 +168,8 @@ public class LocalTypes {
    * </pre>
    */
   public void dupValX1() {
-    var x = stack.pop();
-    var y = stack.pop();
+    StackEntry x = stack.pop();
+    StackEntry y = stack.pop();
     if (x.isStack() && y.isStack()) {
       int xslots = slotsNeeded(x.type);
       int yslots = slotsNeeded(y.type);
@@ -223,8 +223,8 @@ public class LocalTypes {
    * rather than the top two values.
    */
   public void dupVal2() {
-    var x = stack.pop();
-    var y = stack.pop();
+    StackEntry x = stack.pop();
+    StackEntry y = stack.pop();
 
     if (x.isStack() && y.isStack()) {
       JactlType type1 = x.type;
@@ -295,10 +295,10 @@ public class LocalTypes {
 
   public void _popVal(int n) {
     // Pop real values off stack but leave type stack unchanged
-    var iter = stack.iterator();
+    Iterator<StackEntry> iter = stack.iterator();
     for (int i = 0; i < n; i++) {
       check(iter.hasNext(), "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack);
-      var entry = iter.next();
+      StackEntry entry = iter.next();
       if (entry.slot != -1) {
         continue;  // Nothing to do since "stack" location is a local var
       }
@@ -315,8 +315,8 @@ public class LocalTypes {
   public void expect(int count) {
     check(stack.size() >= count, "stack size is " + stack.size() + " but expecting at least " + count + " entries");
 
-    var iter = stack.iterator();
-    boolean seenEntryOnStack = false;
+    Iterator<StackEntry> iter             = stack.iterator();
+    boolean              seenEntryOnStack = false;
     boolean needToStoreInLocals = false;
     for (int i = 0; i < count; i++) {
       StackEntry entry = iter.next();
@@ -404,12 +404,12 @@ public class LocalTypes {
   public void saveLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
     Function<Integer,Boolean>    ignoreEntry = i -> i == continuationVar || i == globalsVar || i == longArr || i == objArr;
     int  startSlot = isStatic ? 0 : 1;
-    var entries = IntStream.range(startSlot, locals.size())
-                           .filter(i -> !ignoreEntry.apply(i))
-                           .mapToObj(i -> locals.get(i))
-                           .filter(entry -> entry != null)
-                           .filter(entry -> !entry.isGlobalVar)
-                           .collect(Collectors.toList());
+    List<LocalEntry> entries = IntStream.range(startSlot, locals.size())
+                                        .filter(i -> !ignoreEntry.apply(i))
+                                        .mapToObj(i -> locals.get(i))
+                                        .filter(entry -> entry != null)
+                                        .filter(entry -> !entry.isGlobalVar)
+                                        .collect(Collectors.toList());
     boolean savePrimitives = entries.stream().anyMatch(entry -> entry.type.isPrimitive());
     boolean saveObjects    = entries.stream().anyMatch(entry -> !entry.type.isPrimitive());
 
@@ -440,8 +440,8 @@ public class LocalTypes {
     }
 
     for (int i = startSlot; i < locals.size(); ) {
-      var       entry = locals.get(i);
-      JactlType type  = entry == null ? null : entry.type;
+      LocalEntry entry = locals.get(i);
+      JactlType  type  = entry == null ? null : entry.type;
       if (entry != null && !ignoreEntry.apply(i) && !entry.isGlobalVar) {
         _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
         Utils.loadConst(mv, i);
@@ -464,11 +464,11 @@ public class LocalTypes {
   public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
     int  startSlot = isStatic ? 0 : 1;
     for (int i = startSlot; i < locals.size(); i++) {
-      var entry = locals.get(i);
+      LocalEntry entry = locals.get(i);
       if (entry == null || entry.isGlobalVar || i == continuationVar || i == globalsVar || i == longArr || i == objArr) {
         continue;
       }
-      var type = entry.type;
+      JactlType type = entry.type;
       Utils.loadStoredValue(mv, continuationVar, i, type);
       _storeLocal(type, i);
       i += slotsNeeded(type) - 1;
@@ -478,7 +478,7 @@ public class LocalTypes {
 
   public void freeSlot(int slot) {
     if (slot == -1) { return; }
-    var entry = locals.get(slot);
+    LocalEntry entry = locals.get(slot);
     if (--entry.refCount == 0) {
       int slots = slotsNeeded(entry.type);
       for (int i = 0; i < slots; i++) {
@@ -494,7 +494,7 @@ public class LocalTypes {
    * @return the slot allocated (or reused) for the temp value
    */
   public int saveInTemp() {
-    var entry = stack.peek();
+    StackEntry entry = stack.peek();
     if (entry.slot != -1) {
       // No need to inc ref count since we would dec when popping stack and then inc again here
       // so net result is no change
@@ -612,7 +612,7 @@ public class LocalTypes {
   }
 
   private JactlType localsType(int slot) {
-    var entry = locals.get(slot);
+    LocalEntry entry = locals.get(slot);
     check(entry != null, "trying to get type of null entry");
     return entry.type;
   }
@@ -641,7 +641,7 @@ public class LocalTypes {
 
     // Set first slot to type. For multi-slot types others are marked as ANY.
     for(int i = 0; i < slotsNeeded(type); i++) {
-      var entry = new LocalEntry(i == 0 ? type : ANY, idx);
+      LocalEntry entry = new LocalEntry(i == 0 ? type : ANY, idx);
       locals.set(idx + i, entry);
     }
   }
@@ -664,12 +664,12 @@ public class LocalTypes {
   ////////////////////////////////////////////////////
 
   private Deque<StackEntry> copyStack(LocalTypes other) {
-    var copy = stack.stream().map(other::copy).collect(Collectors.toCollection(ArrayDeque::new));
+    ArrayDeque<StackEntry> copy = stack.stream().map(other::copy).collect(Collectors.toCollection(ArrayDeque::new));
     return copy;
   }
 
   private List<LocalEntry> copyLocals() {
-    var copy = locals.stream().map(local -> local == null ? null : new LocalEntry(local)).collect(Collectors.toList());
+    List<LocalEntry> copy = locals.stream().map(local -> local == null ? null : new LocalEntry(local)).collect(Collectors.toList());
     return copy;
   }
 
@@ -702,8 +702,8 @@ public class LocalTypes {
     Iterator iter1 = stack1.iterator();
     Iterator iter2 = stack2.iterator();
     while (iter1.hasNext() && iter2.hasNext()) {
-      var next1 = iter1.next();
-      var next2 = iter2.next();
+      Object next1 = iter1.next();
+      Object next2 = iter2.next();
       if (skip-- > 0) {
         continue;
       }

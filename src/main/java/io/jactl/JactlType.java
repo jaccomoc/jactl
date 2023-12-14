@@ -67,7 +67,7 @@ public class JactlType {
     MATCHER,
     CONTINUATION,
     NULL_TYPE,
-    STRING_BUILDER,
+    STRING_BUFFER,
     NAMED_ARGS_MAP,
     BUILTIN,        // Used during checkpoint/restore
     UNKNOWN         // Used as placeholder for "var" until we know type of initialiser for a variable
@@ -135,7 +135,7 @@ public class JactlType {
   }
 
   public static JactlType arrayOf(JactlType type) {
-    var arrType = createRefType(TypeEnum.ARRAY);
+    JactlType arrType = createRefType(TypeEnum.ARRAY);
     arrType.arrayType = type;
     return arrType;
   }
@@ -185,7 +185,7 @@ public class JactlType {
   }
 
   public static JactlType createClass(ClassDescriptor descriptor) {
-    var classType = createInstanceType(descriptor);
+    JactlType classType = createInstanceType(descriptor);
     classType.type = TypeEnum.CLASS;
     return classType;
   }
@@ -396,7 +396,7 @@ public class JactlType {
     }
   }
 
-  private static List                            resultTypes = List.of(
+  private static List                            resultTypes = Utils.listOf(
     new TypePair(BYTE,    INT),       INT,
     new TypePair(BYTE,    LONG),      LONG,
     new TypePair(BYTE,    DOUBLE),    DOUBLE,
@@ -557,8 +557,8 @@ public class JactlType {
     if (type1.is(INSTANCE) || type2.is(INSTANCE)) {
       if (!type1.is(INSTANCE) || !type2.is(INSTANCE))                   { return ANY;   }
       if (type1.getClassDescriptor() == type2.getClassDescriptor())     { return type1; }
-      var type1Base = type1.getClassDescriptor().getBaseClass();
-      var type2Base = type2.getClassDescriptor().getBaseClass();
+      ClassDescriptor type1Base = type1.getClassDescriptor().getBaseClass();
+      ClassDescriptor type2Base = type2.getClassDescriptor().getBaseClass();
       if (type1Base != null && type1Base == type2.getClassDescriptor()) { return type2; }
       if (type2Base != null && type2Base == type1.getClassDescriptor()) { return type1; }
       if (type1Base == null || type2Base == null)                       { return ANY;   }

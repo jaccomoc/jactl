@@ -82,7 +82,7 @@ that both invocations use the same JactlContext object (explained later):
 
 ```java
 var context = JactlContext.create().build();
-var x       = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Map.of(), context);
+var x       = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Utils.mapOf(), context);
 var globals = new HashMap<String,Object>();
 globals.put("x", x);
 var result  = (int)Jactl.eval("x.f(3)", globals, context);
@@ -1264,10 +1264,10 @@ class MyFunctions {
   public static Object measureData;
 
   public static Object measureResume(Continuation c) {
-    var source  = (String)c.localObjects[0];
-    var offset  = (int)c.localPrimitives[0];
-    var count   = (int)c.localPrimitives[1];
-    var closure = (JactlMethodHandle)c.localObjects[1];
+    String source = (String)c.localObjects[0];
+    int    offset = (int)c.localPrimitives[0];
+    int count  = (int)c.localPrimitives[1];
+    JactlMethodHandle closure = (JactlMethodHandle)c.localObjects[1];
     return measure(c, source, offset, count, closure);
   }
 

@@ -67,7 +67,7 @@ public class StreamIterator extends JactlIterator {
 
   public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(StreamIterator.class, IteratorType.STREAM, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
-    var iter = (StreamIterator)c.localObjects[0];
+    StreamIterator iter = (StreamIterator)c.localObjects[0];
     iter.haveValue = true;
     try {
       iter.nextValue = c.getResult();

@@ -143,8 +143,8 @@ public class ClassTests extends BaseTest {
     test("class X { double i=0 }; new X().i", 0D);
     test("class X { Decimal i=0 }; new X().i", "#0");
     test("class X { String i='' }; new X().i", "");
-    test("class X { Map i=[:] }; new X().i", Map.of());
-    test("class X { List i=[] }; new X().i", List.of());
+    test("class X { Map i=[:] }; new X().i", Utils.mapOf());
+    test("class X { List i=[] }; new X().i", Utils.listOf());
     test("class X { def i=null }; new X().i", null);
     test("class X { int i = 1 }; new X().i", 1);
     test("class X { int i = 1 }; new X().\"${'i'}\"", 1);
@@ -235,7 +235,7 @@ public class ClassTests extends BaseTest {
   @Test public void methodArgsAsList() {
     test("def a = [1,2,3]; class X { def f(byte x, byte y=7, byte z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", (byte)12);
     test("def a = [1,2,3]; class X { def f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
-    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1, 2, 3, 7, 8));
+    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", Utils.listOf(1, 2, 3, 7, 8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
     test("class X { def f = {String x, int y -> x + y }}; def a = ['x',2]; new X().f(a)", "x2");
@@ -245,11 +245,11 @@ public class ClassTests extends BaseTest {
     test("class X { def f = { x,y,z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("class X { def f = { x,y,z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
     test("class X { def f(x, y) { x + y }}; new X().f([1,2])", 3);
-    test("class X { def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
+    test("class X { def f(x, y=3) { x + y }}; new X().f([1,2])", Utils.listOf(1, 2, 3));
     test("class X { def f(x, y) { x + y }}; def a = [1,2]; new X().f(a)", 3);
-    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", List.of(1, 2, 3));
+    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", Utils.listOf(1, 2, 3));
     test("class X { def f(x, y=3) { x + y }}; new X().f(1,2)", 3);
-    test("class X { def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
+    test("class X { def f(List x, y=3) { x + y }}; new X().f([1,2])", Utils.listOf(1, 2, 3));
     testError("class X { def f(List x, y=4, z) { x + y + z }}; new X().f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { int f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
@@ -262,7 +262,7 @@ public class ClassTests extends BaseTest {
     test("class X { int f(x, y=3) { x + y }}; new X().f(1,2)", 3);
 
     test("def a = [1,2,3]; class X { def f(x,y=7,z) { x + y + z }}; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
-    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().\"${'f'}\"(a)", List.of(1, 2, 3, 7, 8));
+    test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().\"${'f'}\"(a)", Utils.listOf(1, 2, 3, 7, 8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().\"${'f'}\"(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().\"${'f'}\"(a)", "cannot convert object of type int to string");
     test("class X { def f = {String x, int y -> x + y }}; def a = ['x',2]; new X().\"${'f'}\"(a)", "x2");
@@ -272,51 +272,51 @@ public class ClassTests extends BaseTest {
     test("class X { def f = { int x, int y, int z -> x + y + z } }; def a = [1,2,3]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
     test("class X { def f = { int x, int y, int z=3 -> x + y + z }; }; def a = [1,2]; X x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
     test("class X { def f(x, y) { x + y }}; new X().\"${'f'}\"([1,2])", 3);
-    test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1, 2, 3));
+    test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", Utils.listOf(1, 2, 3));
     test("class X { def f(x, y) { x + y }}; def a = [1,2]; new X().\"${'f'}\"(a)", 3);
-    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().\"${'f'}\"(a)", List.of(1, 2, 3));
+    test("class X { def f(x, y=3) { x + y }; }; def a = [1,2]; new X().\"${'f'}\"(a)", Utils.listOf(1, 2, 3));
     test("class X { def f(x, y=3) { x + y }}; new X().\"${'f'}\"(1,2)", 3);
-    test("class X { def f(List x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", List.of(1, 2, 3));
+    test("class X { def f(List x, y=3) { x + y }}; new X().\"${'f'}\"([1,2])", Utils.listOf(1, 2, 3));
     testError("class X { def f(List x, y=4, z) { x + y + z }}; new X().\"${'f'}\"([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", List.of(1, 2, 3, 7, 8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", Utils.listOf(1, 2, 3, 7, 8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static int f(int x,int y, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; new X().f([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
+    test("class X { static def f(x, y=3) { x + y }}; new X().f([1,2])", Utils.listOf(1, 2, 3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; new X().f(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", List.of(1, 2, 3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; new X().f(a)", Utils.listOf(1, 2, 3));
     test("class X { static def f(x, y=3) { x + y }}; new X().f(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; new X().f([1,2])", List.of(1, 2, 3));
+    test("class X { static def f(List x, y=3) { x + y }}; new X().f([1,2])", Utils.listOf(1, 2, 3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; new X().f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; def x = new X(); x.f(1,2,3) + x.f(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.f(a)", List.of(1, 2, 3, 7, 8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.f(a)", Utils.listOf(1, 2, 3, 7, 8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; def x = new X(); x.f(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; def x = new X(); x.f(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; def x = new X(); x.f(1,2,3) + x.f([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; def x = new X(); x.f([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.f([1,2])", List.of(1, 2, 3));
+    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.f([1,2])", Utils.listOf(1, 2, 3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; def x = new X(); x.f(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.f(a)", List.of(1, 2, 3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.f(a)", Utils.listOf(1, 2, 3));
     test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.f(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.f([1,2])", List.of(1, 2, 3));
+    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.f([1,2])", Utils.listOf(1, 2, 3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; def x = new X(); x.f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; def x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.\"${'f'}\"(a)", List.of(1, 2, 3, 7, 8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; def x = new X(); x.\"${'f'}\"(a)", Utils.listOf(1, 2, 3, 7, 8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; def x = new X(); x.\"${'f'}\"(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; def x = new X(); x.\"${'f'}\"(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; def x = new X(); x.\"${'f'}\"(1,2,3) + x.\"${'f'}\"([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", List.of(1, 2, 3));
+    test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", Utils.listOf(1, 2, 3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; def x = new X(); x.\"${'f'}\"(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.\"${'f'}\"(a)", List.of(1, 2, 3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; def x = new X(); x.\"${'f'}\"(a)", Utils.listOf(1, 2, 3));
     test("class X { static def f(x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", List.of(1, 2, 3));
+    test("class X { static def f(List x, y=3) { x + y }}; def x = new X(); x.\"${'f'}\"([1,2])", Utils.listOf(1, 2, 3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; def x = new X(); x.\"${'f'}\"([1, 2, 3])", "int cannot be cast to List");
   }
 
@@ -324,29 +324,29 @@ public class ClassTests extends BaseTest {
     useAsyncDecorator = false;
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; X.f(1,2,3) + X.f(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; X.f(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; X.f(a)", Utils.listOf(1,2,3,7,8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; X.f(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; X.f(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; X.f(1,2,3) + X.f([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; X.f([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; X.f([1,2])", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }}; X.f([1,2])", Utils.listOf(1,2,3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; X.f(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; X.f(a)", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; X.f(a)", Utils.listOf(1,2,3));
     test("class X { static def f(x, y=3) { x + y }}; X.f(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; X.f([1,2])", List.of(1,2,3));
+    test("class X { static def f(List x, y=3) { x + y }}; X.f([1,2])", Utils.listOf(1,2,3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; X.f([1, 2, 3])", "int cannot be cast to List");
 
     test("def a = [1,2,3]; class X { static def f(x,y=7,z) { x + y + z }}; X.\"${'f'}\"(1,2,3) + X.\"${'f'}\"(a)", 12);
-    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; X.\"${'f'}\"(a)", List.of(1,2,3,7,8));
+    test("def a = [1,2,3]; class X { static def f(x,y=7,z=8) { x + y + z }}; X.\"${'f'}\"(a)", Utils.listOf(1,2,3,7,8));
     test("class X { static def f(String x, int y) { x + y }}; def a = ['x',2]; X.\"${'f'}\"(a)", "x2");
     testError("class X { static def f(String x, int y) { x + y }}; def a = [2,'x']; X.\"${'f'}\"(a)", "cannot convert object of type int to string");
     test("class X { static def f(x,y,z) { x + y + z }}; X.\"${'f'}\"(1,2,3) + X.\"${'f'}\"([1,2,3])", 12);
     test("class X { static def f(x, y) { x + y }}; X.\"${'f'}\"([1,2])", 3);
-    test("class X { static def f(x, y=3) { x + y }}; X.\"${'f'}\"([1,2])", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }}; X.\"${'f'}\"([1,2])", Utils.listOf(1,2,3));
     test("class X { static def f(x, y) { x + y }}; def a = [1,2]; X.\"${'f'}\"(a)", 3);
-    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; X.\"${'f'}\"(a)", List.of(1,2,3));
+    test("class X { static def f(x, y=3) { x + y }; }; def a = [1,2]; X.\"${'f'}\"(a)", Utils.listOf(1,2,3));
     test("class X { static def f(x, y=3) { x + y }}; X.\"${'f'}\"(1,2)", 3);
-    test("class X { static def f(List x, y=3) { x + y }}; X.\"${'f'}\"([1,2])", List.of(1,2,3));
+    test("class X { static def f(List x, y=3) { x + y }}; X.\"${'f'}\"([1,2])", Utils.listOf(1,2,3));
     testError("class X { static def f(List x, y=4, z) { x + y + z }}; X.\"${'f'}\"([1, 2, 3])", "int cannot be cast to List");
   }
 
@@ -357,30 +357,30 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x, y=[a:3]) { x + y }}; new X().f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { def f(x, y=[a:3]) { x + y }}; new X().f(x:1,y:2)", 3);
     testError("class X { def f(x, y) { x + y }}; new X().f([x:1,y:2])", "missing mandatory argument: y");
-    test("class X { def f(x, y=[a:3]) { x + y }}; new X().f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { def f(x, y=[a:3]) { x + y }}; new X().f([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("class X { def f(x,y) { x*y }}; new X().f(x:2,y:3)", 6);
     test("class X { def f(byte x, byte y) { x*y }}; new X().f(x:2,y:3)", (byte)6);
     test("class X { def f(byte x, byte y=3) { x*y }}; new X().f(x:2)", (byte)6);
-    test("class X { def f(Map x, byte y=3) { x.y = y; x }}; new X().f([x:2])", Map.of("x",2,"y",(byte)3));
+    test("class X { def f(Map x, byte y=3) { x.y = y; x }}; new X().f([x:2])", Utils.mapOf("x",2,"y",(byte)3));
     test("class X { def f(int x, int y) { x*y }}; new X().f(x:2,y:3)", 6);
     test("class X { def f(int x, int y=3) { x*y }}; new X().f(x:2)", 6);
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().f([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().f(x:2)", "cannot convert argument of type int to parameter type of Map");
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().f([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(def x, int y=3) { x.y = y; x }}; new X().f(x:2)", "invalid object type");
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("class X { def f(int x) { x*3 }}; new X().f(x:2)", 6);
     test("class X { def f(int x=2) { x*3 }}; new X().f(x:2)", 6);
     test("class X { def f(x,y) { x + y }}; new X().f(x:2,y:3)", 5);
-    test("class X { def f(x,y=[a:1]) { x + y }}; new X().f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f(x,y=[a:1]) { x + y }}; new X().f([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f(x,y=[a:1]) { x + y }}; new X().f(x:2,y:3)", 5);
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:2,y:3)", "missing mandatory argument: z");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(y:3)", "missing mandatory arguments: x, z");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; new X().f(a)", "missing mandatory argument");
-    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; new X().f(a)", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; new X().f(a)", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; new X().f(x:2,y:3)", 5);
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [x:2,y:3]; new X().f(a)", "missing mandatory argument");
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; new X().f(a)", "missing mandatory argument");
@@ -393,27 +393,27 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x, y=[a:3]) { x + y }}; new X().\"${'f'}\"(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { def f(x, y=[a:3]) { x + y }}; new X().\"${'f'}\"(x:1,y:2)", 3);
     testError("class X { def f(x, y) { x + y }}; new X().\"${'f'}\"([x:1,y:2])", "missing mandatory argument");
-    test("class X { def f(x, y=[a:3]) { x + y }}; new X().\"${'f'}\"([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { def f(x, y=[a:3]) { x + y }}; new X().\"${'f'}\"([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("class X { def f(x,y) { x*y }}; new X().\"${'f'}\"(x:2,y:3)", 6);
     test("class X { def f(int x, int y) { x*y }}; new X().\"${'f'}\"(x:2,y:3)", 6);
     test("class X { def f(int x, int y=3) { x*y }}; new X().\"${'f'}\"(x:2)", 6);
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"(x:2)", "cannot be cast to Map");
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(def x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"(x:2)", "invalid object type");
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; new X().\"${'f'}\"([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("class X { def f(int x) { x*3 }}; new X().\"${'f'}\"(x:2)", 6);
     test("class X { def f(int x=2) { x*3 }}; new X().\"${'f'}\"(x:2)", 6);
     test("class X { def f(x,y) { x + y }}; new X().\"${'f'}\"(x:2,y:3)", 5);
-    test("class X { def f(x,y=[a:1]) { x + y }}; new X().\"${'f'}\"([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f(x,y=[a:1]) { x + y }}; new X().\"${'f'}\"([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f(x,y=[a:1]) { x + y }}; new X().\"${'f'}\"(x:2,y:3)", 5);
     testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter 'z'");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(y:3)", "missing value for mandatory parameter 'x'");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:[1],y:3,z:4,a:1)", "no such parameter");
     testError("class X { def f(x,y,z) {x + y + z}}; new X().\"${'f'}\"(x:[1],b:2,y:3,z:4,a:1)", "no such parameter");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; new X().\"${'f'}\"(a)", "missing mandatory argument");
-    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; new X().\"${'f'}\"(a)", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; new X().\"${'f'}\"(a)", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; new X().\"${'f'}\"(x:2,y:3)", 5);
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [x:2,y:3]; new X().\"${'f'}\"(a)", "missing mandatory argument");
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; new X().\"${'f'}\"(a)", "missing mandatory argument");
@@ -426,27 +426,27 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f(x:1,y:2)", 3);
     testError("class X { def f(x, y) { x + y }}; X x = new X(); x.f([x:1,y:2])", "missing mandatory argument");
-    test("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { def f(x, y=[a:3]) { x + y }}; X x = new X(); x.f([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("class X { def f(x,y) { x*y }}; X x = new X(); x.f(x:2,y:3)", 6);
     test("class X { def f(int x, int y) { x*y }}; X x = new X(); x.f(x:2,y:3)", 6);
     test("class X { def f(int x, int y=3) { x*y }}; X x = new X(); x.f(x:2)", 6);
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(Map x, int y=3) { x.y = y; x }}; X x = new X(); x.f(x:2)", "cannot convert argument of type int to parameter type of Map");
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(def x, int y=3) { x.y = y; x }}; X x = new X(); x.f(x:2)", "invalid object type");
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; X x = new X(); x.f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("class X { def f(int x) { x*3 }}; X x = new X(); x.f(x:2)", 6);
     test("class X { def f(int x=2) { x*3 }}; X x = new X(); x.f(x:2)", 6);
     test("class X { def f(x,y) { x + y }}; X x = new X(); x.f(x:2,y:3)", 5);
-    test("class X { def f(x,y=[a:1]) { x + y }}; X x = new X(); x.f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f(x,y=[a:1]) { x + y }}; X x = new X(); x.f([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f(x,y=[a:1]) { x + y }}; X x = new X(); x.f(x:2,y:3)", 5);
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:2,y:3)", "missing mandatory argument: z");
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(y:3)", "missing mandatory arguments: x, z");
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
     testError("class X { def f(x,y,z) {x + y + z}}; X x = new X(); x.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; X x = new X(); x.f(a)", "missing mandatory argument");
-    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; X x = new X(); x.f(a)", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; X x = new X(); x.f(a)", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; X x = new X(); x.f(x:2,y:3)", 5);
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [x:2,y:3]; X x = new X(); x.f(a)", "missing mandatory argument");
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; X x = new X(); x.f(a)", "missing mandatory argument");
@@ -459,27 +459,27 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(x, y=[a:3]) { x + y }}; def x = new X(); x.f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { def f(x, y=[a:3]) { x + y }}; def x = new X(); x.f(x:1,y:2)", 3);
     testError("class X { def f(x, y) { x + y }}; def x = new X(); x.f([x:1,y:2])", "missing mandatory argument");
-    test("class X { def f(x, y=[a:3]) { x + y }}; def x = new X(); x.f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { def f(x, y=[a:3]) { x + y }}; def x = new X(); x.f([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("class X { def f(x,y) { x*y }}; def x = new X(); x.f(x:2,y:3)", 6);
     test("class X { def f(int x, int y) { x*y }}; def x = new X(); x.f(x:2,y:3)", 6);
     test("class X { def f(int x, int y=3) { x*y }}; def x = new X(); x.f(x:2)", 6);
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(Map x, int y=3) { x.y = y; x }}; def x = new X(); x.f(x:2)", "cannot be cast to Map");
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2])", Map.of("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { def f(def x, int y=3) { x.y = y; x }}; def x = new X(); x.f(x:2)", "invalid object type");
-    test("class X { def f(Map x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { def f(def x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { def f(Map x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("class X { def f(def x, int y=3) { x.y = y; x }}; def x = new X(); x.f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("class X { def f(int x) { x*3 }}; def x = new X(); x.f(x:2)", 6);
     test("class X { def f(int x=2) { x*3 }}; def x = new X(); x.f(x:2)", 6);
     test("class X { def f(x,y) { x + y }}; def x = new X(); x.f(x:2,y:3)", 5);
-    test("class X { def f(x,y=[a:1]) { x + y }}; def x = new X(); x.f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f(x,y=[a:1]) { x + y }}; def x = new X(); x.f([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f(x,y=[a:1]) { x + y }}; def x = new X(); x.f(x:2,y:3)", 5);
     testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:2,y:3)", "missing value for mandatory parameter 'z'");
     testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(y:3)", "missing value for mandatory parameter 'x'");
     testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:[1],y:3,z:4,a:1)", "no such parameter: a");
     testError("class X { def f(x,y,z) {x + y + z}}; def x = new X(); x.f(x:[1],b:2,y:3,z:4,a:1)", "no such parameters: b, a");
     testError("class X { def f = { x,y -> x*y }}; def a = [x:2,y:3]; def x = new X(); x.f(a)", "missing mandatory argument");
-    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; def x = new X(); x.f(a)", Map.of("x",2,"y",3,"a",1));
+    test("class X { def f = { x,y=[a:1] -> x + y }}; def a = [x:2,y:3]; def x = new X(); x.f(a)", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { def f = { x,y=[a:1] -> x + y }}; def x = new X(); x.f(x:2,y:3)", 5);
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [x:2,y:3]; def x = new X(); x.f(a)", "missing mandatory argument");
     testError("class X { def f = { x,y,z -> x + y + z}}; def a = [y:3]; def x = new X(); x.f(a)", "missing mandatory arguments");
@@ -496,20 +496,20 @@ public class ClassTests extends BaseTest {
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { static def f(x, y=[a:3]) { x + y }}; X.f(x:1,y:2)", 3);
     testError("class X { static def f(x, y) { x + y }}; X.f([x:1,y:2])", "missing mandatory argument");
-    test("class X { static def f(x, y=[a:3]) { x + y }}; X.f([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { static def f(x, y=[a:3]) { x + y }}; X.f([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("class X { static def f(x,y) { x*y }}; X.f(x:2,y:3)", 6);
     test("class X { static def f(int x, int y) { x*y }}; X.f(x:2,y:3)", 6);
     test("class X { static def f(int x, int y=3) { x*y }}; X.f(x:2)", 6);
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2])", Map.of("x",2,"y",3));
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f(x:2)", "cannot convert argument of type int to parameter type of Map");
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2])", Map.of("x",2,"y",3));
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f(x:2)", "invalid object type");
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.f([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("class X { static def f(int x) { x*3 }}; X.f(x:2)", 6);
     test("class X { static def f(int x=2) { x*3 }}; X.f(x:2)", 6);
     test("class X { static def f(x,y) { x + y }}; X.f(x:2,y:3)", 5);
-    test("class X { static def f(x,y=[a:1]) { x + y }}; X.f([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { static def f(x,y=[a:1]) { x + y }}; X.f([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { static def f(x,y=[a:1]) { x + y }}; X.f(x:2,y:3)", 5);
     testError("class X { static def f(x,y,z) {x + y + z}}; X.f(x:2,y:3)", "missing mandatory argument: z");
     testError("class X { static def f(x,y,z) {x + y + z}}; X.f(y:3)", "missing mandatory arguments: x, z");
@@ -525,22 +525,22 @@ public class ClassTests extends BaseTest {
     testError("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,(''+'y'):2)", "invalid parameter name");
     test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"(x:1,y:2)", 3);
     testError("class X { static def f(x, y) { x + y }}; X.\"${'f'}\"([x:1,y:2])", "missing mandatory argument");
-    test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"([x:1,y:2])", Map.of("x",1,"y",2,"a",3));
+    test("class X { static def f(x, y=[a:3]) { x + y }}; X.\"${'f'}\"([x:1,y:2])", Utils.mapOf("x",1,"y",2,"a",3));
     test("class X { static def f(x,y) { x*y }}; X.\"${'f'}\"(x:2,y:3)", 6);
     test("class X { static def f(int x, int y) { x*y }}; X.\"${'f'}\"(x:2,y:3)", 6);
     test("class X { static def f(int x, int y=3) { x*y }}; X.\"${'f'}\"(x:2)", 6);
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "cannot be cast to Map");
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Map.of("x",2,"y",3));
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2])", Utils.mapOf("x",2,"y",3));
     testError("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"(x:2)", "invalid object type");
-    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
-    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Map.of("x",2,"y",3));
+    test("class X { static def f(Map x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Utils.mapOf("x",2,"y",3));
+    test("class X { static def f(def x, int y=3) { x.y = y; x }}; X.\"${'f'}\"([x:2,y:4])", Utils.mapOf("x",2,"y",3));
     test("class X { static def f(byte x) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(byte x=2) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(int x) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(int x=2) { x*3 }}; X.\"${'f'}\"(x:2)", 6);
     test("class X { static def f(x,y) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
-    test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"([x:2,y:3])", Map.of("x",2,"y",3,"a",1));
+    test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"([x:2,y:3])", Utils.mapOf("x",2,"y",3,"a",1));
     test("class X { static def f(x,y=[a:1]) { x + y }}; X.\"${'f'}\"(x:2,y:3)", 5);
     testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(x:2,y:3)", "missing value for mandatory parameter 'z'");
     testError("class X { static def f(x,y,z) {x + y + z}}; X.\"${'f'}\"(y:3)", "missing value for mandatory parameter 'x'");
@@ -800,37 +800,37 @@ public class ClassTests extends BaseTest {
 
   @Test public void mutatingComplexFieldValues() {
     testError("class X { List a }; new X().\"${'a'}\" = [3]", "missing mandatory field: a");
-    test("class X { List a = []}; new X().a = [3]", List.of(3));
-    test("class X { List a = []}; new X().\"${'a'}\" = [3]", List.of(3));
-    test("class X { List a = [1] }; X x = new X(); x.a = [3]", List.of(3));
-    test("class X { List a = [1] }; X x = new X(); x.\"${'a'}\" = [3]", List.of(3));
-    test("class X { List a = [1] }; X x = new X(); x.\"${'a'}\" = [3]; x.a", List.of(3));
-    test("class X { List a = [] }; def x = new X(); x.\"${'a'}\" = [3]", List.of(3));
-    test("class X { List a = [] }; def x = new X(); x.\"${'a'}\" = [3]; x.a", List.of(3));
-    test("class X { List a = [1] }; new X().a += 3", List.of(1, 3));
-    test("class X { List a = [] }; new X().\"${'a'}\" += 3", List.of(3));
-    test("class X { List a = [] }; X x = new X(); x.\"${'a'}\" += 3", List.of(3));
-    test("class X { List a = [] }; X x = new X(); x.\"${'a'}\" += 3; x.a", List.of(3));
-    test("class X { List a = [1] }; def x = new X(); x.\"${'a'}\" += 3", List.of(1, 3));
-    test("class X { List a = [1] }; def x = new X(); x.\"${'a'}\" += 3; x.a", List.of(1, 3));
+    test("class X { List a = []}; new X().a = [3]", Utils.listOf(3));
+    test("class X { List a = []}; new X().\"${'a'}\" = [3]", Utils.listOf(3));
+    test("class X { List a = [1] }; X x = new X(); x.a = [3]", Utils.listOf(3));
+    test("class X { List a = [1] }; X x = new X(); x.\"${'a'}\" = [3]", Utils.listOf(3));
+    test("class X { List a = [1] }; X x = new X(); x.\"${'a'}\" = [3]; x.a", Utils.listOf(3));
+    test("class X { List a = [] }; def x = new X(); x.\"${'a'}\" = [3]", Utils.listOf(3));
+    test("class X { List a = [] }; def x = new X(); x.\"${'a'}\" = [3]; x.a", Utils.listOf(3));
+    test("class X { List a = [1] }; new X().a += 3", Utils.listOf(1, 3));
+    test("class X { List a = [] }; new X().\"${'a'}\" += 3", Utils.listOf(3));
+    test("class X { List a = [] }; X x = new X(); x.\"${'a'}\" += 3", Utils.listOf(3));
+    test("class X { List a = [] }; X x = new X(); x.\"${'a'}\" += 3; x.a", Utils.listOf(3));
+    test("class X { List a = [1] }; def x = new X(); x.\"${'a'}\" += 3", Utils.listOf(1, 3));
+    test("class X { List a = [1] }; def x = new X(); x.\"${'a'}\" += 3; x.a", Utils.listOf(1, 3));
 
     testError("class X { Map a }; new X().a = [a:3]", "missing mandatory field");
     testError("class X { Map a }; new X().\"${'a'}\" = [a:3]", "missing mandatory field");
-    test("class X { Map a = [:] }; new X().a = [a:3]", Map.of("a", 3));
-    test("class X { Map a = [:] }; new X().\"${'a'}\" = [a:3]", Map.of("a", 3));
-    test("class X { Map a = [b:1] }; X x = new X(); x.\"${'a'}\" = [a:3]", Map.of("a",3));
-    test("class X { Map a = [b:1] }; X x = new X(); x.a = [a:3]", Map.of("a",3));
-    test("class X { Map a = [b:1] }; X x = new X(); x.\"${'a'}\" = [a:3]; x.a", Map.of("a",3));
-    test("class X { Map a = [:] }; def x = new X(); x.\"${'a'}\" = [a:3]", Map.of("a",3));
-    test("class X { Map a = [:] }; def x = new X(); x.\"${'a'}\" = [a:3]; x.a", Map.of("a",3));
-    test("class X { Map a = [a:1] }; new X().a += [b:3]", Map.of("a",1, "b",3));
-    test("class X { Map a = [:] }; new X().\"${'a'}\" += [b:3]", Map.of("b",3));
-    test("class X { Map a = [:] }; X x = new X(); x.\"${'a'}\" += [b:3]", Map.of("b",3));
-    test("class X { Map a = [:] }; X x = new X(); x.a += [b:3]", Map.of("b",3));
-    test("class X { Map a = [:] }; X x = new X(); x.a += [b:3]; x.a", Map.of("b",3));
-    test("class X { Map a = [:] }; X x = new X(); x.\"${'a'}\" += [b:3]; x.a", Map.of("b",3));
-    test("class X { Map a = [a:1] }; def x = new X(); x.\"${'a'}\" += [b:3]", Map.of("a",1, "b",3));
-    test("class X { Map a = [a:1] }; def x = new X(); x.\"${'a'}\" += [b:3]; x.a", Map.of("a",1, "b",3));
+    test("class X { Map a = [:] }; new X().a = [a:3]", Utils.mapOf("a", 3));
+    test("class X { Map a = [:] }; new X().\"${'a'}\" = [a:3]", Utils.mapOf("a", 3));
+    test("class X { Map a = [b:1] }; X x = new X(); x.\"${'a'}\" = [a:3]", Utils.mapOf("a",3));
+    test("class X { Map a = [b:1] }; X x = new X(); x.a = [a:3]", Utils.mapOf("a",3));
+    test("class X { Map a = [b:1] }; X x = new X(); x.\"${'a'}\" = [a:3]; x.a", Utils.mapOf("a",3));
+    test("class X { Map a = [:] }; def x = new X(); x.\"${'a'}\" = [a:3]", Utils.mapOf("a",3));
+    test("class X { Map a = [:] }; def x = new X(); x.\"${'a'}\" = [a:3]; x.a", Utils.mapOf("a",3));
+    test("class X { Map a = [a:1] }; new X().a += [b:3]", Utils.mapOf("a",1, "b",3));
+    test("class X { Map a = [:] }; new X().\"${'a'}\" += [b:3]", Utils.mapOf("b",3));
+    test("class X { Map a = [:] }; X x = new X(); x.\"${'a'}\" += [b:3]", Utils.mapOf("b",3));
+    test("class X { Map a = [:] }; X x = new X(); x.a += [b:3]", Utils.mapOf("b",3));
+    test("class X { Map a = [:] }; X x = new X(); x.a += [b:3]; x.a", Utils.mapOf("b",3));
+    test("class X { Map a = [:] }; X x = new X(); x.\"${'a'}\" += [b:3]; x.a", Utils.mapOf("b",3));
+    test("class X { Map a = [a:1] }; def x = new X(); x.\"${'a'}\" += [b:3]", Utils.mapOf("a",1, "b",3));
+    test("class X { Map a = [a:1] }; def x = new X(); x.\"${'a'}\" += [b:3]; x.a", Utils.mapOf("a",1, "b",3));
 
     test("class X { String i = '1' }; new X().i = '3'", "3");
     test("class X { String i = '1' }; new X().\"${'i'}\" = '3'", "3");
@@ -979,9 +979,9 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 0 }; def a = [i:2]; X x = a; x.i", 2);
     test("class X { int i = 0 }; def a = [i:2]; (a as X).i", 2);
     test("class X { int i = 0 }; def a = [i:2]; def b = (a as X); b.i", 2);
-    test("class X { int i = 0; long j = 2 }; new X() as Map", Map.of("i",0,"j",2L));
-    test("class X { int i = 0; long j = 2 }; X x = new X(); x as Map", Map.of("i",0,"j",2L));
-    test("class X { int i = 0; long j = 2 }; def x = new X(); x as Map", Map.of("i",0,"j",2L));
+    test("class X { int i = 0; long j = 2 }; new X() as Map", Utils.mapOf("i",0,"j",2L));
+    test("class X { int i = 0; long j = 2 }; X x = new X(); x as Map", Utils.mapOf("i",0,"j",2L));
+    test("class X { int i = 0; long j = 2 }; def x = new X(); x as Map", Utils.mapOf("i",0,"j",2L));
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); (x as Map).toString()", "[i:0, j:2, x:null]");
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; x.toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
@@ -1406,20 +1406,20 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void classCompilationExtraStatements() {
-    testError(List.of("int i = 1; class X{}"), "", "expecting 'class'");
-    testError(List.of("\nint i = 1; class X{}"), "", "expecting 'class'");
-    testError(List.of("class X{}; int i = 1"), "", "expecting 'EOF'");
-    testError(List.of("class X{}\n int i = 1"), "", "expecting 'EOF'");
+    testError(Utils.listOf("int i = 1; class X{}"), "", "expecting 'class'");
+    testError(Utils.listOf("\nint i = 1; class X{}"), "", "expecting 'class'");
+    testError(Utils.listOf("class X{}; int i = 1"), "", "expecting 'EOF'");
+    testError(Utils.listOf("class X{}\n int i = 1"), "", "expecting 'EOF'");
   }
 
   @Test public void classRecompilation() {
     skipCheckpointTests = true;
-    test(List.of("class X{}", "class X{ def f(){3}}"), "new X().f()", 3);
-    testError(List.of("class X{def f(){1}}",
+    test(Utils.listOf("class X{}", "class X{ def f(){3}}"), "new X().f()", 3);
+    testError(Utils.listOf("class X{def f(){1}}",
                  "class Y extends X{def f(){2 + super.f()}}",
                  "class X extends Y{def f(){3}}"),
          "def x = new Y(); ((X)x).f() + ((Y)x).f() + x.f()", "cannot be cast");
-    test(List.of("class X { def f() { 'old X' } }",
+    test(Utils.listOf("class X { def f() { 'old X' } }",
                  "class Y extends X {}",
                  "class X { def f() { 'new X' } }"),
          "new Y().f()", "old X");
@@ -1429,14 +1429,14 @@ public class ClassTests extends BaseTest {
     packageName = "x.y.z";
     testError("package x.y.z; class X { static def f(){3}; }; x.y.z.Y.f()", "unknown class 'Y'");
     testError("package x.y.z; class X { static def f(){3}; }; a.b.c.Y.f()", "unknown variable 'a'");
-    testError(List.of("package a.b.c; class X { static def f(){3}; }"), "x.y.z.X.f()", "'a.b.c' conflicts with package name");
-    test(List.of("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", 3);
-    test(List.of("class X { def f(){3} }"), "new X().f()", 3);
-    test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
-    test(List.of("class X { class Y { def f(){3} } }"), "new x.y.z.X.Y().f()", 3);
-    test(List.of("class Y { def f(){3} }", "class X { Y y = null }"), "new x.y.z.X(y:new Y()).y.f()", 3);
-    test(List.of("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new x.y.z.X(y:new x.y.z.Y()).y.f()", 3);
-    test(List.of("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new X(y:new Y()).y.f()", 3);
+    testError(Utils.listOf("package a.b.c; class X { static def f(){3}; }"), "x.y.z.X.f()", "'a.b.c' conflicts with package name");
+    test(Utils.listOf("package x.y.z; class X { static def f(){3}; }"),"x.y.z.X.f()", 3);
+    test(Utils.listOf("class X { def f(){3} }"), "new X().f()", 3);
+    test(Utils.listOf("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+    test(Utils.listOf("class X { class Y { def f(){3} } }"), "new x.y.z.X.Y().f()", 3);
+    test(Utils.listOf("class Y { def f(){3} }", "class X { Y y = null }"), "new x.y.z.X(y:new Y()).y.f()", 3);
+    test(Utils.listOf("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new x.y.z.X(y:new x.y.z.Y()).y.f()", 3);
+    test(Utils.listOf("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new X(y:new Y()).y.f()", 3);
     test("package x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", 3);
   }
 
@@ -1444,43 +1444,43 @@ public class ClassTests extends BaseTest {
     // async tests don't work with static calls when no package specified because sleep(0,X).f() doesn't work when X is a class
     useAsyncDecorator = false;
     packageName = "x.y.z";
-    test(List.of("class X { static def f(){3} }"), "X.f()", 3);
+    test(Utils.listOf("class X { static def f(){3} }"), "X.f()", 3);
     packageName = "";
-    test(List.of("class X { static def f(){3}; }"), "X.f()", 3);
+    test(Utils.listOf("class X { static def f(){3}; }"), "X.f()", 3);
   }
 
   @Test public void rootPackage() {
     packageName = "";
     testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "unknown variable 'x'");
-    test(List.of("class X { static def f(){3}; }"), "new X().f()", 3);
-    test(List.of("class X { def f(){3} }"), "new X().f()", 3);
-    test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+    test(Utils.listOf("class X { static def f(){3}; }"), "new X().f()", 3);
+    test(Utils.listOf("class X { def f(){3} }"), "new X().f()", 3);
+    test(Utils.listOf("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
     packageName = null;
-    test(List.of("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
+    test(Utils.listOf("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
   }
 
   @Test public void differentPackage() {
     packageName = "x.y.z";
     testError("package a.b.c; class X { static def f(){3}; }; x.y.z.X.f()", "conflicts with package");
-    test(List.of("class X { static def f(){3}; }"), "new X().f()", 3);
-    test(List.of("class X { def f(){3} }"), "new X().f()", 3);
-    test(List.of("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+    test(Utils.listOf("class X { static def f(){3}; }"), "new X().f()", 3);
+    test(Utils.listOf("class X { def f(){3} }"), "new X().f()", 3);
+    test(Utils.listOf("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
   }
 
   @Test public void noDefaultPackage() {
     packageName = null;
     testError("def x = 1", "package name not declared");
-    testError(List.of("class X{}"), "def x = 1", "package name not declared");
-    test(List.of("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
+    testError(Utils.listOf("class X{}"), "def x = 1", "package name not declared");
+    test(Utils.listOf("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
   }
 
   @Test public void separateClassCompilation() {
     packageName = null;
-    test(List.of("package a.b; class X{def f(){1}}", "package a.c; class Y extends a.b.X{def f(){2}}"),
+    test(Utils.listOf("package a.b; class X{def f(){1}}", "package a.c; class Y extends a.b.X{def f(){2}}"),
          "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 6);
-    test(List.of("package a.b; class X{def f(){sleep(0,1)}}", "package a.c; class Y extends a.b.X{def f(){sleep(0,2) + super.f()}}"),
+    test(Utils.listOf("package a.b; class X{def f(){sleep(0,1)}}", "package a.c; class Y extends a.b.X{def f(){sleep(0,2) + super.f()}}"),
          "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 9);
-    test(List.of("package a.b; class X{def f(){sleep(0,1)}}", "package a.c; class Y extends a.b.X{ a.b.X x = new a.b.X(); def f(){sleep(0,2) + super.f() + x.f()}}"),
+    test(Utils.listOf("package a.b; class X{def f(){sleep(0,1)}}", "package a.c; class Y extends a.b.X{ a.b.X x = new a.b.X(); def f(){sleep(0,2) + super.f() + x.f()}}"),
          "package a.b; def x = new a.c.Y(); ((X)x).f() + ((a.c.Y)x).f() + x.f()", 12);
   }
 
@@ -1494,31 +1494,31 @@ public class ClassTests extends BaseTest {
   @Test public void importStatements() {
     useAsyncDecorator = false;
     packageName = null;
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; new X().f()", 3);
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X; new X().f()", 3);
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X as Y; new Y().f()", 3);
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X; new X().f()", 3);
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X as Y; new Y().f()", 3);
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; new X().f()", 3);
-    test(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; new Y().f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; X.f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import a.b.c.X; X.f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import a.b.c.X as Y; Y.f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import X; X.f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import X as Y; Y.f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X; X.f()", 3);
-    test(List.of("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X as Y; Y.f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y; new Y().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y as C; new C().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{static def f(){3}} }"), "package x.y.z; import a.b.c.X; X.Y.f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X; new X.Y().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X as C; new C.Y().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y; new Y().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y as C; new C().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y; new Y().f()", 3);
-    test(List.of("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as C; new C().f()", 3);
-    testError(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
-    testError(List.of("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; new X().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X; new X().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X as Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X; new X().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X as Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; new X().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package a.b.c; X.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import a.b.c.X; X.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import a.b.c.X as Y; Y.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import X; X.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package a.b.c; import X as Y; Y.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X; X.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X as Y; Y.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y as C; new C().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{static def f(){3}} }"), "package x.y.z; import a.b.c.X; X.Y.f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X; new X.Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X as C; new C.Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y as C; new C().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as C; new C().f()", 3);
+    testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
+    testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
   }
 
   @Test public void tripleEquals() {

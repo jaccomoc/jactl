@@ -23,7 +23,7 @@ import java.math.BigDecimal;
 import java.util.*;
 
 import static io.jactl.JactlType.*;
-import static io.jactl.JactlType.TypeEnum.STRING_BUILDER;
+import static io.jactl.JactlType.TypeEnum.STRING_BUFFER;
 
 /**
  * Class for saving checkpoint state. Saves into a buffer with layout of:
@@ -147,7 +147,7 @@ public class Checkpointer {
     else if (obj instanceof List)           { writeList((List)obj);     }
     else if (obj instanceof String)         { writeString((String)obj); }
     else if (obj.getClass().isArray())      { writeArray(obj);          }
-    else if (obj instanceof StringBuilder)  { writeStringBuilder((StringBuilder)obj); }
+    else if (obj instanceof StringBuffer)   { writeStringBuffer((StringBuffer)obj); }
     else {
       throw new RuntimeError("Cannot checkpoint object of type " + RuntimeUtils.className(obj), source, offset);
     }
@@ -209,8 +209,8 @@ public class Checkpointer {
     ensureCapacity(1 + 5);
     buf[idx++] = (byte)MAP.getType().ordinal();
     _writeCint(size);
-    for (var iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
-      var entry = iterator.next();
+    for (Iterator<Map.Entry<String, Object>> iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
+      Map.Entry<String, Object> entry = iterator.next();
       writeObject(entry.getKey());
       writeObject(entry.getValue());
     }
@@ -424,8 +424,8 @@ public class Checkpointer {
     } while (num != 0);
   }
 
-  private void writeStringBuilder(StringBuilder sb) {
-    writeByte((byte)STRING_BUILDER.ordinal());
+  private void writeStringBuffer(StringBuffer sb) {
+    writeByte((byte) STRING_BUFFER.ordinal());
     _writeString(sb.toString());
   }
 

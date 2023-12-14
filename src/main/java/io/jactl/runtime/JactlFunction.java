@@ -179,7 +179,7 @@ public class JactlFunction extends FunctionDescriptor {
    */
   private JactlFunction param(String name, Object defaultValue, boolean async) {
     paramNames.add(name);
-    defaultVals = new ArrayList<>(Arrays.asList(defaultVals)){{ add(defaultValue); }}.toArray(Object[]::new);
+    defaultVals = new ArrayList(Arrays.asList(defaultVals)){{ add(defaultValue); }}.toArray(new Object[0]);
     // If no optional params then mandatory count must be all existing params
     if (Arrays.stream(defaultVals).allMatch(v -> v == MANDATORY)) {
       mandatoryArgCount = defaultVals.length;
@@ -323,7 +323,7 @@ public class JactlFunction extends FunctionDescriptor {
     this.paramClassesArr  = paramTypes.stream().map(t -> t.classFromType()).toArray(Class[]::new);
     this.firstArgtype     = firstParamType();
     this.returnType       = getReturnType();
-    this.paramNamesArr    = paramNames.toArray(String[]::new);
+    this.paramNamesArr    = paramNames.toArray(new String[paramNames.size()]);
     this.mandatoryParams  = getMandatoryParams();
     this.wrapperMethod    = null;
     this.isBuiltin        = true;
@@ -482,7 +482,7 @@ public class JactlFunction extends FunctionDescriptor {
    */
   private static Object[] addVarArgs(Object[] args, int pos, Object[] vargs) {
     if (args.length != pos + vargs.length) {
-      var newArgs = new Object[pos + vargs.length];
+      Object[] newArgs = new Object[pos + vargs.length];
       System.arraycopy(args, 0, newArgs, 0, pos);
       args = newArgs;
     }
@@ -526,10 +526,10 @@ public class JactlFunction extends FunctionDescriptor {
   }
 
   private static Method findMethod(Class clss, String methodName) {
-    var methods = Arrays.stream(clss.getDeclaredMethods())
-                        .filter(m -> m.getName().equals(methodName))
-                        .filter(m -> Modifier.isStatic(m.getModifiers()))
-                        .collect(Collectors.toList());
+    List<Method> methods = Arrays.stream(clss.getDeclaredMethods())
+                                 .filter(m -> m.getName().equals(methodName))
+                                 .filter(m -> Modifier.isStatic(m.getModifiers()))
+                                 .collect(Collectors.toList());
     if (methods.size() == 0) {
       throw new IllegalArgumentException("Could not find static method " + methodName + " in class " + clss.getName());
     }

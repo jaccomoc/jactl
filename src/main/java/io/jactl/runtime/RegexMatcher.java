@@ -63,8 +63,9 @@ public class RegexMatcher implements Checkpointable {
   private static int VERSION = 1;
 
   private static final ThreadLocal<LinkedHashMap<String, Pattern>> patternCache = ThreadLocal.withInitial(
-    () -> new LinkedHashMap<>(16, 0.75f, true) {
-      @Override protected boolean removeEldestEntry(Map.Entry<String, Pattern> eldest) {
+    () -> new LinkedHashMap(16, 0.75f, true) {
+      @Override
+      protected boolean removeEldestEntry(Map.Entry eldest) {
         return size() > patternCacheSize;
       }
     });
@@ -112,8 +113,8 @@ public class RegexMatcher implements Checkpointable {
     if (regex == null) {
       throw new NullError("Null regex in regex match", source, offset);
     }
-    var     cache   = patternCache.get();
-    String  key     = regex + "/" + modifiers;
+    LinkedHashMap<String, Pattern> cache = patternCache.get();
+    String                         key   = regex + "/" + modifiers;
     Pattern pattern = cache.get(key);
     if (pattern == null) {
       try {
@@ -189,11 +190,11 @@ public class RegexMatcher implements Checkpointable {
     return (lastWasGlobal ? globalMatcher : nonGlobalMatcher).regexGroup(group, captureAsNums);
   }
 
-  public void appendReplacement(StringBuilder sb, String replacement) {
+  public void appendReplacement(StringBuffer sb, String replacement) {
     (lastWasGlobal ? globalMatcher : nonGlobalMatcher).appendReplacement(sb, replacement);
   }
 
-  public void appendTail(StringBuilder sb) {
+  public void appendTail(StringBuffer sb) {
     (lastWasGlobal ? globalMatcher : nonGlobalMatcher).appendTail(sb);
   }
 
@@ -286,11 +287,11 @@ public class RegexMatcher implements Checkpointable {
       }
     }
 
-    public void appendReplacement(StringBuilder sb, String replacement) {
+    public void appendReplacement(StringBuffer sb, String replacement) {
       matcher.appendReplacement(sb, replacement);
     }
 
-    public void appendTail(StringBuilder sb) {
+    public void appendTail(StringBuffer sb) {
       matcher.appendTail(sb);
     }
   }

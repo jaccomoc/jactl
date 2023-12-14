@@ -80,8 +80,9 @@ public class RuntimeUtils {
   public static final String TRIPLE_GREATER_THAN = ">>>";
 
   private static final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
-    new LinkedHashMap<>(16, 0.75f, true) {
-      @Override protected boolean removeEldestEntry(Map.Entry<String, Function<Map<String,Object>,Object>> eldest) {
+    new LinkedHashMap(16, 0.75f, true) {
+      @Override
+      protected boolean removeEldestEntry(Map.Entry eldest) {
         return size() > scriptCacheSize;
       }
     });
@@ -319,7 +320,7 @@ public class RuntimeUtils {
       }
       if (operator == STAR) {
         if (right instanceof Number) {
-          return leftString.repeat(((Number) right).intValue());
+          return Utils.repeat(leftString, ((Number) right).intValue());
         }
         throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
@@ -378,13 +379,13 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Integer || right instanceof Integer) {
-      var lhs = ((Number) left).intValue();
-      var rhs = ((Number) right).intValue();
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
       return lhs + rhs;
     }
 
-    var lhs = (byte)left;
-    var rhs = (byte)right;
+    byte lhs = (byte)left;
+    byte rhs = (byte)right;
     return (byte)(lhs + rhs);
   }
 
@@ -415,13 +416,13 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Integer || right instanceof Integer) {
-      var lhs = ((Number) left).intValue();
-      var rhs = ((Number) right).intValue();
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
       return lhs + rhs;
     }
 
-    var lhs = (byte)left;
-    var rhs = (byte)right;
+    byte lhs = (byte)left;
+    byte rhs = (byte)right;
     return (byte)(lhs + rhs);
   }
 
@@ -455,13 +456,13 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Integer || right instanceof Integer) {
-      var lhs = ((Number) left).intValue();
-      var rhs = ((Number) right).intValue();
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
       return lhs * rhs;
     }
 
-    var lhs = (byte)left;
-    var rhs = (byte)right;
+    byte lhs = (byte)left;
+    byte rhs = (byte)right;
     return (byte)(lhs * rhs);
   }
 
@@ -494,13 +495,13 @@ public class RuntimeUtils {
     }
 
     if (left instanceof Integer || right instanceof Integer) {
-      var lhs = ((Number) left).intValue();
-      var rhs = ((Number) right).intValue();
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
       return lhs - rhs;
     }
 
-    var lhs = (byte)left;
-    var rhs = (byte)right;
+    byte lhs = (byte)left;
+    byte rhs = (byte)right;
     return (byte)(lhs - rhs);
   }
 
@@ -531,13 +532,13 @@ public class RuntimeUtils {
       }
 
       if (left instanceof Integer || right instanceof Integer) {
-        var lhs = ((Number) left).intValue();
-        var rhs = ((Number) right).intValue();
+        int lhs = ((Number) left).intValue();
+        int rhs = ((Number) right).intValue();
         return lhs / rhs;
       }
 
-      var lhs = (byte) left;
-      var rhs = (byte) right;
+      byte lhs = (byte) left;
+      byte rhs = (byte) right;
       return (byte) (lhs / rhs);
     }
     catch (ArithmeticException e) {
@@ -572,13 +573,13 @@ public class RuntimeUtils {
       }
 
       if (left instanceof Integer || right instanceof Integer) {
-        var lhs = ((Number) left).intValue();
-        var rhs = ((Number) right).intValue();
+        int lhs = ((Number) left).intValue();
+        int rhs = ((Number) right).intValue();
         return lhs % rhs;
       }
 
-      var lhs = (byte)left;
-      var rhs = (byte)right;
+      byte lhs = (byte)left;
+      byte rhs = (byte)right;
       return (byte)(lhs % rhs);
     }
     catch (ArithmeticException e) {
@@ -613,13 +614,13 @@ public class RuntimeUtils {
       }
 
       if (left instanceof Integer || right instanceof Integer) {
-        var lhs = ((Number) left).intValue();
-        var rhs = ((Number) right).intValue();
+        int lhs = ((Number) left).intValue();
+        int rhs = ((Number) right).intValue();
         return ((lhs % rhs) + rhs) % rhs;
       }
 
-      var lhs = (byte)left;
-      var rhs = (byte)right;
+      byte lhs = (byte)left;
+      byte rhs = (byte)right;
       return (byte)(((lhs % rhs)+rhs) % rhs);
     }
     catch (ArithmeticException e) {
@@ -717,11 +718,11 @@ public class RuntimeUtils {
         return operator == BANG_EQUAL;
       }
       // Have two instances of same class so check that each field is equal
-      var fieldAndMethods = ((JactlObject) leftObj)._$j$getFieldsAndMethods();
-      for (var iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
+      Map<String, Object> fieldAndMethods = ((JactlObject) leftObj)._$j$getFieldsAndMethods();
+      for (Iterator<Map.Entry<String, Object>> iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
            iter.hasNext(); ) {
-        var   entry = iter.next();
-        Field field = (Field) entry.getValue();
+        Map.Entry<String, Object> entry = iter.next();
+        Field                     field = (Field) entry.getValue();
         try {
           // If field values differ then we are done
           if (!isEquals(field.get(leftObj), field.get(rightObj), source, offset)) {
@@ -738,12 +739,12 @@ public class RuntimeUtils {
     if (leftObj instanceof JactlObject && rightObj instanceof Map || leftObj instanceof Map && rightObj instanceof JactlObject) {
       Map<String,Object> map = (Map<String,Object>)(leftObj instanceof Map ? leftObj : rightObj);
       JactlObject       obj = (JactlObject)(leftObj instanceof JactlObject ? leftObj : rightObj);
-      Set<String> mapKeys = new HashSet<>(map.keySet());
-      var fieldAndMethods = obj._$j$getFieldsAndMethods();
-      for (var iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
+      Set<String>         mapKeys         = new HashSet<>(map.keySet());
+      Map<String, Object> fieldAndMethods = obj._$j$getFieldsAndMethods();
+      for (Iterator<Map.Entry<String, Object>> iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
            iter.hasNext(); ) {
-        var   entry = iter.next();
-        Field field = (Field) entry.getValue();
+        Map.Entry<String, Object> entry = iter.next();
+        Field                     field = (Field) entry.getValue();
         String key  = entry.getKey();
         try {
           // If field values differ then we are done
@@ -935,7 +936,7 @@ public class RuntimeUtils {
       throw new RuntimeError("String repeat count must be >= 0", source, offset);
     }
     ensureNonNull(str, source, offset);
-    return str.repeat(count);
+    return Utils.repeat(str, count);
   }
 
   /**
@@ -1116,8 +1117,8 @@ public class RuntimeUtils {
         boolean       isMap = obj instanceof Map;
         StringBuilder sb    = new StringBuilder();
         sb.append('[');
-        var iterator = isMap ? ((Map<String, Object>) obj).entrySet().iterator()
-                             : ((JactlObject) obj)._$j$getFieldsAndMethods()
+        Iterator<Map.Entry<String, Object>> iterator = isMap ? ((Map<String, Object>) obj).entrySet().iterator()
+                                                             : ((JactlObject) obj)._$j$getFieldsAndMethods()
                                                    .entrySet()
                                                    .stream()
                                                    .filter(entry -> entry.getValue() instanceof Field)
@@ -1130,16 +1131,16 @@ public class RuntimeUtils {
           else {
             first = false;
           }
-          var entry = iterator.next();
+          Map.Entry<String, Object> entry = iterator.next();
           try {
             Object value = entry.getValue();
             if (!isMap) {
               value = ((Field) entry.getValue()).get(obj);
             }
             if (indent > 0) {
-              sb.append('\n').append(prefix).append(" ".repeat(indent));
+              sb.append('\n').append(prefix).append(Utils.repeat(" ", indent));
             }
-            sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + " ".repeat(indent), indent));
+            sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + Utils.repeat(" ", indent), indent));
           }
           catch (IllegalAccessException e) {
             throw new IllegalStateException("Internal error: problem accessing field '" + entry.getKey() + "': " + e, e);
@@ -1193,10 +1194,10 @@ public class RuntimeUtils {
     if (str.isEmpty()) {
       return "''";
     }
-    final var start = str.charAt(0);
+    final char start = str.charAt(0);
     if (Character.isJavaIdentifierStart(start) && start != '$') {
       for (int i = 1; i < str.length(); i++) {
-        final var ch = str.charAt(i);
+        final char ch = str.charAt(i);
         if (!Character.isJavaIdentifierPart(ch) || ch == '$') {
           return "'" + str + "'";
         }
@@ -1311,7 +1312,7 @@ public class RuntimeUtils {
     // Check for accessing method by name
     String fieldString = castToString(field);
     if (isDot && fieldString != null) {
-      var method = Functions.lookupWrapper(parent, fieldString);
+      JactlMethodHandle method = Functions.lookupWrapper(parent, fieldString);
       if (method != null) {
         return method;
       }
@@ -1482,8 +1483,8 @@ public class RuntimeUtils {
         // _$j$StaticMethods field because the field exists in the parent JactlObject class
         // which means we can't guarantee that class init for the actual class (which populates
         // the map) has been run yet.
-        Method staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
-        var    map           = (Map<String, JactlMethodHandle>) staticMethods.invoke(null);
+        Method                         staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
+        Map<String, JactlMethodHandle> map           = (Map<String, JactlMethodHandle>) staticMethods.invoke(null);
         return map.get(field.toString());
       }
       catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
@@ -1646,7 +1647,7 @@ public class RuntimeUtils {
     }
     // If we have a field handle then we need to get the field value
     if (fieldOrMethod instanceof Field) {
-      var classField = (Field) fieldOrMethod;
+      Field classField = (Field) fieldOrMethod;
       try {
         Object value = classField.get(parent);
         if (value == null) {
@@ -1708,7 +1709,7 @@ public class RuntimeUtils {
     }
     // If we have a field handle then we need to get the field value
     if (fieldOrMethod instanceof Field) {
-      var classField = (Field) fieldOrMethod;
+      Field classField = (Field) fieldOrMethod;
       try {
         return classField.get(parent);
       }
@@ -1901,7 +1902,7 @@ public class RuntimeUtils {
   }
 
   public static List concat(Object... objs) {
-    var result = new ArrayList<>();
+    ArrayList<Object> result = new ArrayList<>();
     for (Object obj: objs) {
       if (obj instanceof List) {
         result.addAll((List) obj);
@@ -1930,7 +1931,7 @@ public class RuntimeUtils {
     FUNCTION;
   }
 
-  private static Map<Class, FieldType> classToType = Map.of(
+  private static Map<Class, FieldType> classToType = Utils.mapOf(
     boolean.class, FieldType.BOOLEAN,
     byte.class, FieldType.BYTE,
     int.class, FieldType.INT,
@@ -2079,8 +2080,8 @@ public class RuntimeUtils {
             break;
           case 4:                      // Have result of iter.next()
             if (elem instanceof Map.Entry) {
-              var entry = (Map.Entry) elem;
-              elem = List.of(entry.getKey(), entry.getValue());
+              Map.Entry entry = (Map.Entry) elem;
+              elem = Utils.listOf(entry.getKey(), entry.getValue());
             }
             result.add(elem);
             methodLocation = 0;       // Back to initial state
@@ -2337,7 +2338,7 @@ public class RuntimeUtils {
 
   public static List<String> lines(String str) {
     if (str.isEmpty()) {
-      return List.of(str);
+      return Utils.listOf(str);
     }
     List<String> lines = new ArrayList<>();
     int offset = 0;
@@ -2436,7 +2437,7 @@ public class RuntimeUtils {
    */
   public static Object mapEntryToList(Object elem) {
     if (elem instanceof Map.Entry) {
-      var entry = (Map.Entry) elem;
+      Map.Entry entry = (Map.Entry) elem;
       elem = Arrays.asList(entry.getKey(), entry.getValue());
     }
     return elem;
@@ -2542,7 +2543,7 @@ public class RuntimeUtils {
     if (obj instanceof String) { return ((String)obj).chars().mapToObj(c -> String.valueOf((char)c)).collect(Collectors.toList()); }
     if (obj instanceof Map) {
       Map<Object,Object> map = (Map)obj;
-      return map.entrySet().stream().map(e -> List.of(e.getKey(), e.getValue())).collect(Collectors.toList());
+      return map.entrySet().stream().map(e -> Utils.listOf(e.getKey(), e.getValue())).collect(Collectors.toList());
     }
     if (obj instanceof Object[]) {
       return Arrays.asList((Object[])obj);
@@ -2693,8 +2694,8 @@ public class RuntimeUtils {
     }
     try {
       bindings = bindings == null ? new LinkedHashMap() : bindings;
-      var script = compileScript(code, bindings, ((JactlContext.DynamicClassLoader)classLoader).getJactlContext());
-      var result = script.apply(bindings);
+      Function<Map<String, Object>, Object> script = compileScript(code, bindings, ((JactlContext.DynamicClassLoader)classLoader).getJactlContext());
+      Object                                result = script.apply(bindings);
       return result;
     }
     catch (Continuation cont) {
@@ -2714,14 +2715,14 @@ public class RuntimeUtils {
 
 
   private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
-    var script = evalScriptCache.get(code);
+    Function<Map<String, Object>, Object> script = evalScriptCache.get(code);
     if (script == null) {
       // For eval we want to be able to cache the scripts but the problem is that if the bindings
       // are typed (e.g. x is an Integer) but then when script is rerun a global has had its type
       // changed (e.g. x is now a Long) the script will fail because the types don't match. So
       // we erase all types and make everything ANY. This is obviously less efficient but for eval()
       // efficiency should not be a big issue.
-      var erasedBindings = new HashMap();
+      HashMap erasedBindings = new HashMap();
       bindings.keySet().forEach(k -> erasedBindings.put(k, null));
       script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACTL_PKG, erasedBindings);
       evalScriptCache.put(code, script);
@@ -2779,5 +2780,10 @@ public class RuntimeUtils {
     uuidLsbVal <<= 24;
     uuidMsb.set(uuidMsbVal);
     uuidLsb.set(uuidLsbVal);
+  }
+
+  public static final String ERROR_WITH_MSG = "errorWithMsg";
+  public static RuntimeError errorWithMsg(String msg, String prefix, String source, int offset) {
+    return new RuntimeError(prefix + (msg == null ? "" : ": " + msg), source, offset);
   }
 }

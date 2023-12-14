@@ -25,6 +25,7 @@ import io.jactl.runtime.RuntimeState;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -235,11 +236,11 @@ public class Jactl {
                    "         -d           : debug: output generated code\n" +
                    "         -c           : do not read .jactlrc config file\n" +
                    "         -h           : print this help\n";
-    var argMap = Utils.parseArgs(args, "d*vcpne:V:*",
-                                 usage);
-    var files     = (List<String>) argMap.get('*');
-    var arguments = (List<String>) argMap.get('@');
-    String script;
+    Map<Character, Object> argMap = Utils.parseArgs(args, "d*vcpne:V:*",
+                                                    usage);
+    List<String> files     = (List<String>) argMap.get('*');
+    List<String> arguments = (List<String>) argMap.get('@');
+    String       script;
     if (argMap.containsKey('e')) {
       script = (String) argMap.get('e');
     }
@@ -249,7 +250,7 @@ public class Jactl {
         throw new IllegalArgumentException("Missing '-e' option and no programFile specified");
       }
       String file = files.remove(0);
-      script = Files.readString(Path.of(file));
+      script = new String(Files.readAllBytes(Paths.get(file)));
     }
     Map<String,Object> globals   = new HashMap<>();
     if (argMap.containsKey('V')) {
@@ -270,8 +271,8 @@ public class Jactl {
 
       globals.put("args", arguments);
       List<InputStream> fileStreams = files.stream().map(Jactl::getFileStream).collect(Collectors.toList());
-      var inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
-                                               : System.in;
+      InputStream inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
+                                                       : System.in;
       BufferedReader input = new BufferedReader(new InputStreamReader(inputStream));
       boolean[] printInvoked = new boolean[]{ false };
       PrintStream output = new PrintStream(System.out) {
@@ -292,12 +293,12 @@ public class Jactl {
       RuntimeState.setInput(input);
       RuntimeState.setOutput(output);
 
-      var context = JactlContext.create()
-                                .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
-                                .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
-                                .printLoop(argMap.containsKey('p'))
-                                .nonPrintLoop(argMap.containsKey('n'))
-                                .build();
+      JactlContext context = JactlContext.create()
+                                         .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
+                                         .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
+                                         .printLoop(argMap.containsKey('p'))
+                                         .nonPrintLoop(argMap.containsKey('n'))
+                                         .build();
       Object result = null;
       result = Compiler.eval(script, context, globals);
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself

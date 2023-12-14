@@ -40,7 +40,7 @@ public class Functions {
    * classes that don't normally have methods (e.g. numbers).
    */
   static void registerMethod(String name, FunctionDescriptor descriptor) {
-    var functions = methods.computeIfAbsent(name, k -> new ArrayList<>());
+    List<FunctionDescriptor> functions = methods.computeIfAbsent(name, k -> new ArrayList<>());
     functions.add(descriptor);
   }
 
@@ -50,8 +50,8 @@ public class Functions {
       classes.get(typeClass).methods.remove(name);
     }
     if (methods.containsKey(name)) {
-      for (var iter = methods.get(name).iterator(); iter.hasNext(); ) {
-        var func = iter.next();
+      for (Iterator<FunctionDescriptor> iter = methods.get(name).iterator(); iter.hasNext(); ) {
+        FunctionDescriptor func = iter.next();
         if (func.name.equals(name)) {
           iter.remove();
         }
@@ -72,7 +72,7 @@ public class Functions {
    * @return the FunctionDescriptor for the method or null if no such method
    */
   public static FunctionDescriptor lookupMethod(JactlType type, String methodName) {
-    var function = findMatching(type, methodName);
+    FunctionDescriptor function = findMatching(type, methodName);
     if (function == NO_SUCH_METHOD) {
       return null;
     }
@@ -89,9 +89,9 @@ public class Functions {
    * @return MethodHandle bound to parent
    */
   static JactlMethodHandle lookupWrapper(Object parent, String methodName) {
-    Class parentClass = parent instanceof JactlIterator ? JactlIterator.class : parent.getClass();
-    var classLookup = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
-    var function    = classLookup.methods.computeIfAbsent(methodName, name -> {
+    Class       parentClass = parent instanceof JactlIterator ? JactlIterator.class : parent.getClass();
+    ClassLookup classLookup = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
+    FunctionDescriptor function    = classLookup.methods.computeIfAbsent(methodName, name -> {
       JactlType parentType = JactlType.typeOf(parent);
       return findMatching(parentType, name);
     });
@@ -104,26 +104,26 @@ public class Functions {
   }
 
   private static FunctionDescriptor findMatching(JactlType objType, String methodName) {
-    var type = objType.unboxed();
-    var functions = methods.get(methodName);
+    JactlType                type      = objType.unboxed();
+    List<FunctionDescriptor> functions = methods.get(methodName);
     if (functions == null) {
       return NO_SUCH_METHOD;
     }
 
     // Look for exact match and then generic match.
     // List/Map/Object[]/String can match on Iterable.
-    var match = functions.stream().filter(f -> f.type.is(type)).findFirst();
-    if (match.isEmpty() && type.is(ARRAY) && type.isCastableTo(OBJECT_ARR)) {
+    Optional<FunctionDescriptor> match = functions.stream().filter(f -> f.type.is(type)).findFirst();
+    if (!match.isPresent() && type.is(ARRAY) && type.isCastableTo(OBJECT_ARR)) {
       match = functions.stream().filter(f -> f.type.is(OBJECT_ARR)).findFirst();
     }
-    if (match.isEmpty() && type.is(LIST,MAP,STRING,BYTE,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
+    if (!match.isPresent() && type.is(LIST,MAP,STRING,BYTE,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
       match = functions.stream().filter(f -> f.type.is(ITERATOR)).findFirst();
     }
-    if (match.isEmpty() && type.is(BYTE,INT,LONG,DOUBLE,DECIMAL)) {
+    if (!match.isPresent() && type.is(BYTE,INT,LONG,DOUBLE,DECIMAL)) {
       match = functions.stream().filter(f -> f.type.is(NUMBER)).findFirst();
     }
     // Final check is for ANY
-    if (match.isEmpty()) {
+    if (!match.isPresent()) {
       match = functions.stream().filter(f -> f.type.is(ANY)).findFirst();
     }
     return match.orElse(NO_SUCH_METHOD);

@@ -149,7 +149,7 @@ public class Token extends Location {
   }
 
   public boolean is(List<TokenType> types) {
-    return is(types.toArray(TokenType[]::new));
+    return is(types.toArray(new TokenType[types.size()]));
   }
 
   /**

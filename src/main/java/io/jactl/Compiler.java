@@ -29,12 +29,12 @@ import java.util.function.Function;
  */
 public class Compiler {
   public static Object eval(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
-    var compiled = compileScript(source, jactlContext, packageName, bindings);
+    JactlScript compiled = compileScript(source, jactlContext, packageName, bindings);
     return compiled.runSync(bindings);
   }
 
   public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings) {
-    var compiled = compileScript(source, jactlContext, bindings);
+    JactlScript compiled = compileScript(source, jactlContext, bindings);
     return compiled.runSync(bindings);
   }
 
@@ -49,45 +49,45 @@ public class Compiler {
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
-    var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);
-    var script   = parser.parseScript(className);
-    var resolver = new Resolver(jactlContext, bindings, script.location);
+    Parser         parser = new Parser(new Tokeniser(source), jactlContext, packageName);
+    Stmt.ClassDecl script = parser.parseScript(className);
+    Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);
-    var analyser = new Analyser(jactlContext);
+    Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);
     return compileWithCompletion(source, jactlContext, script);
   }
 
   // For internal use by eval() function.
   public static Function<Map<String, Object>,Object> compileScriptInternal(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
-    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
-    var parser   = new Parser(new Tokeniser(source), jactlContext, packageName);
-    var script   = parser.parseScript(className);
-    var resolver = new Resolver(jactlContext, bindings, script.location);
+    String         className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
+    Parser         parser    = new Parser(new Tokeniser(source), jactlContext, packageName);
+    Stmt.ClassDecl script    = parser.parseScript(className);
+    Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);
-    var analyser = new Analyser(jactlContext);
+    Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);
-    var compiler = new ScriptCompiler(source, jactlContext, script);
+    ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script);
     return compiler.compile();
   }
 
   public static void compileClass(String source, JactlContext jactlContext, String packageName) {
-    var parser      = new Parser(new Tokeniser(source), jactlContext, packageName);
-    var scriptClass = parser.parseClass();
-    var resolver = new Resolver(jactlContext, Map.of(), scriptClass.location);
+    Parser         parser      = new Parser(new Tokeniser(source), jactlContext, packageName);
+    Stmt.ClassDecl scriptClass = parser.parseClass();
+    Resolver       resolver    = new Resolver(jactlContext, Utils.mapOf(), scriptClass.location);
     resolver.resolveClass(scriptClass);
-    var analyser = new Analyser(jactlContext);
+    Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(scriptClass);
     compileClass(source, jactlContext, packageName, scriptClass);
   }
 
   static JactlScript compileWithCompletion(String source, JactlContext jactlContext, Stmt.ClassDecl script) {
-    var compiler = new ScriptCompiler(source, jactlContext, script);
+    ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script);
     return compiler.compileWithCompletion();
   }
 
   static void compileClass(String source, JactlContext jactlContext, String packageName, Stmt.ClassDecl clss) {
-    var compiler = new  ClassCompiler(source, jactlContext, packageName, clss, clss.name.getStringValue() + ".jactl");
+    ClassCompiler compiler = new  ClassCompiler(source, jactlContext, packageName, clss, clss.name.getStringValue() + ".jactl");
     compiler.compileClass();
   }
 }

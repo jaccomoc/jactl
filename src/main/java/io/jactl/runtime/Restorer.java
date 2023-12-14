@@ -83,7 +83,7 @@ public class Restorer {
     if (typeOrd == JactlType.TypeEnum.NULL_TYPE.ordinal()) {
       return null;
     }
-    var type = JactlType.valueOf(JactlType.TypeEnum.values()[typeOrd]);
+    JactlType type = JactlType.valueOf(JactlType.TypeEnum.values()[typeOrd]);
     if (type.is(ARRAY)) {
       return JactlType.arrayOf(readType());
     }
@@ -98,7 +98,7 @@ public class Restorer {
     if (typeOrd == JactlType.TypeEnum.NULL_TYPE.ordinal()) {
       return;
     }
-    var type = JactlType.TypeEnum.values()[typeOrd];
+    JactlType.TypeEnum type = JactlType.TypeEnum.values()[typeOrd];
     if (type == JactlType.TypeEnum.ARRAY) {
       skipType();
     }
@@ -186,8 +186,8 @@ public class Restorer {
     return num;
   }
 
-  private StringBuilder readStringBuilder() {
-    return new StringBuilder(readString());
+  private StringBuffer readStringBuffer() {
+    return new StringBuffer(readString());
   }
 
   private String readString() {
@@ -237,7 +237,7 @@ public class Restorer {
       // references.
       switch (JactlType.TypeEnum.values()[ordinal]) {
         case STRING:         result = readString();                                    break;
-        case STRING_BUILDER: result = readStringBuilder();                             break;
+        case STRING_BUFFER:  result = readStringBuffer();                             break;
         case MAP:            result = add.apply(new LinkedHashMap<>());                break;
         case LIST:           result = add.apply(new ArrayList<>());                    break;
         case INSTANCE:       result = add.apply(createInstance());                     break;
@@ -348,9 +348,9 @@ public class Restorer {
 
   public Object createArray() {
     int numDimensions = buf[idx++];
-    int[] dimensions = new int[numDimensions];
-    var type = readType();
-    int   size    = readCint();
+    int[]     dimensions = new int[numDimensions];
+    JactlType type       = readType();
+    int       size       = readCint();
     dimensions[0] = size;
     switch (type.getType()) {
       case BOOLEAN:    return Array.newInstance(boolean.class, dimensions);
@@ -368,8 +368,8 @@ public class Restorer {
   }
 
   private void restoreArray(Object arr) {
-    int numDimensions = buf[idx++];
-    var type = readType();
+    int       numDimensions = buf[idx++];
+    JactlType type          = readType();
     if (numDimensions == 1) {
       switch (type.getType()) {
         case BOOLEAN:    readBooleanArr((boolean[])arr);     break;

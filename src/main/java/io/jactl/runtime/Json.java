@@ -21,14 +21,14 @@ public class Json {
 
   public static Object toJsonData;
   public static String toJson(Object obj, String source, int offset) {
-    var buf = JsonEncoder.get(source, offset);
+    JsonEncoder buf = JsonEncoder.get(source, offset);
     buf.writeObj(obj);
     return buf.finalise();
   }
 
   public static Object fromJsonData;
   public static Object fromJson(String str, String source, int offset) {
-    var decoder = JsonDecoder.get(str, source, offset);
+    JsonDecoder decoder = JsonDecoder.get(str, source, offset);
     return decoder.decode();
   }
 
