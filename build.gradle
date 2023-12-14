@@ -49,6 +49,8 @@ tasks.withType(JavaCompile) { options.deprecation = true }
 java {
     withJavadocJar()
     withSourcesJar()
+    sourceCompatibility = "1.8"
+    targetCompatibility = "1.8"
 }
 
 test { useJUnitPlatform() }
