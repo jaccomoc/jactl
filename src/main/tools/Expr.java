@@ -77,7 +77,7 @@ class Expr {
   // Whether expression is a direct function call (and not a closure)
   public boolean isFunctionCall() {
     if (!(this instanceof Expr.Identifier)) { return false; }
-    var ident = (Expr.Identifier)this;
+    Identifier ident = (Expr.Identifier)this;
     return ident.varDecl.type.is(JactlType.FUNCTION) && ident.varDecl.funDecl != null;
   }
 
