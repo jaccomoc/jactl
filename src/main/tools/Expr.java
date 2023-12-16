@@ -105,6 +105,17 @@ class Expr {
     return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.THIS_VAR);
   }
 
+  // True if Literal or Identifier so does not require much code generation. Used in match expressions to
+  // determine whether we can duplicate the code for the result when there are multiple patterns that give
+  // the same result.
+  public boolean isSimple() {
+    return this instanceof Expr.Literal || this instanceof Expr.Identifier;
+  }
+
+  public boolean isLiteral() {
+    return this instanceof Literal || this instanceof ListLiteral || this instanceof MapLiteral;
+  }
+
   class Binary extends Expr {
     Expr  left;
     Token operator;
@@ -311,14 +322,6 @@ class Expr {
     // no variables we close over are declared after that reference
     Token @earliestForwardReference;
 
-    // Keep track of maximum number of locals needed so we know how big an array to
-    // allocate for capturing our state if we suspend
-    int          @localsCnt = 0;
-    int          @maxLocals = 0;
-
-    void allocateLocals(int n) { localsCnt += n; maxLocals = maxLocals > localsCnt ? maxLocals : localsCnt; }
-    void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0;}
-
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
@@ -438,6 +441,25 @@ class Expr {
     Token      token;
     Stmt.Block block;
     boolean    resultIsTrue;     // for "do" blocks always return true
+  }
+
+  /**
+   * Switch statement
+   */
+  class Switch extends Expr {
+    Token            matchToken;
+    Expr             subject;
+    List<SwitchCase> cases;
+    Expr             defaultCase;
+    VarDecl          @itVar;
+    Stmt.Block       @block;     // Need a block for tracking it var
+  }
+
+  class SwitchCase extends Expr {
+    List<Expr> patterns;
+    Expr       result;
+    Stmt.Block @block;          // Need a block for captured regex and destructured vars
+    Expr       @switchSubject;  // Need to know type of switch expression for binding variables
   }
 
   /**
@@ -576,5 +598,13 @@ class Expr {
   class SpecialVar extends Expr {
     Token   name;          // $source or $offset (Utils.SOURCE_VAR_NAME, Utils.OFFSET_VAR_NAME)
     FunDecl @function;     // Our current function
+  }
+
+  /**
+   * Cast existing stack value (used in Match expression to convert results to the right type)
+   */
+  class StackCast extends Expr {
+    Token     token;
+    JactlType castType;
   }
 }

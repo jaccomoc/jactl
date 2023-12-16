@@ -371,6 +371,10 @@ public class JactlType {
     return this;
   }
 
+  /**
+   * Type of elements in the array
+   * @return the element type
+   */
   public JactlType getArrayType() { return arrayType; }
 
   ///////////////////////////////////////
@@ -551,6 +555,8 @@ public class JactlType {
   }
 
   public static JactlType commonSuperType(JactlType type1, JactlType type2) {
+    if (type1 == null)                                                  { return type2;  }
+    if (type2 == null)                                                  { return type1;  }
     if (type1.equals(type2))                                            { return type1;  }
     if (type1.is(CLASS) && type2.is(CLASS))                             { return CLASS;  }
     if (type1.is(CLASS) || type2.is(CLASS))                             { return ANY;    }

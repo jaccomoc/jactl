@@ -48,17 +48,6 @@ import static io.jactl.JactlType.INSTANCE;
  *   discarded. By storing state in local vars instead of the stack we can then preserve
  *   these local variables in the Continuation object for later restoration after resume.
  * </li>
- * <li>
- *   NOT USED: Counting how many local slots and maximum stack size is needed per method. This
- *   allows us to work out how big an array we need for storing the local values if/when
- *   we suspend and we need to save our state. Note: we just track the expression results
- *   and local vars and then allow a "safety margin" of (at the moment) 10 additional values
- *   that might get pushed onto stack as part of a function call that the expression might
- *   invoke as part of its implementation.
- *   <p>NOTE: we don't use this functionality at the moment since we do the counting instead
- *      in the MethodCompiler phase but leaving this code here just in case we need it one
- *      day.</p>
- * </li>
  * </ul>
  * <h2>Two Passes</h2>
  * <p>
@@ -141,12 +130,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       try {
         currentExpr.push(expr);
         expr.accept(this);
-        if (getFunctions().peek() != null) {
-          allocateLocals(1);  // For the result
-          if (!expr.isResultUsed) {
-            freeLocals(1);    // Result not used
-          }
-        }
         return null;
       }
       finally {
@@ -175,6 +158,26 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Expr
 
+
+  @Override public Void visitStackCast(Expr.StackCast expr) {
+    return null;
+  }
+
+  @Override public Void visitSwitch(Expr.Switch expr) {
+    analyse(expr.subject);
+    expr.cases.forEach(this::analyse);
+    if (expr.defaultCase != null) {
+      analyse(expr.defaultCase);
+    }
+    return null;
+  }
+
+  @Override
+  public Void visitSwitchCase(Expr.SwitchCase expr) {
+    expr.patterns.forEach(p -> analyse(p));
+    analyse(expr.result);
+    return null;
+  }
 
   @Override public Void visitExprList(Expr.ExprList expr) {
     throw new UnsupportedOperationException("Internal error: expression lists not supported");
@@ -209,7 +212,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       async(expr);
     }
 
-    freeLocals(1 + expr.args.size());
     return null;
   }
 
@@ -235,7 +237,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // invoking through a function value or when doing run-time lookup of the method name
       async(expr);
     }
-    freeLocals(1 + expr.args.size());
     return null;
   }
 
@@ -256,15 +257,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         async(expr);
       }
     }
-
-    freeLocals(2);       // Two input values
     return null;
   }
 
   @Override public Void visitRegexMatch(Expr.RegexMatch expr) {
     analyse(expr.string);
     analyse(expr.pattern);
-    freeLocals(expr.string == null ? 1 : 2);
     return null;
   }
 
@@ -272,7 +270,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.string);
     analyse(expr.pattern);
     analyse(expr.replace);
-    freeLocals(3);     // 3 input values
     return null;
   }
 
@@ -280,25 +277,21 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.first);
     analyse(expr.second);
     analyse(expr.third);
-    freeLocals(3);     // 3 input values
     return null;
   }
 
   @Override public Void visitPrefixUnary(Expr.PrefixUnary expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
   @Override public Void visitPostfixUnary(Expr.PostfixUnary expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
   @Override public Void visitCast(Expr.Cast expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
@@ -307,10 +300,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitListLiteral(Expr.ListLiteral expr) {
-    expr.exprs.forEach(e -> {
-      analyse(e);
-      freeLocals(1);
-    });
+    expr.exprs.forEach(e -> analyse(e));
     return null;
   }
 
@@ -318,7 +308,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expr.entries.forEach(entry -> {
       analyse(entry.first);
       analyse(entry.second);
-      freeLocals(2);
     });
     return null;
   }
@@ -330,19 +319,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitExprString(Expr.ExprString expr) {
     expr.exprList.forEach(e -> {
       analyse(e);
-      freeLocals(1);
     });
     return null;
   }
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
     analyse(expr.initialiser);
-    if (expr.initialiser != null) {
-      freeLocals(1);
-    }
-    if (!expr.isGlobal) {
-      allocateLocals(1);
-    }
     return null;
   }
 
@@ -361,7 +343,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     getFunctions().push(expr);
     debug("+ Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
     analyse(expr.block);
-    assert funDecl.localsCnt == 0;
     getFunctions().pop();
     debug("- Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
 
@@ -380,10 +361,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.functionDescriptor.isAsync != null && expr.functionDescriptor.isAsync) {
         funDecl.functionDescriptor.isAsync = true;
       }
-
-      if (expr.varDecl != null && !expr.varDecl.isGlobal) {
-        allocateLocals(1);
-      }
     }
 
     return null;
@@ -395,14 +372,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!expr.expr.isNull() && expr.type.is(INSTANCE)) {
       asyncIfTypeIsAsync(expr);
     }
-    freeLocals(2);
     return null;
   }
 
   @Override public Void visitVarOpAssign(Expr.VarOpAssign expr) {
     analyse(expr.identifierExpr);
     analyse(expr.expr);
-    freeLocals(2);
     return null;
   }
 
@@ -413,7 +388,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!expr.expr.isNull() && expr.type.is(INSTANCE)) {
       asyncIfTypeIsAsync(expr);
     }
-    freeLocals(3);
     return null;
   }
 
@@ -421,7 +395,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
-    freeLocals(3);
     return null;
   }
 
@@ -431,7 +404,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitClosure(Expr.Closure expr) {
     analyse(expr.funDecl);
-    freeLocals(1);
     return null;
   }
 
@@ -447,7 +419,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
       }
     }
-    freeLocals(1);
     return null;
   }
 
@@ -456,20 +427,17 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitPrint(Expr.Print expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
   @Override public Void visitDie(Expr.Die expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
   @Override public Void visitEval(Expr.Eval expr) {
     analyse(expr.script);
     analyse(expr.globals);
-    freeLocals(expr.globals == null ? 1 : 2);
     async(expr);
     return null;
   }
@@ -479,45 +447,38 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!expr.resultIsTrue) {
       // Our result will be result of last statement in block so compensate for additional slot
       // created for us by adjusting automatic tally
-      freeLocals(1);
     }
     return null;
   }
 
   @Override public Void visitArrayLength(Expr.ArrayLength expr) {
     analyse(expr.array);
-    freeLocals(1);
     return null;
   }
 
   @Override public Void visitArrayGet(Expr.ArrayGet expr) {
     analyse(expr.array);
     analyse(expr.index);
-    freeLocals(2);
     return null;
   }
 
   @Override public Void visitLoadParamValue(Expr.LoadParamValue expr) {
     analyse(expr.paramDecl);
-    freeLocals(1);
     return null;
   }
 
   @Override public Void visitInvokeFunDecl(Expr.InvokeFunDecl expr) {
     expr.args.forEach(this::analyse);
-    freeLocals(expr.args.size());
     return null;
   }
 
   @Override public Void visitInvokeUtility(Expr.InvokeUtility expr) {
     expr.args.forEach(this::analyse);
-    freeLocals(expr.args.size());
     return null;
   }
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
     expr.dimensions.forEach(this::analyse);
-    freeLocals(expr.dimensions.size());
     return null;
   }
 
@@ -533,7 +494,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInstanceOf(Expr.InstanceOf expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
@@ -561,8 +521,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.expr.isAsync) {
       async(expr);
     }
-
-    freeLocals(3);
     return null;
   }
 
@@ -580,14 +538,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         async(expr);
       }
     }
-
-    freeLocals(expr.args.size());
     return null;
   }
 
   @Override public Void visitCheckCast(Expr.CheckCast expr) {
     analyse(expr.expr);
-    freeLocals(1);
     return null;
   }
 
@@ -606,13 +561,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitBlock(Stmt.Block stmt) {
     analyse(stmt.stmts);
     int nonGlobals = (int)stmt.variables.values().stream().filter(v -> !v.isGlobal).count();
-    freeLocals(nonGlobals);
     return null;
   }
 
   @Override public Void visitIf(Stmt.If stmt) {
     analyse(stmt.condition);
-    freeLocals(1);
     analyse(stmt.trueStmt);
     analyse(stmt.falseStmt);
     return null;
@@ -643,7 +596,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitWhile(Stmt.While stmt) {
     analyse(stmt.condition);
-    freeLocals(1);
     analyse(stmt.updates);
     analyse(stmt.body);
     return null;
@@ -651,7 +603,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitReturn(Stmt.Return stmt) {
     analyse(stmt.expr);
-    freeLocals(1);
     return null;
   }
 
@@ -663,7 +614,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitThrowError(Stmt.ThrowError stmt) {
     analyse(stmt.source);
     analyse(stmt.offset);
-    freeLocals(2);
     return null;
   }
 
@@ -951,17 +901,5 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private Deque<Expr.FunDecl> getFunctions() {
     return classStack.peek().nestedFunctions;
-  }
-
-  private void freeLocals(int n) {
-    if (getFunctions().peek() != null) {
-      getFunctions().peek().freeLocals(n);
-    }
-  }
-
-  private void allocateLocals(int n) {
-    if (getFunctions().peek() != null) {
-      getFunctions().peek().allocateLocals(n);
-    }
   }
 }

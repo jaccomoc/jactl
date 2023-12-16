@@ -65,7 +65,7 @@ When executing such a function, the script will be suspended and when the blocki
 the script execution state is resumed from the point at which it was suspended.
 This is done via an internal _continuation_ mechanism.
 
-Script writers can write their code as though it blocks and do not have to be concerned about which functions are
+Script-writers can write their code as though it blocks and do not have to be concerned about which functions are
 asynchronous and which are synchronous or have to jump through the normal asynchronous programming hoops with the
 use of callbacks to be invoked after a long-running operation completes.
 

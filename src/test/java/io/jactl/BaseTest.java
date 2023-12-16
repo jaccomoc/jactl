@@ -294,7 +294,8 @@ public class BaseTest {
                                                  : new ExprDecorator(
         expr -> {
           assert expr != null;
-          if (expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
+          if (expr instanceof Expr.Block && !((Expr.Block) expr).resultIsTrue ||
+              expr instanceof Expr.VarDecl || expr instanceof Expr.Noop ||
               expr instanceof Expr.TypeExpr || expr instanceof Expr.FunDecl ||
               expr instanceof Expr.MapLiteral && ((Expr.MapLiteral)expr).isNamedArgs ||
               expr instanceof Expr.Binary && ((Expr.Binary)expr).createIfMissing ||

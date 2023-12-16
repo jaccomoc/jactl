@@ -103,6 +103,17 @@ abstract class Expr {
     return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.THIS_VAR);
   }
 
+  // True if Literal or Identifier so does not require much code generation. Used in match expressions to
+  // determine whether we can duplicate the code for the result when there are multiple patterns that give
+  // the same result.
+  public boolean isSimple() {
+    return this instanceof Expr.Literal || this instanceof Expr.Identifier;
+  }
+
+  public boolean isLiteral() {
+    return this instanceof Literal || this instanceof ListLiteral || this instanceof MapLiteral;
+  }
+
   static class Binary extends Expr {
     Expr  left;
     Token operator;
@@ -430,14 +441,6 @@ abstract class Expr {
     // no variables we close over are declared after that reference
     Token earliestForwardReference;
 
-    // Keep track of maximum number of locals needed so we know how big an array to
-    // allocate for capturing our state if we suspend
-    int          localsCnt = 0;
-    int          maxLocals = 0;
-
-    void allocateLocals(int n) { localsCnt += n; maxLocals = maxLocals > localsCnt ? maxLocals : localsCnt; }
-    void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0;}
-
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
@@ -669,6 +672,40 @@ abstract class Expr {
     }
     @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
     @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + ", " + "resultIsTrue=" + resultIsTrue + "]"; }
+  }
+
+  /**
+   * Switch statement
+   */
+  static class Switch extends Expr {
+    Token            matchToken;
+    Expr             subject;
+    List<SwitchCase> cases;
+    Expr             defaultCase;
+    VarDecl          itVar;
+    Stmt.Block       block;     // Need a block for tracking it var
+    Switch(Token matchToken, Expr subject, List<SwitchCase> cases, Expr defaultCase) {
+      this.matchToken = matchToken;
+      this.subject = subject;
+      this.cases = cases;
+      this.defaultCase = defaultCase;
+      this.location = matchToken;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitSwitch(this); }
+    @Override public String toString() { return "Switch[" + "matchToken=" + matchToken + ", " + "subject=" + subject + ", " + "cases=" + cases + ", " + "defaultCase=" + defaultCase + "]"; }
+  }
+
+  static class SwitchCase extends Expr {
+    List<Expr> patterns;
+    Expr       result;
+    Stmt.Block block;          // Need a block for captured regex and destructured vars
+    Expr       switchSubject;  // Need to know type of switch expression for binding variables
+    SwitchCase(List<Expr> patterns, Expr result) {
+      this.patterns = patterns;
+      this.result = result;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitSwitchCase(this); }
+    @Override public String toString() { return "SwitchCase[" + "patterns=" + patterns + ", " + "result=" + result + "]"; }
   }
 
   /**
@@ -918,6 +955,21 @@ abstract class Expr {
     @Override public String toString() { return "SpecialVar[" + "name=" + name + "]"; }
   }
 
+  /**
+   * Cast existing stack value (used in Match expression to convert results to the right type)
+   */
+  static class StackCast extends Expr {
+    Token     token;
+    JactlType castType;
+    StackCast(Token token, JactlType castType) {
+      this.token = token;
+      this.castType = castType;
+      this.location = token;
+    }
+    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitStackCast(this); }
+    @Override public String toString() { return "StackCast[" + "token=" + token + ", " + "castType=" + castType + "]"; }
+  }
+
   interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
@@ -949,6 +1001,8 @@ abstract class Expr {
     T visitDie(Die expr);
     T visitEval(Eval expr);
     T visitBlock(Block expr);
+    T visitSwitch(Switch expr);
+    T visitSwitchCase(SwitchCase expr);
     T visitTypeExpr(TypeExpr expr);
     T visitExprList(ExprList expr);
     T visitArrayLength(ArrayLength expr);
@@ -963,5 +1017,6 @@ abstract class Expr {
     T visitCheckCast(CheckCast expr);
     T visitConvertTo(ConvertTo expr);
     T visitSpecialVar(SpecialVar expr);
+    T visitStackCast(StackCast expr);
   }
 }

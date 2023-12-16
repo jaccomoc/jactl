@@ -50,8 +50,9 @@ public class Parser {
   Deque<Stmt.ClassDecl> classes     = new ArrayDeque<>();
   boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
   String                packageName = null;
-  JactlContext          context;
-  int                   uniqueVarCnt = 0;
+  JactlContext context;
+  boolean      inPatternMatch       = false;   // Whether parsing case pattern
+  int          uniqueVarCnt         = 0;
 
   // Whether we are currently doing a lookahead in which case we don't bother keeping
   // track of state such as functions declared per block and nested functions.
@@ -354,24 +355,22 @@ public class Parser {
    */
   private Stmt statement() {
     matchAny(EOL);
-    // Special case of a Map literal as an expression statement
-    if (peek().is(LEFT_BRACE)) {
-      if (isMapLiteral()) {
-        return exprStmt();
-      }
-    }
-    if (isAtScriptTopLevel() && matchAny(BEGIN,END))  { return beginEndBlock();          }
-    if (matchAny(IF))                                 { return ifStmt();                 }
-    if (matchAny(WHILE))                              { return whileStmt(null);  }
-    if (matchAny(FOR))                                { return forStmt(null);    }
-    if (peek().is(SEMICOLON))                         { return null;                     }
-    // Check for LABEL: while/for
-    if (peek().is(IDENTIFIER) && lookaheadNoEOL(IDENTIFIER, COLON)) {
-      Token label = expect(IDENTIFIER);
-      expect(COLON);
-      if (matchAnyIgnoreEOL(WHILE))                   { return whileStmt(label);         }
-      if (matchAnyIgnoreEOL(FOR))                     { return forStmt(label);           }
-      unexpected("Labels can only be applied to for/while statements");
+    switch (peek().getType()) {
+      case LEFT_BRACE:        if (isMapLiteral())       return exprStmt();      break;
+      case BEGIN: case END:   if (isAtScriptTopLevel()) return beginEndBlock(); break;
+      case IF:                return ifStmt();
+      case WHILE:             return whileStmt(null);
+      case FOR:               return forStmt(null);
+      case SEMICOLON:         return null;
+      case IDENTIFIER:        if (lookaheadNoEOL(IDENTIFIER, COLON)) {
+                                Token label = expect(IDENTIFIER);
+                                expect(COLON);
+                                matchAny(EOL);
+                                if (peek().is(WHILE)) return whileStmt(label);
+                                if (peek().is(FOR))   return forStmt(label);
+                                unexpected("Labels can only be applied to for/while statements");
+                              }
+                              break;
     }
 
     Stmt.ExprStmt stmt = exprStmt();
@@ -601,11 +600,15 @@ public class Parser {
   }
 
   private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl) {
+    return new Stmt.VarDecl(identifier, createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl));
+  }
+
+  private Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl) {
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
     varDecl.isField = inClassDecl;
-    return new Stmt.VarDecl(identifier, varDecl);
+    return varDecl;
   }
 
   private static Expr.Binary asExpr(JactlType type, Expr expr) {
@@ -687,7 +690,7 @@ public class Parser {
    * </pre>
    */
   private Stmt.If ifStmt() {
-    Token ifToken = previous();
+    Token ifToken = expect(IF);
     expect(LEFT_PAREN);
     Expr cond      = condition(true, RIGHT_PAREN);
     Stmt trueStmt  = statement();
@@ -705,7 +708,7 @@ public class Parser {
    *# whileStmt -&gt; (IDENTIFIER ":" ) ? "while" "(" expression ")" statement ;
    */
   private Stmt whileStmt(Token label) {
-    Token whileToken = previous();
+    Token whileToken = expect(WHILE);
     expect(LEFT_PAREN);
     Expr       cond      = condition(false, RIGHT_PAREN);
     Stmt.While whileStmt = new Stmt.While(whileToken, cond, label);
@@ -720,7 +723,7 @@ public class Parser {
    * </pre>
    */
   private Stmt forStmt(Token label) {
-    Token forToken = previous();
+    Token forToken = expect(FOR);
     expect(LEFT_PAREN);
     matchAny(EOL);
     Stmt initialisation;
@@ -780,7 +783,7 @@ public class Parser {
    * </pre>
    */
   Stmt.Block beginEndBlock() {
-    Token blockType = previous();
+    Token blockType = expect(BEGIN, END);
     expect(LEFT_BRACE);
     Stmt.Block block = block(previous(), RIGHT_BRACE);
     block.isBeginBlock = blockType.is(BEGIN);
@@ -1091,6 +1094,23 @@ public class Parser {
         rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
       }
 
+      // For List/Map literals that are constant values (no expressions) we compile as class
+      // static consts if they are used in contexts where it is obvious that the values won't
+      // be mutated:
+      // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
+      if (operator.is(IN,BANG_IN,EQUAL_EQUAL,BANG_EQUAL_EQUAL,TRIPLE_EQUAL,BANG_EQUAL_EQUAL,LEFT_SQUARE,QUESTION_SQUARE)) {
+        if (expr.isLiteral() && isConstListOrMap(expr)) {
+          expr.isConst = true;
+          expr.constValue = literalValue(expr);
+          addClassConstant(expr);
+        }
+        if (rhs.isLiteral() && isConstListOrMap(rhs)) {
+          rhs.isConst = true;
+          rhs.constValue = literalValue(rhs);
+          addClassConstant(rhs);
+        }
+      }
+
       // Check for lvalue for assignment operators
       if (operator.getType().isAssignmentLike()) {
         expr = convertToLValue(expr, operator, rhs, false, true);
@@ -1225,7 +1245,7 @@ public class Parser {
    * </pre>
    */
   private Expr newInstance() {
-    Token     token = previous();
+    Token     token = expect(NEW);
     JactlType type  = type(true, true, false);   // get the type and ignore the square brackets for now
     if (type.is(JactlType.INSTANCE)) {
       if (matchAnyIgnoreEOL(LEFT_PAREN)) {
@@ -1332,37 +1352,53 @@ public class Parser {
    *#          | "(" nestedExpr ")"
    *#          | "do" "{" block "}"
    *#          | "{" closure "}"
+   *#          | switchExpr
    *#          | evalExpr
    *#          | newInstance
+   *#          | (type | type IDENTIFIER)    // only in switch pattern
    *#          ;
    * </pre>
    */
   private Expr primary() {
     Token prev = previous();
     matchAny(EOL);
-    if (isPlusMinusNumber())                               { return getPlusMinusNumber();                 }
-    if (matchAny(BYTE_CONST, INTEGER_CONST, LONG_CONST,
-                 DECIMAL_CONST, DOUBLE_CONST,
-                 STRING_CONST, TRUE, FALSE, NULL))         { return literal(prev, previous());            }
-    if (peek().is(SLASH, SLASH_EQUAL, EXPR_STRING_START))  { return exprString();                         }
-    if (matchAny(REGEX_SUBST_START))                       { return regexSubstitute();                    }
-    if (peek().is(IDENTIFIER))                             { return classPathOrIdentifier();              }
-    if (peek().is(LEFT_SQUARE,LEFT_BRACE))                 { if (isMapLiteral()) { return mapLiteral(); } }
-    if (matchAny(LEFT_SQUARE))                             { return listLiteral();                        }
-    if (matchAny(LEFT_PAREN))                              { return nestedExpr();                         }
-    if (matchAny(LEFT_BRACE))                              { return closure();                            }
-    if (matchAny(EVAL))                                    { return evalExpr();                           }
-    if (matchAny(NEW))                                     { return newInstance();                        }
-    if (matchAny(DO)) {
-      matchAny(EOL);
-      Token leftBrace = expect(LEFT_BRACE);
-      return new Expr.Block(leftBrace, block(RIGHT_BRACE), true);
+    switch (peek().getType()) {
+      case PLUS:          case MINUS:
+      case BYTE_CONST:    case INTEGER_CONST: case TRUE:
+      case DECIMAL_CONST: case DOUBLE_CONST:  case FALSE:
+      case STRING_CONST:  case LONG_CONST:    case NULL:     return literal(prev);
+
+      case SLASH: case SLASH_EQUAL: case EXPR_STRING_START:  return exprString();
+      case REGEX_SUBST_START:                                return regexSubstitute();
+      case IDENTIFIER: case UNDERSCORE: case STAR:           return classPathOrIdentifier();
+      case LEFT_BRACE:                                       return mapLiteralOrClosure();
+      case LEFT_SQUARE:                                      return mapOrListLiteral();
+      case LEFT_PAREN:                                       return nestedExpr();
+      case EVAL:                                             return evalExpr();
+      case NEW:                                              return newInstance();
+      case DO:                                               return doBlock();
+      case SWITCH:                                           return switchExpr();
     }
+
+    if (inPatternMatch && isType()) {
+      return typeOrVarDecl();
+    }
+
     if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
       // Allow keywords to be used in dotted paths. E.g: x.y.while.z
       return new Expr.Literal(new Token(STRING_CONST, advance()).setValue(previous().getChars()));
     }
     return unexpected("Expected start of expression");
+  }
+
+  /**
+   *# doBlock -&gt; "do" "{" block "}"
+   */
+  Expr doBlock() {
+    expect(DO);
+    matchAny(EOL);
+    Token leftBrace = expect(LEFT_BRACE);
+    return new Expr.Block(leftBrace, block(RIGHT_BRACE), true);
   }
 
   /**
@@ -1372,7 +1408,7 @@ public class Parser {
    * Comma-separated expressions can be used in LHS of multi-assignments.
    */
   private Expr nestedExpr() {
-    Token      lparen = previous();
+    Token      lparen = expect(LEFT_PAREN);
     List<Expr> exprs    = new ArrayList<>();
     // Keep building list while we have COMMA
     do {
@@ -1390,16 +1426,37 @@ public class Parser {
     return new Expr.ExprList(lparen, exprs);
   }
 
-  private Expr.Literal literal(Token previous, Token current) {
-    if (previous != null && previous.is(DOT,QUESTION_DOT) && current.is(NULL)) {
+  private Expr.Literal literal(Token previous) {
+    if (previous != null && previous.is(DOT,QUESTION_DOT) && peek().is(NULL)) {
       // Special case for 'null' when used as field name
-      current = current.newLiteral("null");
+      Token current = expect(NULL);
+      return new Expr.Literal(current.newLiteral("null"));
+    }
+    return literal();
+  }
+
+  private Expr.Literal literal() {
+    Token current = advance();
+    if (current.is(PLUS,MINUS)) {
+      return getPlusMinusNumber();
     }
     return new Expr.Literal(current);
   }
 
+  private boolean isLiteral() {
+    switch (peek().getType()) {
+      case PLUS:          case MINUS:
+      case BYTE_CONST:    case INTEGER_CONST: case TRUE:
+      case DECIMAL_CONST: case DOUBLE_CONST:  case FALSE:
+      case STRING_CONST:  case LONG_CONST:    case NULL:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   private Expr.Literal getPlusMinusNumber() {
-    Token sign = expect(PLUS,MINUS);
+    Token sign = previous();
     Token num  = expect(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
     if (sign.is(MINUS)) {
       num = new Token(num.getType(), num).setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
@@ -1421,7 +1478,20 @@ public class Parser {
         return classPath;
       }
     }
-    return new Expr.Identifier(expect(IDENTIFIER));
+    if (inPatternMatch) {
+      return identifier(IDENTIFIER, UNDERSCORE, STAR);
+    }
+    return identifier(IDENTIFIER);
+  }
+
+  /**
+   * <pre>
+   *#  identifier -&gt; IDENTIFIER | "_" | "*"
+   * </pre>
+   */
+  private Expr identifier(TokenType... tokenTypes) {
+    Token token = expect(tokenTypes);
+    return new Expr.Identifier(token);
   }
 
   /**
@@ -1503,13 +1573,21 @@ public class Parser {
     return className;
   }
 
+  private Expr mapOrListLiteral() {
+    if (isMapLiteral()) {
+      return mapLiteral();
+    }
+    return listLiteral();
+  }
+
   /**
    * <pre>
    *# listLiteral -&gt; "[" ( expression ( "," expression ) * ) ? "]"
    * </pre>
    */
   private Expr.ListLiteral listLiteral() {
-    Expr.ListLiteral expr = new Expr.ListLiteral(previous());
+    Token start = expect(LEFT_SQUARE);
+    Expr.ListLiteral expr = new Expr.ListLiteral(start);
     while (!matchAnyIgnoreEOL(RIGHT_SQUARE)) {
       if (expr.exprs.size() > 0) {
         expect(COMMA);
@@ -1517,6 +1595,14 @@ public class Parser {
       expr.exprs.add(expression(true));
     }
     return expr;
+  }
+
+  private Expr mapLiteralOrClosure() {
+    if (isMapLiteral()) {
+      return mapLiteral();
+    }
+    expect(LEFT_BRACE);
+    return closure();
   }
 
   /**
@@ -1533,7 +1619,8 @@ public class Parser {
   private Expr.MapLiteral mapLiteral() {
     expect(LEFT_SQUARE, LEFT_BRACE);
     TokenType endToken = previous().is(LEFT_BRACE) ? RIGHT_BRACE : RIGHT_SQUARE;
-    return mapEntries(endToken);
+    Expr.MapLiteral mapLiteral = mapEntries(endToken);
+    return mapLiteral;
   }
 
   private Expr.MapLiteral mapEntries(TokenType endToken) {
@@ -1558,11 +1645,12 @@ public class Parser {
         Expr   key       = mapKey();
         String keyString = null;
         if (key instanceof Expr.Literal) {
-          Object value = ((Expr.Literal) key).value.getValue();
+          Expr.Literal literal  = (Expr.Literal) key;
+          Object       value = literal.value.is(STAR) ? STAR.asString : literal.value.getValue();
           if (!(value instanceof String)) {
             error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location);
           }
-          keyString = ((Expr.Literal)key).value.getStringValue();
+          keyString = literal.value.getStringValue();
           if (literalKeyMap.containsKey(keyString)) {
             error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location);
           }
@@ -1572,8 +1660,11 @@ public class Parser {
             error("Invalid parameter name", previous());
           }
         }
-        expect(COLON);
-        Expr value = expression(true);
+        Expr value = null;
+        if (keyString == null || !keyString.equals(STAR.asString)) {
+          expect(COLON);
+          value = expression(true);
+        }
         expr.entries.add(new Pair(key, value));
         if (keyString != null) {
           literalKeyMap.put(keyString, value);
@@ -1596,23 +1687,24 @@ public class Parser {
    */
   private Expr mapKey() {
     matchAny(EOL);
-    if (matchAny(STRING_CONST,IDENTIFIER)) { return new Expr.Literal(previous()); }
-    if (peek().is(EXPR_STRING_START))      { return exprString(); }
-    if (peek().isKeyword())                { advance(); return new Expr.Literal(previous().newLiteral(previous().getChars())); }
-    if (matchAny(LEFT_PAREN)) {
-      Expr expr = expression(true);
-      expect(RIGHT_PAREN);
-      return expr;
+    Token token = peek();
+    switch (token.getType()) {
+      case STRING_CONST: case IDENTIFIER:    return new Expr.Literal(advance());
+      case EXPR_STRING_START:                return exprString();
+      case LEFT_PAREN:  {
+        advance();
+        Expr expr = expression(true);
+        expect(RIGHT_PAREN);
+        return expr;
+      }
     }
-    return null;
-  }
 
-  private Expr expectMapKey() {
-    Expr expr = mapKey();
-    if (expr == null) {
-      unexpected("Expected string or identifier");
+    if (peek().isKeyword()) {
+      advance();
+      return new Expr.Literal(previous().newLiteral(previous().getChars()));
     }
-    return expr;
+
+    return null;
   }
 
   /**
@@ -1625,6 +1717,24 @@ public class Parser {
    * For the / version we treat as a multi-line regular expression and don't support escape chars.
    */
   private Expr exprString() {
+    Token startToken = peek();
+    Expr exprString = parseExprString();
+    // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
+    // on our own somewhere. We build "it =~ /regex" and if we are actually part of "x =~ /regex/"
+    // our parent (parseExpression()) will convert back to "x =~ /regex/".
+    // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
+    // be a regular expression string then we will fix the problem then.
+    if (startToken.is(SLASH)) {
+      return new Expr.RegexMatch(new Expr.Identifier(startToken.newIdent(Utils.IT_VAR)),
+                                 new Token(EQUAL_GRAVE, startToken),
+                                 exprString,
+                                 previous().getStringValue(),   // modifiers
+                                 true);
+    }
+    return exprString;
+  }
+
+  private Expr.ExprString parseExprString() {
     Token startToken = expect(EXPR_STRING_START,SLASH,SLASH_EQUAL);
     Expr.ExprString exprString = new Expr.ExprString(startToken);
     if (startToken.is(EXPR_STRING_START)) {
@@ -1641,23 +1751,11 @@ public class Parser {
       // Tell tokeniser that the SLASH was actually the start of a regex expression string
       tokeniser.startRegex();
     }
-    parseExprString(exprString, EXPR_STRING_END);
-    // If regex then we don't know yet whether we are part of a "x =~ /regex/" or just a /regex/
-    // on our own somewhere. We build "it =~ /regex" and if we are actually part of "x =~ /regex/"
-    // our parent (parseExpression()) will convert back to "x =~ /regex/".
-    // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
-    // be a regular expression string then we will fix the problem then.
-    if (startToken.is(SLASH)) {
-      return new Expr.RegexMatch(new Expr.Identifier(startToken.newIdent(Utils.IT_VAR)),
-                                 new Token(EQUAL_GRAVE, startToken),
-                                 exprString,
-                                 previous().getStringValue(),   // modifiers
-                                 true);
-    }
+    doParseExprString(exprString, EXPR_STRING_END);
     return exprString;
   }
 
-  private void parseExprString(Expr.ExprString exprString, TokenType endToken) {
+  private void doParseExprString(Expr.ExprString exprString, TokenType endToken) {
     while (!matchAny(endToken)) {
       if (matchAny(STRING_CONST) && !previous().getStringValue().isEmpty()) {
         exprString.exprList.add(new Expr.Literal(previous()));
@@ -1685,11 +1783,11 @@ public class Parser {
    * </pre>
    */
   private Expr regexSubstitute() {
-    Token start = previous();
+    Token start = expect(REGEX_SUBST_START);
     Expr.ExprString pattern = new Expr.ExprString(previous());
-    parseExprString(pattern, REGEX_REPLACE);
+    doParseExprString(pattern, REGEX_REPLACE);
     Expr.ExprString replace = new Expr.ExprString(previous());
-    parseExprString(replace, EXPR_STRING_END);
+    doParseExprString(replace, EXPR_STRING_END);
 
     boolean isComplexReplacement = false;
 
@@ -1843,7 +1941,7 @@ public class Parser {
    * </pre>
    */
   private Expr.Eval evalExpr() {
-    Token evalToken = previous();
+    Token evalToken = expect(EVAL);
     expect(LEFT_PAREN);
     Expr script = parseExpression();
     Expr globals = null;
@@ -1854,7 +1952,212 @@ public class Parser {
     return new Expr.Eval(evalToken, script, globals);
   }
 
+  /**
+   *# switchExpr -&gt; "switch" ( "(" expr ")" ) ? "{" (switchPattern|"default") ( "=>" expr ( ";"? (switchPattern|"default") "=>" expr )* "}"
+   */
+  Expr.Switch switchExpr() {
+    Token matchToken = expect(SWITCH);
+    Expr subject = null;
+    if (matchAny(LEFT_PAREN)) {
+      subject = expression(true);
+      expect(RIGHT_PAREN);
+    }
+    else {
+      subject = new Expr.Identifier(matchToken.newIdent(Utils.IT_VAR));
+    }
+    expect(LEFT_BRACE);
+    Expr                  defaultCase = null;
+    List<Expr.SwitchCase> cases       = new ArrayList<>();
+    while (!matchAny(RIGHT_BRACE)) {
+      List<Expr> patterns = null;
+      if (matchAny(DEFAULT)) {
+        if (defaultCase != null) {
+          unexpected("cannot have multiple 'default' cases in switch expression");
+        }
+      }
+      else {
+        patterns = switchPatterns();
+      }
+      expect(EQUAL_ARROW);
+      Expr expr = expression();
+      if (expr instanceof Expr.Closure) {
+        Expr.Closure closure = (Expr.Closure) expr;
+        if (closure.noParamsDefined) {
+          // Treat closure as code block since no parameters defined
+          Stmt.Block block = closure.funDecl.block;
+          removeItParameter(block);
+          block = (Stmt.Block)setLastResultIsUsed(block);
+          expr = new Expr.Block(block.openBrace, block, false);
+        }
+      }
+      expr.isResultUsed = true;
+      if (patterns == null) {
+        defaultCase = expr;
+      }
+      else {
+        Expr.SwitchCase switchCase = new Expr.SwitchCase(patterns, expr);
+        switchCase.switchSubject = subject;
+        cases.add(switchCase);
+      }
+      matchAny(SEMICOLON, EOL);
+    }
+
+    // Make sure that patterns that are literals don't occur multiple times. Build a map that we won't use
+    // and use merge function to detect if key occurs multiple times.
+    cases.stream()
+         .flatMap(c -> c.patterns.stream())
+         .filter(expr -> expr.isConst)
+         .collect(Collectors.toMap(expr -> expr.constValue,
+                                   expr -> expr,
+                                   (expr1, expr2) -> error("Literal match occurs multiple times in switch: " + expr2.constValue, expr2.location)));
+    return new Expr.Switch(matchToken, subject, cases, defaultCase);
+  }
+
+  /**
+   *# switchPatterns -&gt; switchPattern
+   *#                 | matchLiteral ( "," matchLiteral ) * ;
+   */
+  private List<Expr> switchPatterns() {
+    List<Expr> patterns = new ArrayList<>();
+    do {
+      patterns.add(switchPattern());
+    } while (matchAny(COMMA));
+    if (patterns.size() > 1) {
+      patterns.stream().filter(p -> !(p.isLiteral() && p.isConst) && !(p instanceof Expr.TypeExpr)).findFirst().ifPresent(p -> {
+        error("Comma separated match cases only supported for simple literal values and type names", p.location);
+      });
+    }
+    return patterns;
+  }
+
+  /**
+   *# switchPattern -&gt; literal
+   *#                | type
+   *#                | expression
+   *#                | exprString
+   *#                | "_"
+   *#                | IDENTIFIER
+   */
+  private Expr switchPattern() {
+    Expr expr = null;
+    if (isLiteral()) {
+      expr = literal();
+      expr.isConst = true;
+      expr.constValue = literalValue(expr);
+    }
+    else if (peek().is(LEFT_SQUARE,LEFT_BRACE)) {
+      inPatternMatch = true;
+      expr = mapOrListLiteral();
+      if (isConstListOrMap(expr)) {
+        expr.isConst = true;
+        expr.constValue = literalValue(expr);
+        addClassConstant(expr);
+      }
+      else {
+        // Verify that the only non-literals are identifiers (for capture vars) or '_' or '*'
+        // and create VarDecl expressions for first use of each identifier.
+        validateListMapPattern(expr);
+      }
+      inPatternMatch = false;
+    }
+    else if (peek().is(SLASH)) {
+      Expr.RegexMatch regex = (Expr.RegexMatch)exprString();
+      expr = regex;
+      if (regex.modifiers.isEmpty()) {
+        // Not an actual regex, just a slashy string
+        expr = regex.pattern;
+      }
+    }
+    else if (isType()) {
+      expr = typeOrVarDecl();
+    }
+    else if (peek().is(UNDERSCORE)) {
+      expr = identifier(UNDERSCORE);
+    }
+    else if (matchAny(IDENTIFIER)) {
+      // Identifier on its own is a binding variable that will be set to it (the value of
+      // the switch expression). We make it of type ANY for the moment.
+      // During resolve phase where we know the type of the switch expression we use a more
+      // appropriate type.
+      expr = createVarDeclExpr(previous(), UNKNOWN, new Token(EQUAL, previous()), null, false);
+    }
+    else {
+      unexpected("Expect const or regex or type in match case");
+    }
+    return expr;
+  }
+
+  private Expr typeOrVarDecl() {
+    Expr  expr;
+    Token token = peek();
+    // We either have a type on its own or a type and an identifier for a binding variable
+    JactlType type = type(false, false, false);
+    if (matchAny(IDENTIFIER)) {
+      expr = createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false);
+    }
+    else {
+      // Is a type
+      expr = new Expr.TypeExpr(token, type);
+    }
+    return expr;
+  }
+
+  private boolean isType() {
+    return lookahead(() -> type(false, false, false) != null);
+  }
+
   /////////////////////////////////////////////////
+
+  private void validateListMapPattern(Expr expr) {
+    _validateListMapPattern(expr, new HashSet<>());
+  }
+
+  private Expr _validateListMapPattern(Expr expr, Set<String> bindingVars) {
+    if (expr instanceof Expr.ListLiteral) {
+      Expr.ListLiteral listExpr = (Expr.ListLiteral) expr;
+      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateListMapPattern(e, bindingVars)).collect(Collectors.toList());
+      listExpr.exprs.stream()
+                    .filter(e -> e instanceof Expr.Identifier && ((Expr.Identifier) e).identifier.is(STAR))
+                    .skip(1)
+                    .findFirst()
+                    .ifPresent(value -> error("'" + STAR.asString + "' can only appear once in a list/map pattern", value.location));
+      return listExpr;
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      Expr.MapLiteral mapLiteral = (Expr.MapLiteral)expr;
+      mapLiteral.entries = mapLiteral.entries.stream().map(pair -> {
+        if (!(pair.first instanceof Expr.Literal)) {
+          error("Expected string constant for map key", pair.first.location);
+        }
+        return Pair.create(pair.first, _validateListMapPattern(pair.second, bindingVars));
+      }).collect(Collectors.toList());
+      return mapLiteral;
+    }
+    if (expr instanceof Expr.Literal || expr instanceof Expr.TypeExpr) {
+      return expr;
+    }
+    if (expr instanceof Expr.VarDecl) {
+      String name = ((Expr.VarDecl) expr).name.getStringValue();
+      if (bindingVars.contains(name)) {
+        error("Binding variable '" + name + "' already declared in switch pattern", expr.location);
+      }
+      bindingVars.add(name);
+      return expr;
+    }
+    if (expr instanceof Expr.Identifier) {
+      // If first occurrence then create the VarDecl
+      Token name = ((Expr.Identifier) expr).identifier;
+      if (!name.is(UNDERSCORE,STAR)) {
+        if (!bindingVars.contains(name.getStringValue())) {
+          bindingVars.add(name.getStringValue());
+          expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false);
+        }
+      }
+      return expr;
+    }
+    error("Unexpected expression type in match case", expr.location);
+    return null;
+  }
 
   private Object ignoreNewLines(Supplier<Object> code) {
     boolean currentIgnoreEol = ignoreEol;
@@ -1989,6 +2292,14 @@ public class Parser {
       else {
         blockStack().peek().functions.add(funDecl);
       }
+    }
+  }
+
+  // Add a constant map/list that we will construct only once in class constructor
+  private void addClassConstant(Expr expr) {
+    assert expr.isConst;
+    if (expr instanceof Expr.ListLiteral || expr instanceof Expr.MapLiteral) {
+      classes.peek().classConstants.add(expr.constValue);
     }
   }
 
@@ -2244,6 +2555,7 @@ public class Parser {
     Token previous                   = previous();
     Token current                    = tokeniser.peek();
     boolean currentIgnoreEol         = ignoreEol;
+    boolean currentInPatternMatch    = inPatternMatch;
     List<CompileError> currentErrors = new ArrayList<>(errors);
 
     // Set flag so that we know not to collect state such as functions per block etc
@@ -2269,6 +2581,7 @@ public class Parser {
       errors        = currentErrors;
       lookaheadCount--;
       ignoreEol = currentIgnoreEol;
+      inPatternMatch = currentInPatternMatch;
     }
   }
 
@@ -2415,6 +2728,15 @@ public class Parser {
       @Override public Boolean visitPrint(Expr.Print expr)                 { return isSimple(expr.expr); }
       @Override public Boolean visitDie(Expr.Die expr)                     { return isSimple(expr.expr); }
 
+      @Override public Boolean visitSwitch(Expr.Switch expr) {
+        return isSimple(expr.subject) && expr.cases.stream().allMatch(this::isSimple);
+      }
+
+      @Override
+      public Boolean visitSwitchCase(Expr.SwitchCase expr) {
+        return expr.patterns.stream().allMatch(this::isSimple) && isSimple(expr.result);
+      }
+
       // These should never occur here since they are never created in Parser (only in Resolver)
       @Override public Boolean visitArrayLength(Expr.ArrayLength expr)       { return true; }
       @Override public Boolean visitArrayGet(Expr.ArrayGet expr)             { return true; }
@@ -2422,12 +2744,12 @@ public class Parser {
       @Override public Boolean visitInvokeNew(Expr.InvokeNew expr)           { return true; }
       @Override public Boolean visitDefaultValue(Expr.DefaultValue expr)     { return true; }
       @Override public Boolean visitCheckCast(Expr.CheckCast expr)           { return true; }
-
       @Override public Boolean visitInvokeFunDecl(Expr.InvokeFunDecl expr)   { return false; }
       @Override public Boolean visitInvokeInit(Expr.InvokeInit expr)         { return false; }
       @Override public Boolean visitInvokeUtility(Expr.InvokeUtility expr)   { return false; }
       @Override public Boolean visitConvertTo(Expr.ConvertTo expr)           { return false; }
       @Override public Boolean visitSpecialVar(Expr.SpecialVar expr)         { return false; }
+      @Override public Boolean visitStackCast(Expr.StackCast expr)           { return false; }
     });
   }
 
@@ -2640,6 +2962,108 @@ public class Parser {
       }
       setCreateIfMissing(binary.left);
     }
+  }
+
+  /**
+   * Check if a list or map is a constant
+   */
+  private boolean isConstListOrMap(Expr expr) {
+    if (expr instanceof Expr.Literal) {
+      return true;
+    }
+    if (expr instanceof Expr.ListLiteral) {
+      return ((Expr.ListLiteral) expr).exprs.stream().allMatch(this::isConstListOrMap);
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      return ((Expr.MapLiteral) expr).entries.stream().allMatch(entry -> isConstListOrMap(entry.first) &&
+                                                                         isConstListOrMap(entry.second));
+    }
+    return false;
+  }
+
+  /**
+   * Get the value of a constant expression (Literal or ListLiteral or MapLiteral)
+   * @param expr  the expression
+   * @return the constant value
+   */
+  private Object literalValue(Expr expr) {
+    if (expr instanceof Expr.Literal) {
+      return ((Expr.Literal) expr).value.getValue();
+    }
+    if (expr instanceof Expr.ListLiteral) {
+      return ((Expr.ListLiteral) expr).exprs.stream().map(this::literalValue).collect(Collectors.toList());
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      Map map = new LinkedHashMap();
+      ((Expr.MapLiteral) expr).entries.stream().forEach(pair -> map.put(literalValue(pair.first), literalValue(pair.second)));
+      return map;
+    }
+    error("Only constant values allowed for cases of match expressions", expr.location);
+    return null;
+  }
+
+  private Stmt setLastResultIsUsed(Stmt stmt) {
+    Supplier<Stmt> nullStmt = () -> new Stmt.ExprStmt(stmt.location, new Expr.Literal(new Token(NULL, stmt.location).setValue(null)));
+
+    return stmt.accept(new Stmt.Visitor<Stmt>() {
+      @Override public Stmt visitStmts(Stmt.Stmts stmt) {
+        if (stmt.stmts.isEmpty()) {
+          stmt.stmts.add(nullStmt.get());
+        }
+        int index = stmt.stmts.size() - 1;
+        stmt.stmts.set(index, setLastResultIsUsed(stmt.stmts.get(index)));
+        return stmt;
+      }
+
+      @Override public Stmt visitBlock(Stmt.Block stmt) {
+        // Special case for while block
+        if (stmt.stmts.stmts.stream().anyMatch(s -> s instanceof Stmt.While)) {
+          Stmt.Stmts stmts = new Stmt.Stmts();
+          stmts.stmts.add(stmt);
+          stmts.stmts.add(setLastResultIsUsed(nullStmt.get()));
+          return stmts;
+        }
+
+        stmt.stmts = (Stmt.Stmts)setLastResultIsUsed(stmt.stmts);
+        return stmt;
+      }
+
+      @Override public Stmt visitIf(Stmt.If stmt) {
+        stmt.trueStmt  = stmt.trueStmt == null ? nullStmt.get() : stmt.trueStmt;
+        stmt.falseStmt = stmt.falseStmt == null ? nullStmt.get() : stmt.falseStmt;
+        stmt.trueStmt  = setLastResultIsUsed(stmt.trueStmt);
+        stmt.falseStmt = setLastResultIsUsed(stmt.falseStmt);
+        return stmt;
+      }
+
+      @Override public Stmt visitClassDecl(Stmt.ClassDecl stmt) { return null; }
+      @Override public Stmt visitImport(Stmt.Import stmt)       { return null; }
+
+      @Override public Stmt visitVarDecl(Stmt.VarDecl stmt) {
+        stmt.declExpr.isResultUsed = true;
+        return stmt;
+      }
+
+      @Override public Stmt visitFunDecl(Stmt.FunDecl stmt) {
+        stmt.declExpr.isResultUsed = true;
+        return stmt;
+      }
+
+      @Override public Stmt visitWhile(Stmt.While stmt) { return stmt; }
+
+      @Override public Stmt visitReturn(Stmt.Return stmt) {
+        return stmt;
+      }
+
+      @Override public Stmt visitExprStmt(Stmt.ExprStmt stmt) {
+        stmt.expr.isResultUsed = true;
+        return stmt;
+      }
+
+      @Override public Stmt visitThrowError(Stmt.ThrowError stmt) {
+        return stmt;
+      }
+    });
   }
 
   private static final Map<TokenType,TokenType> arithmeticOperator =

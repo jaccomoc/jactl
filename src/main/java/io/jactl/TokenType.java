@@ -62,6 +62,7 @@ public enum TokenType {
   AMPERSAND_AMPERSAND("&&"),
   PIPE_PIPE("||"),
   ARROW("->"),
+  EQUAL_ARROW("=>"),
   MINUS_EQUAL("-="),
   PLUS_EQUAL("+="),
   SLASH_EQUAL("/="),
@@ -160,6 +161,8 @@ public enum TokenType {
   EVAL("eval"),
   FINAL("final"),
   SEALED("sealed"),
+  SWITCH("switch"),
+  DEFAULT("default"),
 
   //= Special
   EOL(),            // End of line

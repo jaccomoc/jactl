@@ -32,33 +32,33 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
-import static io.jactl.JactlType.LONG;
 import static java.util.stream.Collectors.groupingBy;
 import static org.objectweb.asm.ClassWriter.*;
 import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
 
-  private static       long   counter            = 0;
-
-  final JactlContext  context;
-  final String         internalName;
-  final String         source;
-  final String         pkg;
-  final String         className;
-  final Stmt.ClassDecl classDecl;
-  final String           sourceName;      // Name of source file
-  protected String       internalBaseName;
-  protected ClassVisitor cv;
+  final JactlContext        context;
+  final String              internalName;
+  final String              source;
+  final String              pkg;
+  final String              className;
+  final Stmt.ClassDecl      classDecl;
+  final String              sourceName;      // Name of source file
+  protected String          internalBaseName;
+  protected ClassVisitor    cv;
   protected ClassWriter     cw;
   protected MethodVisitor   constructor;
   protected MethodVisitor   classInit;   // MethodVisitor for static class initialiser
   protected ClassDescriptor classDescriptor;
   protected Class           compiledClass;
 
-  private   Label         classInitTryStart   = new Label();
-  private   Label         classInitTryEnd     = new Label();
-  private   Label         classInitCatchBlock = new Label();
+  private   Label           classInitTryStart   = new Label();
+  private   Label           classInitTryEnd     = new Label();
+  private   Label           classInitCatchBlock = new Label();
+
+  final         Map<Object,String> classConstantNames = new HashMap<>();
+  private       int                classConstantCnt   = 0;
 
   ClassCompiler(String source, JactlContext context, String jactlPkg, Stmt.ClassDecl classDecl, String sourceName) {
     this.context         = context;
@@ -95,19 +95,19 @@ public class ClassCompiler {
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, superName, "<init>", "()V", false);
 
-    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
     classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
     classInit.visitInsn(DUP);
     classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
-    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_STATIC_METHODS_MAP, MAP.descriptor(), null, null);
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_STATIC_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
     classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
     classInit.visitInsn(DUP);
     classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_STATIC_METHODS_MAP, "Ljava/util/Map;");
-    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class), null, null);
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class), null, null);
     fieldVisitor.visitEnd();
     classInit.visitLdcInsn(classDescriptor.getPrettyName());
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class));
@@ -120,7 +120,7 @@ public class ClassCompiler {
     mv.visitInsn(ARETURN);
     mv.visitMaxs(0, 0);
     mv.visitEnd();
-    mv = cv.visitMethod(ACC_PUBLIC | ACC_STATIC, Utils.JACTL_STATIC_METHODS_STATIC_GETTER,
+    mv = cv.visitMethod(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_STATIC_METHODS_STATIC_GETTER,
                                       "()Ljava/util/Map;", null, null);
     mv.visitCode();
     mv.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_METHODS_MAP, "Ljava/util/Map;");
@@ -151,6 +151,18 @@ public class ClassCompiler {
     classInit.visitLabel(classInitTryStart);
     classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodHandles", "lookup", "()Ljava/lang/invoke/MethodHandles$Lookup;", false);
     classInit.visitVarInsn(ASTORE, 0);
+
+    // Create class static fields for all list/map constants
+    classDecl.classConstants.forEach(c -> {
+      assert c instanceof List || c instanceof Map;
+      String       fieldName  = Utils.JACTL_PREFIX + "constant_" + classConstantCnt++;
+      String       descriptor = c instanceof List ? LIST.descriptor() : MAP.descriptor();
+      FieldVisitor fv         = cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, fieldName, descriptor, null, null);
+      fv.visitEnd();
+      loadConstant(c);
+      classInit.visitFieldInsn(PUTSTATIC, internalName, fieldName, descriptor);
+      classConstantNames.put(c, fieldName);
+    });
   }
 
   public void compileClass() {
@@ -235,7 +247,7 @@ public class ClassCompiler {
     Consumer<Expr.FunDecl> createContinuationHandle = (decl) -> {
       String       continuationMethod = Utils.continuationMethod(decl.functionDescriptor.implementingMethod);
       String       handleName         = Utils.continuationHandle(decl.functionDescriptor.implementingMethod);
-      FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC, handleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+      FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, handleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
       handleVar.visitEnd();
 
       classInit.visitVarInsn(ALOAD, 0);
@@ -353,7 +365,7 @@ public class ClassCompiler {
     // so that we can pass the method by value (by passing the method handle).
     String       wrapperMethodName = method.wrapper.functionDescriptor.implementingMethod;
     String       staticHandleName  = Utils.staticHandleName(wrapperMethodName);
-    FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC, staticHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+    FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, staticHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
     handleVar.visitEnd();
     if (!method.isStatic() && method.isClosure()) {
       // For non-static closures we also create a non-static method handle for the wrapper method
@@ -1364,5 +1376,42 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
+  }
+
+  private void loadConstant(Object obj) {
+    if (obj instanceof List) {
+      List list = (List)obj;
+      String listClassName = Type.getInternalName(Utils.JACTL_LIST_TYPE);
+      classInit.visitTypeInsn(NEW, listClassName);
+      classInit.visitInsn(DUP);
+      classInit.visitMethodInsn(INVOKESPECIAL, listClassName, "<init>", "()V", false);
+      list.forEach(elem -> {
+        classInit.visitInsn(DUP);
+        loadConstant(elem);
+        classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
+        classInit.visitInsn(POP);   // don't need result of add
+      });
+      classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;", false);
+      return;
+    }
+    if (obj instanceof Map) {
+      Map map = (Map)obj;
+      String mapClassName = Type.getInternalName(Utils.JACTL_MAP_TYPE);
+      classInit.visitTypeInsn(NEW, mapClassName);
+      classInit.visitInsn(DUP);
+      classInit.visitMethodInsn(INVOKESPECIAL, mapClassName, "<init>", "()V", false);
+      map.forEach((key,value) -> {
+        classInit.visitInsn(DUP);
+        loadConstant(key);
+        loadConstant(value);
+        classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
+        classInit.visitInsn(POP);   // don't need result of put
+      });
+      classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;", false);
+      return;
+    }
+    // Must be a simple value
+    Utils.loadConst(classInit, obj);
+    Utils.box(classInit, JactlType.typeOf(obj));
   }
 }

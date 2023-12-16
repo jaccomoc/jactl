@@ -152,6 +152,13 @@ class CompilerTest extends BaseTest {
     test("-(-1D)", 1D);
     test("-(-1L)", 1L);
     test("-(-1.0)", "#1.0");
+    test("-+1", -1);
+    test("- -1", 1);
+    test("-(-1)", 1);
+    test("-+(-1)", 1);
+    test("- -(-1)", -1);
+    test("-+(+-1)", 1);
+    test("- -(- -1)", 1);
     testError("-true", "cannot be applied to type");
     testError("-'abc'", "cannot be applied to type");
     testError("+true", "cannot be applied to type");
@@ -3406,6 +3413,7 @@ class CompilerTest extends BaseTest {
     test("'a123.4.5b' =~ /.([\\d.]+)./n; $1", "123.4.5");
     test("'a12345123451234512341234123412341234123412341234b' =~ /.([\\d.]+)./n; $1", "12345123451234512341234123412341234123412341234");
     test("'1bc' =~ /(\\d)(.*(\\d))?/n; $2", null);
+    test("def f(x){x}; 'a123b' =~ /.(\\d+)./n; f($1)", 123L);
   }
 
   @Test public void regexGlobalMatch() {
@@ -3519,6 +3527,16 @@ class CompilerTest extends BaseTest {
     test("def f = { do { 1 } }; f()", true);
     test("def f() { do { 1 } }; f()", true);
     test("do { int x = 1 }", true);
+  }
+
+  @Test public void blocks() {
+    test("{ 1 }", 1);
+    test("{ 1; 2 }", 2);
+    test("{ { 1; 2 } }", 2);
+    test("{ { 1; { 2 } } }", 2);
+    test("def x = { { 1; { 2 } } }()", 2);
+    test("def x; x = { { 1; { 2 } } }()", 2);
+    test("int x; x = { { 1; { 2 } } }()", 2);
   }
 
   @Test public void listLiterals() {
@@ -5001,6 +5019,8 @@ class CompilerTest extends BaseTest {
     test("long[] x = [1,2,3]; x as List", Utils.listOf(1L,2L,3L));
     test("double[] x = [1,2,3]; x as List", Utils.listOf(1D,2D,3D));
     test("boolean[] x = [true,false,true]; x as List", Utils.listOf(true,false,true));
+    test("([1,2,3] as int[]) == ([1,2,3] as int[])", true);
+    test("([1,2,3] as int[]) == [1,2,3]", true);
   }
 
   @Test public void arrayComparisons() {
@@ -5573,10 +5593,21 @@ class CompilerTest extends BaseTest {
     test("def x = '1'; def y = 1; x !== y", true);
     test ("def x = '1'; def y = 1; x === y", false);
 
-    test("[1,2,3] === [1,2,3]", false);
-    test("[1,2,3] !== [1,2,3]", true);
-    test("[a:1,b:[1,2,3],c:[x:1]] === [a:1,b:[1,2,3],c:[x:1]]", false);
-    test("[a:1,b:[1,2,3],c:[x:1]] !== [a:1,b:[1,2,3],c:[x:1]]", true);
+    // Can only run these tests if not wrapping in sleep(0,x) since that turns constants
+    // into non-constants (because we don't know what will happen to return results)
+    {
+      useAsyncDecorator = false;
+      test("[1,2,3] === [1,2,3]", true);
+      test("[1,2,3] !== [1,2,3]", false);
+      test("[a:1,b:[1,2,3],c:[x:1]] === [a:1,b:[1,2,3],c:[x:1]]", true);
+      test("[a:1,b:[1,2,3],c:[x:1]] !== [a:1,b:[1,2,3],c:[x:1]]", false);
+      test("[] === []", true);
+      test("[] !== []", false);
+      test("[] === [:]", false);
+      test("[] !== [:]", true);
+      useAsyncDecorator = true;
+    }
+
     test("[1,2,3] === 1", false);
     test("[a:1,b:[1,2,3],c:[x:1]] === 1", false);
     test("[1,2,3] !== 1", true);
@@ -5592,10 +5623,6 @@ class CompilerTest extends BaseTest {
     test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = 1; x === y", false);
     test("def x = [1,2,3]; def y = 1; x !== y", true);
     test("def x = [a:1,b:[1,2,3],c:[x:1]]; def y = 1; x !== y", true);
-    test("[] === []", false);
-    test("[] !== []", true);
-    test("[] === [:]", false);
-    test("[] !== [:]", true);
     test("def x = []; def y = []; x === y", false);
     test("def x = []; def y = []; x !== y", true);
     test("def x = []; def y = [:]; x === y", false);

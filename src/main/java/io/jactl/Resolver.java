@@ -23,6 +23,7 @@ import org.objectweb.asm.Type;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -527,6 +528,120 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   // = Expr
 
+
+  @Override
+  public JactlType visitStackCast(Expr.StackCast expr) {
+    return expr.type = expr.castType;
+  }
+
+  @Override public JactlType visitSwitch(Expr.Switch expr) {
+    resolve(expr.subject);
+    JactlType    subjectType = expr.subject.type;
+    Stmt.VarDecl itVar       = createVarDecl(expr.matchToken, currentFunction(), Utils.IT_VAR, subjectType, expr.subject);
+    expr.itVar = itVar.declExpr;
+    itVar.declExpr.owner = currentFunction();
+    // Block to hold our it var
+    Stmt.Block block = new Stmt.Block(null, null);
+    expr.block = block;
+    block.stmts = new Stmt.Stmts();
+    block.stmts.stmts.add(itVar);
+    // Create a statement wrapper for each case in the match so we can resolve them
+    block.stmts.stmts.addAll(expr.cases.stream().map(c -> {
+      // Create a block in case we have regex/destructured capture vars
+      c.block = new Stmt.Block(null, null);
+      c.block.stmts = new Stmt.Stmts();
+      c.block.stmts.stmts.add(new Stmt.ExprStmt(c.patterns.get(0).location, c));
+      return c.block;
+    }).collect(Collectors.toList()));
+    resolve(block);
+    expr.cases.forEach(c -> c.patterns.forEach(pat -> validateIsCompatible(subjectType, pat)));
+    resolve(expr.defaultCase);
+
+    // Check that there if there is a pattern covering all cases that there are no subsequent patterns and no default
+    Set<JactlType> coveredTypes = new HashSet<>();
+    expr.cases.forEach(c -> c.patterns.forEach(p -> {
+      JactlType type = coveringType(p);
+      if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(p.type) || (type != null && ct.isAssignableFrom(type)))) {
+        error("Unreachable switch case due to previous case that matches all input", p.location);
+      }
+      if (type != null) {
+        coveredTypes.add(type);
+      }
+    }));
+    if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
+      error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+    }
+
+    if (expr.defaultCase == null) {
+      expr.defaultCase = new Expr.Literal(new Token(NULL, expr.location));
+      resolve(expr.defaultCase);
+    }
+
+    // Find common type for all results (including default case)
+    return expr.type = Stream.concat(expr.cases.stream().map(c -> c.result.type), Stream.of(expr.defaultCase.type))
+                             .reduce(JactlType::commonSuperType)
+                             .orElse(null);
+  }
+
+  private JactlType coveringType(Expr pattern) {
+    if (pattern instanceof Expr.TypeExpr) {
+      return ((Expr.TypeExpr) pattern).typeVal;
+    }
+    if (pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
+      return pattern.type;
+    }
+    return null;
+  }
+
+  private void validateIsCompatible(JactlType subjectType, Expr pat) {
+    if (pat instanceof Expr.ListLiteral) {
+      if (!subjectType.is(ANY,LIST,ARRAY,STRING,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
+      if (subjectType.is(STRING,ARRAY)) {
+        JactlType subType = subjectType.is(STRING) ? STRING : subjectType.getArrayType();
+        ((Expr.ListLiteral) pat).exprs.forEach(subPat -> validateIsCompatible(subType, subPat));
+      }
+    }
+    else if (pat instanceof Expr.TypeExpr || pat instanceof Expr.VarDecl) {
+      JactlType type = pat instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pat).typeVal : pat.type;
+      if (!subjectType.is(ANY) && !subjectType.equals(type) && !type.is(ANY)) {
+        error("Match on expression of type " + subjectType + " can never be " + type, pat.location);
+      }
+    }
+    else if (pat instanceof Expr.RegexMatch && !subjectType.is(STRING,ANY)) {
+      error("Cannot compare type " + subjectType + " to regex string", pat.location);
+    }
+    else if (!subjectType.isConvertibleTo(pat.type, true)) {
+      error("Cannot compare type " + subjectType + " to " + pat.type, pat.location);
+    }
+  }
+
+  @Override
+  public JactlType visitSwitchCase(Expr.SwitchCase caseExpr) {
+    caseExpr.patterns.forEach(expr -> {
+      if (expr instanceof Expr.Identifier && ((Expr.Identifier) expr).identifier.is(UNDERSCORE)) {
+        expr.type = ANY;
+      }
+      else if (expr instanceof Expr.VarDecl) {
+        // Work out type from switch expression type if unknown
+        if (expr.type.is(UNKNOWN)) {
+          expr.type = caseExpr.switchSubject.type;
+        }
+        else if (!caseExpr.switchSubject.type.isConvertibleTo(expr.type)) {
+          error("Type of binding variable not compatible with switch expression type", expr.location);
+        }
+        Stmt.VarDecl varDecl = Utils.createVarDecl(currentFunction(), (Expr.VarDecl)expr);
+        resolve(varDecl);
+        insertStmt(varDecl);
+      }
+      else {
+        resolve(expr);
+      }
+    });
+    resolve(caseExpr.result);
+    return caseExpr.type = ANY;
+  }
+
+
   @Override public JactlType visitExprList(Expr.ExprList expr) {
     error("Expression lists not supported", expr.location);
     return null;
@@ -579,18 +694,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // the parent scope that the closed over capture var belongs to if it relies on the capture vars
     // still being as they were when the nested function/closure was invoked.
     if (captureArrVar == null) {
-      final Token captureArrName = expr.operator.newIdent(Utils.CAPTURE_VAR);
-      // Allocate our capture array var if we don't already have one in scope
-      captureArrVar = new Expr.VarDecl(captureArrName, null, null);
-      captureArrVar.type = MATCHER;
-      captureArrVar.owner = currentFunction();
-      captureArrVar.isResultUsed = false;
-      declare(captureArrVar);
-      define(captureArrName, captureArrVar);
-      expr.captureArrVarDecl = captureArrVar;
-      // Insert a VarDecl statement before current statement so that if we are in a loop our CAPTURE_VAR
-      // is created before the loop starts
-      insertStmt(new Stmt.VarDecl(captureArrName, captureArrVar));
+      Stmt.VarDecl varDecl = createVarDecl(expr.operator, currentFunction(), Utils.CAPTURE_VAR, MATCHER, null);
+      Expr.VarDecl declExpr = varDecl.declExpr;
+      declare(declExpr);
+      define(varDecl.name, declExpr);
+      expr.captureArrVarDecl = declExpr;
+      // Insert a VarDecl statement before current statement so if we are in a loop the var is
+      // created before the loop
+      insertStmt(varDecl);
     }
     else {
       expr.captureArrVarDecl = captureArrVar;
@@ -614,7 +725,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolve(expr.right);
 
-    expr.isConst = expr.left.isConst && expr.right.isConst;
+    expr.isConst = expr.left.isConst && expr.right.isConst && jactlContext.evaluateConstExprs;
 
     if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS, IN, BANG_IN)) {
       expr.isConst = false;
@@ -786,7 +897,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
-    expr.isConst = expr.expr.isConst;
+    expr.isConst = expr.expr.isConst && jactlContext.evaluateConstExprs;
     if (expr.operator.is(BANG,QUESTION_QUESTION)) {
       expr.type = BOOLEAN;
       if (expr.isConst) {
@@ -837,7 +948,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitPostfixUnary(Expr.PostfixUnary expr) {
     resolve(expr.expr);
-    expr.isConst      = expr.expr.isConst;
+    expr.isConst      = expr.expr.isConst && jactlContext.evaluateConstExprs;
     expr.type         = expr.expr.type;
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
       if (expr.isConst) {
@@ -885,10 +996,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitLiteral(Expr.Literal expr) {
-    // Whether we optimise const expressions by evaluating at compile time
-    // is controlled by CompileContext (defaults to true).
-      expr.isConst = jactlContext.evaluateConstExprs;
-      expr.constValue = expr.value.getValue();
+    expr.isConst = true;
+    expr.constValue = expr.value.getValue();
 
     switch (expr.value.getType()) {
       case BYTE_CONST:    return expr.type = BYTE;
@@ -913,15 +1022,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitListLiteral(Expr.ListLiteral expr) {
-      expr.exprs.forEach(this::resolve);
+    expr.exprs.forEach(this::resolve);
     return expr.type = LIST;
   }
 
   @Override public JactlType visitMapLiteral(Expr.MapLiteral expr) {
+    if (!expr.isConst) {
       expr.entries.forEach(entry -> {
         resolve(entry.first);
         resolve(entry.second);
       });
+    }
     return expr.type = MAP;
   }
 
@@ -1049,17 +1160,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         expr.varDecl = varDecl;
       }
     }
-    if (varDecl == null) {
+    String name = expr.identifier.getStringValue();
+    boolean isSpecialMatchIdentifier   = expr.identifier.is(UNDERSCORE, STAR);
+    if (varDecl == null && !isSpecialMatchIdentifier) {
       // Not a function lookup or couldn't find function
       varDecl = lookup(expr.identifier);   // will throw if not found
       expr.varDecl = varDecl;
-      if (expr.identifier.getStringValue().equals(Utils.THIS_VAR) || expr.identifier.getStringValue().equals(Utils.SUPER_VAR)) {
+      if (name.equals(Utils.THIS_VAR) || name.equals(Utils.SUPER_VAR)) {
         expr.couldBeNull = false;
       }
     }
 
     // For capture vars type is always ANY since value can be either a String or a number
-    if (expr.identifier.getStringValue().charAt(0) == '$') {
+    if (name.charAt(0) == '$' || isSpecialMatchIdentifier) {
       return expr.type = ANY;
     }
 
@@ -1391,13 +1504,99 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(expr.block);
     JactlType type = BOOLEAN;
     if (!expr.resultIsTrue) {
-      // Type will be type of last assignment in the multi-assignment block
-      List<Stmt> stmts = expr.block.stmts.stmts;
-      Stmt       last  = stmts.get(stmts.size() - 1);
-      assert last instanceof Stmt.ExprStmt;
-      type = ((Stmt.ExprStmt) last).expr.type;
+      // Type will be type of last expression in the block
+      type = typeOfLastExpr(expr.block);
+      setTypeOfLastExpr(expr.block, type);
     }
     return expr.type = type;
+  }
+
+  private static JactlType typeOfLastExpr(Stmt expr) {
+    return expr.accept(new Stmt.Visitor<JactlType>() {
+      @Override public JactlType visitStmts(Stmt.Stmts stmt) { return stmt.stmts.isEmpty() ? ANY : typeOfLastExpr(stmt.stmts.get(stmt.stmts.size() - 1)); }
+      @Override public JactlType visitBlock(Stmt.Block stmt) { return typeOfLastExpr(stmt.stmts); }
+      @Override public JactlType visitWhile(Stmt.While stmt) { return ANY; }
+      @Override public JactlType visitIf(Stmt.If stmt) {
+        if (stmt.trueStmt == null || stmt.falseStmt == null) {
+          return ANY;
+        }
+        return JactlType.commonSuperType(typeOfLastExpr(stmt.trueStmt), typeOfLastExpr(stmt.falseStmt));
+      }
+
+      @Override public JactlType visitClassDecl(Stmt.ClassDecl stmt) { throw new IllegalStateException("Internal error: Unexpected Stmt type Stmt.ClassDecl"); }
+      @Override public JactlType visitImport(Stmt.Import stmt)       { throw new IllegalStateException("Internal error: Unexpected Stmt type Stmt.Import"); }
+
+      @Override public JactlType visitVarDecl(Stmt.VarDecl stmt)   { return stmt.declExpr.type; }
+      @Override public JactlType visitFunDecl(Stmt.FunDecl stmt)   { return FUNCTION; }
+
+      @Override public JactlType visitReturn(Stmt.Return stmt)     { return stmt.expr.type; }
+      @Override public JactlType visitExprStmt(Stmt.ExprStmt stmt) { return stmt.expr.type; }
+      @Override public JactlType visitThrowError(Stmt.ThrowError stmt) { return ANY; }
+    });
+  }
+
+  private static Stmt setTypeOfLastExpr(Stmt stmt, JactlType type) {
+    BiFunction<Stmt,Expr,Stmt.Stmts> stmtsOf = (original,expr) -> {
+      Stmt.Stmts stmts = new Stmt.Stmts();
+      stmts.stmts.add(original);
+      stmts.stmts.add(new Stmt.ExprStmt(expr.location, expr));
+      return stmts;
+    };
+    Function<Stmt,Stmt.Stmts> addCast = s -> {
+      // Need to add a special cast
+      Expr.StackCast expr = new Expr.StackCast(s.location, type);
+      expr.type = type;
+      return stmtsOf.apply(s, expr);
+    };
+
+    return stmt.accept(new Stmt.Visitor<Stmt>() {
+      @Override public Stmt visitStmts(Stmt.Stmts stmt) {
+        if (!stmt.stmts.isEmpty()) {
+          stmt.stmts.set(stmt.stmts.size() - 1, setTypeOfLastExpr(stmt.stmts.get(stmt.stmts.size() - 1), type));
+        }
+        return stmt;
+      }
+      @Override public Stmt visitBlock(Stmt.Block stmt) { setTypeOfLastExpr(stmt.stmts, type); return stmt; }
+      @Override public Stmt visitWhile(Stmt.While stmt) { return stmt; }
+      @Override public Stmt visitIf(Stmt.If stmt) {
+        if (stmt.trueStmt != null) {
+          stmt.trueStmt = setTypeOfLastExpr(stmt.trueStmt, type);
+        }
+        if (stmt.falseStmt != null) {
+          stmt.falseStmt = setTypeOfLastExpr(stmt.falseStmt, type);
+        }
+        return stmt;
+      }
+
+      @Override public Stmt visitClassDecl(Stmt.ClassDecl stmt) { throw new IllegalStateException("Internal error: Unexpected Stmt type Stmt.ClassDecl"); }
+      @Override public Stmt visitImport(Stmt.Import stmt)       { throw new IllegalStateException("Internal error: Unexpected Stmt type Stmt.Import"); }
+
+      @Override public Stmt visitVarDecl(Stmt.VarDecl stmt)   {
+        if (!type.equals(stmt.declExpr.type)) {
+          return addCast.apply(stmt);
+        }
+        return stmt;
+      }
+
+      @Override public Stmt visitFunDecl(Stmt.FunDecl stmt)   { return stmt; }
+
+      // For return statement which has no value we need to add a literal with default value after
+      // just to fix the compilation which will expect a type on the type stack. (A bit of a hack.)
+      @Override public Stmt visitReturn(Stmt.Return stmt)     {
+        Expr defaultValue = literalDefaultValue(stmt.expr.location, type);
+        defaultValue.isResultUsed = true;
+        defaultValue.type = type;
+        return stmtsOf.apply(stmt, defaultValue);
+      }
+
+      @Override public Stmt visitExprStmt(Stmt.ExprStmt stmt) {
+        if (!type.equals(stmt.expr.type)) {
+          return addCast.apply(stmt);
+        }
+        return stmt;
+      }
+      @Override public Stmt visitThrowError(Stmt.ThrowError stmt) { return stmt; }
+    });
   }
 
   @Override public JactlType visitInvokeNew(Expr.InvokeNew expr) {
@@ -1409,7 +1608,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitClassPath(Expr.ClassPath expr) {
     ClassDescriptor descriptor = lookupClass(Utils.listOf(expr));
-    return expr.type = JactlType.createClass(descriptor);
+    expr.type = JactlType.createClass(descriptor);
+    return expr.type;
   }
 
   @Override public JactlType visitDefaultValue(Expr.DefaultValue expr) {
@@ -1432,7 +1632,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitTypeExpr(Expr.TypeExpr expr) {
     resolve(expr.typeVal);
-    return expr.type = expr.typeVal;
+    expr.isConst = true;
+    expr.constValue = expr.typeVal;
+    return expr.type = CLASS;
   }
 
   @Override public JactlType visitInvokeInit(Expr.InvokeInit expr) {
@@ -1474,8 +1676,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private void insertStmt(Stmt.VarDecl declStmt) {
     Stmt.Stmts currentStmts = getBlock().currentResolvingStmts;
+    if (currentStmts != null) {
       currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
       currentStmts.currentIdx++;
+    }
   }
 
   private JactlType evaluateConstExpr(Expr.Binary expr) {
@@ -1524,9 +1728,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (expr.operator.getType().isBooleanOperator()) {
+      if (expr.operator.is(TRIPLE_EQUAL,BANG_EQUAL_EQUAL) && (leftValue instanceof List || leftValue instanceof Map)) {
+        expr.constValue = expr.operator.is(TRIPLE_EQUAL) == leftValue.equals(rightValue);
+      }
+      else {
         expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
                                                  RuntimeUtils.getOperatorType(expr.operator.getType()),
                                                  expr.operator.getSource(), expr.operator.getOffset());
+      }
       return expr.type = BOOLEAN;
     }
 
@@ -1734,7 +1943,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private Stmt.Block getBlock() {
-    return currentFunction().blocks.peek();
+    Stmt.Block block = currentFunction().blocks.peek();
+    return block;
   }
 
   private FunctionDescriptor lookupMethod(JactlType type, String methodName) {
@@ -2099,19 +2309,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private Stmt doExplicitReturn(Stmt stmt, JactlType returnType) {
-    if (stmt instanceof Stmt.Return) {
-      // Nothing to do
-      return stmt;
-    }
-
-    if (stmt instanceof Stmt.ThrowError) {
-      // Nothing to do if last statement throws an exception
-      return stmt;
-    }
-
-    if (stmt instanceof Stmt.Block || stmt instanceof Stmt.Stmts) {
-      List<Stmt> stmts = stmt instanceof Stmt.Block ? ((Stmt.Block) stmt).stmts.stmts : ((Stmt.Stmts) stmt).stmts;
-      if (stmts.size() == 0) {
+    Stmt newStmt = stmt.accept(new Stmt.Visitor<Stmt>() {
+      @Override public Stmt visitStmts(Stmt.Stmts stmt) {
+        List<Stmt> stmts = stmt.stmts;
+        if (stmts.isEmpty()) {
           if (returnType.isPrimitive()) {
             error("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
           }
@@ -2124,58 +2325,71 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return stmt;
       }
 
-    if (stmt instanceof Stmt.If) {
-      Stmt.If ifStmt = (Stmt.If) stmt;
-      if (ifStmt.trueStmt == null || ifStmt.falseStmt == null) {
-          if (returnType.isPrimitive()) {
-            error("Implicit return of null for " +
-                                 (ifStmt.trueStmt == null ? "true" : "false") + " condition of if statment not compatible with return type of " + returnType, stmt.location);
-          }
-        if (ifStmt.trueStmt == null) {
-          ifStmt.trueStmt = returnStmt(ifStmt.ifToken, returnType);
-          }
-        if (ifStmt.falseStmt == null) {
-          ifStmt.falseStmt = returnStmt(ifStmt.ifToken, returnType);
-          }
-        }
-      ifStmt.trueStmt  = doExplicitReturn(((Stmt.If) stmt).trueStmt, returnType);
-      ifStmt.falseStmt = doExplicitReturn(((Stmt.If) stmt).falseStmt, returnType);
+      @Override public Stmt visitBlock(Stmt.Block stmt) {
+        stmt.stmts = (Stmt.Stmts)doExplicitReturn(stmt.stmts, returnType);
         return stmt;
       }
 
-    // Turn implicit return into explicit return
-    if (stmt instanceof Stmt.ExprStmt) {
-      Stmt.ExprStmt exprStmt = (Stmt.ExprStmt) stmt;
-      Expr          expr     = exprStmt.expr;
-      expr.isResultUsed = true;
-      Stmt.Return returnStmt = returnStmt(exprStmt.location, expr, returnType);
-      return returnStmt;
-    }
+      @Override public Stmt visitIf(Stmt.If stmt) {
+        if (stmt.trueStmt == null || stmt.falseStmt == null) {
+          if (returnType.isPrimitive()) {
+            error("Implicit return of null for " +
+                  (stmt.trueStmt == null ? "true" : "false") + " condition of if statement not compatible with return type of " + returnType, stmt.location);
+          }
+          if (stmt.trueStmt == null) {
+            stmt.trueStmt = returnStmt(stmt.ifToken, returnType);
+          }
+          if (stmt.falseStmt == null) {
+            stmt.falseStmt = returnStmt(stmt.ifToken, returnType);
+          }
+        }
+        stmt.trueStmt  = doExplicitReturn(stmt.trueStmt, returnType);
+        stmt.falseStmt = doExplicitReturn(stmt.falseStmt, returnType);
+        return stmt;
+      }
 
-    // If last statement is an assignment then value of assignment is the returned value.
-    // We set a flag on the statement so that Compiler knows to leave result on the stack
-    // and replace the assignment statement with a return wrapping the assignment expression.
-    if (stmt instanceof Stmt.VarDecl) {
-      Expr.VarDecl declExpr = ((Stmt.VarDecl) stmt).declExpr;
+      @Override public Stmt visitVarDecl(Stmt.VarDecl stmt) {
+        Expr.VarDecl declExpr = stmt.declExpr;
         // Don't use parameter declarations as value to return
         if (!declExpr.isExplicitParam) {
           declExpr.isResultUsed = true;
           Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
           return returnStmt;
         }
+        return null;
       }
 
+      @Override public Stmt visitFunDecl(Stmt.FunDecl stmt) {
         // If last statement is a function declaration then we return the MethodHandle for the
         // function as the return value of our function
         // We set a flag on the statement so that Compiler knows to leave result on the stack
         // and replace the assignment statement with a return wrapping the assignment expression.
-    if (stmt instanceof Stmt.FunDecl) {
-      Expr.FunDecl declExpr = ((Stmt.FunDecl)stmt).declExpr;
+        Expr.FunDecl declExpr = stmt.declExpr;
         declExpr.isResultUsed = true;
         declExpr.varDecl.isResultUsed = true;
         Stmt.Return returnStmt = returnStmt(stmt.location, declExpr, returnType);
         return returnStmt;
       }
+
+      @Override public Stmt visitReturn(Stmt.Return stmt)        { return stmt; }
+      @Override public Stmt visitThrowError(Stmt.ThrowError stmt) { return stmt; }
+
+      @Override public Stmt visitExprStmt(Stmt.ExprStmt stmt) {
+        Expr expr = stmt.expr;
+        expr.isResultUsed = true;
+        Stmt.Return returnStmt = returnStmt(stmt.location, expr, returnType);
+        return returnStmt;
+      }
+
+      @Override public Stmt visitWhile(Stmt.While stmt)         { return null; }
+      @Override public Stmt visitClassDecl(Stmt.ClassDecl stmt) { return null; }
+      @Override public Stmt visitImport(Stmt.Import stmt)       { return null; }
+    });
+
+    // If we have been able to find something to turn into a return
+    if (newStmt != null) {
+      return newStmt;
+    }
 
     // For functions that return an object (i.e. not a primitive) there is an implicit "return null"
     // even if last statement does not have a value so replace stmt with list of statements that
@@ -2707,7 +2921,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return varDecl;
   }
 
-  private Expr literalDefaultValue(Token location, JactlType type) {
+  private static Expr literalDefaultValue(Token location, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN: return new Expr.Literal(new Token(FALSE, location).setValue(false));
       case BYTE:    return new Expr.Literal(new Token(BYTE_CONST, location).setValue(0));

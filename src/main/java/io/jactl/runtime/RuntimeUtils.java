@@ -635,6 +635,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Non-numeric operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
   }
 
+  public static final String BOOLEAN_OP = "booleanOp";
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
     if (operator == TRIPLE_EQUAL) {
       if (left == right)                                        { return true;  }
@@ -1542,11 +1543,15 @@ public class RuntimeUtils {
     return value;
   }
 
+  public static final String LOAD_ARRAY_FIELD = "loadArrayField";
   public static Object loadArrayField(Object parent, int idx, String source, int offset) {
     try {
       if (parent instanceof String) {
         String str = (String)parent;
         return String.valueOf(str.charAt(idx >= 0 ? idx : idx + str.length()));
+      }
+      if (parent instanceof List) {
+        return ((List)parent).get(idx);
       }
       if (parent instanceof int[]) {
         int[] arr = (int[])parent;
@@ -2246,6 +2251,83 @@ public class RuntimeUtils {
     throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
   }
 
+  public static final String CAN_CAST_TO_TYPE = "canCastToType";
+  public static boolean canCastToType(Object obj, Class clss) {
+    if (clss.isArray())                        { return canConvertToArray(obj, clss); }
+    if (clss.isPrimitive() || clss == BigDecimal.class) {
+      if (obj == null)                         { return false; }
+      if (clss == boolean.class)               { return true;  }
+      if (obj instanceof String && ((String)obj).length() == 1) { return true; }
+      if (obj instanceof Number)               { return true; }
+      return false;
+    }
+    if (clss.isAssignableFrom(obj.getClass())) { return true; }
+    return false;
+  }
+
+  public static boolean canConvertToArray(Object obj, Class clss) {
+    if (obj == null)                           { return true; }
+    if (clss.isAssignableFrom(obj.getClass())) { return true; }
+    Class  componentType = clss.getComponentType();
+    if (obj instanceof List) {
+      List   list = (List)obj;
+      for (int i = 0; i < list.size(); i++) {
+        if (!canCastToType(list.get(i), componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (obj.getClass().isArray()) {
+      int    length = Array.getLength(obj);
+      for (int i = 0; i < length; i++) {
+        if (!canCastToType(Array.get(obj, i), componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (obj instanceof String && componentType == byte.class) {
+      return true;
+    }
+    return false;
+  }
+
+  public static final String IS_TYPE = "isType";
+  public static boolean isType(Object obj, Class clss) {
+    if (clss.isArray())  { return isArrayType(obj, clss); }
+    if (obj == null)     { return clss.equals(Object.class); }
+    if (obj instanceof JactlObject) {
+      return clss.isAssignableFrom(obj.getClass());
+    }
+    return obj.getClass().equals(clss);
+  }
+
+  public static boolean isArrayType(Object obj, Class clss) {
+    if (obj == null)                           { return true; }
+    if (clss.isAssignableFrom(obj.getClass())) { return true; }
+    Class  componentType = clss.getComponentType();
+    if (obj instanceof List) {
+      List   list = (List)obj;
+      for (int i = 0; i < list.size(); i++) {
+        if (!isType(list.get(i), componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (obj.getClass().isArray()) {
+      int    length = Array.getLength(obj);
+      for (int i = 0; i < length; i++) {
+        if (!isType(Array.get(obj, i), componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
   public static boolean print(String obj) {
     return doPrint(obj, false);
   }
@@ -2469,6 +2551,15 @@ public class RuntimeUtils {
       return ((Map)collection).containsKey(elem) == isIn;
     }
     throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting String/List/Map for right-hand side not " + className(collection), source, offset);
+  }
+
+  public static final String LENGTH = "length";
+  public static int length(Object obj, String source, int offset) {
+    if (obj instanceof List)      { return ((List)obj).size(); }
+    if (obj instanceof Map)       { return ((Map)obj).size();  }
+    if (obj instanceof String)    { return ((String)obj).length(); }
+    if (obj.getClass().isArray()) { return Array.getLength(obj); }
+    throw new RuntimeError("Cannot get array length/list size of object of type " + className(obj), source, offset);
   }
 
   /////////////////////////////////////
@@ -2712,7 +2803,6 @@ public class RuntimeUtils {
   public static Object eval$c(Continuation c) {
     return evalScript(c, null, null, null);
   }
-
 
   private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
     Function<Map<String, Object>, Object> script = evalScriptCache.get(code);

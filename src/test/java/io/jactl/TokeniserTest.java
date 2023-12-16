@@ -66,6 +66,7 @@ class TokeniserTest {
     doTest.accept(";", TokenType.SEMICOLON);
     doTest.accept("_", TokenType.UNDERSCORE);
     doTest.accept("->", TokenType.ARROW);
+    doTest.accept("=>", TokenType.EQUAL_ARROW);
     doTest.accept("!=", TokenType.BANG_EQUAL);
     doTest.accept("==", TokenType.EQUAL_EQUAL);
     doTest.accept("<=", TokenType.LESS_THAN_EQUAL);
@@ -156,6 +157,8 @@ class TokeniserTest {
     doTest.accept("eval", TokenType.EVAL);
     doTest.accept("final", TokenType.FINAL);
     doTest.accept("sealed", TokenType.SEALED);
+    doTest.accept("switch", TokenType.SWITCH);
+    doTest.accept("default", TokenType.DEFAULT);
     doTest.accept("??", TokenType.QUESTION_QUESTION);
     doTest.accept("%%", TokenType.PERCENT_PERCENT);
     doTest.accept("%%=", TokenType.PERCENT_PERCENT_EQUAL);
