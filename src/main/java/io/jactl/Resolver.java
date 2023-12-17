@@ -23,7 +23,6 @@ import org.objectweb.asm.Type;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -595,10 +594,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private void validateIsCompatible(JactlType subjectType, Expr pat) {
     if (pat instanceof Expr.ListLiteral) {
-      if (!subjectType.is(ANY,LIST,ARRAY,STRING,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
-      if (subjectType.is(STRING,ARRAY)) {
-        JactlType subType = subjectType.is(STRING) ? STRING : subjectType.getArrayType();
-        ((Expr.ListLiteral) pat).exprs.forEach(subPat -> validateIsCompatible(subType, subPat));
+      if (!subjectType.is(ANY,LIST,ARRAY,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
+      if (subjectType.is(ARRAY)) {
+        ((Expr.ListLiteral) pat).exprs.forEach(subPat -> validateIsCompatible(subjectType.getArrayElemType(), subPat));
       }
     }
     else if (pat instanceof Expr.TypeExpr || pat instanceof Expr.VarDecl) {
@@ -799,7 +797,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (!(field.type.isNumeric() || field.type.is(ANY))) {
         error("Array index must be numeric, not " + field.type, field.location);
       }
-      return parent.type.getArrayType();
+      return parent.type.getArrayElemType();
     }
 
     String fieldName = null;
@@ -1014,7 +1012,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       case MAP:           return expr.type = STRING;
       default:
         // In some circumstances (e.g. map keys) we support literals that are keywords
-        if (!expr.value.isKeyword()) {
+        if (!expr.value.isKeyword() && !expr.value.is(STAR)) {
           throw new IllegalStateException("Internal error: unexpected token for literal - " + expr.value);
         }
         return expr.type = STRING;
@@ -1479,7 +1477,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public JactlType visitArrayGet(Expr.ArrayGet expr) {
     resolve(expr.array);
     resolve(expr.index);
-    return expr.type = expr.array.type.getArrayType();
+    return expr.type = expr.array.type.getArrayElemType();
   }
 
   @Override public JactlType visitInvokeFunDecl(Expr.InvokeFunDecl expr) {
@@ -1664,7 +1662,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private void resolve(JactlType type) {
     if (type == null)                      { return; }
     if (type.is(ARRAY)) {
-      resolve(type.getArrayType());
+      resolve(type.getArrayElemType());
       return;
     }
     if (type.is(INSTANCE, CLASS) && type.getClassDescriptor() == null) {
@@ -1890,6 +1888,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private void declare(Expr.VarDecl decl) {
     String varName = decl.name.getStringValue();
+
+    // For binding variables make sure we don't shadow an existing variable of same name to prevent
+    // confusion. Otherwise something like [1,2,i] might be mistaken for a list literal which expands
+    // existing value of 'i'.
+    if (decl.isBindingVar) {
+      if (variableExists(varName)) {
+        error("Binding variable '" + varName + "' shadows another variable of the same name already declared", decl.location);
+      }
+    }
+
     // If we have a field then get class block variables, otherwise get vars for current block
     Map<String, Expr.VarDecl> vars = decl.isField ? classStack.peek().classBlock.variables : getVars(decl.isParam);
     if (!(jactlContext.replMode && isAtTopLevel())) {

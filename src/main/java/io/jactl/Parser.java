@@ -600,14 +600,15 @@ public class Parser {
   }
 
   private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl) {
-    return new Stmt.VarDecl(identifier, createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl));
+    return new Stmt.VarDecl(identifier, createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, false));
   }
 
-  private Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl) {
+  private Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isBindingVar) {
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
     varDecl.isField = inClassDecl;
+    varDecl.isBindingVar = isBindingVar;
     return varDecl;
   }
 
@@ -1642,15 +1643,15 @@ public class Parser {
             unexpected("Was Expecting ',' while parsing Map literal.");
           }
         }
-        Expr   key       = mapKey();
+        Expr key         = inPatternMatch && matchAny(STAR) ? new Expr.Literal(previous()) : mapKey();
         String keyString = null;
         if (key instanceof Expr.Literal) {
-          Expr.Literal literal  = (Expr.Literal) key;
-          Object       value = literal.value.is(STAR) ? STAR.asString : literal.value.getValue();
+          Expr.Literal literal = (Expr.Literal) key;
+          Object       value   = literal.value.is(STAR) ? STAR.asString : literal.value.getValue();
           if (!(value instanceof String)) {
             error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location);
           }
-          keyString = literal.value.getStringValue();
+          keyString = literal.value.is(STAR) ? STAR.asString : literal.value.getStringValue();
           if (literalKeyMap.containsKey(keyString)) {
             error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location);
           }
@@ -2079,7 +2080,7 @@ public class Parser {
       // the switch expression). We make it of type ANY for the moment.
       // During resolve phase where we know the type of the switch expression we use a more
       // appropriate type.
-      expr = createVarDeclExpr(previous(), UNKNOWN, new Token(EQUAL, previous()), null, false);
+      expr = createVarDeclExpr(previous(), UNKNOWN, new Token(EQUAL, previous()), null, false, true);
     }
     else {
       unexpected("Expect const or regex or type in match case");
@@ -2093,7 +2094,7 @@ public class Parser {
     // We either have a type on its own or a type and an identifier for a binding variable
     JactlType type = type(false, false, false);
     if (matchAny(IDENTIFIER)) {
-      expr = createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false);
+      expr = createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, true);
     }
     else {
       // Is a type
@@ -2150,10 +2151,13 @@ public class Parser {
       if (!name.is(UNDERSCORE,STAR)) {
         if (!bindingVars.contains(name.getStringValue())) {
           bindingVars.add(name.getStringValue());
-          expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false);
+          expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, true);
         }
       }
       return expr;
+    }
+    if (expr == null) {
+      return null;      // For second in pair when map entry is '*'
     }
     error("Unexpected expression type in match case", expr.location);
     return null;
@@ -2364,13 +2368,21 @@ public class Parser {
     // Check for start of a Map literal. We need to lookahead to know the difference between
     // a Map literal using '{' and '}' and a statement block or a closure.
     return lookahead(() -> {
-                       if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
+      if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
       TokenType close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
-                       return matchAnyIgnoreEOL(COLON) ||
-                              mapKey() != null &&
-                              matchAnyIgnoreEOL(COLON) &&
-                              // Make sure we are not doing a label for while/for immediately after '{'
-                              !(close == RIGHT_BRACE && matchAnyIgnoreEOL(WHILE,FOR));
+      // Allow '*' as first elem in list of key,value pair if doing pattern match in switch expression
+      if (inPatternMatch && matchAny(STAR)) {
+        expect(COMMA);
+        matchAny(EOL);
+        if (peek().is(COLON)) {
+          return false;
+        }
+      }
+      return matchAnyIgnoreEOL(COLON) ||
+             mapKey() != null &&
+             matchAnyIgnoreEOL(COLON) &&
+             // Make sure we are not doing a label for while/for immediately after '{'
+             !(close == RIGHT_BRACE && matchAnyIgnoreEOL(WHILE,FOR));
     });
  }
 

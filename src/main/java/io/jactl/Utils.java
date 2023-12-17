@@ -330,7 +330,7 @@ public class Utils {
   }
 
   public static void newArray(MethodVisitor mv, JactlType type, int numDimensions) {
-    switch (type.getArrayType().getType()) {
+    switch (type.getArrayElemType().getType()) {
       case BOOLEAN:  mv.visitIntInsn(NEWARRAY, T_BOOLEAN);                         break;
       case BYTE:     mv.visitIntInsn(NEWARRAY, T_BYTE);                            break;
       case INT:      mv.visitIntInsn(NEWARRAY, T_INT);                             break;
@@ -338,7 +338,7 @@ public class Utils {
       case DOUBLE:   mv.visitIntInsn(NEWARRAY, T_DOUBLE);                          break;
       case ARRAY:    mv.visitMultiANewArrayInsn(type.descriptor(), numDimensions); break;
       default:
-        mv.visitTypeInsn(ANEWARRAY, type.getArrayType().getInternalName());
+        mv.visitTypeInsn(ANEWARRAY, type.getArrayElemType().getInternalName());
         break;
     }
   }

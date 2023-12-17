@@ -71,7 +71,7 @@ public class DelegatingJactlType extends JactlType {
   @Override public String toString()                                   { return getDelegate().toString();              }
   @Override public void setClassDescriptor(ClassDescriptor descriptor) { getDelegate().setClassDescriptor(descriptor); }
   @Override public ClassDescriptor getClassDescriptor()                { return getDelegate().getClassDescriptor();    }
-  @Override public JactlType getArrayType()                            { return getDelegate().getArrayType();          }
+  @Override public JactlType getArrayElemType()                            { return getDelegate().getArrayElemType();          }
   @Override public boolean isAssignableFrom(JactlType otherType)       { return getDelegate().isAssignableFrom(otherType); }
   @Override public boolean equals(Object obj)                          { return getDelegate().equals(obj);             }
 }

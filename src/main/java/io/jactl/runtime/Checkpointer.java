@@ -480,7 +480,7 @@ public class Checkpointer {
     TypeEnum enumType = type.getType();
     writeTypeEnum(enumType);
     if (enumType == JactlType.TypeEnum.ARRAY) {
-      writeType(type.getArrayType());
+      writeType(type.getArrayElemType());
     }
     else if (enumType == JactlType.TypeEnum.INSTANCE) {
       writeObject(type.getInternalName());

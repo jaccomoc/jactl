@@ -341,7 +341,7 @@ public class JactlType {
         return true;
       }
       if (this.type == TypeEnum.ARRAY && type.type == TypeEnum.ARRAY) {
-        if (this.getArrayType() == null || type.getArrayType() == null || this.getArrayType().is(type.getArrayType())) {
+        if (this.getArrayElemType() == null || type.getArrayElemType() == null || this.getArrayElemType().is(type.getArrayElemType())) {
           return true;
         }
       }
@@ -375,7 +375,7 @@ public class JactlType {
    * Type of elements in the array
    * @return the element type
    */
-  public JactlType getArrayType() { return arrayType; }
+  public JactlType getArrayElemType() { return arrayType; }
 
   ///////////////////////////////////////
 
@@ -573,7 +573,7 @@ public class JactlType {
     }
     if (type1.is(ARRAY) || type2.is(ARRAY)) {
       if (!type1.is(ARRAY) || !type2.is(ARRAY)) { return ANY; }
-      return JactlType.arrayOf(commonSuperType(type1.getArrayType(), type2.getArrayType()));
+      return JactlType.arrayOf(commonSuperType(type1.getArrayElemType(), type2.getArrayElemType()));
     }
     if (type1.isNumeric() && type2.isNumeric()) {
       if (type1.is(BYTE))   { return type2; }
@@ -641,7 +641,7 @@ public class JactlType {
     if (isNumeric() && otherType.isNumeric())                                   { return true; }
     if (is(MAP) && otherType.is(INSTANCE))                                      { return true; }
     if (is(MAP,INSTANCE) && otherType.is(MAP,INSTANCE))                         { return true; }
-    if (is(ARRAY) && otherType.is(ARRAY))                                       { return getArrayType().isConvertibleTo(otherType.getArrayType(), isCast); }
+    if (is(ARRAY) && otherType.is(ARRAY))                                       { return getArrayElemType().isConvertibleTo(otherType.getArrayElemType(), isCast); }
     if (is(LIST,ITERATOR,ARRAY) && otherType.is(LIST,ITERATOR,ARRAY))           { return true; }
     if (isBoxedOrUnboxed(otherType))                                            { return true; }
     if (is(STRING) && otherType.isNumeric())                                    { return true; }  // for single chars --> ascii of char
@@ -862,7 +862,7 @@ public class JactlType {
       case CONTINUATION: return "Continuation";
       case INSTANCE:     return "Instance<" + getPackagedName() + ">";
       case CLASS:        return "Class<" + getPackagedName() + ">";
-      case ARRAY:        return getArrayType().toString() + "[]";
+      case ARRAY:        return getArrayElemType().toString() + "[]";
       case UNKNOWN:      return "UNKNOWN";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
@@ -918,7 +918,7 @@ public class JactlType {
       return this.getClassDescriptor().equals(other.getClassDescriptor());
     }
     if (is(ARRAY)) {
-      return getArrayType().equals(other.getArrayType());
+      return getArrayElemType().equals(other.getArrayElemType());
     }
     return true;
   }
