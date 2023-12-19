@@ -376,8 +376,11 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void substring() {
     test("''.substring(0)", "");
+    test("''.substring(0,0)", "");
     testError("''.substring(-1)", "string index out of range");
     testError("''.substring(1)", "string index out of range");
+    test("'abc'.substring(0,0)", "");
+    test("'abc'.substring(1,1)", "");
     test("'abc'.substring(0)", "abc");
     test("'abc'.substring(1)", "bc");
     test("'abc'.substring(2)", "c");
@@ -423,7 +426,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = /a${'bc'}def/; def f = x.substring; f(start:2,end:5)", "cde");
     test("def x = /a${'bc'}def/; def f = x.substring; f(2)", "cdef");
     testError("def x = /a${'bc'}def/; def f = x.substring; f(2,7)", "StringIndexOutOfBounds");
-    test("'abc1234'.substring(-4,0)", "1234");
+    testError("'abc1234'.substring(-4,0)", "StringIndexOutOfBounds");
     testError("'abc1234'.substring(-4,1)", "StringIndexOutOfBounds");
   }
 
@@ -1319,6 +1322,7 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void subList() {
     test("[].subList(0)", Utils.listOf());
+    test("[1,2,3].subList(0,0)", Utils.listOf());
     test("[1,2,3].subList(1,2)", Utils.listOf(2));
     test("[1,2,3].subList(1,3)", Utils.listOf(2,3));
     test("[1,2,3].subList(1,-1)", Utils.listOf(2));
@@ -1399,8 +1403,20 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [a:1,b:2,c:3]; x.subList(3)", Utils.listOf());
     test("def x = [a:1,b:2,c:3]; x.subList(-1)", Utils.listOf(Utils.listOf("c",3)));
     test("def x = [a:1,b:2,c:3]; x.subList(-2,-1)", Utils.listOf(Utils.listOf("b",2)));
-    test("[1,2,3,4,5].subList(-2,0)", Utils.listOf(4,5));
+    test("def x = [a:1,b:2,c:3]; x.map().subList(1,3)", Utils.listOf(Utils.listOf("b",2),Utils.listOf("c",3)));
+    test("def x = [a:1,b:2,c:3]; def f = x.map().subList; f(1,3)", Utils.listOf(Utils.listOf("b",2),Utils.listOf("c",3)));
+    test("def x = [a:1,b:2,c:3]; x.map().subList(1)", Utils.listOf(Utils.listOf("b",2),Utils.listOf("c",3)));
+    test("def x = [a:1,b:2,c:3]; x.map().subList(0)", Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2),Utils.listOf("c",3)));
+    test("def x = [a:1,b:2,c:3]; x.map().subList(2,3)", Utils.listOf(Utils.listOf("c",3)));
+    test("def x = [a:1,b:2,c:3]; x.map().subList(3)", Utils.listOf());
+    test("def x = [a:1,b:2,c:3]; x.map().subList(-1)", Utils.listOf(Utils.listOf("c",3)));
+    test("def x = [a:1,b:2,c:3]; x.map().subList(-2,-1)", Utils.listOf(Utils.listOf("b",2)));
+    test("[1,2,3,4,5].map().subList(-2)", Utils.listOf(4,5));
+    test("[1,2,3,4,5].subList(-2)", Utils.listOf(4,5));
+    testError("[1,2,3,4,5].subList(-2,0)", "IllegalArgument");
     testError("[1,2,3,4,5].subList(-2,1)", "IllegalArgument");
+    testError("[1,2,3,4,5].map().subList(-2,0)", "IllegalArgument");
+    testError("[1,2,3,4,5].map().subList(-2,1)", "IllegalArgument");
   }
 
   @Test public void mapRemove() {

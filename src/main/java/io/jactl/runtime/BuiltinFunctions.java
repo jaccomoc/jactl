@@ -928,7 +928,7 @@ public class BuiltinFunctions {
       if (start < 0) {
         start += list.size();
       }
-      if (end <= 0) {
+      if (end < 0) {
         end += list.size();
       }
       return list.subList(start, end);
@@ -1604,7 +1604,7 @@ public class BuiltinFunctions {
       if (start < 0) {
         start += str.length();
       }
-      if (end <= 0) {
+      if (end < 0) {
         end += str.length();
       }
       if (end < 0 || end == Integer.MAX_VALUE) {
