@@ -4038,6 +4038,7 @@ class CompilerTest extends BaseTest {
     test("def a = new int[1][1]; ((int[][])a)[0][0]", 0);
     test("def a = new int[1][1]; ((int[][])a)[0] instanceof int[]", true);
     test("def a = new int[1][1]; ((int[][])a)[0][0] instanceof int", true);
+//TO BE FIXED:    testError("[[1,2],[3,4]] as int[]", "xxx");
   }
 
   @Test public void byteArrays() {
