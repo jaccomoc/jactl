@@ -1647,7 +1647,7 @@ public class Parser {
     // our parent (parseExpression()) will convert back to "x =~ /regex/".
     // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
     // be a regular expression string then we will fix the problem then.
-    if (startToken.is(SLASH)) {
+    if (startToken.is(SLASH,SLASH_EQUAL)) {
       return new Expr.RegexMatch(new Expr.Identifier(startToken.newIdent(Utils.IT_VAR)),
                                  new Token(EQUAL_GRAVE, startToken),
                                  exprString,

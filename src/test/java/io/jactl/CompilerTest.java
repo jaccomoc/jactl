@@ -3367,6 +3367,8 @@ class CompilerTest extends BaseTest {
     test("'abc' =~ /\\\\/", false);
     test("'ab\\\\c' =~ /\\\\/", true);
     test("'ab\\\\c' =~ s/\\\\/x/gr", "abxc");
+    test("def it = '=A'; it =~ /=a/i", true);
+    test("def it = '='; /=/r", true);
   }
 
   @Test public void regexCaptureVars() {
@@ -3451,6 +3453,8 @@ class CompilerTest extends BaseTest {
     test("def x = [a:'abaac']; x.a =~ s/a/x/g; x.a", "xbxxc");
     testError("def x = [a:'abc']; (x.a + 'xyz') =~ s/a/x/; x.a", "invalid lvalue");
     test("def it = 'abaac'; s/a//g", "bc");
+    test("def it = '=ab=a=ac'; s/=a//g", "bc");
+    test("def it = '=ab=a=ac'; s/=a/=/g", "=b==c");
     test("def it = 'abaac'; s/a//g; it", "bc");
     test("def it = 'abaac'; s///g", "abaac");
     test("def it = 'abaac'; s///g; it", "abaac");
