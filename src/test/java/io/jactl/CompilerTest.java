@@ -6928,6 +6928,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void closedOverVars() {
+    test("int x = 1; def f() { x.size() }; f()", 1);
     test("byte x = 1; def f() { x-- }; x = 2", (byte)2);
     test("byte x = 1; def f() { x-- }; x++", (byte)1);
     test("byte x = 1; def f() { x-- }; ++x", (byte)2);

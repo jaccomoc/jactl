@@ -187,7 +187,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (!expr.isResolved) {
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.isPrimitive() || type.is(CLASS))
+        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
             || expr instanceof Expr.Literal || expr instanceof Expr.MapLiteral
             || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
