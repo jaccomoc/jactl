@@ -39,6 +39,7 @@ import org.objectweb.asm.Type;
 import io.jactl.runtime.FunctionDescriptor;
 
 import static io.jactl.JactlType.HEAPLOCAL;
+import static io.jactl.TokenType.STAR;
 
 /**
  * Expr classes for our AST.
@@ -115,6 +116,12 @@ class Expr {
   public boolean isLiteral() {
     return this instanceof Literal || this instanceof ListLiteral || this instanceof MapLiteral;
   }
+
+  public boolean isStar() {
+    return this instanceof Expr.Identifier && ((Expr.Identifier) this).identifier.is(STAR) ||
+           this instanceof Expr.Literal && ((Expr.Literal) this).value.is(STAR);
+  }
+
 
   class Binary extends Expr {
     Expr  left;
@@ -230,6 +237,7 @@ class Expr {
     Token              identifier;
     Expr.VarDecl       @varDecl;               // for variable references
     boolean            @couldBeFunctionCall = false;
+    boolean            @firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
     FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
   }
 
@@ -457,10 +465,10 @@ class Expr {
   }
 
   class SwitchCase extends Expr {
-    List<Expr> patterns;
-    Expr       result;
-    Stmt.Block @block;          // Need a block for captured regex and destructured vars
-    Expr       @switchSubject;  // Need to know type of switch expression for binding variables
+    List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/expression
+    Expr                  result;
+    Stmt.Block            @block;          // Need a block for captured regex and destructured vars
+    Expr                  @switchSubject;  // Need to know type of switch expression for binding variables
   }
 
   /**

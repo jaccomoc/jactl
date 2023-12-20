@@ -187,7 +187,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (!expr.isResolved) {
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.isPrimitive() || type.is(CLASS))
+        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
             || expr instanceof Expr.Literal || expr instanceof Expr.MapLiteral
             || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
@@ -549,16 +549,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // Create a block in case we have regex/destructured capture vars
       c.block = new Stmt.Block(null, null);
       c.block.stmts = new Stmt.Stmts();
-      c.block.stmts.stmts.add(new Stmt.ExprStmt(c.patterns.get(0).location, c));
+      c.block.stmts.stmts.add(new Stmt.ExprStmt(c.patterns.get(0).first.location, c));
       return c.block;
     }).collect(Collectors.toList()));
     resolve(block);
-    expr.cases.forEach(c -> c.patterns.forEach(pat -> validateIsCompatible(subjectType, pat)));
+    expr.cases.forEach(c -> c.patterns.forEach(pat -> validateIsCompatible(subjectType, pat.first)));
     resolve(expr.defaultCase);
 
     // Check that there if there is a pattern covering all cases that there are no subsequent patterns and no default
     Set<JactlType> coveredTypes = new HashSet<>();
-    expr.cases.forEach(c -> c.patterns.forEach(p -> {
+    expr.cases.forEach(c -> c.patterns.stream().map(pair -> pair.first).forEach(p -> {
       JactlType type = coveringType(p);
       if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(p.type) || (type != null && ct.isAssignableFrom(type)))) {
         error("Unreachable switch case due to previous case that matches all input", p.location);
@@ -570,6 +570,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
       error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
     }
+    validateNotCovered(expr.cases.stream().flatMap(c -> c.patterns.stream().map(pair -> pair.first)).collect(Collectors.toList()));
 
     if (expr.defaultCase == null) {
       expr.defaultCase = new Expr.Literal(new Token(NULL, expr.location));
@@ -613,27 +614,98 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
   }
 
+  private void validateNotCovered(List<Expr> patterns) {
+    // For each pattern after the first one check there are no previous ones that are a superset
+    // of the current pattern
+    for (int i = 1; i < patterns.size(); i++) {
+      Expr pattern = patterns.get(i);
+      for (int j = 0; j < i; j++) {
+        if (covers(patterns.get(j), pattern)) {
+          error("Switch pattern will never be evaluated (covered by previous pattern)", pattern.location);
+        }
+      }
+    }
+  }
+
+  private boolean isUnderscore(Expr e) { return e instanceof Expr.Identifier && ((Expr.Identifier)e).identifier.is(UNDERSCORE); }
+
+  private boolean covers(Expr pattern1, Expr pattern2) {
+    return covers(pattern1, pattern2, new HashMap<>());
+  }
+
+  private boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
+    if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl || isUnderscore(pattern1)) {
+      JactlType t1 = pattern1 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern1).typeVal : pattern1.type;
+      JactlType t2 = pattern2 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern2).typeVal : pattern2.type;
+      if (pattern1 instanceof Expr.VarDecl) {
+        bindings.put(((Expr.VarDecl) pattern1).name.getStringValue(), pattern2);
+      }
+      return t1.is(ANY) || t1.is(t2) || t1.isAssignableFrom(t2);
+    }
+    if (pattern1.isLiteral() && pattern1.isConst && pattern2.isLiteral() && pattern2.isConst) {
+      return pattern1.constValue.equals(pattern2.constValue);
+    }
+    if (pattern1 instanceof Expr.ExprString || pattern2 instanceof Expr.ExprString) {
+      return false;
+    }
+    // We have either List/Map pattern or Identifier
+    if (pattern1 instanceof Expr.ListLiteral) {
+      if (!(pattern2 instanceof Expr.ListLiteral))           { return false; }
+      List<Expr> l1 = ((Expr.ListLiteral) pattern1).exprs;
+      List<Expr> l2 = ((Expr.ListLiteral) pattern2).exprs;
+      if (l2.stream().anyMatch(Expr::isStar))            { return false; }
+      boolean l1HasStar = l1.stream().anyMatch(Expr::isStar);
+      if (l1.size() - (l1HasStar ? 1 : 0) > l2.size())   { return false; }
+      if (l2.size() > l1.size() && !l1HasStar)           { return false; }
+      for (int i = 0, star = 0; i < l1.size(); i++) {
+        Expr e1 = l1.get(i);
+        Expr e2 = l2.get(star>0 ? i-l1.size()+l2.size() : i);
+        star += e1.isStar()?1:0;
+        if (!covers(e1,e2,bindings))                      { return false; }
+      }
+      return true;
+    }
+    if (pattern1 instanceof Expr.MapLiteral) {
+      if (!(pattern2 instanceof Expr.MapLiteral))                   { return false; }
+      List<Pair<Expr,Expr>> entries1 = ((Expr.MapLiteral) pattern1).entries;
+      List<Pair<Expr,Expr>> entries2 = ((Expr.MapLiteral) pattern2).entries;
+      if (entries2.stream().anyMatch(p -> p.first.isStar()))         { return false; }
+      boolean l1HasStar = entries1.stream().anyMatch(p -> p.first.isStar());
+      if (entries1.size() - (l1HasStar ? 1 : 0) > entries2.size())   { return false; }
+      if (entries2.size() > entries1.size() && !l1HasStar)           { return false; }
+      Map<String,Expr> m1 = entries1.stream().filter(p -> !p.first.isStar()).collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
+      Map<String,Expr> m2 = entries2.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
+      return m1.keySet().stream().allMatch(k -> m2.containsKey(k) && covers(m1.get(k), m2.get(k), bindings));
+    }
+    if (pattern1 instanceof Expr.Identifier) {
+      return covers(bindings.get(((Expr.Identifier) pattern1).identifier.getStringValue()), pattern2, bindings);
+    }
+    return false;
+  }
+
   @Override
   public JactlType visitSwitchCase(Expr.SwitchCase caseExpr) {
-    caseExpr.patterns.forEach(expr -> {
-      if (expr instanceof Expr.Identifier && ((Expr.Identifier) expr).identifier.is(UNDERSCORE)) {
-        expr.type = ANY;
+    caseExpr.patterns.forEach(pair -> {
+      Expr pattern = pair.first;
+      if (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).identifier.is(UNDERSCORE)) {
+        pattern.type = ANY;
       }
-      else if (expr instanceof Expr.VarDecl) {
+      else if (pattern instanceof Expr.VarDecl) {
         // Work out type from switch expression type if unknown
-        if (expr.type.is(UNKNOWN)) {
-          expr.type = caseExpr.switchSubject.type;
+        if (pattern.type.is(UNKNOWN)) {
+          pattern.type = caseExpr.switchSubject.type;
         }
-        else if (!caseExpr.switchSubject.type.isConvertibleTo(expr.type)) {
-          error("Type of binding variable not compatible with switch expression type", expr.location);
+        else if (!caseExpr.switchSubject.type.isConvertibleTo(pattern.type)) {
+          error("Type of binding variable not compatible with switch expression type", pattern.location);
         }
-        Stmt.VarDecl varDecl = Utils.createVarDecl(currentFunction(), (Expr.VarDecl)expr);
+        Stmt.VarDecl varDecl = Utils.createVarDecl(currentFunction(), (Expr.VarDecl)pattern);
         resolve(varDecl);
         insertStmt(varDecl);
       }
       else {
-        resolve(expr);
+        resolve(pattern);
       }
+      resolve(pair.second);
     });
     resolve(caseExpr.result);
     return caseExpr.type = ANY;
@@ -1890,7 +1962,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     String varName = decl.name.getStringValue();
 
     // For binding variables make sure we don't shadow an existing variable of same name to prevent
-    // confusion. Otherwise something like [1,2,i] might be mistaken for a list literal which expands
+    // confusion. Otherwise, something like [1,2,i] might be mistaken for a list literal which expands
     // existing value of 'i'.
     if (decl.isBindingVar) {
       if (variableExists(varName)) {

@@ -25,6 +25,7 @@ public class SwitchTests extends BaseTest {
     test("switch (1) { 1 => 2 }", 2);
     testError("switch (1) { 1 => 2; 1 => 3 }", "literal match occurs multiple times");
     testError("switch (1) { 1,1 => 2; 2 => 3 }", "literal match occurs multiple times");
+    testError("switch ('a') { 'abc','1' => 2; '2','abc' => 3 }", "literal match occurs multiple times");
     test("switch (1) { 1,2 => 2 }", 2);
     test("switch (1L) { 1,2 => 2 }", 2);
     test("switch (1L) { 1L,2 => 2 }", 2);
@@ -73,8 +74,18 @@ public class SwitchTests extends BaseTest {
     test("switch([1,2,3].map{it+it}) { [2,4,6] => 3; default => 0 }", 3);
     test("switch([1,2,3] as int[]) { [1,2,3] => 2; default => 0 }", 2);
     test("def x = [1,2,3].map{it+it}; switch (x) { [2,4,6] => 3; default => 0 }", 3);
-    test("def x = [1,2,3].map{it+it}; switch (x) { [2,4,6] => 3; default => 0 }", 3);
+    test("def x = [1,2,3] as int[]; switch (x) { [1,2,3] => 2; default => 0 }", 2);
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] => 2; default => 0 }", 2);
+    test("def it = [1,2,3] as int[]; switch\n{\n [\n1,\n2,\n3\n]\n =>\n 2\ndefault\n =>\n 0\n }", 2);
+  }
+
+  @Test public void switchWithArrays() {
+    test("int[] x = [1,2,3]; switch (x) { [1,2],[1,2,4] => 1; [1,2,3] => 2 }", 2);
+  }
+
+  @Test public void switchWithRecursion() {
+    test("def f(it) { switch { [a,b] => f(a)+f(b); [c] => c; d => d } }; f([[1,2],[3]])", 6);
+    test("def f(it) { switch { [a,b] => f(a)+f(b); [c] => c; d => d } }; f([[1,2],[[5],[1,2]]])", 11);
   }
 
   @Test public void switchWithRegex() {
@@ -98,8 +109,7 @@ public class SwitchTests extends BaseTest {
     testError("switch (1) { String,int => 2 }", "can never be string");
     test("def x = 1; switch (x) { String,int => 2 }", 2);
     test("def x = 1; switch (x) { String => 2; int => 3 }", 3);
-    test("def x = 1; switch (x) { String,1 => 2; int,'abc' => 3 }", 2);
-    test("def x = 'abc'; switch (x) { String,1 => 2; int,'abc' => 3 }", 2);
+    test("def x = 'abc'; switch (x) { String,1 => 2; int => 3 }", 2);
     test("def x = 'abc'; switch (x) { long,1 => 2; int,'abc' => 3 }", 3);
     test("def x = []; switch (x) { String => 2\n int => 3\n List => 4\n default => 5 }", 4);
     test("def x = [:]; switch (x) { String => 2\n Map,int => 3; List => 4\n default => 5 }", 3);
@@ -180,7 +190,15 @@ public class SwitchTests extends BaseTest {
     test("def val =[a:1,b:[z:4],c:3]; switch(val) { [a:1,b:x,*] => x; default => 2 }", Utils.mapOf("z",4));
   }
 
+  @Test public void patternCoverages() {
+    testError("List a = [1,2]; switch(a) { [x,y],[_,x] => x }", "covered by previous");
+    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] => i; [_,i,'cc'] => 7 }", "covered by previous");
+    testError("def x = 1; switch (x) { String,1 => 2; int,'abc' => 3 }", "covered by previous");
+    test("def a = [1,2]; switch(a) { [1,2],[_,z] => z }", null);
+  }
+
   @Test public void switchOnList() {
+    test("def x = 1; switch (x) { [a,b] => 1; _ => 2 }", 2);
     testError("switch('abc') { ['a','b','c'] => true; default => false }", "can never match a list");
     test("switch ([]) { [] => 1; default => 2 }", 1);
     test("switch ([1]) { [] => 1; default => 2 }", 2);
@@ -209,42 +227,61 @@ public class SwitchTests extends BaseTest {
     testError("switch ([1,2,3]) { _ => 1; [1,2,3] => 2 }", "unreachable switch case");
     test("switch ([1,2,3]) { [1,2] => 2; _ => 1 }", 1);
     test("switch ([1,2,3]) { [1,2] => 2; [1,2,4],[1,2,3] => 1 }", 1);
-    testError("switch ([1,2,3]) { [1,2] => 2; [_],[_,_] => 1 }", "only supported for simple literal values");
-    testError("switch ([1,2,3]) { [1,2] => 2; _,_ => 1 }", "only supported for simple literal values");
+    test("switch ([1,2,3]) { [1,2] => 2; [_],[_,_,_] => 1 }", 1);
+    test("switch ([1,2,3]) { [1,2] => 2; [int],[_,int,_] => 1 }", 1);
+    testError("switch ([1,2,3]) { [1,2] => 2; _,_ => 1 }", "unreachable");
     test("switch ([1,2,3]) { [1,2,int] => 2; _ => 1 }", 2);
     test("switch ([1,2,3]) { [_,2,int] => 2; _ => 1 }", 2);
     test("switch ([1,[2,'abc'],3]) { [_,[_,String],int] => 2; _ => 1 }", 2);
     test("switch ([1,[2,'abc'],3]) { [*,[2,String],int] => 2; _ => 1 }", 2);
     test("switch ([1,[2,'abc'],3]) { [*,[*,String],int] => 2; _ => 1 }", 2);
+    testError("List x = [1,2,3]; switch(x) { i => i; [1,4,3] => 7 }", "unreachable switch case");
+    testError("List x = [1,2,3]; switch(x) { List i => i; [1,4,3] => 7 }", "unreachable switch case");
+    test("List x = [1,2,3]; switch(x) { i => i }", Utils.listOf(1,2,3));
+    testError("List x = [1,2,3]; switch(x) { int i => i }", "type of binding variable not compatible");
+    test("List x = [1,2,3]; switch(x) { List i => i }", Utils.listOf(1,2,3));
+    test("List x = [1,2,3]; switch(x) { def i => i }", Utils.listOf(1,2,3));
+    test("List x = [1,2,3]; switch(x.size()) { int i => i }", 3);
+    testError("List x = [1,2,3]; switch(x.size()) { long i => i }", "can never be long");
+    test("List x = [1,2,3]; switch(x) { [1,i,3] => i; [1,4,4] => 7 }", 2);
+    test("List x = [1,2,3]; switch(x) { [1,int i,3] => i; [1,4,4] => 7 }", 2);
+    test("List x = [1,2,3]; switch(x) { [1,def i,3] => i; [1,4,4] => 7 }", 2);
+    test("List x = [1,2,2]; switch(x) { [1,i,i] => i; [1,4,3] => 7 }", 2);
+    test("List x = [1,2,2]; switch(x) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
+    test("List x = [1,2,2]; switch(x) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
+    test("List x = [1,'abc','abc']; switch(x) { [1,int i,_] => i; default => 7 }", 7);
+    test("List x = [1,2,'abc']; switch(x) { [1,int i,i] => i; default => 7 }", 7);
+    testError("List x = [1,2,2]; switch(x) { [1,int i,int i] => i; [1,4,3] => 7 }", "'i' already declared");
     testError("List a = [1,2,3]; switch(a) { i => i; [1,4,3] => 7 }", "unreachable switch case");
     testError("List a = [1,2,3]; switch(a) { List i => i; [1,4,3] => 7 }", "unreachable switch case");
     test("List a = [1,2,3]; switch(a) { i => i }", Utils.listOf(1,2,3));
     testError("List a = [1,2,3]; switch(a) { int i => i }", "type of binding variable not compatible");
     test("List a = [1,2,3]; switch(a) { List i => i }", Utils.listOf(1,2,3));
+    testError("List a = [1,2,3]; switch(a) { List a => a }", "binding variable 'a' shadows another variable");
     test("List a = [1,2,3]; switch(a) { def i => i }", Utils.listOf(1,2,3));
     test("List a = [1,2,3]; switch(a.size()) { int i => i }", 3);
     testError("List a = [1,2,3]; switch(a.size()) { long i => i }", "can never be long");
-    test("List a = [1,2,3]; switch(a) { [1,i,3] => i; [1,4,3] => 7 }", 2);
-    test("List a = [1,2,3]; switch(a) { [1,int i,3] => i; [1,4,3] => 7 }", 2);
-    test("List a = [1,2,3]; switch(a) { [1,def i,3] => i; [1,4,3] => 7 }", 2);
+    testError("List a = [1,2,3]; switch(a) { [1,i,3] => i; [1,4,3] => 7 }", "covered by previous");
+    test("List a = [1,2,3]; switch(a) { [1,i,3] => i; [1,3] => 7 }", 2);
+    test("List a = [1,2,3]; switch(a) { [1,int i,3] => i; [1,3] => 7 }", 2);
+    test("List a = [1,2,3]; switch(a) { [1,def i,3] => i; [1,3] => 7 }", 2);
     test("List a = [1,2,2]; switch(a) { [1,i,i] => i; [1,4,3] => 7 }", 2);
     test("List a = [1,2,2]; switch(a) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
     test("List a = [1,2,2]; switch(a) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
     test("List a = [1,'abc','abc']; switch(a) { [1,int i,_] => i; default => 7 }", 7);
     test("List a = [1,2,'abc']; switch(a) { [1,int i,i] => i; default => 7 }", 7);
     testError("List a = [1,2,2]; switch(a) { [1,int i,int i] => i; [1,4,3] => 7 }", "'i' already declared");
-    test("List a = [1,2,3,2]; switch(a) { [_,z,_,z] => z }", 2);
     test("def a = [1,2,3]; switch(a) { i => i }", Utils.listOf(1,2,3));
     test("def a = [1,2,3]; switch(a) { int i => i; default => 5 }", 5);
     test("def a = [1,2,3]; switch(a) { List i => i }", Utils.listOf(1,2,3));
     test("def a = [1,2,3]; switch(a) { def i => i }", Utils.listOf(1,2,3));
     test("def a = [1,2,3]; switch(a.size()) { int i => i }", 3);
     test("def a = [1,2,3]; switch(a.size()) { long i => i; int j => j*j }", 9);
-    test("def a = [1,2,3]; switch(a) { [1,i,3] => i; [1,4,3] => 7 }", 2);
-    test("def a = [1,2,3]; switch(a) { [1,int i,3] => i; [1,4,3] => 7 }", 2);
-    test("def a = [1,2,2]; switch(a) { [1,i,i] => i; [1,4,3] => 7 }", 2);
-    test("def a = [1,2,2]; switch(a) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
-    test("def a = [1,2,2]; switch(a) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
+    test("def a = [1,2,3]; switch(a) { [1,i,3] => i; [1,3] => 7 }", 2);
+    test("def a = [1,2,3]; switch(a) { [1,int i,3] => i; [1,3] => 7 }", 2);
+    test("def a = [1,2,2]; switch(a) { [1,i,i] => i; [1,3] => 7 }", 2);
+    test("def a = [1,2,2]; switch(a) { [1,int i,i] => i; [1,3] => 7 }", 2);
+    test("def a = [1,2,2]; switch(a) { [1,int i,i] => i; [1,3] => 7 }", 2);
     test("def a = [1,'abc','abc']; switch(a) { [1,int i,_] => i; default => 7 }", 7);
     test("def a = [1,2,'abc']; switch(a) { [1,int i,i] => i; default => 7 }", 7);
     testError("def a = [1,2,2]; switch(a) { [1,int i,int i] => i; [1,4,3] => 7 }", "'i' already declared");
@@ -257,10 +294,10 @@ public class SwitchTests extends BaseTest {
     test("List a = ['aa','bb','cc']; switch(a) { def i => i }", Utils.listOf("aa","bb","cc"));
     test("List a = ['aa','bb','cc']; switch(a.size()) { int i => i }", 3);
     testError("List a = ['aa','bb','cc']; switch(a.size()) { long i => i }", "can never be long");
-    test("List a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] => i; ['aa',4,'cc'] => 7 }", "bb");
+    test("List a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] => i; [4,'cc'] => 7 }", "bb");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',String i,'cc'] => i; ['aa',4,'cc'] => 7 }", "bb");
-    test("List a = ['aa','bb','cc']; switch(a) { ['aa',def i,'cc'] => i; ['aa',4,'cc'] => 7 }", "bb");
-    test("List a = ['aa','bb','bb']; switch(a) { ['aa',i,i] => i; ['aa',4,'cc'] => 7 }", "bb");
+    test("List a = ['aa','bb','cc']; switch(a) { ['aa',def i,'cc'] => i; ['aa','cc'] => 7 }", "bb");
+    test("List a = ['aa','bb','bb']; switch(a) { ['aa',i,i] => i; ['aa','cc'] => 7 }", "bb");
     test("List a = ['aa','bb','bb']; switch(a) { ['aa',String i,i] => i; ['aa',4,'cc'] => 7 }", "bb");
     test("List a = ['aa','bb','bb']; switch(a) { ['aa',String i,i] => i; ['aa',4,'cc'] => 7 }", "bb");
     test("List a = ['aa',2,'abc']; switch(a) { ['aa',String i,_] => i; default => 7 }", 7);
@@ -273,7 +310,7 @@ public class SwitchTests extends BaseTest {
     test("def a = ['aa','bb','cc']; switch(a) { def i => i }", Utils.listOf("aa","bb","cc"));
     test("def a = ['aa','bb','cc']; switch(a.size()) { String i => i; int i => i }", 3);
     test("def a = ['aa','bb','cc']; switch(a.size()) { long i => i; String j => j; int i => i*i }", 9);
-    test("def a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] => i; ['aa',4,'cc'] => 7 }", "bb");
+    test("def a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] => i; ['aa','cc'] => 7 }", "bb");
     test("def a = ['aa','bb','cc']; switch(a) { ['aa',String i,'cc'] => i; ['aa',4,'cc'] => 7 }", "bb");
     test("def a = ['aa','bb','bb']; switch(a) { ['aa',i,i] => i; ['aa',4,'cc'] => 7 }", "bb");
     test("def a = ['aa','bb','bb']; switch(a) { ['aa',String i,i] => i; ['aa',4,'cc'] => 7 }", "bb");
@@ -287,6 +324,8 @@ public class SwitchTests extends BaseTest {
     test("def a = ['aa','bb','cc',[4,5,['bb',7]]]; switch(a) { [_,x,_,[*,[x,int y]]] => y }", 7);
     test("def a = ['aa',['bb',['cc',4],'bb'],'cc',[4,5,['bb',['cc',4]]]]; switch(a) { [_,[x,List y,x],_,[*,[x,y]]] => y }", Utils.listOf("cc",4));
     test("def a = ['aa',['bb',['cc',4],'bb'],'cc',[4,5,['bb',['cc',4]]]]; switch(a) { [_,[x,y,x],_,[*,[x,y]]] => y }", Utils.listOf("cc",4));
+    test("List a = [1,2]; switch(a) { [z],[_,z] => z; default => 3 }", 2);
+    test("List a = [1,2,3,2]; switch(a) { [z],[_,z,_,z] => z; default => 3 }", 2);
   }
 
   @Test public void switchArrays() {
@@ -298,8 +337,8 @@ public class SwitchTests extends BaseTest {
     test("def x = [1,2,3] as int[]; switch(x) { def i => i }", new int[]{ 1,2,3 });
     test("def x = [1,2,3] as int[]; switch(x.size()) { int i => i }", 3);
     test("def x = [1,2,3] as int[]; switch(x.size()) { long i => i; int j => j*j }", 9);
-    test("def x = [1,2,3] as int[]; switch(x) { [1,i,3] => i; [1,4,3] => 7 }", 2);
-    test("def x = [1,2,3] as int[]; switch(x) { [1,int i,3] => i; [1,4,3] => 7 }", 2);
+    test("def x = [1,2,3] as int[]; switch(x) { [1,i,3] => i; [1,3] => 7 }", 2);
+    test("def x = [1,2,3] as int[]; switch(x) { [1,int i,3] => i; [1,3] => 7 }", 2);
     test("def x = [1,2,2] as int[]; switch(x) { [1,i,i] => i; [1,4,3] => 7 }", 2);
     test("def x = [1,2,2] as int[]; switch(x) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
     test("def x = [1,2,2] as int[]; switch(x) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
@@ -309,8 +348,8 @@ public class SwitchTests extends BaseTest {
     test("int[] x = [1,2,3] as int[]; switch(x) { def i => i }", new int[]{ 1,2,3 });
     test("int[] x = [1,2,3] as int[]; switch(x.size()) { int i => i }", 3);
     testError("int[] x = [1,2,3] as int[]; switch(x.size()) { long i => i; int j => j*j }", "can never be long");
-    test("int[] x = [1,2,3] as int[]; switch(x) { [1,i,3] => i; [1,4,3] => 7 }", 2);
-    test("int[] x = [1,2,3] as int[]; switch(x) { [1,int i,3] => i; [1,4,3] => 7 }", 2);
+    test("int[] x = [1,2,3] as int[]; switch(x) { [1,i,3] => i; [1,3] => 7 }", 2);
+    test("int[] x = [1,2,3] as int[]; switch(x) { [1,int i,3] => i; [1,3] => 7 }", 2);
     test("int[] x = [1,2,2] as int[]; switch(x) { [1,i,i] => i; [1,4,3] => 7 }", 2);
     test("int[] x = [1,2,2] as int[]; switch(x) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
     test("int[] x = [1,2,2] as int[]; switch(x) { [1,int i,i] => i; [1,4,3] => 7 }", 2);
@@ -354,6 +393,6 @@ public class SwitchTests extends BaseTest {
     test("switch(1) { 1 => { return 2 }; 2 => 3 }", 2);
     test("switch(1) { 1 => { if (true) return 2 }; 2 => 3 }", 2);
     test("switch(1) { 1 => { if (false) return 2 }; 2 => 3 }", null);
+    test("int x = 1; x.map{ switch { 0,1,2 => x.size() }}", Utils.listOf(1));
   }
-
 }

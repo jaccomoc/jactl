@@ -864,15 +864,15 @@ public class Utils {
     Deque<List<Pair<Expr, Expr>>> caseRuns = new ArrayDeque<>();
     Expr currentType = null;
     for (Expr.SwitchCase c: cases) {
-      List<Pair<Expr, Expr>> flattened             = c.patterns.stream().map(p -> Pair.create(p, c.result)).collect(Collectors.toList());
-      Boolean                isHashableAndSameType = isHashableAndSame(c.patterns);
-      if (currentType != null && isHashableAndSameType && isSameType.apply(currentType, c.patterns.get(0))) {
+      List<Pair<Expr, Expr>> flattened             = c.patterns.stream().map(pair -> Pair.create(pair.first, c.result)).collect(Collectors.toList());
+      Boolean                isHashableAndSameType = isHashableAndSame(c.patterns.stream().map(p -> p.first).collect(Collectors.toList()));
+      if (currentType != null && isHashableAndSameType && isSameType.apply(currentType, c.patterns.get(0).first)) {
         caseRuns.getLast().addAll(flattened);
         continue;
       }
       if (isHashableAndSameType) {
         caseRuns.add(new ArrayList<>(flattened));
-        currentType = c.patterns.get(0);
+        currentType = c.patterns.get(0).first;
         continue;
       }
       // Not all the same type but if we have a simple result and we have any that match

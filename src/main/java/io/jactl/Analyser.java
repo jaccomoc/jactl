@@ -174,7 +174,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitSwitchCase(Expr.SwitchCase expr) {
-    expr.patterns.forEach(p -> analyse(p));
+    expr.patterns.forEach(p -> {
+      analyse(p.first);
+      analyse(p.second);
+    });
     analyse(expr.result);
     return null;
   }

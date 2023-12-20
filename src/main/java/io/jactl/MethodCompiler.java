@@ -610,7 +610,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private void compileMatchCase(Expr.Switch expr, Expr pattern, Expr result, boolean subjectIsAny, Map<JactlType, Integer> isTypeSlots, Map<JactlType, Integer> valueSlots, Label end, Map<Expr, Label> nonSimpleLabels) {
+  private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, boolean subjectIsAny, Map<JactlType, Integer> isTypeSlots, Map<JactlType, Integer> valueSlots, Label end, Map<Expr, Label> nonSimpleLabels) {
     emitIf(expr.isAsync, IfTest.IS_TRUE, () -> {
              Label endCheck = new Label();
              Consumer<JactlType> loadValue = type -> {
@@ -631,7 +631,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  }
                }
              };
-             compileMatchCaseTest(loadValue, ifCanConvertTo, expr.subject.type, pattern, expr.subject.location, endCheck);
+             compileMatchCaseTest(loadValue, ifCanConvertTo, expr.subject.type, patternPair, expr.subject.location, endCheck);
              mv.visitLabel(endCheck);
            },
            () -> {
@@ -648,6 +648,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
              }
            },
            null);
+  }
+
+  private void compileMatchCaseTest(Consumer<JactlType> loadValue, Consumer<JactlType> ifCanConvertTo, JactlType subjectType, Pair<Expr,Expr> patternPair, Token subjectLocation, Label endCheck) {
+    Expr pattern = patternPair.first;
+    compileMatchCaseTest(loadValue, ifCanConvertTo, subjectType, pattern, subjectLocation, endCheck);
   }
 
   private void compileMatchCaseTest(Consumer<JactlType> loadValue, Consumer<JactlType> ifCanConvertTo, JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck) {
@@ -671,10 +676,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           popVal();
         }
       }
-      if (pattern instanceof Expr.VarDecl) {
+      if (pattern instanceof Expr.VarDecl || (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).firstTimeInPattern)) {
         loadValue.accept(pattern.type);
         convertTo(pattern.type, pattern, true, pattern.location);
-        storeVar((Expr.VarDecl) pattern);
+        storeVar(pattern);
         loadConst(true);   // Binding variable on its own always matches
       }
       else if (pattern instanceof Expr.Identifier) {
@@ -701,12 +706,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else if (pattern instanceof Expr.ListLiteral) {
         if (!subjectType.is(ITERATOR, LIST, ARRAY, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
         List<Expr> exprs = ((Expr.ListLiteral) pattern).exprs;
-        compileDestructuring(subjectType, true, exprs.size(), exprs.stream().anyMatch(this::isStar), exprs, loadValue, subjectLocation, endCheck);
+        compileDestructuring(subjectType, true, exprs.size(), exprs.stream().anyMatch(Expr::isStar), exprs, loadValue, subjectLocation, endCheck);
       }
       else if (pattern instanceof Expr.MapLiteral) {
         if (!subjectType.is(ITERATOR, MAP, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
         List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral) pattern).entries;
-        compileDestructuring(subjectType, false, exprs.size(), exprs.stream().anyMatch(p -> isStar(p.first)), exprs, loadValue, subjectLocation, endCheck);
+        compileDestructuring(subjectType, false, exprs.size(), exprs.stream().anyMatch(p -> p.first.isStar()), exprs, loadValue, subjectLocation, endCheck);
       }
     }
     else if (pattern instanceof Expr.RegexMatch) {
@@ -715,11 +720,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       throw new UnsupportedOperationException("Unsupported comparison in match: " + pattern.getClass().getName());
     }
-  }
-
-  private boolean isStar(Expr expr) {
-    return expr instanceof Expr.Identifier && ((Expr.Identifier) expr).identifier.is(STAR) ||
-           expr instanceof Expr.Literal && ((Expr.Literal) expr).value.is(STAR);
   }
 
   private boolean isUnderscore(Expr expr) {
@@ -757,7 +757,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           if (isUnderscore(subExpr)) {
             continue;
           }
-          if (isStar(subExpr)) {
+          if (subExpr.isStar()) {
             seenStar = true;
             continue;
           }
@@ -782,7 +782,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           Pair<Expr,Expr> keyVal = (Pair)exprs.get(i);
           subExpr = keyVal.second;
           elemType = ANY;
-          if (isStar(keyVal.first)) {
+          if (keyVal.first.isStar()) {
             continue;
           }
           if (isUnderscore(subExpr)) {
@@ -4862,6 +4862,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Utils.checkCast(mv, type.boxed());
     popType();
     pushType(type.boxed());
+  }
+
+  /**
+   * Store value on stack into variable
+   * @param expr  Identifier or VarDecl
+   */
+  private void storeVar(Expr expr) {
+    Expr.VarDecl varDecl = expr instanceof Expr.VarDecl ? (Expr.VarDecl)expr : null;
+    if (varDecl == null) {
+      if (!(expr instanceof Expr.Identifier)) {
+        throw new IllegalStateException("Internal error: unexpected type " + expr.getClass());
+      }
+      varDecl = ((Expr.Identifier)expr).varDecl;
+    }
+    storeVar(varDecl);
   }
 
   /**

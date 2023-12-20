@@ -73,8 +73,8 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   @Override
   public Expr visitSwitchCase(Expr.SwitchCase expr) {
-    // For the moment don't decorate patterns but once we support patterns with "if" expressions
-    // then we should decorate the "if" part
+    // Decorate just the "and" part of the pattern
+    expr.patterns = expr.patterns.stream().map(pair -> Pair.create(pair.first, decorate(pair.second))).collect(Collectors.toList());
     expr.result = decorate(expr.result);
     return expr;
   }

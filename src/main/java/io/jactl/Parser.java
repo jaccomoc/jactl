@@ -1725,7 +1725,7 @@ public class Parser {
     // our parent (parseExpression()) will convert back to "x =~ /regex/".
     // If we detect at resolve time that the standalone /regex/ has no modifiers and should just
     // be a regular expression string then we will fix the problem then.
-    if (startToken.is(SLASH)) {
+    if (startToken.is(SLASH,SLASH_EQUAL)) {
       return new Expr.RegexMatch(new Expr.Identifier(startToken.newIdent(Utils.IT_VAR)),
                                  new Token(EQUAL_GRAVE, startToken),
                                  exprString,
@@ -1970,7 +1970,7 @@ public class Parser {
     Expr                  defaultCase = null;
     List<Expr.SwitchCase> cases       = new ArrayList<>();
     while (!matchAny(RIGHT_BRACE)) {
-      List<Expr> patterns = null;
+      List<Pair<Expr,Expr>> patterns = null;
       if (matchAny(DEFAULT)) {
         if (defaultCase != null) {
           unexpected("cannot have multiple 'default' cases in switch expression");
@@ -2006,7 +2006,7 @@ public class Parser {
     // Make sure that patterns that are literals don't occur multiple times. Build a map that we won't use
     // and use merge function to detect if key occurs multiple times.
     cases.stream()
-         .flatMap(c -> c.patterns.stream())
+         .flatMap(c -> c.patterns.stream().map(p -> p.first))
          .filter(expr -> expr.isConst)
          .collect(Collectors.toMap(expr -> expr.constValue,
                                    expr -> expr,
@@ -2015,20 +2015,29 @@ public class Parser {
   }
 
   /**
-   *# switchPatterns -&gt; switchPattern
-   *#                 | matchLiteral ( "," matchLiteral ) * ;
+   *# switchPatterns -&gt; switchPatternAndExpr ( "," switchPatternAndExpr ) *
    */
-  private List<Expr> switchPatterns() {
-    List<Expr> patterns = new ArrayList<>();
+  private List<Pair<Expr,Expr>> switchPatterns() {
+    List<Pair<Expr,Expr>> patterns = new ArrayList<>();
     do {
-      patterns.add(switchPattern());
+      patterns.add(switchPatternAndExpr());
     } while (matchAny(COMMA));
-    if (patterns.size() > 1) {
-      patterns.stream().filter(p -> !(p.isLiteral() && p.isConst) && !(p instanceof Expr.TypeExpr)).findFirst().ifPresent(p -> {
-        error("Comma separated match cases only supported for simple literal values and type names", p.location);
-      });
+
+    // Verify that the only non-literals are identifiers (for capture vars) or '_' or '*'
+    // and create VarDecl expressions for first use of each identifier.
+    return validateListMapPatterns(patterns);
+  }
+
+  /**
+   *# switchPatternAndExpr -&gt switchPattern ( "and" expression ) ?
+   */
+  private Pair<Expr,Expr> switchPatternAndExpr() {
+    Expr switchPattern = switchPattern();
+    Expr expr = null;
+    if (matchAny(AND)) {
+      expr = parseExpression();
     }
-    return patterns;
+    return Pair.create(switchPattern, expr);
   }
 
   /**
@@ -2040,6 +2049,7 @@ public class Parser {
    *#                | IDENTIFIER
    */
   private Expr switchPattern() {
+    matchAny(EOL);
     Expr expr = null;
     if (isLiteral()) {
       expr = literal();
@@ -2053,11 +2063,6 @@ public class Parser {
         expr.isConst = true;
         expr.constValue = literalValue(expr);
         addClassConstant(expr);
-      }
-      else {
-        // Verify that the only non-literals are identifiers (for capture vars) or '_' or '*'
-        // and create VarDecl expressions for first use of each identifier.
-        validateListMapPattern(expr);
       }
       inPatternMatch = false;
     }
@@ -2076,11 +2081,12 @@ public class Parser {
       expr = identifier(UNDERSCORE);
     }
     else if (matchAny(IDENTIFIER)) {
-      // Identifier on its own is a binding variable that will be set to it (the value of
-      // the switch expression). We make it of type ANY for the moment.
-      // During resolve phase where we know the type of the switch expression we use a more
-      // appropriate type.
-      expr = createVarDeclExpr(previous(), UNKNOWN, new Token(EQUAL, previous()), null, false, true);
+      expr = new Expr.Identifier(previous());
+//      // Identifier on its own is a binding variable that will be set to it (the value of
+//      // the switch expression). We make it of type ANY for the moment.
+//      // During resolve phase where we know the type of the switch expression we use a more
+//      // appropriate type.
+//      expr = createVarDeclExpr(previous(), UNKNOWN, new Token(EQUAL, previous()), null, false, true);
     }
     else {
       unexpected("Expect const or regex or type in match case");
@@ -2109,14 +2115,28 @@ public class Parser {
 
   /////////////////////////////////////////////////
 
-  private void validateListMapPattern(Expr expr) {
-    _validateListMapPattern(expr, new HashSet<>());
+  private List<Pair<Expr,Expr>> validateListMapPatterns(List<Pair<Expr,Expr>> exprs) {
+    return _validateListMapPattern(exprs, new HashSet<>());
   }
 
-  private Expr _validateListMapPattern(Expr expr, Set<String> bindingVars) {
+  private List<Pair<Expr,Expr>> _validateListMapPattern(List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
+    return exprs.stream()
+                .map(p -> Pair.create(_validateListMapPattern(p.first, bindingVars, new HashSet<>()), p.second))
+                .collect(Collectors.toList());
+  }
+
+  /**
+   * Validate variables in pattern of a switch case and replace Identifier with VarDecl where
+   * appropriate.
+   * @param expr        the pattern
+   * @param bindingVars the binding variables for the entire case
+   * @param varsSeen    binding variables seen in this pattern
+   * @return transformed expression
+   */
+  private Expr _validateListMapPattern(Expr expr, Set<String> bindingVars, Set<String> varsSeen) {
     if (expr instanceof Expr.ListLiteral) {
       Expr.ListLiteral listExpr = (Expr.ListLiteral) expr;
-      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateListMapPattern(e, bindingVars)).collect(Collectors.toList());
+      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateListMapPattern(e, bindingVars, varsSeen)).collect(Collectors.toList());
       listExpr.exprs.stream()
                     .filter(e -> e instanceof Expr.Identifier && ((Expr.Identifier) e).identifier.is(STAR))
                     .skip(1)
@@ -2130,7 +2150,7 @@ public class Parser {
         if (!(pair.first instanceof Expr.Literal)) {
           error("Expected string constant for map key", pair.first.location);
         }
-        return Pair.create(pair.first, _validateListMapPattern(pair.second, bindingVars));
+        return Pair.create(pair.first, _validateListMapPattern(pair.second, bindingVars, varsSeen));
       }).collect(Collectors.toList());
       return mapLiteral;
     }
@@ -2143,15 +2163,26 @@ public class Parser {
         error("Binding variable '" + name + "' already declared in switch pattern", expr.location);
       }
       bindingVars.add(name);
+      varsSeen.add(name);
       return expr;
     }
     if (expr instanceof Expr.Identifier) {
       // If first occurrence then create the VarDecl
       Token name = ((Expr.Identifier) expr).identifier;
+      String varName = name.getStringValue();
       if (!name.is(UNDERSCORE,STAR)) {
-        if (!bindingVars.contains(name.getStringValue())) {
-          bindingVars.add(name.getStringValue());
+        if (!bindingVars.contains(varName)) {
+          bindingVars.add(varName);
           expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, true);
+        }
+        else {
+          // Check if we are first use in this pattern. Previous patterns for the case (separate by commas)
+          // might have the VarDecl in which case we need to know to reinitialise value first time bound in
+          // this pattern.
+          if (!varsSeen.contains(varName)) {
+            ((Expr.Identifier)expr).firstTimeInPattern = true;
+            varsSeen.add(varName);
+          }
         }
       }
       return expr;
@@ -2159,8 +2190,7 @@ public class Parser {
     if (expr == null) {
       return null;      // For second in pair when map entry is '*'
     }
-    error("Unexpected expression type in match case", expr.location);
-    return null;
+    return expr;
   }
 
   private Object ignoreNewLines(Supplier<Object> code) {
@@ -2746,7 +2776,7 @@ public class Parser {
 
       @Override
       public Boolean visitSwitchCase(Expr.SwitchCase expr) {
-        return expr.patterns.stream().allMatch(this::isSimple) && isSimple(expr.result);
+        return expr.patterns.stream().allMatch(pair -> isSimple(pair.first)) && isSimple(expr.result);
       }
 
       // These should never occur here since they are never created in Parser (only in Resolver)
