@@ -341,6 +341,6 @@ switch(x) {
 
 Note that when using this constructor form of a match pattern the use of the wildcard `*` is not used.
 You only need list the fields you are interested in and any value is allowed for the fields not listed.
-There is no need to specify with `*` that there are other fields since, unlike with maps, we know the class
-and what fields exist.
+There is no need to use `*` to specify that there are other fields since (unlike with maps) we know the class
+and which fields exist.
 It is assumed that if you don't list them you are not interested in them.
