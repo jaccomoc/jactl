@@ -2029,13 +2029,14 @@ public class Parser {
   }
 
   /**
-   *# switchPatternAndExpr -&gt switchPattern ( "and" expression ) ?
+   *# switchPatternAndExpr -&gt switchPattern ( "if" expression ) ?
    */
   private Pair<Expr,Expr> switchPatternAndExpr() {
     Expr switchPattern = switchPattern();
     Expr expr = null;
-    if (matchAny(AND)) {
+    if (matchAny(IF)) {
       expr = parseExpression();
+      expr.isResultUsed = true;
     }
     return Pair.create(switchPattern, expr);
   }
@@ -2082,11 +2083,6 @@ public class Parser {
     }
     else if (matchAny(IDENTIFIER)) {
       expr = new Expr.Identifier(previous());
-//      // Identifier on its own is a binding variable that will be set to it (the value of
-//      // the switch expression). We make it of type ANY for the moment.
-//      // During resolve phase where we know the type of the switch expression we use a more
-//      // appropriate type.
-//      expr = createVarDeclExpr(previous(), UNKNOWN, new Token(EQUAL, previous()), null, false, true);
     }
     else {
       unexpected("Expect const or regex or type in match case");
@@ -2187,9 +2183,13 @@ public class Parser {
       }
       return expr;
     }
+    if (expr instanceof Expr.RegexMatch || expr instanceof Expr.ExprString) {
+      return expr;
+    }
     if (expr == null) {
       return null;      // For second in pair when map entry is '*'
     }
+    error("Expressions not supported in list/map literal pattern", expr.location);
     return expr;
   }
 

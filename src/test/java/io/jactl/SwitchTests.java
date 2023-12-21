@@ -68,6 +68,7 @@ public class SwitchTests extends BaseTest {
     testError("switch(0) { 0 || 1 || 2 => 2\n3 => 4\ndefault => 5 }", "unexpected token");
     testError("switch(0) { 0 or 1 or 2 => 2; 3 => 4; default => 5 }", "unexpected token 'or'");
     test("def it = 'abc'; switch{ 'abc' => 1; default => 2 }", 1);
+    testError("switch{ 'abc' => 1; default => 2 }", "unknown variable 'it'");
     test("def it = 'abc'; switch (it[0]) { 'a' => 1; default => 2 }", 1);
     test("def it = 'abc'; switch (it[0]) { 'a' => it; default => 2 }", "a");
     test("def it = 'abc'; def x = switch (it[0]) { 'a' => it; default => 2 }; it + x", "abca");
@@ -77,6 +78,7 @@ public class SwitchTests extends BaseTest {
     test("def x = [1,2,3] as int[]; switch (x) { [1,2,3] => 2; default => 0 }", 2);
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] => 2; default => 0 }", 2);
     test("def it = [1,2,3] as int[]; switch\n{\n [\n1,\n2,\n3\n]\n =>\n 2\ndefault\n =>\n 0\n }", 2);
+    testError("int x = 2\nswitch (x) {\n  1,2 => x\n  'abc' => x\n}", "cannot compare type int to string");
   }
 
   @Test public void switchWithArrays() {
@@ -120,6 +122,17 @@ public class SwitchTests extends BaseTest {
     test("def x = null; switch(x) { long => 1; int => 2; String => 3; def => 4 }", 4);
     testError("List x = null; switch(x) { long => 1; int => 2; String => 3; def => 4 }", "can never be long");
     test("def x = 'abc' as byte[]; switch(x) { long => 1; int => 2; String => 3; def => 4 }", 4);
+  }
+
+  @Test public void patternCoverages() {
+    testError("List a = [1,2]; switch(a) { [x,y],[_,x] => x }", "covered by previous");
+    test("List a = [1,2]; switch(a) { [x,y] if x == 1,[_,x] => x }", 1);
+    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] => i; [_,i,'cc'] => 7 }", "covered by previous");
+    testError("def x = 1; switch (x) { String,1 => 2; int,'abc' => 3 }", "covered by previous");
+    test("def a = [1,2]; switch(a) { [1,2],[_,z] => z }", null);
+    testError("def a; switch(a) { [_,i,'cc'] => i; [_,[x:i],'cc'] => 7 }", "covered by previous");
+    test("def a=[1,[x:3]]; switch(a) { [_,i,'cc'] => i; [_,[x:i]] => i }", 3);
+    test("def a=[1,[x:3]]; switch(a) { [_,int i] => i; [_,[x:i]] => i }", 3);
   }
 
   @Test public void switchOnMap() {
@@ -188,13 +201,6 @@ public class SwitchTests extends BaseTest {
     test("def val =[a:1,b:[2,3],c:3]; switch(val) { [a:1,b:[int x,long y],*] => x+y; default => 2 } == 2", true);
     test("def val =[a:1,b:[2,3],c:3]; switch(val) { [a:1,b:x,*] => x; default => 2 }", Utils.listOf(2,3));
     test("def val =[a:1,b:[z:4],c:3]; switch(val) { [a:1,b:x,*] => x; default => 2 }", Utils.mapOf("z",4));
-  }
-
-  @Test public void patternCoverages() {
-    testError("List a = [1,2]; switch(a) { [x,y],[_,x] => x }", "covered by previous");
-    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] => i; [_,i,'cc'] => 7 }", "covered by previous");
-    testError("def x = 1; switch (x) { String,1 => 2; int,'abc' => 3 }", "covered by previous");
-    test("def a = [1,2]; switch(a) { [1,2],[_,z] => z }", null);
   }
 
   @Test public void switchOnList() {
@@ -326,6 +332,7 @@ public class SwitchTests extends BaseTest {
     test("def a = ['aa',['bb',['cc',4],'bb'],'cc',[4,5,['bb',['cc',4]]]]; switch(a) { [_,[x,y,x],_,[*,[x,y]]] => y }", Utils.listOf("cc",4));
     test("List a = [1,2]; switch(a) { [z],[_,z] => z; default => 3 }", 2);
     test("List a = [1,2,3,2]; switch(a) { [z],[_,z,_,z] => z; default => 3 }", 2);
+    testError("List a = [1,2,3,2]; def x = 1; switch(a) { [z],[_,z,(x+1-1),z] => z; default => 3 }", "expressions not supported");
   }
 
   @Test public void switchArrays() {
@@ -394,5 +401,14 @@ public class SwitchTests extends BaseTest {
     test("switch(1) { 1 => { if (true) return 2 }; 2 => 3 }", 2);
     test("switch(1) { 1 => { if (false) return 2 }; 2 => 3 }", null);
     test("int x = 1; x.map{ switch { 0,1,2 => x.size() }}", Utils.listOf(1));
+  }
+
+  @Test public void switchWithIfExpr() {
+    test("def a = 7; switch (a) { 1,2,3 => it; 7 if true => 11 }", 11);
+    test("def a = 7; switch (a) { 1,2,3 => it; 7 if false => 11; _ => 0 }", 0);
+    test("def a = 7; switch (a) { 1 if it != 2,2 if it == 2,3 => it; 7 if it == 3 => 11; _ => 0 }", 0);
+    test("def a = 7; switch (a) { 1 if it != 2,2 if it == 2,3 => it; 7 if it == 7 => 11; _ => 0 }", 11);
+    test("def a = 7; switch (a) { 1 if it != 2,2 if it == 2,3 => it; 7 if it == sleep(0,7) => 11; _ => 0 }", 11);
+    test("def a = 'abc'; switch (a) { /a(.*)/r if $1 == 'xx' => it + $1; /a(.*)/r if $1 == 'bc' => it + $1*2 }", "abcbcbc");
   }
 }

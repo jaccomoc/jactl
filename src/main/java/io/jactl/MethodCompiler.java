@@ -632,6 +632,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                }
              };
              compileMatchCaseTest(loadValue, ifCanConvertTo, expr.subject.type, patternPair, expr.subject.location, endCheck);
+             if (patternPair.second != null) {
+               // If pattern did not match
+               _dupVal();
+               mv.visitJumpInsn(IFEQ, endCheck);
+               popVal();
+               // Evaluate the "if" expression part
+               compile(patternPair.second);
+             }
              mv.visitLabel(endCheck);
            },
            () -> {

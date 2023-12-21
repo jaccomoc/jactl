@@ -570,7 +570,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
       error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
     }
-    validateNotCovered(expr.cases.stream().flatMap(c -> c.patterns.stream().map(pair -> pair.first)).collect(Collectors.toList()));
+    validateNotCovered(expr.cases.stream().flatMap(c -> c.patterns.stream().filter(pair -> pair.second == null).map(pair -> pair.first)).collect(Collectors.toList()));
 
     if (expr.defaultCase == null) {
       expr.defaultCase = new Expr.Literal(new Token(NULL, expr.location));
@@ -583,7 +583,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                              .orElse(null);
   }
 
-  private JactlType coveringType(Expr pattern) {
+  private static JactlType coveringType(Expr pattern) {
     if (pattern instanceof Expr.TypeExpr) {
       return ((Expr.TypeExpr) pattern).typeVal;
     }
@@ -593,7 +593,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private void validateIsCompatible(JactlType subjectType, Expr pat) {
+  private static void validateIsCompatible(JactlType subjectType, Expr pat) {
     if (pat instanceof Expr.ListLiteral) {
       if (!subjectType.is(ANY,LIST,ARRAY,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
       if (subjectType.is(ARRAY)) {
@@ -614,7 +614,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
   }
 
-  private void validateNotCovered(List<Expr> patterns) {
+  private static void validateNotCovered(List<Expr> patterns) {
     // For each pattern after the first one check there are no previous ones that are a superset
     // of the current pattern
     for (int i = 1; i < patterns.size(); i++) {
@@ -627,13 +627,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
   }
 
-  private boolean isUnderscore(Expr e) { return e instanceof Expr.Identifier && ((Expr.Identifier)e).identifier.is(UNDERSCORE); }
+  private static boolean isUnderscore(Expr e) { return e instanceof Expr.Identifier && ((Expr.Identifier)e).identifier.is(UNDERSCORE); }
 
-  private boolean covers(Expr pattern1, Expr pattern2) {
+  private static boolean covers(Expr pattern1, Expr pattern2) {
     return covers(pattern1, pattern2, new HashMap<>());
   }
 
-  private boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
+  private static boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
     if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl || isUnderscore(pattern1)) {
       JactlType t1 = pattern1 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern1).typeVal : pattern1.type;
       JactlType t2 = pattern2 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern2).typeVal : pattern2.type;
