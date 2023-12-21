@@ -55,7 +55,7 @@ switch(x) {
 In Jactl, `switch` is actually an expression so the code after each `=>` is evaluated and the resulting
 value is returned is that case succeeded:
 ```groovy
-def result = switch (x) {
+def result = switch(x) {
   1       => 'one'
   2       => 'two'
   default => 'unknown'
@@ -66,7 +66,7 @@ If the code does not result in an actual value (for example a `while` loop) then
 
 If multiple values should map to the same result you can separate the values with commas:
 ```groovy
-switch (x) {
+switch(x) {
   1,3,5,7,9  => 'odd'
   2,4,6,8,10 => 'even'
 }
@@ -81,7 +81,7 @@ We can also use literals which are `List` or `Map` literals, and we can support 
 `switch` (if the type of the value which is the subject of the `switch` permits the comparison):
 
 ```groovy
-switch (x) {
+switch(x) {
   1,2,3,4,'abc' => 'primitive'
   [1,2,3]       => 'list'
   [a:1,b:[4,5]] => 'map'
@@ -93,7 +93,7 @@ you will get a compile error.
 For example:
 ```groovy
 int x = 2
-switch (x) {
+switch(x) {
   1,2   => x
   'abc' => "x=$x"
 }
@@ -108,7 +108,7 @@ io.jactl.CompileError: Cannot compare type int to String @ line 4, column 4
 
 In addition to matching against literal values, Jactl also support testing if an expression is of a given type:
 ```groovy
-switch (x) {
+switch(x) {
   String         => 'string'
   int,long       => 'integer'
   double,Decimal => 'floating point'
@@ -117,7 +117,7 @@ switch (x) {
 
 Types and literal values can be mixed in the same `switch` expression:
 ```groovy
-switch (x) {
+switch(x) {
   1, 2, String => '1, 2, or string'
   int ,long    => 'other integral value'
 }
@@ -126,7 +126,7 @@ switch (x) {
 Note that if the order of the matches was the other way around you will get a compile error since `int` already covers
 the case of all int values:
 ```groovy
-switch (x) {
+switch(x) {
   int, long    => 'other integral value'
   1, 2, String => '1, 2, or string'
 }
@@ -144,7 +144,7 @@ class Y extends X {}
 
 def x
 
-switch (x) {
+switch(x) {
   Y => 'type is Y'
   X => 'type is X'
 }
@@ -157,7 +157,7 @@ the match on `Y` can never succeed if it appears after the match on its parent c
 Switch expressions can also be used to do regular expression matches and support the use of capture variables like
 `$1` in the result for that match case:
 ```groovy
-switch (x) {
+switch(x) {
   /(.*)\+(.*)/n  => $1 + $2
   /(.*)-(.*)/n   => $1 - $2
   default        => 0
@@ -176,14 +176,14 @@ appropriate.
 We saw previously that we can match on literals of type `List` and `Map`.
 We can use `_` as a wildcard to match against arbitrary values within a list or map:
 ```groovy
-switch (x) {
+switch(x) {
   [_,_,_]     => 'a list of size 3'
   [k1:_,k2:_] => 'a map of size 2 with keys k1 and k2'
 }
 ```
 We can use `*` to match any number of elements:
 ```groovy
-switch (x) {
+switch(x) {
   [_,_,*] => 'a list with at least two elements'
   [k:_,*] => 'a map with at least one element with key k'
 }
@@ -191,7 +191,7 @@ switch (x) {
 
 If you want to be able to specify the type of the wildcard you can use a type name instead of `_`:
 ```groovy
-switch (x) {
+switch(x) {
   [int,int,String] => '2 ints and a string'
   [int,String,*]   => 'list starting with int and string' 
 }
@@ -202,7 +202,7 @@ being switched on (hence the term _destructuring_):
 
 For example, we can match a list and extract the first element of the list into a variable `a`:
 ```groovy
-switch (x) {
+switch(x) {
   [a,2]         => a + a  // a will be bound to first element of list if second element is 2
   [a,*,b]       => a + b  // a bound to 1st element and b bound to last element
   [k1:a,k2:b,*] => a + b  // a bound to value at k1 and b to value at k2
@@ -214,7 +214,7 @@ The keys themselves are literal values, not binding variables.
 
 Binding variables can occur multiple times:
 ```groovy
-switch (x) {
+switch(x) {
   [a,a]   => "a=$a"  // match all 2 element lists where both elements are the same
   [a,_,a] => "a=$a"  // 3 element list where first and last are the same 
 }
@@ -222,7 +222,7 @@ switch (x) {
 
 Binding variables can also be typed if you want to match on the type:
 ```groovy
-switch (x) {
+switch(x) {
   [int a, b, *]      => "a=$a, b=$b"   // match if first element is int
   [int a,int b], [a] => "a=$a"         // match 1 or 2 element list if first element is an int 
 }
@@ -235,14 +235,14 @@ same type and will only match if the type matches.
 
 Binding variables can occur anywhere within the structure being matched against:
 ```groovy
-switch (x) {
+switch(x) {
   [[a,b],*,[[a,*],[b,*]]] => a + b
 }
 ```
 
 Binding variables can appear at the top level of a pattern as well and can also have a type:
 ```groovy
-switch (x) {
+switch(x) {
   String s => "string with value $s"
   int i    => "int with value $i"
   a        => "other type with value $a"
@@ -252,7 +252,7 @@ switch (x) {
 The wildcard variable `_` can also appear at the top level and can be used as way to provide a `default` case instead
 of using `default`:
 ```groovy
-switch (x) {
+switch(x) {
   1,2,3 => 'number'
   _     => 'other'
 }
@@ -279,7 +279,7 @@ If you are in a context where there is no `it` then you will get an error about 
 Within the `switch` expression itself the `it` variable is bound to the value of the expression passed to `switch`.
 For example:
 ```groovy
-switch (x.substring(3,6)) {
+switch(x.substring(3,6)) {
   'ABC','XYZ'   => "${it.toLowerCase()}:123"    // it has value of x.substring(3,6)
   'XXY'         => 'xxy789'
 }
@@ -291,7 +291,7 @@ In addition to specifying a pattern or literal value to match against, each patt
 optional `if` expression that is evaluated if the pattern/literal matches which must then also evaluate to true
 for that case to match:
 ```groovy
-switch (x.substring(3,6)) {
+switch(x.substring(3,6)) {
   'ABC' if x.size() < 10, 'XYZ' if x.size() > 5 => it * 2
   'XXY' if x[0] == 'a'                          => 'xxy'
 }
@@ -299,7 +299,7 @@ switch (x.substring(3,6)) {
 
 Within the `if` expression references to any binding variables and to `it` are allowed:
 ```groovy
-switch (x) {
+switch(x) {
   [int a,*]    if a < 3                => "list starts with $a < 3"
   [String a,*] if x.size() < 5         => "list with < 5 elems starts with string $a"
   [a,*,b]      if a.size() == b.size() => "first and last elem of same size" 
@@ -310,7 +310,7 @@ switch (x) {
 
 To match on multiple values at the same time just pass a list of the values to the `switch`:
 ```groovy
-switch ([x,y]) {
+switch([x,y]) {
   [[a,*],[*,a]] => 'first elem of x is same as last elem of y'
   [a,a]         => 'x equals y'
 }
@@ -324,7 +324,7 @@ any of the field values or values within the field values:
 class X { int i; int j; List list }
 X x = new X(i:2, j:3, list:[1,2,[3]])
 
-switch (x) {
+switch(x) {
   [i:2,j:3]             => 'i=2, j=3'
   [i:_,j:3]             => 'j=3'
   [i:i,*,list:[_,_,[b]] => "i is $i, b=$b"  // note: 'i' used for field name and binding variable name
@@ -333,7 +333,7 @@ switch (x) {
 
 If you want to be more explicit about the type you can use a class constructor:
 ```groovy
-switch (x) {
+switch(x) {
   X(i:1,j:3)      => 'type is X: i=1, j=3'
   X(list:[_,_,a]) => "type is X: last elem of X.list is $a"
 }
