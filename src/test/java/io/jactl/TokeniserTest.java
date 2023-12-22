@@ -66,7 +66,6 @@ class TokeniserTest {
     doTest.accept(";", TokenType.SEMICOLON);
     doTest.accept("_", TokenType.UNDERSCORE);
     doTest.accept("->", TokenType.ARROW);
-    doTest.accept("=>", TokenType.EQUAL_ARROW);
     doTest.accept("!=", TokenType.BANG_EQUAL);
     doTest.accept("==", TokenType.EQUAL_EQUAL);
     doTest.accept("<=", TokenType.LESS_THAN_EQUAL);

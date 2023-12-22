@@ -1979,7 +1979,7 @@ public class Parser {
       else {
         patterns = switchPatterns();
       }
-      expect(EQUAL_ARROW);
+      expect(ARROW);
       Expr expr = expression();
       if (expr instanceof Expr.Closure) {
         Expr.Closure closure = (Expr.Closure) expr;

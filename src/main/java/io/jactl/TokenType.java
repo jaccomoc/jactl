@@ -62,7 +62,6 @@ public enum TokenType {
   AMPERSAND_AMPERSAND("&&"),
   PIPE_PIPE("||"),
   ARROW("->"),
-  EQUAL_ARROW("=>"),
   MINUS_EQUAL("-="),
   PLUS_EQUAL("+="),
   SLASH_EQUAL("/="),
