@@ -47,7 +47,7 @@ public class SwitchTests extends BaseTest {
     test("def it = 1; switch{ 1 -> 2 }", 2);
     test("def it = 1; switch{ 1,2,3 -> 2 }", 2);
     test("def it = 4; switch{ 1,2,3 -> 2 }", null);
-    testError("int x = 1; switch (x) { 1,'abc',2 -> 2 }", "cannot compare type int to String");
+    testError("int x = 1; switch (x) { 1,'abc',2 -> 2 }", "can never match type string");
     test("def x = 1; switch (x) { 1,'abc',2 -> 2 }", 2);
     test("def it = 1; switch{ 1,'abc',2 -> 2 }", 2);
     test("def x = 3; switch (x) { 1,'abc',2 -> 2 }", null);
@@ -78,7 +78,7 @@ public class SwitchTests extends BaseTest {
     test("def x = [1,2,3] as int[]; switch (x) { [1,2,3] -> 2; default -> 0 }", 2);
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2; default -> 0 }", 2);
     test("def it = [1,2,3] as int[]; switch\n{\n [\n1,\n2,\n3\n]\n ->\n 2\ndefault\n ->\n 0\n }", 2);
-    testError("int x = 2\nswitch (x) {\n  1,2 -> x\n  'abc' -> x\n}", "cannot compare type int to string");
+    testError("int x = 2\nswitch (x) {\n  1,2 -> x\n  'abc' -> x\n}", "can never match type string");
   }
 
   @Test public void switchWithArrays() {
@@ -107,30 +107,30 @@ public class SwitchTests extends BaseTest {
   @Test public void switchOnType() {
     test("switch (1) { int -> 2 }", 2);
     testError("String x = switch (1) { int -> 2 }", "cannot convert object of type int to string");
-    testError("switch (1) { String -> 2 }", "can never be string");
-    testError("switch (1) { String,int -> 2 }", "can never be string");
+    testError("switch (1) { String -> 2 }", "can never match type string");
+    testError("switch (1) { String,int -> 2 }", "can never match type string");
     test("def x = 1; switch (x) { String,int -> 2 }", 2);
     test("def x = 1; switch (x) { String -> 2; int -> 3 }", 3);
     test("def x = 'abc'; switch (x) { String,1 -> 2; int -> 3 }", 2);
     test("def x = 'abc'; switch (x) { long,1 -> 2; int,'abc' -> 3 }", 3);
     test("def x = []; switch (x) { String -> 2\n int -> 3\n List -> 4\n default -> 5 }", 4);
     test("def x = [:]; switch (x) { String -> 2\n Map,int -> 3; List -> 4\n default -> 5 }", 3);
-    testError("int x = 3; switch(x) { long -> 4; default -> 2}", "can never be long");
-    testError("int x = 3; switch(x) { long i -> i; default -> 2}", "can never be long");
+    testError("int x = 3; switch(x) { long -> 4; default -> 2}", "can never match type long");
+    testError("int x = 3; switch(x) { long i -> i; default -> 2}", "can never match type long");
     test("def x = 3; switch(x) { long i -> i; int i -> i*i; default -> 2} == 9", true);
     test("switch(null) { long -> 1; int -> 2; String -> 3; def -> 4 }", 4);
     test("def x = null; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", 4);
-    testError("List x = null; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", "can never be long");
+    testError("List x = null; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", "can never match type long");
     test("def x = 'abc' as byte[]; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", 4);
   }
 
   @Test public void patternCoverages() {
-    testError("List a = [1,2]; switch(a) { [x,y],[_,x] -> x }", "covered by previous");
+    testError("List a = [1,2]; switch(a) { [x,y],[_,x] -> x }", "covered by a previous");
     test("List a = [1,2]; switch(a) { [x,y] if x == 1,[_,x] -> x }", 1);
-    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] -> i; [_,i,'cc'] -> 7 }", "covered by previous");
-    testError("def x = 1; switch (x) { String,1 -> 2; int,'abc' -> 3 }", "covered by previous");
+    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] -> i; [_,i,'cc'] -> 7 }", "covered by a previous");
+    testError("def x = 1; switch (x) { String,1 -> 2; int,'abc' -> 3 }", "covered by a previous");
     test("def a = [1,2]; switch(a) { [1,2],[_,z] -> z }", null);
-    testError("def a; switch(a) { [_,i,'cc'] -> i; [_,[x:i],'cc'] -> 7 }", "covered by previous");
+    testError("def a; switch(a) { [_,i,'cc'] -> i; [_,[x:i],'cc'] -> 7 }", "covered by a previous");
     test("def a=[1,[x:3]]; switch(a) { [_,i,'cc'] -> i; [_,[x:i]] -> i }", 3);
     test("def a=[1,[x:3]]; switch(a) { [_,int i] -> i; [_,[x:i]] -> i }", 3);
   }
@@ -142,10 +142,10 @@ public class SwitchTests extends BaseTest {
     test("switch ([:]) { [a:_] -> 1; default -> 2 }", 2);
     test("switch ([:]) { [a:_,*] -> 1; default -> 2 }", 2);
     test("switch ([a:1]) { [a:1] -> 1; default -> 2 }", 1);
-    testError("switch ([a:1]) { [_] -> 1; default -> 2 }", "can never match");
+    testError("switch ([a:1]) { [_] -> 1; default -> 2 }", "can never match type");
     test("switch ([a:1]) { [a:_] -> 1; default -> 2 }", 1);
     test("switch ([a:1]) { [b:_] -> 1; default -> 2 }", 2);
-    testError("switch ([a:1]) { [*] -> 1; default -> 2 }", "can never match a list");
+    testError("switch ([a:1]) { [*] -> 1; default -> 2 }", "can never match type list");
     test("switch ([a:1,b:2]) { [a:_] -> 1; default -> 2 }", 2);
     test("switch ([a:1,b:2]) { [a:_,b:_] -> 1; default -> 2 }", 1);
     test("switch ([a:1,b:2]) { [a:_,*] -> 1; default -> 2 }", 1);
@@ -205,7 +205,7 @@ public class SwitchTests extends BaseTest {
 
   @Test public void switchOnList() {
     test("def x = 1; switch (x) { [a,b] -> 1; _ -> 2 }", 2);
-    testError("switch('abc') { ['a','b','c'] -> true; default -> false }", "can never match a list");
+    testError("switch('abc') { ['a','b','c'] -> true; default -> false }", "can never match type list");
     test("switch ([]) { [] -> 1; default -> 2 }", 1);
     test("switch ([1]) { [] -> 1; default -> 2 }", 2);
     test("switch ([1]) { [_] -> 1; default -> 2 }", 1);
@@ -248,7 +248,7 @@ public class SwitchTests extends BaseTest {
     test("List x = [1,2,3]; switch(x) { List i -> i }", Utils.listOf(1,2,3));
     test("List x = [1,2,3]; switch(x) { def i -> i }", Utils.listOf(1,2,3));
     test("List x = [1,2,3]; switch(x.size()) { int i -> i }", 3);
-    testError("List x = [1,2,3]; switch(x.size()) { long i -> i }", "can never be long");
+    testError("List x = [1,2,3]; switch(x.size()) { long i -> i }", "can never match type long");
     test("List x = [1,2,3]; switch(x) { [1,i,3] -> i; [1,4,4] -> 7 }", 2);
     test("List x = [1,2,3]; switch(x) { [1,int i,3] -> i; [1,4,4] -> 7 }", 2);
     test("List x = [1,2,3]; switch(x) { [1,def i,3] -> i; [1,4,4] -> 7 }", 2);
@@ -266,8 +266,8 @@ public class SwitchTests extends BaseTest {
     testError("List a = [1,2,3]; switch(a) { List a -> a }", "binding variable 'a' shadows another variable");
     test("List a = [1,2,3]; switch(a) { def i -> i }", Utils.listOf(1,2,3));
     test("List a = [1,2,3]; switch(a.size()) { int i -> i }", 3);
-    testError("List a = [1,2,3]; switch(a.size()) { long i -> i }", "can never be long");
-    testError("List a = [1,2,3]; switch(a) { [1,i,3] -> i; [1,4,3] -> 7 }", "covered by previous");
+    testError("List a = [1,2,3]; switch(a.size()) { long i -> i }", "can never match type long");
+    testError("List a = [1,2,3]; switch(a) { [1,i,3] -> i; [1,4,3] -> 7 }", "covered by a previous");
     test("List a = [1,2,3]; switch(a) { [1,i,3] -> i; [1,3] -> 7 }", 2);
     test("List a = [1,2,3]; switch(a) { [1,int i,3] -> i; [1,3] -> 7 }", 2);
     test("List a = [1,2,3]; switch(a) { [1,def i,3] -> i; [1,3] -> 7 }", 2);
@@ -299,7 +299,7 @@ public class SwitchTests extends BaseTest {
     test("List a = ['aa','bb','cc']; switch(a) { List i -> i }", Utils.listOf("aa","bb","cc"));
     test("List a = ['aa','bb','cc']; switch(a) { def i -> i }", Utils.listOf("aa","bb","cc"));
     test("List a = ['aa','bb','cc']; switch(a.size()) { int i -> i }", 3);
-    testError("List a = ['aa','bb','cc']; switch(a.size()) { long i -> i }", "can never be long");
+    testError("List a = ['aa','bb','cc']; switch(a.size()) { long i -> i }", "can never match type long");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] -> i; [4,'cc'] -> 7 }", "bb");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',String i,'cc'] -> i; ['aa',4,'cc'] -> 7 }", "bb");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',def i,'cc'] -> i; ['aa','cc'] -> 7 }", "bb");
@@ -354,7 +354,7 @@ public class SwitchTests extends BaseTest {
     test("int[] x = [1,2,3] as int[]; switch(x) { int[] i -> i }", new int[]{ 1,2,3 });
     test("int[] x = [1,2,3] as int[]; switch(x) { def i -> i }", new int[]{ 1,2,3 });
     test("int[] x = [1,2,3] as int[]; switch(x.size()) { int i -> i }", 3);
-    testError("int[] x = [1,2,3] as int[]; switch(x.size()) { long i -> i; int j -> j*j }", "can never be long");
+    testError("int[] x = [1,2,3] as int[]; switch(x.size()) { long i -> i; int j -> j*j }", "can never match type long");
     test("int[] x = [1,2,3] as int[]; switch(x) { [1,i,3] -> i; [1,3] -> 7 }", 2);
     test("int[] x = [1,2,3] as int[]; switch(x) { [1,int i,3] -> i; [1,3] -> 7 }", 2);
     test("int[] x = [1,2,2] as int[]; switch(x) { [1,i,i] -> i; [1,4,3] -> 7 }", 2);
@@ -368,7 +368,7 @@ public class SwitchTests extends BaseTest {
 
   @Test public void switchOnClassTypes() {
     test("class X{}; X x = new X(); switch(x) { X -> 1 }", 1);
-    testError("class X{}; X x = new X(); switch(x) { X -> 1; int -> 2 }", "can never be int");
+    testError("class X{}; X x = new X(); switch(x) { X -> 1; int -> 2 }", "can never match type int");
     testError("class X{}; X x = new X(); switch(x) { X -> 1; def -> 2 }", "unreachable switch case");
     testError("class X{}; X x = new X(); switch(x) { def -> 2; X -> 1 }",  "unreachable switch case");
     test("class X{}; def x = new X(); switch(x) { X -> 1; int -> 2 }", 1);
@@ -410,5 +410,24 @@ public class SwitchTests extends BaseTest {
     test("def a = 7; switch (a) { 1 if it != 2,2 if it == 2,3 -> it; 7 if it == 7 -> 11; _ -> 0 }", 11);
     test("def a = 7; switch (a) { 1 if it != 2,2 if it == 2,3 -> it; 7 if it == sleep(0,7) -> 11; _ -> 0 }", 11);
     test("def a = 'abc'; switch (a) { /a(.*)/r if $1 == 'xx' -> it + $1; /a(.*)/r if $1 == 'bc' -> it + $1*2 }", "abcbcbc");
+  }
+
+  @Test public void switchWithClassConstructor() {
+    test("class X{ int i }; def x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
+    test("class X{ int i }; X x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
+    test("class X{ long j }; def x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
+    test("class X{ long j }; X x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
+    test("class X{ String s }; def x = new X('abc'); switch (x) { X('abc') -> true; _ -> false }", true);
+    test("class X{ String s }; X x = new X('abc'); switch (x) { X('abc') -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(3,4) -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:3,j:4) -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X() -> true; _ -> false }", true);
+    testError("class X{ int i; long j }; def x = new X(3,4); switch (x) { X() -> true; X(i:1) -> false }", "covered by a previous");
+    testError("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4,5); switch (x) { X(i:1) -> true; Y(i:1) -> false }", "covered by a previous");
+    test("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4,5); switch (x) { X(i:2) -> true; Y(i:1) -> false }", null);
+    test("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4,5); switch (x) { X(i:2) -> true; Y(i:1) -> false; _ -> 3 }", 3);
+    test("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(2,4,5); switch (x) { X(i:2) -> true; Y(i:1) -> false; _ -> 3 }", true);
+    test("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(1,4,5); switch (x) { X(i:2) -> true; Y(i:1) -> false; _ -> 3 }", false);
+    testError("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4); switch (x) { X(xxx:2) -> true; Y(i:1) -> false }", "xxx does not exist");
   }
 }

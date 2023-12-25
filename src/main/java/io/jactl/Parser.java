@@ -2025,7 +2025,7 @@ public class Parser {
 
     // Verify that the only non-literals are identifiers (for capture vars) or '_' or '*'
     // and create VarDecl expressions for first use of each identifier.
-    return validateListMapPatterns(patterns);
+    return validateSwitchPatterns(patterns);
   }
 
   /**
@@ -2044,7 +2044,7 @@ public class Parser {
   /**
    *# switchPattern -&gt; literal
    *#                | type
-   *#                | expression
+   *#                | className ( "(" mapEntries ")" ) ?
    *#                | exprString
    *#                | "_"
    *#                | IDENTIFIER
@@ -2077,6 +2077,16 @@ public class Parser {
     }
     else if (isType()) {
       expr = typeOrVarDecl();
+      // Check for class name and constructor args (named or not)
+      if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(JactlType.INSTANCE)) {
+        matchAny(EOL);
+        if (matchAny(LEFT_PAREN)) {
+          matchAny(EOL);
+          if (!matchAny(RIGHT_PAREN)) {
+            expr = new Expr.ConstructorPattern(((Expr.TypeExpr) expr).token, (Expr.TypeExpr) expr, arguments());
+          }
+        }
+      }
     }
     else if (peek().is(UNDERSCORE)) {
       expr = identifier(UNDERSCORE);
@@ -2111,13 +2121,13 @@ public class Parser {
 
   /////////////////////////////////////////////////
 
-  private List<Pair<Expr,Expr>> validateListMapPatterns(List<Pair<Expr,Expr>> exprs) {
-    return _validateListMapPattern(exprs, new HashSet<>());
+  private List<Pair<Expr,Expr>> validateSwitchPatterns(List<Pair<Expr,Expr>> exprs) {
+    return _validateSwitchPattern(exprs, new HashSet<>());
   }
 
-  private List<Pair<Expr,Expr>> _validateListMapPattern(List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
+  private List<Pair<Expr,Expr>> _validateSwitchPattern(List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
     return exprs.stream()
-                .map(p -> Pair.create(_validateListMapPattern(p.first, bindingVars, new HashSet<>()), p.second))
+                .map(p -> Pair.create(_validateSwitchPattern(p.first, bindingVars, new HashSet<>()), p.second))
                 .collect(Collectors.toList());
   }
 
@@ -2129,10 +2139,10 @@ public class Parser {
    * @param varsSeen    binding variables seen in this pattern
    * @return transformed expression
    */
-  private Expr _validateListMapPattern(Expr expr, Set<String> bindingVars, Set<String> varsSeen) {
+  private Expr _validateSwitchPattern(Expr expr, Set<String> bindingVars, Set<String> varsSeen) {
     if (expr instanceof Expr.ListLiteral) {
       Expr.ListLiteral listExpr = (Expr.ListLiteral) expr;
-      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateListMapPattern(e, bindingVars, varsSeen)).collect(Collectors.toList());
+      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateSwitchPattern(e, bindingVars, varsSeen)).collect(Collectors.toList());
       listExpr.exprs.stream()
                     .filter(e -> e instanceof Expr.Identifier && ((Expr.Identifier) e).identifier.is(STAR))
                     .skip(1)
@@ -2142,13 +2152,22 @@ public class Parser {
     }
     if (expr instanceof Expr.MapLiteral) {
       Expr.MapLiteral mapLiteral = (Expr.MapLiteral)expr;
+      if (mapLiteral.literalKeyMap == null) {
+        error("Field names must be constant strings",
+              mapLiteral.entries.stream().filter(pair -> !(pair.first instanceof Expr.Literal)).map(p -> p.first).findFirst().orElse(expr).location);
+      }
       mapLiteral.entries = mapLiteral.entries.stream().map(pair -> {
         if (!(pair.first instanceof Expr.Literal)) {
           error("Expected string constant for map key", pair.first.location);
         }
-        return Pair.create(pair.first, _validateListMapPattern(pair.second, bindingVars, varsSeen));
+        return Pair.create(pair.first, _validateSwitchPattern(pair.second, bindingVars, varsSeen));
       }).collect(Collectors.toList());
       return mapLiteral;
+    }
+    if (expr instanceof Expr.ConstructorPattern) {
+      Expr.ConstructorPattern constructorPattern = (Expr.ConstructorPattern) expr;
+      constructorPattern.args = constructorPattern.args.stream().map(a -> _validateSwitchPattern(a, bindingVars, varsSeen)).collect(Collectors.toList());
+      return constructorPattern;
     }
     if (expr instanceof Expr.Literal || expr instanceof Expr.TypeExpr) {
       return expr;
@@ -2774,10 +2793,11 @@ public class Parser {
         return isSimple(expr.subject) && expr.cases.stream().allMatch(this::isSimple);
       }
 
-      @Override
-      public Boolean visitSwitchCase(Expr.SwitchCase expr) {
+      @Override public Boolean visitSwitchCase(Expr.SwitchCase expr) {
         return expr.patterns.stream().allMatch(pair -> isSimple(pair.first)) && isSimple(expr.result);
       }
+
+      @Override public Boolean visitConstructorPattern(Expr.ConstructorPattern expr) { return false; }
 
       // These should never occur here since they are never created in Parser (only in Resolver)
       @Override public Boolean visitArrayLength(Expr.ArrayLength expr)       { return true; }

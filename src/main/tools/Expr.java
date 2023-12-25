@@ -122,6 +122,16 @@ class Expr {
            this instanceof Expr.Literal && ((Expr.Literal) this).value.is(STAR);
   }
 
+  public boolean isTypePattern() {
+    return this instanceof Expr.TypeExpr || this instanceof Expr.ConstructorPattern || this instanceof Expr.VarDecl;
+  }
+
+  public JactlType patternType() {
+    return this instanceof Expr.TypeExpr ? ((Expr.TypeExpr) this).typeVal :
+           this instanceof Expr.ConstructorPattern ? ((Expr.ConstructorPattern)this).typeExpr.typeVal :
+           this.type;
+  }
+
 
   class Binary extends Expr {
     Expr  left;
@@ -465,10 +475,22 @@ class Expr {
   }
 
   class SwitchCase extends Expr {
-    List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/expression
+    List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/ifExpression
     Expr                  result;
     Stmt.Block            @block;          // Need a block for captured regex and destructured vars
     Expr                  @switchSubject;  // Need to know type of switch expression for binding variables
+  }
+
+  /**
+   * For use in constructor pattern.
+   * Can be named or not:
+   *   X(1,2,[_,_,a])
+   *   X(i:1,j:2,list:[_,_,a])
+   */
+  class ConstructorPattern extends Expr {
+    Token      token;
+    TypeExpr   typeExpr;
+    List<Expr> args;
   }
 
   /**

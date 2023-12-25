@@ -513,7 +513,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Map<JactlType, Token> typeLocals = caseRuns.stream()
                                                //.filter(c -> !canUseSwitch.apply(c))
                                                .flatMap(c -> c.stream()
-                                                              .filter(p -> !(p.first instanceof Expr.TypeExpr))
+                                                              .filter(p -> !(p.first.isTypePattern()))
                                                               .map(p -> Pair.create(p.first.type, p.first.location)))
                                                .filter(p -> !p.first.equals(expr.subject.type))
                                                .filter(p -> !p.first.is(LIST,MAP))
@@ -605,10 +605,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  @Override
-  public Void visitSwitchCase(Expr.SwitchCase expr) {
+  @Override public Void visitSwitchCase(Expr.SwitchCase expr) {
     return null;
   }
+  @Override public Void visitConstructorPattern(Expr.ConstructorPattern expr) { return null; }
 
   private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, boolean subjectIsAny, Map<JactlType, Integer> isTypeSlots, Map<JactlType, Integer> valueSlots, Label end, Map<Expr, Label> nonSimpleLabels) {
     emitIf(expr.isAsync, IfTest.IS_TRUE, () -> {
@@ -664,7 +664,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void compileMatchCaseTest(Consumer<JactlType> loadValue, Consumer<JactlType> ifCanConvertTo, JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck) {
-    JactlType patternType = pattern instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern).typeVal : pattern.type;
+    JactlType patternType = pattern.patternType();
     if (isUnderscore(pattern)) {
       // Always match placeholder pattern
       loadConst(true);
@@ -714,13 +714,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else if (pattern instanceof Expr.ListLiteral) {
         if (!subjectType.is(ITERATOR, LIST, ARRAY, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
         List<Expr> exprs = ((Expr.ListLiteral) pattern).exprs;
-        compileDestructuring(subjectType, true, exprs.size(), exprs.stream().anyMatch(Expr::isStar), exprs, loadValue, subjectLocation, endCheck);
+        compileDestructuring(subjectType, patternType, exprs.size(), exprs.stream().anyMatch(Expr::isStar), exprs, loadValue, subjectLocation, endCheck);
       }
       else if (pattern instanceof Expr.MapLiteral) {
         if (!subjectType.is(ITERATOR, MAP, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
         List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral) pattern).entries;
-        compileDestructuring(subjectType, false, exprs.size(), exprs.stream().anyMatch(p -> p.first.isStar()), exprs, loadValue, subjectLocation, endCheck);
+        compileDestructuring(subjectType, patternType, exprs.size(), exprs.stream().anyMatch(p -> p.first.isStar()), exprs, loadValue, subjectLocation, endCheck);
       }
+    } else if (pattern instanceof Expr.ConstructorPattern) {
+      if (!subjectType.is(INSTANCE, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
+      List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral)((Expr.ConstructorPattern) pattern).args.get(0)).entries;
+      compileDestructuring(subjectType, patternType, exprs.size(), false, exprs, loadValue, subjectLocation, endCheck);
     }
     else if (pattern instanceof Expr.RegexMatch) {
       compile(pattern);
@@ -734,91 +738,147 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return expr instanceof Expr.Identifier && ((Expr.Identifier) expr).identifier.is(UNDERSCORE);
   }
 
-  private void compileDestructuring(JactlType parentType, boolean isList, int size, boolean hasStar, List exprs, Consumer<JactlType> loadValue, Token subjectLocation, Label endCheck) {
+  private void compileDestructuring(JactlType parentType, JactlType patternType, int size, boolean hasStar, List exprs, Consumer<JactlType> loadValue, Token subjectLocation, Label endCheck) {
     if (parentType.is(ANY)) {
       // Check for appropriate type
       loadValue.accept(ANY);
-      isInstanceOf(isList ? new JactlType[]{ ARRAY,LIST } : new JactlType[]{ MAP });
+      isInstanceOf(patternType.is(LIST) ? new JactlType[]{ ARRAY,LIST } : new JactlType[]{ patternType });
       _dupVal();
       mv.visitJumpInsn(IFEQ, endCheck);
       popVal();
     }
 
     // Do size check first
-    int     minSize = hasStar && size == 1 ? -1 : size - (hasStar ? 1 : 0);
-    int     maxSize = hasStar ? -1 : size;
-    if (minSize >= 0 && minSize == maxSize) {
-      checkSize(loadValue, subjectLocation, endCheck, minSize, IFNE);
-    }
-    else {
-      if (minSize > 0)  { checkSize(loadValue, subjectLocation, endCheck, minSize, IFLT); }
-      if (maxSize >= 0) { checkSize(loadValue, subjectLocation, endCheck, maxSize, IFGT); }
+    if (patternType.is(LIST,MAP)) {
+      int     minSize = hasStar && size == 1 ? -1 : size - (hasStar ? 1 : 0);
+      int     maxSize = hasStar ? -1 : size;
+      if (minSize >= 0 && minSize == maxSize) {
+        checkSize(loadValue, subjectLocation, endCheck, minSize, IFNE);
+      }
+      else {
+        if (minSize > 0)  { checkSize(loadValue, subjectLocation, endCheck, minSize, IFLT); }
+        if (maxSize >= 0) { checkSize(loadValue, subjectLocation, endCheck, maxSize, IFGT); }
+      }
     }
     if (size > 0) {
       boolean seenStar = false;
-      int subElemSlot = stack.allocateSlot(parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY);
+      Map<JactlType,Integer> subElemSlots;
+      if (patternType.is(INSTANCE)) {
+        subElemSlots = ((List<Pair<Expr, Expr>>) exprs).stream()
+                                                       .map(pair -> patternType.getClassDescriptor().getField(pair.first.constValue.toString()))
+                                                       .distinct()
+                                                       .collect(Collectors.toMap(t -> t, t -> stack.allocateSlot(t)));
+      }
+      else {
+        subElemSlots = new HashMap<>();
+        JactlType type = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
+        subElemSlots.put(type, stack.allocateSlot(type));
+      }
+      int subElemSlot;
       for (int i = 0; i < size; i++) {
         Expr subExpr;
         JactlType elemType = null;
-        if (isList) {
-          subExpr = (Expr) exprs.get(i);
-          if (isUnderscore(subExpr)) {
-            continue;
-          }
-          if (subExpr.isStar()) {
-            seenStar = true;
-            continue;
-          }
-          // Get element and store in a local
-          loadValue.accept(null);
-          // Convert index to negative offset from end if needed
-          int idx = seenStar ? i - size : i;
-          loadConst(idx);
-          if (idx < 0) {
+        switch (patternType.getType()) {
+          case LIST: {
+            subExpr = (Expr) exprs.get(i);
+            if (isUnderscore(subExpr)) {
+              continue;
+            }
+            if (subExpr.isStar()) {
+              seenStar = true;
+              continue;
+            }
+            // Get element and store in a local
             loadValue.accept(null);
-            emitLength(subjectLocation);
-            expect(2);
-            mv.visitInsn(IADD);
-            popType();
+            // Convert index to negative offset from end if needed
+            int idx = seenStar ? i - size : i;
+            loadConst(idx);
+            if (idx < 0) {
+              loadValue.accept(null);
+              emitLength(subjectLocation);
+              expect(2);
+              mv.visitInsn(IADD);
+              popType();
+            }
+            unsafeLoadElem(parentType, subjectLocation);
+            elemType = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
+            subElemSlot = subElemSlots.get(elemType);
+            storeLocal(subElemSlot);
+            break;
           }
-          unsafeLoadElem(parentType, subjectLocation);
-          storeLocal(subElemSlot);
-          elemType = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
-        }
-        else {
-          // Map
-          Pair<Expr,Expr> keyVal = (Pair)exprs.get(i);
-          subExpr = keyVal.second;
-          elemType = ANY;
-          if (keyVal.first.isStar()) {
-            continue;
-          }
-          if (isUnderscore(subExpr)) {
-            // Need to check for presence of key
+          case MAP: {
+            // Map
+            Pair<Expr, Expr> keyVal = (Pair) exprs.get(i);
+            subExpr = keyVal.second;
+            elemType = ANY;
+            if (keyVal.first.isStar()) {
+              continue;
+            }
+            if (isUnderscore(subExpr)) {
+              // Need to check for presence of key
+              loadValue.accept(MAP);
+              compile(keyVal.first);
+              expect(2);
+              invokeMethod(Map.class, "containsKey", Object.class);
+              _dupVal();
+              mv.visitJumpInsn(IFEQ, endCheck);
+              popVal();
+              continue;
+            }
             loadValue.accept(MAP);
             compile(keyVal.first);
             expect(2);
-            invokeMethod(Map.class, "containsKey", Object.class);
+            invokeMethod(Map.class, "get", Object.class);
             _dupVal();
-            mv.visitJumpInsn(IFEQ, endCheck);
-            popVal();
-            continue;
+            subElemSlot = subElemSlots.get(ANY);
+            storeLocal(subElemSlot);
+            Label isNotNull = new Label();
+            mv.visitJumpInsn(IFNONNULL, isNotNull);
+            _loadConst(false);
+            mv.visitJumpInsn(GOTO, endCheck);
+            isNotNull:
+            mv.visitLabel(isNotNull);
+            break;
           }
-          loadValue.accept(MAP);
-          compile(keyVal.first);
-          expect(2);
-          invokeMethod(Map.class, "get", Object.class);
-          _dupVal();
-          storeLocal(subElemSlot);
-          Label isNotNull = new Label();
-          mv.visitJumpInsn(IFNONNULL, isNotNull);
-          _loadConst(false);
-          mv.visitJumpInsn(GOTO, endCheck);
-         isNotNull:
-          mv.visitLabel(isNotNull);
+          case INSTANCE: {
+            // Map
+            Pair<Expr, Expr> keyVal = (Pair) exprs.get(i);
+            subExpr = keyVal.second;
+            if (isUnderscore(subExpr)) {
+              // We already know that field exists in class (checked in Resolver)
+              // so nothing to do for _ as field value.
+              continue;
+            }
+            loadValue.accept(parentType);
+            if (peek().is(ANY)) {
+              isInstanceOf(patternType);
+              _dupVal();
+              mv.visitJumpInsn(IFEQ, endCheck);
+              popVal();
+              loadValue.accept(parentType);
+              checkCast(patternType);
+            }
+            String fieldName = keyVal.first.constValue.toString();
+            elemType = patternType.getClassDescriptor().getField(fieldName);
+            loadClassField(patternType.getInternalName(), fieldName, elemType, false);
+            subElemSlot = subElemSlots.get(elemType);
+            storeLocal(subElemSlot);
+            if (elemType.isRef()) {
+              Label isNotNull = new Label();
+              _loadLocal(subElemSlot);
+              mv.visitJumpInsn(IFNONNULL, isNotNull);
+              _loadConst(false);
+              mv.visitJumpInsn(GOTO, endCheck);
+             isNotNull:
+              mv.visitLabel(isNotNull);
+            }
+            break;
+          }
+          default: throw new IllegalStateException("Internal error: unexpected type " + patternType);
         }
+        int finalSubElemSlot = subElemSlot;
         compileMatchCaseTest(t -> {
-                               loadLocal(subElemSlot);
+                               loadLocal(finalSubElemSlot);
                                if (t != null) {
                                  convertTo(t, subExpr, true, subExpr.location);
                                }
@@ -827,7 +887,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                // Check if type matches and if not jump to end with false on stack
                                if (caseType.is(ANY)) { return; }
                                // Check if we can convert
-                               loadLocal(subElemSlot);
+                               loadLocal(finalSubElemSlot);
                                box();
                                loadConst(caseType.boxed());
                                invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_TYPE, Object.class, Class.class);
@@ -845,7 +905,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         popType();
         popVal();
       }
-      stack.freeSlot(subElemSlot);
+      subElemSlots.forEach((k,v) -> stack.freeSlot(v));
     }
     loadConst(true);
   }

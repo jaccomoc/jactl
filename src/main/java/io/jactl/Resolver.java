@@ -561,7 +561,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.cases.forEach(c -> c.patterns.stream().map(pair -> pair.first).forEach(p -> {
       JactlType type = coveringType(p);
       if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(p.type) || (type != null && ct.isAssignableFrom(type)))) {
-        error("Unreachable switch case due to previous case that matches all input", p.location);
+        error("Unreachable switch case (covered by a previous case)", p.location);
       }
       if (type != null) {
         coveredTypes.add(type);
@@ -594,24 +594,37 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private static void validateIsCompatible(JactlType subjectType, Expr pat) {
-    if (pat instanceof Expr.ListLiteral) {
-      if (!subjectType.is(ANY,LIST,ARRAY,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
-      if (subjectType.is(ARRAY)) {
-        ((Expr.ListLiteral) pat).exprs.forEach(subPat -> validateIsCompatible(subjectType.getArrayElemType(), subPat));
+    if (subjectType.is(ANY)) {
+      return;
+    }
+    if (pat instanceof Expr.RegexMatch) {
+      if (!subjectType.is(STRING)) {
+        error("Cannot compare type " + subjectType + " to regex string", pat.location);
       }
     }
-    else if (pat instanceof Expr.TypeExpr || pat instanceof Expr.VarDecl) {
-      JactlType type = pat instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pat).typeVal : pat.type;
-      if (!subjectType.is(ANY) && !subjectType.equals(type) && !type.is(ANY)) {
-        error("Match on expression of type " + subjectType + " can never be " + type, pat.location);
+    else if (pat.isTypePattern()) {
+      JactlType patType = pat.patternType();
+      if ((subjectType.isPrimitive() || patType.isPrimitive()) && !subjectType.equals(patType)) {
+        error("Type " + subjectType + " can never match type " + patType, pat.location);
       }
-    }
-    else if (pat instanceof Expr.RegexMatch && !subjectType.is(STRING,ANY)) {
-      error("Cannot compare type " + subjectType + " to regex string", pat.location);
+      if (!subjectType.isConvertibleTo(patType, true)) {
+        error("Type " + subjectType + " can never match type " + patType, pat.location);
+      }
     }
     else if (!subjectType.isConvertibleTo(pat.type, true)) {
-      error("Cannot compare type " + subjectType + " to " + pat.type, pat.location);
+      error("Type " + subjectType + " can never match type " + pat.type, pat.location);
     }
+//    if (pat instanceof Expr.ListLiteral) {
+//      if (!subjectType.is(ANY,LIST,ARRAY,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
+//      if (subjectType.is(ARRAY)) {
+//        ((Expr.ListLiteral) pat).exprs.forEach(subPat -> validateIsCompatible(subjectType.getArrayElemType(), subPat));
+//      }
+//    }
+//    else if (pat.isTypePattern()) {
+//      if (!subjectType.is(ANY) && !subjectType.equals(pat.patternType()) && !pat.patternType().is(ANY)) {
+//        error("Match on expression of type " + subjectType + " can never be " + pat.patternType(), pat.location);
+//      }
+//    }
   }
 
   private static void validateNotCovered(List<Expr> patterns) {
@@ -621,7 +634,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr pattern = patterns.get(i);
       for (int j = 0; j < i; j++) {
         if (covers(patterns.get(j), pattern)) {
-          error("Switch pattern will never be evaluated (covered by previous pattern)", pattern.location);
+          error("Switch pattern will never be evaluated (covered by a previous pattern)", pattern.location);
         }
       }
     }
@@ -636,7 +649,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private static boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
     if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl || isUnderscore(pattern1)) {
       JactlType t1 = pattern1 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern1).typeVal : pattern1.type;
-      JactlType t2 = pattern2 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern2).typeVal : pattern2.type;
+      JactlType t2 = pattern2.patternType();
       if (pattern1 instanceof Expr.VarDecl) {
         bindings.put(((Expr.VarDecl) pattern1).name.getStringValue(), pattern2);
       }
@@ -648,7 +661,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (pattern1 instanceof Expr.ExprString || pattern2 instanceof Expr.ExprString) {
       return false;
     }
-    // We have either List/Map pattern or Identifier
+    // We have either List/Map/Constructor pattern or Identifier
     if (pattern1 instanceof Expr.ListLiteral) {
       if (!(pattern2 instanceof Expr.ListLiteral))           { return false; }
       List<Expr> l1 = ((Expr.ListLiteral) pattern1).exprs;
@@ -677,14 +690,57 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Map<String,Expr> m2 = entries2.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
       return m1.keySet().stream().allMatch(k -> m2.containsKey(k) && covers(m1.get(k), m2.get(k), bindings));
     }
+    if (pattern1 instanceof Expr.ConstructorPattern) {
+      if (!(pattern2 instanceof Expr.ConstructorPattern))                      { return false; }
+      if (!pattern1.patternType().isAssignableFrom(pattern2.patternType()))    { return false; }
+      Map<String, Expr> keyMap1 = ((Expr.MapLiteral) ((Expr.ConstructorPattern)pattern1).args.get(0)).literalKeyMap;
+      Map<String, Expr> keyMap2 = ((Expr.MapLiteral) ((Expr.ConstructorPattern)pattern2).args.get(0)).literalKeyMap;
+      if (!keyMap1.keySet().equals(keyMap2.keySet()))                          { return false; }
+      return keyMap1.keySet().stream().allMatch(k -> keyMap2.containsKey(k) && covers(keyMap1.get(k), keyMap2.get(k), bindings));
+    }
     if (pattern1 instanceof Expr.Identifier) {
       return covers(bindings.get(((Expr.Identifier) pattern1).identifier.getStringValue()), pattern2, bindings);
     }
     return false;
   }
 
-  @Override
-  public JactlType visitSwitchCase(Expr.SwitchCase caseExpr) {
+  @Override public JactlType visitConstructorPattern(Expr.ConstructorPattern expr) {
+    resolve(expr.typeExpr);
+    resolve(expr.args);
+    ClassDescriptor descriptor = expr.typeExpr.patternType().getClassDescriptor();
+    List<Map.Entry<String,JactlType>> constructorArgs = descriptor.getAllMandatoryFields().entrySet().stream().collect(Collectors.toList());
+    // Transform unnamed args into named args
+    if (expr.args.size() > 1 || !(expr.args.get(0) instanceof Expr.MapLiteral)) {
+      Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.get(0).location);
+      mapLiteral.literalKeyMap = new HashMap<>();
+      if (expr.args.size() != constructorArgs.size()) {
+        error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.get(0).location);
+      }
+      for (int i = 0; i < expr.args.size(); i++) {
+        Expr arg = expr.args.get(i);
+        Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
+        if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
+          error("Argument value of type " + arg.type + " incompatible with type " + constructorParam.getValue() + " of field " + constructorParam.getKey(), arg.location);
+        }
+        mapLiteral.literalKeyMap.put(constructorParam.getKey(), arg);
+        Expr.Literal fieldName = new Expr.Literal(arg.location.newIdent(constructorParam.getKey()));
+        resolve(fieldName);
+        mapLiteral.entries.add(Pair.create(fieldName, arg));
+      }
+      expr.args = Utils.listOf(mapLiteral);
+    }
+    else {
+      // Validate that the fields listed actually exist
+      ((Expr.MapLiteral)expr.args.get(0)).entries.stream()
+                                                 .map(pair -> pair.first)
+                                                 .filter(field -> !descriptor.getAllMandatoryFields().containsKey(field.constValue))
+                                                 .findFirst()
+                                                 .ifPresent(field -> error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
+    }
+    return expr.type = expr.typeExpr.patternType();
+  }
+
+  @Override public JactlType visitSwitchCase(Expr.SwitchCase caseExpr) {
     caseExpr.patterns.forEach(pair -> {
       Expr pattern = pair.first;
       if (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).identifier.is(UNDERSCORE)) {
@@ -704,6 +760,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       else {
         resolve(pattern);
+        if (pattern instanceof Expr.TypeExpr && ((Expr.TypeExpr) pattern).typeVal.is(CLASS)) {
+          ((Expr.TypeExpr) pattern).typeVal = ((Expr.TypeExpr) pattern).typeVal.createInstanceType();
+        }
       }
       resolve(pair.second);
     });
