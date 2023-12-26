@@ -204,7 +204,7 @@ switch(x) {
 By specifying an identifier you can create a binding variable that binds to that part of the structure in the expression
 being switched on (hence the term _destructuring_):
 
-For example, we can match a list and extract the first element of the list into a variable `a`:
+For example, we can match a list or map and extract different elements of the list or map:
 ```groovy
 switch(x) {
   [a,2]         -> a + a  // a will be bound to first element of list if second element is 2
@@ -213,7 +213,7 @@ switch(x) {
 }
 ```
 
-Note that for map literals, only the value of a key can be bound to a binding variable.
+Note that for map literals, only the value can be bound to a binding variable.
 The keys themselves are literal values, not binding variables.
 
 Binding variables can occur multiple times:
@@ -263,6 +263,15 @@ switch(x) {
 ```
 Note that if you use `_` like this where it will match everything, it must occur last (unlike `default` which can
 occur anywhere in the list of match cases.
+
+As well as destructured matching based on type, you can also use a regular expression to match a string at a particular
+location within a nested structure:
+```groovy
+switch (x) {
+  [/^abc/r, /xyz$/r]     -> 'pair where first starts with abc and second ends in xyz'
+  [name:_, age:/^\d+$/r] -> "map has key called name and key called age whose value is a string of digits"
+}
+```
 
 ## Implicit `it`
 
