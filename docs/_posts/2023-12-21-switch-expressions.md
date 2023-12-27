@@ -66,7 +66,10 @@ def result = switch(x) {
 }
 ```
 
-If the code does not result in an actual value (for example a `while` loop) then `null` is returned.
+If the code for the matching case does not result in an actual value (for example the last statement is a `while` loop)
+then `null` is returned.
+Note that invoking `return` from within a `switch` case will return from the enclosing function rather than cause
+the `switch` expression to return that value.
 
 If multiple values should map to the same result you can separate the values with commas:
 ```groovy
