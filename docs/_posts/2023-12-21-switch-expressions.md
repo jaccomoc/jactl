@@ -106,9 +106,9 @@ switch(x) {
 }
 ```
 ```groovy
-io.jactl.CompileError: Cannot compare type int to String @ line 4, column 4
+io.jactl.CompileError: Cannot compare type int to String @ line 4, column 3
   'abc' -> "x=$x"
-   ^
+  ^
 ```
 
 ## Matching on Type
