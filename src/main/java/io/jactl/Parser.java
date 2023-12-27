@@ -1381,10 +1381,6 @@ public class Parser {
       case SWITCH:                                           return switchExpr();
     }
 
-    if (inPatternMatch && isType()) {
-      return typeOrVarDecl();
-    }
-
     if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
       // Allow keywords to be used in dotted paths. E.g: x.y.while.z
       return new Expr.Literal(new Token(STRING_CONST, advance()).setValue(previous().getChars()));
@@ -2048,6 +2044,8 @@ public class Parser {
    *#                | exprString
    *#                | "_"
    *#                | IDENTIFIER
+   *#                | listPattern
+   *#                | mapPattern
    */
   private Expr switchPattern() {
     matchAny(EOL);
@@ -2057,15 +2055,13 @@ public class Parser {
       expr.isConst = true;
       expr.constValue = literalValue(expr);
     }
-    else if (peek().is(LEFT_SQUARE,LEFT_BRACE)) {
-      inPatternMatch = true;
-      expr = mapOrListLiteral();
+    else if (peek().is(LEFT_SQUARE)) {
+      expr = mapOrListPattern();
       if (isConstListOrMap(expr)) {
         expr.isConst = true;
         expr.constValue = literalValue(expr);
         addClassConstant(expr);
       }
-      inPatternMatch = false;
     }
     else if (peek().is(SLASH)) {
       Expr.RegexMatch regex = (Expr.RegexMatch)exprString();
@@ -2097,6 +2093,106 @@ public class Parser {
     else {
       unexpected("Expect const or regex or type in match case");
     }
+    return expr;
+  }
+
+  private Expr mapOrListPattern() {
+    if (isMapPattern()) {
+      return mapPattern();
+    }
+    return listPattern();
+  }
+
+  private boolean isMapPattern() {
+    // Check for start of a Map literal. We need to lookahead to know the difference between
+    // a Map literal using '{' and '}' and a statement block or a closure.
+    return lookahead(() -> {
+      if (!matchAnyIgnoreEOL(LEFT_SQUARE)) { return false; }
+      // Allow '*' as first elem in list of key,value pair if doing pattern match in switch expression
+      if (matchAny(STAR)) {
+        return matchAnyIgnoreEOL(COMMA) && patternMapKey() != null && matchAnyIgnoreEOL(COLON);
+      }
+      return matchAnyIgnoreEOL(COLON) ||
+             patternMapKey() != null &&
+             matchAnyIgnoreEOL(COLON);
+    });
+  }
+
+  /**
+   * <pre>
+   *# listPattern -&gt; "[" ( switchPattern ( "," switchPattern ) * ) ? "]"
+   * </pre>
+   */
+  private Expr.ListLiteral listPattern() {
+    Token start = expect(LEFT_SQUARE);
+    Expr.ListLiteral expr = new Expr.ListLiteral(start);
+    while (!matchAnyIgnoreEOL(RIGHT_SQUARE)) {
+      if (expr.exprs.size() > 0) {
+        expect(COMMA);
+      }
+      matchAny(EOL);
+      expr.exprs.add(peek().is(STAR) ? new Expr.Identifier(expect(STAR))
+                                     : switchPattern());
+    }
+    return expr;
+  }
+
+  /**
+   * <pre>
+   *# mapPattern -&gt; "[" ":" "]"
+   *#             | "[" ( mapPatternKey ":" switchPattern ) ( "," mapPatternKey ":" switchPattern ) * "]"
+   *#             ;
+   * </pre>
+   */
+  private Expr.MapLiteral mapPattern() {
+    expect(LEFT_SQUARE);
+    Expr.MapLiteral mapLiteral = patternMapEntries();
+    return mapLiteral;
+  }
+
+  private boolean isExprString() {
+    return peek().is(DOUBLE_QUOTE,SLASH,SLASH_EQUAL);
+  }
+
+  /**
+   *# patternMapKey -&gt; STRING_CONST | exprString | IDENTIFIER | "*"
+   */
+  private Expr patternMapKey() {
+    if (isExprString()) {
+      return exprString();
+    }
+    return new Expr.Literal(expect(STRING_CONST, IDENTIFIER, STAR));
+  }
+
+  private Expr.MapLiteral patternMapEntries() {
+    Expr.MapLiteral  expr          = new Expr.MapLiteral(previous());
+    Map<String,Expr> literalKeyMap = new HashMap<>();
+    if (matchAnyIgnoreEOL(COLON)) {
+      // Empty map
+      expect(RIGHT_SQUARE);
+    }
+    else {
+      while (!matchAnyIgnoreEOL(RIGHT_SQUARE)) {
+        if (expr.entries.size() > 0) {
+          expect(COMMA);
+        }
+        Expr   key       = patternMapKey();
+        String keyString = key instanceof Expr.Literal ? ((Expr.Literal)key).value.getStringValue() : null;
+        if (keyString != null && literalKeyMap.containsKey(keyString)) {
+          error("Key '" + keyString + "' occurs multiple times", key.location);
+        }
+        Expr value = null;
+        if (!keyString.equals(STAR.asString)) {
+          expect(COLON);
+          value = switchPattern();
+        }
+        expr.entries.add(new Pair(key, value));
+        if (keyString != null) {
+          literalKeyMap.put(keyString, value);
+        }
+      }
+    }
+    expr.literalKeyMap = literalKeyMap;
     return expr;
   }
 
@@ -2419,21 +2515,13 @@ public class Parser {
     return lookahead(() -> {
       if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
       TokenType close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
-      // Allow '*' as first elem in list of key,value pair if doing pattern match in switch expression
-      if (inPatternMatch && matchAny(STAR)) {
-        expect(COMMA);
-        matchAny(EOL);
-        if (peek().is(COLON)) {
-          return false;
-        }
-      }
       return matchAnyIgnoreEOL(COLON) ||
              mapKey() != null &&
              matchAnyIgnoreEOL(COLON) &&
              // Make sure we are not doing a label for while/for immediately after '{'
              !(close == RIGHT_BRACE && matchAnyIgnoreEOL(WHILE,FOR));
     });
- }
+  }
 
   /////////////////////////////////////////////////
 

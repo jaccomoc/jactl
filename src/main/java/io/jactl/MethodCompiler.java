@@ -26,6 +26,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -487,6 +488,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitSwitch(Expr.Switch expr) {
     compile(expr.subject);
     boolean subjectIsAny = peek().is(ANY);
+    unbox();
     defineVar(expr.itVar);
     storeVar(expr.itVar);
 
@@ -531,8 +533,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         noConvert = new Label();
         loadVar(expr.itVar);
         box();
+        loadConst(type.boxed());
         loadConst(type);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.CAN_CAST_TO_TYPE, Object.class, Class.class);
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.CAN_CAST_TO_TYPE, Object.class, Class.class, Class.class);
         dupVal();
         storeLocal(isTypeSlots.get(type));
         popType();
@@ -562,8 +565,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Make sure all binding variables are created and initialised to default values
     expr.cases.forEach(c -> createVars.accept(c.block.variables.values()));
     expr.cases.forEach(c -> {
+      AtomicBoolean first = new AtomicBoolean(true);
       c.patterns.forEach(pat -> {
-        compileMatchCase(expr, pat, c.result, subjectIsAny, isTypeSlots, valueSlots, end, nonSimpleLabels);
+        // Special case for capture vars. Need to reinitialise so partial matches don't leave
+        // values in $1,$2 etc if complete pattern did not match
+        if (!first.get()) {
+          Expr.VarDecl captureVarDecl = c.block.variables.get(Utils.CAPTURE_VAR);
+          if (captureVarDecl != null) {
+            loadDefaultValue(MATCHER);
+            storeVar(captureVarDecl);
+          }
+        }
+        compileMatchCase(expr, pat, c.result, isTypeSlots, valueSlots, end, nonSimpleLabels);
+        first.set(false);
       });
     });
 
@@ -610,7 +624,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   @Override public Void visitConstructorPattern(Expr.ConstructorPattern expr) { return null; }
 
-  private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, boolean subjectIsAny, Map<JactlType, Integer> isTypeSlots, Map<JactlType, Integer> valueSlots, Label end, Map<Expr, Label> nonSimpleLabels) {
+  private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, Map<JactlType, Integer> isTypeSlots, Map<JactlType, Integer> valueSlots, Label end, Map<Expr, Label> nonSimpleLabels) {
     emitIf(expr.isAsync, IfTest.IS_TRUE, () -> {
              Label endCheck = new Label();
              Consumer<JactlType> loadValue = type -> {
@@ -668,14 +682,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (isUnderscore(pattern)) {
       // Always match placeholder pattern
       loadConst(true);
-    } else if (pattern instanceof Expr.TypeExpr || pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
+    }
+    else if (pattern instanceof Expr.TypeExpr || pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
       if (subjectType.equals(patternType)) {
         if (pattern instanceof Expr.TypeExpr) {
           loadConst(true);
         }
       }
-      else {
-        // We must have ANY type since Resolver will catch situations where subjectType and pattern type are incompatible
+      else if (!patternType.is(ANY) && !subjectType.is(patternType) && !(subjectType.isNumeric() && patternType.isNumeric())) {
         loadValue.accept(ANY);
         isInstanceOf(patternType);
         if (!(pattern instanceof Expr.TypeExpr)) {
@@ -727,7 +741,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compileDestructuring(subjectType, patternType, exprs.size(), false, exprs, loadValue, subjectLocation, endCheck);
     }
     else if (pattern instanceof Expr.RegexMatch) {
-      compile(pattern);
+      compileRegexMatch((Expr.RegexMatch)pattern, () -> {
+        ifCanConvertTo.accept(STRING);
+        loadValue.accept(null);
+      });
     }
     else {
       throw new UnsupportedOperationException("Unsupported comparison in match: " + pattern.getClass().getName());
@@ -879,7 +896,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         int finalSubElemSlot = subElemSlot;
         compileMatchCaseTest(t -> {
                                loadLocal(finalSubElemSlot);
-                               if (t != null) {
+                               if (t != null && !t.is(ANY,LIST)) {
                                  convertTo(t, subExpr, true, subExpr.location);
                                }
                              },
@@ -890,7 +907,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                loadLocal(finalSubElemSlot);
                                box();
                                loadConst(caseType.boxed());
-                               invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_TYPE, Object.class, Class.class);
+                               invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_PATTERN_COMPATIBLE, Object.class, Class.class);
                                dupVal();
                                mv.visitJumpInsn(IFEQ, endCheck);
                                popType();
@@ -1281,18 +1298,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    compileRegexMatch(expr, () -> compile(expr.string));
+
+    return null;
+  }
+
+  private void compileRegexMatch(Expr.RegexMatch expr, Runnable compileString) {
     boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
     boolean captureAsNums  = expr.modifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
     String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS + "]", "");
 
     // Set captureAsNums flag as necessary
     loadVar(expr.captureArrVarDecl);
-    dupVal();
     loadConst(captureAsNums);
     storeClassField(MATCHER.getInternalName(), "captureAsNums", BOOLEAN, false);
 
-    compile(expr.string);
+    compileString.run();
     castToString(expr.string.location);
+    loadVar(expr.captureArrVarDecl);
+    swap();
     compile(expr.pattern);
     castToString(expr.pattern.location);
     expect(3);
@@ -1303,8 +1327,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(BANG_GRAVE)) {
       _booleanNot();
     }
-
-    return null;
   }
 
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {

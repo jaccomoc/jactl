@@ -5639,6 +5639,10 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void constBooleanComparisons() {
+    test("1 == true", false);
+    test("1 == false", false);
+    test("0 == false", false);
+    test("0 == true", false);
     test("null == null", true);
     test("null == true", false);
     test("true == null", false);

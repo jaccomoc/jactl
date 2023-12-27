@@ -536,7 +536,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public JactlType visitSwitch(Expr.Switch expr) {
     resolve(expr.subject);
     JactlType    subjectType = expr.subject.type;
-    Stmt.VarDecl itVar       = createVarDecl(expr.matchToken, currentFunction(), Utils.IT_VAR, subjectType, expr.subject);
+    Stmt.VarDecl itVar       = createVarDecl(expr.matchToken, currentFunction(), Utils.IT_VAR, subjectType.unboxed(), expr.subject);
     expr.itVar = itVar.declExpr;
     itVar.declExpr.owner = currentFunction();
     // Block to hold our it var
@@ -553,7 +553,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return c.block;
     }).collect(Collectors.toList()));
     resolve(block);
-    expr.cases.forEach(c -> c.patterns.forEach(pat -> validateIsCompatible(subjectType, pat.first)));
+    expr.cases.forEach(c -> c.patterns.forEach(pat -> {
+      if (!isCompatible(subjectType, pat.first)) {
+        error("Type " + subjectType + " can never match type " + pat.first.patternType(), pat.first.location);
+      }
+    }));
     resolve(expr.defaultCase);
 
     // Check that there if there is a pattern covering all cases that there are no subsequent patterns and no default
@@ -593,38 +597,28 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private static void validateIsCompatible(JactlType subjectType, Expr pat) {
-    if (subjectType.is(ANY)) {
-      return;
+  private static boolean isCompatible(JactlType subjectType, Expr pat) {
+    JactlType patType = pat.patternType();
+    if (subjectType.is(ANY) || patType.is(ANY)) {
+      return true;
     }
     if (pat instanceof Expr.RegexMatch) {
-      if (!subjectType.is(STRING)) {
-        error("Cannot compare type " + subjectType + " to regex string", pat.location);
-      }
+      return subjectType.is(STRING);
     }
-    else if (pat.isTypePattern()) {
-      JactlType patType = pat.patternType();
-      if ((subjectType.isPrimitive() || patType.isPrimitive()) && !subjectType.equals(patType)) {
-        error("Type " + subjectType + " can never match type " + patType, pat.location);
+    if (pat.isTypePattern()) {
+      if ((!subjectType.is(INSTANCE) || !patType.is(INSTANCE)) && !subjectType.equals(patType)) {
+        return false;
       }
-      if (!subjectType.isConvertibleTo(patType, true)) {
-        error("Type " + subjectType + " can never match type " + patType, pat.location);
-      }
+      return subjectType.isConvertibleTo(patType, true);
     }
-    else if (!subjectType.isConvertibleTo(pat.type, true)) {
-      error("Type " + subjectType + " can never match type " + pat.type, pat.location);
+    if (subjectType.isNumeric() && !patType.isNumeric() || patType.isNumeric() && !subjectType.isNumeric()) {
+      return false;
     }
-//    if (pat instanceof Expr.ListLiteral) {
-//      if (!subjectType.is(ANY,LIST,ARRAY,ITERATOR)) { error("Match on expression of type " + subjectType + " can never match a list", pat.location); }
-//      if (subjectType.is(ARRAY)) {
-//        ((Expr.ListLiteral) pat).exprs.forEach(subPat -> validateIsCompatible(subjectType.getArrayElemType(), subPat));
-//      }
-//    }
-//    else if (pat.isTypePattern()) {
-//      if (!subjectType.is(ANY) && !subjectType.equals(pat.patternType()) && !pat.patternType().is(ANY)) {
-//        error("Match on expression of type " + subjectType + " can never be " + pat.patternType(), pat.location);
-//      }
-//    }
+    if (subjectType.is(ARRAY)) {
+      if (!(pat instanceof Expr.ListLiteral)) { return false; }
+      return ((Expr.ListLiteral) pat).exprs.stream().allMatch(subPat -> isCompatible(subjectType.getArrayElemType(), subPat));
+    }
+    return subjectType.isConvertibleTo(patType, true);
   }
 
   private static void validateNotCovered(List<Expr> patterns) {
@@ -2133,7 +2127,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (classDescriptor == null) {
       return null;
     }
-    Expr.VarDecl classVarDecl = new Expr.VarDecl(location.newIdent(className), null, null);
+    Expr.VarDecl classVarDecl = new Expr.VarDecl(location == null ? null : location.newIdent(className), null, null);
     classVarDecl.classDescriptor = classDescriptor;
     classVarDecl.type = JactlType.createClass(classDescriptor);
     return classVarDecl;

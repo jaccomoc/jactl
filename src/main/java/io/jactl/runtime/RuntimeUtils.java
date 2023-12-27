@@ -2252,17 +2252,16 @@ public class RuntimeUtils {
   }
 
   public static final String CAN_CAST_TO_TYPE = "canCastToType";
-  public static boolean canCastToType(Object obj, Class clss) {
-    if (clss.isArray())                        { return canConvertToArray(obj, clss); }
-    if (clss.isPrimitive() || clss == BigDecimal.class) {
-      if (obj == null)                         { return false; }
-      if (clss == boolean.class)               { return true;  }
-      if (obj instanceof String && ((String)obj).length() == 1) { return true; }
-      if (obj instanceof Number)               { return true; }
-      return false;
+  public static boolean canCastToType(Object obj, Class clss, Class unboxedClass) {
+    if (clss.equals(Object.class))             { return true; }
+    if (obj.getClass().equals(clss))           { return true; }
+    if (unboxedClass.isPrimitive() || clss.equals(BigDecimal.class)) {
+      if (clss.equals(Boolean.class))           { return false; }   // Since obj.class != clss from above
+      return obj instanceof Number || obj instanceof BigDecimal;
     }
-    if (clss.isAssignableFrom(obj.getClass())) { return true; }
-    return false;
+    if (clss.isArray())                        { return canConvertToArray(obj, clss); }
+    if (clss.equals(String.class))             { return false; }
+    return clss.isAssignableFrom(obj.getClass());
   }
 
   public static boolean canConvertToArray(Object obj, Class clss) {
@@ -2272,7 +2271,7 @@ public class RuntimeUtils {
     if (obj instanceof List) {
       List   list = (List)obj;
       for (int i = 0; i < list.size(); i++) {
-        if (!canCastToType(list.get(i), componentType)) {
+        if (!canCastToType(list.get(i), componentType, componentType)) {
           return false;
         }
       }
@@ -2281,7 +2280,7 @@ public class RuntimeUtils {
     if (obj.getClass().isArray()) {
       int    length = Array.getLength(obj);
       for (int i = 0; i < length; i++) {
-        if (!canCastToType(Array.get(obj, i), componentType)) {
+        if (!canCastToType(Array.get(obj, i), componentType, componentType)) {
           return false;
         }
       }
@@ -2293,24 +2292,32 @@ public class RuntimeUtils {
     return false;
   }
 
-  public static final String IS_TYPE = "isType";
-  public static boolean isType(Object obj, Class clss) {
+  public static final String IS_PATTERN_COMPATIBLE = "isPatternCompatible";
+  public static boolean isPatternCompatible(Object obj, Class clss) {
     if (clss.isArray())  { return isArrayType(obj, clss); }
     if (obj == null)     { return clss.equals(Object.class); }
+    if (JactlType.typeFromClass(clss).isNumeric() && JactlType.typeOf(obj).isNumeric()) {
+      return true;
+    }
     if (obj instanceof JactlObject) {
       return clss.isAssignableFrom(obj.getClass());
+    }
+    if (clss.equals(List.class) && obj.getClass().isArray()) {
+      return true;
+    }
+    if (clss.isAssignableFrom(obj.getClass())) {
+      return true;
     }
     return obj.getClass().equals(clss);
   }
 
   public static boolean isArrayType(Object obj, Class clss) {
-    if (obj == null)                           { return true; }
     if (clss.isAssignableFrom(obj.getClass())) { return true; }
     Class  componentType = clss.getComponentType();
     if (obj instanceof List) {
       List   list = (List)obj;
       for (int i = 0; i < list.size(); i++) {
-        if (!isType(list.get(i), componentType)) {
+        if (!isPatternCompatible(list.get(i), componentType)) {
           return false;
         }
       }
@@ -2319,7 +2326,7 @@ public class RuntimeUtils {
     if (obj.getClass().isArray()) {
       int    length = Array.getLength(obj);
       for (int i = 0; i < length; i++) {
-        if (!isType(Array.get(obj, i), componentType)) {
+        if (!isPatternCompatible(Array.get(obj, i), componentType)) {
           return false;
         }
       }
