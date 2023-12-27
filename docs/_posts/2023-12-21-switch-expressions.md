@@ -90,7 +90,7 @@ We can also use literals which are `List` or `Map` literals, and we can support 
 ```groovy
 switch(x) {
   1,2,3,4,'abc' -> 'primitive'
-  [1,2,3]       -> 'list'
+  [1,2,3],[4,5] -> 'list'
   [a:1,b:[4,5]] -> 'map'
 }
 ```
@@ -113,7 +113,7 @@ io.jactl.CompileError: Cannot compare type int to String @ line 4, column 4
 
 ## Matching on Type
 
-In addition to matching against literal values, Jactl also support testing if an expression is of a given type:
+In addition to matching against literal values, Jactl also supports testing if an expression is of a given type:
 ```groovy
 switch(x) {
   String         -> 'string'
@@ -125,8 +125,8 @@ switch(x) {
 Types and literal values can be mixed in the same `switch` expression:
 ```groovy
 switch(x) {
-  1, 2, String -> '1, 2, or string'
-  int ,long    -> 'other integral value'
+  1,2,String -> '1, 2, or string'
+  int,long   -> 'other integral value'
 }
 ```
 
@@ -134,8 +134,8 @@ Note that if the order of the matches was the other way around you will get a co
 the case of all int values:
 ```groovy
 switch(x) {
-  int, long    -> 'other integral value'
-  1, 2, String -> '1, 2, or string'
+  int,long   -> 'other integral value'
+  1,2,String -> '1, 2, or string'
 }
 ```
 ```groovy
@@ -149,7 +149,7 @@ User classes can also be matched against:
 class X {}
 class Y extends X {}
 
-def x
+def x = new Y()
 
 switch(x) {
   Y -> 'type is Y'
@@ -180,11 +180,13 @@ appropriate.
 
 ## Destructuring and Binding Variables
 
-We saw previously that we can match on literals of type `List` and `Map`.
-We can use `_` as a wildcard to match against arbitrary values within a list or map:
+There were previous examples showing matches on literals of type `List` and `Map`.
+When matching against a list or map we can use `_` as a wildcard to match against arbitrary values within the list
+or map:
 ```groovy
 switch(x) {
   [_,_,_]     -> 'a list of size 3'
+  [_,3]       -> 'list of size 2 where last element is 3'
   [k1:_,k2:_] -> 'a map of size 2 with keys k1 and k2'
 }
 ```
@@ -199,8 +201,9 @@ switch(x) {
 If you want to be able to specify the type of the wildcard you can use a type name instead of `_`:
 ```groovy
 switch(x) {
-  [int,int,String] -> '2 ints and a string'
-  [int,String,*]   -> 'list starting with int and string' 
+  [int,int,String]   -> '2 ints and a string'
+  [int,String,*]     -> 'list starting with int and string' 
+  [k1:int,k2:String] -> 'map with k1 value being an int and k2 value being a String' 
 }
 ```
 
@@ -219,7 +222,8 @@ switch(x) {
 Note that for map literals, only the value can be bound to a binding variable.
 The keys themselves are literal values, not binding variables.
 
-Binding variables can occur multiple times:
+Binding variables can occur multiple times but will only match if the value for the variable is the same in all places
+where it is used:
 ```groovy
 switch(x) {
   [a,a]   -> "a=$a"  // match all 2 element lists where both elements are the same
@@ -230,17 +234,17 @@ switch(x) {
 Binding variables can also be typed if you want to match on the type:
 ```groovy
 switch(x) {
-  [int a, b, *]      -> "a=$a, b=$b"   // match if first element is int
   [int a,int b], [a] -> "a=$a"         // match 1 or 2 element list if first element is an int 
+  [int a, b, *]      -> "a=$a, b=$b"   // match if first element is int
 }
 ```
-Note that binding variables are shared across all patterns in the same comma separated list (see second pattern list
+Note that binding variables are shared across all patterns in the same comma separated list (see first pattern list
 in the example above).
-This means that their type can only be specified the first time they occur in the patterns.
-It means that if the variable is used in a subsequent pattern (in the same comma separated list), it inherits the
-same type and will only match if the type matches.
+This means that their type can only be specified the first time they occur in the pattern list and that if
+the variable is used in a subsequent pattern (in the same comma separated list), it inherits the same type
+and will only match if the type matches.
 
-Binding variables can occur anywhere within the structure being matched against:
+Binding variables can occur anywhere within the structure being matched against, no matter how deep the nesting:
 ```groovy
 switch(x) {
   [[a,b],*,[[a,*],[b,*]]] -> a + b
@@ -264,15 +268,26 @@ switch(x) {
   _     -> 'other'
 }
 ```
-Note that if you use `_` like this where it will match everything, it must occur last (unlike `default` which can
-occur anywhere in the list of match cases.
+Note that if you use `_` like this where it will match everything, it must occur last since otherwise the other cases
+would never be evaluated.
+This is different to the `default` which can occur anywhere in the list of match cases.
 
 As well as destructured matching based on type, you can also use a regular expression to match a string at a particular
 location within a nested structure:
 ```groovy
 switch (x) {
-  [/^abc/r, /xyz$/r]     -> 'pair where first starts with abc and second ends in xyz'
+  [/^abc/r, /xyz$/r]     -> 'list of size 2 where first starts with abc and second ends in xyz'
   [name:_, age:/^\d+$/r] -> "map has key called name and key called age whose value is a string of digits"
+}
+```
+
+Note that if you use a capture group within the regular expressions then the capture variables will refer to the last
+regular expression in the pattern.
+For example, in the following code `$1` will never correspond to the capture group in the first regular expression.
+It will only have a value for the match on the second regex:
+```groovy
+switch (x) {
+  [/^(a|b)+/r, /^(x|y|z)/r] -> "$1 will be x or y or z"
 }
 ```
 
@@ -280,7 +295,8 @@ switch (x) {
 
 If you don't specify a subject expression for the `switch` to switch on then it will switch on the implicit `it`
 variable.
-For example, we can read lines from stdin and parse them using `switch` like this:
+For example, we can read lines from stdin and parse them using `switch` like this since the closure passed to `map`
+has an implicit `it` parameter:
 ```groovy
 stream(nextLine).map{
   switch {
@@ -292,7 +308,7 @@ stream(nextLine).map{
 ```
 If you are in a context where there is no `it` then you will get an error about a reference to an unknown `it` variable.
 
-Within the `switch` expression itself the `it` variable is bound to the value of the expression passed to `switch`.
+Within the `switch` expression itself, the `it` variable is bound to the value of the expression passed to `switch`.
 For example:
 ```groovy
 switch(x.substring(3,6)) {
@@ -308,7 +324,7 @@ optional `if` expression that is evaluated if the pattern/literal matches which 
 for that case to match:
 ```groovy
 switch(x.substring(3,6)) {
-  'ABC' if x.size() < 10, 'XYZ' if x.size() > 5 -> it * 2
+  'ABC' if x.size() < 10, 'XYZ' if x.size() > 5 -> "${it}${it}"
   'XXY' if x[0] == 'a'                          -> 'xxy'
 }
 ```
@@ -330,8 +346,8 @@ switch(x) {
 To match on multiple values at the same time just pass a list of the values to the `switch`:
 ```groovy
 switch([x,y]) {
-  [[a,*],[*,a]] -> 'first elem of x is same as last elem of y'
   [a,a]         -> 'x equals y'
+  [[a,*],[*,a]] -> 'first elem of x is same as last elem of y'
 }
 ```
 
@@ -342,12 +358,27 @@ To match based on the field values use the constructor form of the class as the 
 
 For example:
 ```groovy
-class X { int i; int j; List list }
+class X { int i; int j; List list = [] }
 X x = new X(i:2, j:3, list:[1,2,[3]])
 
 switch(x) {
-  X(i:1,j:3)     -> 'type is X: i=1, j=3'
-  X(list:[3,4])  -> 'X with list field being [3,4]'
+  X(i:1)        -> 'type is X: field i is 1'
+  X(list:[3,4]) -> 'X with list field being [3,4]'
+}
+```
+
+If you use the constructor form with named fields (as in the example above) then you only need specify which field
+values you are interested in.
+All other fields can have any value to match that pattern.
+
+The constructor form that does not use named field values requires you to supply values for all mandatory fields:
+```groovy
+class X { int i; int j; List list = [] }
+X x = new X(i:2, j:3, list:[1,2,[3]])
+
+switch(x) {
+  X(1,3) -> 'type is X: i=1, j=3'
+  X(_,4) -> 'any X as long as j=4'
 }
 ```
 
@@ -359,9 +390,3 @@ switch (x) {
   X(list:[_,_,a]) -> "type is X: last elem of X.list is $a"
 }
 ```
-
-Note that when using this constructor form of a match pattern the use, of the wildcard `*` is not used.
-You only need list the fields you are interested in and any value is allowed for the fields not listed.
-There is no need to use `*` to specify that there are other fields since (unlike with maps) we know the class
-and which fields exist.
-It is assumed that if you don't list them you are not interested in them.
