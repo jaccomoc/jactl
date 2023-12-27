@@ -650,6 +650,11 @@ public class SwitchTests extends BaseTest {
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3,j:7)],_] -> 4; _ -> null }", 4);
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
+    testError("class X{int i;long j=7}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", "too many arguments");
+    test("class X{int i;long j=7}; def x = [[new X(3)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:3,j:7)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
   }
 
   @Test public void switchTypeBoolean() {

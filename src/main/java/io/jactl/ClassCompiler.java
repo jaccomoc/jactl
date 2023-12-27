@@ -591,7 +591,7 @@ public class ClassCompiler {
     boolean notFirstOutput = false;
     boolean first = true;
     boolean usingFirstSlot = false;
-    for (Iterator<Map.Entry<String, JactlType>> iter = classDescriptor.getAllFields().iterator(); iter.hasNext(); ) {
+    for (Iterator<Map.Entry<String, JactlType>> iter = classDescriptor.getAllFieldsStream().iterator(); iter.hasNext(); ) {
       Map.Entry<String, JactlType> f     = iter.next();
       String                       field = f.getKey();
       JactlType type  = f.getValue();

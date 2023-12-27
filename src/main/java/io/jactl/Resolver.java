@@ -307,7 +307,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         Stmt.VarDecl superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstanceType(classDescriptor.getBaseClass()));
         superDecl.declExpr.slot = 0;             // "super" is always in local var slot 0
         superStmts.add(superDecl);
-        superStmts.addAll(baseClass.getAllFields()
+        superStmts.addAll(baseClass.getAllFieldsStream()
                                    .map(e -> fieldDecl(classDecl.name, e.getKey(), e.getValue()))
                                    .collect(Collectors.toList()));
         superStmts.addAll(baseClass.getAllMethods()
@@ -727,7 +727,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // Validate that the fields listed actually exist
       ((Expr.MapLiteral)expr.args.get(0)).entries.stream()
                                                  .map(pair -> pair.first)
-                                                 .filter(field -> !descriptor.getAllMandatoryFields().containsKey(field.constValue))
+                                                 .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
                                                  .findFirst()
                                                  .ifPresent(field -> error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
     }
