@@ -736,8 +736,8 @@ abstract class Expr {
   static class ConstructorPattern extends Expr {
     Token      token;
     TypeExpr   typeExpr;
-    List<Expr> args;
-    ConstructorPattern(Token token, TypeExpr typeExpr, List<Expr> args) {
+    Expr       args;
+    ConstructorPattern(Token token, TypeExpr typeExpr, Expr args) {
       this.token = token;
       this.typeExpr = typeExpr;
       this.args = args;

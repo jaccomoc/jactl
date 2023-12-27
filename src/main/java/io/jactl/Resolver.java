@@ -687,8 +687,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (pattern1 instanceof Expr.ConstructorPattern) {
       if (!(pattern2 instanceof Expr.ConstructorPattern))                      { return false; }
       if (!pattern1.patternType().isAssignableFrom(pattern2.patternType()))    { return false; }
-      Map<String, Expr> keyMap1 = ((Expr.MapLiteral) ((Expr.ConstructorPattern)pattern1).args.get(0)).literalKeyMap;
-      Map<String, Expr> keyMap2 = ((Expr.MapLiteral) ((Expr.ConstructorPattern)pattern2).args.get(0)).literalKeyMap;
+      Map<String, Expr> keyMap1 = ((Expr.MapLiteral)((Expr.ConstructorPattern)pattern1).args).literalKeyMap;
+      Map<String, Expr> keyMap2 = ((Expr.MapLiteral)((Expr.ConstructorPattern)pattern2).args).literalKeyMap;
       if (!keyMap1.keySet().equals(keyMap2.keySet()))                          { return false; }
       return keyMap1.keySet().stream().allMatch(k -> keyMap2.containsKey(k) && covers(keyMap1.get(k), keyMap2.get(k), bindings));
     }
@@ -704,14 +704,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     ClassDescriptor descriptor = expr.typeExpr.patternType().getClassDescriptor();
     List<Map.Entry<String,JactlType>> constructorArgs = descriptor.getAllMandatoryFields().entrySet().stream().collect(Collectors.toList());
     // Transform unnamed args into named args
-    if (expr.args.size() > 1 || !(expr.args.get(0) instanceof Expr.MapLiteral)) {
-      Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.get(0).location);
+    if (expr.args instanceof Expr.ListLiteral) {
+      Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.location);
       mapLiteral.literalKeyMap = new HashMap<>();
-      if (expr.args.size() != constructorArgs.size()) {
-        error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.get(0).location);
+      List<Expr> exprs = ((Expr.ListLiteral) expr.args).exprs;
+      if (exprs.size() != constructorArgs.size()) {
+        error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.location);
       }
-      for (int i = 0; i < expr.args.size(); i++) {
-        Expr arg = expr.args.get(i);
+      for (int i = 0; i < exprs.size(); i++) {
+        Expr arg = exprs.get(i);
         Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
         if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
           error("Argument value of type " + arg.type + " incompatible with type " + constructorParam.getValue() + " of field " + constructorParam.getKey(), arg.location);
@@ -721,15 +722,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         resolve(fieldName);
         mapLiteral.entries.add(Pair.create(fieldName, arg));
       }
-      expr.args = Utils.listOf(mapLiteral);
+      expr.args = mapLiteral;
     }
     else {
       // Validate that the fields listed actually exist
-      ((Expr.MapLiteral)expr.args.get(0)).entries.stream()
-                                                 .map(pair -> pair.first)
-                                                 .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
-                                                 .findFirst()
-                                                 .ifPresent(field -> error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
+      ((Expr.MapLiteral)expr.args).entries.stream()
+                                          .map(pair -> pair.first)
+                                          .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
+                                          .findFirst()
+                                          .ifPresent(field -> error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
     }
     return expr.type = expr.typeExpr.patternType();
   }

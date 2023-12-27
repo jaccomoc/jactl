@@ -183,7 +183,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitConstructorPattern(Expr.ConstructorPattern expr) {
     analyse(expr.typeExpr);
-    expr.args.forEach(this::analyse);
+    ((Expr.MapLiteral)expr.args).entries.forEach(p -> {
+      analyse(p.first);
+      analyse(p.second);
+    });
     return null;
   }
 

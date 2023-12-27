@@ -2056,7 +2056,7 @@ public class Parser {
       expr.constValue = literalValue(expr);
     }
     else if (peek().is(LEFT_SQUARE)) {
-      expr = mapOrListPattern();
+      expr = mapOrListPattern(LEFT_SQUARE, RIGHT_SQUARE, true);
       if (isConstListOrMap(expr)) {
         expr.isConst = true;
         expr.constValue = literalValue(expr);
@@ -2076,11 +2076,8 @@ public class Parser {
       // Check for class name and constructor args (named or not)
       if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(JactlType.INSTANCE)) {
         matchAny(EOL);
-        if (matchAny(LEFT_PAREN)) {
-          matchAny(EOL);
-          if (!matchAny(RIGHT_PAREN)) {
-            expr = new Expr.ConstructorPattern(((Expr.TypeExpr) expr).token, (Expr.TypeExpr) expr, arguments());
-          }
+        if (peek().is(LEFT_PAREN)) {
+          expr = new Expr.ConstructorPattern(((Expr.TypeExpr) expr).token, (Expr.TypeExpr) expr, mapOrListPattern(LEFT_PAREN, RIGHT_PAREN, false));
         }
       }
     }
@@ -2096,24 +2093,24 @@ public class Parser {
     return expr;
   }
 
-  private Expr mapOrListPattern() {
-    if (isMapPattern()) {
-      return mapPattern();
+  private Expr mapOrListPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
+    if (isMapPattern(startToken, starAllowed)) {
+      return mapPattern(startToken, endToken, starAllowed);
     }
-    return listPattern();
+    return listPattern(startToken, endToken, starAllowed);
   }
 
-  private boolean isMapPattern() {
+  private boolean isMapPattern(TokenType startToken, boolean starAllowed) {
     // Check for start of a Map literal. We need to lookahead to know the difference between
     // a Map literal using '{' and '}' and a statement block or a closure.
     return lookahead(() -> {
-      if (!matchAnyIgnoreEOL(LEFT_SQUARE)) { return false; }
+      if (!matchAnyIgnoreEOL(startToken)) { return false; }
       // Allow '*' as first elem in list of key,value pair if doing pattern match in switch expression
-      if (matchAny(STAR)) {
-        return matchAnyIgnoreEOL(COMMA) && patternMapKey() != null && matchAnyIgnoreEOL(COLON);
+      if (starAllowed && matchAnyIgnoreEOL(STAR)) {
+        return matchAnyIgnoreEOL(COMMA) && patternMapKey(starAllowed) != null && matchAnyIgnoreEOL(COLON);
       }
       return matchAnyIgnoreEOL(COLON) ||
-             patternMapKey() != null &&
+             patternMapKey(starAllowed) != null &&
              matchAnyIgnoreEOL(COLON);
     });
   }
@@ -2123,16 +2120,16 @@ public class Parser {
    *# listPattern -&gt; "[" ( switchPattern ( "," switchPattern ) * ) ? "]"
    * </pre>
    */
-  private Expr.ListLiteral listPattern() {
-    Token start = expect(LEFT_SQUARE);
+  private Expr.ListLiteral listPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
+    Token start = expect(startToken);
     Expr.ListLiteral expr = new Expr.ListLiteral(start);
-    while (!matchAnyIgnoreEOL(RIGHT_SQUARE)) {
+    while (!matchAnyIgnoreEOL(endToken)) {
       if (expr.exprs.size() > 0) {
         expect(COMMA);
       }
       matchAny(EOL);
-      expr.exprs.add(peek().is(STAR) ? new Expr.Identifier(expect(STAR))
-                                     : switchPattern());
+      expr.exprs.add(starAllowed && peek().is(STAR) ? new Expr.Identifier(expect(STAR))
+                                                    : switchPattern());
     }
     return expr;
   }
@@ -2144,9 +2141,9 @@ public class Parser {
    *#             ;
    * </pre>
    */
-  private Expr.MapLiteral mapPattern() {
-    expect(LEFT_SQUARE);
-    Expr.MapLiteral mapLiteral = patternMapEntries();
+  private Expr.MapLiteral mapPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
+    expect(startToken);
+    Expr.MapLiteral mapLiteral = patternMapEntries(endToken, starAllowed);
     return mapLiteral;
   }
 
@@ -2157,14 +2154,15 @@ public class Parser {
   /**
    *# patternMapKey -&gt; STRING_CONST | exprString | IDENTIFIER | "*"
    */
-  private Expr patternMapKey() {
+  private Expr patternMapKey(boolean starAllowed) {
     if (isExprString()) {
       return exprString();
     }
-    return new Expr.Literal(expect(STRING_CONST, IDENTIFIER, STAR));
+    return new Expr.Literal(starAllowed ? expect(STRING_CONST, IDENTIFIER, STAR)
+                                        : expect(STRING_CONST, IDENTIFIER));
   }
 
-  private Expr.MapLiteral patternMapEntries() {
+  private Expr.MapLiteral patternMapEntries(TokenType endToken, boolean starAllowed) {
     Expr.MapLiteral  expr          = new Expr.MapLiteral(previous());
     Map<String,Expr> literalKeyMap = new HashMap<>();
     if (matchAnyIgnoreEOL(COLON)) {
@@ -2172,11 +2170,11 @@ public class Parser {
       expect(RIGHT_SQUARE);
     }
     else {
-      while (!matchAnyIgnoreEOL(RIGHT_SQUARE)) {
+      while (!matchAnyIgnoreEOL(endToken)) {
         if (expr.entries.size() > 0) {
           expect(COMMA);
         }
-        Expr   key       = patternMapKey();
+        Expr   key       = patternMapKey(starAllowed);
         String keyString = key instanceof Expr.Literal ? ((Expr.Literal)key).value.getStringValue() : null;
         if (keyString != null && literalKeyMap.containsKey(keyString)) {
           error("Key '" + keyString + "' occurs multiple times", key.location);
@@ -2262,7 +2260,15 @@ public class Parser {
     }
     if (expr instanceof Expr.ConstructorPattern) {
       Expr.ConstructorPattern constructorPattern = (Expr.ConstructorPattern) expr;
-      constructorPattern.args = constructorPattern.args.stream().map(a -> _validateSwitchPattern(a, bindingVars, varsSeen)).collect(Collectors.toList());
+      if (constructorPattern.args instanceof Expr.MapLiteral) {
+        Expr.MapLiteral args = (Expr.MapLiteral) constructorPattern.args;
+        args.entries = args.entries.stream().map(a -> Pair.create(a.first,_validateSwitchPattern(a.second, bindingVars, varsSeen))).collect(Collectors.toList());
+        args.literalKeyMap = args.entries.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.toString(), p -> p.second));
+      }
+      else {
+        Expr.ListLiteral args = (Expr.ListLiteral) constructorPattern.args;
+        args.exprs = args.exprs.stream().map(a -> _validateSwitchPattern(a, bindingVars, varsSeen)).collect(Collectors.toList());
+      }
       return constructorPattern;
     }
     if (expr instanceof Expr.Literal || expr instanceof Expr.TypeExpr) {

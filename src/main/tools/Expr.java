@@ -490,7 +490,7 @@ class Expr {
   class ConstructorPattern extends Expr {
     Token      token;
     TypeExpr   typeExpr;
-    List<Expr> args;
+    Expr       args;
   }
 
   /**

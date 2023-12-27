@@ -577,8 +577,12 @@ public class SwitchTests extends BaseTest {
     test("class X{ String s }; X x = new X('abc'); switch (x) { X('abc') -> true; _ -> false }", true);
     test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(3,4) -> true; _ -> false }", true);
     test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:3,j:4) -> true; _ -> false }", true);
-    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X() -> true; _ -> false }", true);
-    testError("class X{ int i; long j }; def x = new X(3,4); switch (x) { X() -> true; X(i:1) -> false }", "covered by a previous");
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:_,j:_) -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:_,j:long) -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:_,j:a) -> a; _ -> false }", 4L);
+    testError("class X{ int i; long j }; def x = new X(3,4); switch (x) { X() -> true; _ -> false }", "does not match mandatory field count");
+    test("class X{ int i=3; long j=4 }; def x = new X(); switch (x) { X() -> true; _ -> false }", true);
+    testError("class X{ int i; long j }; def x = new X(3,4); switch (x) { X -> true; X(i:1) -> false }", "covered by a previous");
     testError("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4,5); switch (x) { X(i:1) -> true; Y(i:1) -> false }", "covered by a previous");
     test("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4,5); switch (x) { X(i:2) -> true; Y(i:1) -> false }", null);
     test("class X{ int i; long j }; class Y extends X{int k}; def x = new Y(3,4,5); switch (x) { X(i:2) -> true; Y(i:1) -> false; _ -> 3 }", 3);
@@ -655,6 +659,10 @@ public class SwitchTests extends BaseTest {
     test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9)", true);
     test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
     test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:3,j:7)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7,list:[1,2,3])],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7,list:[1,2,_])],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7,list:[1,2,3])],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7,list:[1,2,int b])],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
+    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7,list:[1,2,3])],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:long c,list:[1,2,int b])],[a]] -> a.i + a.j + b + c; _ -> null }", 4+9L+7+3);
   }
 
   @Test public void switchTypeBoolean() {

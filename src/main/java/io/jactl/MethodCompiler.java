@@ -737,7 +737,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     } else if (pattern instanceof Expr.ConstructorPattern) {
       if (!subjectType.is(INSTANCE, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
-      List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral)((Expr.ConstructorPattern) pattern).args.get(0)).entries;
+      List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral)((Expr.ConstructorPattern) pattern).args).entries;
       compileDestructuring(subjectType, patternType, exprs.size(), false, exprs, loadValue, subjectLocation, endCheck);
     }
     else if (pattern instanceof Expr.RegexMatch) {
