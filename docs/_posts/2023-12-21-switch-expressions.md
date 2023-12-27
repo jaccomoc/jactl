@@ -57,7 +57,7 @@ switch(x) {
 ```
 
 In Jactl, `switch` is actually an expression so the code after each `->` is evaluated and the resulting
-value is returned is that case succeeded:
+value is returned if that case succeeded:
 ```groovy
 def result = switch(x) {
   1       -> 'one'
