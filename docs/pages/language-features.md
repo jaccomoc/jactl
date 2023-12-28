@@ -422,7 +422,6 @@ x.d.e[2] = 'abc'  // x now has a value of: [a:[b:[c:'123']], d:[e:[null, null, '
 ```
 
 ## Multi-Assignments
-_(New feature: available on trunk.)_
 
 Multiple variables can be declared and initialised in one statement and multiple assignments
 can also be done in one statement:
@@ -435,7 +434,7 @@ def a = [:]
 (a.b.c[x], a.b.c[y]) = [x + y, y + z]    // multi-assign with auto-creation of subfields
 ```
 
-You can a multi-assignment to swap the values of two variables:
+You can use a multi-assignment to swap the values of two variables:
 ```groovy
 (x,y) = [y,x]      // swaps x and y
 ```
