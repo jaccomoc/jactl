@@ -456,6 +456,9 @@ class CompilerTest extends BaseTest {
 
   @Test public void simpleVariableArithmetic() {
     testError("int _ = 1", "expecting identifier");
+    testError("int $a = 1", "expecting identifier");
+    testError("int a = 1; $a", "unexpected token '$'");
+    testError("int a = 1; $_", "unexpected token '$'");
     testError("int : = 1", "expected start of expression");
     test("int a = 1", 1);
     test("int _1 = 1", 1);
@@ -3386,6 +3389,8 @@ class CompilerTest extends BaseTest {
     test("'abcaaxy' =~ /(a+)/", true);
     test("'bcaaxy' =~ /(a+)/ and return $1", "aa");
     test("def it = 'bcaaxy'; /(a+)/r and return $1", "aa");
+    test("def it = 'bcaaxy'; /(a+)/r and return $2", null);
+    testError("def it = 'bcaaxy'; /(a+)/r and return $1000", "capture variable number too large");
     test("def x = 'abcaaxy'; x =~ /(a+)/", true);
     test("def x = 'bcaaxy'; x =~ /(a+)/ and return $1", "aa");
     test("def x; 'bcaaxy' =~ /(a+)/ and x = $1; 'abc' =~ /(a).(c)/ and x += $2; x", "aac");
@@ -3531,6 +3536,7 @@ class CompilerTest extends BaseTest {
     test("def f = { do { 1 } }; f()", true);
     test("def f() { do { 1 } }; f()", true);
     test("do { int x = 1 }", true);
+    test("do {}", true);
   }
 
   @Test public void blocks() {

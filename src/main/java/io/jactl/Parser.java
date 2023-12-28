@@ -51,7 +51,6 @@ public class Parser {
   boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
   String                packageName = null;
   JactlContext context;
-  boolean      inPatternMatch       = false;   // Whether parsing case pattern
   int          uniqueVarCnt         = 0;
 
   // Whether we are currently doing a lookahead in which case we don't bother keeping
@@ -542,7 +541,7 @@ public class Parser {
 
   private boolean isVarDecl() {
     return lookahead(() -> type(true, false, true) != null,
-                     () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE) || matchKeywordIgnoreEOL());
+                     () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeywordIgnoreEOL());
   }
 
   /**
@@ -1348,7 +1347,7 @@ public class Parser {
    *#          | "true" | "false" | "null"
    *#          | exprString
    *#          | regexSubstitute
-   *#          | (IDENTIFIER | classPath)
+   *#          | (IDENTIFIER | DOLLAR_IDENTIFIER | classPath)
    *#          | listOrMapLiteral
    *#          | "(" nestedExpr ")"
    *#          | "do" "{" block "}"
@@ -1356,7 +1355,6 @@ public class Parser {
    *#          | switchExpr
    *#          | evalExpr
    *#          | newInstance
-   *#          | (type | type IDENTIFIER)    // only in switch pattern
    *#          ;
    * </pre>
    */
@@ -1371,7 +1369,6 @@ public class Parser {
 
       case SLASH: case SLASH_EQUAL: case EXPR_STRING_START:  return exprString();
       case REGEX_SUBST_START:                                return regexSubstitute();
-      case IDENTIFIER: case UNDERSCORE: case STAR:           return classPathOrIdentifier();
       case LEFT_BRACE:                                       return mapLiteralOrClosure();
       case LEFT_SQUARE:                                      return mapOrListLiteral();
       case LEFT_PAREN:                                       return nestedExpr();
@@ -1379,6 +1376,8 @@ public class Parser {
       case NEW:                                              return newInstance();
       case DO:                                               return doBlock();
       case SWITCH:                                           return switchExpr();
+      case IDENTIFIER: case DOLLAR_IDENTIFIER:
+      case UNDERSCORE: case STAR:                            return classPathOrIdentifier();
     }
 
     if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
@@ -1475,10 +1474,11 @@ public class Parser {
         return classPath;
       }
     }
-    if (inPatternMatch) {
-      return identifier(IDENTIFIER, UNDERSCORE, STAR);
+    Token identifier = expect(IDENTIFIER, DOLLAR_IDENTIFIER);
+    if (identifier.is(DOLLAR_IDENTIFIER) && !Utils.isDigits(identifier.getStringValue().substring(1))) {
+      error("Unexpected token '$': Identifiers cannot begin with '$'", previous());
     }
-    return identifier(IDENTIFIER);
+    return new Expr.Identifier(identifier);
   }
 
   /**
@@ -1639,15 +1639,15 @@ public class Parser {
             unexpected("Was Expecting ',' while parsing Map literal.");
           }
         }
-        Expr key         = inPatternMatch && matchAny(STAR) ? new Expr.Literal(previous()) : mapKey();
+        Expr key         = mapKey();
         String keyString = null;
         if (key instanceof Expr.Literal) {
           Expr.Literal literal = (Expr.Literal) key;
-          Object       value   = literal.value.is(STAR) ? STAR.asString : literal.value.getValue();
+          Object       value   = literal.value.getValue();
           if (!(value instanceof String)) {
             error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location);
           }
-          keyString = literal.value.is(STAR) ? STAR.asString : literal.value.getStringValue();
+          keyString = literal.value.getStringValue();
           if (literalKeyMap.containsKey(keyString)) {
             error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location);
           }
@@ -1657,11 +1657,8 @@ public class Parser {
             error("Invalid parameter name", previous());
           }
         }
-        Expr value = null;
-        if (keyString == null || !keyString.equals(STAR.asString)) {
-          expect(COLON);
-          value = expression(true);
-        }
+        expect(COLON);
+        Expr value = expression(true);
         expr.entries.add(new Pair(key, value));
         if (keyString != null) {
           literalKeyMap.put(keyString, value);
@@ -1758,12 +1755,12 @@ public class Parser {
         exprString.exprList.add(new Expr.Literal(previous()));
       }
       else
-      if (matchAny(IDENTIFIER)) {
+      if (matchAny(IDENTIFIER,DOLLAR_IDENTIFIER)) {
         exprString.exprList.add(new Expr.Identifier(previous()));
       }
       else
       if (matchAny(LEFT_BRACE)) {
-        exprString.exprList.add(blockExpression());
+        exprString.exprList.add(exprStringBlockExpr());
       }
       else {
         unexpected("Error in expression string");
@@ -1833,7 +1830,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# blockExpression -&gt; "{" block "}"
+   *# exprStringBlockExpr -&gt; "{" block "}"
    * </pre>
    *
    * Used inside expression strings. If no return statement there is an implicit
@@ -1843,7 +1840,7 @@ public class Parser {
    * an anonymous closure invocation. E.g.:
    *   "${stmt1; stmt2; return val}" --&gt; "${ {stmt1;stmt2;return val}() }"
    */
-  private Expr blockExpression() {
+  private Expr exprStringBlockExpr() {
     Token leftBrace = previous();
     Stmt.Block block = block(RIGHT_BRACE);
     if (block.stmts.stmts.size() == 0) {
@@ -1978,14 +1975,7 @@ public class Parser {
       expect(ARROW);
       Expr expr = expression();
       if (expr instanceof Expr.Closure) {
-        Expr.Closure closure = (Expr.Closure) expr;
-        if (closure.noParamsDefined) {
-          // Treat closure as code block since no parameters defined
-          Stmt.Block block = closure.funDecl.block;
-          removeItParameter(block);
-          block = (Stmt.Block)setLastResultIsUsed(block);
-          expr = new Expr.Block(block.openBrace, block, false);
-        }
+        expr = convertClosureToBlockExpr(expr);
       }
       expr.isResultUsed = true;
       if (patterns == null) {
@@ -2008,6 +1998,25 @@ public class Parser {
                                    expr -> expr,
                                    (expr1, expr2) -> error("Literal match occurs multiple times in switch: " + expr2.constValue, expr2.location)));
     return new Expr.Switch(matchToken, subject, cases, defaultCase);
+  }
+
+  private Expr convertClosureToBlockExpr(Expr expr) {
+    Expr.Closure closure = (Expr.Closure) expr;
+    if (closure.noParamsDefined) {
+      // Treat closure as code block since no parameters defined
+      Stmt.Block block = closure.funDecl.block;
+      removeItParameter(block);
+      block = (Stmt.Block)setLastResultIsUsed(block);
+      expr = new Expr.Block(block.openBrace, block, false);
+    }
+    return expr;
+  }
+
+  /**
+   *# blockExpr -> "{" block "}"
+   */
+  private Expr blockExpr() {
+    return convertClosureToBlockExpr(closure());
   }
 
   /**
@@ -2046,6 +2055,8 @@ public class Parser {
    *#                | IDENTIFIER
    *#                | listPattern
    *#                | mapPattern
+   *#                | "$" IDENTIFIER
+   *#                | "$" "{" blockExpression() "}"
    */
   private Expr switchPattern() {
     matchAny(EOL);
@@ -2084,8 +2095,11 @@ public class Parser {
     else if (peek().is(UNDERSCORE)) {
       expr = identifier(UNDERSCORE);
     }
-    else if (matchAny(IDENTIFIER)) {
+    else if (matchAny(IDENTIFIER,DOLLAR_IDENTIFIER)) {
       expr = new Expr.Identifier(previous());
+    }
+    else if (matchAny(DOLLAR_BRACE)) {
+      expr = blockExpr();
     }
     else {
       unexpected("Expect const or regex or type in match case");
@@ -2283,7 +2297,7 @@ public class Parser {
       varsSeen.add(name);
       return expr;
     }
-    if (expr instanceof Expr.Identifier) {
+    if (expr instanceof Expr.Identifier && !((Expr.Identifier) expr).identifier.is(DOLLAR_IDENTIFIER)) {
       // If first occurrence then create the VarDecl
       Token name = ((Expr.Identifier) expr).identifier;
       String varName = name.getStringValue();
@@ -2304,13 +2318,6 @@ public class Parser {
       }
       return expr;
     }
-    if (expr instanceof Expr.RegexMatch || expr instanceof Expr.ExprString) {
-      return expr;
-    }
-    if (expr == null) {
-      return null;      // For second in pair when map entry is '*'
-    }
-    error("Expressions not supported in list/map literal pattern", expr.location);
     return expr;
   }
 
@@ -2710,7 +2717,6 @@ public class Parser {
     Token previous                   = previous();
     Token current                    = tokeniser.peek();
     boolean currentIgnoreEol         = ignoreEol;
-    boolean currentInPatternMatch    = inPatternMatch;
     List<CompileError> currentErrors = new ArrayList<>(errors);
 
     // Set flag so that we know not to collect state such as functions per block etc
@@ -2736,7 +2742,6 @@ public class Parser {
       errors        = currentErrors;
       lookaheadCount--;
       ignoreEol = currentIgnoreEol;
-      inPatternMatch = currentInPatternMatch;
     }
   }
 
@@ -2771,7 +2776,10 @@ public class Parser {
     if (peek().getType().is(EOF)) {
       throw new EOFError("Unexpected EOF: " + msg, peek(), lookaheadCount == 0);
     }
-    final String chars = peekIsEOL() ? "EOL" : "'" + peek().getChars() + "'";
+    final String chars = peekIsEOL() ? "EOL" :
+                         peek().is(EXPR_STRING_START) ? "'\"'" :
+                         peek().is(STRING_CONST) ? "\"'\"" :
+                         "'" + peek().getChars() + "'";
     error("Unexpected token " + chars + ": " + msg);
     return null;
   }

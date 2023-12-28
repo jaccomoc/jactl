@@ -83,13 +83,27 @@ public class SwitchTests extends BaseTest {
     testError("int x = 2\nswitch (x) {\n  1,2 -> x\n  'abc' -> x\n}", "can never match type string");
   }
 
-  @Test public void switchWithArrays() {
-    test("int[] x = [1,2,3]; switch (x) { [1,2],[1,2,4] -> 1; [1,2,3] -> 2 }", 2);
-  }
-
   @Test public void switchWithRecursion() {
     test("def f(it) { switch { [a,b] -> f(a)+f(b); [c] -> c; d -> d } }; f([[1,2],[3]])", 6);
     test("def f(it) { switch { [a,b] -> f(a)+f(b); [c] -> c; d -> d } }; f([[1,2],[[5],[1,2]]])", 11);
+  }
+
+  @Test public void switchWithExpansions() {
+    test("def i = 1; switch (1) { $i -> true; _ -> false }", true);
+    test("def i = 1; switch ([1]) { [$i] -> true; _ -> false }", true);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i,2,a] -> a; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i,2,a] -> a; [1,2,3] -> 7; _ -> false }", 3);
+    testError("def i = 1; int[] x = [1,2,3]; switch (x) { [_,_,_] -> 9; [$i,2,a] -> a; _ -> false }", "covered by a previous pattern");
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i,${i*2},a] -> a; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i++,${i*2},a] -> a; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,1]; switch (x) { [a,${i*2},${a}] -> a*3; _ -> false }", 3);
+    testError("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${i*2},$a] -> a; _ -> false }", "dollar sign used for binding variable");
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${i+a},${3*a}] -> 2*a+i; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${2*a},${3*a}] -> 2*a+i; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${2*a; return 7},${3*a}] -> 2*a+i; _ -> false }", 7);
+    test("def i = 1; int[] x = [1,2,2]; switch (x) { [a,${++a},a] -> a; _ -> false }", 2);  // hard to prevent mutation so have to allow
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${def i = 2; i*a},${3*a}] -> 2*a+i; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${def a = 2; a},${3*a}] -> 2*a+i; _ -> false }", 3);
   }
 
   @Test public void switchWithRegex() {
@@ -210,7 +224,6 @@ public class SwitchTests extends BaseTest {
     test("def val =[a:1,b:[z:4],c:3]; switch(val) { [a:1,b:x,*] -> x; default -> 2 }", Utils.mapOf("z",4));
     test("def val =[a:1,b:[z:4],c:3]; switch(val) { ['a':1,b:x,*] -> x; default -> 2 }", Utils.mapOf("z",4));
     test("def val =['a a':1,b:[z:4],c:3]; switch(val) { ['a a':1,b:x,*] -> x; default -> 2 }", Utils.mapOf("z",4));
-//    test("def val =['a a':1,b:[z:4],c:3]; def x = 'b'; switch(val) { [\"${'abc'[0]} a\":1,\"$x\":x,*] -> x; default -> 2 }", Utils.mapOf("z",4));
     test("Map[] x = [[i:3],[i:4]]; switch (x) { [[i:3],[i:3]] -> 4; [[i:3],[i:4]] -> 3; _ -> null }", 3);
     test("Map[] x = [[i:3],[i:4]]; switch (x) { [_,[i:3]] -> 4; [[i:3],_] -> 3; _ -> null }", 3);
     test("Map[] x = [[i:3],[i:4]]; switch (x) { [_,[i:3]] -> 3; [[i:3],a] -> a; _ -> null } == [i:4]",true);
@@ -281,6 +294,7 @@ public class SwitchTests extends BaseTest {
     test("def x = [[[i:3,j:7]],[[i:4,j:9]]]; switch (x) { [[_],[[i:3,j:7]]] -> 3; [[[i:3,j:7]],_] -> 4; _ -> null }", 4);
     test("def x = [[[i:3,j:7]],[[i:4,j:9]]]; switch (x) { [[_],[[i:3,j:7]]] -> 3; [_,[a]] -> a; _ -> null } == [i:4,j:9]", true);
     test("def x = [[[i:3,j:7]],[[i:4,j:9]]]; switch (x) { [[_],[[i:3,j:7]]] -> 3; [_,[Map a]] -> a; _ -> null } == [i:4,j:9]", true);
+    testError("def val =['a a':1,b:[z:4],c:3]; def x = 'b'; switch(val) { [\"${'abc'[0]} a\":1,\"$x\":x,*] -> x; default -> 2 }", "unexpected token");
   }
 
   @Test public void switchOnList() {
@@ -327,6 +341,8 @@ public class SwitchTests extends BaseTest {
     test("switch ([1,[2,'abc'],3]) { [_,[_,String],int] -> 2; _ -> 1 }", 2);
     test("switch ([1,[2,'abc'],3]) { [*,[2,String],int] -> 2; _ -> 1 }", 2);
     test("switch ([1,[2,'abc'],3]) { [*,[*,String],int] -> 2; _ -> 1 }", 2);
+    test("switch ([1,[2,\"${'abc'}\"],3]) { [*,[*,String],int] -> 2; _ -> 1 }", 2);
+    test("switch ([1,[2,\"${'abc'}\"],3]) { [*,[*,String s],int] -> s; _ -> 1 }", "abc");
     testError("List x = [1,2,3]; switch(x) { i -> i; [1,4,3] -> 7 }", "unreachable switch case");
     testError("List x = [1,2,3]; switch(x) { List i -> i; [1,4,3] -> 7 }", "unreachable switch case");
     test("List x = [1,2,3]; switch(x) { i -> i }", Utils.listOf(1,2,3));

@@ -73,6 +73,7 @@ class TokeniserTest {
     doTest.accept("?:", TokenType.QUESTION_COLON);
     doTest.accept("?.", TokenType.QUESTION_DOT);
     doTest.accept("?[", TokenType.QUESTION_SQUARE);
+    doTest.accept("${", TokenType.DOLLAR_BRACE);
     doTest.accept("&&", TokenType.AMPERSAND_AMPERSAND);
     doTest.accept("||", TokenType.PIPE_PIPE);
     doTest.accept("-=", TokenType.MINUS_EQUAL);
@@ -197,24 +198,25 @@ class TokeniserTest {
   }
 
   @Test public void identifiers() {
-    Consumer<String> doTest = source -> {
+    BiConsumer<String,Boolean> doTest = (source,isDollar) -> {
       Tokeniser tokeniser = new Tokeniser(source);
       Token     token     = tokeniser.next();
-      Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+      Assertions.assertEquals(isDollar ? TokenType.DOLLAR_IDENTIFIER : TokenType.IDENTIFIER, token.getType());
       assertEquals(source,     token.getValue());
       Assertions.assertEquals(EOF, tokeniser.next().getType());
     };
 
-    doTest.accept("_1");
-    doTest.accept("__1");
-    doTest.accept("a__1");
-    doTest.accept("L");
-    doTest.accept("D");
-    doTest.accept("Dxw12uioi_");
-    doTest.accept("__");
-    doTest.accept("a1");
-    doTest.accept("$1");
-    doTest.accept("$1234");
+    doTest.accept("_1", false);
+    doTest.accept("__1", false);
+    doTest.accept("a__1", false);
+    doTest.accept("L", false);
+    doTest.accept("D", false);
+    doTest.accept("Dxw12uioi_", false);
+    doTest.accept("__", false);
+    doTest.accept("a1", false);
+    doTest.accept("$1", true);
+    doTest.accept("$123", true);
+    doTest.accept("$a", true);
   }
 
   @Test public void numericLiterals() {
@@ -596,7 +598,7 @@ class TokeniserTest {
     Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\fc", token.getValue());
     assertEquals(1, token.getLineNum());
-    assertEquals(6, token.getColumn());
+    assertEquals(5, token.getColumn());
     token = tokeniser.next();
     Assertions.assertEquals(EOL, token.getType());
     token = tokeniser.next();
@@ -620,7 +622,7 @@ class TokeniserTest {
     Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\fc", token.getValue());
     assertEquals(1, token.getLineNum());
-    assertEquals(6, token.getColumn());
+    assertEquals(5, token.getColumn());
     token = tokeniser.next();
     Assertions.assertEquals(EOF, token.getType());
   }
@@ -708,7 +710,7 @@ class TokeniserTest {
     Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\f\nc", token.getValue());
     assertEquals(1, token.getLineNum());
-    assertEquals(4, token.getColumn());
+    assertEquals(1, token.getColumn());
   }
 
   @Test public void multiLineStrings() {
@@ -724,7 +726,7 @@ class TokeniserTest {
     Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\f\nc", token.getValue());
     assertEquals(1, token.getLineNum());
-    assertEquals(8, token.getColumn());
+    assertEquals(5, token.getColumn());
     token = tokeniser.next();
     Assertions.assertEquals(EOL, token.getType());
     token = tokeniser.next();
@@ -748,7 +750,7 @@ class TokeniserTest {
     Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\r\n/*\t*/\b\r\f\r\nc", token.getValue());
     assertEquals(1, token.getLineNum());
-    assertEquals(8, token.getColumn());
+    assertEquals(5, token.getColumn());
     token = tokeniser.next();
     Assertions.assertEquals(EOL, token.getType());
     token = tokeniser.next();

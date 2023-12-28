@@ -747,7 +747,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       });
     }
     else {
-      throw new UnsupportedOperationException("Unsupported comparison in match: " + pattern.getClass().getName());
+      loadValue.accept(patternType);
+      if (!patternType.isPrimitive()) {
+        box();
+      }
+      compile(pattern);
+      expect(2);
+      checkForEquality(patternType, pattern.location);
+      //throw new UnsupportedOperationException("Unsupported comparison in match: " + pattern.getClass().getName());
     }
   }
 
@@ -2170,7 +2177,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(BuiltinFunctions.class, "lookupMethodHandle", String.class);
     }
     else
-    if (name.charAt(0) == '$') {
+    if (name.charAt(0) == '$' && Utils.isDigits(name.substring(1))) {
       loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
       loadConst(Integer.parseInt(name.substring(1)));

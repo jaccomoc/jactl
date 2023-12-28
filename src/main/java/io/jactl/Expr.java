@@ -35,6 +35,7 @@ import io.jactl.runtime.FunctionDescriptor;
 
 import static io.jactl.JactlType.HEAPLOCAL;
 import static io.jactl.TokenType.STAR;
+import static io.jactl.TokenType.UNDERSCORE;
 
 /**
  * Expr classes for our AST.
@@ -121,7 +122,8 @@ abstract class Expr {
   }
 
   public boolean isTypePattern() {
-    return this instanceof Expr.TypeExpr || this instanceof Expr.ConstructorPattern || this instanceof Expr.VarDecl;
+    return this instanceof Expr.TypeExpr || this instanceof Expr.ConstructorPattern || this instanceof Expr.VarDecl ||
+           this instanceof Expr.Identifier && (((Expr.Identifier)this).identifier.is(UNDERSCORE) || ((Expr.Identifier)this).varDecl.isBindingVar);
   }
 
   public JactlType patternType() {

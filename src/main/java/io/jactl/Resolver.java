@@ -591,7 +591,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (pattern instanceof Expr.TypeExpr) {
       return ((Expr.TypeExpr) pattern).typeVal;
     }
-    if (pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
+    if ((pattern instanceof Expr.Identifier)) {
+      Expr.Identifier identifier = (Expr.Identifier) pattern;
+      if (identifier.identifier.is(UNDERSCORE) || identifier.varDecl.isBindingVar) {
+        return pattern.type;
+      }
+    }
+    if (pattern instanceof Expr.VarDecl) {
       return pattern.type;
     }
     return null;
@@ -692,7 +698,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (!keyMap1.keySet().equals(keyMap2.keySet()))                          { return false; }
       return keyMap1.keySet().stream().allMatch(k -> keyMap2.containsKey(k) && covers(keyMap1.get(k), keyMap2.get(k), bindings));
     }
-    if (pattern1 instanceof Expr.Identifier) {
+    if (pattern1 instanceof Expr.Identifier && pattern1.isTypePattern()) {
       return covers(bindings.get(((Expr.Identifier) pattern1).identifier.getStringValue()), pattern2, bindings);
     }
     return false;
@@ -1289,6 +1295,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (varDecl == null && !isSpecialMatchIdentifier) {
       // Not a function lookup or couldn't find function
       varDecl = lookup(expr.identifier);   // will throw if not found
+      if (varDecl.isBindingVar && expr.identifier.is(DOLLAR_IDENTIFIER)) {
+        error("Dollar sign used for binding variable in switch pattern", expr.location);
+      }
       expr.varDecl = varDecl;
       if (name.equals(Utils.THIS_VAR) || name.equals(Utils.SUPER_VAR)) {
         expr.couldBeNull = false;
@@ -2249,7 +2258,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Special case for capture vars which are of form $n where n > 0
     // For these vars we actually look for the $@ capture array var since $n means $@[n]
     if (name.charAt(0) == '$') {
-      name = Utils.CAPTURE_VAR;
+      String substr = name.substring(1);
+      name = Utils.isDigits(substr) ? Utils.CAPTURE_VAR : substr;
     }
 
     Expr.VarDecl varDecl = null;
