@@ -95,15 +95,19 @@ public class SwitchTests extends BaseTest {
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i,2,a] -> a; [1,2,3] -> 7; _ -> false }", 3);
     testError("def i = 1; int[] x = [1,2,3]; switch (x) { [_,_,_] -> 9; [$i,2,a] -> a; _ -> false }", "covered by a previous pattern");
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i,${i*2},a] -> a; _ -> false }", 3);
-    test("def i = 1; int[] x = [1,2,3]; switch (x) { [$i++,${i*2},a] -> a; _ -> false }", 3);
+    testError("def i = 1; int[] x = [1,2,3]; switch (x) { [$i++,${i*2},a] -> a; _ -> false }", "unexpected token");
     test("def i = 1; int[] x = [1,2,1]; switch (x) { [a,${i*2},${a}] -> a*3; _ -> false }", 3);
-    testError("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${i*2},$a] -> a; _ -> false }", "dollar sign used for binding variable");
+    test("def i = 1; int[] x = [1,2,1]; switch (x) { [a,${i*2},$a] -> a; _ -> false }", 1);
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${i+a},${3*a}] -> 2*a+i; _ -> false }", 3);
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${2*a},${3*a}] -> 2*a+i; _ -> false }", 3);
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${2*a; return 7},${3*a}] -> 2*a+i; _ -> false }", 7);
     test("def i = 1; int[] x = [1,2,2]; switch (x) { [a,${++a},a] -> a; _ -> false }", 2);  // hard to prevent mutation so have to allow
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${def i = 2; i*a},${3*a}] -> 2*a+i; _ -> false }", 3);
     test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${def a = 2; a},${3*a}] -> 2*a+i; _ -> false }", 3);
+    testError("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${switch(a){a->a}*2},${3*a}] -> 2*a+i; _ -> false }", "'a' shadows another variable");
+    testError("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${switch(a){i->i}*2},${3*a}] -> 2*a+i; _ -> false }", "'i' shadows another variable");
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${switch(a){j->j}*2},${3*a}] -> 2*a+i; _ -> false }", 3);
+    test("def i = 1; int[] x = [1,2,3]; switch (x) { [a,${switch(a){$a->a}*2},${3*a}] -> 2*a+i; _ -> false }", 3);
   }
 
   @Test public void switchWithRegex() {

@@ -1295,9 +1295,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (varDecl == null && !isSpecialMatchIdentifier) {
       // Not a function lookup or couldn't find function
       varDecl = lookup(expr.identifier);   // will throw if not found
-      if (varDecl.isBindingVar && expr.identifier.is(DOLLAR_IDENTIFIER)) {
-        error("Dollar sign used for binding variable in switch pattern", expr.location);
-      }
       expr.varDecl = varDecl;
       if (name.equals(Utils.THIS_VAR) || name.equals(Utils.SUPER_VAR)) {
         expr.couldBeNull = false;
