@@ -390,3 +390,35 @@ switch (x) {
   X(list:[_,_,a]) -> "type is X: last elem of X.list is $a"
 }
 ```
+
+## Variables and Expressions Inside Patterns
+
+If you want to have a pattern that depends on the value of an existing variable then you can use `$` to expand the
+value of that variable inside the pattern.
+For example, to match any list whose first element has the same value as the variable `v`:
+```groovy
+switch (x) {
+  [$v,*]             -> 'matched'
+  [a,$v] if a == 2*v -> 'matched'
+}
+```
+
+Just like in expression strings, if the value to be expanded is more than just a simple variable name you can wrap
+the expression in `{ }`:
+```groovy
+switch (x) {
+  [${2*v}, $v] -> 'matched'
+}
+```
+
+You can refer to the value of binding variables (that are already bound) inside the expressions so these two `switch`
+expressions are equivalent:
+```groovy
+switch (x) {
+  [a,b,c] if b == 2*a && c == 3*a -> 'matched'
+}
+
+switch (x) {
+  [a, ${2*a}, ${3*a}] -> 'matched'
+}
+```
