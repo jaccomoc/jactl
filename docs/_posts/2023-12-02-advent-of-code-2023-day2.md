@@ -41,11 +41,12 @@ For the games that could have occurred we sum their ids and that is the solution
 
 ```groovy
 def bag = [red:12, green:13, blue:14]
-stream(nextLine).map{ /Game (\d+): (.*)$/n
+stream(nextLine).map{ 
+  /Game (\d+): (.*)$/n
   [$1, $2.split(/;/)
-         .flatMap{ it.split(/,/).map{ /(\d+) (.*)/n; [$2,$1] }}
-         .allMatch{ colour,count -> count <= bag[colour] }]  }
-                .filter{ it[1] }.map{ it[0] }.sum()
+         .flatMap{ it.split(/,/)
+         .map{ /(\d+) (.*)/n; [$2,$1] }}.allMatch{ colour,count -> count <= bag[colour] }]
+}.filter{ it[1] }.map{ it[0] }.sum()
 ```
 
 The solution was pretty straightforward.
