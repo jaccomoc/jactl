@@ -45,7 +45,8 @@ println "fib(20) = ${fib(20)}"
 
 Jactl is a multi-paradigm language and so has both Object Oriented and Functional programming features.
 Here is an example showing a more functional programming approach using some built-in higher-order
-functions to take a file of markdown, extract the top level headings, and generate a table of contents:
+functions and built-in regex support to take a file of markdown, extract the top level headings, and generate 
+a table of contents:
 ```groovy
 // Sanitise text to make suitable for a link
 def linkify = { s/ /-/g;  s/[^\w-]//g }
