@@ -19,7 +19,7 @@ to Jactl.
 
 I wanted a language that was a joy to code in, was easy for Java programmers to pick up, 
 provided a secure extension mechanism for applications, and was non-blocking.
-Nothing I found satisfied all of these needs and so Jactl was born.
+Nothing I found satisfied all these needs and so Jactl was born.
 
 ## Features
 
