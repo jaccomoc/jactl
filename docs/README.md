@@ -15,11 +15,17 @@ running.
 :star: Please consider giving this project a star as a way to encourage me to continue making improvements
 to Jactl.
 
+### Another JVM Language?
+
+I wanted a language that was a joy to code in, was easy for Java programmers to pick up, 
+provided a secure extension mechanism for applications, and was non-blocking.
+Nothing I found satisfied all of these needs and so Jactl was born.
+
 ## Features
 
 ### Familiar Syntax
-Jactl syntax is mostly just a subset of Java and Groovy syntax with a bit of Perl thrown in for good measure,
-so it is easy to pick up for anyone familiar with Java:
+Jactl syntax is concise and is mostly just a subset of Java and Groovy syntax with a bit of Perl thrown in for
+good measure, so it is easy to pick up for anyone familiar with Java:
 
 ```groovy
 int fib(int x) {
@@ -37,8 +43,9 @@ def fib(x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 println "fib(20) = ${fib(20)}"
 ```
 
-A more advance example that takes a file of markdown and extracts the top level headings to generate a table 
-of contents:
+Jactl is a multi-paradigm language and so has both Object Oriented and Functional programming features.
+Here is an example showing a more functional programming approach using some built-in higher-order
+functions to take a file of markdown, extract the top level headings, and generate a table of contents:
 ```groovy
 // Sanitise text to make suitable for a link
 def linkify = { s/ /-/g;  s/[^\w-]//g }
@@ -114,17 +121,22 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 
 ### Language Features
 * Closures
+* Functional programming
+  * Functions as values
+  * Higher-order functions
+  * Map, filter, collect, each, etc.
 * Classes with inheritance
 * Strong/weak typing
 * Parameters with default values
 * Named parameters for function calls
 * Multi-line strings
 * Strings with interpolated expressions
-* Functional programming idioms (map, filter, collect, each, etc.)
 * Regex matching syntax
 * Regex capture variables
+* [Pattern matching with destructuring](https://jactl.io/blog/2023/12/21/switch-expressions.html)
 
-See [Language Features](https://jactl.io/language-features) for an overview of the language features.
+See [Language Features](https://jactl.io/language-features) for an overview with examples of the language
+features.
 
 ## Download
 

@@ -196,6 +196,43 @@ totalTime = measure{
 totalTime = measure{ 40.each{ i -> fib(i + 1) } } 
 ```
 
+## Higher-Order Functions
+
+Since functions and closures can be passed by value it is possible to write other functions that
+operate on a function.
+For example we can create a higher-order function `compose` that returns a new function that is
+the composition of two other functions:
+```groovy
+def compose(f,g) { return { x -> f(g(x)) } }
+def twice(x) { x * 2 }
+def plus3(x) { x + 3 }
+
+def plus3Twice = compose(twice, plus3)
+
+plus3Twice(7)        // returns 20
+```
+
+## Efficient Built-in Higher-Order Functions
+
+There are also many built-in higher-order functions for operating on collection types (List, Map, array)
+including `map`, `flatMap`, `filter`, and `each`:
+```groovy
+def fib(x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
+
+// Find first fibonacci number under 1000 that is a multiple of 57
+def x = 1000.map{ [it, fib(it)] }.filter{ n,fib -> fib % 57 == 0 }.limit(1)[0]
+
+// Returns [36, 14930352] so 36th fibonacci number (14930352) is a multiple of 57  
+```
+
+These higher-order functions that operate over collections work by iterating over the collections
+rather than creating a new collection each time.
+So in the example above where we iterate over the first 1000 Fibonacci numbers looking for the
+first one that is a multiple of 57, we don't actually calculate the first 1000 Fibonacci numbers.
+The `limit(1)` means that we stop iterating as soon as we find the first one that matches.
+Each number flows through each of the higher-order functions one at a time before we iterate
+over the subsequent number.
+
 ## Regex Support with Capture Variables $1, $2, ...
 
 Regular expression matching is part of the language rather than being delegated to library calls.
