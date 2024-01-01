@@ -140,7 +140,7 @@ switch(x) {
 ```
 ```groovy
 Switch pattern will never be evaluated (covered by previous pattern) @ line 3, column 3
-  1, 2, String -> '1, 2, or string'
+  1,2,String -> '1, 2, or string'
   ^
 ```
 
