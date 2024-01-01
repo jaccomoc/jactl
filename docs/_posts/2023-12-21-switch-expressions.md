@@ -395,7 +395,8 @@ switch (x) {
 
 If you want to have a pattern that depends on the value of an existing variable then you can use `$` to expand the
 value of that variable inside the pattern.
-For example, to match any list whose first element has the same value as the variable `v`:
+For example, to match any list whose first element has the same value as the variable `v` or to
+match a two element list whose first element is twice the value of `v` and whose last element is `v`:
 ```groovy
 switch (x) {
   [$v,*]             -> 'matched'
@@ -433,14 +434,19 @@ This is to allow you to be able to match on exact types, especially in pattern m
 For example, consider this:
 ```groovy
 switch (x) {
-  1   -> 'int 1'
-  1L  -> 'long 1'
-  1D  -> 'double 1'
-  1.0 -> `Decimal 1`
+  1          -> 'int 1'
+  1L         -> 'long 1'
+  1D         -> 'double 1'
+  (Decimal)1 -> 'Decimal 1'
+  1.0        -> 'Decimal 1.0'
 }
 ```
 When `x` is `1` it will match the pattern that exactly matches its type and value so a `long` will
 only match `1L`, for example.
+
+Note that `(Decimal)1` is different to `1.0`.
+Even though both are of type `Decimal`, `1` is treated differently to `1.0` because the number of decimal
+places is significant.
 
 This means that this will return `false` since the `long` value will not match against an `int` value
 of `1`:
