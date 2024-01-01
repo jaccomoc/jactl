@@ -3767,9 +3767,26 @@ class CompilerTest extends BaseTest {
     test("def x = [a:1,b:2,c:3]; def y = [b:2,a:1,c:3]; x == y", true);
     test("[1,2,3] == [2,3]", false);
     test("[1,2,3] == [1,2,3]", true);
+    test("[1,2,3] == [1,2L,3]", true);
+    test("[1,2,3] == [1,2D,3]", true);
+    test("[1,2,3] == [1,2 as Decimal,3]", true);
+    test("[1,2,3] == [1,(byte)2,3]", true);
     test("[a:1,b:2,c:3] == [b:2,c:3]", false);
+    test("[a:1,b:2,c:3] == [b:2L,c:3]", false);
+    test("[a:1,b:2,c:3] == [b:2D,c:3]", false);
+    test("[a:1,b:2,c:3] == [b:2 as Decimal,c:3]", false);
+    test("[a:1,b:2,c:3] == [b:(byte)2,c:3]", false);
     test("[a:1,b:2,c:3] == [b:2,a:1,c:3]", true);
 
+    test("def x = [1,2,3]; x == [1,2L,3]", true);
+    test("def x = [1,2,3]; x == [1,2D,3]", true);
+    test("def x = [1,2,3]; x == [1,2 as Decimal,3]", true);
+    test("def x = [1,2,3]; x == [1,(byte)2,3]", true);
+    test("def x = [a:1,b:2,c:3]; x == [b:2,c:3]", false);
+    test("def x = [a:1,b:2,c:3]; x == [b:2L,c:3]", false);
+    test("def x = [a:1,b:2,c:3]; x == [b:2D,c:3]", false);
+    test("def x = [a:1,b:2,c:3]; x == [b:2 as Decimal,c:3]", false);
+    test("def x = [a:1,b:2,c:3]; x == [b:(byte)2,c:3]", false);
     test("def x = [1,2,3]; def y = [2,3]; x != y", true);
     test("def x = [1,2,3]; def y = [1,2,3]; x != y", false);
     test("def x = [a:1,b:2,c:3]; def y = [b:2,c:3]; x != y", true);
@@ -5907,6 +5924,7 @@ class CompilerTest extends BaseTest {
     test("def x = [1,[2,3]]; x <=> [1,[3,4]]", -1);
     test("def x = [1,[2,3]]; x <=> [1,[1,3,4]]", 1);
     test("def x = [1,[2,3]]; x <=> [1,[2,3]]", 0);
+    test("def x = [1,[2,3]]; x <=> [1,[2L,3]]", 0);
     test("def x = [1]; x <=> null", 1);
     testError("def x = [1]; x <=> ['a']", "cannot compare");
     testError("def x = [a:1]; x <=> [:]", "cannot compare");

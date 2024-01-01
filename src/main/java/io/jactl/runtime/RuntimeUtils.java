@@ -2253,15 +2253,17 @@ public class RuntimeUtils {
 
   public static final String CAN_CAST_TO_TYPE = "canCastToType";
   public static boolean canCastToType(Object obj, Class clss, Class unboxedClass) {
+    if (obj == null)                           { return false; }
     if (clss.equals(Object.class))             { return true; }
-    if (obj.getClass().equals(clss))           { return true; }
+    Class<?> objClass = obj.getClass();
+    if (objClass.equals(clss))                 { return true; }
     if (unboxedClass.isPrimitive() || clss.equals(BigDecimal.class)) {
-      if (clss.equals(Boolean.class))           { return false; }   // Since obj.class != clss from above
-      return obj instanceof Number || obj instanceof BigDecimal;
+      if (clss.equals(Boolean.class))          { return false; }   // Since obj.class != clss from above
+      return unboxedClass.equals(int.class) && objClass.equals(Byte.class);
     }
     if (clss.isArray())                        { return canConvertToArray(obj, clss); }
     if (clss.equals(String.class))             { return false; }
-    return clss.isAssignableFrom(obj.getClass());
+    return clss.isAssignableFrom(objClass);
   }
 
   public static boolean canConvertToArray(Object obj, Class clss) {
@@ -2292,12 +2294,82 @@ public class RuntimeUtils {
     return false;
   }
 
+  /**
+   * Same as Object.equals() except that Byte and Integer are treated
+   * as equivalent to allow byte values to match int literals in switch
+   * expressions.
+   * Also allow o1 and o2 to be null.
+   * Note that o1 can be an array in which case it can be compared with
+   * a list value for o2.
+   */
+  public static final String SWITCH_EQUALS = "switchEquals";
+  public static boolean switchEquals(Object o1, Object o2) {
+    if (o1 == null || o2 == null) {
+      return o1 == o2;
+    }
+    if (o1 instanceof Byte && o2 instanceof Integer) {
+      return ((Byte) o1).intValue() == ((Integer) o2).intValue();
+    }
+    if (o2 instanceof Byte && o1 instanceof Integer) {
+      return ((Byte) o2).intValue() == ((Integer) o1).intValue();
+    }
+    if (o1 instanceof List && o2 instanceof List) {
+      List l1 = (List)o1;
+      List l2 = (List)o2;
+      if (l1.size() != l2.size()) { return false; }
+      for (int i = 0; i < l1.size(); i++) {
+        if (!switchEquals(l1.get(i),l2.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (o1.getClass().isArray() && o2 instanceof List) {
+      List l2 = (List)o2;
+      if (Array.getLength(o1) != l2.size()) { return false; }
+      for (int i = 0; i < l2.size(); i++) {
+        if (!switchEquals(Array.get(o1,i),l2.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (o1 instanceof Map && o2 instanceof Map) {
+      Map<String,Object> m1 = (Map)o1;
+      Map<String,Object> m2 = (Map)o2;
+      if (m1.size() != m2.size()) { return false; }
+      for (String key: m1.keySet()) {
+        if (!switchEquals(m1.get(key), m2.get(key))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return o1.equals(o2);
+  }
+
+  /**
+   * Get integer value or null if not int/byte
+   */
+  public static final String INT_VALUE = "intValue";
+  public static Integer intValue(Object obj) {
+    if (obj instanceof Integer) {
+      return (Integer)obj;
+    }
+    if (obj instanceof Byte) {
+      return ((Byte)obj).intValue();
+    }
+    return null;
+  }
+
   public static final String IS_PATTERN_COMPATIBLE = "isPatternCompatible";
   public static boolean isPatternCompatible(Object obj, Class clss) {
     if (clss.isArray())  { return isArrayType(obj, clss); }
     if (obj == null)     { return clss.equals(Object.class); }
-    if (JactlType.typeFromClass(clss).isNumeric() && JactlType.typeOf(obj).isNumeric()) {
-      return true;
+    JactlType clssType = JactlType.typeFromClass(clss).unboxed();
+    JactlType objType  = JactlType.typeOf(obj).unboxed();
+    if (clssType.isNumeric() && objType.isNumeric()) {
+      return objType.is(clssType) || objType.is(JactlType.BYTE) && clssType.is(JactlType.INT);
     }
     if (obj instanceof JactlObject) {
       return clss.isAssignableFrom(obj.getClass());

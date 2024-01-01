@@ -26,7 +26,6 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -499,32 +498,50 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     createVars.accept(expr.block.variables.values());
 
-    // List of list of pairs where each sublist is a list of compatible matches
-    // (all literals or all class types or all other) in order in which they
-    // appear in the switch expression
-    Deque<List<Pair<Expr,Expr>>> caseRuns = Utils.flattenCases(expr.cases);
+    Function<List<Triple<Expr,Expr,Expr.SwitchCase>>,Boolean> canUseSwitch = c -> c.size() > 2 && c.get(0).first instanceof Expr.Literal && c.get(0).second == null;
 
-    Function<List<Pair<Expr,Expr>>,Boolean> canUseSwitch = c -> c.size() > 1 &&
-                                                                Utils.isHashableAndSame(c.stream()
-                                                                                         .map(pair -> pair.first)
-                                                                                         .collect(Collectors.toList()));
+    Label end = new Label();
+    // Create labels for all results that are not simple, so we only have to generate code for these once.
+    Map<Expr,Label> nonSimpleLabels = expr.cases.stream()
+                                                .filter(c -> !c.result.isSimple())
+                                                .collect(Collectors.toMap(c -> c.result, t -> new Label(), (a,b) -> a));
+
+    // Make sure all binding variables are created and initialised to default values
+    expr.cases.forEach(c -> createVars.accept(c.block.variables.values()));
+
+    Function<Triple<Expr,Expr,Expr.SwitchCase>,Boolean> isSimplePattern = pattern -> pattern.first instanceof Expr.Literal &&
+                                                                                     !pattern.first.isNull() &&
+                                                                                     pattern.second == null;
+
+    // If all cases are simple literals (with no ifExpr), then we can use a TABLESWITCH or LOOKUPSWITCH instruction
+    boolean allLiterals = expr.cases.size() > 0 &&
+                          expr.cases.stream()
+                                    .flatMap(c -> c.patterns.stream())
+                                    .allMatch(pair -> pair.first instanceof Expr.Literal && !pair.first.isNull() && pair.second == null);
 
     // Find all case elements for literal values that can't be done with a switch op code and for each type
     // we need to convert to create a local variable for it (if type is different to subject type)
     // Ignore Map and Lists as they are special cases.
-    Map<JactlType, Token> typeLocals = caseRuns.stream()
-                                               //.filter(c -> !canUseSwitch.apply(c))
-                                               .flatMap(c -> c.stream()
-                                                              .filter(p -> !(p.first.isTypePattern()))
-                                                              .map(p -> Pair.create(p.first.type, p.first.location)))
-                                               .filter(p -> !p.first.equals(expr.subject.type))
-                                               .filter(p -> !p.first.is(LIST,MAP))
-                                               .collect(Collectors.toMap(p -> p.first, p -> p.second, (first, second) -> first));
+    Map<JactlType, Token> typeLocals = /*allLiterals ? null
+                                                   :*/ expr.cases.stream()
+                                                               .flatMap(c -> c.patterns.stream()
+                                                                                       .filter(p -> !(p.first.isTypePattern()))
+                                                                                       .map(p -> Pair.create(p.first.type, p.first.location)))
+                                                               .filter(p -> !p.first.equals(expr.subject.type))
+                                                               .filter(p -> !p.first.is(LIST,MAP))
+                                                               .collect(Collectors.toMap(p -> p.first, p -> p.second, (first, second) -> first));
+
     // Slots for values of each type
-    Map<JactlType, Integer> valueSlots = typeLocals.keySet().stream().collect(Collectors.toMap(Function.identity(), t -> stack.allocateSlot(t)));
+    Map<JactlType, Integer> valueSlots = /*allLiterals ? new HashMap<>()
+                                                     :*/ typeLocals.keySet().stream().collect(Collectors.toMap(Function.identity(), t -> stack.allocateSlot(t)));
+
     // Slots for booleans to indicate that subject can be converted to that type (for cases when subject type is ANY)
-    Map<JactlType, Integer> isTypeSlots = subjectIsAny ? typeLocals.keySet().stream().collect(Collectors.toMap(Function.identity(), t -> stack.allocateSlot(BOOLEAN))) : null;
-    valueSlots.forEach((type,slot) -> {
+    Map<JactlType, Integer> isTypeSlots = subjectIsAny /*&& !allLiterals*/ ? typeLocals.keySet().stream().collect(Collectors.toMap(Function.identity(), t -> stack.allocateSlot(BOOLEAN))) : null;
+
+    List<Triple<Expr,Expr,Expr.SwitchCase>> flattened = expr.cases.stream()
+                                                                  .flatMap(c -> c.patterns.stream().map(pair -> Triple.create(pair.first, pair.second, c)))
+                                                                  .collect(Collectors.toList());
+    valueSlots.forEach((type, slot) -> {
       Label noConvert = null;
       if (subjectIsAny) {
         // Check for compatible types if we don't know type of subject
@@ -549,37 +566,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     });
 
-    // Output sequence of switch statements or if statements as appropriate
-    Label end = new Label();
-    Map<Expr,Label> nonSimpleLabels  = new HashMap<>();
-//    caseRuns.forEach(c -> {
-//      if (canUseSwitch.apply(c)) {
-//        Utils.emitSwitch(mv, c, end);
-//      }
-//      else {
-//        for (var exprPair: c) {
-//          compileMatchCase(expr, exprPair, subjectIsAny, isTypeSlots, valueSlots, end, nonSimpleLabels);
-//        }
-//      }
-//    });
-    // Make sure all binding variables are created and initialised to default values
-    expr.cases.forEach(c -> createVars.accept(c.block.variables.values()));
-    expr.cases.forEach(c -> {
-      AtomicBoolean first = new AtomicBoolean(true);
-      c.patterns.forEach(pat -> {
-        // Special case for capture vars. Need to reinitialise so partial matches don't leave
-        // values in $1,$2 etc if complete pattern did not match
-        if (!first.get()) {
-          Expr.VarDecl captureVarDecl = c.block.variables.get(Utils.CAPTURE_VAR);
-          if (captureVarDecl != null) {
-            loadDefaultValue(MATCHER);
-            storeVar(captureVarDecl);
-          }
+    for (int i = 0; i < flattened.size(); i++) {
+      // Find subList with all literals that we can use emitSwitch with
+      int j = i;
+      for (; j < flattened.size() && isSimplePattern.apply(flattened.get(j)); j++) {}
+      if (j - i > 2) {
+        emitSwitch(mv, flattened.subList(i, j).stream().map(t -> Pair.create(t.first, t.third.result)).collect(Collectors.toList()),
+                   expr.type, end, nonSimpleLabels, () -> loadVar(expr.itVar));
+        i = j - 1;
+      }
+      else {
+        Triple<Expr,Expr,Expr.SwitchCase> pattern = flattened.get(i);
+        Expr.VarDecl captureVarDecl = pattern.third.block.variables.get(Utils.CAPTURE_VAR);
+        if (captureVarDecl != null) {
+          loadDefaultValue(MATCHER);
+          storeVar(captureVarDecl);
         }
-        compileMatchCase(expr, pat, c.result, isTypeSlots, valueSlots, end, nonSimpleLabels);
-        first.set(false);
-      });
-    });
+        compileMatchCase(expr, Pair.create(pattern.first,pattern.second), pattern.third.result, isTypeSlots, valueSlots, end, nonSimpleLabels);
+      }
+    }
 
     // Fall through to default case
     compile(expr.defaultCase);
@@ -606,8 +611,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     });
 
     mv.visitLabel(end);
-    valueSlots.values().forEach(s -> stack.freeSlot(s));
-    if (subjectIsAny) {
+    if (valueSlots != null) {
+      valueSlots.values().forEach(s -> stack.freeSlot(s));
+    }
+    if (isTypeSlots != null) {
       isTypeSlots.values().forEach(s -> stack.freeSlot(s));
     }
     Label endBlock = new Label();
@@ -628,7 +635,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     emitIf(expr.isAsync, IfTest.IS_TRUE, () -> {
              Label endCheck = new Label();
              Consumer<JactlType> loadValue = type -> {
-               if (type == null)   { loadVar(expr.itVar); return; }
+               if (type == null)  { loadVar(expr.itVar); return; }
                Integer vslot = valueSlots.get(type);
                if (vslot == null) {  loadVar(expr.itVar); }
                else               {  loadLocal(vslot);    }
@@ -664,9 +671,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                mv.visitJumpInsn(GOTO, end);
              }
              else {
-               Label label = nonSimpleLabels.computeIfAbsent(result, k -> new Label());
+               Label label = nonSimpleLabels.get(result);
                mv.visitJumpInsn(GOTO, label);    // Skip to location where we will generate result for non-simple values
-               nonSimpleLabels.put(result, label);
              }
            },
            null);
@@ -709,7 +715,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         convertTo(pattern.type, pattern, true, pattern.location);
         compile(pattern);
         expect(2);
-        checkForEquality(pattern.type, pattern.location);
+        checkForEquality(pattern.type);
       }
     }
     else if (pattern.isLiteral() || pattern instanceof Expr.ExprString) {
@@ -723,7 +729,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadValue.accept(patternType);
         compile(pattern);
         expect(2);
-        checkForEquality(patternType, pattern.location);
+        checkForEquality(patternType);
       }
       else if (pattern instanceof Expr.ListLiteral) {
         if (!subjectType.is(ITERATOR, LIST, ARRAY, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
@@ -753,7 +759,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       compile(pattern);
       expect(2);
-      checkForEquality(patternType, pattern.location);
+      checkForEquality(patternType);
       //throw new UnsupportedOperationException("Unsupported comparison in match: " + pattern.getClass().getName());
     }
   }
@@ -950,7 +956,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     popVal();
   }
 
-  private void checkForEquality(JactlType type, Token location) {
+  private void checkForEquality(JactlType type) {
     if (type.isPrimitive()) {
       int opCode = type.is(BOOLEAN,BYTE,INT) ? ISUB :
                    type.is(LONG)             ? LCMP :
@@ -968,10 +974,141 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       pushType(BOOLEAN);
     }
     else {
-      loadConst(RuntimeUtils.getOperatorType(EQUAL_EQUAL));
-      loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.BOOLEAN_OP, Object.class, Object.class, String.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.SWITCH_EQUALS, Object.class, Object.class);
     }
+  }
+
+  private void emitSwitch(MethodVisitor mv,
+                          List<Pair<Expr,Expr>> cases,
+                          JactlType resultType,
+                          Label end,
+                          Map<Expr,Label> nonSimpleLabels,
+                          Runnable loadSubject) {
+    // We need to decide whether to output a TABLESWITCH or a LOOKUPSWITCH statement.
+    // TABLESWITCH is faster (if applicable) but can use more space if the values produce
+    // a sparse table.
+    // We use a heuristic that if the sparse table size would be more than 5 times as big
+    // as the number of individual cases then we will use a LOOKUPSWITCH instead. This
+    // check only applies if the values are all integral types (numeric and not double/BigDecimal).
+    // All other types we will generate a LOOKUPSWITCH for.
+    Function<Expr, Boolean> isIntegral = e -> e.isConst && e.constValue instanceof Number &&
+                                              !(e.constValue instanceof Double || e.constValue instanceof BigDecimal || e.constValue instanceof Long);
+
+    // Check if all patterns are an integer value in which case we might be able to use a TABLESWITCH
+    boolean useTable = cases.stream().allMatch(t -> isIntegral.apply(t.first));
+
+    Label noMatch = new Label();
+
+    loadSubject.run();
+    if (useTable) {
+      // Build map of unique results so that we can have one label per result
+      Map<Expr,Label> switchLabels = cases.stream()
+                                          .collect(Collectors.toMap(p -> p.second, p -> nonSimpleLabels.getOrDefault(p.second, new Label()), (a,b) -> a));
+
+      // Sort literal values
+      List<Pair<Integer,Label>> sorted = cases.stream()
+                                              .map(p -> Pair.create(((Number) p.first.constValue).intValue(), switchLabels.get(p.second)))
+                                              .sorted(Comparator.comparingInt(p -> p.first))
+                                              .collect(Collectors.toList());
+
+      // Make sure that we don't have so many values that the table would be too large
+      int max   = sorted.get(sorted.size() - 1).first;
+      int min   = sorted.get(0).first;
+      int range = max - min + 1;
+      if (range > 5 * sorted.size()) {
+        useTable = false;
+      }
+      if (useTable) {
+        // Make sure we have a subject of the right type
+        switch (peek().getType()) {
+          case ANY: {
+            invokeMethod(RuntimeUtils.class, RuntimeUtils.INT_VALUE, Object.class);
+            _dupVal();
+            Label isInt = new Label();
+            mv.visitJumpInsn(IFNONNULL, isInt);
+            mv.visitInsn(POP);
+            mv.visitJumpInsn(GOTO, noMatch);
+            mv.visitLabel(isInt);
+            invokeMethod(Integer.class, "intValue");
+            break;
+          }
+          case BYTE: case INT:     break;
+          default: throw new IllegalStateException("Internal error: Unexpected type for int based switch: " + peek());
+        }
+
+        // Have integral values not spaced out too far
+        // Populate labels with defaultLabel
+        Label[] labels = IntStream.range(0,range).mapToObj(i -> noMatch).toArray(Label[]::new);
+        // Override where we have an actual case with the label for the result
+        sorted.forEach(t -> labels[t.first - min] = t.second);
+        mv.visitTableSwitchInsn(min, max, noMatch, labels);
+        popType();
+        // For any results that are simple we compile on the spot. Non-simple ones are left for later.
+        switchLabels.entrySet().stream().filter(e -> !nonSimpleLabels.containsKey(e.getKey())).forEach(entry -> {
+          mv.visitLabel(entry.getValue());
+          compile(entry.getKey());
+          convertTo(resultType, entry.getKey(), true, entry.getKey().location);
+          popType();
+          mv.visitJumpInsn(GOTO, end);
+        });
+        mv.visitLabel(noMatch);
+        return;
+      }
+      // Fall through to using LOOKUPSWITCH if we couldn't use TABLESWITCH
+    }
+
+    box();
+    mv.visitJumpInsn(IFNULL, noMatch);
+    popType();
+    loadSubject.run();
+    box();
+    invokeMethod(Object.class, "hashCode");
+
+    // Annoyingly, we need to support multiple literal values that could hash to the same value so
+    // we calculate a list of unique hashCodes combined with a pair of label and a list of pattern/result pairs
+    // and then sort on hash code.
+    List<Map.Entry<Integer,Pair<Label,List<Pair<Expr,Expr>>>>> hashed =
+      cases.stream()
+           .collect(Collectors.toMap(p -> p.first.constValue.hashCode(),
+                                     p -> Pair.create(new Label(), Utils.listOf(Pair.create(p.first, p.second))),
+                                     (a, b) -> { a.second.addAll(b.second); return a; }))
+           .entrySet().stream()
+           .sorted(Comparator.comparingInt(Map.Entry::getKey))
+           .collect(Collectors.toList());
+
+    mv.visitLookupSwitchInsn(noMatch,
+                             hashed.stream().mapToInt(Map.Entry::getKey).toArray(),
+                             hashed.stream().map(e -> e.getValue().first).toArray(Label[]::new));
+    popType();
+
+    hashed.forEach(entry -> {
+      mv.visitLabel(entry.getValue().first);
+      entry.getValue().second.forEach( pair -> {
+        loadSubject.run();
+        box();
+        compile(pair.first);       // literal value
+        box();
+        Label notEqual = new Label();
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.SWITCH_EQUALS, Object.class, Object.class);
+        mv.visitJumpInsn(IFEQ, notEqual);
+        popType();
+        Label nonSimple = nonSimpleLabels.get(pair.second);
+        if (nonSimple == null) {
+          compile(pair.second);
+          convertTo(resultType, pair.second, true, pair.second.location);
+          popType();
+          mv.visitJumpInsn(GOTO, end);
+        }
+        else {
+          mv.visitJumpInsn(GOTO, nonSimple);
+        }
+       isNotLiteral:
+        mv.visitLabel(notEqual);
+      });
+      mv.visitJumpInsn(GOTO, noMatch);
+    });
+
+    mv.visitLabel(noMatch);
   }
 
   @Override public Void visitExprList(Expr.ExprList expr) {
@@ -5378,7 +5515,6 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     }
     else {
       compile(expr.field);
-      int indexVar  = stack.allocateSlot(INT);
       if (expr.field.type.is(ANY)) {
         throwIfNotNumber("Array index must be numeric not ", expr.field.location);
         mv.visitTypeInsn(CHECKCAST, "java/lang/Number");

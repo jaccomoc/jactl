@@ -553,11 +553,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return c.block;
     }).collect(Collectors.toList()));
     resolve(block);
-    expr.cases.forEach(c -> c.patterns.forEach(pat -> {
-      if (!isCompatible(subjectType, pat.first)) {
-        error("Type " + subjectType + " can never match type " + pat.first.patternType(), pat.first.location);
-      }
-    }));
+    expr.cases.forEach(c -> c.patterns.forEach(pat -> isCompatible(subjectType, pat.first)));
     resolve(expr.defaultCase);
 
     // Check that there if there is a pattern covering all cases that there are no subsequent patterns and no default
@@ -603,7 +599,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private static boolean isCompatible(JactlType subjectType, Expr pat) {
+  public static boolean isCompatible(JactlType subjectType, Expr pat) {
+    if (!doIsCompatible(subjectType, pat)) {
+      error("Type " + subjectType + " can never match type " + pat.patternType() + " with value " + pat.constValue, pat.location);
+      return false;
+    }
+    return true;
+  }
+
+  public static boolean doIsCompatible(JactlType subjectType, Expr pat) {
     JactlType patType = pat.patternType();
     if (subjectType.is(ANY) || patType.is(ANY)) {
       return true;
@@ -619,6 +623,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     if (subjectType.isNumeric() && !patType.isNumeric() || patType.isNumeric() && !subjectType.isNumeric()) {
       return false;
+    }
+    if (subjectType.isNumeric() && patType.isNumeric()) {
+      if (!subjectType.boxed().is(patType.boxed())) {
+        // Only implicit conversion allowed is between byte and int
+        if (patType.is(INT) && subjectType.unboxed().is(BYTE)) {
+          return (int) pat.constValue <= 127 && (int) pat.constValue >= -128;
+        }
+        return false;
+      }
+      else {
+        return true;
+      }
     }
     if (subjectType.is(ARRAY)) {
       if (!(pat instanceof Expr.ListLiteral)) { return false; }
@@ -656,7 +672,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return t1.is(ANY) || t1.is(t2) || t1.isAssignableFrom(t2);
     }
     if (pattern1.isLiteral() && pattern1.isConst && pattern2.isLiteral() && pattern2.isConst) {
-      return pattern1.constValue.equals(pattern2.constValue);
+      return RuntimeUtils.switchEquals(pattern1.constValue,pattern2.constValue);
     }
     if (pattern1 instanceof Expr.ExprString || pattern2 instanceof Expr.ExprString) {
       return false;

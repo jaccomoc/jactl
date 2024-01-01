@@ -257,6 +257,27 @@ public class JactlType {
     }
   }
 
+  /**
+   * Return the TokenType for the constant that would generate this JactlType
+   * @param value  the constant value for which we need a token type (used for BOOLEAN)
+   * @return the token type
+   */
+  public TokenType constTokenType(Object value) {
+    switch (this.type) {
+      case BOOLEAN:    return (boolean)value ? TokenType.TRUE : TokenType.FALSE;
+      case BYTE:       return TokenType.BYTE_CONST;
+      case INT:        return TokenType.INTEGER_CONST;
+      case LONG:       return TokenType.LONG_CONST;
+      case DOUBLE:     return TokenType.DOUBLE_CONST;
+      case DECIMAL:    return TokenType.DECIMAL_CONST;
+      case STRING:     return TokenType.STRING_CONST;
+      case MAP:        return TokenType.MAP;
+      case LIST:       return TokenType.LIST;
+      case ANY:        return TokenType.DEF;
+      default: throw new IllegalStateException("Internal error: unexpected type " + this.type);
+    }
+  }
+
   public static JactlType valueOf(TypeEnum type) {
     switch (type) {
       case BOOLEAN:      return BOOLEAN;

@@ -479,7 +479,7 @@ public class Utils {
     return new HashSet(Arrays.asList(elems));
   }
 
-  public static List listOf(Object... elems) {
+  public static <T> List<T> listOf(T... elems) {
     return Arrays.asList(elems);
   }
 
@@ -814,89 +814,6 @@ public class Utils {
       sb.append(str);
     }
     return sb.toString();
-  }
-
-  // = Switch expressions
-
-  static void emitSwitch(MethodVisitor mv, List<Pair<Expr, Expr>> cases, Label end) {
-    assert !cases.isEmpty();
-    // We need to decide whether to output a TABLESWITCH or a LOOKUPSWITCH statement.
-    // TABLESWITCH is faster (if applicable) but can use more space if the values produce
-    // a sparse table.
-    // We use a heuristic that if the sparse table size would be more than 5 times as big
-    // as the number of individual cases then we will use a LOOKUPSWITCH instead. This
-    // check only applies if the values are all integral types (numeric and not double/BigDecimal).
-    // All other types we will generate a LOOKUPSWITCH for.
-    Function<Expr,Boolean> isIntegral = e -> e.isConst && e.constValue instanceof Number &&
-                                             !(e.constValue instanceof Double || e.constValue instanceof BigDecimal);
-    boolean useTable = cases.stream().allMatch(p -> isIntegral.apply(p.first));
-    // Make sure that we don't have so many values to check that table becomes too large
-    long max = useTable ? cases.stream().mapToLong(p -> ((Number)p.first.constValue).longValue()).max().orElse(Integer.MAX_VALUE) : Integer.MAX_VALUE;
-    long min = useTable ? cases.stream().mapToLong(p -> ((Number)p.first.constValue).longValue()).min().orElse(0) : 0;
-    if (max - min + 1 > 5L * cases.size()) {
-      useTable = false;
-    }
-  }
-
-  /**
-   * Flatten the case entries of a switch statement so that multiple matches in the same case
-   * are turned into individual ones and group runs of the same match type (literal, type, other)
-   * into sublists.
-   * E.g.:
-   * <pre>
-   *   switch() { 1,2,3 => 'abc'; 4,int,String => 'xxx'; long,5 => 'xyz' }
-   * </pre>
-   * This turns into:
-   * <pre>
-   *   [[Pair(1,'abc'), Pair(2,'abc'), Pair(3,'abc'), Pair(4,'xxx')],
-   *    [Pair(int,'xxx'), Pair(String,'xxx'), Pair(long,'xyz')],
-   *    [Pair(5,'xyz')]]
-   * </pre>
-   * If the list of entries of a case are not compatible with each other and the result is not
-   * a trivial result (not a literal or simple variable), then that case gets its own list, so
-   * we can't assume that the sublists returned have compatible types for their matches.
-   * This to avoid having to generate the same code for the result multiple times when the result
-   * code could be large.
-   */
-  static Deque<List<Pair<Expr, Expr>>> flattenCases(List<Expr.SwitchCase> cases) {
-    BiFunction<Expr,Expr,Boolean>     isSameType        = (e1, e2) -> e1.getClass().equals(e2.getClass());
-
-    Deque<List<Pair<Expr, Expr>>> caseRuns = new ArrayDeque<>();
-    Expr currentType = null;
-    for (Expr.SwitchCase c: cases) {
-      List<Pair<Expr, Expr>> flattened             = c.patterns.stream().map(pair -> Pair.create(pair.first, c.result)).collect(Collectors.toList());
-      Boolean                isHashableAndSameType = isHashableAndSame(c.patterns.stream().map(p -> p.first).collect(Collectors.toList()));
-      if (currentType != null && isHashableAndSameType && isSameType.apply(currentType, c.patterns.get(0).first)) {
-        caseRuns.getLast().addAll(flattened);
-        continue;
-      }
-      if (isHashableAndSameType) {
-        caseRuns.add(new ArrayList<>(flattened));
-        currentType = c.patterns.get(0).first;
-        continue;
-      }
-      // Not all the same type but if we have a simple result and we have any that match
-      // current type we can add them to the current one before creating a new list for the
-      // rest
-      if (c.result.isSimple()) {
-        for (Pair<Expr, Expr> pair: flattened) {
-          if (currentType == null || !isSameType.apply(pair.first, currentType)) {
-            caseRuns.add(new ArrayList<>());
-          }
-          caseRuns.getLast().add(pair);
-          currentType = pair.first;
-        }
-        continue;
-      }
-      // Not simple result so we need a sublist all of our own
-      currentType = null;
-      caseRuns.add(flattened);
-    }
-    return caseRuns;
-  }
-
-  static boolean isHashableAndSame(List<Expr> exprs) {
-    return exprs.stream().allMatch(p -> p.isConst && p.getClass().equals(exprs.get(0).getClass()));
   }
 
   static boolean isDigits(String str) {

@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
@@ -27,6 +28,7 @@ import java.util.stream.Stream;
 import static io.jactl.JactlType.ANY;
 import static io.jactl.JactlType.UNKNOWN;
 import static io.jactl.TokenType.*;
+import static io.jactl.TokenType.NUMBER;
 
 /**
  * Recursive descent parser for parsing the Jactl language.
@@ -1173,7 +1175,7 @@ public class Parser {
   private Expr unary(int precedenceLevel) {
     Expr expr;
     matchAny(EOL);
-    if (lookahead(() -> matchAny(LEFT_PAREN), () -> type(false, false, false) != null, () -> matchAny(RIGHT_PAREN))) {
+    if (isCast()) {
       // Type cast. Rather than create a separate operator for each type case we just use the
       // token for the type as the operator if we detect a type cast.
       expect(LEFT_PAREN);
@@ -1231,6 +1233,10 @@ public class Parser {
       }
     }
     return expr;
+  }
+
+  private boolean isCast() {
+    return lookahead(() -> matchAny(LEFT_PAREN), () -> type(false, false, false) != null, () -> matchAny(RIGHT_PAREN));
   }
 
   private boolean isPlusMinusNumber() {
@@ -2101,10 +2107,35 @@ public class Parser {
     else if (matchAny(DOLLAR_BRACE)) {
       expr = blockExpr();
     }
+    else if (isCast()) {
+      expect(LEFT_PAREN);
+      matchAny(EOL);
+      JactlType castType = type(false, false, false);
+      matchAny(EOL);
+      expect(RIGHT_PAREN);
+      if (!isLiteral()) {
+        error("Expected simple literal value after type cast");
+      }
+      Expr.Literal literal = literal();
+      literal.isConst = true;
+      literal.constValue = castTo(literal.value.getValue(),castType, literal.location);
+      literal.value = new Token(JactlType.typeOf(literal.constValue).constTokenType(literal.constValue),literal.location).setValue(literal.constValue);
+      expr = literal;
+    }
     else {
       unexpected("Expect const or regex or type in match case");
     }
     return expr;
+  }
+
+  private Object castTo(Object value, JactlType type, Token token) {
+    try {
+      return RuntimeUtils.castTo(type.classFromType(), value, token.getSource(), token.getOffset());
+    }
+    catch (JactlError e) {
+      error(e.getErrorMessage(), token);
+    }
+    return null;
   }
 
   private Expr mapOrListPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
