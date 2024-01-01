@@ -1,8 +1,10 @@
 ---
 layout: page
-title: "FAQ - Frequently Asked Questions"
+title: "FAQ"
 permalink: /faq
 ---
+
+# Frequently Asked Questions
 
 ### Why do we need yet another JVM language?
 
