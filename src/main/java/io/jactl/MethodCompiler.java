@@ -498,8 +498,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     createVars.accept(expr.block.variables.values());
 
-    Function<List<Triple<Expr,Expr,Expr.SwitchCase>>,Boolean> canUseSwitch = c -> c.size() > 2 && c.get(0).first instanceof Expr.Literal && c.get(0).second == null;
-
     Label end = new Label();
     // Create labels for all results that are not simple, so we only have to generate code for these once.
     Map<Expr,Label> nonSimpleLabels = expr.cases.stream()
@@ -513,58 +511,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                                                      !pattern.first.isNull() &&
                                                                                      pattern.second == null;
 
-    // If all cases are simple literals (with no ifExpr), then we can use a TABLESWITCH or LOOKUPSWITCH instruction
-    boolean allLiterals = expr.cases.size() > 0 &&
-                          expr.cases.stream()
-                                    .flatMap(c -> c.patterns.stream())
-                                    .allMatch(pair -> pair.first instanceof Expr.Literal && !pair.first.isNull() && pair.second == null);
-
-    // Find all case elements for literal values that can't be done with a switch op code and for each type
-    // we need to convert to create a local variable for it (if type is different to subject type)
-    // Ignore Map and Lists as they are special cases.
-    Map<JactlType, Token> typeLocals = /*allLiterals ? null
-                                                   :*/ expr.cases.stream()
-                                                               .flatMap(c -> c.patterns.stream()
-                                                                                       .filter(p -> !(p.first.isTypePattern()))
-                                                                                       .map(p -> Pair.create(p.first.type, p.first.location)))
-                                                               .filter(p -> !p.first.equals(expr.subject.type))
-                                                               .filter(p -> !p.first.is(LIST,MAP))
-                                                               .collect(Collectors.toMap(p -> p.first, p -> p.second, (first, second) -> first));
-
-    // Slots for values of each type
-    Map<JactlType, Integer> valueSlots = /*allLiterals ? new HashMap<>()
-                                                     :*/ typeLocals.keySet().stream().collect(Collectors.toMap(Function.identity(), t -> stack.allocateSlot(t)));
-
-    // Slots for booleans to indicate that subject can be converted to that type (for cases when subject type is ANY)
-    Map<JactlType, Integer> isTypeSlots = subjectIsAny /*&& !allLiterals*/ ? typeLocals.keySet().stream().collect(Collectors.toMap(Function.identity(), t -> stack.allocateSlot(BOOLEAN))) : null;
-
     List<Triple<Expr,Expr,Expr.SwitchCase>> flattened = expr.cases.stream()
                                                                   .flatMap(c -> c.patterns.stream().map(pair -> Triple.create(pair.first, pair.second, c)))
                                                                   .collect(Collectors.toList());
-    valueSlots.forEach((type, slot) -> {
-      Label noConvert = null;
-      if (subjectIsAny) {
-        // Check for compatible types if we don't know type of subject
-        loadDefaultValue(type);
-        storeLocal(slot);
-        noConvert = new Label();
-        loadVar(expr.itVar);
-        box();
-        loadConst(type.boxed());
-        loadConst(type);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.CAN_CAST_TO_TYPE, Object.class, Class.class, Class.class);
-        dupVal();
-        storeLocal(isTypeSlots.get(type));
-        popType();
-        mv.visitJumpInsn(IFEQ, noConvert);   // Can't do conversion because types are incompatible
-      }
-      loadVar(expr.itVar);
-      convertTo(type, expr.subject, true, typeLocals.get(type));
-      storeLocal(slot);
-      if (noConvert != null) {
-        mv.visitLabel(noConvert);
-      }
-    });
 
     for (int i = 0; i < flattened.size(); i++) {
       // Find subList with all literals that we can use emitSwitch with
@@ -582,7 +531,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           loadDefaultValue(MATCHER);
           storeVar(captureVarDecl);
         }
-        compileMatchCase(expr, Pair.create(pattern.first,pattern.second), pattern.third.result, isTypeSlots, valueSlots, end, nonSimpleLabels);
+        compileMatchCase(expr, Pair.create(pattern.first,pattern.second), pattern.third.result, end, nonSimpleLabels);
       }
     }
 
@@ -611,12 +560,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     });
 
     mv.visitLabel(end);
-    if (valueSlots != null) {
-      valueSlots.values().forEach(s -> stack.freeSlot(s));
-    }
-    if (isTypeSlots != null) {
-      isTypeSlots.values().forEach(s -> stack.freeSlot(s));
-    }
     Label endBlock = new Label();
     mv.visitLabel(endBlock);
     expr.block.variables.forEach((name, varDecl) -> {
@@ -631,28 +574,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   @Override public Void visitConstructorPattern(Expr.ConstructorPattern expr) { return null; }
 
-  private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, Map<JactlType, Integer> isTypeSlots, Map<JactlType, Integer> valueSlots, Label end, Map<Expr, Label> nonSimpleLabels) {
+  private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, Label end, Map<Expr, Label> nonSimpleLabels) {
     emitIf(expr.isAsync, IfTest.IS_TRUE, () -> {
              Label endCheck = new Label();
              Consumer<JactlType> loadValue = type -> {
-               if (type == null)  { loadVar(expr.itVar); return; }
-               Integer vslot = valueSlots.get(type);
-               if (vslot == null) {  loadVar(expr.itVar); }
-               else               {  loadLocal(vslot);    }
-             };
-             Consumer<JactlType> ifCanConvertTo = (caseType) -> {
-               if (isTypeSlots != null) {
-                 Integer slot = isTypeSlots.get(caseType);
-                 if (slot != null) {
-                   loadLocal(slot);
-                   dupVal();
-                   mv.visitJumpInsn(IFEQ, endCheck);
-                   popType();
-                   popVal();
-                 }
+               loadVar(expr.itVar);
+               if (type != null && !type.is(ANY,LIST)) {
+                 convertTo(type, expr.subject, true, expr.subject.location);
                }
              };
-             compileMatchCaseTest(loadValue, ifCanConvertTo, expr.subject.type, patternPair, expr.subject.location, endCheck);
+             compileMatchCaseTest(loadValue, expr.subject.type, patternPair, expr.subject.location, endCheck);
              if (patternPair.second != null) {
                // If pattern did not match
                _dupVal();
@@ -678,12 +609,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
            null);
   }
 
-  private void compileMatchCaseTest(Consumer<JactlType> loadValue, Consumer<JactlType> ifCanConvertTo, JactlType subjectType, Pair<Expr,Expr> patternPair, Token subjectLocation, Label endCheck) {
+  private void compileMatchCaseTest(Consumer<JactlType> loadValue, JactlType subjectType, Pair<Expr,Expr> patternPair, Token subjectLocation, Label endCheck) {
     Expr pattern = patternPair.first;
-    compileMatchCaseTest(loadValue, ifCanConvertTo, subjectType, pattern, subjectLocation, endCheck);
+    compileMatchCaseTest(subjectType, pattern, subjectLocation, endCheck, loadValue);
   }
 
-  private void compileMatchCaseTest(Consumer<JactlType> loadValue, Consumer<JactlType> ifCanConvertTo, JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck) {
+  private void compileMatchCaseTest(JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck, Consumer<JactlType> loadValue) {
+    Consumer<JactlType> ifCanConvertTo = (caseType) -> {
+      // Check if type matches and if not jump to end with false on stack
+      if (caseType.is(ANY)) { return; }
+      // Check if we can convert
+      loadValue.accept(null);
+      box();
+      loadConst(caseType.boxed());
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_PATTERN_COMPATIBLE, Object.class, Class.class);
+      dupVal();
+      mv.visitJumpInsn(IFEQ, endCheck);
+      popType();
+      popVal();
+    };
+
     JactlType patternType = pattern.patternType();
     if (isUnderscore(pattern)) {
       // Always match placeholder pattern
@@ -907,29 +852,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           default: throw new IllegalStateException("Internal error: unexpected type " + patternType);
         }
         int finalSubElemSlot = subElemSlot;
-        compileMatchCaseTest(t -> {
-                               loadLocal(finalSubElemSlot);
-                               if (t != null && !t.is(ANY,LIST)) {
-                                 convertTo(t, subExpr, true, subExpr.location);
-                               }
-                             },
-                             caseType -> {
-                               // Check if type matches and if not jump to end with false on stack
-                               if (caseType.is(ANY)) { return; }
-                               // Check if we can convert
-                               loadLocal(finalSubElemSlot);
-                               box();
-                               loadConst(caseType.boxed());
-                               invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_PATTERN_COMPATIBLE, Object.class, Class.class);
-                               dupVal();
-                               mv.visitJumpInsn(IFEQ, endCheck);
-                               popType();
-                               popVal();
-                             },
-                             elemType,
-                             subExpr,
-                             subjectLocation,
-                             endCheck);
+        compileMatchCaseTest(elemType, subExpr, subjectLocation, endCheck, t -> {
+          loadLocal(finalSubElemSlot);
+          if (t != null && !t.is(ANY,LIST)) {
+            convertTo(t, subExpr, true, subExpr.location);
+          }
+        });
         dupVal();
         mv.visitJumpInsn(IFEQ, endCheck);
         popType();

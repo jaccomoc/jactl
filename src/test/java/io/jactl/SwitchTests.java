@@ -167,7 +167,7 @@ public class SwitchTests extends BaseTest {
     test("def it = 'abc'; switch{ /a/r -> 1; default -> 2 }", 1);
     test("def it = 'abc'; switch{ /a(.)c/r -> $1; default -> 2 }", "b");
     test("def it = 'abc'; switch{ /a(.)c/r if false, 'abc'-> $1; default -> 2 }", null);
-    testError("def it = ['abc']; switch{ /a(.)c/r -> $1; default -> 2 }", "cannot convert object");
+    test("def it = ['abc']; switch{ /a(.)c/r -> $1; default -> 2 }", 2);
     testError("switch (['abc']) { /a(.)c/r -> $1; default -> 2 }", "can never match");
     testError("def it = 'abc'; switch{ /a(.)c/ -> $1; default -> $1 }", "reference to regex capture variable");
     test("switch('abc') { /a/ -> 1 }", null);
