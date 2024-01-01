@@ -6,10 +6,30 @@ permalink: /faq
 
 # Frequently Asked Questions
 
-### Why do we need yet another JVM language?
+* [Why do we need yet another JVM language?](#why-do-we-need-yet-another-jvm-language)
+* [What does it mean that it never blocks?](#what-does-it-mean-that-it-never-blocks)
+* [Why the need for Jactl to have non-blocking code now that Java 21 has virtual threads?](#why-the-need-for-jactl-to-have-non-blocking-code-now-that-java-21-has-virtual-threads)
+* [Why can't Jactl scripts directly invoke Java library functions?](#why-cant-jactl-scripts-directly-invoke-java-library-functions)
+* [Can I run Jactl code without having to embed it in another appplication?](#can-i-run-jactl-code-without-having-to-embed-it-in-another-appplication)
+* [Is there a REPL for experimenting with Jactl?](#is-there-a-repl-for-experimenting-with-jactl)
+* [What language is the Jactl compiler written in?](#what-language-is-the-jactl-compiler-written-in)
+* [How big is the compiler?](#how-big-is-the-compiler)
+* [How many test cases are there?](#how-many-test-cases-are-there)
+* [What other libraries does Jactl depend on?](#what-other-libraries-does-jactl-depend-on)
+* [Is the Jactl language Object-Oriented or Functional?](#is-the-jactl-language-object-oriented-or-functional)
+* [Is Jactl strongly-typed?](#is-jactl-strongly-typed)
+* [How easy is Jactl to extend?](#how-easy-is-jactl-to-extend)
+* [Does Jactl provide any thread synchronisation mechanisms?](#does-jactl-provide-any-thread-synchronisation-mechanisms)
+* [Why can't classes have static data members?](#why-cant-classes-have-static-data-members)
+* [Can closures mutate variables in outer scopes?](#can-closures-mutate-variables-in-outer-scopes)
+* [Do collection methods like `map` and `filter` create new collections?](#do-collection-methods-like-map-and-filter-create-new-collections)
+* [What is the performance of `switch` expressions?](#what-is-the-performance-of-switch-expressions)
+* [Why do Maps only support Strings for keys?](#why-do-maps-only-support-strings-for-keys)
+* [Why is there no Set type in Jactl?](#why-is-there-no-set-type-in-jactl)
+* [I still didn't find the answer to my question](#i-still-didnt-find-the-answer-to-my-question)
 
-<details>
-  <summary>Click to expand</summary>
+
+### Why do we need yet another JVM language?
 
 I wrote Jactl because I wanted a scripting language that Java applications could embed to allow their users
 to provide customisations and extensions that had the following characteristics:
@@ -49,12 +69,8 @@ to provide customisations and extensions that had the following characteristics:
   features that I would want to use to write scripts in.
 
 I could not find any language that met all the criteria, and so I decided to write one instead.
-</details>
 
 ### What does it mean that it never blocks?
-
-<details>
-  <summary>Click to expand</summary>
 
 Most programs that deal with long-running operations such as sending a request and waiting for
 a response take one of two approaches:
@@ -77,12 +93,8 @@ When a long-running operation takes place in a script, Jactl captures the execut
 script in a `Continuation` object and returns, thus freeing up the event-loop thread.
 Once the result of the long-running operation is available, the `Continuation` is resumed which
 will continue the operation of the script from the point where it was suspended. 
-</details>
 
 ### Why the need for Jactl to have non-blocking code now that Java 21 has virtual threads?
-
-<details>
-  <summary>Click to expand</summary>
 
 Java 21 now has virtual threads which implement a similar approach to Jactl in terms
 of suspending code for a long-running operation and resuming once the operation has completed.
@@ -96,12 +108,8 @@ For the moment though:
    execution state of a script can be replicated/persisted and restored after a failure to continue
    running from where it left off.
 3. Jactl supports Java 8+ so Jactl supports applications that are not yet running on the latest Java.
-</details>
 
 ### Why can't Jactl scripts directly invoke Java library functions?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl is intended to be used as a scripting language for Java applications, and therefore, 
 it is tightly controlled what scripts are and aren't allowed to do.
@@ -110,24 +118,16 @@ in order to provide a secure scripting language where the application has comple
 what scripts can do.
 The only way in which scripts can interact with their environment is via extension functions
 and methods provided by the application in which it is embedded.
-</details>
 
 ### Can I run Jactl code without having to embed it in another appplication?
-
-<details>
-  <summary>Click to expand</summary>
 
 If you just want to run Jactl scripts on their own, you can run them from the command line.
 In this mode they can read from _stdin_ and write to _stdout_ and so are useful for performing
 scripting that might otherwise be done by Perl, awk, sed, etc.
 
 See [Command Line Scripting](command-line-scripts.md) for more details.
-</details>
 
 ### Is there a REPL for experimenting with Jactl?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl comes with a REPL (Read-Evaluate-Print-Loop) that provides a prompt where you can enter
 Jactl code and have it evaluated immediately.
@@ -138,75 +138,47 @@ command-line history and editing.
 
 See the [Jactl REPL](https://github.com/jaccomoc/jactl-repl) project for more details including
 a link for where the JAR file can be downloaded from.
-</details>
 
 ### What language is the Jactl compiler written in?
-
-<details>
-  <summary>Click to expand</summary>
 
 The Jactl compiler is written almost entirely in Java (compatible with Java 8+).
 There is one Perl script that is used to generate the AST classes from a simplified Java class
 specification (see Expr.java and Stmt.java).
-</details>
 
 ### How big is the compiler?
 
-<details>
-  <summary>Click to expand</summary>
-
 The Jactl source code currently is about 25K lines of code after stripping out comments and
 blank lines (or 33K including comments and blank lines).
-</details>
 
 ### How many test cases are there?
-
-<details>
-  <summary>Click to expand</summary>
 
 There are currently over 11K individual test cases.
 Each test case is a Jactl script that is compiled, run, and then verified against the expected
 result (or the expected error).
-</details>
 
 ### What other libraries does Jactl depend on?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl is completely stand-alone, with no dependencies on any other libraries apart from the
 [ASM](https://asm.ow2.io/) library which is used for generating the bytecode.
 The ASM library is embedded inside the Jactl JAR file where it has been renamed to avoid clashes
 with any other versions of the library that might be used by the application in which Jactl is
 running.
-</details>
 
 ### Is the Jactl language Object-Oriented or Functional?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl is a multi-paradigm language and offers both Object-Oriented and Functional programming
 idioms.
 The script writer can choose whether to use one or the other or to use a combination of both.
-</details>
 
 ### Is Jactl strongly-typed?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl is an optionally typed language, so it can be used as a dynamic programming language
 (known as _duck typing_) or you can provide types for variables and return types in which case
 Jactl will enforce these types.
 If type information is provided, then Jactl can make use of this information to compile to more
 optimal code in many cases.
-</details>
 
 ### How easy is Jactl to extend?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl is intended to be embedded in Java applications which then provide their own 
 application-specific functions as extensions to the Jactl compiler for use by Jactl scripts.
@@ -232,24 +204,16 @@ def encoded = 'AQIDBA=='
 def decoded = x.base64Decode()    // will be array of bytes: [1, 2, 3, 4]
 ```
 See the [Integration Guide](integration-guide.md) for more information.
-</details>
 
 ### Does Jactl provide any thread synchronisation mechanisms?
-
-<details>
-  <summary>Click to expand</summary>
 
 Jactl is intended to run in highly multithreaded, event-loop based applications.
 To avoid unintended deadlocks, and to avoid blocking event-loop threads, there is no mechanism
 in Jactl to explicitly synchronise or wait on other threads.
 Since there is no global data of any sort (see next question), there is no need to have a way to
 control multiple threads accessing this data from within Jactl.
-</details>
 
 ### Why can't classes have static data members?
-
-<details>
-  <summary>Click to expand</summary>
 
 The reason that static data members are not allowed in classes is twofold:
 1. Jactl is intended to run in distributed applications where there are multiple instances running.
@@ -260,12 +224,8 @@ The reason that static data members are not allowed in classes is twofold:
    different threads to be trying to access and modify the same data.
    This means that Jactl does not need to provide any thread sychronisation mechanisms that are
    notoriously error-prone and avoids having to worry about deadlocks.
-</details>
 
 ### Can closures mutate variables in outer scopes?
-
-<details>
-  <summary>Click to expand</summary>
 
 In Jactl, unlike Java, closures (lambda functions in Java) and functions can mutate the value of variables
 in an outer scope.
@@ -274,12 +234,8 @@ This is allowed in Jactl:
 def i = 0
 def f() { ++i }
 ```
-</details>
 
 ### Do collection methods like `map` and `filter` create new collections?
-
-<details>
-  <summary>Click to expand</summary>
 
 When chaining together multiple invocations of collection methods such as `map()`, `flatMap()`,
 and `filter()`, Jactl does not create intermediate collections.
@@ -295,12 +251,8 @@ The only exception to this are the methods `collect()` and `collectEntries()` wh
 to explicitly force an intermediate collection to be created.
 This could be needed if the functions being invoked have side effects and the order of these
 side effects needs to be based on fully processing the collection at each step.
-</details>
 
 ### What is the performance of `switch` expressions?
-
-<details>
-  <summary>Click to expand</summary>
 
 If you are using simple numeric and String literals as the values to match against in your `switch`
 expressions (with no `if` expression) then the performance should be similar to what you would get in Java.
@@ -335,22 +287,15 @@ switch (x) {
   'xyz'                  -> true
 }
 ```
-</details>
 
 ### Why do Maps only support Strings for keys?
-
-<details>
-  <summary>Click to expand</summary>
 
 In Jactl, the built-in Map type currently only supports key values that are Strings.
 This seemed like a reasonable limitation for a scripting language to start with.
 In the future, there might be an enhancement where Maps could support other key types.
-</details>
 
 ### Why is there no Set type in Jactl?
 
-<details>
-  <summary>Click to expand</summary>
 
 Jactl does not currently have a built-in Set type, but equivalent behaviour can be obtained using
 Maps:
@@ -375,13 +320,8 @@ set[p.toString()] = true     // Need to convert to a string first before putting
 ```
 
 Adding Sets as a built-in type in Jactl is a possible future enhancement.
-</details>
 
 ### I still didn't find the answer to my question
 
-<details>
-  <summary>Click to expand</summary>
-
 Please use the [discussions](https://github.com/jaccomoc/jactl/discussions) section in GitHub to
 ask your questions, and I will endeavour to respond in a timely fashion.
-</details>
