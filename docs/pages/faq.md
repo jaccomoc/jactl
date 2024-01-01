@@ -101,7 +101,7 @@ of suspending code for a long-running operation and resuming once the operation 
 This works for (almost) arbitrary Java code, so in theory, Jactl could piggyback off that without
 having to implement its own suspend/resume functionality. 
 
-For the moment though:
+For the moment, though:
 1. It is not yet clear what the performance implications of moving an application from an event-loop
    approach to one that uses virtual threads are.
 2. The suspend/resume functionality in Jactl also allows it to offer a checkpoint mechanism where the
@@ -112,7 +112,7 @@ For the moment though:
 ### Why can't Jactl scripts directly invoke Java library functions?
 
 Jactl is intended to be used as a scripting language for Java applications, and therefore, 
-it is tightly controlled what scripts are and aren't allowed to do.
+it tightly controls what scripts are and aren't allowed to do.
 Jactl prevents scripts from directly interacting with the file system, the network, and the JVM
 in order to provide a secure scripting language where the application has complete control over
 what scripts can do.
@@ -126,6 +126,10 @@ In this mode they can read from _stdin_ and write to _stdout_ and so are useful 
 scripting that might otherwise be done by Perl, awk, sed, etc.
 
 See [Command Line Scripting](command-line-scripts.md) for more details.
+
+Jactl has been used in this way to solve [Advent Of Code](https://adventofcode.com/) puzzles.
+See the [Jactl Blog](https://jactl.io/blog) for posts with solutions for some past Advent Of Code
+problems.
 
 ### Is there a REPL for experimenting with Jactl?
 
