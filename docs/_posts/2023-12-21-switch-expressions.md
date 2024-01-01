@@ -453,7 +453,7 @@ of `1`:
 ```groovy
 def x = 1L
 switch (x) {
-  1 -> true
+  1       -> true
   default -> false
 }
 ```
