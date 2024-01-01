@@ -422,3 +422,41 @@ switch (x) {
   [a, ${2*a}, ${3*a}] -> 'matched'
 }
 ```
+
+## Switch Literal Comparisons
+
+Note that `switch` expressions will compare numeric values slightly differently than a standard `==` comparison.
+In a `switch` expression, numeric value comparisons will only match if the types are the same.
+A `long` value will not match an `int` value.
+This is to allow you to be able to match on exact types, especially in pattern matches.
+
+For example, consider this:
+```groovy
+switch (x) {
+  1   -> 'int 1'
+  1L  -> 'long 1'
+  1D  -> 'double 1'
+  1.0 -> `Decimal 1`
+}
+```
+When `x` is `1` it will match the pattern that exactly matches its type and value so a `long` will
+only match `1L`, for example.
+
+This means that this will return `false` since the `long` value will not match against an `int` value
+of `1`:
+```groovy
+def x = 1L
+switch (x) {
+  1 -> true
+  default -> false
+}
+```
+
+This is different to standard comparisons using `==`:
+```groovy
+def x = 1L
+x == 1       // evaluates to true
+```
+
+If the compiler knows the type of the value being switched on and can tell that it can never
+match one of the literls in the `switch` expression you will get a compile error.

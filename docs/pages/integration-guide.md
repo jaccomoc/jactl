@@ -52,7 +52,7 @@ then be invoked multiple times as discussed below).
 To share data between the Java application and the script, it is possible to pass in a Map of global variables
 that the script can then access.
 ```java
-var    globals = new HashMap<String,Object>();
+Map<String,Object> globals = new HashMap<>();
 globals.put("x", 3);
 globals.put("y", 4);
 Object result = Jactl.eval("x += y", globals);
@@ -81,11 +81,11 @@ returned such a value, then this same value can be passed to another script invo
 that both invocations use the same JactlContext object (explained later):
 
 ```java
-var context = JactlContext.create().build();
-var x       = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Utils.mapOf(), context);
-var globals = new HashMap<String,Object>();
+JactlContext context = JactlContext.create().build();
+Object x             = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Utils.mapOf(), context);
+Map<String,Object> globals = new HashMap<>();
 globals.put("x", x);
-var result  = (int)Jactl.eval("x.f(3)", globals, context);
+Object result = (int)Jactl.eval("x.f(3)", globals, context);
 assertEquals(6, result);
 ```
 
@@ -112,9 +112,9 @@ This is why `runSync()` should only be used if the caller can guarantee that the
 function or if the caller is not running on an event-loop thread.
 
 ```java
-var         globals = new HashMap<String,Object>();
-JactlScript script  = Jactl.compileScript("3 + 4", globals);
-Object      result  = script.runSync(globals);          // result will be 7
+Map<String,Object> globals = new HashMap<>();
+JactlScript script = Jactl.compileScript("3 + 4", globals);
+Object      result = script.runSync(globals);          // result will be 7
 assertEquals(7, result);
 ```
 
@@ -141,12 +141,12 @@ It takes two arguments:
 
 Here is an example:
 ```java
-var globals = new HashMap<String,Object>();
+Map<String,Object> globals = new HashMap<>();
 globals.put("x", null);
 globals.put("y", null);
-var script  = Jactl.compileScript("x + y", globals);
+JactlScript script  = Jactl.compileScript("x + y", globals);
 
-var globalValues = new HashMap<String,Object>();
+Map<String,Object> globalValues = new HashMap<>();
 globalValues.put("x", 7);
 globalValues.put("y", 3);
 script.run(globalValues, result -> System.out.println("Result is " + result));
@@ -189,8 +189,8 @@ Then to use the `JactlContext` you have built, pass it to the `Jactl.eval()` or 
 JactlContext context = JactlContext.create()
                                    .build();
 
-var globals = new HashMap<String,Object>();
-var script  = Jactl.compileScript("13 * 17", globals, context);
+Map<String,Object> globals = new HashMap<>();
+JactlScript script = Jactl.compileScript("13 * 17", globals, context);
 script.run(globals, result -> System.out.println("Result: " + result));    // Output will be: "Result is 221"
 
 Object result = Jactl.eval("13 * 17", globals, context);
@@ -248,12 +248,12 @@ or use one provided (for example the `io.jactl.vertx.JactlVertxEnv` environment 
 Here is an example that specifies a `JactlVertxEnv` object as the execution environment:
 
 ```java
-var vertx   = Vertx.vertx();
-var env     = new JactlVertxEnv(vertx);
+Vertx vertx          = Vertx.vertx();
+JactlVertxEnv env    = new JactlVertxEnv(vertx);
 
-var context = JactlContext.create()
-                          .environment(env)
-                          .build();
+JactlContext context = JactlContext.create()
+                                   .environment(env)
+                                   .build();
 ```
 
 ### debug(int level)
@@ -272,15 +272,15 @@ The methods for building a `JactlContext` can be chained in any order (apart fro
 and `build()` which must come last).
 So to explicitly build a `JactlContext` with all the default values:
 ```java
-var context = JactlContext.create()
-                          .javaPackage("io.jactl.pkg")
-                          .environment(new io.jactl.DefaultEnv())
-                          .minScale(10)
-                          .debug(0)
-                          .build();
+JactlContext context = JactlContext.create()
+                                   .javaPackage("io.jactl.pkg")
+                                   .environment(new io.jactl.DefaultEnv())
+                                   .minScale(10)
+                                   .debug(0)
+                                   .build();
 
 // This is equivalent to:
-var context = JactlContext.create().build()
+JactlContext context = JactlContext.create().build()
 ```
 
 ## Compiling Classes
@@ -291,17 +291,17 @@ Jactl classes that use the same `JactlContext`.
 
 To compile a class use one of the `Jactl.compileClass()` methods:
 ```java
-var context = JactlContext.create().build();
+JactlContext context = JactlContext.create().build();
 Jactl.compileClass("class Multiplier { int n; def mult(x){ n * x } }", context);
 ```
 
 Then to use the class, compile and run a script that refers to it using the same context:
 ```java
-var context = JactlContext.create().build();
+JactlContext context = JactlContext.create().build();
 Jactl.compileClass("class Multiplier { int n; def mult(x){ n * x } }", context);
 
-var globals = new HashMap<String,Object>();
-var script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
+Map<String,Object> globals = new HashMap<>();
+JactlScript script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
 script.run(globals, result -> System.out.println("Result: " + result));
 ```
 
@@ -313,11 +313,11 @@ script.run(globals, result -> System.out.println("Result: " + result));
 If the class has a Jactl package declaration and the script is in a different package, then the script should either
 import the class from the other package or use a fully qualified class name:
 ```java
-var context = JactlContext.create().build();
+JactlContext context = JactlContext.create().build();
 Jactl.compileClass("package a.b.c; class Multiplier { int n; def mult(x){ n * x } }", context);
 
-var globals = new HashMap<String,Object>();
-var script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
+Map<String,Object> globals = new HashMap<>();
+JactlScript script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
 script.run(globals, result -> System.out.println("Result: " + result));
 
 // Or import the class
@@ -345,10 +345,10 @@ The Jactl package name passed in can be:
 
 There is also a similar `Jactl.compileScript()` method where you can pass in the Jactl package name for the script as well:
 ```java
-var context = JactlContext.create().build();
-var globals = new HashMap<String,Object>();
-var pkgName = "a.b.c";
-var script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context, pkgName);
+JactlContext context = JactlContext.create().build();
+Map<String,Object> globals = new HashMap<>();
+String pkgName = "a.b.c";
+JactlScript script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context, pkgName);
 ```
 The only reason for passing an explicit Jactl package when compiling a script is so to allow the script to access
 classes in the same package without having to explicitly qualify them with a package name or to import them.

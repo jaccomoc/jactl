@@ -19,7 +19,9 @@ to Jactl.
 
 I wanted a language that was a joy to code in, was easy for Java programmers to pick up, 
 provided a secure extension mechanism for applications, and was non-blocking.
-Nothing I found satisfied all these needs and so Jactl was born.
+Nothing I found satisfied all these needs, and so Jactl was born.
+
+See the [FAQ](https://jactl.io/faq) for the answers to more questions.
 
 ## Features
 
@@ -57,6 +59,8 @@ stream(nextLine).filter{ /^# /r }
                 .map{ "* [$it](#${ linkify(it.toLowerCase()) })" }
                 .each{ println it }
 ```
+
+See [Language Features](https://jactl.io/language-features) for more language features and examples.
 
 ### Compiles to Java bytecode
 Jactl scripts compile to bytecode to take advantage of the performance capabilities of the JVM.

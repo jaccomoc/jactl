@@ -303,6 +303,26 @@ stream(nextLine).filter{ /^# /r }
                 .each{ println it }
 ```
 
+## Pattern Matching with Destructuring
+
+_This feature is coming in the forthcoming Jactl 1.5.0 release._
+
+Jactl provides `switch` expressions that can match on literal values but can also be used to
+match on the structure of the data and bind variables to different parts of the structure:
+```groovy
+switch (x) {
+  /Type:(\w+), Cost:(\d+)/n -> [$1, $2]      // regex match with capture vars
+  [1,*]                     -> 'matched'     // list whose first element is 1
+  [_,_]                     -> 'matched'     // list with 2 elements
+  [int,String,_]            -> 'matched'     // 3 element list. 1st is an int, 2nd is a String
+  [a,_,a]                   -> a * 2         // 3 element list. 1st and last elements the same
+  [a,*,a] if a < 10         -> a * 3         // list with at least 2 elements. 1st and last the same and < 10
+  [a,${2*a},${3*a}]         -> a             // match if list is of form [2,4,6] or [3,6,9] etc
+  [a,b,c,d]                 -> a+b+c+d       // 4 element list
+  [[2],[a],[_,b],[_,_,c]]   ->               // List of lists with a,b,c bound to different parts 
+}
+```
+
 ## Statement _if_/_unless_ Condition
 
 As well as standard `if` statements, it is possible to have the `if` and the condition come after the statement to
