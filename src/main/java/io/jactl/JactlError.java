@@ -61,4 +61,8 @@ public class JactlError extends RuntimeException {
     }
     return String.format("%s @ line %d, column %d%n%s", errorMessage, location.getLineNum(), location.getColumn(), location.getMarkedSourceLine());
   }
+
+  public String getErrorMessage() {
+    return errorMessage;
+  }
 }

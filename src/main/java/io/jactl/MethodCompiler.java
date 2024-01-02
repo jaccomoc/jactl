@@ -417,7 +417,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitThrowError(Stmt.ThrowError stmt) {
     mv.visitTypeInsn(NEW, "io/jactl/runtime/RuntimeError");
-    push(ANY);
+    pushType(ANY);
     dupVal();
     loadConst(stmt.msg);
     compile(stmt.source);
@@ -442,7 +442,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(expr.constValue);
         if (expr.constValue == null) {
           popType();
-          push(expr.type);
+          pushType(expr.type);
         }
       }
       return null;
@@ -479,6 +479,566 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  @Override public Void visitStackCast(Expr.StackCast expr) {
+    convertTo(expr.castType, expr, true, expr.location);
+    return null;
+  }
+
+  @Override public Void visitSwitch(Expr.Switch expr) {
+    compile(expr.subject);
+    boolean subjectIsAny = peek().is(ANY);
+    unbox();
+    defineVar(expr.itVar);
+    storeVar(expr.itVar);
+
+    // Create the capture var (if needed) plus any others
+    Consumer<Collection<Expr.VarDecl>> createVars = varDecls -> varDecls.stream()
+                                                                        .filter(varDecl -> !varDecl.name.getValue().equals(Utils.IT_VAR))
+                                                                        .forEach(this::compile);
+
+    createVars.accept(expr.block.variables.values());
+
+    Label end = new Label();
+    // Create labels for all results that are not simple, so we only have to generate code for these once.
+    Map<Expr,Label> nonSimpleLabels = expr.cases.stream()
+                                                .filter(c -> !c.result.isSimple())
+                                                .collect(Collectors.toMap(c -> c.result, t -> new Label(), (a,b) -> a));
+
+    // Make sure all binding variables are created and initialised to default values
+    expr.cases.forEach(c -> createVars.accept(c.block.variables.values()));
+
+    Function<Triple<Expr,Expr,Expr.SwitchCase>,Boolean> isSimplePattern = pattern -> pattern.first instanceof Expr.Literal &&
+                                                                                     !pattern.first.isNull() &&
+                                                                                     pattern.second == null;
+
+    List<Triple<Expr,Expr,Expr.SwitchCase>> flattened = expr.cases.stream()
+                                                                  .flatMap(c -> c.patterns.stream().map(pair -> Triple.create(pair.first, pair.second, c)))
+                                                                  .collect(Collectors.toList());
+
+    for (int i = 0; i < flattened.size(); i++) {
+      // Find subList with all literals that we can use emitSwitch with
+      int j = i;
+      for (; j < flattened.size() && isSimplePattern.apply(flattened.get(j)); j++) {}
+      if (j - i > 2) {
+        emitSwitch(mv, flattened.subList(i, j).stream().map(t -> Pair.create(t.first, t.third.result)).collect(Collectors.toList()),
+                   expr.type, end, nonSimpleLabels, () -> loadVar(expr.itVar));
+        i = j - 1;
+      }
+      else {
+        Triple<Expr,Expr,Expr.SwitchCase> pattern = flattened.get(i);
+        Expr.VarDecl captureVarDecl = pattern.third.block.variables.get(Utils.CAPTURE_VAR);
+        if (captureVarDecl != null) {
+          loadDefaultValue(MATCHER);
+          storeVar(captureVarDecl);
+        }
+        compileMatchCase(expr, Pair.create(pattern.first,pattern.second), pattern.third.result, end, nonSimpleLabels);
+      }
+    }
+
+    // Fall through to default case
+    compile(expr.defaultCase);
+    convertTo(expr.type, expr, true, expr.defaultCase.location);
+    popType();
+
+    if (!nonSimpleLabels.isEmpty()) {
+      mv.visitJumpInsn(GOTO, end);
+      nonSimpleLabels.forEach((resultExpr, label) -> {
+        mv.visitLabel(label);
+        compile(resultExpr);
+        convertTo(expr.type, expr, true, resultExpr.location);
+        popType();
+        mv.visitJumpInsn(GOTO, end);
+      });
+    }
+
+    expr.cases.forEach(c -> {
+      if (!c.block.variables.isEmpty()) {
+        Label endCase = new Label();
+        mv.visitLabel(endCase);
+        c.block.variables.values().forEach(v -> undefineVar(v, endCase));
+      }
+    });
+
+    mv.visitLabel(end);
+    Label endBlock = new Label();
+    mv.visitLabel(endBlock);
+    expr.block.variables.forEach((name, varDecl) -> {
+      undefineVar(varDecl, endBlock);
+    });
+    pushType(expr.type);
+    return null;
+  }
+
+  @Override public Void visitSwitchCase(Expr.SwitchCase expr) {
+    return null;
+  }
+  @Override public Void visitConstructorPattern(Expr.ConstructorPattern expr) { return null; }
+
+  private void compileMatchCase(Expr.Switch expr, Pair<Expr,Expr> patternPair, Expr result, Label end, Map<Expr, Label> nonSimpleLabels) {
+    emitIf(expr.isAsync, IfTest.IS_TRUE, () -> {
+             Label endCheck = new Label();
+             Consumer<JactlType> loadValue = type -> {
+               loadVar(expr.itVar);
+               if (type != null && !type.is(ANY,LIST)) {
+                 convertTo(type, expr.subject, true, expr.subject.location);
+               }
+             };
+             compileMatchCaseTest(loadValue, expr.subject.type, patternPair, expr.subject.location, endCheck);
+             if (patternPair.second != null) {
+               // If pattern did not match
+               _dupVal();
+               mv.visitJumpInsn(IFEQ, endCheck);
+               popVal();
+               // Evaluate the "if" expression part
+               compile(patternPair.second);
+             }
+             mv.visitLabel(endCheck);
+           },
+           () -> {
+             if (result.isSimple()) {
+               compile(result);
+               convertTo(expr.type, expr, true, result.location);
+               popType();
+               mv.visitJumpInsn(GOTO, end);
+             }
+             else {
+               Label label = nonSimpleLabels.get(result);
+               mv.visitJumpInsn(GOTO, label);    // Skip to location where we will generate result for non-simple values
+             }
+           },
+           null);
+  }
+
+  private void compileMatchCaseTest(Consumer<JactlType> loadValue, JactlType subjectType, Pair<Expr,Expr> patternPair, Token subjectLocation, Label endCheck) {
+    Expr pattern = patternPair.first;
+    compileMatchCaseTest(subjectType, pattern, subjectLocation, endCheck, loadValue);
+  }
+
+  private void compileMatchCaseTest(JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck, Consumer<JactlType> loadValue) {
+    Consumer<JactlType> ifCanConvertTo = (caseType) -> {
+      // Check if type matches and if not jump to end with false on stack
+      if (caseType.is(ANY)) { return; }
+      // Check if we can convert
+      loadValue.accept(null);
+      box();
+      loadConst(caseType.boxed());
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_PATTERN_COMPATIBLE, Object.class, Class.class);
+      dupVal();
+      mv.visitJumpInsn(IFEQ, endCheck);
+      popType();
+      popVal();
+    };
+
+    JactlType patternType = pattern.patternType();
+    if (isUnderscore(pattern)) {
+      // Always match placeholder pattern
+      loadConst(true);
+    }
+    else if (pattern instanceof Expr.TypeExpr || pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
+      if (subjectType.equals(patternType)) {
+        if (pattern instanceof Expr.TypeExpr) {
+          loadConst(true);
+        }
+      }
+      else if (!patternType.is(ANY) && !subjectType.is(patternType) && !(subjectType.isNumeric() && patternType.isNumeric())) {
+        loadValue.accept(ANY);
+        isInstanceOf(patternType);
+        if (!(pattern instanceof Expr.TypeExpr)) {
+          _dupVal();
+          mv.visitJumpInsn(IFEQ, endCheck);  // Not the right type
+          popVal();
+        }
+      }
+      if (pattern instanceof Expr.VarDecl || (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).firstTimeInPattern)) {
+        loadValue.accept(pattern.type);
+        convertTo(pattern.type, pattern, true, pattern.location);
+        storeVar(pattern);
+        loadConst(true);   // Binding variable on its own always matches
+      }
+      else if (pattern instanceof Expr.Identifier) {
+        loadValue.accept(pattern.type);
+        convertTo(pattern.type, pattern, true, pattern.location);
+        compile(pattern);
+        expect(2);
+        checkForEquality(pattern.type);
+      }
+    }
+    else if (pattern.isLiteral() || pattern instanceof Expr.ExprString) {
+      if (pattern.isConst || pattern instanceof Expr.ExprString) {
+        // We assume that Resolver has already checked for static type compatibility so we only need
+        // worry about situations where the type is ANY.
+        // If type is ANY then we need to check if we can convert to the type of the literal
+        if (!patternType.equals(subjectType) && subjectType.is(ANY)) {
+          ifCanConvertTo.accept(patternType);
+        }
+        loadValue.accept(patternType);
+        compile(pattern);
+        expect(2);
+        checkForEquality(patternType);
+      }
+      else if (pattern instanceof Expr.ListLiteral) {
+        if (!subjectType.is(ITERATOR, LIST, ARRAY, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
+        List<Expr> exprs = ((Expr.ListLiteral) pattern).exprs;
+        compileDestructuring(subjectType, patternType, exprs.size(), exprs.stream().anyMatch(Expr::isStar), exprs, loadValue, subjectLocation, endCheck);
+      }
+      else if (pattern instanceof Expr.MapLiteral) {
+        if (!subjectType.is(ITERATOR, MAP, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
+        List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral) pattern).entries;
+        compileDestructuring(subjectType, patternType, exprs.size(), exprs.stream().anyMatch(p -> p.first.isStar()), exprs, loadValue, subjectLocation, endCheck);
+      }
+    } else if (pattern instanceof Expr.ConstructorPattern) {
+      if (!subjectType.is(INSTANCE, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
+      List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral)((Expr.ConstructorPattern) pattern).args).entries;
+      compileDestructuring(subjectType, patternType, exprs.size(), false, exprs, loadValue, subjectLocation, endCheck);
+    }
+    else if (pattern instanceof Expr.RegexMatch) {
+      compileRegexMatch((Expr.RegexMatch)pattern, () -> {
+        ifCanConvertTo.accept(STRING);
+        loadValue.accept(null);
+      });
+    }
+    else {
+      loadValue.accept(patternType);
+      if (!patternType.isPrimitive()) {
+        box();
+      }
+      compile(pattern);
+      expect(2);
+      checkForEquality(patternType);
+      //throw new UnsupportedOperationException("Unsupported comparison in match: " + pattern.getClass().getName());
+    }
+  }
+
+  private boolean isUnderscore(Expr expr) {
+    return expr instanceof Expr.Identifier && ((Expr.Identifier) expr).identifier.is(UNDERSCORE);
+  }
+
+  private void compileDestructuring(JactlType parentType, JactlType patternType, int size, boolean hasStar, List exprs, Consumer<JactlType> loadValue, Token subjectLocation, Label endCheck) {
+    if (parentType.is(ANY)) {
+      // Check for appropriate type
+      loadValue.accept(ANY);
+      isInstanceOf(patternType.is(LIST) ? new JactlType[]{ ARRAY,LIST } : new JactlType[]{ patternType });
+      _dupVal();
+      mv.visitJumpInsn(IFEQ, endCheck);
+      popVal();
+    }
+
+    // Do size check first
+    if (patternType.is(LIST,MAP)) {
+      int     minSize = hasStar && size == 1 ? -1 : size - (hasStar ? 1 : 0);
+      int     maxSize = hasStar ? -1 : size;
+      if (minSize >= 0 && minSize == maxSize) {
+        checkSize(loadValue, subjectLocation, endCheck, minSize, IFNE);
+      }
+      else {
+        if (minSize > 0)  { checkSize(loadValue, subjectLocation, endCheck, minSize, IFLT); }
+        if (maxSize >= 0) { checkSize(loadValue, subjectLocation, endCheck, maxSize, IFGT); }
+      }
+    }
+    if (size > 0) {
+      boolean seenStar = false;
+      Map<JactlType,Integer> subElemSlots;
+      if (patternType.is(INSTANCE)) {
+        subElemSlots = ((List<Pair<Expr, Expr>>) exprs).stream()
+                                                       .map(pair -> patternType.getClassDescriptor().getField(pair.first.constValue.toString()))
+                                                       .distinct()
+                                                       .collect(Collectors.toMap(t -> t, t -> stack.allocateSlot(t)));
+      }
+      else {
+        subElemSlots = new HashMap<>();
+        JactlType type = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
+        subElemSlots.put(type, stack.allocateSlot(type));
+      }
+      int subElemSlot;
+      for (int i = 0; i < size; i++) {
+        Expr subExpr;
+        JactlType elemType = null;
+        switch (patternType.getType()) {
+          case LIST: {
+            subExpr = (Expr) exprs.get(i);
+            if (isUnderscore(subExpr)) {
+              continue;
+            }
+            if (subExpr.isStar()) {
+              seenStar = true;
+              continue;
+            }
+            // Get element and store in a local
+            loadValue.accept(null);
+            // Convert index to negative offset from end if needed
+            int idx = seenStar ? i - size : i;
+            loadConst(idx);
+            if (idx < 0) {
+              loadValue.accept(null);
+              emitLength(subjectLocation);
+              expect(2);
+              mv.visitInsn(IADD);
+              popType();
+            }
+            unsafeLoadElem(parentType, subjectLocation);
+            elemType = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
+            subElemSlot = subElemSlots.get(elemType);
+            storeLocal(subElemSlot);
+            break;
+          }
+          case MAP: {
+            // Map
+            Pair<Expr, Expr> keyVal = (Pair) exprs.get(i);
+            subExpr = keyVal.second;
+            elemType = ANY;
+            if (keyVal.first.isStar()) {
+              continue;
+            }
+            if (isUnderscore(subExpr)) {
+              // Need to check for presence of key
+              loadValue.accept(MAP);
+              compile(keyVal.first);
+              expect(2);
+              invokeMethod(Map.class, "containsKey", Object.class);
+              _dupVal();
+              mv.visitJumpInsn(IFEQ, endCheck);
+              popVal();
+              continue;
+            }
+            loadValue.accept(MAP);
+            compile(keyVal.first);
+            expect(2);
+            invokeMethod(Map.class, "get", Object.class);
+            _dupVal();
+            subElemSlot = subElemSlots.get(ANY);
+            storeLocal(subElemSlot);
+            Label isNotNull = new Label();
+            mv.visitJumpInsn(IFNONNULL, isNotNull);
+            _loadConst(false);
+            mv.visitJumpInsn(GOTO, endCheck);
+            isNotNull:
+            mv.visitLabel(isNotNull);
+            break;
+          }
+          case INSTANCE: {
+            // Map
+            Pair<Expr, Expr> keyVal = (Pair) exprs.get(i);
+            subExpr = keyVal.second;
+            if (isUnderscore(subExpr)) {
+              // We already know that field exists in class (checked in Resolver)
+              // so nothing to do for _ as field value.
+              continue;
+            }
+            loadValue.accept(parentType);
+            if (peek().is(ANY)) {
+              isInstanceOf(patternType);
+              _dupVal();
+              mv.visitJumpInsn(IFEQ, endCheck);
+              popVal();
+              loadValue.accept(parentType);
+              checkCast(patternType);
+            }
+            String fieldName = keyVal.first.constValue.toString();
+            elemType = patternType.getClassDescriptor().getField(fieldName);
+            loadClassField(patternType.getInternalName(), fieldName, elemType, false);
+            subElemSlot = subElemSlots.get(elemType);
+            storeLocal(subElemSlot);
+            if (elemType.isRef()) {
+              Label isNotNull = new Label();
+              _loadLocal(subElemSlot);
+              mv.visitJumpInsn(IFNONNULL, isNotNull);
+              _loadConst(false);
+              mv.visitJumpInsn(GOTO, endCheck);
+             isNotNull:
+              mv.visitLabel(isNotNull);
+            }
+            break;
+          }
+          default: throw new IllegalStateException("Internal error: unexpected type " + patternType);
+        }
+        int finalSubElemSlot = subElemSlot;
+        compileMatchCaseTest(elemType, subExpr, subjectLocation, endCheck, t -> {
+          loadLocal(finalSubElemSlot);
+          if (t != null && !t.is(ANY,LIST)) {
+            convertTo(t, subExpr, true, subExpr.location);
+          }
+        });
+        dupVal();
+        mv.visitJumpInsn(IFEQ, endCheck);
+        popType();
+        popVal();
+      }
+      subElemSlots.forEach((k,v) -> stack.freeSlot(v));
+    }
+    loadConst(true);
+  }
+
+  private void checkSize(Consumer<JactlType> loadValue, Token subjectLocation, Label endCheck, int size, int opCode) {
+    loadValue.accept(ANY);
+    emitLength(subjectLocation);
+    loadConst(size);
+    expect(2);
+    mv.visitInsn(ISUB);
+    popType(2);
+    pushType(INT);
+    // Put false on stack so if we jump to endCheck the match case will fail
+    loadConst(false);
+    swap();
+    mv.visitJumpInsn(opCode, endCheck);
+    popType();
+    popVal();
+  }
+
+  private void checkForEquality(JactlType type) {
+    if (type.isPrimitive()) {
+      int opCode = type.is(BOOLEAN,BYTE,INT) ? ISUB :
+                   type.is(LONG)             ? LCMP :
+                   DCMPL;
+      mv.visitInsn(opCode);
+      popType(2);
+      Label isTrue = new Label();
+      Label end    = new Label();
+      mv.visitJumpInsn(IFEQ, isTrue);
+      _loadConst(false);
+      mv.visitJumpInsn(GOTO, end);
+      mv.visitLabel(isTrue);
+      _loadConst(true);
+      mv.visitLabel(end);
+      pushType(BOOLEAN);
+    }
+    else {
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.SWITCH_EQUALS, Object.class, Object.class);
+    }
+  }
+
+  private void emitSwitch(MethodVisitor mv,
+                          List<Pair<Expr,Expr>> cases,
+                          JactlType resultType,
+                          Label end,
+                          Map<Expr,Label> nonSimpleLabels,
+                          Runnable loadSubject) {
+    // We need to decide whether to output a TABLESWITCH or a LOOKUPSWITCH statement.
+    // TABLESWITCH is faster (if applicable) but can use more space if the values produce
+    // a sparse table.
+    // We use a heuristic that if the sparse table size would be more than 5 times as big
+    // as the number of individual cases then we will use a LOOKUPSWITCH instead. This
+    // check only applies if the values are all integral types (numeric and not double/BigDecimal).
+    // All other types we will generate a LOOKUPSWITCH for.
+    Function<Expr, Boolean> isIntegral = e -> e.isConst && e.constValue instanceof Number &&
+                                              !(e.constValue instanceof Double || e.constValue instanceof BigDecimal || e.constValue instanceof Long);
+
+    // Check if all patterns are an integer value in which case we might be able to use a TABLESWITCH
+    boolean useTable = cases.stream().allMatch(t -> isIntegral.apply(t.first));
+
+    Label noMatch = new Label();
+
+    loadSubject.run();
+    if (useTable) {
+      // Build map of unique results so that we can have one label per result
+      Map<Expr,Label> switchLabels = cases.stream()
+                                          .collect(Collectors.toMap(p -> p.second, p -> nonSimpleLabels.getOrDefault(p.second, new Label()), (a,b) -> a));
+
+      // Sort literal values
+      List<Pair<Integer,Label>> sorted = cases.stream()
+                                              .map(p -> Pair.create(((Number) p.first.constValue).intValue(), switchLabels.get(p.second)))
+                                              .sorted(Comparator.comparingInt(p -> p.first))
+                                              .collect(Collectors.toList());
+
+      // Make sure that we don't have so many values that the table would be too large
+      int max   = sorted.get(sorted.size() - 1).first;
+      int min   = sorted.get(0).first;
+      int range = max - min + 1;
+      if (range > 5 * sorted.size()) {
+        useTable = false;
+      }
+      if (useTable) {
+        // Make sure we have a subject of the right type
+        switch (peek().getType()) {
+          case ANY: {
+            invokeMethod(RuntimeUtils.class, RuntimeUtils.INT_VALUE, Object.class);
+            _dupVal();
+            Label isInt = new Label();
+            mv.visitJumpInsn(IFNONNULL, isInt);
+            mv.visitInsn(POP);
+            mv.visitJumpInsn(GOTO, noMatch);
+            mv.visitLabel(isInt);
+            invokeMethod(Integer.class, "intValue");
+            break;
+          }
+          case BYTE: case INT:     break;
+          default: throw new IllegalStateException("Internal error: Unexpected type for int based switch: " + peek());
+        }
+
+        // Have integral values not spaced out too far
+        // Populate labels with defaultLabel
+        Label[] labels = IntStream.range(0,range).mapToObj(i -> noMatch).toArray(Label[]::new);
+        // Override where we have an actual case with the label for the result
+        sorted.forEach(t -> labels[t.first - min] = t.second);
+        mv.visitTableSwitchInsn(min, max, noMatch, labels);
+        popType();
+        // For any results that are simple we compile on the spot. Non-simple ones are left for later.
+        switchLabels.entrySet().stream().filter(e -> !nonSimpleLabels.containsKey(e.getKey())).forEach(entry -> {
+          mv.visitLabel(entry.getValue());
+          compile(entry.getKey());
+          convertTo(resultType, entry.getKey(), true, entry.getKey().location);
+          popType();
+          mv.visitJumpInsn(GOTO, end);
+        });
+        mv.visitLabel(noMatch);
+        return;
+      }
+      // Fall through to using LOOKUPSWITCH if we couldn't use TABLESWITCH
+    }
+
+    box();
+    mv.visitJumpInsn(IFNULL, noMatch);
+    popType();
+    loadSubject.run();
+    box();
+    invokeMethod(Object.class, "hashCode");
+
+    // Annoyingly, we need to support multiple literal values that could hash to the same value so
+    // we calculate a list of unique hashCodes combined with a pair of label and a list of pattern/result pairs
+    // and then sort on hash code.
+    List<Map.Entry<Integer,Pair<Label,List<Pair<Expr,Expr>>>>> hashed =
+      cases.stream()
+           .collect(Collectors.toMap(p -> p.first.constValue.hashCode(),
+                                     p -> Pair.create(new Label(), Utils.listOf(Pair.create(p.first, p.second))),
+                                     (a, b) -> { a.second.addAll(b.second); return a; }))
+           .entrySet().stream()
+           .sorted(Comparator.comparingInt(Map.Entry::getKey))
+           .collect(Collectors.toList());
+
+    mv.visitLookupSwitchInsn(noMatch,
+                             hashed.stream().mapToInt(Map.Entry::getKey).toArray(),
+                             hashed.stream().map(e -> e.getValue().first).toArray(Label[]::new));
+    popType();
+
+    hashed.forEach(entry -> {
+      mv.visitLabel(entry.getValue().first);
+      entry.getValue().second.forEach( pair -> {
+        loadSubject.run();
+        box();
+        compile(pair.first);       // literal value
+        box();
+        Label notEqual = new Label();
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.SWITCH_EQUALS, Object.class, Object.class);
+        mv.visitJumpInsn(IFEQ, notEqual);
+        popType();
+        Label nonSimple = nonSimpleLabels.get(pair.second);
+        if (nonSimple == null) {
+          compile(pair.second);
+          convertTo(resultType, pair.second, true, pair.second.location);
+          popType();
+          mv.visitJumpInsn(GOTO, end);
+        }
+        else {
+          mv.visitJumpInsn(GOTO, nonSimple);
+        }
+       isNotLiteral:
+        mv.visitLabel(notEqual);
+      });
+      mv.visitJumpInsn(GOTO, noMatch);
+    });
+
+    mv.visitLabel(noMatch);
+  }
+
   @Override public Void visitExprList(Expr.ExprList expr) {
     expr.exprs.forEach(this::compile);
     return null;
@@ -501,7 +1061,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // No need to cast if null
         if (expr.type.isRef() && expr.isNull()) {
           popType();
-          push(expr.type);
+          pushType(expr.type);
         }
         else {
           convertTo(expr.type, expr.initialiser, true, expr.initialiser.location);
@@ -564,7 +1124,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      // is compatible with use of null
                      box();
                      popType();
-                     push(expr.type);
+                     pushType(expr.type);
                    }
                  };
 
@@ -706,7 +1266,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    // Just in case our field is a primitive we need to leave a boxed result on stack
                    // to be compatible with non-assigment case when we leave null on the stack
                    popType();
-                   push(expr.type);
+                   pushType(expr.type);
                    box();
                  }
                },
@@ -810,18 +1370,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
+    compileRegexMatch(expr, () -> compile(expr.string));
+
+    return null;
+  }
+
+  private void compileRegexMatch(Expr.RegexMatch expr, Runnable compileString) {
     boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
     boolean captureAsNums  = expr.modifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
     String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS + "]", "");
 
     // Set captureAsNums flag as necessary
     loadVar(expr.captureArrVarDecl);
-    dupVal();
     loadConst(captureAsNums);
     storeClassField(MATCHER.getInternalName(), "captureAsNums", BOOLEAN, false);
 
-    compile(expr.string);
+    compileString.run();
     castToString(expr.string.location);
+    loadVar(expr.captureArrVarDecl);
+    swap();
     compile(expr.pattern);
     castToString(expr.pattern.location);
     expect(3);
@@ -832,8 +1399,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.operator.is(BANG_GRAVE)) {
       _booleanNot();
     }
-
-    return null;
   }
 
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
@@ -1163,9 +1728,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     //= instanceOf and !instanceOf
     if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
+      assert expr.right instanceof Expr.TypeExpr;
       compile(expr.left);
       box();
-      isInstanceOf(expr.right.type.boxed());
+      isInstanceOf(((Expr.TypeExpr) expr.right).typeVal.boxed());
       if (expr.operator.is(BANG_INSTANCE_OF)) {
         _booleanNot();
       }
@@ -1220,7 +1786,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(expr.left);
       convertToBoolean(false, expr.left);
 
-      // Look for short-cutting && or || (i.e. if we already know the result
+      // Look for short-cutting && or || (i.expr. if we already know the result
       // we don't need to evaluate right-hand side)
       if (expr.operator.is(AMPERSAND_AMPERSAND)) {
         // Handle case for &&
@@ -1258,7 +1824,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _loadConst(true);
         mv.visitLabel(end);
       }
-      push(BOOLEAN);
+      pushType(BOOLEAN);
       if (expr.type.isBoxed()) {
         box();
       }
@@ -1281,8 +1847,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         expect(2);
         switch (maxType.getType()) {
           case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
-          case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   push(INT);                break;
-          case LONG:    mv.visitInsn(LCMP);     popType(2);   push(INT);                break;
+          case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);                break;
+          case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);                break;
           default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
         }
         return null;
@@ -1310,7 +1876,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         box();
         loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
         loadLocation(expr.operator);
-        invokeMethod(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, int.class);
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.BOOLEAN_OP, Object.class, Object.class, String.class, String.class, int.class);
         return null;
       }
 
@@ -1361,7 +1927,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitLabel(resultIsTrue);   // :resultIsTrue
       _loadConst(true);
       mv.visitLabel(end);            // :end
-      push(BOOLEAN);
+      pushType(BOOLEAN);
       return null;
     }
 
@@ -1446,7 +2012,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.type.is(BYTE)) {
         mv.visitInsn(I2B);
       }
-      push(expr.type);
+      pushType(expr.type);
     }
     else
     if (expr.type.is(DECIMAL)) {
@@ -1524,7 +2090,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  swap();
                  convertToInt(expr.right.location);
                  loadLocation(expr.operator);
-                 invokeMethod(RuntimeUtils.class, "loadArrayField", Object.class, int.class, String.class, int.class);
+                 invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, int.class, String.class, int.class);
                },
                () -> {
                  swap();
@@ -1612,14 +2178,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(expr.value.getValue());
     if (expr.isNull()) {
       popType();
-      push(expr.type);
+      pushType(expr.type);
     }
     return null;
   }
 
   @Override public Void visitListLiteral(Expr.ListLiteral expr) {
+    if (expr.isConst) {
+      loadClassConstant(expr.constValue);
+      return null;
+    }
+
     _newInstance(Type.getInternalName(Utils.JACTL_LIST_TYPE));
-    push(LIST);
+    pushType(LIST);
     expr.exprs.forEach(entry -> {
       dupVal();
       compile(entry);
@@ -1632,8 +2203,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitMapLiteral(Expr.MapLiteral expr) {
+    if (expr.isConst) {
+      loadClassConstant(expr.constValue);
+      return null;
+    }
+
     _newInstance(expr.isNamedArgs ? NamedArgsMap.class : Utils.JACTL_MAP_TYPE);
-    push(MAP);
+    pushType(MAP);
     expr.entries.forEach(entry -> {
       dupVal();
       Expr key = entry.first;
@@ -1666,7 +2242,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(BuiltinFunctions.class, "lookupMethodHandle", String.class);
     }
     else
-    if (name.charAt(0) == '$') {
+    if (name.charAt(0) == '$' && Utils.isDigits(name.substring(1))) {
       loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
       loadConst(Integer.parseInt(name.substring(1)));
@@ -1697,7 +2273,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.exprList.size() > 1) {
       _loadConst(expr.exprList.size());
       mv.visitTypeInsn(ANEWARRAY, "java/lang/String");
-      push(STRING_ARR);
+      pushType(STRING_ARR);
       for (int i = 0; i < expr.exprList.size(); i++) {
         dupVal();
         loadConst(i);
@@ -1958,7 +2534,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     mv.visitInsn(ARRAYLENGTH);
     popType();
-    push(INT);
+    pushType(INT);
     return null;
   }
 
@@ -2006,7 +2582,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     convertTo(returnExpr.returnType, returnExpr.expr, true, returnExpr.expr.location);
     emitReturn(returnExpr.returnType);
     popType();
-    push(ANY);
+    pushType(ANY);
     return null;
   }
 
@@ -2014,7 +2590,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Pop off any additional stack elements to get back to where stack was at time of while loop
     _popVal(stack.stackDepth() - stmt.whileLoop.stackDepth);
     mv.visitJumpInsn(GOTO, stmt.whileLoop.endLoopLabel);
-    push(BOOLEAN);
+    pushType(BOOLEAN);
     return null;
   }
 
@@ -2022,7 +2598,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Pop off any additional stack elements to get back to where stack was at time of while loop
     _popVal(stack.stackDepth() - stmt.whileLoop.stackDepth);
     mv.visitJumpInsn(GOTO, stmt.whileLoop.continueLabel);
-    push(BOOLEAN);
+    pushType(BOOLEAN);
     return null;
   }
 
@@ -2105,7 +2681,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     mv.visitTypeInsn(INSTANCEOF, expr.className);
     popType();
-    push(BOOLEAN);
+    pushType(BOOLEAN);
     return null;
   }
 
@@ -2187,7 +2763,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                     loadNullContinuation();
                                     invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
                                     popType();
-                                    push(ANY);   // Don't know if call occurs so we still have to assume ANY
+                                    pushType(ANY);   // Don't know if call occurs so we still have to assume ANY
                                   }),
            null);
   }
@@ -2237,7 +2813,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        loadLocation(runtimeLocation);
                        _loadConst(1);
                        mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-                       push(OBJECT_ARR);
+                       pushType(OBJECT_ARR);
                        dupVal();
                        loadConst(0);
                        loadLocal(temp);
@@ -2257,8 +2833,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     stack.freeSlot(temp);
   }
 
-  private static String literalString(Expr e) {
-    return ((Expr.Literal) e).value.getValue().toString();
+  private static String literalString(Expr expr) {
+    return ((Expr.Literal) expr).value.getValue().toString();
   }
 
   private void compileFieldAccess(Expr.Binary expr) {
@@ -2290,7 +2866,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       String          fieldName   = literalString(node.right);
       ClassDescriptor parentClass = node.left.type.getClassDescriptor();
       JactlType       childType   = parentClass.getField(fieldName);
-      // Can only create if createIfMissing flag set and if there are no mandatory fields (i.e. init method
+      // Can only create if createIfMissing flag set and if there are no mandatory fields (i.expr. init method
       // has 0 parameters).
       boolean createIfMissing = node.createIfMissing && !(childType.is(INSTANCE) && childType.getClassDescriptor().getInitMethod().paramCount > 0);
       checkForNull = !createIfMissing;
@@ -2559,7 +3135,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       _newInstance(type.getInternalName());
     }
-    push(type);
+    pushType(type);
   }
 
   private void _newInstance(Class clss) {
@@ -2720,11 +3296,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   // = Type stack
 
-  private void push(Class clss) {
+  private void pushType(Class clss) {
     stack.push(clss);
   }
 
-  private void push(JactlType type) {
+  private void pushType(JactlType type) {
     stack.push(type);
   }
 
@@ -2839,7 +3415,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(1);
       Utils.box(mv, type);
       popType();
-      push(type.boxed());
+      pushType(type.boxed());
     }
   }
 
@@ -2874,7 +3450,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMethod(Double.class, "doubleValue");
         break;
       default:
-        // For other types (e.g. DECIMAL) don't do anything if asked to unbox
+        // For other types (expr.g. DECIMAL) don't do anything if asked to unbox
         return;
     }
     setStackType(peek().unboxed());
@@ -2888,12 +3464,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void loadNull(JactlType type) {
     _loadConst(null);
-    push(type);
+    pushType(type);
   }
 
   private void loadNullContinuation() {
     _loadConst(null);
-    push(CONTINUATION);
+    pushType(CONTINUATION);
   }
 
   /**
@@ -2902,7 +3478,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param obj  object to load on stack
    */
   private Void loadConst(Object obj) {
-    push(_loadConst(obj));
+    if (obj instanceof List || obj instanceof Map) {
+      loadClassConstant(obj);
+    }
+    else {
+      pushType(_loadConst(obj));
+    }
     return null;
   }
 
@@ -2927,15 +3508,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case FUNCTION:    loadConst(null);         break;   // use null for the moment to indicate identity function
       case MATCHER:
         _newInstance(RegexMatcher.class);
-        push(MATCHER);
+        pushType(MATCHER);
         break;
       case MAP:
         _newInstance(Utils.JACTL_MAP_TYPE);
-        push(MAP);
+        pushType(MAP);
         break;
       case LIST:
         _newInstance(Utils.JACTL_LIST_TYPE);
-        push(LIST);
+        pushType(LIST);
         break;
       case ARRAY:
         loadConst(null);
@@ -3100,7 +3681,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     popType();
-    push(BOOLEAN);
+    pushType(BOOLEAN);
     return null;
   }
 
@@ -3131,7 +3712,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitInsn(I2B);
     }
     popType();
-    push(BYTE);
+    pushType(BYTE);
     return null;
   }
 
@@ -3160,7 +3741,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     popType();
-    push(INT);
+    pushType(INT);
     return null;
   }
 
@@ -3189,7 +3770,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     popType();
-    push(LONG);
+    pushType(LONG);
     return null;
   }
 
@@ -3218,7 +3799,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     popType();
-    push(DOUBLE);
+    pushType(DOUBLE);
     return null;
   }
 
@@ -3249,7 +3830,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         throw new CompileError("Cannot convert " + peek() + " to Decimal", (Token)location);
     }
     popType();
-    push(DECIMAL);
+    pushType(DECIMAL);
     return null;
   }
 
@@ -3304,7 +3885,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(type)) {
       return null;
     }
-    if (peek().is(ANY,LIST,ARRAY) || (peek().is(STRING) && type.getArrayType().is(BYTE))) {
+    if (peek().is(ANY,LIST,ARRAY) || (peek().is(STRING) && type.getArrayElemType().is(BYTE))) {
       expect(1);
       loadConst(type);
       loadLocation(location);
@@ -3567,18 +4148,47 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private void isInstanceOf(JactlType... types) {
+    if (types.length == 1) {
+      isInstanceOf(types[0]);
+      return;
+    }
+    Label isTrue = new Label();
+    for (JactlType type: types) {
+      dupVal();
+      isInstanceOf(type);
+      mv.visitJumpInsn(IFNE, isTrue);
+      popType();
+    }
+    _loadConst(false);
+    Label end = new Label();
+    mv.visitJumpInsn(GOTO, end);
+    mv.visitLabel(isTrue);
+    loadConst(true);
+    mv.visitLabel(end);
+    swap();
+    popVal();
+  }
+
   private void isInstanceOf(JactlType type) {
     expect(1);
-    mv.visitTypeInsn(INSTANCEOF, type.getInternalName());
+    if (type.is(ARRAY) && type.getArrayElemType() == null) {
+      // Just want to know if we have an array and don't care about the actual type
+      invokeMethod(Object.class, "getClass");
+      invokeMethod(Class.class, "isArray");
+    }
+    else {
+      mv.visitTypeInsn(INSTANCEOF, type.boxed().getInternalName());
+    }
     popType();
-    push(BOOLEAN);
+    pushType(BOOLEAN);
   }
 
   private void isInstanceOf(Class clss) {
     expect(1);
     mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(clss));
     popType();
-    push(BOOLEAN);
+    pushType(BOOLEAN);
   }
 
   private void throwIfNull(String msg, SourceLocation location) {
@@ -3767,7 +4377,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // We save the type stack we have after the try block and restore the stack ready for the
     // catch block.
     stack = preTryState;
-    push(exceptionClass);
+    pushType(exceptionClass);
     catchBlock.run();
     mv.visitLabel(after);
 
@@ -4110,7 +4720,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       popType(paramTypes.length + 1);
     }
     if (!method.getReturnType().equals(void.class)) {
-      push(method.getReturnType());
+      pushType(method.getReturnType());
     }
   }
 
@@ -4149,7 +4759,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         expect(stackCount);
         functionDescriptor.inlineMethod.invoke(null, this.mv);
         popType(stackCount);
-        push(functionDescriptor.returnType);
+        pushType(functionDescriptor.returnType);
       }
       catch (IllegalAccessException|InvocationTargetException e) {
         throw new IllegalStateException("Error invoking inlining method for " + functionDescriptor.name + ": " + e.getMessage(), e);
@@ -4182,13 +4792,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        getMethodDescriptor(returnType, paramTypes),
                        false);
     popType(stackCount);
-    push(returnType);
+    pushType(returnType);
   }
 
   private void loadArgsAsObjectArr(List<Expr> args) {
     _loadConst(args.size());
     mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-    push(OBJECT_ARR);
+    pushType(OBJECT_ARR);
     for (int i = 0; i < args.size(); i++) {
       dupVal();
       loadConst(i);
@@ -4253,6 +4863,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadClassField(classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, MAP, false);
   }
 
+  private void loadClassConstant(Object obj) {
+    assert obj instanceof List || obj instanceof Map;
+    String fieldName = classCompiler.classConstantNames.get(obj);
+    if (fieldName == null) {
+      throw new IllegalStateException("Internal error: missing class constant for constant value " + obj);
+    }
+    loadClassField(classCompiler.internalName, fieldName, obj instanceof List ? LIST : MAP, true);
+  }
+
   private void loadClassField(String internalClassName, String fieldName, JactlType type, boolean isStatic) {
     if (!isStatic) {
       expect(1);
@@ -4261,7 +4880,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (!isStatic) {
       popType();
     }
-    push(type);
+    pushType(type);
   }
 
   private void _loadClassField(String internalClassName, String fieldName, JactlType type, boolean isStatic) {
@@ -4327,7 +4946,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Utils.checkCast(mv, varDecl.type);
     }
     popType();
-    push(varDecl.type);
+    pushType(varDecl.type);
     storeLocal(slot);
   }
 
@@ -4348,7 +4967,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(Map.class, "get", Object.class);
       checkCast(varDecl.type);
       popType();
-      push(varDecl.type.boxed());
+      pushType(varDecl.type.boxed());
       if (slot != -1) {
         storeLocal(slot);
         loadLocal(slot);
@@ -4404,7 +5023,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     Utils.checkCast(mv, type.boxed());
     popType();
-    push(type.boxed());
+    pushType(type.boxed());
+  }
+
+  /**
+   * Store value on stack into variable
+   * @param expr  Identifier or VarDecl
+   */
+  private void storeVar(Expr expr) {
+    Expr.VarDecl varDecl = expr instanceof Expr.VarDecl ? (Expr.VarDecl)expr : null;
+    if (varDecl == null) {
+      if (!(expr instanceof Expr.Identifier)) {
+        throw new IllegalStateException("Internal error: unexpected type " + expr.getClass());
+      }
+      varDecl = ((Expr.Identifier)expr).varDecl;
+    }
+    storeVar(varDecl);
   }
 
   /**
@@ -4478,7 +5112,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Special case for RuntimeUtils.DEFAULT_VALUE
       if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
         mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "DEFAULT_VALUE", "Ljava/lang/Object;");
-        push(ANY);
+        pushType(ANY);
       }
       else {
         loadConst(defaultValue);
@@ -4631,7 +5265,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void loadDefaultValueOrNewInstance(JactlType type, Expr expr) {
     if (type.is(INSTANCE)) {
-      // If there is no no-arg constructor (i.e. there is at least one mandatory field) then we have to throw
+      // If there is no no-arg constructor (i.expr. there is at least one mandatory field) then we have to throw
       // a NullError since field is currently null
       FunctionDescriptor initMethod = type.getClassDescriptor().getInitMethod();
       if (initMethod.paramCount > 0) {
@@ -4668,7 +5302,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   /**
    * Load array element or string char
-   * <p>Expect on stack: ...,parent
+   * <p>Expect on stack: ...,parent,index
    * @param expr the binary expression for parent[index]
    */
   private void loadArrElemOrStringChar(Expr.Binary expr) {
@@ -4683,28 +5317,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
       mv.visitInsn(SWAP);
       mv.visitInsn(DUP_X1);
-      if (parentType.is(STRING)) {
-        push(STRING);
-        invokeMethod(String.class, "length");
-        popType();
-      }
-      else {
-        mv.visitInsn(ARRAYLENGTH);
-      }
+      emitLength(parentType, expr.left.location);
       mv.visitInsn(IADD);
     }
 NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
     tryCatch(IndexOutOfBoundsException.class, false,
              () -> {
-               if (parentType.is(STRING)) {
-                 invokeMethod(String.class, "charAt", int.class);
-                 invokeMethod(String.class, "valueOf", char.class);
-               }
-               else {
-                 popType(2);
-                 loadArrayElem(parentType);
-               }
+               unsafeLoadElem(parentType, null);
              },
              () -> {
                invokeMethod(Throwable.class, "getMessage");
@@ -4712,8 +5332,64 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
              });
   }
 
+  private void emitLength(Token location) {
+    emitLength(peek(), location);
+  }
+
+  private void emitLength(JactlType parentType, Token location) {
+    expect(1);
+    if (parentType.is(STRING)) {
+      invokeMethod(String.class, "length");
+    }
+    else if (parentType.is(LIST)) {
+      invokeMethod(List.class, "size");
+    }
+    else if (parentType.is(MAP)) {
+      invokeMethod(Map.class, "size");
+    }
+    else if (parentType.is(ARRAY)) {
+      popType();
+      mv.visitInsn(ARRAYLENGTH);
+      pushType(INT);
+    }
+    else if (parentType.is(ANY)) {
+      loadLocation(location);
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.LENGTH, Object.class, String.class, int.class);
+    }
+    else {
+      throw new IllegalStateException("Internal error: unexpected type " + parentType);
+    }
+  }
+
+  /**
+   * Load list/array element or string char at given position.
+   * Does not check for length first.
+   * Expect on stack:  ...,parent,index
+   */
+  private void unsafeLoadElem(JactlType parentType, Token location) {
+    expect(2);
+    if (parentType.is(STRING)) {
+      invokeMethod(String.class, "charAt", int.class);
+      invokeMethod(String.class, "valueOf", char.class);
+    }
+    else if (parentType.is(ARRAY)) {
+      popType(2);
+      loadArrayElem(parentType);
+    }
+    else if (parentType.is(LIST)) {
+      invokeMethod(List.class, "get", int.class);
+    }
+    else if (parentType.is(ANY)) {
+      loadLocation(location);
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, int.class, String.class, int.class);
+    }
+    else {
+      throw new IllegalStateException("Internal error: unexpected type " + parentType);
+    }
+  }
+
   private void loadArrayElem(JactlType parentType) {
-    switch (parentType.getArrayType().getType()) {
+    switch (parentType.getArrayElemType().getType()) {
       case BOOLEAN:  mv.visitInsn(BALOAD); break;
       case BYTE:     mv.visitInsn(BALOAD); break;
       case INT:      mv.visitInsn(IALOAD); break;
@@ -4721,7 +5397,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
       case DOUBLE:   mv.visitInsn(DALOAD); break;
       default:       mv.visitInsn(AALOAD); break;
     }
-    push(parentType.getArrayType());
+    pushType(parentType.getArrayElemType());
   }
 
   /**
@@ -4732,7 +5408,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     if (!expr.accessType.is(LEFT_SQUARE)) {
       throw new CompileError("Field access not supported for Array object", expr.accessType);
     }
-    JactlType arrayType = expr.parent.type.getArrayType();
+    JactlType arrayType = expr.parent.type.getArrayElemType();
     convertTo(arrayType, expr.expr, true, expr.expr.location);
     compile(expr.parent);
     if (couldBeNull(expr.parent)) {
@@ -4767,7 +5443,6 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     }
     else {
       compile(expr.field);
-      int indexVar  = stack.allocateSlot(INT);
       if (expr.field.type.is(ANY)) {
         throwIfNotNumber("Array index must be numeric not ", expr.field.location);
         mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
@@ -4860,8 +5535,8 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
   private void loadLocation(SourceLocation location) {
     _loadLocation(location);
-    push(STRING);
-    push(INT);
+    pushType(STRING);
+    pushType(INT);
   }
 
   private void _loadLocation(SourceLocation sourceLocation) {

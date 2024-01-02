@@ -635,6 +635,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Non-numeric operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
   }
 
+  public static final String BOOLEAN_OP = "booleanOp";
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
     if (operator == TRIPLE_EQUAL) {
       if (left == right)                                        { return true;  }
@@ -1542,11 +1543,15 @@ public class RuntimeUtils {
     return value;
   }
 
+  public static final String LOAD_ARRAY_FIELD = "loadArrayField";
   public static Object loadArrayField(Object parent, int idx, String source, int offset) {
     try {
       if (parent instanceof String) {
         String str = (String)parent;
         return String.valueOf(str.charAt(idx >= 0 ? idx : idx + str.length()));
+      }
+      if (parent instanceof List) {
+        return ((List)parent).get(idx);
       }
       if (parent instanceof int[]) {
         int[] arr = (int[])parent;
@@ -2246,6 +2251,162 @@ public class RuntimeUtils {
     throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
   }
 
+  public static final String CAN_CAST_TO_TYPE = "canCastToType";
+  public static boolean canCastToType(Object obj, Class clss, Class unboxedClass) {
+    if (obj == null)                           { return false; }
+    if (clss.equals(Object.class))             { return true; }
+    Class<?> objClass = obj.getClass();
+    if (objClass.equals(clss))                 { return true; }
+    if (unboxedClass.isPrimitive() || clss.equals(BigDecimal.class)) {
+      if (clss.equals(Boolean.class))          { return false; }   // Since obj.class != clss from above
+      return unboxedClass.equals(int.class) && objClass.equals(Byte.class);
+    }
+    if (clss.isArray())                        { return canConvertToArray(obj, clss); }
+    if (clss.equals(String.class))             { return false; }
+    return clss.isAssignableFrom(objClass);
+  }
+
+  public static boolean canConvertToArray(Object obj, Class clss) {
+    if (obj == null)                           { return true; }
+    if (clss.isAssignableFrom(obj.getClass())) { return true; }
+    Class  componentType = clss.getComponentType();
+    if (obj instanceof List) {
+      List   list = (List)obj;
+      for (int i = 0; i < list.size(); i++) {
+        if (!canCastToType(list.get(i), componentType, componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (obj.getClass().isArray()) {
+      int    length = Array.getLength(obj);
+      for (int i = 0; i < length; i++) {
+        if (!canCastToType(Array.get(obj, i), componentType, componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (obj instanceof String && componentType == byte.class) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Same as Object.equals() except that Byte and Integer are treated
+   * as equivalent to allow byte values to match int literals in switch
+   * expressions.
+   * Also allow o1 and o2 to be null.
+   * Note that o1 can be an array in which case it can be compared with
+   * a list value for o2.
+   */
+  public static final String SWITCH_EQUALS = "switchEquals";
+  public static boolean switchEquals(Object o1, Object o2) {
+    if (o1 == null || o2 == null) {
+      return o1 == o2;
+    }
+    if (o1 instanceof Byte && o2 instanceof Integer) {
+      return ((Byte) o1).intValue() == ((Integer) o2).intValue();
+    }
+    if (o2 instanceof Byte && o1 instanceof Integer) {
+      return ((Byte) o2).intValue() == ((Integer) o1).intValue();
+    }
+    if (o1 instanceof List && o2 instanceof List) {
+      List l1 = (List)o1;
+      List l2 = (List)o2;
+      if (l1.size() != l2.size()) { return false; }
+      for (int i = 0; i < l1.size(); i++) {
+        if (!switchEquals(l1.get(i),l2.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (o1.getClass().isArray() && o2 instanceof List) {
+      List l2 = (List)o2;
+      if (Array.getLength(o1) != l2.size()) { return false; }
+      for (int i = 0; i < l2.size(); i++) {
+        if (!switchEquals(Array.get(o1,i),l2.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (o1 instanceof Map && o2 instanceof Map) {
+      Map<String,Object> m1 = (Map)o1;
+      Map<String,Object> m2 = (Map)o2;
+      if (m1.size() != m2.size()) { return false; }
+      for (String key: m1.keySet()) {
+        if (!switchEquals(m1.get(key), m2.get(key))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return o1.equals(o2);
+  }
+
+  /**
+   * Get integer value or null if not int/byte
+   */
+  public static final String INT_VALUE = "intValue";
+  public static Integer intValue(Object obj) {
+    if (obj instanceof Integer) {
+      return (Integer)obj;
+    }
+    if (obj instanceof Byte) {
+      return ((Byte)obj).intValue();
+    }
+    return null;
+  }
+
+  public static final String IS_PATTERN_COMPATIBLE = "isPatternCompatible";
+  public static boolean isPatternCompatible(Object obj, Class clss) {
+    if (clss.isArray())  { return isArrayType(obj, clss); }
+    if (obj == null)     { return clss.equals(Object.class); }
+    JactlType clssType = JactlType.typeFromClass(clss).unboxed();
+    JactlType objType  = JactlType.typeOf(obj).unboxed();
+    if (clssType.isNumeric() && objType.isNumeric()) {
+      return objType.is(clssType) || objType.is(JactlType.BYTE) && clssType.is(JactlType.INT);
+    }
+    if (obj instanceof JactlObject) {
+      return clss.isAssignableFrom(obj.getClass());
+    }
+    if (clss.equals(List.class) && obj.getClass().isArray()) {
+      return true;
+    }
+    if (clss.isAssignableFrom(obj.getClass())) {
+      return true;
+    }
+    return obj.getClass().equals(clss);
+  }
+
+  public static boolean isArrayType(Object obj, Class clss) {
+    if (clss.isAssignableFrom(obj.getClass())) { return true; }
+    Class  componentType = clss.getComponentType();
+    if (obj instanceof List) {
+      List   list = (List)obj;
+      for (int i = 0; i < list.size(); i++) {
+        if (!isPatternCompatible(list.get(i), componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (obj.getClass().isArray()) {
+      int    length = Array.getLength(obj);
+      for (int i = 0; i < length; i++) {
+        if (!isPatternCompatible(Array.get(obj, i), componentType)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
   public static boolean print(String obj) {
     return doPrint(obj, false);
   }
@@ -2469,6 +2630,15 @@ public class RuntimeUtils {
       return ((Map)collection).containsKey(elem) == isIn;
     }
     throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting String/List/Map for right-hand side not " + className(collection), source, offset);
+  }
+
+  public static final String LENGTH = "length";
+  public static int length(Object obj, String source, int offset) {
+    if (obj instanceof List)      { return ((List)obj).size(); }
+    if (obj instanceof Map)       { return ((Map)obj).size();  }
+    if (obj instanceof String)    { return ((String)obj).length(); }
+    if (obj.getClass().isArray()) { return Array.getLength(obj); }
+    throw new RuntimeError("Cannot get array length/list size of object of type " + className(obj), source, offset);
   }
 
   /////////////////////////////////////
@@ -2712,7 +2882,6 @@ public class RuntimeUtils {
   public static Object eval$c(Continuation c) {
     return evalScript(c, null, null, null);
   }
-
 
   private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
     Function<Map<String, Object>, Object> script = evalScriptCache.get(code);

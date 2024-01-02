@@ -35,6 +35,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BuiltinFunctionTests extends BaseTest {
 
+  @Test public void sleep() {
+    test("sleep(0,1)", 1);
+    test("sleep(1,1)", 1);
+    test("sleep(0)", null);
+    test("sleep(1)", null);
+    test("sleep(0,null)", null);
+    test("sleep(0,'abc')", "abc");
+  }
+
   @Test public void filter() {
     test("[].filter{it>1}", Utils.listOf());
     test("[].filter()", Utils.listOf());
@@ -1318,6 +1327,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [].addAt(0,1).addAt(0,2).addAt(2,3); x.add(4)", Utils.listOf(2,1,3,4));
     test("def x = [2,1,3]; x.add(4)", Utils.listOf(2,1,3,4));
     test("def x = [2,1,3]; def f = x.add; f(4)", Utils.listOf(2,1,3,4));
+    test("def x = [1,2,3]; x.add(4)", Utils.listOf(1,2,3,4));
   }
 
   @Test public void subList() {

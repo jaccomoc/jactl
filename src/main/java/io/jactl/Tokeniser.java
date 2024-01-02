@@ -299,9 +299,9 @@ public class Tokeniser {
         pushStringState("/", offset-1, true);
         return token.setType(REGEX_SUBST_START);
       }
-      case LEFT_BRACE: {
+      case DOLLAR_BRACE: case LEFT_BRACE: {
         nestedBraces++;
-        return token.setType(LEFT_BRACE).setLength(1);
+        return token.setType(sym.type).setLength(sym.length);
       }
       case RIGHT_BRACE: {
         nestedBraces--;
@@ -461,28 +461,19 @@ public class Tokeniser {
 
     // Search for first char that is not a valid identifier char
     int i = 1;
-    for (; i < remaining; i++) {
-      final int c = charAt(i);
-      if (startChar == '$' && !Character.isDigit(c)) {
-          break;
-      }
-      else
-      if (startChar != '$' && !isIdentifierPart(c)) {
-        break;
-      }
+    int digitCount = 0;
+    for (; i < remaining && isIdentifierPart(charAt(i)); i++) {
+      digitCount += isDigit(charAt(i),10) ? 1 : 0;
     }
 
-    if (startChar == '$') {
-      if (i == 1) { throw new CompileError("Unexpected character '$'", token); }
-      if (i > 6) {
-        throw new CompileError("Capture variable name too large", token);
-      }
+    if (startChar == '$' && i == 1) { throw new CompileError("Unexpected character '$'", token); }
+    if (startChar == '$' && digitCount == i-1 && digitCount > 3) {
+      throw new CompileError("Capture variable number too large", token);
     }
 
-    TokenType tokenType = IDENTIFIER;
-    if (startChar == '_' && i == 1) {
-      tokenType = UNDERSCORE;
-    }
+    TokenType tokenType = startChar == '$'           ? DOLLAR_IDENTIFIER :
+                          startChar == '_' && i == 1 ? UNDERSCORE
+                                                     : IDENTIFIER;
 
     advance(i);
     return token.setType(tokenType)
@@ -681,7 +672,7 @@ public class Tokeniser {
 
   private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
     char endChar = endChars.charAt(0);
-    Token token = createToken();
+    Token token = createToken(stringStart);
     StringBuilder sb = new StringBuilder();
     boolean finished = false;
     for (; !finished && available(1); advance(1)) {

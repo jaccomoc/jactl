@@ -191,7 +191,7 @@ public class Continuation extends RuntimeException implements Checkpointable {
         result = runtimeError;
       }
       catch (Throwable e) {
-        throw new IllegalStateException("Internal error: " + e.getMessage(), e);
+        throw new IllegalStateException("Internal error: " + (e.getMessage() == null ? e.getClass() : e.getMessage()), e);
       }
     }
     return result;

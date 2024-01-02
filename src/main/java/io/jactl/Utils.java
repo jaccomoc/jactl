@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.FunctionDescriptor;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -72,9 +74,11 @@ public class Utils {
   public static final String EVAL_ERROR        = "$error";   // Name of output variable containing error (if any) for eval()
 
   public static final String IT_VAR            = "it";       // Name of implicit arg for closures
+  public static final String PATTERN_VAR       = "_";        // Name of var used in structural pattern matching
   public static final String CAPTURE_VAR       = "$@";       // Name of internal array for capture values of a regex
   public static final String THIS_VAR          = "this";
   public static final String SUPER_VAR         = "super";
+  public static final String UNDERSCORE_VAR    = "_";
   public static final String TO_STRING         = "toString";
   public static final int    DEFAULT_MIN_SCALE = 10;
 
@@ -326,7 +330,7 @@ public class Utils {
   }
 
   public static void newArray(MethodVisitor mv, JactlType type, int numDimensions) {
-    switch (type.getArrayType().getType()) {
+    switch (type.getArrayElemType().getType()) {
       case BOOLEAN:  mv.visitIntInsn(NEWARRAY, T_BOOLEAN);                         break;
       case BYTE:     mv.visitIntInsn(NEWARRAY, T_BYTE);                            break;
       case INT:      mv.visitIntInsn(NEWARRAY, T_INT);                             break;
@@ -334,7 +338,7 @@ public class Utils {
       case DOUBLE:   mv.visitIntInsn(NEWARRAY, T_DOUBLE);                          break;
       case ARRAY:    mv.visitMultiANewArrayInsn(type.descriptor(), numDimensions); break;
       default:
-        mv.visitTypeInsn(ANEWARRAY, type.getArrayType().getInternalName());
+        mv.visitTypeInsn(ANEWARRAY, type.getArrayElemType().getInternalName());
         break;
     }
   }
@@ -475,7 +479,7 @@ public class Utils {
     return new HashSet(Arrays.asList(elems));
   }
 
-  public static List listOf(Object... elems) {
+  public static <T> List<T> listOf(T... elems) {
     return Arrays.asList(elems);
   }
 
@@ -710,11 +714,17 @@ public class Utils {
 
   public static Stmt.VarDecl createVarDecl(Expr.FunDecl ownerFunDecl, Token name, JactlType type, Expr init) {
     Expr.VarDecl varDecl = new Expr.VarDecl(name, new Token(EQUAL,name), init);
-    init.isResultUsed = true;
+    if (init != null) {
+      init.isResultUsed = true;
+    }
     varDecl.type = type;
+    return createVarDecl(ownerFunDecl, varDecl);
+  }
+
+  public static Stmt.VarDecl createVarDecl(Expr.FunDecl ownerFunDecl, Expr.VarDecl varDecl) {
     varDecl.isResultUsed = false;
     varDecl.owner = ownerFunDecl;
-    return new Stmt.VarDecl(name, varDecl);
+    return new Stmt.VarDecl(varDecl.name, varDecl);
   }
 
   public static String dumpHex(byte[] buf, int length) {
@@ -804,5 +814,14 @@ public class Utils {
       sb.append(str);
     }
     return sb.toString();
+  }
+
+  static boolean isDigits(String str) {
+    for (int i = 0; i < str.length(); i++) {
+      if (!Character.isDigit(str.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 }

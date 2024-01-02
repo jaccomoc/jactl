@@ -55,6 +55,34 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
   // = Expr
 
 
+  @Override public Expr visitStackCast(Expr.StackCast expr) {
+    return expr;
+  }
+
+  @Override public Expr visitSwitch(Expr.Switch expr) {
+    expr.subject = decorate(expr.subject);
+    // Don't decorate case statements because not all patterns make sense to decorate since
+    // we rely on the MethodCompiler.visitMatch to be able to determine from the raw patterns
+    // when we can generate code for a table lookup (for example).
+    expr.cases.forEach(c -> c.result = decorate(c.result));
+    if (expr.defaultCase != null) {
+      expr.defaultCase = decorate(expr.defaultCase);
+    }
+    return expr;
+  }
+
+  @Override public Expr visitSwitchCase(Expr.SwitchCase expr) {
+    // Decorate just the "if" part of the pattern
+    expr.patterns = expr.patterns.stream().map(pair -> Pair.create(pair.first, decorate(pair.second))).collect(Collectors.toList());
+    expr.result = decorate(expr.result);
+    return expr;
+  }
+
+  @Override public Expr visitConstructorPattern(Expr.ConstructorPattern expr) {
+    // Don't decorate constructor args patterns
+    return expr;
+  }
+
   @Override public Expr visitExprList(Expr.ExprList expr) {
     expr.exprs = expr.exprs.stream().map(this::decorate).collect(Collectors.toList());
     return expr;

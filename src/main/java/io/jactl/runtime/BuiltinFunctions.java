@@ -475,7 +475,7 @@ public class BuiltinFunctions {
       Jactl.function()
            .name("sleep")
            .param("timeMs")
-           .param("data", new Object[0])
+           .param("data", null)
            .impl(BuiltinFunctions.class, "sleep")
            .register();
 

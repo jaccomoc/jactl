@@ -39,6 +39,8 @@ import org.objectweb.asm.Type;
 import io.jactl.runtime.FunctionDescriptor;
 
 import static io.jactl.JactlType.HEAPLOCAL;
+import static io.jactl.TokenType.STAR;
+import static io.jactl.TokenType.UNDERSCORE;
 
 /**
  * Expr classes for our AST.
@@ -104,6 +106,34 @@ class Expr {
   public boolean isThis() {
     return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.getStringValue().equals(Utils.THIS_VAR);
   }
+
+  // True if Literal or Identifier so does not require much code generation. Used in match expressions to
+  // determine whether we can duplicate the code for the result when there are multiple patterns that give
+  // the same result.
+  public boolean isSimple() {
+    return this instanceof Expr.Literal || this instanceof Expr.Identifier;
+  }
+
+  public boolean isLiteral() {
+    return this instanceof Literal || this instanceof ListLiteral || this instanceof MapLiteral;
+  }
+
+  public boolean isStar() {
+    return this instanceof Expr.Identifier && ((Expr.Identifier) this).identifier.is(STAR) ||
+           this instanceof Expr.Literal && ((Expr.Literal) this).value.is(STAR);
+  }
+
+  public boolean isTypePattern() {
+    return this instanceof Expr.TypeExpr || this instanceof Expr.ConstructorPattern || this instanceof Expr.VarDecl ||
+           this instanceof Expr.Identifier && (((Expr.Identifier)this).identifier.is(UNDERSCORE) || ((Expr.Identifier)this).varDecl.isBindingVar);
+  }
+
+  public JactlType patternType() {
+    return this instanceof Expr.TypeExpr ? ((Expr.TypeExpr) this).typeVal :
+           this instanceof Expr.ConstructorPattern ? ((Expr.ConstructorPattern)this).typeExpr.typeVal :
+           this.type;
+  }
+
 
   class Binary extends Expr {
     Expr  left;
@@ -219,6 +249,7 @@ class Expr {
     Token              identifier;
     Expr.VarDecl       @varDecl;               // for variable references
     boolean            @couldBeFunctionCall = false;
+    boolean            @firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
     FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
   }
 
@@ -248,6 +279,7 @@ class Expr {
     boolean         @isParam;             // True if variable is a parameter of function (explicit or implicit)
     boolean         @isExplicitParam;     // True if explicit declared parameter of function
     boolean         @isField;             // True if instance field of a class
+    boolean         @isBindingVar;        // True if this is a binding variable in a switch destructing pattern
     int             @slot = -1;           // Which local variable slot
     int             @nestingLevel;        // What level of nested function owns this variable (1 is top level)
     Label           @declLabel;           // Where variable comes into scope (for debugger)
@@ -310,14 +342,6 @@ class Expr {
     // Remember earliest (in the code) forward reference to us so we can make sure that
     // no variables we close over are declared after that reference
     Token @earliestForwardReference;
-
-    // Keep track of maximum number of locals needed so we know how big an array to
-    // allocate for capturing our state if we suspend
-    int          @localsCnt = 0;
-    int          @maxLocals = 0;
-
-    void allocateLocals(int n) { localsCnt += n; maxLocals = maxLocals > localsCnt ? maxLocals : localsCnt; }
-    void freeLocals(int n)     { localsCnt -= n; assert localsCnt >= 0;}
 
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }
@@ -438,6 +462,37 @@ class Expr {
     Token      token;
     Stmt.Block block;
     boolean    resultIsTrue;     // for "do" blocks always return true
+  }
+
+  /**
+   * Switch statement
+   */
+  class Switch extends Expr {
+    Token            matchToken;
+    Expr             subject;
+    List<SwitchCase> cases;
+    Expr             defaultCase;
+    VarDecl          @itVar;
+    Stmt.Block       @block;     // Need a block for tracking it var
+  }
+
+  class SwitchCase extends Expr {
+    List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/ifExpression
+    Expr                  result;
+    Stmt.Block            @block;          // Need a block for captured regex and destructured vars
+    Expr                  @switchSubject;  // Need to know type of switch expression for binding variables
+  }
+
+  /**
+   * For use in constructor pattern.
+   * Can be named or not:
+   *   X(1,2,[_,_,a])
+   *   X(i:1,j:2,list:[_,_,a])
+   */
+  class ConstructorPattern extends Expr {
+    Token      token;
+    TypeExpr   typeExpr;
+    Expr       args;
   }
 
   /**
@@ -576,5 +631,13 @@ class Expr {
   class SpecialVar extends Expr {
     Token   name;          // $source or $offset (Utils.SOURCE_VAR_NAME, Utils.OFFSET_VAR_NAME)
     FunDecl @function;     // Our current function
+  }
+
+  /**
+   * Cast existing stack value (used in Match expression to convert results to the right type)
+   */
+  class StackCast extends Expr {
+    Token     token;
+    JactlType castType;
   }
 }

@@ -133,21 +133,29 @@ public class ClassDescriptor {
   }
 
   public List<String> getAllFieldNames() {
-    return getAllFields().map(Map.Entry::getKey).collect(Collectors.toList());
+    return getAllFieldsStream().map(Map.Entry::getKey).collect(Collectors.toList());
   }
 
   public List<JactlType> getAllFieldTypes() {
-    return getAllFields().map(Map.Entry::getValue).collect(Collectors.toList());
+    return getAllFieldsStream().map(Map.Entry::getValue).collect(Collectors.toList());
   }
 
   public List<Map.Entry<String,JactlType>> getFields() {
     return new ArrayList<>(fields.entrySet());
   }
 
-  public Stream<Map.Entry<String,JactlType>> getAllFields() {
+  public Map<String,JactlType> getAllFields() {
     Stream<Map.Entry<String,JactlType>> allFields = Stream.of();
     if (getBaseClass() != null) {
-      allFields = getBaseClass().getAllFields();
+      allFields = getBaseClass().getAllFieldsStream();
+    }
+    return Stream.concat(allFields, fields.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
+  public Stream<Map.Entry<String,JactlType>> getAllFieldsStream() {
+    Stream<Map.Entry<String,JactlType>> allFields = Stream.of();
+    if (getBaseClass() != null) {
+      allFields = getBaseClass().getAllFieldsStream();
     }
     return Stream.concat(allFields, fields.entrySet().stream());
   }

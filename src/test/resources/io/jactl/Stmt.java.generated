@@ -29,6 +29,8 @@ import java.util.Deque;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Set;
+import java.util.HashSet;
 
 import io.jactl.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
@@ -130,6 +132,7 @@ abstract class Stmt {
     List<Stmt.VarDecl>       fields    = new ArrayList<>();      // Field VarDecl stmts
     Map<String,Expr.VarDecl> fieldVars = new LinkedHashMap<>();  // Map of field name to decl expr
     Expr.VarDecl             thisField;
+    Set<Object>              classConstants = new HashSet();     // Constants to be initialised in class init
 
     // Used by Parser and Resolver
     Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();

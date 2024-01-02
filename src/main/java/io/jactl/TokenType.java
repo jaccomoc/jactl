@@ -81,6 +81,7 @@ public enum TokenType {
   STAR_STAR_EQUAL("**="),
   QUESTION_DOT("?."),
   QUESTION_SQUARE("?["),
+  DOLLAR_BRACE("${"),
 
   //= Triple char tokens
   PERCENT_PERCENT_EQUAL("%%="),
@@ -96,6 +97,7 @@ public enum TokenType {
   TRIPLE_GREATER_THAN_EQUAL(">>>="),
 
   //= Literals
+  DOLLAR_IDENTIFIER(),
   IDENTIFIER(),
   STRING_CONST(),
   BYTE_CONST(),
@@ -160,6 +162,8 @@ public enum TokenType {
   EVAL("eval"),
   FINAL("final"),
   SEALED("sealed"),
+  SWITCH("switch"),
+  DEFAULT("default"),
 
   //= Special
   EOL(),            // End of line
