@@ -15,13 +15,13 @@ running.
 :star: Please consider giving this project a star as a way to encourage me to continue making improvements
 to Jactl.
 
-### Another JVM Language?
+### Why Another JVM Language?
 
 I wanted a language that was a joy to code in, was easy for Java programmers to pick up, 
 provided a secure extension mechanism for applications, and was non-blocking.
 Nothing I found satisfied all these needs, and so Jactl was born.
 
-See the [FAQ](https://jactl.io/faq) for the answers to more questions.
+See the [FAQ](https://jactl.io/faq) for a more detailed answer and answers to other questions.
 
 ## Features
 
