@@ -305,7 +305,7 @@ stream(nextLine).filter{ /^# /r }
 
 ## Pattern Matching with Destructuring
 
-_This feature is coming in the forthcoming Jactl 1.5.0 release._
+_Available on trunk and coming in the forthcoming Jactl 1.5.0 release._
 
 Jactl provides `switch` expressions that can match on literal values but can also be used to
 match on the structure of the data and bind variables to different parts of the structure:
