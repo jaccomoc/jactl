@@ -279,6 +279,7 @@ class Expr {
     boolean         @isParam;             // True if variable is a parameter of function (explicit or implicit)
     boolean         @isExplicitParam;     // True if explicit declared parameter of function
     boolean         @isField;             // True if instance field of a class
+    boolean         @isClassConst;        // True if static final field (i.e. a const value)
     boolean         @isBindingVar;        // True if this is a binding variable in a switch destructing pattern
     int             @slot = -1;           // Which local variable slot
     int             @nestingLevel;        // What level of nested function owns this variable (1 is top level)

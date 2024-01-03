@@ -1304,10 +1304,11 @@ public class RuntimeUtils {
 
     return loadOther(parent, field, isDot, source, offset);
   }
+  public static final String LOAD_FIELD = "loadField";
 
   private static Object loadOther(Object parent, Object field, boolean isDot, String source, int offset) {
     if (parent instanceof Class) {
-      return loadStaticMethod(parent, field, source, offset);
+      return loadStaticFieldOrMethod(parent, field, source, offset);
     }
 
     // Check for accessing method by name
@@ -1370,7 +1371,7 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof Class) {
-      return loadStaticMethod(parent, field, source, offset);
+      return loadStaticFieldOrMethod(parent, field, source, offset);
     }
 
     if (parent instanceof JactlObject) {
@@ -1475,25 +1476,29 @@ public class RuntimeUtils {
     return Character.toString(parentString.charAt(index));
   }
 
-  private static JactlMethodHandle loadStaticMethod(Object parent, Object field, String source, int offset) {
+  private static Object loadStaticFieldOrMethod(Object parent, Object field, String source, int offset) {
     Class clss = (Class) parent;
-    // For classes, we only support runtime lookup of static methods
+    String fieldName = field.toString();
     if (JactlObject.class.isAssignableFrom(clss)) {
       try {
         // Need to get map of static methods via getter rather than directly accessing the
         // _$j$StaticMethods field because the field exists in the parent JactlObject class
         // which means we can't guarantee that class init for the actual class (which populates
         // the map) has been run yet.
-        Method                         staticMethods = clss.getMethod(Utils.JACTL_STATIC_METHODS_STATIC_GETTER);
+        Method                         staticMethods = clss.getMethod(Utils.JACTL_STATIC_FIELDS_METHODS_STATIC_GETTER);
         Map<String, JactlMethodHandle> map           = (Map<String, JactlMethodHandle>) staticMethods.invoke(null);
-        return map.get(field.toString());
+        Object value = map.get(fieldName);
+        if (value == null && !map.containsKey(fieldName)) {
+          throw new RuntimeError("No static field/method '" + fieldName + "' for class " + parent, source, offset);
+        }
+        return value;
       }
       catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
         throw new RuntimeException(e);
       }
     }
     else {
-      throw new RuntimeError("No static method '" + field.toString() + "' for class " + parent, source, offset);
+      throw new RuntimeError("No static field/method '" + fieldName + "' for class " + parent, source, offset);
     }
   }
 
@@ -1703,8 +1708,8 @@ public class RuntimeUtils {
       fieldOrMethod = ((JactlMethodHandle) fieldOrMethod).bindTo(parent);
     }
     if (fieldOrMethod == null) {
-      // search for matching method
-      fieldOrMethod = parent._$j$getStaticMethods().get(fieldName);
+      // search for matching static field or method
+      fieldOrMethod = parent._$j$getStaticFieldsAndMethods().get(fieldName);
       if (fieldOrMethod == null) {
         fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
       }
@@ -1834,6 +1839,9 @@ public class RuntimeUtils {
     JactlObject jactlObj     = (JactlObject) parent;
     Object       fieldOrMethod = jactlObj._$j$getFieldsAndMethods().get(fieldName);
     if (fieldOrMethod == null) {
+      if (jactlObj._$j$getStaticFieldsAndMethods().get(fieldName) != null) {
+        throw new RuntimeError("Cannot modify static final field '" + fieldName + "' for class " + className(parent), source, offset);
+      }
       throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
     }
     if (!(fieldOrMethod instanceof Field)) {
@@ -1961,26 +1969,16 @@ public class RuntimeUtils {
     }
     else {
       switch (type) {
-        case BOOLEAN:
-          return isTruth(value, false);
-        case BYTE:
-          return castToByte(value, source, offset);
-        case INT:
-          return castToInt(value, source, offset);
-        case LONG:
-          return castToLong(value, source, offset);
-        case DOUBLE:
-          return castToDouble(value, source, offset);
-        case DECIMAL:
-          return castToDecimal(value, source, offset);
-        case STRING:
-          return castToString(value, source, offset);
-        case MAP:
-          return castToMap(value, source, offset);
-        case LIST:
-          return castToList(value, source, offset);
-        case FUNCTION:
-          return castToFunction(value, source, offset);
+        case BOOLEAN:  return isTruth(value, false);
+        case BYTE:     return castToByte(value, source, offset);
+        case INT:      return castToInt(value, source, offset);
+        case LONG:     return castToLong(value, source, offset);
+        case DOUBLE:   return castToDouble(value, source, offset);
+        case DECIMAL:  return castToDecimal(value, source, offset);
+        case STRING:   return castToString(value, source, offset);
+        case MAP:      return castToMap(value, source, offset);
+        case LIST:     return castToList(value, source, offset);
+        case FUNCTION: return castToFunction(value, source, offset);
       }
     }
     throw new RuntimeError("Cannot convert from " + className(value) + " to type " + clss.getName(), source, offset);

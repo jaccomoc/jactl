@@ -290,6 +290,10 @@ public class LocalTypes {
   }
 
   private void _popVal(JactlType type) {
+    if (type.is(CLASS)) {
+      // Nothing to do
+      return;
+    }
     mv.visitInsn(type.is(DOUBLE, LONG) ? POP2 : POP);
   }
 

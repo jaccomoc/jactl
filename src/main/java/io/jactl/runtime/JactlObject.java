@@ -17,15 +17,14 @@
 
 package io.jactl.runtime;
 
-import java.lang.invoke.MethodHandle;
 import java.util.Map;
 
 /**
  * All JactlObjects implement this. It provides runtime access to fields and methods.
  */
 public interface JactlObject extends Checkpointable {
-  public Map<String,Object>        _$j$getFieldsAndMethods();
-  public Map<String, MethodHandle> _$j$getStaticMethods();
+  public Map<String,Object> _$j$getFieldsAndMethods();
+  public Map<String,Object> _$j$getStaticFieldsAndMethods();
 
   public Object      _$j$init$$w(Continuation c, String source, int offset, Object[] args);
   public void        _$j$writeJson(JsonEncoder buffer);

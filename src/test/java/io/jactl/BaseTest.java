@@ -40,6 +40,7 @@ public class BaseTest {
   protected String             packageName = Utils.DEFAULT_JACTL_PKG;
   protected Map<String,Object> globals     = new HashMap<>();
   protected boolean            useAsyncDecorator   = true;
+  protected boolean            alwaysEvalConsts    = false;
   protected boolean            replModeEnabled     = true;
   protected boolean            skipCheckpointTests = false;
   protected JactlEnv           jactlEnv = new DefaultEnv();
@@ -256,8 +257,8 @@ public class BaseTest {
     if (o1 == null && o2 == null) {
       return;
     }
-    assertTrue(o1 != null);
-    assertTrue(o2 != null);
+    assertTrue(o1 != null, "Expected " + o1 + " but was " + o2);
+    assertTrue(o2 != null, "Expected " + o1 + " but was " + o2);
     if (!o1.getClass().isArray() && !o2.getClass().isArray()) {
       assertEquals(o1, o2);
       return;
@@ -343,7 +344,9 @@ public class BaseTest {
 
   protected void test(String code, Object expected) {
     doTest(code, true, false, false, expected);
-    doTest(code, false, false, false, expected);
+    if (!alwaysEvalConsts) {
+      doTest(code, false, false, false, expected);
+    }
     doTest(code, true, false, true, expected);
     if (!skipCheckpointTests) {
       doTest(Utils.listOf(), code, true, false, true, true, expected);
@@ -351,7 +354,9 @@ public class BaseTest {
     }
     if (replModeEnabled) {
       doTest(code, true, true, false, expected);
-      doTest(code, false, true, false, expected);
+      if (!alwaysEvalConsts) {
+        doTest(code, false, true, false, expected);
+      }
       doTest(code, true, true, true, expected);
       if (!skipCheckpointTests) {
         doTest(Utils.listOf(), code, true, true, true, true, expected);
@@ -361,7 +366,9 @@ public class BaseTest {
 
   protected void test(List<String> classCode, String scriptCode, Object expected) {
     doTest(classCode, scriptCode, true, false, false, expected);
-    doTest(classCode, scriptCode, false, false, false, expected);
+    if (!alwaysEvalConsts) {
+      doTest(classCode, scriptCode, false, false, false, expected);
+    }
     doTest(classCode, scriptCode, true, false, true, expected);
     if (!skipCheckpointTests) {
       doTest(classCode, scriptCode, true, false, true, true, expected);
@@ -369,7 +376,9 @@ public class BaseTest {
     }
     if (replModeEnabled) {
       doTest(classCode, scriptCode, true, true, false, expected);
-      doTest(classCode, scriptCode, false, true, false, expected);
+      if (!alwaysEvalConsts) {
+        doTest(classCode, scriptCode, false, true, false, expected);
+      }
       doTest(classCode, scriptCode, true, true, true, expected);
       if (!skipCheckpointTests) {
         doTest(classCode, scriptCode, true, true, true, true, expected);
@@ -383,7 +392,9 @@ public class BaseTest {
 
   protected void testError(List<String> classCode, String scriptCode, String expectedError) {
     doTestError(classCode, scriptCode, true, false, expectedError);
-    doTestError(classCode, scriptCode, false, false, expectedError);
+    if (!alwaysEvalConsts) {
+      doTestError(classCode, scriptCode, false, false, expectedError);
+    }
 
     // Tests in repl mode may have different errors or no errors compared
     // to normal mode when accessing global vars so we can't run tests that
@@ -443,7 +454,7 @@ public class BaseTest {
     catch (JactlError e) {
       if (!e.getMessage().toLowerCase().contains(expectedError.toLowerCase())) {
         e.printStackTrace();
-        fail("Message did not contain expected string '" + expectedError + "'. Message=" + e.getMessage());
+        fail("Message did not contain expected string <" + expectedError + ">. Message=" + e.getMessage());
       }
     }
   }

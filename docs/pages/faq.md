@@ -217,10 +217,16 @@ in Jactl to explicitly synchronise or wait on other threads.
 Since there is no global data of any sort (see next question), there is no need to have a way to
 control multiple threads accessing this data from within Jactl.
 
-### Why can't classes have static data members?
+### Can classes have static fields?
 
-The reason that static data members are not allowed in classes is twofold:
-1. Jactl is intended to run in distributed applications where there are multiple instances running.
+Jactl supports static final data fields for classes where the fields are simple types (primitives
+and Strings).
+This allows the user to create names for constant values that can then be used multiple times.
+
+Non-final static fields that would support modification are not allowed by Jactl.
+The reason that they are not allowed is twofold:
+1. 
+2. Jactl is intended to run in distributed applications where there are multiple instances running.
    Having a static data member in a class for sharing information across all class instances makes
    no sense when there are multiple application instances running since there would then be multiple
    instances of the static data.
@@ -324,6 +330,34 @@ set[p.toString()] = true     // Need to convert to a string first before putting
 ```
 
 Adding Sets as a built-in type in Jactl is a possible future enhancement.
+
+### What is the difference between the % and %% operators?
+
+In Jactl, the `%` operator works as a modulus operator and always returns a value between `0` and the number on
+the right-hand side:
+```groovy
+ 7 %  5     //  7 mod 5  is  2
+-2 %  5     // -2 mod 5  is  3
+ 3 % -5     //  3 mod -5 is -2
+-3 % -5     // -3 mod -5 is -3
+```
+So, if the number on the right-hand side is positive, then the result will always be postive, regardless of whether
+the left-hand number is positive or negative.
+Similarly, if the number on the right-hand side is negative, the result will always be negative.
+
+In Java, the `%` operator works as a remainder operator whose definition is:
+```java
+a % b = a - b * (int)(a / b)
+```
+This leads to results like `-2 % 5` being `-2`.
+
+For me, I felt that having a modulus operation was more useful than a remainder operation, so that is why the Jactl
+`%` operator works differently to the Java `%` operator.
+Other languages (e.g. Python) also take the approach of using `%` for modulus.
+
+Jactl has the `%%` operator which works the same as the remainder operator in Java for situations where you really
+want to do a remainder rather than a modulus operation.
+Since it corresponds to the native Java operation, it is also slightly more efficient.
 
 ### I still didn't find the answer to my question
 

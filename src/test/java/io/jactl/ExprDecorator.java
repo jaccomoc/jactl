@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static io.jactl.TokenType.*;
+
 public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   Function<Expr,Expr> decorator;
@@ -98,7 +100,7 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     if (expr.parent instanceof Expr.Identifier) {
       String ident = ((Expr.Identifier) expr.parent).identifier.getStringValue();
       // Don't decorate if parent looks like it might be a class name because
-      // classes aren't values and can't be wrapped in sleep(0, X) for example.
+      // classes aren't values and can't be wrapped in sleep(0,X) for example.
       if (!Character.isUpperCase(ident.charAt(0))) {
         expr.parent = decorate(expr.parent);
       }
@@ -110,9 +112,20 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     return expr;
   }
 
+  private static boolean couldBeClassName(Expr expr) {
+    return expr instanceof Expr.Identifier && Character.isUpperCase(((Expr.Identifier) expr).identifier.getStringValue().charAt(0));
+  }
+
   @Override public Expr visitBinary(Expr.Binary expr) {
-    expr.left = decorate(expr.left);
-    expr.right = decorate(expr.right);
+    // Need to make sure we don't decorate a class name since it has no actual
+    // value that can be returned from sleep() so play on the safe side and
+    // check for any identifier starting with a capital letter.
+    if (!expr.operator.is(DOT,QUESTION_DOT,LEFT_SQUARE,QUESTION_SQUARE) || !couldBeClassName(expr.left)) {
+      expr.left = decorate(expr.left);
+    }
+    if (!expr.operator.is(AS) || !couldBeClassName(expr.right)) {
+      expr.right = decorate(expr.right);
+    }
     return expr;
   }
 
@@ -174,7 +187,10 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
   }
 
   @Override public Expr visitVarDecl(Expr.VarDecl expr) {
-    expr.initialiser = decorate(expr.initialiser);
+    // Can't have non-const expressions in static field initialiser
+    if (!expr.isClassConst) {
+      expr.initialiser = decorate(expr.initialiser);
+    }
     return expr;
   }
 

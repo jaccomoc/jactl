@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
 import static io.jactl.JactlType.BYTE;
+import static io.jactl.JactlType.CLASS;
 import static io.jactl.JactlType.DECIMAL;
 import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.INT;
@@ -1291,12 +1292,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitFieldOpAssign(Expr.FieldOpAssign expr) {
     compile(expr.parent);
 
-    boolean isInstanceField = expr.parent.type.is(INSTANCE) && expr.field instanceof Expr.Literal;
-    String fieldName     = isInstanceField ? ((Expr.Literal)expr.field).value.getStringValue() : null;
-    JactlType fieldType = isInstanceField ? getFieldType(expr.parent.type, fieldName) : null;
-    if (isInstanceField) {
-      dupVal();  // Need extra parent ref for later storing of field
-      loadClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+    boolean   isField   = expr.parent.type.is(INSTANCE,CLASS) && expr.field instanceof Expr.Literal;
+    String    fieldName = isField ? ((Expr.Literal)expr.field).value.getStringValue() : null;
+    JactlType fieldType = isField ? getFieldType(expr.parent.type, fieldName) : null;
+    boolean   isStatic  = isField ? expr.parent.type.getClassDescriptor().getStaticField(fieldName) != null : false;
+    check(!isStatic, "cannot assign to static field");
+    if (isField) {
+      if (isStatic) {
+        popVal();
+      }
+      else {
+        dupVal();  // Need extra parent ref for later storing of field
+      }
+      loadClassField(expr.parent.type.getInternalName(), fieldName, fieldType, isStatic);
     }
     else {
       compile(expr.field);
@@ -1329,14 +1337,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we need the after result and we have an instance field then stash in a temp for later retrieval.
     // For non-instsance fields the storeField() will return the after result so no need for a temp.
     boolean afterResultUsed = expr.isResultUsed && !expr.isPreIncOrDec;
-    if (afterResultUsed && isInstanceField) {
+    if (afterResultUsed && isField) {
       dupVal();
       temp = stack.allocateSlot(expr.type);
       storeLocal(temp);
     }
 
     // Store result back into field
-    if (isInstanceField) {
+    if (isField) {
       // Parent ref still on stack from earlier
       storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
     }
@@ -1628,7 +1636,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       compile(expr.left);
-      if (expr.left.type.is(INSTANCE,JactlType.CLASS)) {
+      if (expr.left.type.is(INSTANCE, CLASS)) {
         if (expr.right instanceof Expr.Literal) {
           // We know the type so get the field/method directly.
           // Note: we know that Resolver has already checked for valid field/method name.
@@ -1641,16 +1649,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             return null;
           }
 
-          // We need to find the method handle for the given method
-          FunctionDescriptor method = clss.getMethod(name);
-          check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
-          // We want the handle to the wrapper method.
-          loadWrapperHandle(method, expr);
+          // Look for a static field
+          JactlType fieldType = clss.getStaticField(name);
+          if (fieldType != null) {
+            Object fieldValue = clss.getStaticFieldValue(name);
+            loadConst(fieldValue);
+            convertTo(fieldType, expr, fieldValue == null, expr.right.location);
+            popType();
+            pushType(fieldType);
+          }
+          else {
+            // We need to find the method handle for the given method
+            FunctionDescriptor method = clss.getMethod(name);
+            check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
+            // We want the handle to the wrapper method.
+            loadWrapperHandle(method, expr);
+          }
           return null;
         }
 
         // Can't determine method/field at compile time so fall through to runtime lookup
-        if (expr.left.type.is(JactlType.CLASS)) {
+        if (expr.left.type.is(CLASS)) {
           // Need to tell runtime what class it is so load class onto stack
           loadConst(expr.left.type);
         }
@@ -2224,7 +2243,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIdentifier(Expr.Identifier expr) {
-    if (expr.varDecl.type.is(JactlType.CLASS)) {
+    if (expr.varDecl.type.is(CLASS)) {
       // Nothing to do
       //push(expr.type);
       return null;
@@ -2418,7 +2437,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              }
                            }
                            else
-                           if (method.isStatic && !expr.parent.type.is(JactlType.CLASS)) {
+                           if (method.isStatic && !expr.parent.type.is(CLASS)) {
                              popVal();
                            }
 
@@ -2453,7 +2472,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (couldBeNull(expr.parent)) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
-                           if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(JactlType.CLASS)) {
+                           if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(CLASS)) {
                              popVal();
                            }
                            if (expr.parent.type.isPrimitive()) {
@@ -2871,23 +2890,31 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       boolean createIfMissing = node.createIfMissing && !(childType.is(INSTANCE) && childType.getClassDescriptor().getInitMethod().paramCount > 0);
       checkForNull = !createIfMissing;
       JactlType fieldType   = parentClass.getField(fieldName);
+      boolean isStatic = fieldType == null;
+      if (isStatic) {
+        fieldType = parentClass.getStaticField(fieldName);
+      }
       check(fieldType != null, "could not find field '" + fieldName + "' for " + JactlType.createClass(parentClass));
+      JactlType finalFieldType = fieldType;
       if (createIfMissing) {
         dupVal();    // Save parent in case field is null and we need to store a value
 
         emitIf(asyncAutoCreateAllowed(), IfTest.IS_NULL,
                () -> {
-                 loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);
+                 if (isStatic) {
+                   popVal();
+                 }
+                 loadClassField(parentClass.getInternalName(), fieldName, finalFieldType, isStatic);
                  dupVal();
                },
                () -> {
                  popVal();             // pop the duplicate null
                  // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
-                 loadDefaultValueOrNewInstance(fieldType.is(ANY) ? expr.type : fieldType, expr);
-                 setStackType(fieldType);
+                 loadDefaultValueOrNewInstance(finalFieldType.is(ANY) ? expr.type : finalFieldType, expr);
+                 setStackType(finalFieldType);
                  expect(2);
                  dupValX1();          // Copy value and move it two slots
-                 storeClassField(parentClass.getInternalName(), fieldName, fieldType, false);
+                 storeClassField(parentClass.getInternalName(), fieldName, finalFieldType, false);
                },
                () -> {
                  // Not null so for x.y we have on stack: ..., x, y
@@ -2902,13 +2929,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           emitIf(false, IfTest.IS_NOTNULL,
                  () -> dupVal(),
                  () -> {
-                   loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);
+                   if (isStatic) {
+                     popVal();
+                   }
+                   loadClassField(parentClass.getInternalName(), fieldName, finalFieldType, isStatic);
                    box();
                  },
-                 () -> checkCast(fieldType.boxed()));
+                 () -> checkCast(finalFieldType.boxed()));
         }
         else {
-          loadClassField(parentClass.getInternalName(), fieldName, fieldType, false);  // Note: we don't support static fields
+          if (isStatic) {
+            popVal();
+          }
+          loadClassField(parentClass.getInternalName(), fieldName, fieldType, isStatic);
         }
       }
       lastNode = node;
@@ -3052,6 +3085,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private static JactlType getFieldType(JactlType type, String fieldName) {
     JactlType fieldType = type.getClassDescriptor().getField(fieldName);
+    if (fieldType == null) {
+      fieldType = type.getClassDescriptor().getStaticField(fieldName);
+    }
     check(fieldType != null, "couldn't find field '" + fieldName + "' in class " + type);
     return fieldType;
   }
@@ -5131,7 +5167,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(accessOperator.is(DOT, QUESTION_DOT));
         loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
         loadLocation(location);
-        invokeMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_FIELD, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, String.class, Integer.TYPE);
       }
     }
   }

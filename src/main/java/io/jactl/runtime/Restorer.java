@@ -248,8 +248,8 @@ public class Restorer {
         case CONTINUATION:   result = add.apply(new Continuation());                   break;
         case MATCHER:        result = add.apply(new RegexMatcher());                   break;
         case BUILTIN:        result = add.apply(createBuiltinInstance());              break;
+        case CLASS:          result = add.apply(createClass());                        break;
         case NUMBER:
-        case CLASS:
         case ANY:
         case UNKNOWN:
         default:
@@ -277,6 +277,7 @@ public class Restorer {
           case MAP:   restoreMap((Map)obj);     break;
           case LIST:  restoreList((List)obj);   break;
           case ARRAY: restoreArray(obj);        break;
+          case CLASS: break;
           default:    throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
         }
       }
@@ -391,6 +392,11 @@ public class Restorer {
   public Object createBuiltinInstance() {
     Class clss = BuiltinFunctions.getClass(readCint());
     return newInstance(clss);
+  }
+
+  public Class createClass() {
+    String internalClassName = (String)readObject();
+    return getJactlClass(internalClassName);
   }
 
   public JactlObject createInstance() {

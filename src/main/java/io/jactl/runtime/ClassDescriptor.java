@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import io.jactl.Pair;
 import io.jactl.Utils;
 
 import java.util.*;
@@ -41,6 +42,7 @@ public class ClassDescriptor {
   Map<String, ClassDescriptor>    innerClasses    = new LinkedHashMap<>();
   FunctionDescriptor              initMethod;
   boolean                         allFieldsAreDefaults;
+  Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();
 
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
     this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces, allFieldsAreDefaults);
@@ -111,7 +113,8 @@ public class ClassDescriptor {
    *         have a method of that name in this class
    */
   public boolean addMethod(String name, FunctionDescriptor fun) {
-    if (getField(name) != null)  { return false; }
+    if (getField(name) != null)       { return false; }
+    if (getStaticField(name) != null) { return false; }
     return methods.put(name, fun) == null;
   }
 
@@ -123,9 +126,48 @@ public class ClassDescriptor {
     return type;
   }
 
+  public JactlType getStaticField(String name) {
+    Pair<JactlType,Object> f = staticFields.get(name);
+    if (f == null) {
+      return getBaseClass() == null ? null : getBaseClass().getStaticField(name);
+    }
+    return f.first;
+  }
+
+  public Object getStaticFieldValue(String name) {
+    Pair<JactlType,Object> f = staticFields.get(name);
+    if (f == null) {
+      if (getBaseClass() != null) {
+        return getBaseClass().getStaticFieldValue(name);
+      }
+      throw new IllegalStateException("Internal error: static field " + name + " does not exist");
+    }
+    return f.second;
+  }
+
+  /**
+   * Add a static field of given type
+   * @param name name of the field
+   * @param type type of the field
+   * @return true if no field of that name already exists
+   */
+  public boolean addStaticField(String name, JactlType type) {
+    return getField(name) == null && getMethod(name) == null &&
+           staticFields.put(name, Pair.create(type,null)) == null;
+  }
+
+  public void setStaticFieldValue(String name, Object value) {
+    JactlType type = getStaticField(name);
+    if (type == null) {
+      throw new IllegalStateException("Internal error: no static field called " + name);
+    }
+    staticFields.put(name, Pair.create(type,value));
+  }
+
   public boolean addField(String name, JactlType type, boolean isMandatory) {
-    if (getField(name) != null)  { return false; }
-    if (getMethod(name) != null) { return false; }
+    if (getField(name) != null)       { return false; }
+    if (getMethod(name) != null)      { return false; }
+    if (getStaticField(name) != null) { return false; }
     if (isMandatory) {
       mandatoryFields.put(name, type);
     }

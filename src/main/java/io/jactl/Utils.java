@@ -18,7 +18,6 @@
 package io.jactl;
 
 import io.jactl.runtime.FunctionDescriptor;
-import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -28,7 +27,6 @@ import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -53,9 +51,9 @@ public class Utils {
 
   public static final String JACTL_FIELDS_METHODS_MAP           = "_$j$FieldsAndMethods";
   public static final String JACTL_FIELDS_METHODS_GETTER        = "_$j$getFieldsAndMethods";
-  public static final String JACTL_STATIC_METHODS_MAP           = "_$j$StaticMethods";
-  public static final String JACTL_STATIC_METHODS_GETTER        = "_$j$getStaticMethods";
-  public static final String JACTL_STATIC_METHODS_STATIC_GETTER = "_$j$StaticGetStaticMethods";
+  public static final String JACTL_STATIC_FIELDS_METHODS_MAP    = "_$j$StaticFieldsAndMethods";
+  public static final String JACTL_STATIC_FIELDS_METHODS_GETTER = "_$j$getStaticFieldsAndMethods";
+  public static final String JACTL_STATIC_FIELDS_METHODS_STATIC_GETTER = "_$j$StaticGetStaticFieldsAndMethods";
   public static final String JACTL_PRETTY_NAME_FIELD            = "_$j$PackagedName";
   public static final String JACTL_WRITE_JSON                   = "_$j$writeJson";
   public static final String JACTL_FROM_JSON                    = "fromJson";

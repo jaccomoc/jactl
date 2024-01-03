@@ -250,7 +250,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (Functions.lookupMethod(ANY, fieldName) != null) {
             error("Field name '" + fieldName + "' clashes with built-in method of same name", varDecl.name);
           }
-          if (!classDescriptor.addField(fieldName, varDecl.type, varDecl.initialiser == null)) {
+          if (varDecl.isClassConst) {
+            if (!classDescriptor.addStaticField(fieldName, varDecl.type)) {
+              error("Static field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
+            }
+          }
+          else if (!classDescriptor.addField(fieldName, varDecl.type, varDecl.initialiser == null)) {
             error("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
           }
         }
@@ -328,13 +333,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStmts.stmts.addAll(superStmts);
       classStmts.stmts.addAll(classDecl.innerClasses);
       classStmts.stmts.add(thisStmt);
+      classStmts.stmts.addAll(classDecl.fields.stream().filter(decl -> decl.declExpr.isClassConst).collect(Collectors.toList()));
+      // Replace the field VarDecls with ones that have no initialisation because we will move the
+      // initialisation into a separate init method
       List<Stmt.VarDecl> fields = classDecl.fields.stream()
+                                                  .filter(decl -> !decl.declExpr.isClassConst)
                                                   .map(decl -> {
-                                     Expr.VarDecl newDecl = new Expr.VarDecl(decl.name, null, null);
-                                     newDecl.isField = true;
-                                     newDecl.type    = decl.declExpr.type;
-                                     return newDecl;
-                                   })
+                                                    Expr.VarDecl newDecl = new Expr.VarDecl(decl.name, null, null);
+                                                    newDecl.isField = true;
+                                                    newDecl.type    = decl.declExpr.type;
+                                                    return newDecl; })
                                                   .map(decl -> new Stmt.VarDecl(decl.name, decl))
                                                   .collect(Collectors.toList());
       classStmts.stmts.addAll(fields);
@@ -888,7 +896,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (!expr.left.type.is(ANY)) {
         // Do some level of validation
         if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
-          expr.type = getFieldType(expr.left, expr.operator, expr.right, false);
+          expr.type = getFieldType(expr.left, expr.operator, expr.right, false).first;
           if (expr.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
             expr.type = expr.type.boxed();         // since with ?. and ?[ we could get null
           }
@@ -933,6 +941,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return expr.type = typeExpr.typeVal;
     }
 
+    // Special check for ++/-- operators to get a better error message
+    if (expr.originalOperator != null && expr.originalOperator.is(PLUS_PLUS,MINUS_MINUS) && !expr.left.type.isNumeric() && !expr.left.type.is(ANY)) {
+      error("Non-numeric operand for " + expr.originalOperator.getChars(), expr.operator);
+    }
+
     expr.type = JactlType.result(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
       return evaluateConstExpr(expr);
@@ -940,86 +953,100 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type;
   }
 
-  private JactlType getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
+  private Pair<JactlType,Boolean> getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
+    boolean isStatic = false;
+    JactlType type = null;
     if (parent.type.is(ARRAY) && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
       if (!(field.type.isNumeric() || field.type.is(ANY))) {
         error("Array index must be numeric, not " + field.type, field.location);
       }
-      return parent.type.getArrayElemType();
+      type = parent.type.getArrayElemType();
     }
+    else {
+      String fieldName = null;
+      if (field instanceof Expr.Literal) {
+        Object fieldValue = ((Expr.Literal) field).value.getValue();
+        if (fieldValue instanceof String) {
+          fieldName = (String) fieldValue;
+        }
+        else {
+          if (parent.type.is(INSTANCE, CLASS, ARRAY)) {
+            error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
+          }
+        }
+      }
 
-    String fieldName = null;
-    if (field instanceof Expr.Literal) {
-      Object fieldValue = ((Expr.Literal) field).value.getValue();
-      if (fieldValue instanceof String) {
-        fieldName = (String) fieldValue;
+      if (fieldName == null) {
+        if (parent.isSuper()) {
+          error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
+        }
+        type = ANY;   // Can't determine type at compile time; wait for runtime
       }
       else {
-        if (parent.type.is(INSTANCE, CLASS, ARRAY)) {
-          error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
+        if (parent.isSuper() && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
+          error("Field access for 'super' cannot be performed via '" + accessOperator.getChars() + "]'", accessOperator);
         }
-      }
-    }
 
-    if (fieldName == null) {
-      if (parent.isSuper()) {
-        error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
-      }
-      return ANY;   // Can't determine type at compile time; wait for runtime
-    }
-
-    if (parent.isSuper() && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
-      error("Field access for 'super' cannot be performed via '" + accessOperator.getChars() + "]'", accessOperator);
-    }
-
-    if (parent.type.is(INSTANCE, CLASS)) {
-      // Check for valid field/method name
-      ClassDescriptor desc = parent.type.getClassDescriptor();
-      JactlType       type = fieldName != null ? desc.getField(fieldName) : null;
-      if (type == null && fieldName != null) {
-        FunctionDescriptor descriptor = desc.getMethod(fieldName);
-        if (descriptor == null) {
-          // Finally check if built-in method exists for that name
-          descriptor = lookupMethod(parent.type, (String) fieldName);
-        }
-        if (descriptor != null) {
-          // If we only want fields but have found a method then throw error
-          if (fieldsOnly) {
-            error("Found method where field expected", field.location);
+        if (parent.type.is(INSTANCE, CLASS)) {
+          // Check for valid field/method name
+          ClassDescriptor desc = parent.type.getClassDescriptor();
+          type = fieldName != null ? desc.getField(fieldName) : null;
+          if (type != null && parent.type.is(CLASS)) {
+            error("Static access to non-static field '" + fieldName, field.location);
           }
-          if (parent.type.is(CLASS) && !descriptor.isStatic) {
-            error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
+          if (type == null && fieldName != null) {
+            type = desc.getStaticField(fieldName);
+            if (type != null) {
+              isStatic = true;
+            }
           }
-          type = FUNCTION;
+          if (type == null && fieldName != null) {
+            FunctionDescriptor descriptor = desc.getMethod(fieldName);
+            if (descriptor == null) {
+              // Finally check if built-in method exists for that name
+              descriptor = lookupMethod(parent.type, (String) fieldName);
+            }
+            if (descriptor != null) {
+              // If we only want fields but have found a method then throw error
+              if (fieldsOnly) {
+                error("Found method where field expected", field.location);
+              }
+              if (parent.type.is(CLASS) && !descriptor.isStatic) {
+                error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
+              }
+              type = FUNCTION;
+            }
+            if (descriptor == null && parent.type.is(CLASS)) {
+              // Look for an inner class if parent is a Class
+              ClassDescriptor innerClass = parent.type.getClassDescriptor().getInnerClass(fieldName);
+              if (innerClass != null) {
+                type = JactlType.createClass(innerClass);
+              }
+            }
+          }
+          if (type == null) {
+            error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
+          }
         }
-        if (descriptor == null && parent.type.is(CLASS)) {
-          // Look for an inner class if parent is a Class
-          ClassDescriptor innerClass = parent.type.getClassDescriptor().getInnerClass(fieldName);
-          if (innerClass != null) {
-            type = JactlType.createClass(innerClass);
+        else {
+          // Not INSTANCE or CLASS
+
+          // Might be a built-in method...
+          if (lookupMethod(parent.type, (String) fieldName) != null) {
+            type = FUNCTION;
+          }
+          else if (parent.type.is(MAP, ANY)) {
+            // Either we have a map (whose field could have any value) or we don't know parent type, so we
+            // default to ANY and figure it out at runtime
+            type = ANY;
+          }
+          else {
+            error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
           }
         }
       }
-      if (type == null) {
-        error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
-      }
-      return type;
     }
-
-    // Not INSTANCE or CLASS
-
-    // Might be a built-in method...
-    if (lookupMethod(parent.type, (String) fieldName) != null) {
-      return FUNCTION;
-    }
-
-    if (parent.type.is(MAP, ANY)) {
-      // Either we have a map (whose field could have any value) or we don't know parent type, so we
-      // default to ANY and figure it out at runtime
-      return ANY;
-    }
-    error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
-    return null;
+    return Pair.create(type,isStatic);
   }
 
   @Override public JactlType visitTernary(Expr.Ternary expr) {
@@ -1083,10 +1110,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       else
       if (expr.operator.is(PLUS_PLUS, MINUS_MINUS)) {
-        if (expr.expr.constValue == null) {
-          error("Prefix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
-        }
-        expr.constValue = incOrDec(expr.operator.is(PLUS_PLUS), expr.type, expr.expr.constValue);
+        error(expr.expr.constValue == null ? "Null value encountered where null not allowed" : "Cannot modify a constant value", expr.expr.location);
       }
     }
     return expr.type;
@@ -1098,11 +1122,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.type         = expr.expr.type;
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
       if (expr.isConst) {
-        if (expr.expr.constValue == null) {
-          error("Postfix operator '" + expr.operator.getChars() + "': null value encountered", expr.expr.location);
-        }
-        // For const expressions, postfix inc/dec is a no-op
-        expr.constValue = expr.expr.constValue;
+        error(expr.expr.constValue == null ? "Null value encountered where null not allowed" : "Cannot modify a constant value", expr.expr.location);
       }
       return expr.type;
     }
@@ -1131,6 +1151,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           expr.constValue = (byte)charVal;
         }
       }
+      else if (expr.expr.isConst) {
+        expr.isConst = true;
+        expr.constValue = castToType(expr.expr.constValue, expr.castType, expr.location);
+      }
       return expr.type;
     }
 
@@ -1139,6 +1163,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // We have a cast so our type is the type we are casting to
     return expr.type;
+  }
+
+  private Object castToType(Object value, JactlType type, Token location) {
+    try {
+      return RuntimeUtils.castTo(type.classFromType(), value, location.getSource(), location.getOffset());
+    }
+    catch (RuntimeError e) {
+      error(e.getErrorMessage(), location);
+      return null;
+    }
   }
 
   @Override public JactlType visitLiteral(Expr.Literal expr) {
@@ -1197,6 +1231,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     resolve(expr.initialiser);
     checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
+
+    // For class static final fields make sure we have a const value since we need the value at compile time
+    if (expr.isClassConst) {
+      if (expr.initialiser == null || !expr.initialiser.isConst) {
+        error("Static final fields must be initialised to simple constant values", expr.initialiser.location);
+      }
+      classStack.peek().classDescriptor.setStaticFieldValue(expr.name.getStringValue(), expr.initialiser.constValue);
+      expr.isConst = true;
+      expr.constValue = castToType(expr.initialiser.constValue, expr.type, expr.location);
+    }
 
     define(expr.name, expr);
     return expr.type;
@@ -1322,6 +1366,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return expr.type = ANY;
     }
 
+    if (varDecl.isConst) {
+      expr.isConst = true;
+      expr.constValue = varDecl.constValue;
+    }
+
     return expr.type = varDecl.type;
   }
 
@@ -1354,6 +1403,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // If using ?= have to allow for null being result
       expr.type = ANY;
     }
+
+    if (expr.identifierExpr.varDecl.isClassConst) {
+      error("Cannot modify static final field", expr.location);
+    }
+
     // Flag variable as non-final since it has had an assignment to it
     expr.identifierExpr.varDecl.isFinal = false;
 
@@ -1400,6 +1454,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (!expr.expr.type.isCastableTo(expr.type)) {
       error("Cannot convert from type of right-hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
+
+    if (expr.identifierExpr.varDecl.isClassConst) {
+      error("Cannot modify static final field", expr.location);
+    }
+
+    // Flag variable as non-final since it has had an assignment to it
+    expr.identifierExpr.varDecl.isFinal = false;
+
     return expr.type;
   }
 
@@ -1410,12 +1472,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitFieldAssign(Expr.FieldAssign expr) {
-    resolve(expr.parent);
+    resolveClassAllowed(expr.parent);
     return resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
   }
 
   @Override public JactlType visitFieldOpAssign(Expr.FieldOpAssign expr) {
-    resolve(expr.parent);
+    resolveClassAllowed(expr.parent);
 
     // For FieldOpAssign we will either have something like the following example:
     //  a.b.c.d += 5 ==> new FieldOpAssign(parent = new Binary('a.b.c'),
@@ -1433,7 +1495,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // know the field type (e.g. it comes from a Map) then we will just use ANY as the type
       // and figure it all out at runtime.
       Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-      valueExpr.left.type = getFieldType(expr.parent, expr.accessType, expr.field, true);
+      valueExpr.left.type = getFieldType(expr.parent, expr.accessType, expr.field, true).first;
     }
     resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
 
@@ -1442,7 +1504,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private JactlType resolveFieldAssignment(Expr expr, Expr parent, Expr field, Expr valueExpr, Token accessType) {
     boolean dottedAcess = accessType.is(DOT, QUESTION_DOT);
-    if (dottedAcess && !parent.type.is(ANY, MAP, INSTANCE)) {
+    if (dottedAcess && !parent.type.is(ANY, MAP, INSTANCE, CLASS)) {
       error("Invalid object type (" + parent.type + ") for field access", accessType);
     }
     if (!dottedAcess && !parent.type.is(ANY, LIST, ARRAY, MAP, INSTANCE)) {
@@ -1463,9 +1525,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(field);
     resolve(valueExpr);
 
-    if (parent.type.is(INSTANCE)) {
+    if (parent.type.is(INSTANCE, CLASS)) {
       // Type will be the field type (boxed if ?= being used due to possibility of null value)
-      JactlType fieldType = getFieldType(parent, accessType, field, true);
+      Pair<JactlType,Boolean> pair = getFieldType(parent, accessType, field, true);
+      JactlType fieldType = pair.first;
+      if (fieldType.is(CLASS)) {
+        error("Invalid operation on a class", field.location);
+      }
+      if (pair.second) {
+        error ("Cannot modify static final field", field.location);
+      }
+      if (parent.type.is(CLASS)) {
+        error("Cannot modify class field", field.location);
+      }
       if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign) expr).assignmentOperator.is(QUESTION_EQUAL)) {
         fieldType = fieldType.boxed();
       }
@@ -2320,10 +2392,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (varDecl != null) {
       if (varDecl.isField && inStaticContext()) {
-        if (varDecl.funDecl == null) {
-          error("Reference to field in static function", location);
+        if (varDecl.funDecl == null && !varDecl.isClassConst) {
+          error("Reference to non-static field in static function", location);
         }
-        if (!varDecl.funDecl.isStatic()) {
+        if (varDecl.funDecl != null && !varDecl.funDecl.isStatic()) {
           error("Reference to non-static method in static function", location);
         }
       }
@@ -2873,9 +2945,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Assign values for all fields. Mandatory fields get values from corresponding parameter and optional fields
     // are assigned from their initialiser.
-    classDecl.fieldVars.forEach((field, varDecl) -> {
-      Token fieldToken = varDecl.name;
-      Token paramToken = fieldToken.newIdent(paramName.apply(fieldToken.getStringValue()));
+    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isClassConst).forEach(entry -> {
+      Expr.VarDecl varDecl = entry.getValue();
+      Token fieldToken     = varDecl.name;
+      Token paramToken     = fieldToken.newIdent(paramName.apply(fieldToken.getStringValue()));
       Expr value = varDecl.initialiser == null ? new Expr.Identifier(paramToken)
                                                : varDecl.initialiser;
       Expr.FieldAssign assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
@@ -2981,7 +3054,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Assign value to each field from map or from initialiser
     Expr.Literal trueLiteral = new Expr.Literal(new Token(TRUE, classToken).setValue(true));
-    classDecl.fieldVars.forEach((field,varDecl) -> {
+    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isClassConst).forEach(entry -> {
+      Expr.VarDecl varDecl          = entry.getValue();
       Token        fieldToken       = varDecl.name;
       Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
       Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.class, "removeOrThrow",

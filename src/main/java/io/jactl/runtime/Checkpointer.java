@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -148,6 +149,7 @@ public class Checkpointer {
     else if (obj instanceof String)         { writeString((String)obj); }
     else if (obj.getClass().isArray())      { writeArray(obj);          }
     else if (obj instanceof StringBuffer)   { writeStringBuffer((StringBuffer)obj); }
+    else if (obj instanceof Class)          { writeClass((Class)obj);   }
     else {
       throw new RuntimeError("Cannot checkpoint object of type " + RuntimeUtils.className(obj), source, offset);
     }
@@ -202,6 +204,11 @@ public class Checkpointer {
       objects[id] = value;
     }
     return id;
+  }
+
+  void writeClass(Class clss) {
+    writeType(CLASS);
+    writeObject(Type.getInternalName(clss));
   }
 
   void writeMap(Map<String,Object> map) {

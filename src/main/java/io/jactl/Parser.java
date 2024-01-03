@@ -17,7 +17,6 @@
 
 package io.jactl;
 
-import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
@@ -28,7 +27,6 @@ import java.util.stream.Stream;
 import static io.jactl.JactlType.ANY;
 import static io.jactl.JactlType.UNKNOWN;
 import static io.jactl.TokenType.*;
-import static io.jactl.TokenType.NUMBER;
 
 /**
  * Recursive descent parser for parsing the Jactl language.
@@ -447,15 +445,12 @@ public class Parser {
 
   private boolean isFunDecl(boolean inClassDecl) {
     return lookahead(() -> {
-      if (inClassDecl && matchAny(STATIC)) {
-        return true;           // "static" can only appear for function declarations
+      if (inClassDecl) {
+        // Allow static or final for methods. Both are not allowed but we will detect that later.
+        while (matchAnyIgnoreEOL(STATIC,FINAL)) {}
+        matchAny(EOL);
       }
-      if (inClassDecl && matchAny(FINAL)) {
-        return true;           // "final" can only appear for function declarations
-      }
-      else {
-        type(false, false, false);
-      }
+      type(false, false, false);
       if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeywordIgnoreEOL()) {
         return false;
       }
@@ -470,8 +465,22 @@ public class Parser {
    * </pre>
    */
   private Stmt.FunDecl funDecl(boolean inClassDecl) {
-    boolean isStatic = inClassDecl && matchAny(STATIC);
-    boolean isFinal  = inClassDecl && !isStatic && matchAny(FINAL);
+    boolean isStatic = false;
+    boolean isFinal  = false;
+    if (inClassDecl) {
+      while (matchAnyIgnoreEOL(STATIC,FINAL)) {
+        if (previousWas(STATIC)) {
+          if (isStatic) { error("'static' cannot appear multiple times", previous()); }
+          if (isFinal)  { error("Unexpected token: 'static' cannot be combined with 'final' for methods", previous()); }
+          isStatic = true;
+        }
+        else {
+          if (isFinal)  { error("Unexpected token: 'final' cannot appear multiple times", previous()); }
+          if (isStatic) { error("Unexpected token: 'static' cannot be combined with 'final' for methods", previous()); }
+          isFinal = true;
+        }
+      }
+    }
     Token start = peek();
     JactlType returnType = type(false, false, false);
     Token      name       = expect(IDENTIFIER);
@@ -513,7 +522,7 @@ public class Parser {
       // Note that unlike a normal varDecl where commas separate different vars of the same type,
       // with parameters we expect a separate comma for parameter with a separate type for each one
       // so we build up a list of singleVarDecl.
-      Stmt.VarDecl varDecl = singleVarDecl(type, false);
+      Stmt.VarDecl varDecl = singleVarDecl(type, false, false);
       varDecl.declExpr.isParam = true;
       parameters.add(varDecl);
       matchAny(EOL);
@@ -542,7 +551,8 @@ public class Parser {
   }
 
   private boolean isVarDecl() {
-    return lookahead(() -> type(true, false, true) != null,
+    return lookahead(() -> { while(matchAny(STATIC,FINAL)) {}; return true; },
+                     () -> type(true, false, true) != null,
                      () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeywordIgnoreEOL());
   }
 
@@ -558,12 +568,28 @@ public class Parser {
   }
 
   private Stmt doVarDecl(boolean inClassDecl) {
+    boolean isStatic = false;
+    boolean isFinal  = false;
+    if (inClassDecl) {
+      while (matchAnyIgnoreEOL(STATIC,FINAL)) {
+        if (previousWas(STATIC)) {
+          if (isStatic) { error("Unexpected token: 'static' cannot appear multiple times", previous()); }
+          isStatic = true;
+        }
+        else {
+          if (isFinal)  { error("Unexpected token: 'final' cannot appear multiple times", previous()); }
+          isFinal = true;
+        }
+      }
+      if (isStatic && !isFinal) { error("Class static fields must be final"); }
+      if (isFinal && !isStatic) { error("Final fields are only supported for static class fields"); }
+    }
     JactlType type = type(true, false, false);
     Stmt.Stmts stmts = new Stmt.Stmts();
-    stmts.stmts.add(singleVarDecl(type, inClassDecl));
+    stmts.stmts.add(singleVarDecl(type, inClassDecl, isStatic));
     while (matchAny(COMMA)) {
       matchAny(EOL);
-      stmts.stmts.add(singleVarDecl(type, inClassDecl));
+      stmts.stmts.add(singleVarDecl(type, inClassDecl, isStatic));
     }
     if (stmts.stmts.size() > 1) {
       // Multiple variables so return list of VarDecls
@@ -573,7 +599,7 @@ public class Parser {
     return stmts.stmts.get(0);
   }
 
-  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl) {
+  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isClassConst) {
     Token identifier  = expect(IDENTIFIER);
     Expr  initialiser = null;
     Token equalsToken = null;
@@ -597,19 +623,20 @@ public class Parser {
       initialiser = asExpr(type, initialiser);
     }
 
-    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl);
+    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl, isClassConst);
   }
 
-  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl) {
-    return new Stmt.VarDecl(identifier, createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, false));
+  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isClassConst) {
+    return new Stmt.VarDecl(identifier, createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, isClassConst, false));
   }
 
-  private Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isBindingVar) {
+  private Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isClassConst, boolean isBindingVar) {
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
     varDecl.isField = inClassDecl;
     varDecl.isBindingVar = isBindingVar;
+    varDecl.isClassConst = isClassConst;
     return varDecl;
   }
 
@@ -665,7 +692,7 @@ public class Parser {
       // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
       // end of current scope - could handle this better but not a high priority since not an actual leak.
       //: def _$jmultiAssignN = expression() as List
-      stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, isInClassDecl));
+      stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, isInClassDecl, false));
       for (int i = 0; i < identifiers.size(); i++) {
         Token varName = identifiers.get(i);
         // def variable = _$jmultiAssignN[i]
@@ -673,14 +700,14 @@ public class Parser {
                                       new Expr.Binary(new Expr.Identifier(rhsName),
                                                       new Token(LEFT_SQUARE, equalToken),
                                                       new Expr.Literal(new Token(INTEGER_CONST, equalToken).setValue(i))),
-                                      isInClassDecl));
+                                      isInClassDecl, false));
       }
     }
     else {
       // No initialisers
       for (int i = 0; i < identifiers.size(); i++) {
         Token varName = identifiers.get(i);
-        stmts.stmts.add(createVarDecl(varName, types.get(i), null, null, isInClassDecl));
+        stmts.stmts.add(createVarDecl(varName, types.get(i), null, null, isInClassDecl, false));
       }
     }
     return stmts;
@@ -2245,7 +2272,7 @@ public class Parser {
     // We either have a type on its own or a type and an identifier for a binding variable
     JactlType type = type(false, false, false);
     if (matchAny(IDENTIFIER)) {
-      expr = createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, true);
+      expr = createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, false, true);
     }
     else {
       // Is a type
@@ -2335,7 +2362,7 @@ public class Parser {
       if (!name.is(UNDERSCORE,STAR)) {
         if (!bindingVars.contains(varName)) {
           bindingVars.add(varName);
-          expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, true);
+          expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, false, true);
         }
         else {
           // Check if we are first use in this pattern. Previous patterns for the case (separate by commas)
@@ -3128,7 +3155,7 @@ public class Parser {
     // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
     // end of current scope - could handle this better but not a high priority since not an actual leak.
     //: def _$jmultiAssignN = expression()
-    stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, false));
+    stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, false, false));
 
     List<Expr> lhs = lhsExprs.exprs;
     // For each expression in lhs create a "lvalue = _$jmultiAssignN[i]"

@@ -2903,14 +2903,14 @@ class CompilerTest extends BaseTest {
 
   @Test
   public void constExprArithmeticPrecedence() {
+    alwaysEvalConsts = true;
     test("1 + -2 * -3 + 4", 11);
     test("1 + (2 + 3) * 4 - 5", 16);
     test("13 + 12 %% 7L", 18L);
     test("13 + 12 %% 7 - 3", 15);
-    test("13 + 12 %% ++6 - 3", 15);
+    testError("13 + 12 %% ++6 - 3", "cannot modify a constant value");
     test("13 + 12 % 7L", 18L);
     test("13 + 12 % 7 - 3", 15);
-    test("13 + 12 % ++6 - 3", 15);
   }
 
   @Test public void constStringConcatenation() {
@@ -2964,12 +2964,19 @@ class CompilerTest extends BaseTest {
 
   @Test
   public void prefixIncOrDec() {
-    testError("++null", "null value encountered");
-    testError("--null", "null value encountered");
+    alwaysEvalConsts = true;
+    testError("++null", "null value");
+    testError("--null", "null value");
     test("++(byte)1", (byte)2);
     test("--(byte)1", (byte)0);
-    test("++1", 2);
-    test("--1", 0);
+    testError("++1", "cannot modify a constant value");
+    testError("--1", "cannot modify a constant value");
+    testError("++1L", "cannot modify a constant value");
+    testError("--1L", "cannot modify a constant value");
+    testError("++1D", "cannot modify a constant value");
+    testError("--1D", "cannot modify a constant value");
+    testError("++1.0", "cannot modify a constant value");
+    testError("--1.0", "cannot modify a constant value");
     test("byte x = 1; ++x", (byte)2);
     test("byte x = 1; --x", (byte)0);
     test("byte x = 3; --x + --x", (byte)3);
@@ -2978,22 +2985,16 @@ class CompilerTest extends BaseTest {
     test("int x = 1; --x", 0);
     test("int x = 3; --x + --x", 3);
     test("int x = 3; ++x + ++x", 9);
-    test("++1L", 2L);
-    test("--1L", 0L);
     test("long x = 1; ++x", 2L);
     test("long x = 1; --x", 0L);
     test("long x = 3; --x + --x", 3L);
     test("long x = 3; ++x + ++x", 9L);
-    test("++1D", 2D);
-    test("--1D", 0D);
     test("double x = 1; ++x", 2D);
     test("double x = 1; --x", 0D);
     test("double x = 1.5D; --x", 0.5D);
     test("double x = 3; --x + --x", 3D);
     test("double x = 3.5D; --x + --x", 4D);
     test("double x = 3.5D; ++x + ++x", 10D);
-    test("++1.0", "#2.0");
-    test("--1.0", "#0.0");
     test("Decimal x = 1; ++x", "#2");
     test("Decimal x = 1.5; ++x", "#2.5");
     test("Decimal x = 1; --x", "#0");
@@ -3035,14 +3036,19 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void postfixIncOrDec() {
+    alwaysEvalConsts = true;
     testError("null++", "null value encountered");
     testError("null--", "null value encountered");
-    test("(byte)1++", (byte)1);
-    test("(byte)1--", (byte)1);
-    test("((byte)1)++", (byte)1);
-    test("((byte)1)--", (byte)1);
-    test("1++", 1);
-    test("1--", 1);
+    testError("(byte)1++", "cannot modify a constant value");
+    testError("(byte)1--", "cannot modify a constant value");
+    testError("1++", "cannot modify a constant value");
+    testError("1--", "cannot modify a constant value");
+    testError("1L++", "cannot modify a constant value");
+    testError("1L--", "cannot modify a constant value");
+    testError("1D++", "cannot modify a constant value");
+    testError("1D--", "cannot modify a constant value");
+    testError("1.0++", "cannot modify a constant value");
+    testError("1.0--", "cannot modify a constant value");
     test("byte x = 1; x++", (byte)1);
     test("byte x = 1; x--", (byte)1);
     test("byte x = 1; x++; x", (byte)2);
@@ -3059,8 +3065,6 @@ class CompilerTest extends BaseTest {
     test("int x = 3; x-- + x--; x", 1);
     test("int x = 3; x++ + x++", 7);
     test("int x = 3; x++ + x++; x", 5);
-    test("2L++", 2L);
-    test("0L--", 0L);
     test("long x = 1; x++", 1L);
     test("long x = 1; x++; x", 2L);
     test("long x = 1; x--", 1L);
@@ -3069,8 +3073,6 @@ class CompilerTest extends BaseTest {
     test("long x = 3; x-- + x--; x", 1L);
     test("long x = 3; x++ + x++", 7L);
     test("long x = 3; x++ + x++; x", 5L);
-    test("1D++", 1D);
-    test("1D--", 1D);
     test("double x = 1D; x++", 1D);
     test("double x = 1D; x++; x", 2D);
     test("double x = 1D; x--", 1D);
@@ -3083,8 +3085,6 @@ class CompilerTest extends BaseTest {
     test("double x = 3.5D; x-- + x--; x", 1.5D);
     test("double x = 3.5D; x++ + x++", 8D);
     test("double x = 3.5D; x++ + x++; x", 5.5D);
-    test("1.0++", "#1.0");
-    test("1.0--", "#1.0");
     test("Decimal x = 1; x++", "#1");
     test("Decimal x = 1; x++; x", "#2");
     test("Decimal x = 1.5; x++", "#1.5");
@@ -3144,8 +3144,6 @@ class CompilerTest extends BaseTest {
     test("def x = 1; ++x--", 2);
     test("def x = 1; ++x--; x", 0);
     test("def x = 1; ++(x--); x", 0);
-    test("--1", 0);
-    test("----1", -1);
     test("def x = 1; -- -- -- ++x--", -1);
 
     test("def x = 1; def y = 3; x + --y * ++y++ - 2", 5);
@@ -7306,7 +7304,9 @@ class CompilerTest extends BaseTest {
   @Test public void classNameErrors() {
     testError("class X{}\nX\n1", "class name not allowed");
     testError("class X{}; ++X", "class name not allowed");
-    testError("class X{ class Y{} }; ++X.Y", "class name not allowed");
+    testError("class X{ class Y{} }; X.Y += 4", "non-numeric operand");
+    testError("class X{ class Y{} }; X.Y++", "non-numeric operand");
+    testError("class X{ class Y{} }; ++X.Y", "non-numeric operand");
     testError("class X{}; X++", "class name not allowed");
     testError("class X{}; !X", "class name not allowed");
     testError("class X{ class Y{} }; !X.Y", "class name not allowed");
