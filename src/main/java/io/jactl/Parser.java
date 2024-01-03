@@ -218,19 +218,33 @@ public class Parser {
   }
 
   /**
-   *# importStmt -&gt; "import" classPath ("as" IDENTIFIER)? ;
+   *# importStmt -&gt; "import" classPath ("as" IDENTIFIER)?
+   *#             | "import" "static" classPath "." ( IDENTIFIER | "*" )
+   *#             ;
    */
   List<Stmt.Import> importStmts() {
     List<Stmt.Import> stmts = new ArrayList<>();
     while (matchAnyIgnoreEOL(IMPORT)) {
       Token importToken = previous();
-      List<Expr> className = className();
-      Token as = null;
-      if (matchAnyIgnoreEOL(AS)) {
-         as = expect(IDENTIFIER);
+      boolean isStatic = matchAnyIgnoreEOL(STATIC);
+      List<Expr> className = new ArrayList<>(Utils.listOf(classPathOrIdentifier(false)));
+      int starCount = 0;
+      while (matchAnyIgnoreEOL(DOT)) {
+        if (starCount > 0) {
+          error("Unexpected token '.' after '*'", previous());
+        }
+        Expr.Identifier identifier = identifier(IDENTIFIER, STAR);
+        if (identifier.identifier.is(STAR)) {
+          starCount++;
+        }
+        className.add(identifier);
       }
-      stmts.add(new Stmt.Import(importToken, className, as));
-      matchAnyIgnoreEOL(SEMICOLON);
+      if (isStatic && className.size() < 2) {
+        error("Expected '.' after class name", className.get(0).location);
+      }
+      Token as = starCount == 0 && matchAnyIgnoreEOL(AS) ? expect(IDENTIFIER) : null;
+      stmts.add(new Stmt.Import(importToken, className, as, isStatic));
+      expect(EOL,SEMICOLON);
     }
     return stmts;
   }
@@ -1410,7 +1424,7 @@ public class Parser {
       case DO:                                               return doBlock();
       case SWITCH:                                           return switchExpr();
       case IDENTIFIER: case DOLLAR_IDENTIFIER:
-      case UNDERSCORE: case STAR:                            return classPathOrIdentifier();
+      case UNDERSCORE: case STAR:                            return classPathOrIdentifier(true);
     }
 
     if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
@@ -1498,7 +1512,7 @@ public class Parser {
    *# classPathOrIdentifier -&gt; IDENTIFIER | classPath ;
    * </pre>
    */
-  private Expr classPathOrIdentifier() {
+  private Expr classPathOrIdentifier(boolean allowDollarDigits) {
     // Can only be classPath if previous token was not "." since we want to avoid treating a.x.y.z.A
     // as a."x.y.z.A" if x.y.z is a package name but a.x.y.z isn't.
     if (!previousWas(DOT)) {
@@ -1507,7 +1521,7 @@ public class Parser {
         return classPath;
       }
     }
-    Token identifier = expect(IDENTIFIER, DOLLAR_IDENTIFIER);
+    Token identifier = allowDollarDigits ? expect(IDENTIFIER, DOLLAR_IDENTIFIER) : expect(IDENTIFIER);
     if (identifier.is(DOLLAR_IDENTIFIER) && !Utils.isDigits(identifier.getStringValue().substring(1))) {
       error("Unexpected token '$': Identifiers cannot begin with '$'", previous());
     }
@@ -1519,14 +1533,14 @@ public class Parser {
    *#  identifier -&gt; IDENTIFIER | "_" | "*"
    * </pre>
    */
-  private Expr identifier(TokenType... tokenTypes) {
+  private Expr.Identifier identifier(TokenType... tokenTypes) {
     Token token = expect(tokenTypes);
     return new Expr.Identifier(token);
   }
 
   /**
    * <pre>
-   *# className -&gt; IDENTIFIER ( "." IDENTIFIER ) + ;
+   *# classPath -&gt; IDENTIFIER ( "." IDENTIFIER ) + ;
    * </pre>
    * We look for a class path like: x.y.z.A
    * where x, y, and z are all in lowercase and A begins with an uppercase.
@@ -2116,6 +2130,8 @@ public class Parser {
       }
     }
     else if (isType()) {
+      // Note that we can't actually tell the difference between X.Y.Z being a class name and X.Y.Z being
+      // a field Z inside the class X.Y. We build a TypeExpr anyway and let the Resolver take care of it.
       expr = typeOrVarDecl();
       // Check for class name and constructor args (named or not)
       if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(JactlType.INSTANCE)) {
@@ -2125,10 +2141,26 @@ public class Parser {
         }
       }
     }
+    else if (matchAny(IDENTIFIER)){
+      // If there is just a single identifier we return it. Otherwise, we look for a dotted list of identifiers
+      // which would be a static field in a class and tunnel this list of identifiers in a TypeExpr as though
+      // it were actually a type.
+      // This is because if we had X.Y.Z we would detect it as a type and build a TypeExpr (see previous if)
+      // so we also build a TypeExpr if we have X.Y.z
+      // The Resolver will take care of checking whether X.Y.Z is an actual field reference or a class name
+      // and will also, therefore, cope with X.Y.z
+      List<Expr> exprs = new ArrayList<>();
+      exprs.add(new Expr.Identifier(previous()));
+      while (matchAnyIgnoreEOL(DOT)) {
+        expect(IDENTIFIER);
+        exprs.add(new Expr.Identifier(previous()));
+      }
+      expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, JactlType.createInstanceType(exprs));
+    }
     else if (peek().is(UNDERSCORE)) {
       expr = identifier(UNDERSCORE);
     }
-    else if (matchAny(IDENTIFIER,DOLLAR_IDENTIFIER)) {
+    else if (matchAny(DOLLAR_IDENTIFIER)) {
       expr = new Expr.Identifier(previous());
     }
     else if (matchAny(DOLLAR_BRACE)) {

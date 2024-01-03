@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.resolver.Resolver;
 import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +25,6 @@ import java.io.BufferedReader;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -38,7 +38,7 @@ public class AsyncTest {
 
   private boolean isAsync(String source, JactlContext context) {
     Parser         parser = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACTL_PKG);
-    Stmt.ClassDecl script = parser.parseScript("AsyncScriptTest");
+    Stmt.ClassDecl script   = parser.parseScript("AsyncScriptTest");
     Resolver       resolver = new Resolver(context, Utils.mapOf(), script.location);
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(context);

@@ -128,9 +128,10 @@ class Stmt {
    * Import statement
    */
   class Import extends Stmt {
-    Token token;
+    Token      token;
     List<Expr> className;
-    Token as;
+    Token      as;
+    boolean    staticImport;
   }
 
   /**

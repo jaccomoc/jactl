@@ -43,12 +43,12 @@ while (<FH>) {
   } and next;
 
   /^class +([A-Z][a-z]*)/ and $rootClass = $1 and do {
-    print "abstract $_";
-    print "\n  abstract <T> T accept(Visitor<T> visitor);\n\n";
+    print "public abstract $_";
+    print "\n  public abstract <T> T accept(Visitor<T> visitor);\n\n";
   } and next;
 
   /^}/ and do {
-    print "\n  interface Visitor<T> {\n";
+    print "\n  public interface Visitor<T> {\n";
     print "    T visit$_($_ \l$rootClass);\n" for @types;
     print "  }\n";
     print;
@@ -66,7 +66,7 @@ while (<FH>) {
       push @constructorFields, @{$baseClasses{$extends}};
     }
     push @constructorFields, @fields;
-    print "    $className(" . join(', ', map { "$_->[1] $_->[0]"} @constructorFields) . ") {\n";
+    print "    public $className(" . join(', ', map { "$_->[1] $_->[0]"} @constructorFields) . ") {\n";
     @superFields and print "      super(" . join(", ", @superFields) . ");\n";
     print "      this.$_->[0] = $_->[0];\n" for @fields;
     my @tokenFields = @{[ grep {$_->[1] eq 'Token'} @constructorFields ]};
@@ -76,7 +76,7 @@ while (<FH>) {
       print "      this.location = $firstTokenArg;\n";
     }
     print "    }\n";
-    print "    \@Override <T> T accept(Visitor<T> visitor) { return visitor.visit$className(this); }\n";
+    print "    \@Override public <T> T accept(Visitor<T> visitor) { return visitor.visit$className(this); }\n";
     my @fieldsAndAttrs;
     push @fieldsAndAttrs, map { $_->[0] } @constructorFields;
     #push @fieldsAndAttrs, @attributes;
@@ -91,13 +91,15 @@ while (<FH>) {
     @attributes = ();
   } and print and next;
 
-  $inClass and /([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/  and push @fields, [$2, $1];
-  $inClass and /([A-Za-z][a-zA-Z<,>.]*) +\@([a-zA-Z0-9]+)/ and push @attributes, $2;
+  $inClass and /^ +([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+) *;/ and push @fields, [$2, $1] and s/(^ +)/\1public /;
+  $inClass and /^ +([A-Za-z][a-zA-Z<,>.]*) +\@([a-zA-Z0-9]+)/  and push @attributes, $2 and s/(^ +)/\1public /;
   s/@//;
 
   /class (.*) extends +(\w*)/ and ($inClass, $className, $extends) = (1, $1, $2)
     and push @types, $className
-    and s/class/static class/;
+    and s/class/public static class/;
+
+  !$inClass and !/public/ and /^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)/ and s/(^ +)/\1public /;
 
   print;
 }

@@ -301,6 +301,8 @@ public class ClassTests extends BaseTest {
     testError("class X { static final def x = {1} }; X.x", "simple constant value");
     testError("def f() { static final int i = 1; i }; f()", "unexpected token");
     testError("def f() { final static int i = 1; i }; f()", "unexpected token");
+    test("class Y { static final int I = 1; static final int J = I + 1 }; class X extends Y {}; X.I + X.J + Y.I + Y.J", 6);
+    testError("class Y { static final int I = 1; static final int J = I + 1 }; class X extends Y {}; X.I x", "unknown class");
   }
 
   @Test public void fieldClashWithBuiltinMethod() {
@@ -360,6 +362,7 @@ public class ClassTests extends BaseTest {
     test("class X { Y y }; class Y { int j = 3 }; X x = new X(y:new Y(j:4)); x.y.j", 4);
     testError("class X { Y y }; class Y { int j = 3 }; X x = new X(new Y(j:4)); x['xx'].j", "no such field or method");
     test("class X { Y y }; class Y { int j = 3 }; X x = new X(y:new Y(j:4)); x['y'].j", 4);
+    test("class X { Y y }; class Y { int J = 3 }; X x = new X(y:new Y(J:4)); x['y'].J", 4);
   }
 
   @Test public void fieldsWithInitialisers() {
@@ -1702,6 +1705,32 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as C; new C().f()", 3);
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
+  }
+
+  @Test public void staticImportStatements() {
+    useAsyncDecorator = false;
+    packageName = null;
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; X.A + X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.A; A + a.b.c.X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.A; A + X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.b; a.b.c.X.A + b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.A; import static X.b; X.A + b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.A as a; a + a.b.c.X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.A as Z; Z + a.b.c.X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.A as a; a + X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.A as Z; Z + X.b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.b as b; a.b.c.X.A + b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.b as B; a.b.c.X.A + B", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.A as a; import static X.b as B; a + B", 3);
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.A; import static X.b; import static X.A; X.A + b", "duplicate constant");
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.*.A; A + b", "unexpected token");
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.*.*; A + b", "unexpected token");
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.*; A + b", 3);
+    test(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.*; A + b", 3);
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.*; import static X.A; A + b", "duplicate constant");
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package a.b.c; import static X.*; import static X.*; A + b", "duplicate constant");
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.*; import static a.b.c.X.A; A + b", "duplicate constant");
+    testError(Utils.listOf("package a.b.c; class X{ static final int A=1,b=2 }"), "package x.y; import static a.b.c.X.* as Z; A + b", "unexpected token");
   }
 
   @Test public void tripleEquals() {

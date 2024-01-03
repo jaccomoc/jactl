@@ -130,6 +130,7 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
   * Functions as values
   * Higher-order functions
   * Map, filter, collect, each, etc.
+  * [Pattern matching with destructuring](https://jactl.io/blog/2023/12/21/switch-expressions.html)
 * Classes with inheritance
 * Strong/weak typing
 * Parameters with default values
@@ -138,7 +139,6 @@ Jactl scripts can be run from the commandline to replace use of various Unix uti
 * Strings with interpolated expressions
 * Regex matching syntax
 * Regex capture variables
-* [Pattern matching with destructuring](https://jactl.io/blog/2023/12/21/switch-expressions.html)
 
 See [Language Features](https://jactl.io/language-features) for an overview with examples of the language
 features.

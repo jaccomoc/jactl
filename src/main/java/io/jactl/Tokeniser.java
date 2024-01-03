@@ -462,12 +462,13 @@ public class Tokeniser {
     // Search for first char that is not a valid identifier char
     int i = 1;
     int digitCount = 0;
-    for (; i < remaining && isIdentifierPart(charAt(i)); i++) {
+    boolean isDigits = startChar == '$' && isDigit(charAt(1),10);
+    for (; i < remaining && (isDigits ? isDigit(charAt(i),10) : isIdentifierPart(charAt(i))); i++) {
       digitCount += isDigit(charAt(i),10) ? 1 : 0;
     }
 
     if (startChar == '$' && i == 1) { throw new CompileError("Unexpected character '$'", token); }
-    if (startChar == '$' && digitCount == i-1 && digitCount > 3) {
+    if (startChar == '$' && isDigits && digitCount == i-1 && digitCount > 3) {
       throw new CompileError("Capture variable number too large", token);
     }
 

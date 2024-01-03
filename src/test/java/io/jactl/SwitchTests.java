@@ -1136,4 +1136,15 @@ public class SwitchTests extends BaseTest {
     test("def x = [['3'],['4']] as String[][]; switch (x) { [[_],['3']] -> '3'; [_,[a]] -> a; _ -> null }", "4");
     test("def x = [['3'],['4']] as String[][]; switch (x) { [[_],['3']] -> '3'; [_,[String a]] -> a; _ -> null }", "4");
   }
+
+  @Test public void switchClassConstants() {
+    test("class X { static final int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test("package a.b.c; class X { static final int A=1, B=2, C=3 }; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "package a.b.c; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "import a.b.c.X; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "import static a.b.c.X.*; int x = 2; switch (x) { A -> 'a'; B -> 'b'; C -> 'c' }", "b");
+//    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "import static a.b.c.X.A as a; int x = 2; switch (x) { a -> 'a'; B -> 'b'; C -> 'c' }", "b");
+    testError("class X { static final int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A() -> 'a'; X.B -> 'b'; X.C -> 'c' }", "unknown class");
+    test("class X { static final int a=1, b=2, c=3 }; int x = 2; switch (x) { X.a -> 'a'; X.b -> 'b'; X.c -> 'c' }", "b");
+  }
 }

@@ -194,6 +194,12 @@ public class ClassDescriptor {
     return Stream.concat(allFields, fields.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
+  public Map<String,Pair<JactlType,Object>> getAllStaticFields() {
+    return Stream.concat(getBaseClass() != null ? getBaseClass().getAllStaticFields().entrySet().stream() : Stream.of(),
+                         staticFields.entrySet().stream())
+                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
   public Stream<Map.Entry<String,JactlType>> getAllFieldsStream() {
     Stream<Map.Entry<String,JactlType>> allFields = Stream.of();
     if (getBaseClass() != null) {

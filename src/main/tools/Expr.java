@@ -226,7 +226,7 @@ class Expr {
     // That way x.map{} which in theory does nothing but might have side effects if the closure has
     // a side effect will still run and cause the side effects to happen even though the end result
     // is not actually used.
-    boolean isMethodCallTarget = false;
+    boolean @isMethodCallTarget = false;
   }
 
   class Literal extends Expr {
@@ -250,7 +250,7 @@ class Expr {
     Expr.VarDecl       @varDecl;               // for variable references
     boolean            @couldBeFunctionCall = false;
     boolean            @firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
-    FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
+    public FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
   }
 
   class ClassPath extends Expr {
@@ -327,7 +327,7 @@ class Expr {
     boolean        @isCompiled = false;
 
     // Nested while loops. Used by Resolver to find target of break/continue stmts.
-    Deque<Stmt.While> whileLoops = new ArrayDeque<>();
+    Deque<Stmt.While> @whileLoops = new ArrayDeque<>();
 
     // Stack of blocks used during Resolver phase to track variables and which scope they
     // are declared in and used during Parser phase to track function declarations so we
@@ -457,7 +457,7 @@ class Expr {
 
   /**
    * Used to turn a list of statements into an expression so that we can support "do {...}":
-   *   x < max or do { x++; y-- } and return x + y;
+   *   x == max or do { x++; y-- } and return x + y;
    */
   class Block extends Expr {
     Token      token;

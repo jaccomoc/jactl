@@ -41,12 +41,12 @@ source.lines().each{
   }
 
   /^class +([A-Z][a-z]*)/r and rootClass = $1 and do {
-    println "abstract $it\n"
-    println "  abstract <T> T accept(Visitor<T> visitor);\n"
+    println "public abstract $it\n"
+    println "  public abstract <T> T accept(Visitor<T> visitor);\n"
   } and return
 
   /^}/r and do {
-    print "\n  interface Visitor<T> {\n"
+    print "\n  public interface Visitor<T> {\n"
     types.each{ print "    T visit$it($it ${rootClass.toLowerCase(1)});\n" }
     print "  }\n"
     println it
@@ -67,7 +67,7 @@ source.lines().each{
     constructorFields += fields
 
     // Output constructor
-    println "    $className(${constructorFields.map{ "${it[1]} ${it[0]}" }.join(', ')}) {"
+    println "    public $className(${constructorFields.map{ "${it[1]} ${it[0]}" }.join(', ')}) {"
     superFields and print """      super(${superFields.join(", ")});\n"""
     fields.each{ println "      this.${it[0]} = ${it[0]};" }
     def firstTokenArg = constructorFields.filter{ name,type -> type == 'Token' }.map{ it[0] }?[0]
@@ -77,7 +77,7 @@ source.lines().each{
     }
     println "    }"
     
-    println "    @Override <T> T accept(Visitor<T> visitor) { return visitor.visit$className(this); }"
+    println "    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visit$className(this); }"
     
     // Generate toString()
     def fieldValues = constructorFields.map{ it[0] }.map{""""$it=" + $it"""}.join(' + ", " + ')
@@ -93,16 +93,18 @@ source.lines().each{
     println it
   } and return
 
-  inClass and /([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);/r  and fields += [[$2, $1]]
-  inClass and /([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)/r and attributes += $2
+  inClass and /^ +([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+) *;/r  and fields += [[$2, $1]] and s/^( +)/$1public /
+  inClass and /^ +([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)/r and attributes += $2 and s/^( +)/$1public /
   s/@//
 
   /class (.*) extends +(\w*)/r and do {
     inClass = true
     className = $1
     extendsClass = $2
-    types += className and s/class/static class/
+    types += className and s/class/public static class/
   }
+
+  !inClass and !/public/r and /^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)/r and s/^( +)/$1public /
 
   println it
 }

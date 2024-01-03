@@ -172,14 +172,14 @@ public enum TokenType {
   // Internal use only
   NUMBER();
 
-  final String asString;
+  public final String asString;
 
   TokenType(String str) {
     this.asString = str;
   }
   TokenType()           { this.asString = null; }
 
-  boolean is(TokenType... types) {
+  public boolean is(TokenType... types) {
     for (TokenType type: types) {
       if (this == type) {
         return true;
@@ -188,7 +188,7 @@ public enum TokenType {
     return false;
   }
 
-  boolean isNumericOperator() {
+  public boolean isNumericOperator() {
     switch (this) {
       case PLUS:
       case MINUS:
@@ -208,25 +208,25 @@ public enum TokenType {
    * as +=, -=, etc
    * @return true if operator is an assignment operator
    */
-  boolean isAssignmentLike() {
+  public boolean isAssignmentLike() {
     return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL,
                    PLUS_EQUAL, MINUS_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL,
                    TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL, PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL);
   }
 
-  boolean isBooleanOperator() {
+  public boolean isBooleanOperator() {
     return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL,
                    LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF,
                    BANG_INSTANCE_OF, QUESTION_QUESTION);
   }
 
-  boolean isBitOperator() {
+  public boolean isBitOperator() {
     return this.is(AMPERSAND, AMPERSAND_EQUAL, PIPE, PIPE_EQUAL, ACCENT, ACCENT_EQUAL, GRAVE,
                    DOUBLE_LESS_THAN, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN,
                    DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN, TRIPLE_GREATER_THAN_EQUAL);
   }
 
-  boolean isBitShift() {
+  public boolean isBitShift() {
     return this.is(DOUBLE_LESS_THAN,DOUBLE_GREATER_THAN,TRIPLE_GREATER_THAN);
   }
 

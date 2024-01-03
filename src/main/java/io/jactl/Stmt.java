@@ -38,25 +38,25 @@ import org.objectweb.asm.Label;
 /**
  * Stmt classes for our AST.
  */
-abstract class Stmt {
+public abstract class Stmt {
 
-  abstract <T> T accept(Visitor<T> visitor);
+  public abstract <T> T accept(Visitor<T> visitor);
 
 
-  Token      location   = null;
-  boolean    isResolved = false;
-  boolean    isAsync    = false;   // Whether statement contains an async call
+  public Token      location   = null;
+  public boolean    isResolved = false;
+  public boolean    isAsync    = false;   // Whether statement contains an async call
 
   /**
    * Represents a sequence of statments.
    */
-  static class Stmts extends Stmt {
-    List<Stmt> stmts = new ArrayList<>();
+  public static class Stmts extends Stmt {
+    public List<Stmt> stmts = new ArrayList<>();
 
-    int currentIdx;     // Which statement we are currently resolving
-    Stmts() {
+    public int currentIdx;     // Which statement we are currently resolving
+    public Stmts() {
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitStmts(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitStmts(this); }
     @Override public String toString() { return "Stmts[" + "]"; }
   }
 
@@ -64,30 +64,30 @@ abstract class Stmt {
    * Represents a block of statments. This class represents a scope for any variables
    * declared by statements within the block.
    */
-  static class Block extends Stmt {
-    Token                    openBrace;
-    Stmts                    stmts;
-    List<Stmt.FunDecl>       functions    = new ArrayList<>();
+  public static class Block extends Stmt {
+    public Token                    openBrace;
+    public Stmts                    stmts;
+    public List<Stmt.FunDecl>       functions    = new ArrayList<>();
 
-    Map<String,Expr.VarDecl> variables  = new LinkedHashMap<>();
+    public Map<String,Expr.VarDecl> variables  = new LinkedHashMap<>();
 
-    boolean isBeginBlock;
-    boolean isEndBlock;
+    public boolean isBeginBlock;
+    public boolean isEndBlock;
 
     // Used to track which Stmt.Stmts we are currently resolving in case we need to insert a new statement
     // at Resolve time
-    Stmt.Stmts               currentResolvingStmts;
+    public Stmt.Stmts               currentResolvingStmts;
 
-    boolean isResolvingParams = false;   // Used during resolution to tell if we are resolving function/closure
+    public boolean isResolvingParams = false;   // Used during resolution to tell if we are resolving function/closure
                                           // parameters so we can tell when we need to convert a declared parameter
                                           // into one that is passed as a HeapLocal (because it is closed over by
                                           // an initialiser for another parameter of the same function).
-    Block(Token openBrace, Stmts stmts) {
+    public Block(Token openBrace, Stmts stmts) {
       this.openBrace = openBrace;
       this.stmts = stmts;
       this.location = openBrace;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
     @Override public String toString() { return "Block[" + "openBrace=" + openBrace + ", " + "stmts=" + stmts + "]"; }
   }
 
@@ -95,52 +95,52 @@ abstract class Stmt {
    * If statement with condition and statement(s) to execute if true
    * and statement(s) to execute if false.
    */
-  static class If extends Stmt {
-    Token ifToken;
-    Expr  condition;
-    Stmt  trueStmt;
-    Stmt  falseStmt;
-    If(Token ifToken, Expr condition, Stmt trueStmt, Stmt falseStmt) {
+  public static class If extends Stmt {
+    public Token ifToken;
+    public Expr  condition;
+    public Stmt  trueStmt;
+    public Stmt  falseStmt;
+    public If(Token ifToken, Expr condition, Stmt trueStmt, Stmt falseStmt) {
       this.ifToken = ifToken;
       this.condition = condition;
       this.trueStmt = trueStmt;
       this.falseStmt = falseStmt;
       this.location = ifToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitIf(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitIf(this); }
     @Override public String toString() { return "If[" + "ifToken=" + ifToken + ", " + "condition=" + condition + ", " + "trueStmt=" + trueStmt + ", " + "falseStmt=" + falseStmt + "]"; }
   }
 
   /**
    * Class declaration
    */
-  static class ClassDecl extends Stmt {
-    Token                name;
-    String               packageName;
-    Token                baseClassToken;
-    JactlType           baseClass;
-    boolean              isInterface;
-    List<Stmt.Import>    imports;
-    Stmt.Block           classBlock;
-    List<Stmt.FunDecl>   methods = new ArrayList<>();
-    Stmt.FunDecl         initMethod;
-    List<Stmt.ClassDecl> innerClasses = new ArrayList<>();
+  public static class ClassDecl extends Stmt {
+    public Token                name;
+    public String               packageName;
+    public Token                baseClassToken;
+    public JactlType           baseClass;
+    public boolean              isInterface;
+    public List<Stmt.Import>    imports;
+    public Stmt.Block           classBlock;
+    public List<Stmt.FunDecl>   methods = new ArrayList<>();
+    public Stmt.FunDecl         initMethod;
+    public List<Stmt.ClassDecl> innerClasses = new ArrayList<>();
 
-    List<List<Expr>>     interfaces = new ArrayList<>();
+    public List<List<Expr>>     interfaces = new ArrayList<>();
 
-    Stmt.FunDecl             scriptMain;                         // Mainline of script
-    List<Stmt.VarDecl>       fields    = new ArrayList<>();      // Field VarDecl stmts
-    Map<String,Expr.VarDecl> fieldVars = new LinkedHashMap<>();  // Map of field name to decl expr
-    Expr.VarDecl             thisField;
-    Set<Object>              classConstants = new HashSet();     // Constants to be initialised in class init
+    public Stmt.FunDecl             scriptMain;                         // Mainline of script
+    public List<Stmt.VarDecl>       fields    = new ArrayList<>();      // Field VarDecl stmts
+    public Map<String,Expr.VarDecl> fieldVars = new LinkedHashMap<>();  // Map of field name to decl expr
+    public Expr.VarDecl             thisField;
+    public Set<Object>              classConstants = new HashSet();     // Constants to be initialised in class init
 
     // Used by Parser and Resolver
-    Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
+    public Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
-    ClassDescriptor classDescriptor;
+    public ClassDescriptor classDescriptor;
 
     public boolean isScriptClass() { return scriptMain != null; }
-    ClassDecl(Token name, String packageName, Token baseClassToken, JactlType baseClass, boolean isInterface) {
+    public ClassDecl(Token name, String packageName, Token baseClassToken, JactlType baseClass, boolean isInterface) {
       this.name = name;
       this.packageName = packageName;
       this.baseClassToken = baseClassToken;
@@ -148,98 +148,100 @@ abstract class Stmt {
       this.isInterface = isInterface;
       this.location = name;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
     @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClassToken=" + baseClassToken + ", " + "baseClass=" + baseClass + ", " + "isInterface=" + isInterface + "]"; }
   }
 
   /**
    * Import statement
    */
-  static class Import extends Stmt {
-    Token token;
-    List<Expr> className;
-    Token as;
-    Import(Token token, List<Expr> className, Token as) {
+  public static class Import extends Stmt {
+    public Token      token;
+    public List<Expr> className;
+    public Token      as;
+    public boolean    staticImport;
+    public Import(Token token, List<Expr> className, Token as, boolean staticImport) {
       this.token = token;
       this.className = className;
       this.as = as;
+      this.staticImport = staticImport;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitImport(this); }
-    @Override public String toString() { return "Import[" + "token=" + token + ", " + "className=" + className + ", " + "as=" + as + "]"; }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitImport(this); }
+    @Override public String toString() { return "Import[" + "token=" + token + ", " + "className=" + className + ", " + "as=" + as + ", " + "staticImport=" + staticImport + "]"; }
   }
 
   /**
    * Variable declaration with optional initialiser. Statement wraps the corresponding
    * Expr type where the work is done.
    */
-  static class VarDecl extends Stmt {
-    Token        name;
-    Expr.VarDecl declExpr;
-    VarDecl(Token name, Expr.VarDecl declExpr) {
+  public static class VarDecl extends Stmt {
+    public Token        name;
+    public Expr.VarDecl declExpr;
+    public VarDecl(Token name, Expr.VarDecl declExpr) {
       this.name = name;
       this.declExpr = declExpr;
       this.location = name;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
     @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "declExpr=" + declExpr + "]"; }
   }
 
   /**
    * Function declaration
    */
-  static class FunDecl extends Stmt {
-    Token        startToken;   // Either identifier for function decl or start brace for closure
-    Expr.FunDecl declExpr;
+  public static class FunDecl extends Stmt {
+    public Token        startToken;   // Either identifier for function decl or start brace for closure
+    public Expr.FunDecl declExpr;
 
     // Create a var that points to MethodHandle (which points to wrapper).
     // Exception is when inside wrapper function we don't create var that points to
     // the function since the MethodHandle must go through the wrapper function.
-    boolean      createVar = true;
-    FunDecl(Token startToken, Expr.FunDecl declExpr) {
+    public boolean      createVar = true;
+    public FunDecl(Token startToken, Expr.FunDecl declExpr) {
       this.startToken = startToken;
       this.declExpr = declExpr;
       this.location = startToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
     @Override public String toString() { return "FunDecl[" + "startToken=" + startToken + ", " + "declExpr=" + declExpr + "]"; }
   }
 
   /**
    * While and For loop
    */
-  static class While extends Stmt {
-    Token whileToken;
-    Expr  condition;
-    Token label;
-    Stmt  body;
-    Stmt  updates;            // used for For loops
-    Label endLoopLabel;       // where to jump to on break stmt
-    Label continueLabel;      // where to jump to on a continue stmt
-    int   stackDepth;         // depth of stack where while loop is (used by continue/break)
-    int   globalRegexMatches; // count of number of /xxx/g in while condition
-    While(Token whileToken, Expr condition, Token label) {
+  public static class While extends Stmt {
+    public Token whileToken;
+    public Expr  condition;
+    public Token label;
+    public Stmt  body;
+    public Stmt  updates;            // used for For loops
+    public Label endLoopLabel;       // where to jump to on break stmt
+    public Label continueLabel;      // where to jump to on a continue stmt
+    public int   stackDepth;         // depth of stack where while loop is (used by continue/break)
+    public int   globalRegexMatches; // count of number of /xxx/g in while condition
+    public While(Token whileToken, Expr condition, Token label) {
       this.whileToken = whileToken;
       this.condition = condition;
       this.label = label;
       this.location = whileToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitWhile(this); }
     @Override public String toString() { return "While[" + "whileToken=" + whileToken + ", " + "condition=" + condition + ", " + "label=" + label + "]"; }
   }
 
   /**
    * Return statement
    */
-  static class Return extends Stmt {
-    Token       returnToken;
-    Expr.Return expr;
-    Return(Token returnToken, Expr.Return expr) {
+  public static class Return extends Stmt {
+    public Token       returnToken;
+    public Expr.Return expr;
+    public Return(Token returnToken, Expr.Return expr) {
       this.returnToken = returnToken;
       this.expr = expr;
       this.location = returnToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
     @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + "]"; }
   }
 
@@ -250,38 +252,38 @@ abstract class Stmt {
    * Other types of statements that are just an expression include simple assignments. Since
    * an assignment has a value (the value being assigned), an assignment is actually an expression.
    */
-  static class ExprStmt extends Stmt {
-    Token exprLocation;
-    Expr expr;
-    ExprStmt(Token exprLocation, Expr expr) {
+  public static class ExprStmt extends Stmt {
+    public Token exprLocation;
+    public Expr expr;
+    public ExprStmt(Token exprLocation, Expr expr) {
       this.exprLocation = exprLocation;
       this.expr = expr;
       this.location = exprLocation;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitExprStmt(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitExprStmt(this); }
     @Override public String toString() { return "ExprStmt[" + "exprLocation=" + exprLocation + ", " + "expr=" + expr + "]"; }
   }
 
   /**
    * Internal use only - throw RuntimeError
    */
-  static class ThrowError extends Stmt {
-    Token token;
-    Expr.Identifier source;
-    Expr.Identifier offset;
-    String msg;
-    ThrowError(Token token, Expr.Identifier source, Expr.Identifier offset, String msg) {
+  public static class ThrowError extends Stmt {
+    public Token token;
+    public Expr.Identifier source;
+    public Expr.Identifier offset;
+    public String msg;
+    public ThrowError(Token token, Expr.Identifier source, Expr.Identifier offset, String msg) {
       this.token = token;
       this.source = source;
       this.offset = offset;
       this.msg = msg;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitThrowError(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitThrowError(this); }
     @Override public String toString() { return "ThrowError[" + "token=" + token + ", " + "source=" + source + ", " + "offset=" + offset + ", " + "msg=" + msg + "]"; }
   }
 
-  interface Visitor<T> {
+  public interface Visitor<T> {
     T visitStmts(Stmts stmt);
     T visitBlock(Block stmt);
     T visitIf(If stmt);

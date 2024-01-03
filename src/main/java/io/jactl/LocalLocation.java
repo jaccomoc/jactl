@@ -19,11 +19,11 @@ package io.jactl;
 
 import io.jactl.runtime.SourceLocation;
 
-class LocalLocation implements SourceLocation {
+public class LocalLocation implements SourceLocation {
   int sourceSlot;
   int offsetSlot;
 
-  LocalLocation(int sourceSlot, int offsetSlot) {
+  public LocalLocation(int sourceSlot, int offsetSlot) {
     this.sourceSlot = sourceSlot;
     this.offsetSlot = offsetSlot;
   }

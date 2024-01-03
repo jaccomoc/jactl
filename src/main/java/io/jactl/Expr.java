@@ -40,23 +40,23 @@ import static io.jactl.TokenType.UNDERSCORE;
 /**
  * Expr classes for our AST.
  */
-abstract class Expr {
+public abstract class Expr {
 
-  abstract <T> T accept(Visitor<T> visitor);
+  public abstract <T> T accept(Visitor<T> visitor);
 
 
-  Token      location;
-  JactlType type;
-  boolean    isResolved = false;
+  public Token      location;
+  public JactlType type;
+  public boolean    isResolved = false;
 
-  boolean    isConst = false;   // Whether expression consists only of constants
-  Object     constValue;        // If expression is only consts then we keep the
+  public boolean    isConst = false;   // Whether expression consists only of constants
+  public Object     constValue;        // If expression is only consts then we keep the
                                 // result of evaluating the expression during the
                                 // resolve phase here.
 
-  boolean    isCallee    = false; // Whether we are the callee in a call expression
-  boolean    couldBeNull = true;  // Whether result could be null
-  boolean    isAsync     = false; // Whether expression contains an async call
+  public boolean    isCallee    = false; // Whether we are the callee in a call expression
+  public boolean    couldBeNull = true;  // Whether result could be null
+  public boolean    isAsync     = false; // Whether expression contains an async call
 
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when
@@ -64,15 +64,15 @@ abstract class Expr {
   // For some expressions (e.g. the top Expr in an expression statement) the result of the
   // expression is ignored so this flag allows us to know whether to leave the result on
   // the stack or not.
-  boolean isResultUsed = true;
+  public boolean isResultUsed = true;
 
-  boolean wasNested = false;      // Set if expression was inside parentheses.
+  public boolean wasNested = false;      // Set if expression was inside parentheses.
                                   // So we can tell difference between "x = 1" and "(x) = [1]"
 
   // Marker interface to indicate whether MethodCompiler visitor for that element type
   // handles leaving result on stack or not (based on isResultUsed flag) or whether
   // result management needs to be done for it.
-  interface ManagesResult {}
+  public interface ManagesResult {}
 
   // Whether expression is a direct function call (and not a closure)
   public boolean isFunctionCall() {
@@ -133,32 +133,32 @@ abstract class Expr {
   }
 
 
-  static class Binary extends Expr {
-    Expr  left;
-    Token operator;
-    Expr  right;
-    boolean createIfMissing = false;  // Used for field access used as lvalues
-    boolean isFieldAccess   = false;  // True if this is a field access expression where field name and type are known
-    Token originalOperator;           // When -- or ++ is turned into x = x + 1 this is the actual --/++ op
-    Binary(Expr left, Token operator, Expr right) {
+  public static class Binary extends Expr {
+    public Expr  left;
+    public Token operator;
+    public Expr  right;
+    public boolean createIfMissing = false;  // Used for field access used as lvalues
+    public boolean isFieldAccess   = false;  // True if this is a field access expression where field name and type are known
+    public Token originalOperator;           // When -- or ++ is turned into x = x + 1 this is the actual --/++ op
+    public Binary(Expr left, Token operator, Expr right) {
       this.left = left;
       this.operator = operator;
       this.right = right;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBinary(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitBinary(this); }
     @Override public String toString() { return "Binary[" + "left=" + left + ", " + "operator=" + operator + ", " + "right=" + right + "]"; }
   }
 
-  static class RegexMatch extends Expr {
-    Expr    string;
-    Token   operator;
-    Expr    pattern;
-    String  modifiers;
-    boolean isSubstitute = false;
-    boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
-    VarDecl captureArrVarDecl;
-    RegexMatch(Expr string, Token operator, Expr pattern, String modifiers, boolean implicitItMatch) {
+  public static class RegexMatch extends Expr {
+    public Expr    string;
+    public Token   operator;
+    public Expr    pattern;
+    public String  modifiers;
+    public boolean isSubstitute = false;
+    public boolean implicitItMatch;   // True if standalone /regex/ which we then implicitly match against "it"
+    public VarDecl captureArrVarDecl;
+    public RegexMatch(Expr string, Token operator, Expr pattern, String modifiers, boolean implicitItMatch) {
       this.string = string;
       this.operator = operator;
       this.pattern = pattern;
@@ -166,20 +166,20 @@ abstract class Expr {
       this.implicitItMatch = implicitItMatch;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexMatch(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitRegexMatch(this); }
     @Override public String toString() { return "RegexMatch[" + "string=" + string + ", " + "operator=" + operator + ", " + "pattern=" + pattern + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + "]"; }
   }
 
-  static class RegexSubst extends RegexMatch {
-    Expr    replace;
-    boolean isComplexReplacement;   // True if replacement string has embedded expressions
+  public static class RegexSubst extends RegexMatch {
+    public Expr    replace;
+    public boolean isComplexReplacement;   // True if replacement string has embedded expressions
     { isSubstitute = true; }
-    RegexSubst(Expr string, Token operator, Expr pattern, String modifiers, boolean implicitItMatch, Expr replace, boolean isComplexReplacement) {
+    public RegexSubst(Expr string, Token operator, Expr pattern, String modifiers, boolean implicitItMatch, Expr replace, boolean isComplexReplacement) {
       super(string, operator, pattern, modifiers, implicitItMatch);
       this.replace = replace;
       this.isComplexReplacement = isComplexReplacement;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitRegexSubst(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitRegexSubst(this); }
     @Override public String toString() { return "RegexSubst[" + "string=" + string + ", " + "operator=" + operator + ", " + "pattern=" + pattern + ", " + "modifiers=" + modifiers + ", " + "implicitItMatch=" + implicitItMatch + ", " + "replace=" + replace + ", " + "isComplexReplacement=" + isComplexReplacement + "]"; }
   }
 
@@ -187,13 +187,13 @@ abstract class Expr {
    * Ternary expression - only used for:
    *     cond ? trueExpr : falseExpr
    */
-  static class Ternary extends Expr {
-    Expr  first;
-    Token operator1;
-    Expr  second;
-    Token operator2;
-    Expr  third;
-    Ternary(Expr first, Token operator1, Expr second, Token operator2, Expr third) {
+  public static class Ternary extends Expr {
+    public Expr  first;
+    public Token operator1;
+    public Expr  second;
+    public Token operator2;
+    public Expr  third;
+    public Ternary(Expr first, Token operator1, Expr second, Token operator2, Expr third) {
       this.first = first;
       this.operator1 = operator1;
       this.second = second;
@@ -201,81 +201,81 @@ abstract class Expr {
       this.third = third;
       this.location = operator1;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitTernary(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitTernary(this); }
     @Override public String toString() { return "Ternary[" + "first=" + first + ", " + "operator1=" + operator1 + ", " + "second=" + second + ", " + "operator2=" + operator2 + ", " + "third=" + third + "]"; }
   }
 
-  static class PrefixUnary extends Expr implements ManagesResult {
-    Token operator;
-    Expr  expr;
-    PrefixUnary(Token operator, Expr expr) {
+  public static class PrefixUnary extends Expr implements ManagesResult {
+    public Token operator;
+    public Expr  expr;
+    public PrefixUnary(Token operator, Expr expr) {
       this.operator = operator;
       this.expr = expr;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitPrefixUnary(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitPrefixUnary(this); }
     @Override public String toString() { return "PrefixUnary[" + "operator=" + operator + ", " + "expr=" + expr + "]"; }
   }
 
-  static class PostfixUnary extends Expr implements ManagesResult {
-    Expr  expr;
-    Token operator;
-    PostfixUnary(Expr expr, Token operator) {
+  public static class PostfixUnary extends Expr implements ManagesResult {
+    public Expr  expr;
+    public Token operator;
+    public PostfixUnary(Expr expr, Token operator) {
       this.expr = expr;
       this.operator = operator;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitPostfixUnary(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitPostfixUnary(this); }
     @Override public String toString() { return "PostfixUnary[" + "expr=" + expr + ", " + "operator=" + operator + "]"; }
   }
 
-  static class Cast extends Expr implements ManagesResult {
-    Token       token;
-    JactlType  castType;
-    Expr        expr;
-    Cast(Token token, JactlType castType, Expr expr) {
+  public static class Cast extends Expr implements ManagesResult {
+    public Token       token;
+    public JactlType  castType;
+    public Expr        expr;
+    public Cast(Token token, JactlType castType, Expr expr) {
       this.token = token;
       this.castType = castType;
       this.expr = expr;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCast(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitCast(this); }
     @Override public String toString() { return "Cast[" + "token=" + token + ", " + "castType=" + castType + ", " + "expr=" + expr + "]"; }
   }
 
-  static class Call extends Expr {
-    Token      token;
-    Expr       callee;
-    List<Expr> args;
+  public static class Call extends Expr {
+    public Token      token;
+    public Expr       callee;
+    public List<Expr> args;
 
-    boolean validateArgsAtCompileTime; // true if we should validate args at compile time rather than at runtime
+    public boolean validateArgsAtCompileTime; // true if we should validate args at compile time rather than at runtime
 
     // If we are a call to an arbitrary function/closure then it is possible that the
     // function we are calling returns an Iterator:  def f = x.map; f()
     // In this case we need to check that if the result is not immediately used as the
     // target of a chained method call (f().each()) and the result was an Iterator then
     // the result must be converted to a List.
-    boolean isMethodCallTarget;
-    Call(Token token, Expr callee, List<Expr> args) {
+    public boolean isMethodCallTarget;
+    public Call(Token token, Expr callee, List<Expr> args) {
       this.token = token;
       this.callee = callee;
       this.args = args;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCall(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitCall(this); }
     @Override public String toString() { return "Call[" + "token=" + token + ", " + "callee=" + callee + ", " + "args=" + args + "]"; }
   }
 
-  static class MethodCall extends Expr {
-    Token          leftParen;
-    Expr           parent;
-    Token          accessOperator; // Either '.' or '?.'
-    String         methodName;     // Either the method name or field name that holds a MethodHandle
-    SourceLocation methodNameLocation;
-    List<Expr> args;
+  public static class MethodCall extends Expr {
+    public Token          leftParen;
+    public Expr           parent;
+    public Token          accessOperator; // Either '.' or '?.'
+    public String         methodName;     // Either the method name or field name that holds a MethodHandle
+    public SourceLocation methodNameLocation;
+    public List<Expr> args;
 
-    FunctionDescriptor methodDescriptor;
-    boolean validateArgsAtCompileTime = true;   // true if we should validate args at compile time rather than at runtime
+    public FunctionDescriptor methodDescriptor;
+    public boolean validateArgsAtCompileTime = true;   // true if we should validate args at compile time rather than at runtime
 
     // True if result of method call becomes the target of the next method call. This is used so
     // that we can allow Iterators to be the result of a list.map() call which is then itself used
@@ -289,8 +289,8 @@ abstract class Expr {
     // That way x.map{} which in theory does nothing but might have side effects if the closure has
     // a side effect will still run and cause the side effects to happen even though the end result
     // is not actually used.
-    boolean isMethodCallTarget = false;
-    MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, SourceLocation methodNameLocation, List<Expr> args) {
+    public boolean isMethodCallTarget = false;
+    public MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, SourceLocation methodNameLocation, List<Expr> args) {
       this.leftParen = leftParen;
       this.parent = parent;
       this.accessOperator = accessOperator;
@@ -299,78 +299,78 @@ abstract class Expr {
       this.args = args;
       this.location = leftParen;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitMethodCall(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitMethodCall(this); }
     @Override public String toString() { return "MethodCall[" + "leftParen=" + leftParen + ", " + "parent=" + parent + ", " + "accessOperator=" + accessOperator + ", " + "methodName=" + methodName + ", " + "methodNameLocation=" + methodNameLocation + ", " + "args=" + args + "]"; }
   }
 
-  static class Literal extends Expr {
-    Token value;
-    Literal(Token value) {
+  public static class Literal extends Expr {
+    public Token value;
+    public Literal(Token value) {
       this.value = value;
       this.location = value;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitLiteral(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitLiteral(this); }
     @Override public String toString() { return "Literal[" + "value=" + value + "]"; }
   }
 
-  static class ListLiteral extends Expr {
-    Token start;
-    List<Expr> exprs = new ArrayList<>();
-    ListLiteral(Token start) {
+  public static class ListLiteral extends Expr {
+    public Token start;
+    public List<Expr> exprs = new ArrayList<>();
+    public ListLiteral(Token start) {
       this.start = start;
       this.location = start;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitListLiteral(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitListLiteral(this); }
     @Override public String toString() { return "ListLiteral[" + "start=" + start + "]"; }
   }
 
-  static class MapLiteral extends Expr {
-    Token start;
-    List<Pair<Expr,Expr>> entries = new ArrayList<>();
-    boolean               isNamedArgs;    // whether this map is used as named args for function/method/constructor call
-    Map<String,Expr>      literalKeyMap;  // Map based on key names if all keys were string literals
-    MapLiteral(Token start) {
+  public static class MapLiteral extends Expr {
+    public Token start;
+    public List<Pair<Expr,Expr>> entries = new ArrayList<>();
+    public boolean               isNamedArgs;    // whether this map is used as named args for function/method/constructor call
+    public Map<String,Expr>      literalKeyMap;  // Map based on key names if all keys were string literals
+    public MapLiteral(Token start) {
       this.start = start;
       this.location = start;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitMapLiteral(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitMapLiteral(this); }
     @Override public String toString() { return "MapLiteral[" + "start=" + start + "]"; }
   }
 
-  static class Identifier extends Expr {
-    Token              identifier;
-    Expr.VarDecl       varDecl;               // for variable references
-    boolean            couldBeFunctionCall = false;
-    boolean            firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
-    FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
-    Identifier(Token identifier) {
+  public static class Identifier extends Expr {
+    public Token              identifier;
+    public Expr.VarDecl       varDecl;               // for variable references
+    public boolean            couldBeFunctionCall = false;
+    public boolean            firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
+    public FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
+    public Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitIdentifier(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitIdentifier(this); }
     @Override public String toString() { return "Identifier[" + "identifier=" + identifier + "]"; }
   }
 
-  static class ClassPath extends Expr {
-    Token pkg;
-    Token className;
-    ClassPath(Token pkg, Token className) {
+  public static class ClassPath extends Expr {
+    public Token pkg;
+    public Token className;
+    public ClassPath(Token pkg, Token className) {
       this.pkg = pkg;
       this.className = className;
       this.location = pkg;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClassPath(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitClassPath(this); }
     @Override public String toString() { return "ClassPath[" + "pkg=" + pkg + ", " + "className=" + className + "]"; }
   }
 
-  static class ExprString extends Expr {
-    Token exprStringStart;
-    List<Expr> exprList = new ArrayList<>();
-    ExprString(Token exprStringStart) {
+  public static class ExprString extends Expr {
+    public Token exprStringStart;
+    public List<Expr> exprList = new ArrayList<>();
+    public ExprString(Token exprStringStart) {
       this.exprStringStart = exprStringStart;
       this.location = exprStringStart;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitExprString(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitExprString(this); }
     @Override public String toString() { return "ExprString[" + "exprStringStart=" + exprStringStart + "]"; }
   }
 
@@ -379,45 +379,45 @@ abstract class Expr {
    * This is done as an expression in case value of the assignment
    * is returned implicitly from a function/closure.
    */
-  static class VarDecl extends Expr implements ManagesResult {
-    Token           name;
-    Token           equals;
-    Expr            initialiser;
-    Expr.FunDecl    owner;               // Which function variable belongs to (for local vars)
-    boolean         isGlobal;            // Whether global (bindings var) or local
-    boolean         isHeapLocal;         // Is this a heap local var
-    boolean         isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
-    boolean         isParam;             // True if variable is a parameter of function (explicit or implicit)
-    boolean         isExplicitParam;     // True if explicit declared parameter of function
-    boolean         isField;             // True if instance field of a class
-    boolean         isClassConst;        // True if static final field (i.e. a const value)
-    boolean         isBindingVar;        // True if this is a binding variable in a switch destructing pattern
-    int             slot = -1;           // Which local variable slot
-    int             nestingLevel;        // What level of nested function owns this variable (1 is top level)
-    Label           declLabel;           // Where variable comes into scope (for debugger)
-    Expr.FunDecl    funDecl;             // If type is FUNCTION then this is the function declaration
-    ClassDescriptor classDescriptor;     // If type is CLASS then this is the class descriptor
-    VarDecl         parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
-    VarDecl         originalVarDecl;     // VarDecl for actual original variable declaration
+  public static class VarDecl extends Expr implements ManagesResult {
+    public Token           name;
+    public Token           equals;
+    public Expr            initialiser;
+    public Expr.FunDecl    owner;               // Which function variable belongs to (for local vars)
+    public boolean         isGlobal;            // Whether global (bindings var) or local
+    public boolean         isHeapLocal;         // Is this a heap local var
+    public boolean         isPassedAsHeapLocal; // If we are an explicit parameter and HeapLocal is passed to us from wrapper
+    public boolean         isParam;             // True if variable is a parameter of function (explicit or implicit)
+    public boolean         isExplicitParam;     // True if explicit declared parameter of function
+    public boolean         isField;             // True if instance field of a class
+    public boolean         isClassConst;        // True if static final field (i.e. a const value)
+    public boolean         isBindingVar;        // True if this is a binding variable in a switch destructing pattern
+    public int             slot = -1;           // Which local variable slot
+    public int             nestingLevel;        // What level of nested function owns this variable (1 is top level)
+    public Label           declLabel;           // Where variable comes into scope (for debugger)
+    public Expr.FunDecl    funDecl;             // If type is FUNCTION then this is the function declaration
+    public ClassDescriptor classDescriptor;     // If type is CLASS then this is the class descriptor
+    public VarDecl         parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
+    public VarDecl         originalVarDecl;     // VarDecl for actual original variable declaration
 
     // If never reassigned we know it is effectively final. This means that if we have "def f = { ... }" and
     // closure is not async and f is never reassigned (isFinal == true) we know that calls to "f()" will never
     // be async.
-    boolean      isFinal = true;
+    public boolean      isFinal = true;
 
     // When we are in the wrapper function we create a variable for every parameter.
     // This points to the parameter so we can turn it into HeapLocal if necessary and
     // to set its type (if it was declared as "var") once we know the type of the initialiser.
-    VarDecl      paramVarDecl;
+    public VarDecl      paramVarDecl;
 
     Type descriptorType() { return isPassedAsHeapLocal ? HEAPLOCAL.descriptorType() : type.descriptorType(); }
-    VarDecl(Token name, Token equals, Expr initialiser) {
+    public VarDecl(Token name, Token equals, Expr initialiser) {
       this.name = name;
       this.equals = equals;
       this.initialiser = initialiser;
       this.location = name;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitVarDecl(this); }
     @Override public String toString() { return "VarDecl[" + "name=" + name + ", " + "equals=" + equals + ", " + "initialiser=" + initialiser + "]"; }
   }
 
@@ -426,102 +426,102 @@ abstract class Expr {
    * We make this an expression so we can have last statement in a block be a function declaration
    * and have it then returned as the return value of the function.
    */
-  static class FunDecl extends Expr implements ManagesResult {
-    Token              startToken;   // Either identifier for function decl or start brace for closure
-    Token              nameToken;    // Null for closures and script main
-    JactlType         returnType;
-    List<Stmt.VarDecl> parameters;
-    Stmt.Block         block;
+  public static class FunDecl extends Expr implements ManagesResult {
+    public Token              startToken;   // Either identifier for function decl or start brace for closure
+    public Token              nameToken;    // Null for closures and script main
+    public JactlType         returnType;
+    public List<Stmt.VarDecl> parameters;
+    public Stmt.Block         block;
 
-    FunctionDescriptor functionDescriptor;
-    Expr.VarDecl       varDecl;            // For the variable that we will create to hold our MethodHandle
-    Expr.FunDecl       owner;              // If we are nested inside another function then this the enclosing function
+    public FunctionDescriptor functionDescriptor;
+    public Expr.VarDecl       varDecl;            // For the variable that we will create to hold our MethodHandle
+    public Expr.FunDecl       owner;              // If we are nested inside another function then this the enclosing function
 
-    boolean            isWrapper;   // Whether this is the wrapper function or the real one
-    Expr.FunDecl       wrapper;     // The wrapper method that handles var arg and named arg invocations
+    public boolean            isWrapper;   // Whether this is the wrapper function or the real one
+    public Expr.FunDecl       wrapper;     // The wrapper method that handles var arg and named arg invocations
 
-    boolean        isScriptMain = false; // Whether this is the funDecl for the script main function
-    Stmt.ClassDecl classDecl = null;     // For init methods this is our ClassDecl
-    int            closureCount = 0;
-    boolean        isCompiled = false;
+    public boolean        isScriptMain = false; // Whether this is the funDecl for the script main function
+    public Stmt.ClassDecl classDecl = null;     // For init methods this is our ClassDecl
+    public int            closureCount = 0;
+    public boolean        isCompiled = false;
 
     // Nested while loops. Used by Resolver to find target of break/continue stmts.
-    Deque<Stmt.While> whileLoops = new ArrayDeque<>();
+    public Deque<Stmt.While> whileLoops = new ArrayDeque<>();
 
     // Stack of blocks used during Resolver phase to track variables and which scope they
     // are declared in and used during Parser phase to track function declarations so we
     // can handle forward references during Resolver phase
-    Deque<Stmt.Block> blocks = new ArrayDeque<>();
+    public Deque<Stmt.Block> blocks = new ArrayDeque<>();
 
     // Which heap locals from our parent we need passed in to us
-    LinkedHashMap<String,Expr.VarDecl>       heapLocalsByName = new LinkedHashMap<>();
-    LinkedHashMap<Expr.VarDecl,Expr.VarDecl> heapLocals       = new LinkedHashMap<>();
+    public LinkedHashMap<String,Expr.VarDecl>       heapLocalsByName = new LinkedHashMap<>();
+    public LinkedHashMap<Expr.VarDecl,Expr.VarDecl> heapLocals       = new LinkedHashMap<>();
 
-    HashMap<String,Expr.VarDecl> globals = new HashMap<>();   // global vars accessed by this function
+    public HashMap<String,Expr.VarDecl> globals = new HashMap<>();   // global vars accessed by this function
 
     // Remember earliest (in the code) forward reference to us so we can make sure that
     // no variables we close over are declared after that reference
-    Token earliestForwardReference;
+    public Token earliestForwardReference;
 
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStatic; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
     public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync ? 2 : 1) : -1; }
-    FunDecl(Token startToken, Token nameToken, JactlType returnType, List<Stmt.VarDecl> parameters) {
+    public FunDecl(Token startToken, Token nameToken, JactlType returnType, List<Stmt.VarDecl> parameters) {
       this.startToken = startToken;
       this.nameToken = nameToken;
       this.returnType = returnType;
       this.parameters = parameters;
       this.location = startToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitFunDecl(this); }
     @Override public String toString() { return "FunDecl[" + "startToken=" + startToken + ", " + "nameToken=" + nameToken + ", " + "returnType=" + returnType + ", " + "parameters=" + parameters + "]"; }
   }
 
   /**
    * When variable used as lvalue in an assignment
    */
-  static class VarAssign extends Expr implements ManagesResult {
-    Identifier identifierExpr;
-    Token      operator;
-    Expr       expr;
-    VarAssign(Identifier identifierExpr, Token operator, Expr expr) {
+  public static class VarAssign extends Expr implements ManagesResult {
+    public Identifier identifierExpr;
+    public Token      operator;
+    public Expr       expr;
+    public VarAssign(Identifier identifierExpr, Token operator, Expr expr) {
       this.identifierExpr = identifierExpr;
       this.operator = operator;
       this.expr = expr;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarAssign(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitVarAssign(this); }
     @Override public String toString() { return "VarAssign[" + "identifierExpr=" + identifierExpr + ", " + "operator=" + operator + ", " + "expr=" + expr + "]"; }
   }
 
   /**
    * When variable used as lvalue in an assignment of type +=, -=, ...
    */
-  static class VarOpAssign extends Expr implements ManagesResult {
-    Identifier identifierExpr;
-    Token      operator;
-    Expr       expr;
-    VarOpAssign(Identifier identifierExpr, Token operator, Expr expr) {
+  public static class VarOpAssign extends Expr implements ManagesResult {
+    public Identifier identifierExpr;
+    public Token      operator;
+    public Expr       expr;
+    public VarOpAssign(Identifier identifierExpr, Token operator, Expr expr) {
       this.identifierExpr = identifierExpr;
       this.operator = operator;
       this.expr = expr;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitVarOpAssign(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitVarOpAssign(this); }
     @Override public String toString() { return "VarOpAssign[" + "identifierExpr=" + identifierExpr + ", " + "operator=" + operator + ", " + "expr=" + expr + "]"; }
   }
 
   /**
    * Used to represent assignment to a field or list element
    */
-  static class FieldAssign extends Expr implements ManagesResult {
-    Expr  parent;
-    Token accessType;
-    Expr  field;
-    Token assignmentOperator;
-    Expr  expr;
-    FieldAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
+  public static class FieldAssign extends Expr implements ManagesResult {
+    public Expr  parent;
+    public Token accessType;
+    public Expr  field;
+    public Token assignmentOperator;
+    public Expr  expr;
+    public FieldAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
       this.parent = parent;
       this.accessType = accessType;
       this.field = field;
@@ -529,7 +529,7 @@ abstract class Expr {
       this.expr = expr;
       this.location = accessType;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFieldAssign(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitFieldAssign(this); }
     @Override public String toString() { return "FieldAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + "]"; }
   }
 
@@ -537,17 +537,17 @@ abstract class Expr {
    * Used to represent assignment to a field or list element where assignment is done with
    * one of the +=, -=, *=, ... operations
    */
-  static class FieldOpAssign extends Expr implements ManagesResult {
-    Expr  parent;
-    Token accessType;
-    Expr  field;
-    Token assignmentOperator;
-    Expr  expr;
+  public static class FieldOpAssign extends Expr implements ManagesResult {
+    public Expr  parent;
+    public Token accessType;
+    public Expr  field;
+    public Token assignmentOperator;
+    public Expr  expr;
 
     // true if value before operation should be result - used for post inc/dec of fields
     // where we covert to a binary += or -= and then need the before value as the result
-    boolean isPreIncOrDec;
-    FieldOpAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
+    public boolean isPreIncOrDec;
+    public FieldOpAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
       this.parent = parent;
       this.accessType = accessType;
       this.field = field;
@@ -555,7 +555,7 @@ abstract class Expr {
       this.expr = expr;
       this.location = accessType;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitFieldOpAssign(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitFieldOpAssign(this); }
     @Override public String toString() { return "FieldOpAssign[" + "parent=" + parent + ", " + "accessType=" + accessType + ", " + "field=" + field + ", " + "assignmentOperator=" + assignmentOperator + ", " + "expr=" + expr + "]"; }
   }
 
@@ -564,169 +564,169 @@ abstract class Expr {
    * for x += y type expressions which turn into x = _Noop_ + y where _Noop_ is used to mark
    * the place where the x value will be inserted into the binary expressions.
    */
-  static class Noop extends Expr {
-    Token operator;
-    Noop(Token operator) {
+  public static class Noop extends Expr {
+    public Token operator;
+    public Noop(Token operator) {
       this.operator = operator;
       this.location = operator;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitNoop(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitNoop(this); }
     @Override public String toString() { return "Noop[" + "operator=" + operator + "]"; }
   }
 
   /**
    * Closure definition
    */
-  static class Closure extends Expr implements ManagesResult {
-    Token        startToken;
-    Expr.FunDecl funDecl;
-    boolean      noParamsDefined;
-    Closure(Token startToken, Expr.FunDecl funDecl, boolean noParamsDefined) {
+  public static class Closure extends Expr implements ManagesResult {
+    public Token        startToken;
+    public Expr.FunDecl funDecl;
+    public boolean      noParamsDefined;
+    public Closure(Token startToken, Expr.FunDecl funDecl, boolean noParamsDefined) {
       this.startToken = startToken;
       this.funDecl = funDecl;
       this.noParamsDefined = noParamsDefined;
       this.location = startToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitClosure(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitClosure(this); }
     @Override public String toString() { return "Closure[" + "startToken=" + startToken + ", " + "funDecl=" + funDecl + ", " + "noParamsDefined=" + noParamsDefined + "]"; }
   }
 
-  static class Return extends Expr {
-    Token      returnToken;
-    Expr       expr;
-    JactlType returnType;      // Return type of the function we are embedded in
-    FunDecl    funDecl;
-    Return(Token returnToken, Expr expr, JactlType returnType) {
+  public static class Return extends Expr {
+    public Token      returnToken;
+    public Expr       expr;
+    public JactlType returnType;      // Return type of the function we are embedded in
+    public FunDecl    funDecl;
+    public Return(Token returnToken, Expr expr, JactlType returnType) {
       this.returnToken = returnToken;
       this.expr = expr;
       this.returnType = returnType;
       this.location = returnToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitReturn(this); }
     @Override public String toString() { return "Return[" + "returnToken=" + returnToken + ", " + "expr=" + expr + ", " + "returnType=" + returnType + "]"; }
   }
 
   /**
    * Break statement
    */
-  static class Break extends Expr {
-    Token breakToken;
-    Token label;
-    Stmt.While whileLoop;
-    Break(Token breakToken, Token label) {
+  public static class Break extends Expr {
+    public Token breakToken;
+    public Token label;
+    public Stmt.While whileLoop;
+    public Break(Token breakToken, Token label) {
       this.breakToken = breakToken;
       this.label = label;
       this.location = breakToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitBreak(this); }
     @Override public String toString() { return "Break[" + "breakToken=" + breakToken + ", " + "label=" + label + "]"; }
   }
 
   /**
    * Continue statement
    */
-  static class Continue extends Expr{
-    Token continueToken;
-    Token label;
-    Stmt.While whileLoop;
-    Continue(Token continueToken, Token label) {
+  public static class Continue extends Expr{
+    public Token continueToken;
+    public Token label;
+    public Stmt.While whileLoop;
+    public Continue(Token continueToken, Token label) {
       this.continueToken = continueToken;
       this.label = label;
       this.location = continueToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitContinue(this); }
     @Override public String toString() { return "Continue[" + "continueToken=" + continueToken + ", " + "label=" + label + "]"; }
   }
 
-  static class Print extends Expr {
-    Token printToken;
-    Expr  expr;
-    boolean newLine;    // Whether to print newline
-    Print(Token printToken, Expr expr, boolean newLine) {
+  public static class Print extends Expr {
+    public Token printToken;
+    public Expr  expr;
+    public boolean newLine;    // Whether to print newline
+    public Print(Token printToken, Expr expr, boolean newLine) {
       this.printToken = printToken;
       this.expr = expr;
       this.newLine = newLine;
       this.location = printToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitPrint(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitPrint(this); }
     @Override public String toString() { return "Print[" + "printToken=" + printToken + ", " + "expr=" + expr + ", " + "newLine=" + newLine + "]"; }
   }
 
-  static class Die extends Expr {
-    Token dieToken;
-    Expr  expr;
-    Die(Token dieToken, Expr expr) {
+  public static class Die extends Expr {
+    public Token dieToken;
+    public Expr  expr;
+    public Die(Token dieToken, Expr expr) {
       this.dieToken = dieToken;
       this.expr = expr;
       this.location = dieToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitDie(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitDie(this); }
     @Override public String toString() { return "Die[" + "dieToken=" + dieToken + ", " + "expr=" + expr + "]"; }
   }
 
-  static class Eval extends Expr {
-    Token evalToken;
-    Expr  script;
-    Expr  globals;
-    Eval(Token evalToken, Expr script, Expr globals) {
+  public static class Eval extends Expr {
+    public Token evalToken;
+    public Expr  script;
+    public Expr  globals;
+    public Eval(Token evalToken, Expr script, Expr globals) {
       this.evalToken = evalToken;
       this.script = script;
       this.globals = globals;
       this.location = evalToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitEval(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitEval(this); }
     @Override public String toString() { return "Eval[" + "evalToken=" + evalToken + ", " + "script=" + script + ", " + "globals=" + globals + "]"; }
   }
 
   /**
    * Used to turn a list of statements into an expression so that we can support "do {...}":
-   *   x < max or do { x++; y-- } and return x + y;
+   *   x == max or do { x++; y-- } and return x + y;
    */
-  static class Block extends Expr {
-    Token      token;
-    Stmt.Block block;
-    boolean    resultIsTrue;     // for "do" blocks always return true
-    Block(Token token, Stmt.Block block, boolean resultIsTrue) {
+  public static class Block extends Expr {
+    public Token      token;
+    public Stmt.Block block;
+    public boolean    resultIsTrue;     // for "do" blocks always return true
+    public Block(Token token, Stmt.Block block, boolean resultIsTrue) {
       this.token = token;
       this.block = block;
       this.resultIsTrue = resultIsTrue;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
     @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + ", " + "resultIsTrue=" + resultIsTrue + "]"; }
   }
 
   /**
    * Switch statement
    */
-  static class Switch extends Expr {
-    Token            matchToken;
-    Expr             subject;
-    List<SwitchCase> cases;
-    Expr             defaultCase;
-    VarDecl          itVar;
-    Stmt.Block       block;     // Need a block for tracking it var
-    Switch(Token matchToken, Expr subject, List<SwitchCase> cases, Expr defaultCase) {
+  public static class Switch extends Expr {
+    public Token            matchToken;
+    public Expr             subject;
+    public List<SwitchCase> cases;
+    public Expr             defaultCase;
+    public VarDecl          itVar;
+    public Stmt.Block       block;     // Need a block for tracking it var
+    public Switch(Token matchToken, Expr subject, List<SwitchCase> cases, Expr defaultCase) {
       this.matchToken = matchToken;
       this.subject = subject;
       this.cases = cases;
       this.defaultCase = defaultCase;
       this.location = matchToken;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitSwitch(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitSwitch(this); }
     @Override public String toString() { return "Switch[" + "matchToken=" + matchToken + ", " + "subject=" + subject + ", " + "cases=" + cases + ", " + "defaultCase=" + defaultCase + "]"; }
   }
 
-  static class SwitchCase extends Expr {
-    List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/ifExpression
-    Expr                  result;
-    Stmt.Block            block;          // Need a block for captured regex and destructured vars
-    Expr                  switchSubject;  // Need to know type of switch expression for binding variables
-    SwitchCase(List<Pair<Expr,Expr>> patterns, Expr result) {
+  public static class SwitchCase extends Expr {
+    public List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/ifExpression
+    public Expr                  result;
+    public Stmt.Block            block;          // Need a block for captured regex and destructured vars
+    public Expr                  switchSubject;  // Need to know type of switch expression for binding variables
+    public SwitchCase(List<Pair<Expr,Expr>> patterns, Expr result) {
       this.patterns = patterns;
       this.result = result;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitSwitchCase(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitSwitchCase(this); }
     @Override public String toString() { return "SwitchCase[" + "patterns=" + patterns + ", " + "result=" + result + "]"; }
   }
 
@@ -736,32 +736,32 @@ abstract class Expr {
    *   X(1,2,[_,_,a])
    *   X(i:1,j:2,list:[_,_,a])
    */
-  static class ConstructorPattern extends Expr {
-    Token      token;
-    TypeExpr   typeExpr;
-    Expr       args;
-    ConstructorPattern(Token token, TypeExpr typeExpr, Expr args) {
+  public static class ConstructorPattern extends Expr {
+    public Token      token;
+    public TypeExpr   typeExpr;
+    public Expr       args;
+    public ConstructorPattern(Token token, TypeExpr typeExpr, Expr args) {
       this.token = token;
       this.typeExpr = typeExpr;
       this.args = args;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitConstructorPattern(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitConstructorPattern(this); }
     @Override public String toString() { return "ConstructorPattern[" + "token=" + token + ", " + "typeExpr=" + typeExpr + ", " + "args=" + args + "]"; }
   }
 
   /**
    * Expr for wrapping a type. Used for instanceof, !instanceof, and as
    */
-  static class TypeExpr extends Expr {
-    Token      token;
-    JactlType typeVal;
-    TypeExpr(Token token, JactlType typeVal) {
+  public static class TypeExpr extends Expr {
+    public Token      token;
+    public JactlType typeVal;
+    public TypeExpr(Token token, JactlType typeVal) {
       this.token = token;
       this.typeVal = typeVal;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitTypeExpr(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitTypeExpr(this); }
     @Override public String toString() { return "TypeExpr[" + "token=" + token + ", " + "typeVal=" + typeVal + "]"; }
   }
 
@@ -770,15 +770,15 @@ abstract class Expr {
    * Used for multi-assignments: (x,y,z) = [1,2,3]
    * Only used within Parser at the moment (unless we eventually support comma as an operator)
    */
-  static class ExprList extends Expr {
-    Token      token;
-    List<Expr> exprs;
-    ExprList(Token token, List<Expr> exprs) {
+  public static class ExprList extends Expr {
+    public Token      token;
+    public List<Expr> exprs;
+    public ExprList(Token token, List<Expr> exprs) {
       this.token = token;
       this.exprs = exprs;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitExprList(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitExprList(this); }
     @Override public String toString() { return "ExprList[" + "token=" + token + ", " + "exprs=" + exprs + "]"; }
   }
 
@@ -789,32 +789,32 @@ abstract class Expr {
   /**
    * Array length
    */
-  static class ArrayLength extends Expr implements ManagesResult {
-    Token token;
-    Expr array;
-    ArrayLength(Token token, Expr array) {
+  public static class ArrayLength extends Expr implements ManagesResult {
+    public Token token;
+    public Expr array;
+    public ArrayLength(Token token, Expr array) {
       this.token = token;
       this.array = array;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitArrayLength(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitArrayLength(this); }
     @Override public String toString() { return "ArrayLength[" + "token=" + token + ", " + "array=" + array + "]"; }
   }
 
   /**
    * Array get
    */
-  static class ArrayGet extends Expr implements ManagesResult {
-    Token token;
-    Expr  array;
-    Expr  index;
-    ArrayGet(Token token, Expr array, Expr index) {
+  public static class ArrayGet extends Expr implements ManagesResult {
+    public Token token;
+    public Expr  array;
+    public Expr  index;
+    public ArrayGet(Token token, Expr array, Expr index) {
       this.token = token;
       this.array = array;
       this.index = index;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitArrayGet(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitArrayGet(this); }
     @Override public String toString() { return "ArrayGet[" + "token=" + token + ", " + "array=" + array + ", " + "index=" + index + "]"; }
   }
 
@@ -822,66 +822,66 @@ abstract class Expr {
    * LoadParamValue - load value needed for a param.
    * Can be HeapLocal if isPassedAsHeapLocal is set or just a standard value.
    */
-  static class LoadParamValue extends Expr implements ManagesResult {
-    Token name;
-    Expr.VarDecl paramDecl;
-    Expr.VarDecl varDecl;
-    LoadParamValue(Token name, Expr.VarDecl paramDecl) {
+  public static class LoadParamValue extends Expr implements ManagesResult {
+    public Token name;
+    public Expr.VarDecl paramDecl;
+    public Expr.VarDecl varDecl;
+    public LoadParamValue(Token name, Expr.VarDecl paramDecl) {
       this.name = name;
       this.paramDecl = paramDecl;
       this.location = name;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitLoadParamValue(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitLoadParamValue(this); }
     @Override public String toString() { return "LoadParamValue[" + "name=" + name + ", " + "paramDecl=" + paramDecl + "]"; }
   }
 
   /**
    * Invoke a user function - used for invoking actual function at end of varargs wrapper function
    */
-  static class InvokeFunDecl extends Expr implements ManagesResult {
-    Token        token;
-    Expr.FunDecl funDecl;
-    List<Expr>   args;
-    InvokeFunDecl(Token token, Expr.FunDecl funDecl, List<Expr> args) {
+  public static class InvokeFunDecl extends Expr implements ManagesResult {
+    public Token        token;
+    public Expr.FunDecl funDecl;
+    public List<Expr>   args;
+    public InvokeFunDecl(Token token, Expr.FunDecl funDecl, List<Expr> args) {
       this.token = token;
       this.funDecl = funDecl;
       this.args = args;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunDecl(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeFunDecl(this); }
     @Override public String toString() { return "InvokeFunDecl[" + "token=" + token + ", " + "funDecl=" + funDecl + ", " + "args=" + args + "]"; }
   }
 
   /**
    * Invoke init method of a class
    */
-  static class InvokeInit extends Expr {
-    Token            token;
+  public static class InvokeInit extends Expr {
+    public Token            token;
     // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
-    boolean          invokeSpecial;
-    ClassDescriptor  classDescriptor;
-    List<Expr>       args;
-    InvokeInit(Token token, boolean invokeSpecial, ClassDescriptor classDescriptor, List<Expr> args) {
+    public boolean          invokeSpecial;
+    public ClassDescriptor  classDescriptor;
+    public List<Expr>       args;
+    public InvokeInit(Token token, boolean invokeSpecial, ClassDescriptor classDescriptor, List<Expr> args) {
       this.token = token;
       this.invokeSpecial = invokeSpecial;
       this.classDescriptor = classDescriptor;
       this.args = args;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeInit(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeInit(this); }
     @Override public String toString() { return "InvokeInit[" + "token=" + token + ", " + "invokeSpecial=" + invokeSpecial + ", " + "classDescriptor=" + classDescriptor + ", " + "args=" + args + "]"; }
   }
 
   /**
    * Invoke an internal utility function
    */
-  static class InvokeUtility extends Expr {
-    Token       token;
-    Class       clss;
-    String      methodName;
-    List<Class> paramTypes;
-    List<Expr>  args;
-    InvokeUtility(Token token, Class clss, String methodName, List<Class> paramTypes, List<Expr> args) {
+  public static class InvokeUtility extends Expr {
+    public Token       token;
+    public Class       clss;
+    public String      methodName;
+    public List<Class> paramTypes;
+    public List<Expr>  args;
+    public InvokeUtility(Token token, Class clss, String methodName, List<Class> paramTypes, List<Expr> args) {
       this.token = token;
       this.clss = clss;
       this.methodName = methodName;
@@ -889,38 +889,38 @@ abstract class Expr {
       this.args = args;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeUtility(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeUtility(this); }
     @Override public String toString() { return "InvokeUtility[" + "token=" + token + ", " + "clss=" + clss + ", " + "methodName=" + methodName + ", " + "paramTypes=" + paramTypes + ", " + "args=" + args + "]"; }
   }
 
   /**
    * Create a new instance of a class
    */
-  static class InvokeNew extends Expr {
-    Token      token;
-    JactlType  instanceType;
-    List<Expr> dimensions = new ArrayList<>();
-    InvokeNew(Token token, JactlType instanceType) {
+  public static class InvokeNew extends Expr {
+    public Token      token;
+    public JactlType  instanceType;
+    public List<Expr> dimensions = new ArrayList<>();
+    public InvokeNew(Token token, JactlType instanceType) {
       this.token = token;
       this.instanceType = instanceType;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeNew(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeNew(this); }
     @Override public String toString() { return "InvokeNew[" + "token=" + token + ", " + "instanceType=" + instanceType + "]"; }
   }
 
   /**
    * Load default value of given type onto stack
    */
-  static class DefaultValue extends Expr {
-    Token      token;
-    JactlType varType;
-    DefaultValue(Token token, JactlType varType) {
+  public static class DefaultValue extends Expr {
+    public Token      token;
+    public JactlType varType;
+    public DefaultValue(Token token, JactlType varType) {
       this.token = token;
       this.varType = varType;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitDefaultValue(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitDefaultValue(this); }
     @Override public String toString() { return "DefaultValue[" + "token=" + token + ", " + "varType=" + varType + "]"; }
   }
 
@@ -928,34 +928,34 @@ abstract class Expr {
    * For situations where we know the class name up front and don't want to have to create
    * a new JactlType value for it.
    */
-  static class InstanceOf extends Expr {
-    Token  token;
-    Expr   expr;      // The object for which we are checking the type
-    String className; // The internal class name to check for
-    InstanceOf(Token token, Expr expr, String className) {
+  public static class InstanceOf extends Expr {
+    public Token  token;
+    public Expr   expr;      // The object for which we are checking the type
+    public String className; // The internal class name to check for
+    public InstanceOf(Token token, Expr expr, String className) {
       this.token = token;
       this.expr = expr;
       this.className = className;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitInstanceOf(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitInstanceOf(this); }
     @Override public String toString() { return "InstanceOf[" + "token=" + token + ", " + "expr=" + expr + ", " + "className=" + className + "]"; }
   }
 
   /**
    * Cast to given type
    */
-  static class CheckCast extends Expr {
-    Token      token;
-    Expr       expr;      // Object being cast
-    JactlType castType;  // Type to cast to
-    CheckCast(Token token, Expr expr, JactlType castType) {
+  public static class CheckCast extends Expr {
+    public Token      token;
+    public Expr       expr;      // Object being cast
+    public JactlType castType;  // Type to cast to
+    public CheckCast(Token token, Expr expr, JactlType castType) {
       this.token = token;
       this.expr = expr;
       this.castType = castType;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitCheckCast(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitCheckCast(this); }
     @Override public String toString() { return "CheckCast[" + "token=" + token + ", " + "expr=" + expr + ", " + "castType=" + castType + "]"; }
   }
 
@@ -964,13 +964,13 @@ abstract class Expr {
    * is not the right type but is a Map/List we invoke the constructor to convert into the right
    * instance type.
    */
-  static class ConvertTo extends Expr {
-    Token      token;
-    JactlType varType;
-    Expr       expr;
-    Expr       source;
-    Expr       offset;
-    ConvertTo(Token token, JactlType varType, Expr expr, Expr source, Expr offset) {
+  public static class ConvertTo extends Expr {
+    public Token      token;
+    public JactlType varType;
+    public Expr       expr;
+    public Expr       source;
+    public Expr       offset;
+    public ConvertTo(Token token, JactlType varType, Expr expr, Expr source, Expr offset) {
       this.token = token;
       this.varType = varType;
       this.expr = expr;
@@ -978,7 +978,7 @@ abstract class Expr {
       this.offset = offset;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitConvertTo(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitConvertTo(this); }
     @Override public String toString() { return "ConvertTo[" + "token=" + token + ", " + "varType=" + varType + ", " + "expr=" + expr + ", " + "source=" + source + ", " + "offset=" + offset + "]"; }
   }
 
@@ -986,33 +986,33 @@ abstract class Expr {
    * Used for times when we need to get the source or offset value from our params (when needsLocation is set).
    * Since we don't declare formal parameters for these we use this as a special place holder.
    */
-  static class SpecialVar extends Expr {
-    Token   name;          // $source or $offset (Utils.SOURCE_VAR_NAME, Utils.OFFSET_VAR_NAME)
-    FunDecl function;     // Our current function
-    SpecialVar(Token name) {
+  public static class SpecialVar extends Expr {
+    public Token   name;          // $source or $offset (Utils.SOURCE_VAR_NAME, Utils.OFFSET_VAR_NAME)
+    public FunDecl function;     // Our current function
+    public SpecialVar(Token name) {
       this.name = name;
       this.location = name;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitSpecialVar(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitSpecialVar(this); }
     @Override public String toString() { return "SpecialVar[" + "name=" + name + "]"; }
   }
 
   /**
    * Cast existing stack value (used in Match expression to convert results to the right type)
    */
-  static class StackCast extends Expr {
-    Token     token;
-    JactlType castType;
-    StackCast(Token token, JactlType castType) {
+  public static class StackCast extends Expr {
+    public Token     token;
+    public JactlType castType;
+    public StackCast(Token token, JactlType castType) {
       this.token = token;
       this.castType = castType;
       this.location = token;
     }
-    @Override <T> T accept(Visitor<T> visitor) { return visitor.visitStackCast(this); }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitStackCast(this); }
     @Override public String toString() { return "StackCast[" + "token=" + token + ", " + "castType=" + castType + "]"; }
   }
 
-  interface Visitor<T> {
+  public interface Visitor<T> {
     T visitBinary(Binary expr);
     T visitRegexMatch(RegexMatch expr);
     T visitRegexSubst(RegexSubst expr);

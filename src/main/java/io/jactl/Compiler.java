@@ -17,10 +17,9 @@
 
 package io.jactl;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import io.jactl.resolver.Resolver;
+
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 /**
@@ -50,7 +49,7 @@ public class Compiler {
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
     Parser         parser = new Parser(new Tokeniser(source), jactlContext, packageName);
-    Stmt.ClassDecl script = parser.parseScript(className);
+    Stmt.ClassDecl script   = parser.parseScript(className);
     Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(jactlContext);

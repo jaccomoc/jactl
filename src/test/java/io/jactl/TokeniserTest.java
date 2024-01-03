@@ -198,11 +198,11 @@ class TokeniserTest {
   }
 
   @Test public void identifiers() {
-    BiConsumer<String,Boolean> doTest = (source,isDollar) -> {
+    BiConsumer<String, Boolean> doTest = (source, isDollar) -> {
       Tokeniser tokeniser = new Tokeniser(source);
       Token     token     = tokeniser.next();
       Assertions.assertEquals(isDollar ? TokenType.DOLLAR_IDENTIFIER : TokenType.IDENTIFIER, token.getType());
-      assertEquals(source,     token.getValue());
+      assertEquals(source, token.getValue());
       Assertions.assertEquals(EOF, tokeniser.next().getType());
     };
 
@@ -217,6 +217,17 @@ class TokeniserTest {
     doTest.accept("$1", true);
     doTest.accept("$123", true);
     doTest.accept("$a", true);
+  }
+
+  @Test public void dollarNumIdent() {
+    Tokeniser tokeniser = new Tokeniser("$1public");
+    Token     token     = tokeniser.next();
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals("$1", token.getValue());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("public", token.getValue());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void numericLiterals() {

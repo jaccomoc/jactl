@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.resolver.Resolver;
 import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.RuntimeUtils;

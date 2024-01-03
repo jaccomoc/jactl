@@ -104,7 +104,7 @@ public class Utils {
     return methodName+"$h";
   }
 
-  static String wrapperName(String methodName) {
+  public static String wrapperName(String methodName) {
     return methodName + "$$w";
   }
 
@@ -138,7 +138,7 @@ public class Utils {
     }
   }
 
-  static boolean toBoolean(Object value) {
+  public static boolean toBoolean(Object value) {
     if (value == null)               { return false;              }
     if (value instanceof Boolean)    { return (boolean)value;     }
     if (value instanceof Byte)       { return (byte)value != 0;    }
@@ -155,7 +155,7 @@ public class Utils {
     return (byte)toInt(value);
   }
 
-  static int toInt(Object value) {
+  public static int toInt(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;         }
     if (value instanceof Byte)       { return (byte)value;                    }
     if (value instanceof Integer)    { return (int)value;                     }
@@ -165,7 +165,7 @@ public class Utils {
     throw new IllegalStateException("Trying to convert type " + value.getClass().getName() + " to int (value=" + value + ")");
   }
 
-  static long toLong(Object value) {
+  public static long toLong(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;          }
     if (value instanceof Byte)       { return (byte)value;                     }
     if (value instanceof Integer)    { return (int)value;                      }
@@ -175,7 +175,7 @@ public class Utils {
     throw new IllegalStateException("Trying to convert type " + value.getClass().getName() + " to long (value=" + value + ")");
   }
 
-  static double toDouble(Object value) {
+  public static double toDouble(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;            }
     if (value instanceof Byte)       { return (byte)value;                       }
     if (value instanceof Integer)    { return (int)value;                        }
@@ -185,7 +185,7 @@ public class Utils {
     throw new IllegalStateException("Trying to convert type " + value.getClass().getName() + " to double (value=" + value + ")");
   }
 
-  static BigDecimal toDecimal(Object value) {
+  public static BigDecimal toDecimal(Object value) {
     if (value instanceof Boolean)    { return new BigDecimal((boolean)value ? 1 : 0); }
     if (value instanceof Byte)       { return new BigDecimal((byte)value);            }
     if (value instanceof Integer)    { return new BigDecimal((int)value);             }
@@ -195,7 +195,7 @@ public class Utils {
     throw new IllegalStateException("Trying to convert type " + value.getClass().getName() + " to decimal (value=" + value + ")");
   }
 
-  static String toString(Object value) {
+  public static String toString(Object value) {
     if (value == null) { return "null"; }
     return value.toString();
   }
@@ -814,7 +814,7 @@ public class Utils {
     return sb.toString();
   }
 
-  static boolean isDigits(String str) {
+  public static boolean isDigits(String str) {
     for (int i = 0; i < str.length(); i++) {
       if (!Character.isDigit(str.charAt(i))) {
         return false;

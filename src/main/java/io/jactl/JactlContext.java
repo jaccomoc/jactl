@@ -28,33 +28,33 @@ public class JactlContext {
 
   JactlEnv executionEnv     = null;
 
-  boolean printSize          = false;
-  boolean evaluateConstExprs = true;
-  boolean printLoop          = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
-  boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
-  boolean autoCreateAsync    = false;   // Whether to allow async functions in initialisers during auto-creation
+  public boolean printSize          = false;
+  public boolean evaluateConstExprs = true;
+  public boolean printLoop          = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
+  public boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
+  public boolean autoCreateAsync    = false;   // Whether to allow async functions in initialisers during auto-creation
 
   // Testing
   boolean checkpoint = false;
   boolean restore    = false;
 
-  int     minScale           = Utils.DEFAULT_MIN_SCALE;
+  public int     minScale           = Utils.DEFAULT_MIN_SCALE;
 
   // In repl mode top level vars are stored in the globals map and their type
   // is tracked here. We also allow redefinitions of existing vars. We don't
   // allow shadowing of actual global vars that already exist in the globals map.
-  boolean replMode           = false;
+  public boolean replMode           = false;
 
   // In repl mode we keep track of the type of the top level vars here
   // and store their actual values in the globals map that is passed in
   // at run time.
-  final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
+  public final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
 
   // Whether to dump byte code during compilation
-  int debugLevel = 0;
+  public int debugLevel = 0;
 
-  String javaPackage = Utils.JACTL_PKG;   // The Java package under which compiled classes will be generated
-  String internalJavaPackage;
+  public String javaPackage = Utils.JACTL_PKG;   // The Java package under which compiled classes will be generated
+  public String internalJavaPackage;
 
   Set<String>                  packages    = new HashSet<>();
   Map<String, ClassDescriptor> classLookup = new HashMap<>();  // Keyed on internal name

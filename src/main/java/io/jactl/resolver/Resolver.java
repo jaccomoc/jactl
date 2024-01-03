@@ -15,8 +15,9 @@
  *
  */
 
-package io.jactl;
+package io.jactl.resolver;
 
+import io.jactl.*;
 import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 
@@ -24,6 +25,7 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -105,21 +107,22 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private String scriptName  = null;  // If this is a script
 
   private final Map<String, ClassDescriptor> imports      = new HashMap<>();
+          final Map<String, Expr.VarDecl>    constants    = new HashMap<>();
   private final Map<String,ClassDescriptor>  localClasses = new HashMap<>();
 
   private boolean isWhileCondition = false;        // true while resolving while condition
-
   private int lastLineNumber = -1;
-
   private boolean isScript = false;
 
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
 
   /**
    * Resolve variables, references, etc
+   * @param jactlContext the JactlContext
    * @param globals  map of global variables (which themselves can be Maps or Lists or simple values)
+   * @param location location for error
    */
-  Resolver(JactlContext jactlContext, Map<String,Object> globals, Token location) {
+  public Resolver(JactlContext jactlContext, Map<String, Object> globals, Token location) {
     this.jactlContext = jactlContext;
     this.globals        = globals == null ? Utils.mapOf() : globals;
     this.globals.keySet().forEach(name -> {
@@ -139,7 +142,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, builtinVarDecl(f)));
   }
 
-  void resolveClass(Stmt.ClassDecl classDecl) {
+  public void resolveClass(Stmt.ClassDecl classDecl) {
     this.packageName = classDecl.packageName;
     classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
@@ -147,7 +150,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(classDecl);
   }
 
-  void resolveScript(Stmt.ClassDecl classDecl) {
+  public void resolveScript(Stmt.ClassDecl classDecl) {
     isScript = true;
     this.scriptName  = classDecl.name.getStringValue();
     resolveClass(classDecl);
@@ -430,10 +433,40 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitImport(Stmt.Import stmt) {
-    ClassDescriptor classDesc = lookupClass(stmt.className);
-    String          name      = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
-    if (imports.put(name, classDesc) != null) {
-      error("Class of name '" + name + "' already imported", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+    if (stmt.staticImport) {
+      Expr.Identifier field     = (Expr.Identifier)stmt.className.get(stmt.className.size() - 1);
+      ClassDescriptor classDesc = lookupClass(stmt.className.subList(0, stmt.className.size() - 1));
+      String fieldName = field.identifier.getStringValue();
+      Consumer<String> defineConst = name -> {
+        JactlType fieldType = classDesc.getStaticField(name);
+        if (fieldType == null) {
+          error("No class static field called '" + name + "' in class " + classDesc.getClassName(), field.location);
+        }
+        Token        constName = field.location.newIdent(name);
+        Expr.VarDecl varDecl   = new Expr.VarDecl(constName, null, null);
+        varDecl.isClassConst = true;
+        varDecl.type = fieldType;
+        varDecl.isConst = true;
+        varDecl.constValue = classDesc.getStaticFieldValue(name);
+        name = stmt.as == null ? name : stmt.as.getStringValue();
+        if (constants.put(name, varDecl) != null) {
+          error("Duplicate constant name '" + name + "'", stmt.location);
+        }
+      };
+      if (fieldName.equals(STAR.asString)) {
+        Set<String> fields = classDesc.getAllStaticFields().keySet();
+        fields.forEach(name -> defineConst.accept(name));
+      }
+      else {
+        defineConst.accept(fieldName);
+      }
+    }
+    else {
+      ClassDescriptor classDesc = lookupClass(stmt.className);
+      String          name      = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
+      if (imports.put(name, classDesc) != null) {
+        error("Class of name '" + name + "' already imported", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+      }
     }
     return null;
   }
@@ -542,259 +575,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitSwitch(Expr.Switch expr) {
-    resolve(expr.subject);
-    JactlType    subjectType = expr.subject.type;
-    Stmt.VarDecl itVar       = createVarDecl(expr.matchToken, currentFunction(), Utils.IT_VAR, subjectType.unboxed(), expr.subject);
-    expr.itVar = itVar.declExpr;
-    itVar.declExpr.owner = currentFunction();
-    // Block to hold our it var
-    Stmt.Block block = new Stmt.Block(null, null);
-    expr.block = block;
-    block.stmts = new Stmt.Stmts();
-    block.stmts.stmts.add(itVar);
-    // Create a statement wrapper for each case in the match so we can resolve them
-    block.stmts.stmts.addAll(expr.cases.stream().map(c -> {
-      // Create a block in case we have regex/destructured capture vars
-      c.block = new Stmt.Block(null, null);
-      c.block.stmts = new Stmt.Stmts();
-      c.block.stmts.stmts.add(new Stmt.ExprStmt(c.patterns.get(0).first.location, c));
-      return c.block;
-    }).collect(Collectors.toList()));
-    resolve(block);
-    expr.cases.forEach(c -> c.patterns.forEach(pat -> isCompatible(subjectType, pat.first)));
-    resolve(expr.defaultCase);
-
-    // Check that there if there is a pattern covering all cases that there are no subsequent patterns and no default
-    Set<JactlType> coveredTypes = new HashSet<>();
-    expr.cases.forEach(c -> c.patterns.stream().map(pair -> pair.first).forEach(p -> {
-      JactlType type = coveringType(p);
-      if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(p.type) || (type != null && ct.isAssignableFrom(type)))) {
-        error("Unreachable switch case (covered by a previous case)", p.location);
-      }
-      if (type != null) {
-        coveredTypes.add(type);
-      }
-    }));
-    if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
-      error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
-    }
-    validateNotCovered(expr.cases.stream().flatMap(c -> c.patterns.stream().filter(pair -> pair.second == null).map(pair -> pair.first)).collect(Collectors.toList()));
-
-    if (expr.defaultCase == null) {
-      expr.defaultCase = new Expr.Literal(new Token(NULL, expr.location));
-      resolve(expr.defaultCase);
-    }
-
-    // Find common type for all results (including default case)
-    return expr.type = Stream.concat(expr.cases.stream().map(c -> c.result.type), Stream.of(expr.defaultCase.type))
-                             .reduce(JactlType::commonSuperType)
-                             .orElse(null);
-  }
-
-  private static JactlType coveringType(Expr pattern) {
-    if (pattern instanceof Expr.TypeExpr) {
-      return ((Expr.TypeExpr) pattern).typeVal;
-    }
-    if ((pattern instanceof Expr.Identifier)) {
-      Expr.Identifier identifier = (Expr.Identifier) pattern;
-      if (identifier.identifier.is(UNDERSCORE) || identifier.varDecl.isBindingVar) {
-        return pattern.type;
-      }
-    }
-    if (pattern instanceof Expr.VarDecl) {
-      return pattern.type;
-    }
-    return null;
-  }
-
-  public static boolean isCompatible(JactlType subjectType, Expr pat) {
-    if (!doIsCompatible(subjectType, pat)) {
-      error("Type " + subjectType + " can never match type " + pat.patternType() + " with value " + pat.constValue, pat.location);
-      return false;
-    }
-    return true;
-  }
-
-  public static boolean doIsCompatible(JactlType subjectType, Expr pat) {
-    JactlType patType = pat.patternType();
-    if (subjectType.is(ANY) || patType.is(ANY)) {
-      return true;
-    }
-    if (pat instanceof Expr.RegexMatch) {
-      return subjectType.is(STRING);
-    }
-    if (pat.isTypePattern()) {
-      if ((!subjectType.is(INSTANCE) || !patType.is(INSTANCE)) && !subjectType.equals(patType)) {
-        return false;
-      }
-      return subjectType.isConvertibleTo(patType, true);
-    }
-    if (subjectType.isNumeric() && !patType.isNumeric() || patType.isNumeric() && !subjectType.isNumeric()) {
-      return false;
-    }
-    if (subjectType.isNumeric() && patType.isNumeric()) {
-      if (!subjectType.boxed().is(patType.boxed())) {
-        // Only implicit conversion allowed is between byte and int
-        if (patType.is(INT) && subjectType.unboxed().is(BYTE)) {
-          return (int) pat.constValue <= 127 && (int) pat.constValue >= -128;
-        }
-        return false;
-      }
-      else {
-        return true;
-      }
-    }
-    if (subjectType.is(ARRAY)) {
-      if (!(pat instanceof Expr.ListLiteral)) { return false; }
-      return ((Expr.ListLiteral) pat).exprs.stream().allMatch(subPat -> isCompatible(subjectType.getArrayElemType(), subPat));
-    }
-    return subjectType.isConvertibleTo(patType, true);
-  }
-
-  private static void validateNotCovered(List<Expr> patterns) {
-    // For each pattern after the first one check there are no previous ones that are a superset
-    // of the current pattern
-    for (int i = 1; i < patterns.size(); i++) {
-      Expr pattern = patterns.get(i);
-      for (int j = 0; j < i; j++) {
-        if (covers(patterns.get(j), pattern)) {
-          error("Switch pattern will never be evaluated (covered by a previous pattern)", pattern.location);
-        }
-      }
-    }
-  }
-
-  private static boolean isUnderscore(Expr e) { return e instanceof Expr.Identifier && ((Expr.Identifier)e).identifier.is(UNDERSCORE); }
-
-  private static boolean covers(Expr pattern1, Expr pattern2) {
-    return covers(pattern1, pattern2, new HashMap<>());
-  }
-
-  private static boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
-    if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl || isUnderscore(pattern1)) {
-      JactlType t1 = pattern1 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern1).typeVal : pattern1.type;
-      JactlType t2 = pattern2.patternType();
-      if (pattern1 instanceof Expr.VarDecl) {
-        bindings.put(((Expr.VarDecl) pattern1).name.getStringValue(), pattern2);
-      }
-      return t1.is(ANY) || t1.is(t2) || t1.isAssignableFrom(t2);
-    }
-    if (pattern1.isLiteral() && pattern1.isConst && pattern2.isLiteral() && pattern2.isConst) {
-      return RuntimeUtils.switchEquals(pattern1.constValue,pattern2.constValue);
-    }
-    if (pattern1 instanceof Expr.ExprString || pattern2 instanceof Expr.ExprString) {
-      return false;
-    }
-    // We have either List/Map/Constructor pattern or Identifier
-    if (pattern1 instanceof Expr.ListLiteral) {
-      if (!(pattern2 instanceof Expr.ListLiteral))           { return false; }
-      List<Expr> l1 = ((Expr.ListLiteral) pattern1).exprs;
-      List<Expr> l2 = ((Expr.ListLiteral) pattern2).exprs;
-      if (l2.stream().anyMatch(Expr::isStar))            { return false; }
-      boolean l1HasStar = l1.stream().anyMatch(Expr::isStar);
-      if (l1.size() - (l1HasStar ? 1 : 0) > l2.size())   { return false; }
-      if (l2.size() > l1.size() && !l1HasStar)           { return false; }
-      for (int i = 0, star = 0; i < l1.size(); i++) {
-        Expr e1 = l1.get(i);
-        Expr e2 = l2.get(star>0 ? i-l1.size()+l2.size() : i);
-        star += e1.isStar()?1:0;
-        if (!covers(e1,e2,bindings))                      { return false; }
-      }
-      return true;
-    }
-    if (pattern1 instanceof Expr.MapLiteral) {
-      if (!(pattern2 instanceof Expr.MapLiteral))                   { return false; }
-      List<Pair<Expr,Expr>> entries1 = ((Expr.MapLiteral) pattern1).entries;
-      List<Pair<Expr,Expr>> entries2 = ((Expr.MapLiteral) pattern2).entries;
-      if (entries2.stream().anyMatch(p -> p.first.isStar()))         { return false; }
-      boolean l1HasStar = entries1.stream().anyMatch(p -> p.first.isStar());
-      if (entries1.size() - (l1HasStar ? 1 : 0) > entries2.size())   { return false; }
-      if (entries2.size() > entries1.size() && !l1HasStar)           { return false; }
-      Map<String,Expr> m1 = entries1.stream().filter(p -> !p.first.isStar()).collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
-      Map<String,Expr> m2 = entries2.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
-      return m1.keySet().stream().allMatch(k -> m2.containsKey(k) && covers(m1.get(k), m2.get(k), bindings));
-    }
-    if (pattern1 instanceof Expr.ConstructorPattern) {
-      if (!(pattern2 instanceof Expr.ConstructorPattern))                      { return false; }
-      if (!pattern1.patternType().isAssignableFrom(pattern2.patternType()))    { return false; }
-      Map<String, Expr> keyMap1 = ((Expr.MapLiteral)((Expr.ConstructorPattern)pattern1).args).literalKeyMap;
-      Map<String, Expr> keyMap2 = ((Expr.MapLiteral)((Expr.ConstructorPattern)pattern2).args).literalKeyMap;
-      if (!keyMap1.keySet().equals(keyMap2.keySet()))                          { return false; }
-      return keyMap1.keySet().stream().allMatch(k -> keyMap2.containsKey(k) && covers(keyMap1.get(k), keyMap2.get(k), bindings));
-    }
-    if (pattern1 instanceof Expr.Identifier && pattern1.isTypePattern()) {
-      return covers(bindings.get(((Expr.Identifier) pattern1).identifier.getStringValue()), pattern2, bindings);
-    }
-    return false;
+    return SwitchResolver.visitSwitch(this, expr);
   }
 
   @Override public JactlType visitConstructorPattern(Expr.ConstructorPattern expr) {
-    resolve(expr.typeExpr);
-    resolve(expr.args);
-    ClassDescriptor descriptor = expr.typeExpr.patternType().getClassDescriptor();
-    List<Map.Entry<String,JactlType>> constructorArgs = descriptor.getAllMandatoryFields().entrySet().stream().collect(Collectors.toList());
-    // Transform unnamed args into named args
-    if (expr.args instanceof Expr.ListLiteral) {
-      Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.location);
-      mapLiteral.literalKeyMap = new HashMap<>();
-      List<Expr> exprs = ((Expr.ListLiteral) expr.args).exprs;
-      if (exprs.size() != constructorArgs.size()) {
-        error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.location);
-      }
-      for (int i = 0; i < exprs.size(); i++) {
-        Expr arg = exprs.get(i);
-        Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
-        if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
-          error("Argument value of type " + arg.type + " incompatible with type " + constructorParam.getValue() + " of field " + constructorParam.getKey(), arg.location);
-        }
-        mapLiteral.literalKeyMap.put(constructorParam.getKey(), arg);
-        Expr.Literal fieldName = new Expr.Literal(arg.location.newIdent(constructorParam.getKey()));
-        resolve(fieldName);
-        mapLiteral.entries.add(Pair.create(fieldName, arg));
-      }
-      expr.args = mapLiteral;
-    }
-    else {
-      // Validate that the fields listed actually exist
-      ((Expr.MapLiteral)expr.args).entries.stream()
-                                          .map(pair -> pair.first)
-                                          .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
-                                          .findFirst()
-                                          .ifPresent(field -> error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
-    }
-    return expr.type = expr.typeExpr.patternType();
+    return SwitchResolver.visitConstructorPattern(this, expr);
   }
 
   @Override public JactlType visitSwitchCase(Expr.SwitchCase caseExpr) {
-    caseExpr.patterns.forEach(pair -> {
-      Expr pattern = pair.first;
-      if (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).identifier.is(UNDERSCORE)) {
-        pattern.type = ANY;
-      }
-      else if (pattern instanceof Expr.VarDecl) {
-        // Work out type from switch expression type if unknown
-        if (pattern.type.is(UNKNOWN)) {
-          pattern.type = caseExpr.switchSubject.type;
-        }
-        else if (!caseExpr.switchSubject.type.isConvertibleTo(pattern.type)) {
-          error("Type of binding variable not compatible with switch expression type", pattern.location);
-        }
-        Stmt.VarDecl varDecl = Utils.createVarDecl(currentFunction(), (Expr.VarDecl)pattern);
-        resolve(varDecl);
-        insertStmt(varDecl);
-      }
-      else {
-        resolve(pattern);
-        if (pattern instanceof Expr.TypeExpr && ((Expr.TypeExpr) pattern).typeVal.is(CLASS)) {
-          ((Expr.TypeExpr) pattern).typeVal = ((Expr.TypeExpr) pattern).typeVal.createInstanceType();
-        }
-      }
-      resolve(pair.second);
-    });
-    resolve(caseExpr.result);
-    return caseExpr.type = ANY;
+    return SwitchResolver.visitSwitchCase(this, caseExpr);
   }
-
 
   @Override public JactlType visitExprList(Expr.ExprList expr) {
     error("Expression lists not supported", expr.location);
@@ -1892,7 +1682,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   ////////////////////////////////////////////
 
-  private void insertStmt(Stmt.VarDecl declStmt) {
+  public void insertStmt(Stmt.VarDecl declStmt) {
     Stmt.Stmts currentStmts = getBlock().currentResolvingStmts;
     if (currentStmts != null) {
       currentStmts.stmts.add(currentStmts.currentIdx, declStmt);
@@ -2097,7 +1887,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  static private void error(String msg, SourceLocation location) {
+  static void error(String msg, SourceLocation location) {
     if (!(location instanceof Location)) {
       throw new IllegalStateException("Internal error: Expected location of type Location but got " + location.getClass().getName());
     }
@@ -2189,10 +1979,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private ClassDescriptor lookupClass(List<Expr> classNameParts) {
+    return lookupClass(classNameParts, false);
+  }
+
+  ClassDescriptor lookupClass(List<Expr> classNameParts, boolean checkForExistence) {
     Function<Expr,String> identStr = expr -> ((Expr.Identifier)expr).identifier.getStringValue();
 
     if (classNameParts == null || classNameParts.size() == 0) {
-      return null;
+      throw new IllegalStateException("Internal error: class name is empty");
     }
     String classPkg  = null;
     String firstClass = null;
@@ -2214,11 +2008,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     String subPath = classNameParts.stream().map(e -> identStr.apply(e)).collect(Collectors.joining("$"));
     subPath = subPath.isEmpty() ? "" : '$' + subPath;
 
-    return lookupClass(classPkg, packageToken, firstClass, classToken, subPath);
+    return lookupClass(classPkg, packageToken, firstClass, classToken, subPath, checkForExistence);
   }
 
   private Expr.VarDecl lookupClass(String className, Token location) {
-    ClassDescriptor classDescriptor = lookupClass(null, null, className, null, "");
+    ClassDescriptor classDescriptor = lookupClass(null, null, className, null, "", false);
     if (classDescriptor == null) {
       return null;
     }
@@ -2228,7 +2022,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return classVarDecl;
   }
 
-  private ClassDescriptor lookupClass(String classPkg, Token packageToken, String firstClass, Token classToken, String subPath) {
+  private ClassDescriptor lookupClass(String classPkg, Token packageToken, String firstClass, Token classToken, String subPath, boolean checkForExistence) {
     String className = null;
     // If no package supplied then we need to search for within current script/class and then if not
     // found check for any imported classes that match
@@ -2284,6 +2078,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       if (className == null) {
         if (classToken != null) {
+          if (checkForExistence) { return null; }
           error("Unknown class '" + firstClass + "'", classToken);
         }
         return null;
@@ -2312,12 +2107,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       else {
         if (!classPkg.equals(packageName)) {
+          if (checkForExistence) { return null; }
           error("Unknown package '" + classPkg + "'", packageToken);
         }
       }
     }
 
     if (descriptor == null && classToken != null) {
+      if (checkForExistence) { return null; }
       error("Unknown class '" + className.replaceAll("\\$", ".") + "' in package " + classPkg, classToken);
     }
     return descriptor;
@@ -2366,9 +2163,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Reference to '" + name + "' in static function", location);
     }
 
-    // We haven't found symbol yet so check super classes, class names, built-in functions
+    // We haven't found symbol yet so check super classes, class names, constants (from import static),
+    // and built-in functions
     if (varDecl == null) { varDecl = lookupClassMember(name);       }
     if (varDecl == null) { varDecl = lookupClass(name, location);   }
+    if (varDecl == null) { varDecl = constants.get(name);           }
     if (varDecl == null) { varDecl = builtinFunctions.get(name);    }
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
@@ -2391,6 +2190,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl != null) {
+      if (varDecl.isClassConst) {
+        return varDecl;
+      }
       if (varDecl.isField && inStaticContext()) {
         if (varDecl.funDecl == null && !varDecl.isClassConst) {
           error("Reference to non-static field in static function", location);
@@ -3105,6 +2907,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return initWrapper;
   }
 
+  public Stmt.VarDecl createVarDecl(Expr.VarDecl varDecl) {
+    return Utils.createVarDecl(currentFunction(), varDecl);
+  }
+
+  public Stmt.VarDecl createVarDecl(Token token, String name, JactlType type, Expr init) {
+    return createVarDecl(token, currentFunction(), name, type, init);
+  }
+
   private static Stmt.VarDecl createVarDecl(Token token, Expr.FunDecl ownerFunDecl, String name, JactlType type, Expr init) {
     return Utils.createVarDecl(ownerFunDecl, token.newIdent(name), type, init);
   }
@@ -3152,7 +2962,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return varDecl;
   }
 
-  private static Expr literalDefaultValue(Token location, JactlType type) {
+  static Expr literalDefaultValue(Token location, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN: return new Expr.Literal(new Token(FALSE, location).setValue(false));
       case BYTE:    return new Expr.Literal(new Token(BYTE_CONST, location).setValue(0));
