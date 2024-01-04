@@ -291,9 +291,9 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void testSumAvg() {
-    test("[(byte)1,(byte)2,(byte)3].sum()", 6);
+    test("[(byte)-1,(byte)2,(byte)3].sum()", 255+2+3);
     test("[1,2,3].sum()", 6);
-    test("[(byte)1,(byte)2,(byte)3].avg()", "#2");
+    test("[(byte)-1,(byte)-2,(byte)3,256].avg()", "#192");
     test("[1,2,3].avg()", "#2");
     test("[].sum()", 0);
     testError("[].avg()", "empty list for avg");
@@ -732,7 +732,7 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void abs() {
     test("((byte)0).abs()", (byte)0);
     test("((byte)-0).abs()", (byte)0);
-    test("((byte)-1).abs()", (byte)1);
+    test("((byte)-1).abs()", (byte)-1);
     test("((byte)1).abs()", (byte)1);
     test("0.abs()", 0);
     test("-0.abs()", 0);
@@ -793,10 +793,6 @@ public class BuiltinFunctionTests extends BaseTest {
     test("int sum = 0; def x = 3; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
     test("int sum = 0; def x = 3.4; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
     test("def x = 3\n[[1],[2]].size()", 2);
-  }
-
-  @Test public void testStuff() {
-    test("[a:'abc'].each{ it[1] =~ s/b/x/ }", null);
   }
 
   @Test public void mapEach() {
@@ -1549,7 +1545,9 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void toBase() {
     test("((byte)1).toBase(10)", "1");
+    test("((byte)-1).toBase(10)", "255");
     test("((byte)255).toBase(16)", "FF");
+    test("((byte)-1).toBase(16)", "FF");
     test("1.toBase(10)", "1");
     test("1L.toBase(10)", "1");
     testError("1.0.toBase(10)", "no such method");
@@ -1617,6 +1615,7 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void sqrt() {
     test("((byte)4).sqrt()", 2);
+    test("((byte)-1).sqrt()", Math.sqrt(255));
     test("4.sqrt()", 2);
     test("4.sqrt() + 4.sqrt()", 4);
     test("(123456789L*123456789L).sqrt()", 123456789);
@@ -1646,6 +1645,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("2.sqr().sqrt()", 2);
     test("2.sqr() + 2.sqr()", 8);
     test("((byte)2).sqr() + ((byte)2).sqr()", 8);
+    test("((byte)-2).sqr() + ((byte)-2).sqr()", (256-2)*(256-2)*2);
     test("123456789L.sqr().sqrt()", 123456789);
     test("12345678901.0.sqr().sqrt()", "#12345678901");
 //    test("12345678901.0.sqr().sqrt()", "#12345678901.0");
@@ -1672,6 +1672,7 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void pow() {
     test("((byte)4).pow(0)", 1);
+    test("((byte)-4).pow(1)", 256-4);
     test("4.pow(0)", 1);
     test("((byte)4).pow(0.5)", 2);
     test("4.pow(0.5)", 2);
@@ -1763,7 +1764,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("null.toString()", "tried to invoke method on null");
     test("((byte)1).toString()", "1");
     test("((byte)123).toString()", "123");
-    test("((byte)255).toString()", "-1");
+    test("((byte)255).toString()", "255");
     test("1.toString()", "1");
     test("def x = 1; x.toString()", "1");
     test("def x = 1; def f = x.toString; f()", "1");

@@ -161,6 +161,7 @@ public enum TokenType {
   DIE("die"),
   EVAL("eval"),
   FINAL("final"),
+  CONST("const"),
   SEALED("sealed"),
   SWITCH("switch"),
   DEFAULT("default"),

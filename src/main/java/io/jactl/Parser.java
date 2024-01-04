@@ -120,7 +120,8 @@ public class Parser {
 
   // = Stmt
 
-  private static final TokenType[] types = new TokenType[] { DEF, OBJECT, BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL, STRING, MAP, LIST, OBJECT };
+  private static final TokenType[] simpleTypes = new TokenType[] { BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL, STRING };
+  private static final List<TokenType> types = RuntimeUtils.concat(simpleTypes, new TokenType[] { DEF, OBJECT, MAP, LIST });
   private static final List<TokenType> typesAndVar = RuntimeUtils.concat(types, VAR);
 
   /**
@@ -243,6 +244,9 @@ public class Parser {
         error("Expected '.' after class name", className.get(0).location);
       }
       Token as = starCount == 0 && matchAnyIgnoreEOL(AS) ? expect(IDENTIFIER) : null;
+      if (!isStatic && as != null && !Character.isUpperCase(as.getStringValue().charAt(0))) {
+        error("Alias name for imported class must start with uppercase letter", as);
+      }
       stmts.add(new Stmt.Import(importToken, className, as, isStatic));
       expect(EOL,SEMICOLON);
     }
@@ -565,9 +569,15 @@ public class Parser {
   }
 
   private boolean isVarDecl() {
-    return lookahead(() -> { while(matchAny(STATIC,FINAL)) {}; return true; },
-                     () -> type(true, false, true) != null,
-                     () -> matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeywordIgnoreEOL());
+    return lookahead(() -> {
+      boolean isConst = matchAny(CONST);
+      while(matchAny(STATIC,FINAL)) {}
+      matchAny(CONST);
+      if (!isConst || peek().is(simpleTypes)) {
+        type(true, false, true);
+      }
+      return matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeywordIgnoreEOL();
+    });
   }
 
   /**
@@ -582,28 +592,29 @@ public class Parser {
   }
 
   private Stmt doVarDecl(boolean inClassDecl) {
-    boolean isStatic = false;
-    boolean isFinal  = false;
-    if (inClassDecl) {
-      while (matchAnyIgnoreEOL(STATIC,FINAL)) {
-        if (previousWas(STATIC)) {
-          if (isStatic) { error("Unexpected token: 'static' cannot appear multiple times", previous()); }
-          isStatic = true;
-        }
-        else {
-          if (isFinal)  { error("Unexpected token: 'final' cannot appear multiple times", previous()); }
-          isFinal = true;
-        }
-      }
-      if (isStatic && !isFinal) { error("Class static fields must be final"); }
-      if (isFinal && !isStatic) { error("Final fields are only supported for static class fields"); }
+    if (matchAny(STATIC,FINAL)) {
+      error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
-    JactlType type = type(true, false, false);
+    boolean isConst = matchAny(CONST);
+    JactlType type = isConst ? JactlType.createUnknown() : ANY;
+    if (isConst) {
+      if (peek().is(simpleTypes)) {
+        // Only simple types allowed for constants. If no type given then will work like 'var' and
+        // inherit type from initialiser.
+        type = JactlType.valueOf(expect(simpleTypes).getType());
+      }
+      else if (peek().is(types)) {
+        unexpected("Constants can only be simple types");
+      }
+    }
+    else {
+      type = type(true, false, false);
+    }
     Stmt.Stmts stmts = new Stmt.Stmts();
-    stmts.stmts.add(singleVarDecl(type, inClassDecl, isStatic));
+    stmts.stmts.add(singleVarDecl(type, inClassDecl, isConst));
     while (matchAny(COMMA)) {
       matchAny(EOL);
-      stmts.stmts.add(singleVarDecl(type, inClassDecl, isStatic));
+      stmts.stmts.add(singleVarDecl(type, inClassDecl, isConst));
     }
     if (stmts.stmts.size() > 1) {
       // Multiple variables so return list of VarDecls
@@ -613,7 +624,11 @@ public class Parser {
     return stmts.stmts.get(0);
   }
 
-  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isClassConst) {
+  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst) {
+    if (isConst && peek().is(LEFT_SQUARE)) {
+      // Catches: const int[] x = [1,2,3] (for example)
+      error("Constants can only be simple types", previous());
+    }
     Token identifier  = expect(IDENTIFIER);
     Expr  initialiser = null;
     Token equalsToken = null;
@@ -623,10 +638,13 @@ public class Parser {
       initialiser = parseExpression();
     }
 
-    if (type.is(UNKNOWN)) {
-      if (initialiser == null) {
-        unexpected("Initialiser expression required for 'var' declaration");
+    if ((type.is(UNKNOWN) || isConst) && initialiser == null) {
+      if (isConst && peek().is(IDENTIFIER,LEFT_SQUARE) && Character.isUpperCase(identifier.getStringValue().charAt(0))) {
+        error("Constants can only be simple types", previous());
       }
+      error("Initialiser expression required for '" + (isConst ? "const" : "var") + "' declaration", previous());
+    }
+    if (type.is(UNKNOWN)) {
       type.typeDependsOn(initialiser);   // Once initialiser type is known the type will then be known
     }
 
@@ -637,21 +655,11 @@ public class Parser {
       initialiser = asExpr(type, initialiser);
     }
 
-    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl, isClassConst);
+    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl, isConst);
   }
 
-  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isClassConst) {
-    return new Stmt.VarDecl(identifier, createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, isClassConst, false));
-  }
-
-  private Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isClassConst, boolean isBindingVar) {
-    Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
-    varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
-    varDecl.type = type;
-    varDecl.isField = inClassDecl;
-    varDecl.isBindingVar = isBindingVar;
-    varDecl.isClassConst = isClassConst;
-    return varDecl;
+  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isConst) {
+    return new Stmt.VarDecl(identifier, Utils.createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, isConst, false));
   }
 
   private static Expr.Binary asExpr(JactlType type, Expr expr) {
@@ -2074,10 +2082,7 @@ public class Parser {
     do {
       patterns.add(switchPatternAndExpr());
     } while (matchAny(COMMA));
-
-    // Verify that the only non-literals are identifiers (for capture vars) or '_' or '*'
-    // and create VarDecl expressions for first use of each identifier.
-    return validateSwitchPatterns(patterns);
+    return patterns;
   }
 
   /**
@@ -2304,7 +2309,7 @@ public class Parser {
     // We either have a type on its own or a type and an identifier for a binding variable
     JactlType type = type(false, false, false);
     if (matchAny(IDENTIFIER)) {
-      expr = createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, false, true);
+      expr = Utils.createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, false, true);
     }
     else {
       // Is a type
@@ -2318,98 +2323,6 @@ public class Parser {
   }
 
   /////////////////////////////////////////////////
-
-  private List<Pair<Expr,Expr>> validateSwitchPatterns(List<Pair<Expr,Expr>> exprs) {
-    return _validateSwitchPattern(exprs, new HashSet<>());
-  }
-
-  private List<Pair<Expr,Expr>> _validateSwitchPattern(List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
-    return exprs.stream()
-                .map(p -> Pair.create(_validateSwitchPattern(p.first, bindingVars, new HashSet<>()), p.second))
-                .collect(Collectors.toList());
-  }
-
-  /**
-   * Validate variables in pattern of a switch case and replace Identifier with VarDecl where
-   * appropriate.
-   * @param expr        the pattern
-   * @param bindingVars the binding variables for the entire case
-   * @param varsSeen    binding variables seen in this pattern
-   * @return transformed expression
-   */
-  private Expr _validateSwitchPattern(Expr expr, Set<String> bindingVars, Set<String> varsSeen) {
-    if (expr instanceof Expr.ListLiteral) {
-      Expr.ListLiteral listExpr = (Expr.ListLiteral) expr;
-      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateSwitchPattern(e, bindingVars, varsSeen)).collect(Collectors.toList());
-      listExpr.exprs.stream()
-                    .filter(e -> e instanceof Expr.Identifier && ((Expr.Identifier) e).identifier.is(STAR))
-                    .skip(1)
-                    .findFirst()
-                    .ifPresent(value -> error("'" + STAR.asString + "' can only appear once in a list/map pattern", value.location));
-      return listExpr;
-    }
-    if (expr instanceof Expr.MapLiteral) {
-      Expr.MapLiteral mapLiteral = (Expr.MapLiteral)expr;
-      if (mapLiteral.literalKeyMap == null) {
-        error("Field names must be constant strings",
-              mapLiteral.entries.stream().filter(pair -> !(pair.first instanceof Expr.Literal)).map(p -> p.first).findFirst().orElse(expr).location);
-      }
-      mapLiteral.entries = mapLiteral.entries.stream().map(pair -> {
-        if (!(pair.first instanceof Expr.Literal)) {
-          error("Expected string constant for map key", pair.first.location);
-        }
-        return Pair.create(pair.first, _validateSwitchPattern(pair.second, bindingVars, varsSeen));
-      }).collect(Collectors.toList());
-      return mapLiteral;
-    }
-    if (expr instanceof Expr.ConstructorPattern) {
-      Expr.ConstructorPattern constructorPattern = (Expr.ConstructorPattern) expr;
-      if (constructorPattern.args instanceof Expr.MapLiteral) {
-        Expr.MapLiteral args = (Expr.MapLiteral) constructorPattern.args;
-        args.entries = args.entries.stream().map(a -> Pair.create(a.first,_validateSwitchPattern(a.second, bindingVars, varsSeen))).collect(Collectors.toList());
-        args.literalKeyMap = args.entries.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.toString(), p -> p.second));
-      }
-      else {
-        Expr.ListLiteral args = (Expr.ListLiteral) constructorPattern.args;
-        args.exprs = args.exprs.stream().map(a -> _validateSwitchPattern(a, bindingVars, varsSeen)).collect(Collectors.toList());
-      }
-      return constructorPattern;
-    }
-    if (expr instanceof Expr.Literal || expr instanceof Expr.TypeExpr) {
-      return expr;
-    }
-    if (expr instanceof Expr.VarDecl) {
-      String name = ((Expr.VarDecl) expr).name.getStringValue();
-      if (bindingVars.contains(name)) {
-        error("Binding variable '" + name + "' already declared in switch pattern", expr.location);
-      }
-      bindingVars.add(name);
-      varsSeen.add(name);
-      return expr;
-    }
-    if (expr instanceof Expr.Identifier && !((Expr.Identifier) expr).identifier.is(DOLLAR_IDENTIFIER)) {
-      // If first occurrence then create the VarDecl
-      Token name = ((Expr.Identifier) expr).identifier;
-      String varName = name.getStringValue();
-      if (!name.is(UNDERSCORE,STAR)) {
-        if (!bindingVars.contains(varName)) {
-          bindingVars.add(varName);
-          expr = createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, false, true);
-        }
-        else {
-          // Check if we are first use in this pattern. Previous patterns for the case (separate by commas)
-          // might have the VarDecl in which case we need to know to reinitialise value first time bound in
-          // this pattern.
-          if (!varsSeen.contains(varName)) {
-            ((Expr.Identifier)expr).firstTimeInPattern = true;
-            varsSeen.add(varName);
-          }
-        }
-      }
-      return expr;
-    }
-    return expr;
-  }
 
   private Object ignoreNewLines(Supplier<Object> code) {
     boolean currentIgnoreEol = ignoreEol;
@@ -2485,12 +2398,12 @@ public class Parser {
   }
 
   private Stmt.VarDecl createItParam(Token token) {
-    return Utils.createParam(token.newIdent(Utils.IT_VAR), ANY, new Expr.Literal(new Token(NULL, token)));
+    return Utils.createParam(token.newIdent(Utils.IT_VAR), ANY, new Expr.Literal(new Token(NULL, token)), true, false);
   }
 
   // Create parameter for class instance initialiser method
   private Stmt.VarDecl createInitParam(Expr.VarDecl varDecl) {
-    Stmt.VarDecl paramDecl = Utils.createParam(varDecl.name, varDecl.type, varDecl.initialiser);
+    Stmt.VarDecl paramDecl = Utils.createParam(varDecl.name, varDecl.type, varDecl.initialiser, true, false);
     paramDecl.declExpr.paramVarDecl = varDecl;
     varDecl.initialiser = null;
     return paramDecl;

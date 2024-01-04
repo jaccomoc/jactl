@@ -225,6 +225,8 @@ class CompilerTest extends BaseTest {
     testError("1.0 % (byte)0", "divide by zero");
     testError("1.0 % 0", "divide by zero");
     testError("1 % 0.0", "divide by zero");
+    test("(byte)-1", (byte)-1);
+    test("(byte)-1 + 1", 256);
     test("(byte)1 + (byte)2", (byte)3);
     test("1 + (byte)2", 3);
     test("1 + 2", 3);
@@ -259,22 +261,24 @@ class CompilerTest extends BaseTest {
     test("(byte)8 % (byte)5", (byte)3);
     test("8 % 1", 0);
     test("-8 % (byte)5", 2);
-    test("(byte)-8 % 5", 2);
-    test("(byte)-8 % (byte)5", (byte)2);
+    test("(byte)-8 % 5", (-8 & 0xff) % 5);
+    test("(byte)-8 % (byte)5", (byte)((-8 & 0xff) % 5));
     test("-8 % 5", 2);
     test("-8 % 1", 0);
-    test("8 %% (byte)-5", 3);
+    test("8 %% (byte)-5", 8);
     test("(byte)8 %% -5", 3);
-    test("(byte)8 %% (byte)-5", (byte)3);
+    test("(byte)8 %% (byte)-5", (byte)8);
     test("8 %% -5", 3);
+    test("(byte)8 % -1", 0);
     test("(byte)8 %% -1", 0);
-    test("(byte)8 %% -(byte)1", (byte)0);
+    test("(byte)8 % -(byte)1", (byte)8);
+    test("(byte)8 %% -(byte)1", (byte)8);
     test("8 %% -1", 0);
     test("-8 %% -5", -3);
     test("-8 %% -1", 0);
-    test("8 % (byte)-5", -2);
+    test("8 % (byte)-5", 8);
     test("(byte)8 % -5", -2);
-    test("(byte)8 % (byte)-5", (byte)-2);
+    test("(byte)8 % (byte)-5", (byte)8);
     test("8 % -5", -2);
     test("8 % -1", 0);
     test("-8 % -5", -3);
@@ -364,7 +368,7 @@ class CompilerTest extends BaseTest {
     test("8D %% 5", 3D);
     test("-8D %% 5", -3D);
     test("8 %% 5D", 3D);
-    test("(byte)-8 %% 5D", -3D);
+    test("(byte)-8 %% 5D", 3D);
     test("-8 %% 5D", -3D);
     test("8D % 5", 3D);
     test("-8D % (byte)5", 2D);
@@ -400,11 +404,11 @@ class CompilerTest extends BaseTest {
     test("8 % 5.0", "#3.0");
     test("-8.0 % 5", "#2.0");
     test("-8 % 5.0", "#2.0");
-    test("8.0 %% (byte)-5", "#3.0");
+    test("8.0 %% (byte)-5", "#8.0");
     test("8.0 %% -5", "#3.0");
     test("8 %% -5.0", "#3.0");
     test("-8.0 %% -5", "#-3.0");
-    test("(byte)-8 %% -5.0", "#-3.0");
+    test("(byte)-8 %% -5.0", "#3.0");
     test("-8 %% -5.0", "#-3.0");
     test("8.0 % -5", "#-2.0");
     test("8 % -5.0", "#-2.0");
@@ -609,10 +613,10 @@ class CompilerTest extends BaseTest {
     test("def x = (byte)8; def y = (byte)1; x %% y", (byte)0);
     test("byte x = (byte)8; def y = (byte)1; x %% y", (byte)0);
     test("def x = (byte)8; byte y = (byte)1; x %% y", (byte)0);
-    test("byte x = (byte)-8; byte y = (byte)5; x %% y", (byte)-3);
-    test("def x = (byte)-8; def y = (byte)5; x %% y", (byte)-3);
-    test("byte x = (byte)-8; def y = (byte)5; x %% y", (byte)-3);
-    test("def x = (byte)-8; byte y = (byte)5; x %% y", (byte)-3);
+    test("byte x = (byte)-8; byte y = (byte)5; x %% y", (byte)3);
+    test("def x = (byte)-8; def y = (byte)5; x %% y", (byte)3);
+    test("byte x = (byte)-8; def y = (byte)5; x %% y", (byte)3);
+    test("def x = (byte)-8; byte y = (byte)5; x %% y", (byte)3);
     test("byte x = (byte)-8; byte y = (byte)1; x %% y", (byte)0);
     test("def x = (byte)-8; def y = (byte)1; x %% y", (byte)0);
     test("byte x = (byte)-8; def y = (byte)1; x %% y", (byte)0);
@@ -625,10 +629,10 @@ class CompilerTest extends BaseTest {
     test("def x = (byte)8; def y = (byte)1; x % y", (byte)0);
     test("byte x = (byte)8; def y = (byte)1; x % y", (byte)0);
     test("def x = (byte)8; byte y = (byte)1; x % y", (byte)0);
-    test("byte x = (byte)-8; byte y = (byte)5; x % y", (byte)2);
-    test("def x = (byte)-8; def y = (byte)5; x % y", (byte)2);
-    test("byte x = (byte)-8; def y = (byte)5; x % y", (byte)2);
-    test("def x = (byte)-8; byte y = (byte)5; x % y", (byte)2);
+    test("byte x = (byte)-8; byte y = (byte)5; x % y", (byte)3);
+    test("def x = (byte)-8; def y = (byte)5; x % y", (byte)3);
+    test("byte x = (byte)-8; def y = (byte)5; x % y", (byte)3);
+    test("def x = (byte)-8; byte y = (byte)5; x % y", (byte)3);
     test("byte x = (byte)-8; byte y = (byte)1; x % y", (byte)0);
     test("def x = (byte)-8; def y = (byte)1; x % y", (byte)0);
     test("byte x = (byte)-8; def y = (byte)1; x % y", (byte)0);
@@ -754,9 +758,9 @@ class CompilerTest extends BaseTest {
     test("def x = -8L; def y = 5; x %% y", -3L);
     test("long x = -8L; def y = 5; x %% y", -3L);
     test("def x = -8L; byte y = 5; x %% y", -3L);
-    test("byte x = -8; long y = 5L; x %% y", -3L);
+    test("byte x = -8; long y = 5L; x %% y", 3L);
     test("def x = -8; def y = 5L; x %% y", -3L);
-    test("byte x = -8; def y = 5L; x %% y", -3L);
+    test("byte x = -8; def y = 5L; x %% y", 3L);
     test("def x = -8; long y = 5L; x %% y", -3L);
     test("long x = 8L; byte y = 5; x % y", 3L);
     test("def x = 8L; def y = 5; x % y", 3L);
@@ -770,9 +774,8 @@ class CompilerTest extends BaseTest {
     test("def x = -8L; def y = 5; x % y", 2L);
     test("long x = -8L; def y = 5; x % y", 2L);
     test("def x = -8L; byte y = 5; x % y", 2L);
-    test("byte x = -8; long y = 5L; x % y", 2L);
+    test("byte x = -8; long y = 5L; x % y", 3L);
     test("def x = -8; def y = 5L; x % y", 2L);
-    test("byte x = -8; def y = 5L; x % y", 2L);
     test("def x = -8; long y = 5L; x % y", 2L);
     test("byte x = 1; int y = 2; x + y", 3);
     test("def x = 1; def y = 2; x + y", 3);
@@ -806,9 +809,9 @@ class CompilerTest extends BaseTest {
     test("def x = -8; def y = 5; x %% y", -3);
     test("int x = -8; def y = 5; x %% y", -3);
     test("def x = -8; byte y = 5; x %% y", -3);
-    test("byte x = -8; int y = 5; x %% y", -3);
+    test("byte x = -8; int y = 5; x %% y", 3);
     test("def x = -8; def y = 5; x %% y", -3);
-    test("byte x = -8; def y = 5; x %% y", -3);
+    test("byte x = -8; def y = 5; x %% y", 3);
     test("def x = -8; int y = 5; x %% y", -3);
     test("int x = 8; byte y = 5; x % y", 3);
     test("def x = 8; def y = 5; x % y", 3);
@@ -822,9 +825,9 @@ class CompilerTest extends BaseTest {
     test("def x = -8; def y = 5; x % y", 2);
     test("int x = -8; def y = 5; x % y", 2);
     test("def x = -8; byte y = 5; x % y", 2);
-    test("byte x = -8; int y = 5; x % y", 2);
+    test("byte x = -8; int y = 5; x % y", 3);
     test("def x = -8; def y = 5; x % y", 2);
-    test("byte x = -8; def y = 5; x % y", 2);
+    test("byte x = -8; def y = 5; x % y", 3);
     test("def x = -8; int y = 5; x % y", 2);
     test("double x = 1.0D; double y = 2.0D; x + y", 3.0D);
     test("def x = 1.0D; def y = 2.0D; x + y", 3.0D);
@@ -1808,6 +1811,8 @@ class CompilerTest extends BaseTest {
     test("(byte)1 & (byte)1", (byte)1);
     test("(byte)1 & (byte)0", (byte)0);
     test("(byte)0 & (byte)-1", (byte)0);
+    test("byte[] x = [255]; x[0] >> (byte)4", (byte)15);
+    test("byte[] x = [255]; x[0] >>> (byte)4", (byte)15);
     test("1 & (byte)1", 1);
     test("1 & (byte)0", 0);
     test("0 & (byte)-1", 0);
@@ -1820,6 +1825,7 @@ class CompilerTest extends BaseTest {
     test("5 & 4", 4);
     test("(256+255) & 0xff", 255);
     test("(256+255) & (byte)-1", 255);
+    test("(byte)((256+255) & (byte)-1)", (byte)255);
     test("12345678901234L & 1234567", 12345678901234L & 1234567);
     test("(byte)1 | (byte)0", (byte)1);
     test("1 | 0", 1);
@@ -1858,12 +1864,12 @@ class CompilerTest extends BaseTest {
     testError("~1.0D", "must be int, byte, or long");
     test("(byte)1 << (byte)2", (byte)(1 << 2));
     test("(byte)4 >> (byte)1", (byte)2);
-    test("(byte)-1 >> (byte)4", (byte)-1);
+    test("(byte)-1 >> (byte)4", (byte)15);
     test("(byte)-1 >>> (byte)4", (byte)15);
     test("(byte)1 << (byte)9", (byte)2);
     test("def x = (byte)1; def y = (byte)2; x << y", (byte)(1 << 2));
     test("def x = (byte)4; def y =  (byte)1; x >> y", (byte)2);
-    test("def x = (byte)-1; def y = (byte)4; x >> y", (byte)-1);
+    test("def x = (byte)-1; def y = (byte)4; x >> y", (byte)15);
     test("def x = (byte)-1; def y = (byte)4; x >>> y", (byte)15);
     test("def x = (byte)1 << (byte)9", (byte)2);
     test("1 << (byte)2", 1 << 2);
@@ -2280,15 +2286,12 @@ class CompilerTest extends BaseTest {
     test("def x = (byte)8; x %% (byte)5", (byte)3);
     test("def x = (byte)5; (byte)8 %% x", (byte)3);
     test("def x = (byte)8; def y = (byte)5; x %% y", (byte)3);
-    test("def x = (byte)-8; x %% (byte)5", (byte)-3);
-    test("def x = (byte)5; (byte)-8 %% x", (byte)-3);
-    test("def x = (byte)-8; def y = (byte)5; x %% y", (byte)-3);
+    test("def x = (byte)-8; x %% (byte)5", (byte)3);
+    test("def x = (byte)5; (byte)-8 %% x", (byte)3);
+    test("def x = (byte)-8; def y = (byte)5; x %% y", (byte)3);
     test("def x = (byte)8; x % (byte)5", (byte)3);
     test("def x = (byte)5; (byte)8 % x", (byte)3);
     test("def x = (byte)8; def y = (byte)5; x % y", (byte)3);
-    test("def x = (byte)-8; x % (byte)5", (byte)2);
-    test("def x = (byte)5; (byte)-8 % x", (byte)2);
-    test("def x = (byte)-8; def y = (byte)5; x % y", (byte)2);
     test("def x = 1; x + 2", 3);
     test("def x = 2; 1 + x", 3);
     test("def x = 1; def y = 2; x + y", 3);
@@ -2967,8 +2970,8 @@ class CompilerTest extends BaseTest {
     alwaysEvalConsts = true;
     testError("++null", "null value");
     testError("--null", "null value");
-    test("++(byte)1", (byte)2);
-    test("--(byte)1", (byte)0);
+    testError("++(byte)1", "cannot modify a constant value");
+    testError("--(byte)1", "cannot modify a constant value");
     testError("++1", "cannot modify a constant value");
     testError("--1", "cannot modify a constant value");
     testError("++1L", "cannot modify a constant value");
@@ -3171,6 +3174,53 @@ class CompilerTest extends BaseTest {
     testError("def x = 2; { int x = 3; String x = 'abc'; }", "clashes with previously declared variable");
     testError("int f() { def x = 3; def x = 4; }", "clashes with previously declared variable");
     testError("int f(x) { def x = 3; }", "clashes with previously declared variable");
+  }
+
+  @Test public void constVars() {
+    alwaysEvalConsts = true;
+    test("var i = 1", 1);
+    test("var X = 1", 1);
+    testError("const int i = 1; i = 2", "cannot modify a constant");
+    testError("const int i = 1; i++", "cannot modify a constant");
+    testError("const int i = 1; ++i", "cannot modify a constant");
+    test("const int i = 1; i", 1);
+    testError("const int i; i", "initialiser expression required");
+    testError("const var i; i", "unexpected token 'var'");
+    testError("const def i; i", "unexpected token 'def'");
+    test("const i = 1", 1);
+    test("const i = 1; i", 1);
+    testError("const List i = [1]; i", "constants can only be simple types");
+    testError("const int[] i = [1]; i", "constants can only be simple types");
+    testError("const i; i", "initialiser expression required");
+    test("const int X = 1; X", 1);
+    test("const X = 1; X", 1);
+    testError("const X = [1,2,3]; X", "simple constant value");
+    test("def f() { const int i = 1; i }; f()", 1);
+    testError("def f() { const def i = 1; i }; f()", "unexpected token 'def'");
+    test("def f() { const i = 1; i }; f()", 1);
+    test("const x = 2; def f() { const i = 1; i+x }; f()", 3);
+    test("const X = 2; def f() { const i = 1; i+X }; f()", 3);
+    test("const X = 2; def f() { const X = 1; X }; f()", 1);
+    test("class X{}; const X = 1", 1);
+    testError("class X{}; const X i = 1", "can only be simple types");
+    testError("class X{}; const X[] i = 1", "can only be simple types");
+    test("const byte i = 1; i + 1", 2);
+    test("const i = (byte)1; i + 1", 2);
+    test("const int i = 1; i + 1", 2);
+    test("const i = 1; i + 1", 2);
+    test("const long i = 1; i + 1", 2L);
+    test("const i = 1L; i + 1", 2L);
+    test("const double i = 1; i + 1", 2D);
+    test("const i = 1D; i + 1", 2D);
+    test("const Decimal i = 1; i + 1", "#2");
+    test("const Decimal i = 1D; i + 1", "#2.0");
+    test("const Decimal i = 1L; i + 1", "#2");
+    test("const i = (Decimal)1; i + 1", "#2");
+    test("const i = 1.0; i + 1", "#2.0");
+    test("const boolean i = true; i && true", true);
+    test("const i = true; i && true", true);
+    test("const String i = 'abc'; i + 'x'", "abcx");
+    test("const i = 'abc'; i + 'x'", "abcx");
   }
 
   @Test public void exprStrings() {
@@ -3980,6 +4030,8 @@ class CompilerTest extends BaseTest {
     test("def a = new int[1]; ((int[])a)[0]", 0);
     test("def a = new int[1]; ((int[])a)[0] instanceof int", true);
     test("int[] f() { [1,2,3] }; f() instanceof int[] and f().sum() == 6", true);
+    test("([1,-2,3] as int[]).toString()", "[1, -2, 3]");
+    test("([[1],[-2],[3]] as int[][]).toString()", "[[1], [-2], [3]]");
   }
 
   @Test public void nullArrays() {
@@ -4146,6 +4198,8 @@ class CompilerTest extends BaseTest {
     test("byte[][] b = new byte[10][]; b[0] = 'abc'", new byte[]{97,98,99});
     test("String s = [97,98,99] as byte[]", "abc");
     test("String s; def x = [97,98,99] as byte[]; s = x", "abc");
+    test("([1,-2,3] as byte[]).toString()", "[1, 254, 3]");
+    test("([[1],[-2],[3]] as byte[][]).toString()", "[[1], [254], [3]]");
   }
 
   @Test public void nullByteArrays() {
@@ -4301,6 +4355,8 @@ class CompilerTest extends BaseTest {
     test("var a = new long[10]; def i = 0; a[i] = 3; a[i]", 3L);
     test("var a = new long[10]; def i = -1; a[i] = 3; a[i]", 3L);
     test("var a = new long[1];  var x = a[0]; x instanceof long", true);
+    test("([1,-2,3] as long[]).toString()", "[1, -2, 3]");
+    test("([[1],[-2],[3]] as long[][]).toString()", "[[1], [-2], [3]]");
   }
 
   @Test public void longArrayMultipleDimensionsErrors() {
@@ -4454,6 +4510,8 @@ class CompilerTest extends BaseTest {
     test("var a = new double[10]; def i = 0; a[i] = 3; a[i]", 3D);
     test("var a = new double[10]; def i = -1; a[i] = 3; a[i]", 3D);
     test("var a = new double[1];  var x = a[0]; x instanceof double", true);
+    test("([1,-2,3] as double[]).toString()", "[1.0, -2.0, 3.0]");
+    test("([[1],[-2],[3]] as double[][]).toString()", "[[1.0], [-2.0], [3.0]]");
   }
 
   @Test public void doubleArrayMultipleDimensions() {
@@ -4605,6 +4663,8 @@ class CompilerTest extends BaseTest {
     test("var a = new Decimal[10]; def i = 0; a[i] = 3; a[i]", "#3");
     test("var a = new Decimal[10]; def i = -1; a[i] = 3; a[i]", "#3");
     test("var a = new Decimal[1];  a[0] = 3; var x = a[0]; x instanceof Decimal", true);
+    test("([1.0,-2.0,3] as Decimal[]).toString()", "[1.0, -2.0, 3]");
+    test("([[1],[-2],[3.0]] as Decimal[][]).toString()", "[[1], [-2], [3.0]]");
   }
 
   @Test public void booleanArrays() {
@@ -4734,6 +4794,8 @@ class CompilerTest extends BaseTest {
     test("var a = new boolean[1]; a instanceof boolean[]", true);
     test("def a = new boolean[1]; ((boolean[])a)[0]", false);
     test("def a = new boolean[1]; ((boolean[])a)[0] instanceof boolean", true);
+    test("([true,false] as boolean[]).toString()", "[true, false]");
+    test("([[true],[false],[true]] as boolean[][]).toString()", "[[true], [false], [true]]");
   }
 
   @Test public void stringArrays() {
@@ -4828,6 +4890,8 @@ class CompilerTest extends BaseTest {
     test("var a = new String[10]; def i = 0; a[i] = 'abc'; a[i]", "abc");
     test("var a = new String[10]; def i = -1; a[i] = 'abc'; a[i]", "abc");
     test("var a = new String[1];  a[0] = 'abc'; var x = a[0]; x instanceof String", true);
+    test("(['1','-2','3'] as String[]).toString()", "['1', '-2', '3']");
+    test("([['1'],['-2'],['3']] as String[][]).toString()", "[['1'], ['-2'], ['3']]");
   }
 
   @Test public void arrayError() {
@@ -4909,6 +4973,8 @@ class CompilerTest extends BaseTest {
     test("var a = new Object[1];  a[0] = 'abc'; var x = a[0]; x instanceof Object", true);
     test("var a = new Object[1];  a[0] = 'abc'; var x = a[0]; x instanceof String", true);
     test("var a = new Object[1];  a[0] = 3.0; var x = a[0]; x instanceof Decimal", true);
+    test("([1,-2,3] as Object[]).toString()", "[1, -2, 3]");
+    test("([[1],[-2],[3]] as Object[][]).toString()", "[[1], [-2], [3]]");
   }
 
   @Test public void otherArrayTypes() {
@@ -4918,6 +4984,8 @@ class CompilerTest extends BaseTest {
     test("def x = [[[1,2],['a','b','c']]] as List[][]; x instanceof List[][] && x[0][1] instanceof List && x[0][1] == ['a','b','c']", true);
     test("Map[][] x = [[[a:1,b:2],[x:'a',y:'b',z:'c']]]; x instanceof Map[][] && x[0][1] instanceof Map && x[0][1] == [x:'a',y:'b',z:'c']", true);
     test("def x = [[[a:1,b:2],[x:'a',y:'b',z:'c']]] as Map[][]; x instanceof Map[][] && x[0][1] instanceof Map && x[0][1] == [x:'a',y:'b',z:'c']", true);
+    test("([[1],[-2],[3]] as List[]).toString()", "[[1], [-2], [3]]");
+    test("([[[1]],[[-2]],[[3]]] as List[][]).toString()", "[[[1]], [[-2]], [[3]]]");
   }
 
   @Test public void arraysAsValues() {
@@ -5791,27 +5859,28 @@ class CompilerTest extends BaseTest {
   };
 
   @Test public void constComparisons() {
-    comparisonTests.accept("(byte)-3", "7");
+    comparisonTests.accept("(byte)3", "(byte)7");
+    comparisonTests.accept("(byte)3", "7");
     comparisonTests.accept("-3", "(byte)7");
     comparisonTests.accept("-3", "7");
     comparisonTests.accept("-3L", "7L");
     comparisonTests.accept("-3.0D", "7.0D");
-    comparisonTests.accept("(byte)-3", "7.0D");
+    comparisonTests.accept("(byte)3", "7.0D");
     comparisonTests.accept("-3.0D", "(byte)7");
     comparisonTests.accept("-3.0", "7.0");
 
-    comparisonTests.accept("(byte)-3", "7L");
+    comparisonTests.accept("(byte)3", "7L");
     comparisonTests.accept("-3", "7L");
     comparisonTests.accept("-3L", "(byte)7");
     comparisonTests.accept("-3L", "7");
-    comparisonTests.accept("(byte)-3", "7D");
+    comparisonTests.accept("(byte)3", "7D");
     comparisonTests.accept("-3", "7D");
     comparisonTests.accept("-3D", "(byte)7");
     comparisonTests.accept("-3D", "7");
     comparisonTests.accept("-3L", "7D");
     comparisonTests.accept("-3D", "7L");
 
-    comparisonTests.accept("(byte)-3", "7.0");
+    comparisonTests.accept("(byte)3", "7.0");
     comparisonTests.accept("-3", "7.0");
     comparisonTests.accept("-3.0", "(byte)7");
     comparisonTests.accept("-3.0", "7");
@@ -5830,11 +5899,11 @@ class CompilerTest extends BaseTest {
   @Test public void expressionComparisons() {
     //String init = "byte b2 = 2; int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
     //              "def db2 = (byte)2; def di3=3; def dl5=5L; def dd7=7.0D; def ddec13=13.0; def dsabc = 'abc';";
-    comparisonTests.accept("-b2", "l5");
+    comparisonTests.accept("l5", "-b2");
     comparisonTests.accept("-i3", "l5");
     comparisonTests.accept("-i3 * d7", "dec13");
     comparisonTests.accept("-i3 * l5", "dec13");
-    comparisonTests.accept("-db2 * 5", "l5");
+    comparisonTests.accept("l5", "-db2 * 5");
     comparisonTests.accept("-di3 * 5", "l5");
     comparisonTests.accept("-di3 * (byte)5", "l5");
     comparisonTests.accept("-di3 * 5", "l5 * ddec13");

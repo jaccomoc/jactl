@@ -188,7 +188,7 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   @Override public Expr visitVarDecl(Expr.VarDecl expr) {
     // Can't have non-const expressions in static field initialiser
-    if (!expr.isClassConst) {
+    if (!expr.isConstVar) {
       expr.initialiser = decorate(expr.initialiser);
     }
     return expr;

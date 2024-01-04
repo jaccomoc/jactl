@@ -66,8 +66,9 @@ public class Utils {
   public static final Class JACTL_LIST_TYPE = ArrayList.class;
 
   public static final String JACTL_GLOBALS_NAME   = JACTL_PREFIX + "globals";
-  public static final String SOURCE_VAR_NAME   = "$source";
-  public static final String OFFSET_VAR_NAME   = "$offset";
+  public static final String SOURCE_VAR_NAME   = "_$source";
+  public static final String OFFSET_VAR_NAME   = "_$offset";
+  public static final String ARGS_VAR_NAME     = "_$args";
 
   public static final String EVAL_ERROR        = "$error";   // Name of output variable containing error (if any) for eval()
 
@@ -157,7 +158,7 @@ public class Utils {
 
   public static int toInt(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;         }
-    if (value instanceof Byte)       { return (byte)value;                    }
+    if (value instanceof Byte)       { return (byte)value & 0xff;             }
     if (value instanceof Integer)    { return (int)value;                     }
     if (value instanceof Long)       { return (int)(long)value;               }
     if (value instanceof Double)     { return ((Double)value).intValue();     }
@@ -167,7 +168,7 @@ public class Utils {
 
   public static long toLong(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;          }
-    if (value instanceof Byte)       { return (byte)value;                     }
+    if (value instanceof Byte)       { return (byte)value & 0xff;              }
     if (value instanceof Integer)    { return (int)value;                      }
     if (value instanceof Long)       { return (long)value;                     }
     if (value instanceof Double)     { return ((Double)value).longValue();     }
@@ -177,7 +178,7 @@ public class Utils {
 
   public static double toDouble(Object value) {
     if (value instanceof Boolean)    { return (boolean)value ? 1 : 0;            }
-    if (value instanceof Byte)       { return (byte)value;                       }
+    if (value instanceof Byte)       { return (byte)value & 0xff;                }
     if (value instanceof Integer)    { return (int)value;                        }
     if (value instanceof Long)       { return (long)value;                       }
     if (value instanceof Double)     { return (double)value;                     }
@@ -187,7 +188,7 @@ public class Utils {
 
   public static BigDecimal toDecimal(Object value) {
     if (value instanceof Boolean)    { return new BigDecimal((boolean)value ? 1 : 0); }
-    if (value instanceof Byte)       { return new BigDecimal((byte)value);            }
+    if (value instanceof Byte)       { return new BigDecimal((byte)value & 0xff);    }
     if (value instanceof Integer)    { return new BigDecimal((int)value);             }
     if (value instanceof Long)       { return new BigDecimal((long)value);            }
     if (value instanceof Double)     { return BigDecimal.valueOf((double)value);      }
@@ -213,6 +214,9 @@ public class Utils {
     else
     if (obj instanceof Byte || obj instanceof Integer || obj instanceof Short || obj instanceof Character) {
       int value = obj instanceof Character ? (char)obj : ((Number)obj).intValue();
+      if (obj instanceof Byte) {
+        value = value & 0xff;
+      }
       switch (value) {
         case -1:  mv.visitInsn(ICONST_M1);   break;
         case 0:   mv.visitInsn(ICONST_0);    break;
@@ -228,7 +232,6 @@ public class Utils {
           break;
       }
       if (obj instanceof Byte) {
-        mv.visitInsn(I2B);
         return BYTE;
       }
       return INT;
@@ -355,7 +358,7 @@ public class Utils {
   public static void loadArrayElement(MethodVisitor mv, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN:  mv.visitInsn(BALOAD); break;
-      case BYTE:     mv.visitInsn(BALOAD); break;
+      case BYTE:     mv.visitInsn(BALOAD); loadConst(mv, 255); mv.visitInsn(IAND); break;
       case INT:      mv.visitInsn(IALOAD); break;
       case LONG:     mv.visitInsn(LALOAD); break;
       case DOUBLE:   mv.visitInsn(DALOAD); break;
@@ -373,7 +376,7 @@ public class Utils {
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
         break;
       case BYTE:
-        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false);
+        mv.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/RuntimeUtils", "byteValueOf", "(I)Ljava/lang/Byte;", false);
         break;
       case INT:
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
@@ -403,7 +406,6 @@ public class Utils {
         mv.visitInsn(L2I);
         Utils.loadConst(mv, 255);
         mv.visitInsn(IAND);
-        mv.visitInsn(I2B);
       } else if (type.is(JactlType.BOOLEAN, JactlType.INT)) {
         mv.visitInsn(L2I);
       } else if (type.is(DOUBLE)) {
@@ -543,11 +545,12 @@ public class Utils {
     return invokeNew;
   }
 
-  public static Stmt.VarDecl createParam(Token name, JactlType type, Expr initialiser) {
+  public static Stmt.VarDecl createParam(Token name, JactlType type, Expr initialiser, boolean isResultUsed, boolean isExplicitParam) {
     Expr.VarDecl decl  = new Expr.VarDecl(name, new Token(EQUAL,name), initialiser);
     decl.isParam = true;
-    decl.isResultUsed = false;
+    decl.isResultUsed = isResultUsed;
     decl.type = type;
+    decl.isExplicitParam = isExplicitParam;
     return new Stmt.VarDecl(name, decl);
   }
 
@@ -821,5 +824,15 @@ public class Utils {
       }
     }
     return true;
+  }
+
+  public static Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isConst, boolean isBindingVar) {
+    Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
+    varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
+    varDecl.type = type;
+    varDecl.isField = inClassDecl;
+    varDecl.isBindingVar = isBindingVar;
+    varDecl.isConstVar = isConst;
+    return varDecl;
   }
 }

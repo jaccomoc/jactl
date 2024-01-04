@@ -390,7 +390,7 @@ public abstract class Expr {
     public boolean         isParam;             // True if variable is a parameter of function (explicit or implicit)
     public boolean         isExplicitParam;     // True if explicit declared parameter of function
     public boolean         isField;             // True if instance field of a class
-    public boolean         isClassConst;        // True if static final field (i.e. a const value)
+    public boolean         isConstVar;          // True if declared as a constant
     public boolean         isBindingVar;        // True if this is a binding variable in a switch destructing pattern
     public int             slot = -1;           // Which local variable slot
     public int             nestingLevel;        // What level of nested function owns this variable (1 is top level)

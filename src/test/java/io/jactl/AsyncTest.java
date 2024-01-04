@@ -69,7 +69,7 @@ public class AsyncTest {
       expected = new BigDecimal(((String)((String) expected).substring(1)));
     }
     classSources.forEach(s -> Jactl.compileClass(s, context));
-    assertEquals(isAsync, isAsync(source, context));
+    assertEquals(isAsync, isAsync(source, context), isAsync ? "Was not async" : "Was not sync");
     RuntimeState.setInput(new BufferedReader(new StringReader(input)));
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
     assertEquals(expected, script.runSync(Utils.mapOf()));

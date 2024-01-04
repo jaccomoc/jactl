@@ -207,6 +207,9 @@ public class Reducer implements Checkpointable {
     if (!(elemObj instanceof Number)) {
       throw new RuntimeError("Non-numeric element in list (type is " + RuntimeUtils.className(elemObj) + ")", source, offset);
     }
+    if (elemObj instanceof Byte) {
+      elemObj = ((int)(byte)elemObj) & 0xff;
+    }
     if (valueObj instanceof BigDecimal || elemObj instanceof BigDecimal) {
       BigDecimal value = valueObj instanceof BigDecimal ? (BigDecimal)valueObj : RuntimeUtils.toBigDecimal(valueObj);
       BigDecimal elem  = elemObj instanceof BigDecimal ? (BigDecimal)elemObj : RuntimeUtils.toBigDecimal(elemObj);
@@ -220,10 +223,7 @@ public class Reducer implements Checkpointable {
     if (valueObj instanceof Long || elemObj instanceof Long) {
       return ((Number)valueObj).longValue() + ((Number)elemObj).longValue();
     }
-    if (valueObj instanceof Integer || elemObj instanceof Integer) {
-      return ((Number)valueObj).intValue() + ((Number)elemObj).intValue();
-    }
-    return (byte)valueObj + (byte)elemObj;
+    return ((Number)valueObj).intValue() + ((Number)elemObj).intValue();
   }
 
   private Object result() {

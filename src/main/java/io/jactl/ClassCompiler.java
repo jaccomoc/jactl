@@ -473,14 +473,14 @@ public class ClassCompiler {
   }
 
   public void defineField(String name, Expr.VarDecl varDecl) {
-    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | (varDecl.isClassConst ? ACC_STATIC | ACC_FINAL : 0),
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | (varDecl.isConstVar ? ACC_STATIC | ACC_FINAL : 0),
                                               name, varDecl.type.descriptor(), null, null);
     fieldVisitor.visitEnd();
 
     // If not an internal field
     if (!name.startsWith(Utils.JACTL_PREFIX)) {
       // Initialise static fields
-      if (varDecl.isClassConst) {
+      if (varDecl.isConstVar) {
         // Store the field value (since it is a constant) in the static map of field/methods
         classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor());
         Utils.loadConst(classInit,name);
@@ -1241,7 +1241,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, "_$j$checkpoint", "(Lio/jactl/runtime/Checkpointer;)V", false);
     }
 
-    classDecl.fields.stream().filter(f -> !f.declExpr.isClassConst).forEach(f -> {
+    classDecl.fields.stream().filter(f -> !f.declExpr.isConstVar).forEach(f -> {
       mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitFieldInsn(GETFIELD, internalName, f.name.getStringValue(), f.declExpr.type.descriptor());
@@ -1300,7 +1300,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, "_$j$restore", "(Lio/jactl/runtime/Restorer;)V", false);
     }
 
-    classDecl.fields.stream().filter(f -> !f.declExpr.isClassConst).forEach(f -> {
+    classDecl.fields.stream().filter(f -> !f.declExpr.isConstVar).forEach(f -> {
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitVarInsn(ALOAD, RESTORER_SLOT);
       switch (f.declExpr.type.getType()) {

@@ -156,6 +156,7 @@ class TokeniserTest {
     doTest.accept("die", TokenType.DIE);
     doTest.accept("eval", TokenType.EVAL);
     doTest.accept("final", TokenType.FINAL);
+    doTest.accept("const", TokenType.CONST);
     doTest.accept("sealed", TokenType.SEALED);
     doTest.accept("switch", TokenType.SWITCH);
     doTest.accept("default", TokenType.DEFAULT);

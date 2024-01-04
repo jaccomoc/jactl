@@ -1976,8 +1976,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       _loadConst(7);
       mv.visitInsn(IAND);
     }
-    else
-    if (expr.right.type.is(BYTE) && expr.operator.getType().isBitOperator()) {
+    else if (expr.right.type.is(BYTE) && expr.operator.getType().isBitOperator()) {
       _loadConst(255);
       mv.visitInsn(IAND);
     }
@@ -2029,7 +2028,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       ops.forEach(op -> mv.visitInsn(op));
       popType(2);
       if (expr.type.is(BYTE)) {
-        mv.visitInsn(I2B);
+        _loadConst(255);
+        mv.visitInsn(IAND);
       }
       pushType(expr.type);
     }
@@ -3475,6 +3475,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         break;
       case BYTE:
         invokeMethod(Byte.class, "byteValue");
+        _loadConst(255);
+        mv.visitInsn(IAND);
         break;
       case INT:
         invokeMethod(Integer.class, "intValue");
@@ -3732,11 +3734,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY, STRING)) {
       loadLocation(location);
       invokeMethod(RuntimeUtils.class, "castToByte", Object.class, String.class, Integer.TYPE);
+      _loadConst(255);
+      mv.visitInsn(IAND);
+      popType();
+      pushType(BYTE);
     }
     else
     if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       invokeMethod(Number.class, "byteValue");
+      _loadConst(255);
+      mv.visitInsn(IAND);
     }
     else {
       switch (peek().getType()) {
@@ -3745,7 +3753,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         case DOUBLE:  mv.visitInsn(D2I);   break;
         default:      throw new CompileError("Cannot convert " + peek() + " to byte", (Token)location);
       }
-      mv.visitInsn(I2B);
+      _loadConst(255);
+      mv.visitInsn(IAND);
     }
     popType();
     pushType(BYTE);
@@ -3755,6 +3764,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private Void convertToInt(SourceLocation location) {
     if (peek().isBoxedOrUnboxed(INT,BYTE,BOOLEAN)) {
       unbox();
+      if (peek().is(BYTE)) {
+        _loadConst(255);
+        mv.visitInsn(IAND);
+      }
       setStackType(INT);
       return null;
     }
@@ -3792,8 +3805,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeMethod(Number.class, "longValue");
     }
-    else
-    if (peek().isBoxed() || peek().is(DECIMAL)) {
+    else if (peek().is(BYTE.boxed())) {
+      mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
+      invokeMethod(Number.class, "byteValue");
+      _loadConst(255);
+      mv.visitInsn(IAND);
+      mv.visitInsn(I2L);
+    }
+    else if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       invokeMethod(Number.class, "longValue");
     }
@@ -3821,8 +3840,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       invokeMethod(Number.class, "doubleValue");
     }
-    else
-    if (peek().isBoxed() || peek().is(DECIMAL)) {
+    else if (peek().is(BYTE.boxed())) {
+      mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
+      invokeMethod(Number.class, "byteValue");
+      _loadConst(255);
+      mv.visitInsn(IAND);
+      mv.visitInsn(I2D);
+    }
+    else if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       invokeMethod(Number.class, "doubleValue");
     }
@@ -3950,7 +3975,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case BYTE:
         _loadConst((int)-1);
         mv.visitInsn(IXOR);
-        mv.visitInsn(I2B);
+        _loadConst(255);
+        mv.visitInsn(IAND);
         break;
       case INT:
         _loadConst((int)-1);
@@ -3972,7 +3998,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     unbox();
     switch (peek().getType()) {
-      case BYTE:    mv.visitInsn(INEG);  mv.visitInsn(I2B); break;
+      case BYTE:    mv.visitInsn(INEG);  _loadConst(255); mv.visitInsn(IAND); break;
       case INT:     mv.visitInsn(INEG);  break;
       case LONG:    mv.visitInsn(LNEG);  break;
       case DOUBLE:  mv.visitInsn(DNEG);  break;
@@ -4056,7 +4082,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           incOrDec.accept(() -> {
             mv.visitInsn(isInc ? IADD : ISUB);
             popType();
-            if (varDecl.type.is(BYTE)) { mv.visitInsn(I2B); }
+            if (varDecl.type.is(BYTE)) { _loadConst(255); mv.visitInsn(IAND); }
           });
         }
         else {
@@ -4134,10 +4160,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(valueOf(peek(), 1));
     }
     switch (peek().getType()) {
-      case BYTE:    mv.visitInsn(isInc ? IADD : ISUB); mv.visitInsn(I2B); popType();              break;
-      case INT:     mv.visitInsn(isInc ? IADD : ISUB);                    popType();              break;
-      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);                    popType();              break;
-      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);                    popType();              break;
+      case BYTE:    mv.visitInsn(isInc ? IADD : ISUB);
+                    _loadConst(255);
+                    mv.visitInsn(IAND);
+                    popType();
+                    break;
+      case INT:     mv.visitInsn(isInc ? IADD : ISUB);   popType();      break;
+      case LONG:    mv.visitInsn(isInc ? LADD : LSUB);   popType();      break;
+      case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);   popType();      break;
       case DECIMAL: invokeMethod(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class); break;
       default:      throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
@@ -5045,6 +5075,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         default:           methodName = "getValue";          break;
       }
       invokeMethod(HeapLocal.class, methodName);
+      if (varDecl.type.is(BYTE)) {
+        _loadConst(255);
+        mv.visitInsn(IAND);
+      }
       if (varDecl.type.is(INSTANCE,ARRAY)) {
         checkCast(varDecl.type);
       }
@@ -5425,14 +5459,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
   }
 
   private void loadArrayElem(JactlType parentType) {
-    switch (parentType.getArrayElemType().getType()) {
-      case BOOLEAN:  mv.visitInsn(BALOAD); break;
-      case BYTE:     mv.visitInsn(BALOAD); break;
-      case INT:      mv.visitInsn(IALOAD); break;
-      case LONG:     mv.visitInsn(LALOAD); break;
-      case DOUBLE:   mv.visitInsn(DALOAD); break;
-      default:       mv.visitInsn(AALOAD); break;
-    }
+    Utils.loadArrayElement(mv, parentType.getArrayElemType());
     pushType(parentType.getArrayElemType());
   }
 

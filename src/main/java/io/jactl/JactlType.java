@@ -317,6 +317,10 @@ public class JactlType {
     }
   }
 
+  public boolean isSimple() {
+    return isNumeric() || is(STRING);
+  }
+
   public boolean isPrimitive() {
     return !isRef;
   }

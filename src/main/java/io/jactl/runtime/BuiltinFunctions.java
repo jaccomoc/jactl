@@ -713,7 +713,7 @@ public class BuiltinFunctions {
 
   // = abs
   public static Object byteAbsData;
-  public static byte byteAbs(byte n)                { return n < 0 ? (byte)-n : (byte)n; }
+  public static byte byteAbs(byte n)                { return n; }   // All byte values treated as 0-255
   public static Object intAbsData;
   public static int intAbs(int n)                   { return n < 0 ? -n : n; }
   public static Object longAbsData;
@@ -757,6 +757,9 @@ public class BuiltinFunctions {
   // = sqrt
   public static Object numberSqrtData;
   public static Object numberSqrt(Number num, String source, int offset) {
+    if (num instanceof Byte) {
+      num = ((int)(byte)num) & 0xff;
+    }
     if (num.doubleValue() < 0) {
       throw new RuntimeError("Attempt to take square root of negative number: " + num, source, offset);
     }
@@ -782,7 +785,7 @@ public class BuiltinFunctions {
 
   // = sqr
   public static Object byteSqrData;
-  public static int byteSqr(byte num, String source, int offset) { return num * num; }
+  public static int byteSqr(byte num, String source, int offset) { int n = num < 0 ? num + 256 : num; return n * n; }
   public static Object intSqrData;
   public static int intSqr(int num, String source, int offset) { return num * num; }
   public static Object longSqrData;
@@ -795,6 +798,8 @@ public class BuiltinFunctions {
   // = pow
   public static Object numberPowData;
   public static Object numberPow(Number num, String source, int offset, Number power) {
+    if (num instanceof Byte) { num = ((int)(byte)num) & 0xff; }
+    if (power instanceof Byte) { power = ((int)(byte)power) & 0xff; }
     if (num instanceof BigDecimal && !(power instanceof Double || power instanceof BigDecimal) && power.longValue() >= 0) {
       try {
         long exponent = power.longValue();

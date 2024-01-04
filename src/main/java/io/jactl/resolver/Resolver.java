@@ -139,7 +139,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     });
     // Build map of built-in functions, making them look like internal functions for consistency
-    BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, builtinVarDecl(f)));
+    BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, funcDescriptorToVarDecl(f)));
   }
 
   public void resolveClass(Stmt.ClassDecl classDecl) {
@@ -253,7 +253,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (Functions.lookupMethod(ANY, fieldName) != null) {
             error("Field name '" + fieldName + "' clashes with built-in method of same name", varDecl.name);
           }
-          if (varDecl.isClassConst) {
+          if (varDecl.isConstVar) {
             if (!classDescriptor.addStaticField(fieldName, varDecl.type)) {
               error("Static field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
             }
@@ -336,11 +336,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStmts.stmts.addAll(superStmts);
       classStmts.stmts.addAll(classDecl.innerClasses);
       classStmts.stmts.add(thisStmt);
-      classStmts.stmts.addAll(classDecl.fields.stream().filter(decl -> decl.declExpr.isClassConst).collect(Collectors.toList()));
+      classStmts.stmts.addAll(classDecl.fields.stream().filter(decl -> decl.declExpr.isConstVar).collect(Collectors.toList()));
       // Replace the field VarDecls with ones that have no initialisation because we will move the
       // initialisation into a separate init method
       List<Stmt.VarDecl> fields = classDecl.fields.stream()
-                                                  .filter(decl -> !decl.declExpr.isClassConst)
+                                                  .filter(decl -> !decl.declExpr.isConstVar)
                                                   .map(decl -> {
                                                     Expr.VarDecl newDecl = new Expr.VarDecl(decl.name, null, null);
                                                     newDecl.isField = true;
@@ -438,24 +438,36 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       ClassDescriptor classDesc = lookupClass(stmt.className.subList(0, stmt.className.size() - 1));
       String fieldName = field.identifier.getStringValue();
       Consumer<String> defineConst = name -> {
-        JactlType fieldType = classDesc.getStaticField(name);
-        if (fieldType == null) {
-          error("No class static field called '" + name + "' in class " + classDesc.getClassName(), field.location);
+        Token              constName = field.location.newIdent(name);
+        FunctionDescriptor funcDesc   = classDesc.getMethod(name);
+        if (funcDesc != null && !funcDesc.isStatic) {
+          error("Cannot use import static for non-static method", field.location);
         }
-        Token        constName = field.location.newIdent(name);
-        Expr.VarDecl varDecl   = new Expr.VarDecl(constName, null, null);
-        varDecl.isClassConst = true;
-        varDecl.type = fieldType;
-        varDecl.isConst = true;
-        varDecl.constValue = classDesc.getStaticFieldValue(name);
+        Expr.VarDecl varDecl;
+        if (funcDesc != null) {
+          varDecl = funcDescriptorToVarDecl(funcDesc, field.location);
+          varDecl.constValue = funcDesc;
+        }
+        else {
+          JactlType fieldType = classDesc.getStaticField(name);
+          if (fieldType == null) {
+            error("No class static field/method called '" + name + "' in class " + classDesc.getClassName(), field.location);
+          }
+          varDecl            = new Expr.VarDecl(constName, null, null);
+          varDecl.type       = fieldType;
+          varDecl.constValue = classDesc.getStaticFieldValue(name);
+        }
+        varDecl.isConstVar = true;
+        varDecl.isConst        = true;
         name = stmt.as == null ? name : stmt.as.getStringValue();
         if (constants.put(name, varDecl) != null) {
           error("Duplicate constant name '" + name + "'", stmt.location);
         }
       };
       if (fieldName.equals(STAR.asString)) {
-        Set<String> fields = classDesc.getAllStaticFields().keySet();
-        fields.forEach(name -> defineConst.accept(name));
+        // Import all static fields and methods
+        classDesc.getAllStaticFields().keySet().forEach(name -> defineConst.accept(name));
+        classDesc.getAllMethods().filter(entry -> entry.getValue().isStatic).forEach(entry -> defineConst.accept(entry.getKey()));
       }
       else {
         defineConst.accept(fieldName);
@@ -883,19 +895,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.constValue = expr.expr.constValue;
       if (expr.operator.is(MINUS)) {
         switch (expr.type.getType()) {
-          case BYTE:    expr.constValue = (byte)-(int)expr.constValue;            break;
-          case INT:     expr.constValue = -(int)expr.constValue;                  break;
-          case LONG:    expr.constValue = -(long)expr.constValue;                 break;
-          case DOUBLE:  expr.constValue = -(double)expr.constValue;               break;
-          case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate(); break;
+          case BYTE:    expr.constValue = (byte)-((Number)expr.constValue).intValue(); break;
+          case INT:     expr.constValue = -(int)expr.constValue;                       break;
+          case LONG:    expr.constValue = -(long)expr.constValue;                      break;
+          case DOUBLE:  expr.constValue = -(double)expr.constValue;                    break;
+          case DECIMAL: expr.constValue = ((BigDecimal)expr.constValue).negate();      break;
         }
       }
       else
       if (expr.operator.is(GRAVE)) {
         switch (expr.type.getType()) {
-          case BYTE:      expr.constValue = (byte)~(int) expr.constValue;   break;
-          case INT:       expr.constValue = ~(int) expr.constValue;         break;
-          case LONG:      expr.constValue = ~(long) expr.constValue;        break;
+          case BYTE:      expr.constValue = (byte)~((Number)expr.constValue).intValue();   break;
+          case INT:       expr.constValue = ~(int) expr.constValue;                        break;
+          case LONG:      expr.constValue = ~(long) expr.constValue;                       break;
         }
       }
       else
@@ -928,9 +940,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Special case for single char strings if casting to int or byte
     if (expr.expr.type.is(STRING) && expr.type.is(BYTE,INT)) {
       if (expr.expr.isConst && expr.expr.constValue instanceof String) {
-        String value = (String)expr.expr.constValue;
+        String value = (String) expr.expr.constValue;
         if (value.length() != 1) {
-          error((value.isEmpty()?"Empty String":"String with multiple chars") + " cannot be cast to int", expr.location);
+          error((value.isEmpty() ? "Empty String" : "String with multiple chars") + " cannot be cast to int", expr.location);
         }
         expr.isConst = true;
         int charVal = value.charAt(0);
@@ -938,18 +950,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           expr.constValue = charVal;
         }
         else {
-          expr.constValue = (byte)charVal;
+          expr.constValue = (byte) charVal;
         }
-      }
-      else if (expr.expr.isConst) {
-        expr.isConst = true;
-        expr.constValue = castToType(expr.expr.constValue, expr.castType, expr.location);
       }
       return expr.type;
     }
 
     // Throw error if bad cast
     checkTypeConversion(expr.expr, expr.castType, true, expr.location);
+
+    if (expr.expr.isConst && expr.castType.isSimple()) {
+      expr.isConst = true;
+      expr.constValue = castToType(expr.expr.constValue, expr.castType, expr.location);
+    }
 
     // We have a cast so our type is the type we are casting to
     return expr.type;
@@ -1022,14 +1035,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(expr.initialiser);
     checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
 
-    // For class static final fields make sure we have a const value since we need the value at compile time
-    if (expr.isClassConst) {
+    // For constants make sure we have a const value since we need the value at compile time
+    if (expr.isConstVar) {
       if (expr.initialiser == null || !expr.initialiser.isConst) {
-        error("Static final fields must be initialised to simple constant values", expr.initialiser.location);
+        error("Constants must be initialised to simple constant values", expr.initialiser.location);
       }
-      classStack.peek().classDescriptor.setStaticFieldValue(expr.name.getStringValue(), expr.initialiser.constValue);
-      expr.isConst = true;
+      // If constant is a class field
+      Stmt.ClassDecl classDesc = classStack.peek();
+      String         varName   = expr.name.getStringValue();
       expr.constValue = castToType(expr.initialiser.constValue, expr.type, expr.location);
+      expr.isConst = true;
+      if (classDesc != null && classDesc.classDescriptor.getStaticField(varName) != null) {
+        classDesc.classDescriptor.setStaticFieldValue(varName, expr.constValue);
+      }
     }
 
     define(expr.name, expr);
@@ -1194,8 +1212,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.type = ANY;
     }
 
-    if (expr.identifierExpr.varDecl.isClassConst) {
-      error("Cannot modify static final field", expr.location);
+    if (expr.identifierExpr.varDecl.isConstVar) {
+      error("Cannot modify a constant", expr.location);
     }
 
     // Flag variable as non-final since it has had an assignment to it
@@ -1245,8 +1263,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Cannot convert from type of right-hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
     }
 
-    if (expr.identifierExpr.varDecl.isClassConst) {
-      error("Cannot modify static final field", expr.location);
+    if (expr.identifierExpr.varDecl.isConstVar) {
+      error("Cannot modify a constant", expr.location);
     }
 
     // Flag variable as non-final since it has had an assignment to it
@@ -1323,7 +1341,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         error("Invalid operation on a class", field.location);
       }
       if (pair.second) {
-        error ("Cannot modify static final field", field.location);
+        error ("Cannot modify a constant", field.location);
       }
       if (parent.type.is(CLASS)) {
         error("Cannot modify class field", field.location);
@@ -1754,6 +1772,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       case BYTE: case INT: {
         int left  = Utils.toInt(leftValue);
         int right = Utils.toInt(rightValue);
+        if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_LESS_THAN)) {
+          right = right & 0x07;
+        }
         throwIf(expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0, "Divide by zero error", expr.right.location);
         switch (expr.operator.getType()) {
           case PLUS:                expr.constValue = left + right;   break;
@@ -1937,7 +1958,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // In repl mode we don't have a top level block, and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (!decl.isParam && isAtTopLevel() && jactlContext.replMode) {
+    if (!decl.isParam && !decl.isConstVar && isAtTopLevel() && jactlContext.replMode) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }
@@ -2136,7 +2157,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   // If we still can't find the variable we search in parent functions to see if the
   // variable exists there (at which point we close over it and it becomes a heap variable
   // rather than one that is a JVM local).
-  private Expr.VarDecl lookup(String name, Token location, boolean functionLookup, boolean existenceCheckOnly) {
+  Expr.VarDecl lookup(String name, Token location, boolean functionLookup, boolean existenceCheckOnly) {
     // Special case for capture vars which are of form $n where n > 0
     // For these vars we actually look for the $@ capture array var since $n means $@[n]
     if (name.charAt(0) == '$') {
@@ -2190,11 +2211,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (varDecl != null) {
-      if (varDecl.isClassConst) {
+      if (varDecl.isConstVar) {
         return varDecl;
       }
       if (varDecl.isField && inStaticContext()) {
-        if (varDecl.funDecl == null && !varDecl.isClassConst) {
+        if (varDecl.funDecl == null && !varDecl.isConstVar) {
           error("Reference to non-static field in static function", location);
         }
         if (varDecl.funDecl != null && !varDecl.funDecl.isStatic()) {
@@ -2476,40 +2497,20 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     BiFunction<String, JactlType,Stmt.VarDecl> createParam =
       (name,type) -> {
-        Token        nameToken = funDecl.startToken.newIdent(name);
-        Expr.VarDecl declExpr  = new Expr.VarDecl(nameToken, null, null);
-        declExpr.type = type;
-        declExpr.isParam = true;
-        declExpr.isExplicitParam = true;
-        declExpr.isResultUsed = false;
-        return new Stmt.VarDecl(nameToken,
-                                declExpr);
+        return Utils.createParam(funDecl.startToken.newIdent(name), type, null, false, true);
       };
     //-----------------------------------
 
-    List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
 
-    String sourceName = "_$source";
-    wrapperParams.add(createParam.apply(sourceName, STRING));
-    Expr.Identifier sourceIdent = ident.apply(sourceName);
+    Expr.Identifier sourceIdent = ident.apply(Utils.SOURCE_VAR_NAME);
+    Expr.Identifier offsetIdent = ident.apply(Utils.OFFSET_VAR_NAME);
+    Expr.Identifier argsIdent   = ident.apply(Utils.ARGS_VAR_NAME);
 
-    String offsetName = "_$offset";
-    wrapperParams.add(createParam.apply(offsetName, INT));
-    Expr.Identifier offsetIdent = ident.apply(offsetName);
-
-    String argsName = "_$args";
-    wrapperParams.add(createParam.apply(argsName, OBJECT_ARR));
-    Expr.Identifier argsIdent = ident.apply(argsName);
-
-    Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(startToken,
-                                                      identToken.apply(Utils.wrapperName(funDecl.functionDescriptor.implementingMethod)),
-                                                      ANY,    // wrapper always returns Object
-                                                      wrapperParams,
-                                                      funDecl.isStatic(), false, false);
+    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(startToken, funDecl.functionDescriptor.implementingMethod, funDecl.isStatic());
     wrapperFunDecl.functionDescriptor.isWrapper = true;
     Stmt.Stmts stmts = new Stmt.Stmts();
     List<Stmt> stmtList = stmts.stmts;
-    stmtList.addAll(wrapperParams);
+    stmtList.addAll(wrapperFunDecl.parameters);
 
     if (false) {
       Expr.Print debugPrint = new Expr.Print(new Token("println", 0).setType(PRINTLN),
@@ -2553,7 +2554,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Stmt.Stmts ifTrueStmts = new Stmt.Stmts();
       Expr.ArrayGet getArg0     = new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0));
       Expr.InvokeUtility toObjectArr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", Utils.listOf(Object.class), Utils.listOf(getArg0));
-      ifTrueStmts.stmts.add(assignStmt.apply(argsName, toObjectArr));
+      ifTrueStmts.stmts.add(assignStmt.apply(Utils.ARGS_VAR_NAME, toObjectArr));
       ifTrueStmts.stmts.add(assignStmt.apply(argCountName, new Expr.ArrayLength(startToken, argsIdent)));
       Stmt.If ifArg0IsList = new Stmt.If(startToken,
                                          new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsList),
@@ -2707,7 +2708,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     List<Stmt.VarDecl> mandatoryParams = classDescriptor.getAllMandatoryFields()
                                                         .entrySet()
                                                         .stream()
-                                                        .map(e -> Utils.createParam(token.newIdent(e.getKey()), e.getValue(), null))
+                                                        .map(e -> Utils.createParam(token.newIdent(e.getKey()), e.getValue(), null, true, false))
                                                         .collect(Collectors.toList());
     JactlType    classType     = createClass(classDescriptor);
     Token        initNameToken = token.newIdent(Utils.JACTL_INIT);
@@ -2747,7 +2748,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Assign values for all fields. Mandatory fields get values from corresponding parameter and optional fields
     // are assigned from their initialiser.
-    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isClassConst).forEach(entry -> {
+    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isConstVar).forEach(entry -> {
       Expr.VarDecl varDecl = entry.getValue();
       Token fieldToken     = varDecl.name;
       Token paramToken     = fieldToken.newIdent(paramName.apply(fieldToken.getStringValue()));
@@ -2786,22 +2787,22 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // no args. If there are mandatory fields then we generate an error.
     Stmt.ClassDecl classDecl = initMethod.classDecl;
     JactlType      classType = JactlType.createClass(classDecl.classDescriptor);
-    String    sourceName = "_$source";
+    String    sourceName = Utils.SOURCE_VAR_NAME;
     int    SOURCE_SLOT    = 2;
-    String offsetName     = "_$offset";
+    String offsetName     = Utils.OFFSET_VAR_NAME;
     int    OFFSET_SLOT    = 3;
     String objectArrName  = "_$objArr";             // Wrapper funcs always have Object[] parameter type.
     Token  classToken     = classDecl.name;
     Token  sourceToken    = classToken.newIdent(sourceName);
     Token  offsetToken    = classToken.newIdent(offsetName);
     Token        objectArrToken = classToken.newIdent(objectArrName);
-    Stmt.VarDecl sourceParam    = Utils.createParam(sourceToken, STRING, null);
-    Stmt.VarDecl offsetParam    = Utils.createParam(offsetToken, INT, null);
-    Stmt.VarDecl objectArrParam = Utils.createParam(objectArrToken, OBJECT_ARR, null);
-    Expr.FunDecl initWrapper = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_WRAPPER),
-                                                   ANY,   /* wrappers always return Object */
-                                                   Utils.listOf(sourceParam,offsetParam,objectArrParam),
-                                                   false, true, false);
+    Stmt.VarDecl sourceParam    = Utils.createParam(sourceToken, STRING, null, true, false);
+    Stmt.VarDecl offsetParam    = Utils.createParam(offsetToken, INT, null, true, false);
+    Stmt.VarDecl objectArrParam = Utils.createParam(objectArrToken, OBJECT_ARR, null, true, false);
+    Expr.FunDecl initWrapper    = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_WRAPPER),
+                                                      ANY,   /* wrappers always return Object */
+                                                      Utils.listOf(sourceParam,offsetParam,objectArrParam),
+                                                      false, true, false);
     initWrapper.functionDescriptor.isWrapper = true;
     initWrapper.isWrapper     = true;
     Stmt.Stmts wrapperSmts    = new Stmt.Stmts();
@@ -2856,7 +2857,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Assign value to each field from map or from initialiser
     Expr.Literal trueLiteral = new Expr.Literal(new Token(TRUE, classToken).setValue(true));
-    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isClassConst).forEach(entry -> {
+    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isConstVar).forEach(entry -> {
       Expr.VarDecl varDecl          = entry.getValue();
       Token        fieldToken       = varDecl.name;
       Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
@@ -2946,8 +2947,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return new Stmt.Return(token, new Expr.Return(token, expr, type));
   }
 
-  private Expr.VarDecl builtinVarDecl(FunctionDescriptor func) {
-    Function<TokenType,Token> token = t -> new Token(null, 0).setType(t);
+  private Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func) {
+    return funcDescriptorToVarDecl(func, new Token(null,0));
+  }
+
+  private Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func, Token tok) {
+    Function<TokenType,Token> token = t -> tok.setType(t);
     List<Stmt.VarDecl> params = new ArrayList<>();
     for (int i = 0; i < func.paramTypes.size(); i++) {
       final Expr.VarDecl p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null, null);
@@ -2956,10 +2961,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     Expr.FunDecl funDecl = new Expr.FunDecl(null, null, func.returnType, params);
     funDecl.functionDescriptor = func;
+    funDecl.wrapper = createWrapperFunDecl(tok, func.wrapperMethod, func.isStatic);
     Expr.VarDecl varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), token.apply(EQUAL), funDecl);
     varDecl.funDecl = funDecl;
     varDecl.type = FUNCTION;
     return varDecl;
+  }
+
+  private Expr.FunDecl createWrapperFunDecl(Token token, String name, boolean isStatic) {
+    List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
+    wrapperParams.add(Utils.createParam(token.newIdent(Utils.SOURCE_VAR_NAME), STRING));
+    wrapperParams.add(Utils.createParam(token.newIdent(Utils.OFFSET_VAR_NAME), INT));
+    wrapperParams.add(Utils.createParam(token.newIdent(Utils.ARGS_VAR_NAME),   OBJECT_ARR));
+    return Utils.createFunDecl(token, token.newIdent(Utils.wrapperName(name)), ANY, wrapperParams, isStatic, false, false);
   }
 
   static Expr literalDefaultValue(Token location, JactlType type) {

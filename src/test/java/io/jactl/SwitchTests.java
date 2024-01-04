@@ -791,10 +791,11 @@ public class SwitchTests extends BaseTest {
 
   @Test public void switchTypeByte() {
     test("switch ((byte)3) { 3 -> true; default -> false }", true);
-    test("switch ((byte)-128) { -128 -> true; default -> false }", true);
+    test("switch ((byte)-128) { (byte)-128 -> true; default -> false }", true);
+    test("switch ((byte)-128) { 128 -> true; default -> false }", true);
     test("switch ((byte)127) { 127 -> true; default -> false }", true);
-    testError("switch ((byte)128) { 128 -> true; default -> false }", "can never match");
-    testError("switch ((byte)128) { -129 -> true; default -> false }", "can never match");
+    testError("switch ((byte)128) { -1 -> true; default -> false }", "can never match");
+    testError("switch ((byte)128) { 256 -> true; default -> false }", "can never match");
     test("byte x = 3; switch (x) { 3 -> true; default -> false }", true);
     testError("byte x = 0; switch (x) { false ->  null; 0 -> true; default -> false }", "can never match");
     testError("byte x = 3; switch (x) { 3L -> true; default -> false }", "can never match");
@@ -806,6 +807,7 @@ public class SwitchTests extends BaseTest {
     test("def x = (byte)3; switch (x) { true -> 1; 3 -> true; default -> 2 }", true);
     test("def x = (byte)0; switch (x) { false -> null; 3 -> true; default -> false }", false);
     test("def x = (byte)3; switch (x) { 3 -> true; default -> false }", true);
+    test("def x = (byte)-3; switch (x) { (byte)-3 -> true; default -> false }", true);
     test("def x = (byte)3; switch (x) { 5 -> null; 3 -> true; default -> false }", true);
     test("def x = (byte)4; switch (x) { 5 -> null; 3 -> true; default -> false }", false);
     test("def x = (byte)4; switch (x) { long -> null; byte -> true; default -> false }", true);
@@ -1137,14 +1139,16 @@ public class SwitchTests extends BaseTest {
     test("def x = [['3'],['4']] as String[][]; switch (x) { [[_],['3']] -> '3'; [_,[String a]] -> a; _ -> null }", "4");
   }
 
-  @Test public void switchClassConstants() {
-    test("class X { static final int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
-    test("package a.b.c; class X { static final int A=1, B=2, C=3 }; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
-    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "package a.b.c; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
-    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "import a.b.c.X; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
-    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "import static a.b.c.X.*; int x = 2; switch (x) { A -> 'a'; B -> 'b'; C -> 'c' }", "b");
-//    test(Utils.listOf("package a.b.c; class X { static final int A=1, B=2, C=3 }"), "import static a.b.c.X.A as a; int x = 2; switch (x) { a -> 'a'; B -> 'b'; C -> 'c' }", "b");
-    testError("class X { static final int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A() -> 'a'; X.B -> 'b'; X.C -> 'c' }", "unknown class");
-    test("class X { static final int a=1, b=2, c=3 }; int x = 2; switch (x) { X.a -> 'a'; X.b -> 'b'; X.c -> 'c' }", "b");
+  @Test public void switchConstants() {
+    test("class X { const int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test("package a.b.c; class X { const int A=1, B=2, C=3 }; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "package a.b.c; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "import a.b.c.X; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "import static a.b.c.X.*; int x = 2; switch (x) { A -> 'a'; B -> 'b'; C -> 'c' }", "b");
+    test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"),
+         "import static a.b.c.X.A as a; import static a.b.c.X.B as B; import a.b.c.X;\n" +
+         "int x = 2; switch (x) { a -> 'a'; B -> 'b'; X.C -> 'c' }", "b");
+    testError("class X { const int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A() -> 'a'; X.B -> 'b'; X.C -> 'c' }", "unknown class");
+    test("class X { const int a=1, b=2, c=3 }; int x = 2; switch (x) { X.a -> 'a'; X.b -> 'b'; X.c -> 'c' }", "b");
   }
 }

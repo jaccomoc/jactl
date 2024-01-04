@@ -245,6 +245,9 @@ public class RuntimeUtils {
       if (obj1 instanceof BigDecimal || obj2 instanceof BigDecimal) {
         return toBigDecimal(obj1).compareTo(toBigDecimal(obj2));
       }
+
+      if (obj1 instanceof Byte) { obj1 = ((int)(byte)obj1) & 0xff; }
+      if (obj2 instanceof Byte) { obj2 = ((int)(byte)obj2) & 0xff; }
       Number n1 = (Number) obj1;
       Number n2 = (Number) obj2;
       if (obj1 instanceof Double || obj2 instanceof Double) {
@@ -366,6 +369,10 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    boolean resultIsByte = left instanceof Byte && right instanceof Byte;
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -378,15 +385,11 @@ public class RuntimeUtils {
       return lhs + rhs;
     }
 
-    if (left instanceof Integer || right instanceof Integer) {
-      int lhs = ((Number) left).intValue();
-      int rhs = ((Number) right).intValue();
-      return lhs + rhs;
-    }
-
-    byte lhs = (byte)left;
-    byte rhs = (byte)right;
-    return (byte)(lhs + rhs);
+    int lhs = ((Number) left).intValue();
+    int rhs = ((Number) right).intValue();
+    int result = lhs + rhs;
+    if (resultIsByte) { return (byte)result; }
+    return result;
   }
 
   public static Object plus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -403,6 +406,12 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    if (left instanceof Byte && right instanceof Byte) {
+      return (byte)((byte)left + (byte)right);
+    }
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -415,15 +424,9 @@ public class RuntimeUtils {
       return lhs + rhs;
     }
 
-    if (left instanceof Integer || right instanceof Integer) {
-      int lhs = ((Number) left).intValue();
-      int rhs = ((Number) right).intValue();
-      return lhs + rhs;
-    }
-
-    byte lhs = (byte)left;
-    byte rhs = (byte)right;
-    return (byte)(lhs + rhs);
+    int lhs = ((Number) left).intValue();
+    int rhs = ((Number) right).intValue();
+    return lhs + rhs;
   }
 
   public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -443,6 +446,12 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    if (left instanceof Byte && right instanceof Byte) {
+      return (byte)((byte)left * (byte)right);
+    }
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -455,15 +464,9 @@ public class RuntimeUtils {
       return lhs * rhs;
     }
 
-    if (left instanceof Integer || right instanceof Integer) {
-      int lhs = ((Number) left).intValue();
-      int rhs = ((Number) right).intValue();
-      return lhs * rhs;
-    }
-
-    byte lhs = (byte)left;
-    byte rhs = (byte)right;
-    return (byte)(lhs * rhs);
+    int lhs = ((Number) left).intValue();
+    int rhs = ((Number) right).intValue();
+    return lhs * rhs;
   }
 
   public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -482,6 +485,12 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    if (left instanceof Byte && right instanceof Byte) {
+      return (byte)((byte)left - (byte)right);
+    }
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -494,15 +503,9 @@ public class RuntimeUtils {
       return lhs - rhs;
     }
 
-    if (left instanceof Integer || right instanceof Integer) {
-      int lhs = ((Number) left).intValue();
-      int rhs = ((Number) right).intValue();
-      return lhs - rhs;
-    }
-
-    byte lhs = (byte)left;
-    byte rhs = (byte)right;
-    return (byte)(lhs - rhs);
+    int lhs = ((Number) left).intValue();
+    int rhs = ((Number) right).intValue();
+    return lhs - rhs;
   }
 
   public static Object divide(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
@@ -518,6 +521,10 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    boolean resultIsByte = left instanceof Byte && right instanceof Byte;
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -531,15 +538,11 @@ public class RuntimeUtils {
         return lhs / rhs;
       }
 
-      if (left instanceof Integer || right instanceof Integer) {
-        int lhs = ((Number) left).intValue();
-        int rhs = ((Number) right).intValue();
-        return lhs / rhs;
-      }
-
-      byte lhs = (byte) left;
-      byte rhs = (byte) right;
-      return (byte) (lhs / rhs);
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
+      int result = lhs / rhs;
+      if (resultIsByte) { return (byte)result; }
+      return result;
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
@@ -559,6 +562,10 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    boolean resultIsByte = left instanceof Byte && right instanceof Byte;
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -572,15 +579,11 @@ public class RuntimeUtils {
         return lhs % rhs;
       }
 
-      if (left instanceof Integer || right instanceof Integer) {
-        int lhs = ((Number) left).intValue();
-        int rhs = ((Number) right).intValue();
-        return lhs % rhs;
-      }
-
-      byte lhs = (byte)left;
-      byte rhs = (byte)right;
-      return (byte)(lhs % rhs);
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
+      int result = lhs % rhs;
+      if (resultIsByte) { return (byte)result; }
+      return result;
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
@@ -600,6 +603,10 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    boolean resultIsByte = left instanceof Byte && right instanceof Byte;
+    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+
     if (left instanceof Double || right instanceof Double) {
       double lhs = ((Number) left).doubleValue();
       double rhs = ((Number) right).doubleValue();
@@ -613,15 +620,11 @@ public class RuntimeUtils {
         return ((lhs % rhs) + rhs) % rhs;
       }
 
-      if (left instanceof Integer || right instanceof Integer) {
-        int lhs = ((Number) left).intValue();
-        int rhs = ((Number) right).intValue();
-        return ((lhs % rhs) + rhs) % rhs;
-      }
-
-      byte lhs = (byte)left;
-      byte rhs = (byte)right;
-      return (byte)(((lhs % rhs)+rhs) % rhs);
+      int lhs = ((Number) left).intValue();
+      int rhs = ((Number) right).intValue();
+      int result = ((lhs % rhs) + rhs) % rhs;
+      if (resultIsByte) { return (byte)result; }
+      return result;
     }
     catch (ArithmeticException e) {
       throw new RuntimeError("Divide by zero", source, offset);
@@ -866,11 +869,14 @@ public class RuntimeUtils {
 
     // >> is special since it works differently for negative numbers
     if (operator == DOUBLE_GREATER_THAN) {
-      long lhs = ((Number) left).longValue();
+      long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((int)(byte)left) & 0xff : (int)left;
       result = lhs >> rhs;
     }
     else {
-      long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((byte)left) & 0xff : (long)(int)left & 0xffffffffL;
+      long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((long)(byte)left) & 0xff : ((long)(int)left) & 0xffffffffL;
+      if (left instanceof Byte && operator == DOUBLE_LESS_THAN) {
+        rhs = rhs & 0x07;
+      }
       switch (operator) {
         case DOUBLE_LESS_THAN:    result = lhs << rhs;  break;
         case TRIPLE_GREATER_THAN: result = lhs >>> rhs; break;
@@ -1074,7 +1080,7 @@ public class RuntimeUtils {
       obj = Arrays.asList((Object[]) obj);
     }
     if (obj instanceof boolean[]) { return Arrays.toString((boolean[])obj); }
-    if (obj instanceof byte[])    { return Arrays.toString((byte[])obj); }
+    if (obj instanceof byte[])    { return byteArrayToString((byte[])obj); }
     if (obj instanceof int[])     { return Arrays.toString((int[])obj); }
     if (obj instanceof long[])    { return Arrays.toString((long[])obj); }
     if (obj instanceof double[])  { return Arrays.toString((double[])obj); }
@@ -1166,12 +1172,27 @@ public class RuntimeUtils {
         return "Function@" + System.identityHashCode(obj);
       }
 
+      if (obj instanceof Byte) {
+        return Integer.toString(((int)(byte)obj) & 0xff);
+      }
+
       // All other types use default toString()
       return obj.toString();
     }
     finally {
       previousObjects.remove(System.identityHashCode(obj));
     }
+  }
+
+  private static String byteArrayToString(byte[] array) {
+    StringBuilder sb = new StringBuilder();
+    sb.append('[');
+    for (int i = 0; i < array.length; i++) {
+      if (i > 0) { sb.append(", "); }
+      sb.append(((int)array[i]) & 0xff);
+    }
+    sb.append(']');
+    return sb.toString();
   }
 
   /**
@@ -1840,7 +1861,7 @@ public class RuntimeUtils {
     Object       fieldOrMethod = jactlObj._$j$getFieldsAndMethods().get(fieldName);
     if (fieldOrMethod == null) {
       if (jactlObj._$j$getStaticFieldsAndMethods().get(fieldName) != null) {
-        throw new RuntimeError("Cannot modify static final field '" + fieldName + "' for class " + className(parent), source, offset);
+        throw new RuntimeError("Cannot modify a constant field '" + fieldName + "' of class " + className(parent), source, offset);
       }
       throw new RuntimeError("No such field '" + fieldName + "' for class " + className(parent), source, offset);
     }
@@ -2097,6 +2118,11 @@ public class RuntimeUtils {
     }
   }
 
+  public static Byte byteValueOf(int b) {
+    b = b & 0xff;
+    return Byte.valueOf(b >= 128 ? (byte)(b - 256) : (byte)b);
+  }
+
   public static byte castToByte(Object obj, String source, int offset) {
     if (obj instanceof Number) {
       return ((Number) obj).byteValue();
@@ -2115,6 +2141,9 @@ public class RuntimeUtils {
   }
 
   public static int castToInt(Object obj, String source, int offset) {
+    if (obj instanceof Byte) {
+      return ((int)(byte)obj) & 0xff;
+    }
     if (obj instanceof Number) {
       return ((Number) obj).intValue();
     }
@@ -2140,6 +2169,9 @@ public class RuntimeUtils {
   }
 
   public static Number castToNumber(Object obj, String source, int offset) {
+    if (obj instanceof Byte) {
+      return ((int)(byte)obj) & 0xff;
+    }
     if (obj instanceof Number) {
       return (Number) obj;
     }
@@ -2436,7 +2468,7 @@ public class RuntimeUtils {
     if (val instanceof Integer)    { return BigDecimal.valueOf((int)val); }
     if (val instanceof Long)       { return BigDecimal.valueOf((long)val); }
     if (val instanceof Double)     { return BigDecimal.valueOf((double)val); }
-    if (val instanceof Byte)       { return BigDecimal.valueOf((byte)val); }
+    if (val instanceof Byte)       { return BigDecimal.valueOf(((int)(byte)val) & 0xff); }
     return null;
   }
 

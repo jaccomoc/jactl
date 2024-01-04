@@ -9,13 +9,21 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
-import static io.jactl.TokenType.NULL;
-import static io.jactl.TokenType.UNDERSCORE;
+import static io.jactl.JactlType.BYTE;
+import static io.jactl.JactlType.CLASS;
+import static io.jactl.JactlType.INT;
+import static io.jactl.JactlType.STRING;
+import static io.jactl.TokenType.*;
 
 public class SwitchResolver {
 
   public static JactlType visitSwitch(Resolver resolver, Expr.Switch expr) {
     resolver.resolve(expr.subject);
+
+    // Verify that the only non-literals are identifiers (for capture vars) or '_' or '*'
+    // and create VarDecl expressions for first use of each identifier.
+    expr.cases.forEach(c -> c.patterns = validateSwitchPatterns(resolver, c.patterns));
+
     JactlType    subjectType = expr.subject.type;
     Stmt.VarDecl itVar       = resolver.createVarDecl(expr.matchToken, Utils.IT_VAR, subjectType.unboxed(), expr.subject);
     expr.itVar = itVar.declExpr;
@@ -108,7 +116,7 @@ public class SwitchResolver {
       if (!subjectType.boxed().is(patType.boxed())) {
         // Only implicit conversion allowed is between byte and int
         if (patType.is(INT) && subjectType.unboxed().is(BYTE)) {
-          return (int) pat.constValue <= 127 && (int) pat.constValue >= -128;
+          return (int) pat.constValue >= 0 && (int) pat.constValue < 256;
         }
         return false;
       }
@@ -306,6 +314,109 @@ public class SwitchResolver {
     literal.value.setValue(descriptor.getStaticFieldValue(fieldName));
     resolver.resolve(literal);
     return literal;
+  }
+
+  private static List<Pair<Expr,Expr>> validateSwitchPatterns(Resolver resolver, List<Pair<Expr,Expr>> exprs) {
+    return _validateSwitchPattern(resolver, exprs, new HashSet<>());
+  }
+
+  private static List<Pair<Expr,Expr>> _validateSwitchPattern(Resolver resolver, List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
+    return exprs.stream()
+                .map(p -> Pair.create(_validateSwitchPattern(resolver, p.first, bindingVars, new HashSet<>()), p.second))
+                .collect(Collectors.toList());
+  }
+
+  /**
+   * Validate variables in pattern of a switch case and replace Identifier with VarDecl where appropriate.
+   *
+   * @param resolver
+   * @param expr        the pattern
+   * @param bindingVars the binding variables for the entire case
+   * @param varsSeen    binding variables seen in this pattern
+   * @return transformed expression
+   */
+  private static Expr _validateSwitchPattern(Resolver resolver, Expr expr, Set<String> bindingVars, Set<String> varsSeen) {
+    if (expr instanceof Expr.ListLiteral) {
+      Expr.ListLiteral listExpr = (Expr.ListLiteral) expr;
+      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateSwitchPattern(resolver, e, bindingVars, varsSeen)).collect(Collectors.toList());
+      listExpr.exprs.stream()
+                    .filter(e -> e instanceof Expr.Identifier && ((Expr.Identifier) e).identifier.is(STAR))
+                    .skip(1)
+                    .findFirst()
+                    .ifPresent(value -> resolver.error("'" + STAR.asString + "' can only appear once in a list/map pattern", value.location));
+      return listExpr;
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      Expr.MapLiteral mapLiteral = (Expr.MapLiteral)expr;
+      if (mapLiteral.literalKeyMap == null) {
+        resolver.error("Field names must be constant strings",
+              mapLiteral.entries.stream().filter(pair -> !(pair.first instanceof Expr.Literal)).map(p -> p.first).findFirst().orElse(expr).location);
+      }
+      mapLiteral.entries = mapLiteral.entries.stream().map(pair -> {
+        if (!(pair.first instanceof Expr.Literal)) {
+          resolver.error("Expected string constant for map key", pair.first.location);
+        }
+        return Pair.create(pair.first, _validateSwitchPattern(resolver, pair.second, bindingVars, varsSeen));
+      }).collect(Collectors.toList());
+      return mapLiteral;
+    }
+    if (expr instanceof Expr.ConstructorPattern) {
+      Expr.ConstructorPattern constructorPattern = (Expr.ConstructorPattern) expr;
+      if (constructorPattern.args instanceof Expr.MapLiteral) {
+        Expr.MapLiteral args = (Expr.MapLiteral) constructorPattern.args;
+        args.entries = args.entries.stream().map(a -> Pair.create(a.first,_validateSwitchPattern(resolver, a.second, bindingVars, varsSeen))).collect(Collectors.toList());
+        args.literalKeyMap = args.entries.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.toString(), p -> p.second));
+      }
+      else {
+        Expr.ListLiteral args = (Expr.ListLiteral) constructorPattern.args;
+        args.exprs = args.exprs.stream().map(a -> _validateSwitchPattern(resolver, a, bindingVars, varsSeen)).collect(Collectors.toList());
+      }
+      return constructorPattern;
+    }
+    if (expr instanceof Expr.Literal || expr instanceof Expr.TypeExpr) {
+      return expr;
+    }
+    if (expr instanceof Expr.VarDecl) {
+      String name = ((Expr.VarDecl) expr).name.getStringValue();
+      if (bindingVars.contains(name)) {
+        resolver.error("Binding variable '" + name + "' already declared in switch pattern", expr.location);
+      }
+      bindingVars.add(name);
+      varsSeen.add(name);
+      return expr;
+    }
+    if (expr instanceof Expr.Identifier && !((Expr.Identifier) expr).identifier.is(DOLLAR_IDENTIFIER)) {
+      Token name = ((Expr.Identifier) expr).identifier;
+      String varName = name.getStringValue();
+
+      // Turn into a Literal value if we have a constant
+      Expr.VarDecl varDecl = resolver.lookup(varName, name, false, true);
+      if (varDecl != null && varDecl.isConstVar) {
+        Expr.Literal literal = (Expr.Literal)Resolver.literalDefaultValue(name, varDecl.type);
+        literal.value.setValue(varDecl.constValue);
+        return literal;
+      }
+
+      // Otherwise, if first occurrence then create a VarDecl for the binding var.
+      // We will check for clash with other variables later.
+      if (!name.is(UNDERSCORE,STAR)) {
+        if (!bindingVars.contains(varName)) {
+          bindingVars.add(varName);
+          expr = Utils.createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, false, true);
+        }
+        else {
+          // Check if we are first use in this pattern. Previous patterns for the case (separate by commas)
+          // might have the VarDecl in which case we need to know to reinitialise value first time bound in
+          // this pattern.
+          if (!varsSeen.contains(varName)) {
+            ((Expr.Identifier)expr).firstTimeInPattern = true;
+            varsSeen.add(varName);
+          }
+        }
+      }
+      return expr;
+    }
+    return expr;
   }
 
 }
