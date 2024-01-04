@@ -799,7 +799,8 @@ public class SwitchTests extends BaseTest {
     test("byte x = 3; switch (x) { 3 -> true; default -> false }", true);
     testError("byte x = 0; switch (x) { false ->  null; 0 -> true; default -> false }", "can never match");
     testError("byte x = 3; switch (x) { 3L -> true; default -> false }", "can never match");
-    test("byte x = 3; switch (x) { 5 -> null; 3 -> true; default -> false }", true);
+    test("byte x = -3; switch (x) { 5 -> null; (byte)-3 -> true; default -> false }", true);
+    test("const byte x = -3; switch (x) { 5 -> null; (byte)-3 -> true; default -> false }", true);
     testError("byte x = 4; switch (x) { /abc/r -> null; byte -> true; default -> false }", "can never match");
     testError("byte x = 4; switch (x) { long -> null; byte -> true; default -> false }", "can never match");
     testError("byte x = 4; switch (x) { String -> true; default -> false }", "can never match");

@@ -1394,18 +1394,36 @@ class CompilerTest extends BaseTest {
     test("boolean v = true; v", true);
     test("boolean v = !false; v", true);
     test("boolean v = !true; v", false);
+    test("var v = false", false);
+    test("var v = true", true);
+    test("var v = false; v", false);
+    test("var v = true; v", true);
+    test("var v = !false; v", true);
+    test("var v = !true; v", false);
+    test("const v = false", false);
+    test("const v = true", true);
+    test("const v = false; v", false);
+    test("const v = true; v", true);
     test("int v = 1; v", 1);
     test("int v = 1", 1);
     test("var v = 1; v", 1);
+    test("const v = 1; v", 1);
     test("long v = 1; v", 1L);
     test("var v = 1L; v", 1L);
+    test("const v = 1L; v", 1L);
     test("double v = 1; v", 1D);
     test("double v = 1.5; v", 1.5D);
     test("var v = 1D; v", 1D);
+    test("const v = 1D; v", 1D);
     test("Decimal v = 1; v", "#1");
     test("var v = 1.0; v", "#1.0");
+    test("const v = 1.0; v", "#1.0");
     test("def x = 'abc', y = 'xyz'", "xyz");
     test("boolean x = 1", true);
+
+    alwaysEvalConsts = true;
+    test("const v = !false; v", true);
+    test("const v = !true; v", false);
   }
 
   @Test public void multipleVarDecls() {
@@ -2674,6 +2692,26 @@ class CompilerTest extends BaseTest {
     test("var TRUE=true; var FALSE=false; TRUE  || TRUE && TRUE", true);
     test("var TRUE=true; var FALSE=false; FALSE || !FALSE && TRUE", true);
 
+    test("const TRUE=true; const FALSE=false; !TRUE", false);
+    test("const TRUE=true; const FALSE=false; !FALSE", true);
+    test("const TRUE=true; const FALSE=false; !!TRUE", true);
+    test("const TRUE=true; const FALSE=false; !!FALSE", false);
+    test("const TRUE=true; const FALSE=false; !(!!TRUE)", false);
+    test("const TRUE=true; const FALSE=false; !!(!FALSE)", true);
+    test("const TRUE=true; const FALSE=false; TRUE && TRUE", true);
+    test("const TRUE=true; const FALSE=false; FALSE && TRUE", false);
+    test("const TRUE=true; const FALSE=false; TRUE && FALSE", false);
+    test("const TRUE=true; const FALSE=false; FALSE && FALSE", false);
+    test("const TRUE=true; const FALSE=false; TRUE || TRUE", true);
+    test("const TRUE=true; const FALSE=false; FALSE || TRUE", true);
+    test("const TRUE=true; const FALSE=false; TRUE || FALSE", true);
+    test("const TRUE=true; const FALSE=false; FALSE || FALSE", false);
+    test("const TRUE=true; const FALSE=false; !FALSE || FALSE", true);
+    test("const TRUE=true; const FALSE=false; FALSE || TRUE && FALSE", false);
+    test("const TRUE=true; const FALSE=false; TRUE  || TRUE && FALSE", true);
+    test("const TRUE=true; const FALSE=false; TRUE  || TRUE && TRUE", true);
+    test("const TRUE=true; const FALSE=false; FALSE || !FALSE && TRUE", true);
+
     test("def TRUE=true; def FALSE=false; !TRUE", false);
     test("def TRUE=true; def FALSE=false; !FALSE", true);
     test("def TRUE=true; def FALSE=false; !!TRUE", true);
@@ -2885,6 +2923,7 @@ class CompilerTest extends BaseTest {
     test("int v = 2; { v = v + 1; return v }; v = v + 3", 3);
     test("String v = '2'; { v = v + 1; { return v }}", "21");
     test("var v = 2.0; { v = v + 1; { return v }}", "#3.0");
+    test("const v = 2.0; { def x = v + 1; { return x+v }}", "#5.0");
     test("Decimal v = 2.0; { v = v + 1; { return v }}", "#3.0");
     test("def v = '2'; { v = v + 1; { return v }}", "21");
     testError("double v = 2; return v; v = v + 1", "unreachable statement");
@@ -2901,6 +2940,7 @@ class CompilerTest extends BaseTest {
     test("int v = 2; { v = v + 1; v }", 3);
     test("String v = '2'; { v = v + 1; { v }}", "21");
     test("var v = 2.0; { v = v + 1; { v }}", "#3.0");
+    test("const v = 2.0; { def x = v + 1; { x+v }}", "#5.0");
     test("def v = '2'; { v = v + 1; { v }}", "21");
   }
 
@@ -3178,17 +3218,22 @@ class CompilerTest extends BaseTest {
 
   @Test public void constVars() {
     alwaysEvalConsts = true;
-    test("var i = 1", 1);
-    test("var X = 1", 1);
     testError("const int i = 1; i = 2", "cannot modify a constant");
     testError("const int i = 1; i++", "cannot modify a constant");
     testError("const int i = 1; ++i", "cannot modify a constant");
-    test("const int i = 1; i", 1);
     testError("const int i; i", "initialiser expression required");
     testError("const var i; i", "unexpected token 'var'");
     testError("const def i; i", "unexpected token 'def'");
+    test("var i = 1", 1);
+    test("var X = 1", 1);
+    test("const int i = 1; i", 1);
     test("const i = 1", 1);
     test("const i = 1; i", 1);
+    test("var i = (byte)-1", (byte)-1);
+    test("var X = (byte)-1", (byte)-1);
+    test("const byte i = (byte)-1; i", (byte)-1);
+    test("const i = (byte)-1", (byte)-1);
+    test("const i = (byte)-1; i", (byte)-1);
     testError("const List i = [1]; i", "constants can only be simple types");
     testError("const int[] i = [1]; i", "constants can only be simple types");
     testError("const i; i", "initialiser expression required");
