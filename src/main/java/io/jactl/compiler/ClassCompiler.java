@@ -15,8 +15,9 @@
  *
  */
 
-package io.jactl;
+package io.jactl.compiler;
 
+import io.jactl.*;
 import io.jactl.runtime.*;
 import org.objectweb.asm.*;
 import org.objectweb.asm.util.Textifier;
@@ -40,13 +41,13 @@ import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
 
-  final JactlContext        context;
-  final String              internalName;
+  final JactlContext   context;
+  final String         internalName;
   final String              source;
   final String              pkg;
-  final String              className;
-  final Stmt.ClassDecl      classDecl;
-  final String              sourceName;      // Name of source file
+  final String         className;
+  final Stmt.ClassDecl classDecl;
+  final String         sourceName;      // Name of source file
   protected String          internalBaseName;
   protected ClassVisitor    cv;
   protected ClassWriter     cw;

@@ -18,6 +18,7 @@
 package io.jactl.resolver;
 
 import io.jactl.*;
+import io.jactl.compiler.LocalLocation;
 import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 

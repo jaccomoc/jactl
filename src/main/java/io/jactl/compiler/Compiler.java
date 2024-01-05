@@ -15,8 +15,9 @@
  *
  */
 
-package io.jactl;
+package io.jactl.compiler;
 
+import io.jactl.*;
 import io.jactl.resolver.Resolver;
 
 import java.util.Map;
@@ -49,7 +50,7 @@ public class Compiler {
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
     Parser         parser = new Parser(new Tokeniser(source), jactlContext, packageName);
-    Stmt.ClassDecl script   = parser.parseScript(className);
+    Stmt.ClassDecl script = parser.parseScript(className);
     Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(jactlContext);
@@ -80,12 +81,12 @@ public class Compiler {
     compileClass(source, jactlContext, packageName, scriptClass);
   }
 
-  static JactlScript compileWithCompletion(String source, JactlContext jactlContext, Stmt.ClassDecl script) {
+  public static JactlScript compileWithCompletion(String source, JactlContext jactlContext, Stmt.ClassDecl script) {
     ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script);
     return compiler.compileWithCompletion();
   }
 
-  static void compileClass(String source, JactlContext jactlContext, String packageName, Stmt.ClassDecl clss) {
+  public static void compileClass(String source, JactlContext jactlContext, String packageName, Stmt.ClassDecl clss) {
     ClassCompiler compiler = new  ClassCompiler(source, jactlContext, packageName, clss, clss.name.getStringValue() + ".jactl");
     compiler.compileClass();
   }

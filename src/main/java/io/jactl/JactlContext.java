@@ -100,7 +100,7 @@ public class JactlContext {
     return new JactlContextBuilder();
   }
 
-  Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
+  public Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replaceAll("/", ".");
     if (classLoader.getClass(className) != null) {
       // Redefining existing class so create a new ClassLoader. This allows already defined classes that
@@ -224,7 +224,7 @@ public class JactlContext {
 
   //////////////////////////////////
 
-  void asyncWork(Consumer<Object> completion, Continuation c, JactlScriptObject instance) {
+  public void asyncWork(Consumer<Object> completion, Continuation c, JactlScriptObject instance) {
     // Need to execute async task on some sort of blocking work scheduler and then reschedule
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
     // the same thread as we are on).

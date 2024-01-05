@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.compiler.Compiler;
 import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.JactlFunction;
 import io.jactl.runtime.RuntimeError;
@@ -24,7 +25,6 @@ import io.jactl.runtime.RuntimeState;
 
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;

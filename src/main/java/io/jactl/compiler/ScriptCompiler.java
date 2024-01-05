@@ -15,8 +15,9 @@
  *
  */
 
-package io.jactl;
+package io.jactl.compiler;
 
+import io.jactl.*;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.*;

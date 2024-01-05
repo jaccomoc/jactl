@@ -15,7 +15,7 @@
  *
  */
 
-package io.jactl;
+package io.jactl.compiler;
 
 import io.jactl.runtime.SourceLocation;
 

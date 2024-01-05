@@ -92,11 +92,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private boolean isFirstPass = true;       // True if doing first pass through
 
-  Analyser(JactlContext context) {
+  public Analyser(JactlContext context) {
     this.context = context;
   }
 
-  void analyseClass(Stmt.ClassDecl classDecl) {
+  public void analyseClass(Stmt.ClassDecl classDecl) {
     isFirstPass = true;
     analyse(classDecl);
 

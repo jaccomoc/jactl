@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.compiler.Compiler;
 import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.Test;
 

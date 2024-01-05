@@ -15,8 +15,10 @@
  *
  */
 
-package io.jactl;
+package io.jactl.compiler;
 
+import io.jactl.JactlType;
+import io.jactl.Utils;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -24,7 +26,6 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;

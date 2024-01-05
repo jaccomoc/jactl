@@ -18,7 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.*;
-import io.jactl.Compiler;
+import io.jactl.compiler.Compiler;
 
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandles;

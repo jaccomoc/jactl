@@ -31,7 +31,7 @@ public class JactlScript {
   private BiConsumer<Map<String,Object>,Consumer<Object>> script;
   private JactlContext jactlContext;
 
-  JactlScript(JactlContext jactlContext, BiConsumer<Map<String,Object>,Consumer<Object>> script) {
+  public JactlScript(JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
     this.jactlContext = jactlContext;
     this.script        = script;
   }

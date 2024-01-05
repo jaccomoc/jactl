@@ -92,16 +92,20 @@ public class Utils {
 
   /**
    * Get the name of the static field that will contain the handle for a given method
+   * @param methodName method name
+   * @return the name of the static field for the method handle
    */
-  static String staticHandleName(String methodName) {
+  public static String staticHandleName(String methodName) {
     return methodName+"$sh";
   }
 
   /**
    * Get the name of the instance field that will contain the handle for a given method
    * that has been bound to the instance
+   * @param methodName the method name
+   * @return the name of the instance field for the handle of the method
    */
-  static String handleName(String methodName) {
+  public static String handleName(String methodName) {
     return methodName+"$h";
   }
 
@@ -109,16 +113,19 @@ public class Utils {
     return methodName + "$$w";
   }
 
-  static String continuationMethod(String methodName) {
+  public static String continuationMethod(String methodName) {
     return methodName + "$$c";
   }
-  static String continuationHandle(String methodName) { return methodName + "$ch"; }
+  public static String continuationHandle(String methodName) { return methodName + "$ch"; }
 
   /**
    * Return the numeric type which is the "greater" of the two based on this ordering:
-   *   int, long, double, BigDecimal
+   * <pre>  int, long, double, BigDecimal</pre>
+   * @param type1 type 1
+   * @param type2 type 2
+   * @return the number type that is the "greater" of the two types
    */
-  static JactlType maxNumericType(JactlType type1, JactlType type2) {
+  public static JactlType maxNumericType(JactlType type1, JactlType type2) {
     if (!type1.isNumeric() || !type2.isNumeric()) { return null;    }
     if (type1.is(DECIMAL)  || type2.is(DECIMAL))  { return DECIMAL; }
     if (type1.is(DOUBLE)   || type2.is(DOUBLE))   { return DOUBLE;  }
@@ -128,7 +135,7 @@ public class Utils {
     return null;
   }
 
-  static Object convertNumberTo(JactlType type, Object number) {
+  public static Object convertNumberTo(JactlType type, Object number) {
     switch (type.getType()) {
       case BYTE:    return toByte(number);
       case INT:     return toInt(number);
@@ -201,7 +208,7 @@ public class Utils {
     return value.toString();
   }
 
-  static JactlType loadConst(MethodVisitor mv, Object obj) {
+  public static JactlType loadConst(MethodVisitor mv, Object obj) {
     if (obj == null) {
       mv.visitInsn(ACONST_NULL);
       return ANY;
