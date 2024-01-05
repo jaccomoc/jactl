@@ -1679,9 +1679,12 @@ public class ClassTests extends BaseTest {
     testError(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package x.y; import static a.b.c.X.*; import static a.b.c.X.A; A + b", "duplicate constant");
     testError(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package x.y; import static a.b.c.X.* as Z; A + b", "unexpected token");
     test(Utils.listOf("package a.b.c; class X{ static def f() { 3 } }"), "package x.y; import static a.b.c.X.f; f()", 3);
-    test(Utils.listOf("package a.b.c; class X{ static def f() { 3 } }"), "package x.y; import static a.b.c.X.f as F; F()", 3);
     test(Utils.listOf("package a.b.c; class X{ static def f() { 3 } }"), "package x.y; import static a.b.c.X.*; f()", 3);
     testError(Utils.listOf("package a.b.c; class X{ static def f() { 3 }; def g() {2} }"), "package x.y; import static a.b.c.X.*; f() + g()", "unknown variable 'g'");
+    test(Utils.listOf("package a.b.c; class X{ static def f() { 3 } }"), "package x.y; import static a.b.c.X.*; def g = f; g()", 3);
+    test(Utils.listOf("package a.b.c; class X{ static def f() { 3 } }"), "package x.y; import static a.b.c.X.f as F; def g = F; g()", 3);
+    test(Utils.listOf("package a.b.c; class X{ static def f(a,b,c) { a+b+c } }"), "package x.y; import static a.b.c.X.f as F; def g = F; g(1,2,3)", 6);
+    testError(Utils.listOf("package a.b.c; class X{ static def f(a,b,c) { a+b+c } }"), "package x.y; import static a.b.c.X.f as F; def g = F; g(1,2)", "missing mandatory arguments");
   }
 
   @Test public void tripleEquals() {

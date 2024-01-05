@@ -447,7 +447,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         Expr.VarDecl varDecl;
         if (funcDesc != null) {
           varDecl = funcDescriptorToVarDecl(funcDesc, field.location);
-          varDecl.constValue = funcDesc;
+          varDecl.constValue = varDecl.funDecl.wrapper.functionDescriptor;
         }
         else {
           JactlType fieldType = classDesc.getStaticField(name);
@@ -468,7 +468,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (fieldName.equals(STAR.asString)) {
         // Import all static fields and methods
         classDesc.getAllStaticFields().keySet().forEach(name -> defineConst.accept(name));
-        classDesc.getAllMethods().filter(entry -> entry.getValue().isStatic).forEach(entry -> defineConst.accept(entry.getKey()));
+        classDesc.getAllMethods()
+                 .filter(entry -> entry.getValue().isStatic)
+                 .forEach(entry -> defineConst.accept(entry.getKey()));
       }
       else {
         defineConst.accept(fieldName);
@@ -2508,7 +2510,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Expr.Identifier argsIdent   = ident.apply(Utils.ARGS_VAR_NAME);
 
     Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(startToken, funDecl.functionDescriptor.implementingMethod, funDecl.isStatic());
-    wrapperFunDecl.functionDescriptor.isWrapper = true;
     Stmt.Stmts stmts = new Stmt.Stmts();
     List<Stmt> stmtList = stmts.stmts;
     stmtList.addAll(wrapperFunDecl.parameters);
@@ -2687,7 +2688,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                             funDecl.returnType));
 
     wrapperFunDecl.block      = new Stmt.Block(startToken, stmts);
-    wrapperFunDecl.isWrapper  = true;
 
     // Return type must be ANY since if function is invoked by value, caller won't know return type
     wrapperFunDecl.returnType = ANY;
@@ -2962,11 +2962,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     Expr.FunDecl funDecl = new Expr.FunDecl(null, null, func.returnType, params);
     funDecl.functionDescriptor = func;
-    funDecl.wrapper = createWrapperFunDecl(tok, func.wrapperMethod, func.isStatic);
+    funDecl.wrapper = createWrapperFunDecl(tok, func);
     Expr.VarDecl varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), token.apply(EQUAL), funDecl);
     varDecl.funDecl = funDecl;
     varDecl.type = FUNCTION;
     return varDecl;
+  }
+
+  private Expr.FunDecl createWrapperFunDecl(Token token, FunctionDescriptor func) {
+    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(token, func.implementingMethod, func.isStatic);
+    FunctionDescriptor wrapper = wrapperFunDecl.functionDescriptor;
+    wrapper.implementingClassName = func.implementingClassName;
+    wrapper.implementingMethod    = Utils.wrapperName(func.implementingMethod);
+    return wrapperFunDecl;
   }
 
   private Expr.FunDecl createWrapperFunDecl(Token token, String name, boolean isStatic) {
@@ -2974,7 +2982,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     wrapperParams.add(Utils.createParam(token.newIdent(Utils.SOURCE_VAR_NAME), STRING));
     wrapperParams.add(Utils.createParam(token.newIdent(Utils.OFFSET_VAR_NAME), INT));
     wrapperParams.add(Utils.createParam(token.newIdent(Utils.ARGS_VAR_NAME),   OBJECT_ARR));
-    return Utils.createFunDecl(token, token.newIdent(Utils.wrapperName(name)), ANY, wrapperParams, isStatic, false, false);
+    Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(token, token.newIdent(Utils.wrapperName(name)), ANY, wrapperParams, isStatic, false, false);
+    wrapperFunDecl.functionDescriptor.isWrapper = true;
+    wrapperFunDecl.isWrapper = true;
+    return wrapperFunDecl;
   }
 
   static Expr literalDefaultValue(Token location, JactlType type) {

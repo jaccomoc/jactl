@@ -322,6 +322,11 @@ public class Utils {
       }
       return ANY;
     }
+    else if (obj instanceof FunctionDescriptor) {
+      FunctionDescriptor f = (FunctionDescriptor)obj;
+      mv.visitFieldInsn(GETSTATIC, f.implementingClassName, staticHandleName(f.implementingMethod), FUNCTION.descriptor());
+      return FUNCTION;
+    }
     else {
       throw new IllegalStateException("Constant of type " + obj.getClass().getName() + " not supported");
     }
