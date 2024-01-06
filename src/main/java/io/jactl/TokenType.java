@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import java.util.Arrays;
+
 /**
  * Enum for different token types supported in Jactl
  */
@@ -235,4 +237,11 @@ public enum TokenType {
   public String toString() {
     return asString != null ? asString : super.toString();
   }
+
+  public static void main(String[] args) {
+    Arrays.stream(io.jactl.TokenType.values()).forEach(t -> {
+      System.out.println("  IElementType " + t.name() + " = new JactlTokenType(\"" + t.name() + "\", TokenType." + t.name() + ");");
+    });
+  }
+
 }

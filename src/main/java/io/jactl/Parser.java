@@ -66,7 +66,7 @@ public class Parser {
 
   /**
    *<pre>
-   *# parseScript ::= packageDecl? script
+   *# parseScript ::= packageDecl? importStmt* script
    *</pre>
    * @param scriptClassName the class name to use for the script
    * @return the ClassDecl for the compiled script
@@ -100,7 +100,7 @@ public class Parser {
 
   /**
    *<pre>
-   *# parseClass ::= packageDecl? classDecl EOF
+   *# parseClass ::= packageDecl? importStmt* classDecl EOF
    *</pre>
    * @return the ClassDecl for the class
    */
@@ -195,7 +195,7 @@ public class Parser {
 
   /**
    *<pre>
-   *# package ::= "package" IDENTIFIER ( "." IDENTIFIER ) *
+   *# packageDecl ::= PACKAGE IDENTIFIER ( DOT IDENTIFIER ) *
    *</pre>
    */
   private void packageDecl() {
@@ -218,8 +218,8 @@ public class Parser {
   }
 
   /**
-   *# importStmt ::= "import" classPath ("as" IDENTIFIER)?
-   *#             | "import" "static" classPath "." ( IDENTIFIER | "*" )
+   *# importStmt ::= IMPORT classPath (AS IDENTIFIER)?
+   *#             | IMPORT STATIC classPath DOT ( IDENTIFIER | STAR )
    *#
    */
   List<Stmt.Import> importStmts() {
@@ -254,7 +254,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# block ::= "{" stmts "}"
+   *# block ::= LEFT_BRACE stmts RIGHT_BRACE
    *#        | stmts EOF      // Special case for top most script block
    *#
    * </pre>
@@ -363,10 +363,10 @@ public class Parser {
    * <pre>
    *# statement ::= block
    *#            | ifStmt
-   *#            | forStmt
-   *#            | whileStmt
-   *#            | ("BEGIN" | "END") block
-   *#            | exprStatement
+   *#            | (IDENTIFIER COLON) ? forStmt
+   *#            | (IDENTIFIER COLON) ? whileStmt
+   *#            | beginEndBlock
+   *#            | exprStmt
    * </pre>
    */
   private Stmt statement() {
@@ -429,9 +429,9 @@ public class Parser {
 
   /**
    * <pre>
-   * # type ::= "def" | "var"
-   * #         | ( ("boolean" | "int" | "long" | "double" | "Decimal" | "String" | "Map" | "List" | "Object") ("[" "]") * )
-   * #         | ( className ( "[" "]" ) * )
+   * # type ::= DEF | VAR
+   * #         | ( (BOOLEAN | BYTE | INT | LONG | DOUBLE | DECIMAL | STRING | MAP | LIST | OBJECT) (LEFT_SQUARE RIGHT_SQUARE) * )
+   * #         | ( className ( LEFT_SQUARE RIGHT_SQUARE ) * )
    * </pre>
    * @param varAllowed       true if "var" is allowed in place of a type name
    * @param ignoreArrays     true if we should ignore "[" after the type
@@ -478,7 +478,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# funDecl ::= "static"? type IDENTIFIER "(" ( varDecl ( "," varDecl ) * ) ? ")" "{" block "}"
+   *# funDecl ::= STATIC? type IDENTIFIER LEFT_PAREN parameters? RIGHT_PAREN LEFT_BRACE block RIGHT_BRACE
    * </pre>
    */
   private Stmt.FunDecl funDecl(boolean inClassDecl) {
@@ -523,7 +523,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# parameters ::= ( varDecl ( "," varDecl ) * ) ?
+   *# parameters ::= ( varDecl ( COMMA varDecl ) * ) ?
    * </pre>
    */
   private List<Stmt.VarDecl> parameters(TokenType endToken) {
@@ -581,7 +581,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# varDecl ::= type IDENTIFIER ( "=" expression ) ? ( "," IDENTIFIER ( "=" expression ) ? ) *
+   *# varDecl ::= type singleVarDecl ? ( COMMA singleVarDecl ? ) *
    * </pre>
    * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
    *       a list of VarDecls if multiple variables declared.
@@ -623,6 +623,9 @@ public class Parser {
     return stmts.stmts.get(0);
   }
 
+  /**
+   *# singleVarDecl ::= IDENTIFIER ( EQUAL expression )
+   */
   private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst) {
     if (isConst && peek().is(LEFT_SQUARE)) {
       // Catches: const int[] x = [1,2,3] (for example)
@@ -667,7 +670,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# multiVarDecl ::= "def" "(" type? IDENTIFIER ( , type? IDENTIFIER ) * ")" "=" "[" expression (, expression)* "]
+   *# multiVarDecl ::= DEF LEFT_PAREN type? IDENTIFIER (COMMA type? IDENTIFIER ) * RIGHT_PAREN EQUAL LEFT_SQUARE expression (COMMA expression)* RIGHT_SQUARE
    * </pre>
    */
   private Stmt multiVarDecl(boolean isInClassDecl) {
@@ -736,7 +739,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# ifStmt ::= "if" "(" expression ")" statement ( "else" statement ) ?
+   *# ifStmt ::= IF LEFT_PAREN condition RIGHT_PAREN statement ( ELSE statement ) ?
    * </pre>
    */
   private Stmt.If ifStmt() {
@@ -755,7 +758,7 @@ public class Parser {
   }
 
   /**
-   *# whileStmt ::= (IDENTIFIER ":" ) ? "while" "(" expression ")" statement
+   *# whileStmt ::= WHILE LEFT_PAREN condition RIGHT_PAREN statement
    */
   private Stmt whileStmt(Token label) {
     Token whileToken = expect(WHILE);
@@ -768,8 +771,8 @@ public class Parser {
 
   /**
    * <pre>
-   *# forStmt ::= "for" "(" declaration ";" expression ";"
-   *#                         commaSeparatedStatements ")" statement
+   *# forStmt ::= FOR LEFT_PAREN declaration SEMICOLON condition SEMICOLON
+   *#                         commaSeparatedStatements RIGHT_PAREN statement
    * </pre>
    */
   private Stmt forStmt(Token label) {
@@ -811,7 +814,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# commaSeparatedStatements ::= ( statement ( "," statement ) * ) ?
+   *# commaSeparatedStatements ::= ( statement ( COMMA statement ) * ) ?
    * </pre>
    */
   Stmt.Stmts commaSeparatedStatements() {
@@ -829,7 +832,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# beginEndBlock ::= ("BEGIN" | "END") "{" statements "}"
+   *# beginEndBlock ::= (BEGIN | END) LEFT_BRACE statements RIGHT_BRACE
    * </pre>
    */
   Stmt.Block beginEndBlock() {
@@ -861,11 +864,6 @@ public class Parser {
     return stmt;
   }
 
-  /**
-   * <pre>
-   *# stmtBlock ::= "{" statement * "}"
-   * </pre>
-   */
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
     Stmt.Stmts stmts = new Stmt.Stmts();
     stmts.stmts.addAll(Arrays.asList(statements));
@@ -874,9 +872,9 @@ public class Parser {
 
   /**
    * <pre>
-   *# classDecl ::= "class" IDENTIFIER "extends" className "{"
-   *#                ( singleVarDecl | "static"? funDecl | classDecl ) *
-   *#               "}"
+   *# classDecl ::= CLASS IDENTIFIER (EXTENDS className)? LEFT_BRACE
+   *#                ( singleVarDecl | STATIC? funDecl | classDecl ) *
+   *#               RIGHT_BRACE
    * </pre>
    */
   private Stmt.ClassDecl classDecl() {
@@ -1006,7 +1004,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# orExpression ::= andExpression ( "or" andExpression) *
+   *# orExpression ::= andExpression ( OR andExpression) *
    * </pre>
    */
   private Expr orExpression() {
@@ -1032,7 +1030,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# notExpresssion ::= NOT * (expr | returnExpr | printExpr | "break" | "continue" )
+   *# notExpression ::= NOT * (expr | returnExpr | printExpr | dieExpr | BREAK | CONTINUE )
    * </pre>
    */
   private Expr notExpression() {
@@ -1064,9 +1062,9 @@ public class Parser {
 
   /**
    * <pre>
-   *# expr ::= "(" expr ( "," expr ) * ")" = expr
+   *# expr ::= LEFT_PAREN expr ( COMMA expr ) * RIGHT_PAREN EQUAL expr
    *#       | expr operator expr
-   *#       | expr "?" expr ":"" expr
+   *#       | expr QUESTION expr COLON expr
    *#       | unary
    *#       | primary
    * </pre>
@@ -1215,8 +1213,8 @@ public class Parser {
 
   /**
    * <pre>
-   *# unary ::= ( "??" | "!" | "--" | "++" | "-" | "+" | "~" | "(" type ")" )
-   *#                  unary ( "--" | "++" )
+   *# unary ::= ( QUESTION_QUESTION | BANG | MINUS_MINUS | PLUS_PLUS | MINUS | PLUS | GRAVE | LEFT_PAREN type RIGHT_PAREN )
+   *#                  unary ( MINUS_MINUS | PLUS_PLUS )
    *#        | expression
    * </pre>
    */
@@ -1293,9 +1291,9 @@ public class Parser {
 
   /**
    * <pre>
-   *# newInstance ::= "new" classPathOrIdentifier "(" arguments ")"
-   *#                | "new" type ("[" expression "]" ) ( "[" expression "]" ) *
-   *#                         ( "[" "]" ) *
+   *# newInstance ::= NEW classPathOrIdentifier LEFT_PAREN arguments RIGHT_PAREN
+   *#                | NEW type (LEFT_SQUARE expression RIGHT_SQUARE ) ( LEFT_SQUARE expression RIGHT_SQUARE ) *
+   *#                         ( LEFT_SQUARE RIGHT_SQUARE ) *
    * </pre>
    */
   private Expr newInstance() {
@@ -1332,7 +1330,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# expressionList ::= expression ( "," expression ) *
+   *# expressionList ::= expression ( COMMA expression ) *
    * </pre>
    */
   private List<Expr> expressionList(TokenType endToken) {
@@ -1349,7 +1347,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# arguments ::= mapEntry + | argList
+   *# arguments ::= mapEntries | argList
    * </pre>
    */
   private List<Expr> arguments() {
@@ -1367,7 +1365,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# argList ::= expressionList ? ( "{" closure "}" ) *
+   *# argList ::= expressionList ? ( LEFT_BRACE closure RIGHT_BRACE ) *
    * </pre>
    */
   private List<Expr> argList() {
@@ -1396,16 +1394,16 @@ public class Parser {
 
   /**
    * <pre>
-   *# primary ::= (("+" | "-")? INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST)
+   *# primary ::= ((PLUS | MINUS)? INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST)
    *#          | STRING_CONST
-   *#          | "true" | "false" | "null"
+   *#          | TRUE | FALSE | NULL
    *#          | exprString
    *#          | regexSubstitute
    *#          | (IDENTIFIER | DOLLAR_IDENTIFIER | classPath)
-   *#          | listOrMapLiteral
-   *#          | "(" nestedExpr ")"
-   *#          | "do" "{" block "}"
-   *#          | "{" closure "}"
+   *#          | mapOrListLiteral
+   *#          | nestedExpr
+   *#          | doBlock
+   *#          | closure
    *#          | switchExpr
    *#          | evalExpr
    *#          | newInstance
@@ -1442,7 +1440,7 @@ public class Parser {
   }
 
   /**
-   *# doBlock ::= "do" "{" block "}"
+   *# doBlock ::= DO LEFT_BRACE block RIGHT_BRACE
    */
   Expr doBlock() {
     expect(DO);
@@ -1452,8 +1450,8 @@ public class Parser {
   }
 
   /**
-   *# nestedExpOr ::= "(" expression ( "," expression ) * ")"
-   *#              | "(" expression ")"
+   *# nestedExpr ::= LEFT_PAREN expression ( COMMA expression ) * RIGHT_PAREN
+   *#             | LEFT_PAREN expression RIGHT_PAREN
    * Returns a single expression or an ExprList if comma separated.
    * Comma-separated expressions can be used in LHS of multi-assignments.
    */
@@ -1535,11 +1533,6 @@ public class Parser {
     return new Expr.Identifier(identifier);
   }
 
-  /**
-   * <pre>
-   *#  identifier ::= IDENTIFIER | "_" | "*"
-   * </pre>
-   */
   private Expr.Identifier identifier(TokenType... tokenTypes) {
     Token token = expect(tokenTypes);
     return new Expr.Identifier(token);
@@ -1547,7 +1540,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# classPath ::= IDENTIFIER ( "." IDENTIFIER ) +
+   *# classPath ::= IDENTIFIER ( DOT IDENTIFIER ) +
    * </pre>
    * We look for a class path like: x.y.z.A
    * where x, y, and z are all in lowercase and A begins with an uppercase.
@@ -1588,7 +1581,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# className ::= classPathOrIdentifier ( "." IDENTIFIER ) *
+   *# className ::= classPathOrIdentifier ( DOT IDENTIFIER ) *
    * </pre>
    */
   private List<Expr> className() {
@@ -1624,6 +1617,9 @@ public class Parser {
     return className;
   }
 
+  /**
+   *# mapOrListLiteral ::= mapLiteral | listLiteral
+   */
   private Expr mapOrListLiteral() {
     if (isMapLiteral()) {
       return mapLiteral();
@@ -1633,7 +1629,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# listLiteral ::= "[" ( expression ( "," expression ) * ) ? "]"
+   *# listLiteral ::= LEFT_SQUARE ( expression ( COMMA expression ) * ) ? RIGHT_SQUARE
    * </pre>
    */
   private Expr.ListLiteral listLiteral() {
@@ -1658,11 +1654,10 @@ public class Parser {
 
   /**
    * <pre>
-   *# mapLiteral ::= "[" ":" "]"
-   *#             | "{" ":" "}"
-   *#             | "[" ( mapKey ":" expression ) + "]"
-   *#             | "{" ( mapKey ":" expression ) + "}"
-   *#
+   *# mapLiteral ::= LEFT_SQUARE COLON RIGHT_SQUARE
+   *#             | LEFT_BRACE COLON RIGHT_BRACE
+   *#             | LEFT_SQUARE mapEntries RIGHT_SQUARE
+   *#             | LEFT_BRACE mapEntries RIGHT_BRACE
    * </pre>
    * Return a map literal. For maps we support Groovy map syntax using "[" and "]"
    * as well as JSON syntax using "{" and "}".
@@ -1674,6 +1669,9 @@ public class Parser {
     return mapLiteral;
   }
 
+  /**
+   *# mapEntries ::= mapKey COLON expression (COMMA mapKey COLON expression) *
+   */
   private Expr.MapLiteral mapEntries(TokenType endToken) {
     boolean          isNamedArgs   = endToken.is(RIGHT_PAREN);
     String           paramOrKey    = isNamedArgs ? "Parameter" : "Map key";
@@ -1730,7 +1728,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# mapKey ::= STRING_CONST | IDENTIFIER | "(" expression() + ")" | exprString | keyWord
+   *# mapKey ::= STRING_CONST | IDENTIFIER | LEFT_PAREN expression + RIGHT_PAREN | exprString | keyWord
    * </pre>
    */
   private Expr mapKey() {
@@ -1757,9 +1755,9 @@ public class Parser {
 
   /**
    * <pre>
-   *# exprString ::= EXPR_STRING_START ( "$" IDENTIFIER | "${" blockExpr "}" |
+   *# exprString ::= EXPR_STRING_START ( DOLLAR_IDENTIFIER | DOLLAR_BRACE blockExpr |
    *#                       STRING_CONST ) * EXPR_STRING_END
-   *#             | "/" ( IDENTIFIER | "{" blockExpr "}" | STRING_CONST ) * "/"
+   *#             | (SLASH|SLASH_EQUAL) ( IDENTIFIER | DOLLAR_BRACE blockExpr | STRING_CONST ) * SLASH
    * </pre>
    * We parse an expression string delimited by " or """ or /
    * For the / version we treat as a multi-line regular expression and don't support escape chars.
@@ -1824,9 +1822,9 @@ public class Parser {
 
   /**
    * <pre>
-   *# regexSubstitute ::= REGEX_SUBST_START ( "$" IDENTIFIER | "${" blockExpr "}" |
+   *# regexSubstitute ::= REGEX_SUBST_START ( DOLLAR_IDENTIFIER | DOLLAR_BRACE blockExpr RIGHT_BRACE |
    *#                           STRING_CONST ) *
-   *#                       REGEX_REPLACE ( "$" IDENTIFIER | "${" blockExpr "}" |
+   *#                       REGEX_REPLACE ( DOLLAR_IDENTIFIER | DOLLAR_BRACE blockExpr RIGHT_BRACE |
    *#                           STRING_CONST ) * EXPR_STRING_END
    * </pre>
    */
@@ -1883,10 +1881,6 @@ public class Parser {
   }
 
   /**
-   * <pre>
-   *# exprStringBlockExpr ::= "{" block "}"
-   * </pre>
-   *
    * Used inside expression strings. If no return statement there is an implicit
    * return on last statement in block that gives the value to then interpolate
    * into surrounding expression string.
@@ -1925,7 +1919,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# closure ::= "{" (parameters "-&gt;" ) ? block "}"
+   *# closure ::= LEFT_BRACE (parameters ARROW ) ? block RIGHT_BRACE
    * </pre>
    */
   private Expr closure() {
@@ -1949,7 +1943,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# returnExpr ::= "return" expression
+   *# returnExpr ::= RETURN expression
    * </pre>
    */
   private Expr.Return returnExpr() {
@@ -1961,7 +1955,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# printExpr ::= ("print" | "println") expr ?
+   *# printExpr ::= (PRINT | PRINTLN) expr ?
    * </pre>
    */
   private Expr.Print printExpr() {
@@ -1973,7 +1967,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# dieExpr ::= "die" expr ?
+   *# dieExpr ::= DIE expr ?
    * </pre>
    */
   private Expr.Die dieExpr() {
@@ -1985,7 +1979,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# evalExpr ::= "eval" ("(" expr ")" | "(" expr "," expr ")" )
+   *# evalExpr ::= EVAL LEFT_PAREN expr ( COMMA expr )? RIGHT_PAREN
    * </pre>
    */
   private Expr.Eval evalExpr() {
@@ -2001,7 +1995,7 @@ public class Parser {
   }
 
   /**
-   *# switchExpr ::= "switch" ( "(" expr ")" ) ? "{" (switchPattern|"default") ( "->" expr ( ";"? (switchPattern|"default") "=>" expr )* "}"
+   *# switchExpr ::= SWITCH ( LEFT_PAREN expr RIGHT_PAREN ) ? LEFT_BRACE (switchPatterns|DEFAULT) ARROW expression (SEMICOLON? (switchPatterns|DEFAULT) ARROW expression)* RIGHT_BRACE
    */
   Expr.Switch switchExpr() {
     Token matchToken = expect(SWITCH);
@@ -2067,14 +2061,14 @@ public class Parser {
   }
 
   /**
-   *# blockExpr -> "{" block "}"
+   *# blockExpr ::= LEFT_BRACE block RIGHT_BRACE
    */
   private Expr blockExpr() {
     return convertClosureToBlockExpr(closure());
   }
 
   /**
-   *# switchPatterns ::= switchPatternAndExpr ( "," switchPatternAndExpr ) *
+   *# switchPatterns ::= switchPatternAndExpr ( COMMA switchPatternAndExpr ) *
    */
   private List<Pair<Expr,Expr>> switchPatterns() {
     List<Pair<Expr,Expr>> patterns = new ArrayList<>();
@@ -2085,7 +2079,7 @@ public class Parser {
   }
 
   /**
-   *# switchPatternAndExpr -&gt switchPattern ( "if" expression ) ?
+   *# switchPatternAndExpr ::= switchPattern ( IF expression ) ?
    */
   private Pair<Expr,Expr> switchPatternAndExpr() {
     Expr switchPattern = switchPattern();
@@ -2100,14 +2094,14 @@ public class Parser {
   /**
    *# switchPattern ::= literal
    *#                | type
-   *#                | className ( "(" mapEntries ")" ) ?
+   *#                | className ( LEFT_PAREN mapOrListPattern RIGHT_PAREN ) ?
    *#                | exprString
-   *#                | "_"
+   *#                | UNDERSCORE
    *#                | IDENTIFIER
    *#                | listPattern
    *#                | mapPattern
-   *#                | "$" IDENTIFIER
-   *#                | "$" "{" blockExpression() "}"
+   *#                | DOLLAR_IDENTIFIER
+   *#                | DOLLAR_BRACE blockExpr RIGHT_BRACE
    */
   private Expr switchPattern() {
     matchAny(EOL);
@@ -2201,6 +2195,9 @@ public class Parser {
     return null;
   }
 
+  /**
+   *# mapOrListPattern ::= mapPattern | listPattern
+   */
   private Expr mapOrListPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
     if (isMapPattern(startToken, starAllowed)) {
       return mapPattern(startToken, endToken, starAllowed);
@@ -2225,7 +2222,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# listPattern ::= "[" ( switchPattern ( "," switchPattern ) * ) ? "]"
+   *# listPattern ::= LEFT_SQUARE ( switchPattern ( COMMA switchPattern ) * ) ? RIGHT_SQUARE
    * </pre>
    */
   private Expr.ListLiteral listPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
@@ -2244,9 +2241,8 @@ public class Parser {
 
   /**
    * <pre>
-   *# mapPattern ::= "[" ":" "]"
-   *#             | "[" ( mapPatternKey ":" switchPattern ) ( "," mapPatternKey ":" switchPattern ) * "]"
-   *#
+   *# mapPattern ::= LEFT_SQUARE COLON RIGHT_SQUARE
+   *#             | LEFT_SQUARE ( patternMapKey COLON switchPattern ) ( COMMA patternMapKey COLON switchPattern ) * RIGHT_SQUARE
    * </pre>
    */
   private Expr.MapLiteral mapPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
@@ -2260,7 +2256,7 @@ public class Parser {
   }
 
   /**
-   *# patternMapKey ::= STRING_CONST | exprString | IDENTIFIER | "*"
+   *# patternMapKey ::= STRING_CONST | exprString | IDENTIFIER | STAR
    */
   private Expr patternMapKey(boolean starAllowed) {
     if (isExprString()) {
@@ -3248,4 +3244,12 @@ public class Parser {
                 DOUBLE_GREATER_THAN_EQUAL, DOUBLE_GREATER_THAN,
                 TRIPLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN,
                 EQUAL_GRAVE,               EQUAL_GRAVE);
+
+  /*
+   *# keyWord ::= UNDERSCORE | DEF | VAR | BOOLEAN | BYTE | INT | LONG | DOUBLE | DECIMAL | STRING | OBJECT | VOID
+   *#           | MAP | LIST | FOR | IF | UNLESS | WHILE | ELSE | CONTINUE | BREAK | CLASS | INTERFACE | EXTENDS
+   *#           | IMPLEMENTS | PACKAGE | STATIC | IMPORT | AS | TRUE | FALSE | NULL | IN | INSTANCE_OF | RETURN
+   *#           | NEW | AND | OR | NOT | DO | PRINT | PRINTLN | BEGIN | END | DIE | EVAL | FINAL | CONST | SEALED
+   *#           | SWITCH | DEFAULT
+   */
 }
