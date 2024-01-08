@@ -650,6 +650,8 @@ public class Parser {
       error("Initialiser expression required for '" + (isConst ? "const" : "var") + "' declaration", previous());
     }
     if (type.is(UNKNOWN)) {
+      // Create a new one in case we are in a multi-variable declaration where we need a separate type per variable
+      type = JactlType.createUnknown();
       type.typeDependsOn(initialiser);   // Once initialiser type is known the type will then be known
     }
 

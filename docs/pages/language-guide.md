@@ -1098,6 +1098,38 @@ This multi-declaration form supports the type being specified per variable:
 abc
 ```
 
+## Declaring Constants
+
+The `const` keyword can be used when declaring a variable to create a constant.
+Constants cannot be assigned to or modified and are limited to these simple types:
+* boolean
+* byte
+* int
+* long
+* double
+* Decimal
+* String
+
+For example:
+```groovy
+const int     MAX_SIZE = 10000
+const Decimal PI       = 3.1415926536
+```
+
+The type is optional and will be inferred from the value of the initialiser:
+```groovy
+const MAX_SIZE = 10000
+const PI       = 3.1415926536
+```
+
+A `const` must have an initialiser expression to provide the value of the constant.
+This expression can be a simple value (number, String, etc.) or can be a simple numerical
+expression:
+```groovy
+const PI      = 3.1415926536
+const PI_SQRD = PI * PI
+```
+
 # Expressions and Operators
 
 ## Operator Precedence
@@ -3895,6 +3927,21 @@ Invoking a static method via an instance works even if the type of the variable 
 [x:2, y:3]
 ```
 
+## Static Constants
+
+Classes can declare static constants but not static fields (see below).
+
+For example:
+```groovy
+class Math {
+  static const PI = 3.14159265356
+}
+
+def area(radius) { Math.PI * radius.sqr() }
+```
+
+As for other constants, only simple types are supported.
+
 ## No Static Fields
 
 In Jactl, there is no support for static fields.
@@ -4165,6 +4212,43 @@ def x = new MLNC()
 
 Using `import as` is also useful if you have classes of the same name in different packages that you need
 access to.
+
+## Import Static
+
+You can use `import static` to selectively import static functions and constants from another class into the
+current class/script.
+So if a class `a.b.c.X` has a static function `f` you can import just that function like this:
+```groovy
+import static a.b.c.X.f
+```
+
+Using `import static` this way means that you can then refer to the static function directly, without having to
+qualify it with the class name:
+```groovy
+import static MathUtils.circleArea
+
+def radius = 4
+circleArea(radius)
+```
+
+Using `as` you can import it and give it a different name:
+```groovy
+import static MathUtils.circleArea as area
+
+def radius = 4
+area(radius)
+```
+
+The `import static` directive also works for static constants defined in another class:
+```groovy
+import static MathUtils.PI
+import static MathUtils.PI_SQRD as pi_squared
+```
+
+Using `*` you can import all static functions and constants from a class:
+```groovy
+import static MathUtils.*
+```
 
 ## Scoping
 

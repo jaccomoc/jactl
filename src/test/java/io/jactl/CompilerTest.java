@@ -1423,8 +1423,15 @@ class CompilerTest extends BaseTest {
     test("boolean x = 1", true);
 
     alwaysEvalConsts = true;
+    testError("const v", "initialiser expression required");
     test("const v = !false; v", true);
     test("const v = !true; v", false);
+    test("const x = 'abc'; x", "abc");
+    test("const x = 13; const y = 13 * x; y", 13*13);
+    test("const int x = 13, y = 13 * x; y", 13*13);
+    testError("const x = 13, y = 13 * x; y = 4", "cannot modify a constant");
+    testError("def (const int x, const int y) = [13,14]; x + y", "unexpected token 'const'");
+    testError("const x = 'abc'.length(); x", "simple constant value");
   }
 
   @Test public void multipleVarDecls() {
@@ -1432,6 +1439,7 @@ class CompilerTest extends BaseTest {
     test("int i = 1,j; i + j", 1);
     test("int i = 1,j=3; i + j", 4);
     test("int i =\n1,\nj =\n3\n; i + j", 4);
+    test("var x = 13, y = 13 * x; y", 13*13);
   }
 
   @Test public void variableAssignments() {
@@ -6815,10 +6823,6 @@ class CompilerTest extends BaseTest {
     testError("long f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
     testError("double f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
     testError("boolean f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
-  }
-
-  @Test public void testStuff() {
-    test("int sum = 0; double i = 0; do { if (i > 5) continue; sum += i } until (i == 10); sum", 15);
   }
 
   @Test public void breakContinue() {
