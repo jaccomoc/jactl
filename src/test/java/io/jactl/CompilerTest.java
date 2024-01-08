@@ -3692,6 +3692,9 @@ class CompilerTest extends BaseTest {
     test("do {for(int i = 0; i < 10; i++){}}", null);
     test("do { if (true) 1 == 1 }", true);
     test("do { if (false) 1 == 1 }", null);
+    test("do { if (true) 1 == 1 } and true", true);
+    test("do { if (true) 1 == 1 } if true", true);
+    test("do { if (true) 1 == 1 } and true if true", true);
     test("class X{int i}; do { if (true) new X(1) } == new X(1)", true);
     test("class X{int i}; do { if (false) new X(1) } == null", true);
     test("class X{int i}; do { do{ if (true) new X(1) } } == new X(1)", true);
@@ -3791,6 +3794,7 @@ class CompilerTest extends BaseTest {
     test("[:]", new HashMap<>());
     test("[a:(byte)1]", Utils.mapOf("a",(byte)1));
     test("[a:1]", Utils.mapOf("a",1));
+    test("[a:1] if true", Utils.mapOf("a",1));
     testError("[:", "unexpected EOF");
     testError("[:123]", "unexpected token");
     test("[for:1]", Utils.mapOf("for",1));
@@ -3802,6 +3806,7 @@ class CompilerTest extends BaseTest {
     test("[a:1,b:[c:2]]", Utils.mapOf("a",1, "b", Utils.mapOf("c",2)));
     test("{:}", new HashMap<>());
     test("{a:1}", Utils.mapOf("a",1));
+    test("{a:1} if true", Utils.mapOf("a",1));
     testError("{:", "unexpected EOF");
     test("{for:1}", Utils.mapOf("for",1));
     test("{'for':1}", Utils.mapOf("for",1));

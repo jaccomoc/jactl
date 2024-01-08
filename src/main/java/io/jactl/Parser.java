@@ -372,13 +372,14 @@ public class Parser {
    */
   private Stmt statement() {
     matchAny(EOL);
+    Stmt stmt = null;
     switch (peek().getType()) {
-      case LEFT_BRACE:        if (isMapLiteral())       return exprStmt();      break;
+      case LEFT_BRACE:        if (isMapLiteral())       stmt = exprStmt();      break;
       case BEGIN: case END:   if (isAtScriptTopLevel()) return beginEndBlock(); break;
       case IF:                return ifStmt();
       case WHILE:             return whileStmt(null);
       case FOR:               return forStmt(null);
-      case DO:                return doUntilStmt(null);
+      case DO:                stmt = doUntilStmt(null);                   break;
       case SEMICOLON:         return null;
       case IDENTIFIER:        if (lookaheadNoEOL(IDENTIFIER, COLON)) {
                                 Token label = expect(IDENTIFIER);
@@ -392,7 +393,13 @@ public class Parser {
                               break;
     }
 
-    Stmt.ExprStmt stmt = exprStmt();
+    if (stmt == null) {
+      stmt = exprStmt();
+    }
+    if (!(stmt instanceof Stmt.ExprStmt)) {
+      return stmt;
+    }
+    Stmt.ExprStmt exprStmt = (Stmt.ExprStmt)stmt;
     // We need to check if exprStmt was a parameterless closure and if so convert back into
     // statement block. The problem is that we can't tell the difference between a closure with
     // no parameters and a code block until after we have parsed them. (If the parameterless
@@ -400,8 +407,8 @@ public class Parser {
     // invoked because expression type won't be a closure.) Otherwise, if the type is a closure
     // and it has no parameters we know it wasn't immediately invoked and we will treat it is a
     // code block.
-    if (stmt.expr instanceof Expr.Closure) {
-      Expr.Closure closure = (Expr.Closure)stmt.expr;
+    if (exprStmt.expr instanceof Expr.Closure) {
+      Expr.Closure closure = (Expr.Closure)exprStmt.expr;
       if (closure.noParamsDefined) {
         removeItParameter(closure.funDecl.block);
         return closure.funDecl.block;   // Treat closure as code block since no parameters
@@ -414,20 +421,20 @@ public class Parser {
       Token ifToken = previous();
       Expr  condition = expression();
       if (ifToken.is(IF)) {
-        return new Stmt.If(ifToken, condition, stmt, null);
+        return new Stmt.If(ifToken, condition, exprStmt, null);
       }
       else {
-        return new Stmt.If(ifToken, condition, null, stmt);
+        return new Stmt.If(ifToken, condition, null, exprStmt);
       }
     }
 
     // If we have a solitary return expression then convert to return statement
-    if (stmt.expr instanceof Expr.Return) {
-      final Expr.Return returnExpr = (Expr.Return) stmt.expr;
+    if (exprStmt.expr instanceof Expr.Return) {
+      final Expr.Return returnExpr = (Expr.Return) exprStmt.expr;
       returnExpr.isResultUsed = true;
       return new Stmt.Return(returnExpr.returnToken, returnExpr);
     }
-    return stmt;
+    return exprStmt;
   }
 
   /**
@@ -778,24 +785,28 @@ public class Parser {
    *<pre>
    *# doUntilStmt ::= DO BLOCK UNTIL LEFT_PAREN condition RIGHT_PAREN
    *</pre>
-   * Look for a do/until. If no until then return the block.
    */
   private Stmt doUntilStmt(Token label) {
-    Token doToken = expect(DO);
-    Stmt  block   = block(expect(LEFT_BRACE), RIGHT_BRACE);
-    if (!matchAnyIgnoreEOL(UNTIL)) {
-      // Not a do/until
-      if (label != null) {
+    Token doToken = peek();
+    // We can't tell whether we have a do/until or simple do expression
+    // at this point so we will parse as an expression and then check if
+    // we have a following "until"
+    Stmt.ExprStmt stmt = exprStmt();
+    if (stmt.expr instanceof Expr.Block) {
+      if (matchAnyIgnoreEOL(UNTIL)) {
+        expect(LEFT_PAREN);
+        Expr       cond      = condition(false, RIGHT_PAREN);
+        Stmt.While whileStmt = new Stmt.While(doToken, cond, label);
+        whileStmt.body = stmt;
+        whileStmt.isDoUntil = true;
+        return stmtBlock(doToken, whileStmt);
+      }
+      else if (label != null) {
         error("Labels can only be applied to for, while, and do/until loops", label);
       }
-      return block;
     }
-    expect(LEFT_PAREN);
-    Expr       cond      = condition(false, RIGHT_PAREN);
-    Stmt.While whileStmt = new Stmt.While(doToken, cond, label);
-    whileStmt.body = block;
-    whileStmt.isDoUntil = true;
-    return stmtBlock(doToken, whileStmt);
+    // Not do/while so return our ExprStmt
+    return stmt;
   }
 
   /**
@@ -820,7 +831,7 @@ public class Parser {
     }
     Expr cond        = condition(false, SEMICOLON);
     Stmt update      = commaSeparatedStatements();
-    Token rightParen = expect(RIGHT_PAREN);
+    expect(RIGHT_PAREN);
 
     Stmt.While whileStmt = new Stmt.While(forToken, cond, label);
     whileStmt.updates = update;
@@ -881,9 +892,6 @@ public class Parser {
   private Stmt.ExprStmt exprStmt() {
     Expr  expr     = expression();
     Stmt.ExprStmt stmt = createStmtExpr(expr);
-    //    if (peek().isNot(EOF, EOL, SEMICOLON, RIGHT_BRACE)) {
-//      unexpected("Expected end of expression");
-//    }
     return stmt;
   }
 
