@@ -685,15 +685,13 @@ public abstract class Expr {
   public static class Block extends Expr {
     public Token      token;
     public Stmt.Block block;
-    public boolean    resultIsTrue;     // for "do" blocks always return true
-    public Block(Token token, Stmt.Block block, boolean resultIsTrue) {
+    public Block(Token token, Stmt.Block block) {
       this.token = token;
       this.block = block;
-      this.resultIsTrue = resultIsTrue;
       this.location = token;
     }
     @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitBlock(this); }
-    @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + ", " + "resultIsTrue=" + resultIsTrue + "]"; }
+    @Override public String toString() { return "Block[" + "token=" + token + ", " + "block=" + block + "]"; }
   }
 
   /**

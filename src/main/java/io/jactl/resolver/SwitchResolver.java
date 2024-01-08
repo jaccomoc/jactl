@@ -28,16 +28,17 @@ public class SwitchResolver {
     Stmt.VarDecl itVar       = resolver.createVarDecl(expr.matchToken, Utils.IT_VAR, subjectType.unboxed(), expr.subject);
     expr.itVar = itVar.declExpr;
     // Block to hold our it var
-    Stmt.Block block = new Stmt.Block(null, null);
+    Stmt.Block block = new Stmt.Block(expr.location, null);
     expr.block = block;
-    block.stmts = new Stmt.Stmts();
+    block.stmts = new Stmt.Stmts(expr.matchToken);
     block.stmts.stmts.add(itVar);
     // Create a statement wrapper for each case in the match so we can resolve them
     block.stmts.stmts.addAll(expr.cases.stream().map(c -> {
       // Create a block in case we have regex/destructured capture vars
       c.block = new Stmt.Block(null, null);
-      c.block.stmts = new Stmt.Stmts();
-      c.block.stmts.stmts.add(new Stmt.ExprStmt(c.patterns.get(0).first.location, c));
+      Token location = c.patterns.get(0).first.location;
+      c.block.stmts = new Stmt.Stmts(location);
+      c.block.stmts.stmts.add(new Stmt.ExprStmt(location, c));
       return c.block;
     }).collect(Collectors.toList()));
     resolver.resolve(block);

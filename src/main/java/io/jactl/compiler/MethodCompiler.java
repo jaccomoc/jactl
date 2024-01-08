@@ -2116,9 +2116,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitBlock(Expr.Block expr) {
     compile(expr.block);
-    if (expr.resultIsTrue) {
-      loadConst(true);
-    }
     return null;
   }
 

@@ -462,7 +462,6 @@ class Expr {
   class Block extends Expr {
     Token      token;
     Stmt.Block block;
-    boolean    resultIsTrue;     // for "do" blocks always return true
   }
 
   /**

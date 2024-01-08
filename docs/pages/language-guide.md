@@ -2403,16 +2403,20 @@ commands.each{
 die unless [x, y, distance] == [7, 10, 21] 
 ```
 
-A `do` expression always returns `true` so it can be chained with other boolean expressions:
+A `do` expression returns the value of the last statement/expression in the block.
+When chaining with other boolean expressions using `and`, be careful since if the value of the
+last expression does not result in a [truthiness](#Truthiness) value of `true` then the subsequent
+expressions won't be evaluated.
+For example, in the following, since `x++` is the last value in the `do` block the `do` block will
+evaluate to `x` and if `x` where `0` then the `break` would not be executed:
 ```groovy
-def x = 1
 def found = false
 while (true) {
-  x == 1 and do { found = true; x++ } and break
+  f(x) == 1 and do { found = true; x++ } and break
 }
 ```
 
-You can comnbine `do` with `if/unless`:
+You can combine `do` with `if/unless`:
 ```groovy
 do { found = true; println "Found multiple of 17: $x" } if x % 17 == 0
 ```

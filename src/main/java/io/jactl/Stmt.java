@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.HashSet;
 
+import io.jactl.Token;
 import io.jactl.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 
@@ -51,13 +52,16 @@ public abstract class Stmt {
    * Represents a sequence of statments.
    */
   public static class Stmts extends Stmt {
+    public Token token;
     public List<Stmt> stmts = new ArrayList<>();
 
     public int currentIdx;     // Which statement we are currently resolving
-    public Stmts() {
+    public Stmts(Token token) {
+      this.token = token;
+      this.location = token;
     }
     @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitStmts(this); }
-    @Override public String toString() { return "Stmts[" + "]"; }
+    @Override public String toString() { return "Stmts[" + "token=" + token + "]"; }
   }
 
   /**

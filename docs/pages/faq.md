@@ -359,6 +359,57 @@ Jactl has the `%%` operator which works the same as the remainder operator in Ja
 want to do a remainder rather than a modulus operation.
 Since it corresponds to the native Java operation, it is also slightly more efficient.
 
+### Why is there no do/while loop?
+
+Jactl does not offer a `do/while` loop because of the ambiguities it would create.
+Jactl has the concept of a `do` block which turns a set of statements into an expression.
+For example:
+```groovy
+x == 1 and do { y++; z += y }
+a = do { for(int i = 0; i < 10; i++) { z += i }; z }  // Assign final value of z to a
+```
+
+If Jactl supported `do/while` then consider what this might mean:
+```groovy
+do { for(int i = 0; i < 10; i++) { z += i }; z }
+while (x-- > 0)
+{ int j = f(z); z += j }
+```
+
+It could be parsed in either of these ways:
+```groovy
+// Do/while
+do { 
+  for(int i = 0; i < 10; i++) { 
+    z += i 
+  }
+  z
+} while (x-- > 0);
+// New code block
+{
+  int j = f(z)
+  z += j 
+}
+```
+```groovy
+// Do block
+do { for(int i = 0; i < 10; i++) { z += i }; z }
+// While loop  
+while (x-- > 0) {
+  int j = f(z)
+  z += j
+}
+```
+
+To avoid these problems, Jactl, instead, offers a `do/until` loop which works the same way as a `do/while`
+except that the loop continues _until_ the condition is met (rather than while the condition is met):
+```groovy
+do {
+  Token token = nextToken()
+  count++
+} until (token.isEof())
+```
+
 ### I still didn't find the answer to my question
 
 Please use the [discussions](https://github.com/jaccomoc/jactl/discussions) section in GitHub to

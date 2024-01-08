@@ -28,6 +28,7 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -331,7 +332,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       //  baseClassFields
       //  fields
       //  methods  (including initMethod)
-      Stmt.Stmts classStmts = new Stmt.Stmts();
+      Stmt.Stmts classStmts = new Stmt.Stmts(classDecl.location);
       classDecl.classBlock = new Stmt.Block(classDecl.name, classStmts);
       classDecl.classBlock.functions = classDecl.methods;
       classStmts.stmts.addAll(superStmts);
@@ -1531,13 +1532,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitBlock(Expr.Block expr) {
     resolve(expr.block);
-    JactlType type = BOOLEAN;
-    if (!expr.resultIsTrue) {
-      // Type will be type of last expression in the block
-      type = typeOfLastExpr(expr.block);
-      setTypeOfLastExpr(expr.block, type);
-    }
-    return expr.type = type;
+    // Type will be type of last expression in the block
+    expr.type = typeOfLastExpr(expr.block);
+    setTypeOfLastExpr(expr.block, expr.type, expr.location);
+    return expr.type;
   }
 
   private static JactlType typeOfLastExpr(Stmt expr) {
@@ -1564,9 +1562,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     });
   }
 
-  private static Stmt setTypeOfLastExpr(Stmt stmt, JactlType type) {
+  private static Stmt setTypeOfLastExpr(Stmt stmt, JactlType type, Token location) {
     BiFunction<Stmt,Expr,Stmt.Stmts> stmtsOf = (original,expr) -> {
-      Stmt.Stmts stmts = new Stmt.Stmts();
+      Stmt.Stmts stmts = new Stmt.Stmts(location);
       stmts.stmts.add(original);
       stmts.stmts.add(new Stmt.ExprStmt(expr.location, expr));
       return stmts;
@@ -1577,23 +1575,41 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.type = type;
       return stmtsOf.apply(s, expr);
     };
+    Supplier<Stmt> literalStmtExpr = () -> {
+      Expr expr = literalDefaultValue(location, type);
+      expr.isResultUsed = true;
+      return new Stmt.ExprStmt(location, expr);
+    };
+
+
+    if (stmt == null) {
+      return literalStmtExpr.get();
+    }
 
     return stmt.accept(new Stmt.Visitor<Stmt>() {
       @Override public Stmt visitStmts(Stmt.Stmts stmt) {
         if (!stmt.stmts.isEmpty()) {
-          stmt.stmts.set(stmt.stmts.size() - 1, setTypeOfLastExpr(stmt.stmts.get(stmt.stmts.size() - 1), type));
+          stmt.stmts.set(stmt.stmts.size() - 1, setTypeOfLastExpr(stmt.stmts.get(stmt.stmts.size() - 1), type, stmt.location));
+        }
+        else {
+          stmt.stmts.add(literalStmtExpr.get());
         }
         return stmt;
       }
-      @Override public Stmt visitBlock(Stmt.Block stmt) { setTypeOfLastExpr(stmt.stmts, type); return stmt; }
-      @Override public Stmt visitWhile(Stmt.While stmt) { return stmt; }
+      @Override public Stmt visitBlock(Stmt.Block stmt) {
+        stmt.stmts = (Stmt.Stmts)setTypeOfLastExpr(stmt.stmts, type, stmt.location);
+        return stmt;
+      }
+      @Override public Stmt visitWhile(Stmt.While stmt) {
+        Stmt.Stmts stmts = new Stmt.Stmts(stmt.location);
+        stmts.location = stmt.location;
+        stmts.stmts.add(stmt);
+        stmts.stmts.add(literalStmtExpr.get());
+        return stmts;
+      }
       @Override public Stmt visitIf(Stmt.If stmt) {
-        if (stmt.trueStmt != null) {
-          stmt.trueStmt = setTypeOfLastExpr(stmt.trueStmt, type);
-        }
-        if (stmt.falseStmt != null) {
-          stmt.falseStmt = setTypeOfLastExpr(stmt.falseStmt, type);
-        }
+        stmt.trueStmt = setTypeOfLastExpr(stmt.trueStmt, type, stmt.location);
+        stmt.falseStmt = setTypeOfLastExpr(stmt.falseStmt, type, stmt.location);
         return stmt;
       }
 
@@ -1601,10 +1617,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       @Override public Stmt visitImport(Stmt.Import stmt)       { throw new IllegalStateException("Internal error: Unexpected Stmt type Stmt.Import"); }
 
       @Override public Stmt visitVarDecl(Stmt.VarDecl stmt)   {
-        if (!type.equals(stmt.declExpr.type)) {
-          return addCast.apply(stmt);
-        }
-        return stmt;
+        stmt.declExpr.isResultUsed = true;
+        return type.equals(stmt.declExpr.type) ? stmt : addCast.apply(stmt);
       }
 
       @Override public Stmt visitFunDecl(Stmt.FunDecl stmt)   { return stmt; }
@@ -1614,15 +1628,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       @Override public Stmt visitReturn(Stmt.Return stmt)     {
         Expr defaultValue = literalDefaultValue(stmt.expr.location, type);
         defaultValue.isResultUsed = true;
-        defaultValue.type = type;
         return stmtsOf.apply(stmt, defaultValue);
       }
 
       @Override public Stmt visitExprStmt(Stmt.ExprStmt stmt) {
-        if (!type.equals(stmt.expr.type)) {
-          return addCast.apply(stmt);
-        }
-        return stmt;
+        stmt.expr.isResultUsed = true;
+        return type.equals(stmt.expr.type) ? stmt : addCast.apply(stmt);
       }
       @Override public Stmt visitThrowError(Stmt.ThrowError stmt) { return stmt; }
     });
@@ -2450,7 +2461,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // even if last statement does not have a value so replace stmt with list of statements that
     // include the stmt and then a "return null" statement.
     if (returnType.isRef()) {
-      Stmt.Stmts stmts = new Stmt.Stmts();
+      Stmt.Stmts stmts = new Stmt.Stmts(stmt.location);
       stmts.stmts.add(stmt);
       stmts.location = stmt.location;
       Stmt.Return returnStmt = returnStmt(stmt.location, new Expr.Literal(new Token(NULL, stmt.location)), returnType);
@@ -2510,7 +2521,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Expr.Identifier argsIdent   = ident.apply(Utils.ARGS_VAR_NAME);
 
     Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(startToken, funDecl.functionDescriptor.implementingMethod, funDecl.isStatic());
-    Stmt.Stmts stmts = new Stmt.Stmts();
+    Stmt.Stmts stmts = new Stmt.Stmts(startToken);
     List<Stmt> stmtList = stmts.stmts;
     stmtList.addAll(wrapperFunDecl.parameters);
 
@@ -2553,7 +2564,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       //:     _$argCount = _$argArr.length
       //:   }
       Expr       arg0IsList  = instOfExpr.apply(new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)), LIST);
-      Stmt.Stmts ifTrueStmts = new Stmt.Stmts();
+      Stmt.Stmts ifTrueStmts = new Stmt.Stmts(startToken);
       Expr.ArrayGet getArg0     = new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0));
       Expr.InvokeUtility toObjectArr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", Utils.listOf(Object.class), Utils.listOf(getArg0));
       ifTrueStmts.stmts.add(assignStmt.apply(Utils.ARGS_VAR_NAME, toObjectArr));
@@ -2574,7 +2585,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Expr.InstanceOf arg0IsMap = new Expr.InstanceOf(startToken,
                                                     new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)),
                                                     Type.getInternalName(NamedArgsMap.class));
-    Stmt.Stmts mapStmts = new Stmt.Stmts();
+    Stmt.Stmts mapStmts = new Stmt.Stmts(startToken);
     Stmt.If ifArg0IsMap = new Stmt.If(startToken,
                                       new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsMap),
                                       mapStmts,
@@ -2714,7 +2725,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     JactlType    classType     = createClass(classDescriptor);
     Token        initNameToken = token.newIdent(Utils.JACTL_INIT);
     Expr.FunDecl initFunc      = Utils.createFunDecl(token, initNameToken, classType.createInstanceType(), mandatoryParams, false, true, false);
-    Stmt.Stmts initStmts       = new Stmt.Stmts();
+    Stmt.Stmts initStmts       = new Stmt.Stmts(classDecl.name);
     initFunc.block             = new Stmt.Block(token, initStmts);
 
     // Change name of params to avoid clashing with field names. This allows us to reuse initialiser expressions
@@ -2806,7 +2817,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                       false, true, false);
     initWrapper.functionDescriptor.isWrapper = true;
     initWrapper.isWrapper     = true;
-    Stmt.Stmts wrapperSmts    = new Stmt.Stmts();
+    Stmt.Stmts wrapperSmts    = new Stmt.Stmts(classToken);
     initWrapper.block         = new Stmt.Block(classToken, wrapperSmts);
     wrapperSmts.stmts.addAll(Utils.listOf(objectArrParam, sourceParam, offsetParam));
 
@@ -2989,6 +3000,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   static Expr literalDefaultValue(Token location, JactlType type) {
+    Expr expr = _literalDefaultValue(location, type);
+    expr.type = type;
+    return expr;
+  }
+
+  static Expr _literalDefaultValue(Token location, JactlType type) {
     switch (type.getType()) {
       case BOOLEAN: return new Expr.Literal(new Token(FALSE, location).setValue(false));
       case BYTE:    return new Expr.Literal(new Token(BYTE_CONST, location).setValue(0));
@@ -3031,7 +3048,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Stmt.VarDecl param     = Utils.createParam(paramName, JactlType.STRING);
     Expr.FunDecl funDecl   = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_FROM_JSON), instanceType, Utils.listOf(param), true, false, true);
     Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(classToken, funDecl);
-    Stmt.Stmts   stmts       = new Stmt.Stmts();
+    Stmt.Stmts   stmts       = new Stmt.Stmts(classToken);
     stmts.stmts.add(param);
     Token objIdent         = classToken.newIdent("obj");
     stmts.stmts.add(Utils.createVarDecl(funDecl, objIdent, instanceType, new Expr.InvokeNew(classToken, instanceType)));
@@ -3076,7 +3093,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Stmt.VarDecl flagsVarDecl = Utils.createParam(flagsParam, flagsType);
     Expr.FunDecl funDecl      = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_MISSING), instanceType, Utils.listOf(flagsVarDecl), false, false, false);
     Stmt.FunDecl funDeclStmt  = new Stmt.FunDecl(classToken, funDecl);
-    Stmt.Stmts   stmts       = new Stmt.Stmts();
+    Stmt.Stmts   stmts       = new Stmt.Stmts(classToken);
     stmts.stmts.add(flagsVarDecl);
     Token     thisIdent    = classToken.newIdent(Utils.THIS_VAR);
 

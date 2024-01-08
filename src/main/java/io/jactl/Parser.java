@@ -48,7 +48,7 @@ public class Parser {
   List<CompileError>    errors      = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes     = new ArrayDeque<>();
   boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
-  String                packageName = null;
+  String                packageName;
   JactlContext context;
   int          uniqueVarCnt         = 0;
 
@@ -176,7 +176,7 @@ public class Parser {
           println.isResultUsed = false;
           body.add(new Stmt.ExprStmt(whileToken, println));
         }
-        Stmt.Stmts whileBody = new Stmt.Stmts();
+        Stmt.Stmts whileBody = new Stmt.Stmts(whileToken);
         whileBody.stmts = body;
         whileStmt.body = whileBody;
         bodyStream = Stream.of(whileStmt);
@@ -270,7 +270,7 @@ public class Parser {
   private Stmt.Block block(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
     boolean currentIgnoreEol = ignoreEol;
     ignoreEol = false;
-    Stmt.Stmts stmts = new Stmt.Stmts();
+    Stmt.Stmts stmts = new Stmt.Stmts(openBlock);
     Stmt.Block block = new Stmt.Block(openBlock, stmts);
     pushBlock(block);
     try {
@@ -609,7 +609,7 @@ public class Parser {
     else {
       type = type(true, false, false);
     }
-    Stmt.Stmts stmts = new Stmt.Stmts();
+    Stmt.Stmts stmts = new Stmt.Stmts(peek());
     stmts.stmts.add(singleVarDecl(type, inClassDecl, isConst));
     while (matchAny(COMMA)) {
       matchAny(EOL);
@@ -689,7 +689,7 @@ public class Parser {
       identifiers.add(expect(IDENTIFIER));
     }
     matchAny(EOL);
-    Stmt.Stmts stmts      = new Stmt.Stmts();
+    Stmt.Stmts stmts      = new Stmt.Stmts(peek());
     if (peek().is(EQUAL)) {
       Token      equalToken = expect(EQUAL);
       Token      rhsToken   = peek();
@@ -822,7 +822,7 @@ public class Parser {
     if (peek().is(RIGHT_PAREN)) {
       return null;
     }
-    Stmt.Stmts stmts = new Stmt.Stmts();
+    Stmt.Stmts stmts = new Stmt.Stmts(previous());
     stmts.stmts.add(statement());
     while (matchAny(COMMA)) {
       stmts.stmts.add(statement());
@@ -865,7 +865,7 @@ public class Parser {
   }
 
   private Stmt.Block stmtBlock(Token startToken, Stmt... statements) {
-    Stmt.Stmts stmts = new Stmt.Stmts();
+    Stmt.Stmts stmts = new Stmt.Stmts(startToken);
     stmts.stmts.addAll(Arrays.asList(statements));
     return new Stmt.Block(startToken, stmts);
   }
@@ -1445,7 +1445,7 @@ public class Parser {
     expect(DO);
     matchAny(EOL);
     Token leftBrace = expect(LEFT_BRACE);
-    return new Expr.Block(leftBrace, block(RIGHT_BRACE), true);
+    return new Expr.Block(leftBrace, block(RIGHT_BRACE));
   }
 
   /**
@@ -2061,7 +2061,7 @@ public class Parser {
       Stmt.Block block = closure.funDecl.block;
       removeItParameter(block);
       block = (Stmt.Block)setLastResultIsUsed(block);
-      expr = new Expr.Block(block.openBrace, block, false);
+      expr = new Expr.Block(block.openBrace, block);
     }
     return expr;
   }
@@ -3103,7 +3103,7 @@ public class Parser {
     Token rhsToken   = rhsExpr.location;
     Token rhsName    = rhsToken.newIdent(Utils.JACTL_PREFIX + "multiAssign" + uniqueVarCnt++);
 
-    Stmt.Stmts stmts = new Stmt.Stmts();
+    Stmt.Stmts stmts = new Stmt.Stmts(rhsToken);
 
     // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
     // end of current scope - could handle this better but not a high priority since not an actual leak.
@@ -3125,7 +3125,7 @@ public class Parser {
     }
 
     Token      lparen = lhsExprs.token;
-    Expr.Block block  = new Expr.Block(lparen, new Stmt.Block(lparen, stmts), false);
+    Expr.Block block  = new Expr.Block(lparen, new Stmt.Block(lparen, stmts));
     return block;
   }
 
@@ -3193,7 +3193,7 @@ public class Parser {
       @Override public Stmt visitBlock(Stmt.Block stmt) {
         // Special case for while block
         if (stmt.stmts.stmts.stream().anyMatch(s -> s instanceof Stmt.While)) {
-          Stmt.Stmts stmts = new Stmt.Stmts();
+          Stmt.Stmts stmts = new Stmt.Stmts(stmt.location);
           stmts.stmts.add(stmt);
           stmts.stmts.add(setLastResultIsUsed(nullStmt.get()));
           return stmts;

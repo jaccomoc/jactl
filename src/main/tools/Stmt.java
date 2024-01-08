@@ -37,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.HashSet;
 
+import io.jactl.Token;
 import io.jactl.runtime.ClassDescriptor;
 import org.objectweb.asm.Label;
 
@@ -53,6 +54,7 @@ class Stmt {
    * Represents a sequence of statments.
    */
   class Stmts extends Stmt {
+    Token token;
     List<Stmt> @stmts = new ArrayList<>();
 
     int @currentIdx;     // Which statement we are currently resolving

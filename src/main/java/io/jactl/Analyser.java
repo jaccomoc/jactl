@@ -455,10 +455,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitBlock(Expr.Block expr) {
     analyse(expr.block);
-    if (!expr.resultIsTrue) {
-      // Our result will be result of last statement in block so compensate for additional slot
-      // created for us by adjusting automatic tally
-    }
     return null;
   }
 
