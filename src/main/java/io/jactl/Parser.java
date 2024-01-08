@@ -364,6 +364,7 @@ public class Parser {
    *# statement ::= ifStmt
    *#             | (IDENTIFIER COLON) ? forStmt
    *#             | (IDENTIFIER COLON) ? whileStmt
+   *#             | (IDENTIFIER COLON) ? doUntilStmt
    *#             | beginEndBlock
    *#             | LEFT_BRACE stmts RIGHT_BRACE
    *#             | exprStmt
@@ -377,6 +378,7 @@ public class Parser {
       case IF:                return ifStmt();
       case WHILE:             return whileStmt(null);
       case FOR:               return forStmt(null);
+      case DO:                return doUntilStmt(null);
       case SEMICOLON:         return null;
       case IDENTIFIER:        if (lookaheadNoEOL(IDENTIFIER, COLON)) {
                                 Token label = expect(IDENTIFIER);
@@ -384,7 +386,8 @@ public class Parser {
                                 matchAny(EOL);
                                 if (peek().is(WHILE)) return whileStmt(label);
                                 if (peek().is(FOR))   return forStmt(label);
-                                unexpected("Labels can only be applied to for/while statements");
+                                if (peek().is(DO))    return doUntilStmt(label);
+                                unexpected("Labels can only be applied to for, while, and do/until loops");
                               }
                               break;
     }
@@ -767,6 +770,30 @@ public class Parser {
     Stmt.While whileStmt = new Stmt.While(whileToken, cond, label);
     whileStmt.body = statement();
     return stmtBlock(whileToken, whileStmt);
+  }
+
+  /**
+   *<pre>
+   *# doUntilStmt ::= DO BLOCK UNTIL LEFT_PAREN condition RIGHT_PAREN
+   *</pre>
+   * Look for a do/until. If no until then return the block.
+   */
+  private Stmt doUntilStmt(Token label) {
+    Token doToken = expect(DO);
+    Stmt  block   = block(expect(LEFT_BRACE), RIGHT_BRACE);
+    if (!matchAnyIgnoreEOL(UNTIL)) {
+      // Not a do/until
+      if (label != null) {
+        error("Labels can only be applied to for, while, and do/until loops", label);
+      }
+      return block;
+    }
+    expect(LEFT_PAREN);
+    Expr       cond      = condition(false, RIGHT_PAREN);
+    Stmt.While whileStmt = new Stmt.While(doToken, cond, label);
+    whileStmt.body = block;
+    whileStmt.isDoUntil = true;
+    return stmtBlock(doToken, whileStmt);
   }
 
   /**
@@ -1692,7 +1719,7 @@ public class Parser {
         if (expr.entries.size() > 0) {
           if (!matchAny(COMMA)) {
             if (endToken.is(RIGHT_BRACE) && expr.entries.size() == 1) {
-              unexpected("Label applied to statement that is not for/while or malformed Map literal using '{}' form.");
+              unexpected("Label applied to statement that is not for/while/until loop or malformed Map literal using '{}' form.");
             }
             unexpected("Was Expecting ',' while parsing Map literal.");
           }

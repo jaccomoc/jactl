@@ -159,7 +159,7 @@ class Stmt {
   }
 
   /**
-   * While and For loop
+   * While, for, and do/until loops
    */
   class While extends Stmt {
     Token whileToken;
@@ -171,6 +171,7 @@ class Stmt {
     Label @continueLabel;      // where to jump to on a continue stmt
     int   @stackDepth;         // depth of stack where while loop is (used by continue/break)
     int   @globalRegexMatches; // count of number of /xxx/g in while condition
+    boolean @isDoUntil = false;
   }
 
   /**

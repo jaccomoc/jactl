@@ -6774,7 +6774,23 @@ class CompilerTest extends BaseTest {
     test("byte i = 1; while (++i < 10); i", (byte)10);
     test("int i = 1; while (++i < 10); i", 10);
     test("int i = 1; while() { break if i > 4; i++ }; i", 5);
-    testError("LABEL: int i = 1", "labels can only be applied to for/while");
+    testError("LABEL: int i = 1", "labels can only be applied to for, while, and do/until");
+  }
+
+  @Test public void doUntilLoops() {
+    test("int i = 0; do { i++ } until (i == 10); i", 10);
+    testError("int i = 0; do i++ until (i == 10); i", "unexpected token 'i'");
+    test("int i = 0; int sum = 0; do { sum += i++} until (i == 10); sum", 45);
+    test("int i = 0; int sum = 0; do\n{\nsum += i++\n}\nuntil\n(\ni ==\n 10\n)\nsum", 45);
+    test("int i = 0; int sum = 0; do { sum += i; i++ } until (i == 10); sum", 45);
+    test("int i = 0; int sum = 0; do { int j = 0; while (j < i) { sum++; j++ }; i++ } until (i == 10); sum", 45);
+    testError("do { i++ } until (true);", "unknown variable 'i'");
+    test("byte i = 1; do { i++ } until (true); i", (byte)2);
+    test("int i = 1; do { i++ } until (true); i", 2);
+    test("int i = 1; do {} until (true)", null);
+    test("int i = 1; LABEL: do { break LABEL if i > 4; i++ } until (false); i", 5);
+    test("int i = 1; LABEL:\ndo { break LABEL if i > 4; i++ } until (false); i", 5);
+    testError("int i = 1; LABEL:\ndo { break LABEL2 if i > 4; i++ } until (false); i",  "could not find enclosing loop with label LABEL2");
   }
 
   @Test public void forLoops() {
@@ -6801,6 +6817,10 @@ class CompilerTest extends BaseTest {
     testError("boolean f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
   }
 
+  @Test public void testStuff() {
+    test("int sum = 0; double i = 0; do { if (i > 5) continue; sum += i } until (i == 10); sum", 15);
+  }
+
   @Test public void breakContinue() {
     testError("break", "break must be within");
     testError("continue", "continue must be within");
@@ -6814,6 +6834,14 @@ class CompilerTest extends BaseTest {
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5 && i < 7) { if (true) continue } ; sum += i }; sum", 49);
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) break; sum += i }; sum", 15);
     test("int sum = 0; double i = 0; while (i++ < 10) { if (i > 5) { if (true) break}; sum += i }; sum", 15);
+    test("int sum = 0; double i = 0; do { if (i > 5) continue; sum += i } until (i++ == 10); sum", 15);
+    test("def sum = 0; def i = 0.0D; do { if (i > 5) continue; sum += i } until (i++ == 10); sum", 15.0D);
+    test("int sum = 0; double i = 0; do { if (i > 5) continue; sum = sum * 1 + i } until (i++ == 10); sum", 15);
+    test("def sum = 0; def i = 0.0D; do { if (i > 5) continue; sum = sum * 1 + i } until (i++ == 10); sum", 15.0D);
+    test("int sum = 0; double i = 0; do { if (i > 5 && i < 7) continue; sum += i } until (i++ == 10); sum", 49);
+    test("int sum = 0; double i = 0; do { if (i > 5 && i < 7) { if (true) continue } ; sum += i } until (i++ == 10); sum", 49);
+    test("int sum = 0; double i = 0; do { if (i > 5) break; sum += i } until (i++ == 10); sum", 15);
+    test("int sum = 0; double i = 0; do { if (i > 5) { if (true) break}; sum += i } until (i++ == 10); sum", 15);
     test("int sum = 0; for (double i = 0; i < 10; i++) { if (i > 5) continue; sum += i }; sum", 15);
     test("int sum = 0; for (double i = 0; i < 10; i++) { if (i > 5 && i < 7) continue; sum += i }; sum", 39);
     test("int sum = 0; for (double i = 0; i < 10; i++) { if (i > 5) break; sum += i }; sum", 15);
@@ -6832,15 +6860,20 @@ class CompilerTest extends BaseTest {
     test("int i = 0; int sum = 0; while (i < 10) { XXX: while(false){}; int j = 0; LABEL: while (j < i) { sum++; j++; continue LABEL }; i++ }; sum", 45);
     test("int i = 0; int sum = 0; OUTER: while (i < 10) { int j = 0; LABEL: while (j < i) { sum++; j++; i++; continue OUTER }; i++ }; sum", 9);
     test("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
-    testError("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum", "could not find enclosing for/while");
-    testError("int i = 0; int sum = 0; OUTER: while (i < 15) { int j = 0; LABEL: while (j < i) { break XXX if i >= 10; sum++; j++; continue LABEL }; i++ }; sum", "could not find enclosing for/while");
+    testError("int i = 0; int sum = 0; OUTER:\n while (i < 15) { int j = 0; LABEL:\n while (j < i) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum", "could not find enclosing loop");
+    testError("int i = 0; int sum = 0; OUTER: while (i < 15) { int j = 0; LABEL: while (j < i) { break XXX if i >= 10; sum++; j++; continue LABEL }; i++ }; sum", "could not find enclosing loop");
+    test("int i = 0; int sum = 0; do{ XXX: do{}until(true); int j = 0; LABEL: do{ sum++; j++; continue LABEL } until (j >= i); i++ } until (i >= 10); sum", 46);
+    test("int i = 0; int sum = 0; OUTER: do{ int j = 0; LABEL: do{ sum++; j++; i++; continue OUTER } until (j >= i); i++ } until (i >= 10); sum", 10);
+    test("int i = 0; int sum = 0; OUTER:\n do{ int j = 0; LABEL:\n do{ break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ } until (j >= i); sum++; i++ } until (i >=15); sum", 56);
+    testError("int i = 0; int sum = 0; OUTER:\n do{ int j = 0; LABEL:\n do{ break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ } until (j >= i); sum++; continue LABEL; i++ } until (i >= 15); sum", "could not find enclosing loop");
+    testError("int i = 0; int sum = 0; OUTER: do{ int j = 0; LABEL: do{ break XXX if i >= 10; sum++; j++; continue LABEL } until (j >= i); i++ } until (i >= 15); sum", "could not find enclosing loop");
     test("int sum = 0; LABEL: for (int i=0; i < 10; i++) { sum += i }; sum", 45);
     test("int sum = 0; for (int i=0; i < 10; ) { LABEL: for (int j = 0; j < i; ) { sum++; j++; continue LABEL }; i++ }; sum", 45);
     test("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue OUTER }; i++ }; sum", 9);
     test("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
-    testError("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue XXX }; i++ }; sum", "could not find enclosing for/while");
-    testError("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum",  "could not find enclosing for/while");
-    testError("LABEL: println 'xxx'", "labels can only be applied to for/while");
+    testError("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue XXX }; i++ }; sum", "could not find enclosing loop");
+    testError("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum",  "could not find enclosing loop");
+    testError("LABEL: println 'xxx'", "labels can only be applied to for, while, and do/until");
     testError("LABEL\n: while (false) {}; 1", "unexpected token ':'");
   }
 

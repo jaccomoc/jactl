@@ -212,7 +212,7 @@ public abstract class Stmt {
   }
 
   /**
-   * While and For loop
+   * While, for, and do/until loops
    */
   public static class While extends Stmt {
     public Token whileToken;
@@ -224,6 +224,7 @@ public abstract class Stmt {
     public Label continueLabel;      // where to jump to on a continue stmt
     public int   stackDepth;         // depth of stack where while loop is (used by continue/break)
     public int   globalRegexMatches; // count of number of /xxx/g in while condition
+    public boolean isDoUntil = false;
     public While(Token whileToken, Expr condition, Token label) {
       this.whileToken = whileToken;
       this.condition = condition;

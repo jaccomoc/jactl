@@ -120,6 +120,7 @@ class TokeniserTest {
     doTest.accept("List", TokenType.LIST);
     doTest.accept("void", TokenType.VOID);
     doTest.accept("for", TokenType.FOR);
+    doTest.accept("until", TokenType.UNTIL);
     doTest.accept("if", TokenType.IF);
     doTest.accept("else", TokenType.ELSE);
     doTest.accept("while", TokenType.WHILE);

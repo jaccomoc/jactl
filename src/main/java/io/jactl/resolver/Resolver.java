@@ -1918,7 +1918,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return whileStmt;
       }
     }
-    error("Could not find enclosing for/while statement with label " + label.getStringValue(), label);
+    error("Could not find enclosing loop with label " + label.getStringValue(), label);
     return null;
   }
 

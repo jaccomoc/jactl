@@ -201,19 +201,21 @@ For example:
 
 # Keywords
 
-The following table list the reserved keywords used by Jactl:
+The following table lists the reserved keywords used by Jactl:
 
-| Key Words  |          |             |          |             |
-|------------|----------|-------------|----------|-------------|
-| BEGIN      | Decimal  | END         | List     | Map         |
-| String     | and      | as          | boolean  | break       |
-| class      | continue | def         | die      | do          |
-| double     | else     | extends     | false    | final       |
-| for        | if       | implements  | import   | in          |
-| instanceof | int      | interface   | long     | new         |
-| not        | null     | or          | package  | print       |
-| println    | return   | sealed      | static   | true        |
-| unless     | var      | void        | while    |             |
+| Key Words |            |         |            |         |
+|-----------|------------|---------|------------|---------|
+| BEGIN     | Decimal    | END     | List       | Map     |
+| Object    | String     | _       | and        | as      |
+| boolean   | break      | byte    | class      | const   |
+| continue  | def        | default | die        | do      |
+| double    | else       | eval    | extends    | false   |
+| final     | for        | if      | implements | import  |
+| in        | instanceof | int     | interface  | long    |
+| new       | not        | null    | or         | package |
+| print     | println    | return  | sealed     | static  |
+| switch    | true       | unless  | until      | var     |
+| void      | while      |         |            |         |
 
 
 # Types
@@ -2251,7 +2253,9 @@ abc
 > die "x has invalid value: $x" unless x.size() == 3
 ```
 
-# While Loops
+# Loop Statements
+
+## While Loops
 
 Jactl `while` loops work like Java and Groovy:
 > `while (<cond>) <statement>`
@@ -2269,7 +2273,7 @@ while (i < 5) {
 die if sum != 10
 ```
 
-## Break and Continue
+### Break and Continue
 
 Like Java, `break` can be used to exit the while loop at any point and `continue` can be used to goto the next
 iteration of the loop before the current iteration has completed:
@@ -2298,7 +2302,7 @@ while (i < 100) {
 die unless sum == 1683
 ```
 
-# For Loops
+## For Loops
 
 A `for` loop is similar to a `while` loop in that it executes a block of statements while a given condition is met.
 It additionally has some initialisation that is run before the loop and some statements that are run for every loop
@@ -2360,19 +2364,37 @@ for (;;) {
 die unless sum == 55 
 ```
 
-# Labels for While/For Statements
+## Do/Until Loops
 
-With `while` or `for` loops you can always break out of or continue the current loop using `break` or `continue`.
-Jacasal also allows you to break out of or continue an outer loop by labelling the loops and using the label in the
+Jactl does not support `do/while` loops but does have a `do/until` loop.
+
+The `do/until` loop works similarly to a `while` loop.
+It performs a statement or block of statements _until_ a given condition evaluates to `true`.
+Note that it always runs the loop at least once since the condition is checked after each execution of the loop.
+
+For example:
+```groovy
+int count = 0;
+do {
+  count++
+} until (nextToken().isEof())
+```
+
+## Labels for While, For, and Do/While Statements
+
+With `while`, `for`, and `do/while` loops, you can always break out of or continue the current loop using `break` 
+or `continue`.
+Jactl also allows you to break out of, or continue an outer loop by labelling the loops and using the label in the
 `break` or `continue`.
 
-Labels are a valid name followed by `:` and can be attached to a `while` or `for` statement if they occur immediately
-before the loop:
+Labels are a valid name followed by `:` and can be attached to a `while`, `for`, or `do/while` statement if they
+occur just before the loop:
 ```groovy
 int sum = 0
 OUTER: for (int i = 0; i < 10; i++) {
   int j = 0
-  INNER: while (true) {
+ INNER:
+  while (true) {
     sum += ++j
     continue OUTER if j > i
     break    OUTER if sum > 30 
@@ -2381,14 +2403,14 @@ OUTER: for (int i = 0; i < 10; i++) {
 die unless sum == 36 
 ```
 
-Label names are any valid identifier (any combination of letters, digits, and underscore as long as first character
+Label names are any valid identifier (any combination of letters, digits, and underscore as long as the first character
 is not a digit and identifier is not a single underscore).
-Label names can be the same as other variable names (although not recommended practice).
+Label names can be the same as other variable names (although this is not recommended practise).
 
 # Do Expression
 
-Jactl has a `do` expression that allows you to execute a block of statements where normally an expression would be
-expected.
+A `do/while` loop without the `until` expression can be used as a way to execute a set of statements (exactly one time)
+in a context where an expression would normally be expected.
 For example:
 ```groovy
 def commands = ['right 5', 'up 7', 'left 2', 'up 3', 'right 4']
@@ -2408,7 +2430,7 @@ When chaining with other boolean expressions using `and`, be careful since if th
 last expression does not result in a [truthiness](#Truthiness) value of `true` then the subsequent
 expressions won't be evaluated.
 For example, in the following, since `x++` is the last value in the `do` block the `do` block will
-evaluate to `x` and if `x` where `0` then the `break` would not be executed:
+evaluate to `x` and if `x` were `0`, then the `break` would not be executed:
 ```groovy
 def found = false
 while (true) {
@@ -2416,13 +2438,14 @@ while (true) {
 }
 ```
 
-You can combine `do` with `if/unless`:
+You can combine `do` with `if` or `unless`:
 ```groovy
 do { found = true; println "Found multiple of 17: $x" } if x % 17 == 0
 ```
 
-> **Note**<br/>
-> `do/while` statements like those in Java are not currently supported in Jactl.
+```groovy
+do { found = true; println "Found multiple of 17: $x" } unless x % 17
+```
 
 # Print Statements
 
