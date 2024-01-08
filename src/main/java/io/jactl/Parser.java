@@ -219,7 +219,7 @@ public class Parser {
 
   /**
    *# importStmt ::= IMPORT classPath (AS IDENTIFIER)?
-   *#             | IMPORT STATIC classPath DOT ( IDENTIFIER | STAR )
+   *#              | IMPORT STATIC classPath DOT ( IDENTIFIER | STAR )
    *#
    */
   List<Stmt.Import> importStmts() {
@@ -255,7 +255,7 @@ public class Parser {
   /**
    * <pre>
    *# block ::= LEFT_BRACE stmts RIGHT_BRACE
-   *#        | stmts EOF      // Special case for top most script block
+   *#         | stmts EOF      // Special case for top most script block
    *#
    * </pre>
    */
@@ -322,10 +322,10 @@ public class Parser {
   /**
    * <pre>
    *# declaration ::= multiVarDecl
-   *#              | funDecl
-   *#              | varDecl
-   *#              | classDecl
-   *#              | statement
+   *#               | funDecl
+   *#               | varDecl
+   *#               | classDecl
+   *#               | statement
    * </pre>
    */
   private Stmt declaration() {
@@ -361,12 +361,12 @@ public class Parser {
 
   /**
    * <pre>
-   *# statement ::= block
-   *#            | ifStmt
-   *#            | (IDENTIFIER COLON) ? forStmt
-   *#            | (IDENTIFIER COLON) ? whileStmt
-   *#            | beginEndBlock
-   *#            | exprStmt
+   *# statement ::= ifStmt
+   *#             | (IDENTIFIER COLON) ? forStmt
+   *#             | (IDENTIFIER COLON) ? whileStmt
+   *#             | beginEndBlock
+   *#             | LEFT_BRACE stmts RIGHT_BRACE
+   *#             | exprStmt
    * </pre>
    */
   private Stmt statement() {
@@ -429,9 +429,9 @@ public class Parser {
 
   /**
    * <pre>
-   * # type ::= DEF | VAR
-   * #         | ( (BOOLEAN | BYTE | INT | LONG | DOUBLE | DECIMAL | STRING | MAP | LIST | OBJECT) (LEFT_SQUARE RIGHT_SQUARE) * )
-   * #         | ( className ( LEFT_SQUARE RIGHT_SQUARE ) * )
+   *# type ::= DEF | VAR
+   *#          | ( (BOOLEAN | BYTE | INT | LONG | DOUBLE | DECIMAL | STRING | MAP | LIST | OBJECT) (LEFT_SQUARE RIGHT_SQUARE) * )
+   *#          | ( className ( LEFT_SQUARE RIGHT_SQUARE ) * )
    * </pre>
    * @param varAllowed       true if "var" is allowed in place of a type name
    * @param ignoreArrays     true if we should ignore "[" after the type
@@ -478,7 +478,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# funDecl ::= STATIC? type IDENTIFIER LEFT_PAREN parameters? RIGHT_PAREN LEFT_BRACE block RIGHT_BRACE
+   *# funDecl ::= STATIC? type IDENTIFIER LEFT_PAREN parameters? RIGHT_PAREN block
    * </pre>
    */
   private Stmt.FunDecl funDecl(boolean inClassDecl) {
@@ -624,7 +624,7 @@ public class Parser {
   }
 
   /**
-   *# singleVarDecl ::= IDENTIFIER ( EQUAL expression )
+   *# singleVarDecl ::= IDENTIFIER ( EQUAL expression ) ?
    */
   private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst) {
     if (isConst && peek().is(LEFT_SQUARE)) {
@@ -832,7 +832,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# beginEndBlock ::= (BEGIN | END) LEFT_BRACE statements RIGHT_BRACE
+   *# beginEndBlock ::= (BEGIN | END) block
    * </pre>
    */
   Stmt.Block beginEndBlock() {
@@ -1030,7 +1030,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# notExpression ::= NOT * (expr | returnExpr | printExpr | dieExpr | BREAK | CONTINUE )
+   *# notExpression ::= NOT * (returnExpr | printExpr | dieExpr | BREAK | CONTINUE | expr)
    * </pre>
    */
   private Expr notExpression() {
@@ -1062,11 +1062,11 @@ public class Parser {
 
   /**
    * <pre>
-   *# expr ::= LEFT_PAREN expr ( COMMA expr ) * RIGHT_PAREN EQUAL expr
-   *#       | expr operator expr
-   *#       | expr QUESTION expr COLON expr
-   *#       | unary
-   *#       | primary
+   * expr ::= LEFT_PAREN expr ( COMMA expr ) * RIGHT_PAREN EQUAL expr
+   *        | expr operator expr
+   *        | expr QUESTION expr COLON expr
+   *        | unary
+   *        | primary
    * </pre>
    * Parse expressions (mostly binary operations).
    * We parse based on operator precedence. If we reach highest level of precedence
@@ -1213,9 +1213,9 @@ public class Parser {
 
   /**
    * <pre>
-   *# unary ::= ( QUESTION_QUESTION | BANG | MINUS_MINUS | PLUS_PLUS | MINUS | PLUS | GRAVE | LEFT_PAREN type RIGHT_PAREN )
-   *#                  unary ( MINUS_MINUS | PLUS_PLUS )
-   *#        | expression
+   * unary ::= ( QUESTION_QUESTION | BANG | MINUS_MINUS | PLUS_PLUS | MINUS | PLUS | GRAVE | LEFT_PAREN type RIGHT_PAREN )
+   *                  unary ( MINUS_MINUS | PLUS_PLUS )
+   *         | expression
    * </pre>
    */
   private Expr unary(int precedenceLevel) {
@@ -1292,7 +1292,7 @@ public class Parser {
   /**
    * <pre>
    *# newInstance ::= NEW classPathOrIdentifier LEFT_PAREN arguments RIGHT_PAREN
-   *#                | NEW type (LEFT_SQUARE expression RIGHT_SQUARE ) ( LEFT_SQUARE expression RIGHT_SQUARE ) *
+   *#                 | NEW type (LEFT_SQUARE expression RIGHT_SQUARE ) ( LEFT_SQUARE expression RIGHT_SQUARE ) *
    *#                         ( LEFT_SQUARE RIGHT_SQUARE ) *
    * </pre>
    */
@@ -1395,19 +1395,18 @@ public class Parser {
   /**
    * <pre>
    *# primary ::= ((PLUS | MINUS)? INTEGER_CONST | DECIMAL_CONST | DOUBLE_CONST)
-   *#          | STRING_CONST
-   *#          | TRUE | FALSE | NULL
-   *#          | exprString
-   *#          | regexSubstitute
-   *#          | (IDENTIFIER | DOLLAR_IDENTIFIER | classPath)
-   *#          | mapOrListLiteral
-   *#          | nestedExpr
-   *#          | doBlock
-   *#          | closure
-   *#          | switchExpr
-   *#          | evalExpr
-   *#          | newInstance
-   *#
+   *#           | STRING_CONST
+   *#           | TRUE | FALSE | NULL
+   *#           | exprString
+   *#           | regexSubstitute
+   *#           | (IDENTIFIER | DOLLAR_IDENTIFIER | classPath)
+   *#           | mapOrListLiteral
+   *#           | nestedExpr
+   *#           | doBlock
+   *#           | closure
+   *#           | switchExpr
+   *#           | evalExpr
+   *#           | newInstance
    * </pre>
    */
   private Expr primary() {
@@ -1440,7 +1439,7 @@ public class Parser {
   }
 
   /**
-   *# doBlock ::= DO LEFT_BRACE block RIGHT_BRACE
+   *# doBlock ::= DO block
    */
   Expr doBlock() {
     expect(DO);
@@ -1450,8 +1449,8 @@ public class Parser {
   }
 
   /**
-   *# nestedExpr ::= LEFT_PAREN expression ( COMMA expression ) * RIGHT_PAREN
-   *#             | LEFT_PAREN expression RIGHT_PAREN
+   *# nestedExpr ::= LEFT_PAREN expression ( COMMA expression ) * RIGHT_PAREN   // for lhs of multi-assignments
+   *#              | LEFT_PAREN expression RIGHT_PAREN
    * Returns a single expression or an ExprList if comma separated.
    * Comma-separated expressions can be used in LHS of multi-assignments.
    */
@@ -1483,6 +1482,10 @@ public class Parser {
     return literal();
   }
 
+  /**
+   *# literal ::= plusMinusNumber | BYTE_CONST | INTEGER_CONST | LONG_CONST | DOUBLE_CONST
+   *#           | DECIMAL_CONST | STRING_CONST | TRUE | FALSE | NULL
+   */
   private Expr.Literal literal() {
     Token current = advance();
     if (current.is(PLUS,MINUS)) {
@@ -1503,6 +1506,9 @@ public class Parser {
     }
   }
 
+  /**
+   *# plusMinusNumber ::= (PLUS | MINUS) (BYTE_CONST | INTEGER_CONST | LONG_CONST | DOUBLE_CONST | DECIMAL_CONST)
+   */
   private Expr.Literal getPlusMinusNumber() {
     Token sign = previous();
     Token num  = expect(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
@@ -1540,7 +1546,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# classPath ::= IDENTIFIER ( DOT IDENTIFIER ) +
+   *# classPath ::= IDENTIFIER DOT IDENTIFIER (DOT IDENTIFIER) *
    * </pre>
    * We look for a class path like: x.y.z.A
    * where x, y, and z are all in lowercase and A begins with an uppercase.
@@ -1655,9 +1661,9 @@ public class Parser {
   /**
    * <pre>
    *# mapLiteral ::= LEFT_SQUARE COLON RIGHT_SQUARE
-   *#             | LEFT_BRACE COLON RIGHT_BRACE
-   *#             | LEFT_SQUARE mapEntries RIGHT_SQUARE
-   *#             | LEFT_BRACE mapEntries RIGHT_BRACE
+   *#              | LEFT_BRACE COLON RIGHT_BRACE
+   *#              | LEFT_SQUARE mapEntries RIGHT_SQUARE
+   *#              | LEFT_BRACE mapEntries RIGHT_BRACE
    * </pre>
    * Return a map literal. For maps we support Groovy map syntax using "[" and "]"
    * as well as JSON syntax using "{" and "}".
@@ -1728,7 +1734,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# mapKey ::= STRING_CONST | IDENTIFIER | LEFT_PAREN expression + RIGHT_PAREN | exprString | keyWord
+   *# mapKey ::= STRING_CONST | IDENTIFIER | LEFT_PAREN expression RIGHT_PAREN | exprString | keyWord
    * </pre>
    */
   private Expr mapKey() {
@@ -1757,7 +1763,7 @@ public class Parser {
    * <pre>
    *# exprString ::= EXPR_STRING_START ( DOLLAR_IDENTIFIER | DOLLAR_BRACE blockExpr |
    *#                       STRING_CONST ) * EXPR_STRING_END
-   *#             | (SLASH|SLASH_EQUAL) ( IDENTIFIER | DOLLAR_BRACE blockExpr | STRING_CONST ) * SLASH
+   *#              | (SLASH|SLASH_EQUAL) ( IDENTIFIER | DOLLAR_BRACE blockExpr | STRING_CONST ) * SLASH
    * </pre>
    * We parse an expression string delimited by " or """ or /
    * For the / version we treat as a multi-line regular expression and don't support escape chars.
@@ -1919,7 +1925,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# closure ::= LEFT_BRACE (parameters ARROW ) ? block RIGHT_BRACE
+   *# closure ::= LEFT_BRACE (parameters ARROW ) ? block
    * </pre>
    */
   private Expr closure() {
@@ -2061,7 +2067,7 @@ public class Parser {
   }
 
   /**
-   *# blockExpr ::= LEFT_BRACE block RIGHT_BRACE
+   *# blockExpr ::= block
    */
   private Expr blockExpr() {
     return convertClosureToBlockExpr(closure());
@@ -2093,15 +2099,15 @@ public class Parser {
 
   /**
    *# switchPattern ::= literal
-   *#                | type
-   *#                | className ( LEFT_PAREN mapOrListPattern RIGHT_PAREN ) ?
-   *#                | exprString
-   *#                | UNDERSCORE
-   *#                | IDENTIFIER
-   *#                | listPattern
-   *#                | mapPattern
-   *#                | DOLLAR_IDENTIFIER
-   *#                | DOLLAR_BRACE blockExpr RIGHT_BRACE
+   *#                 | type
+   *#                 | className ( LEFT_PAREN mapOrListPattern RIGHT_PAREN ) ?
+   *#                 | exprString
+   *#                 | UNDERSCORE
+   *#                 | IDENTIFIER
+   *#                 | listPattern
+   *#                 | mapPattern
+   *#                 | DOLLAR_IDENTIFIER
+   *#                 | DOLLAR_BRACE blockExpr RIGHT_BRACE
    */
   private Expr switchPattern() {
     matchAny(EOL);
@@ -2242,7 +2248,7 @@ public class Parser {
   /**
    * <pre>
    *# mapPattern ::= LEFT_SQUARE COLON RIGHT_SQUARE
-   *#             | LEFT_SQUARE ( patternMapKey COLON switchPattern ) ( COMMA patternMapKey COLON switchPattern ) * RIGHT_SQUARE
+   *#              | LEFT_SQUARE ( patternMapKey COLON switchPattern ) ( COMMA patternMapKey COLON switchPattern ) * RIGHT_SQUARE
    * </pre>
    */
   private Expr.MapLiteral mapPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
@@ -3086,6 +3092,13 @@ public class Parser {
     return expr;
   }
 
+  /**
+   * Convert a multi-assignment into a list of lvalue assignments
+   * @param lhsExprs   the list of variables/field expressions to be assigned to
+   * @param equalToken the operator
+   * @param rhsExpr    the right-hand side (which should result in a list)
+   * @return a new Expr.Block expression with the lvalues assignment statements
+   */
   private Expr convertToLvalue(Expr.ExprList lhsExprs, Token equalToken, Expr rhsExpr) {
     Token rhsToken   = rhsExpr.location;
     Token rhsName    = rhsToken.newIdent(Utils.JACTL_PREFIX + "multiAssign" + uniqueVarCnt++);
@@ -3252,4 +3265,70 @@ public class Parser {
    *#           | NEW | AND | OR | NOT | DO | PRINT | PRINTLN | BEGIN | END | DIE | EVAL | FINAL | CONST | SEALED
    *#           | SWITCH | DEFAULT
    */
+
+  /**
+   * Genearate the EBNF for expressions based on operator precedence.
+   * Generates this content:
+   *<pre>
+   *# expr ::= expr1 ( (EQUAL | QUESTION_EQUAL | STAR_EQUAL | SLASH_EQUAL | PERCENT_EQUAL | PERCENT_PERCENT_EQUAL | PLUS_EQUAL | MINUS_EQUAL | DOUBLE_LESS_THAN_EQUAL | DOUBLE_GREATER_THAN_EQUAL | TRIPLE_GREATER_THAN_EQUAL | AMPERSAND_EQUAL | PIPE_EQUAL | ACCENT_EQUAL) expr1 ) *
+   *# expr1 ::= expr2a ( QUESTION expr2a COLON expr2a ) ?
+   *# expr2a ::= ( expr2 QUESTION_COLON )* expr2
+   *# expr2 ::= ( expr3 PIPE_PIPE )* expr3
+   *# expr3 ::= ( expr4 AMPERSAND_AMPERSAND )* expr4
+   *# expr4 ::= ( expr5 PIPE )* expr5
+   *# expr5 ::= ( expr6 ACCENT )* expr6
+   *# expr6 ::= ( expr7 AMPERSAND )* expr7
+   *# expr7 ::= ( expr8 (EQUAL_EQUAL | BANG_EQUAL | COMPARE | EQUAL_GRAVE | BANG_GRAVE | TRIPLE_EQUAL | BANG_EQUAL_EQUAL) )* expr8
+   *# expr8 ::= ( expr9 (LESS_THAN | LESS_THAN_EQUAL | GREATER_THAN | GREATER_THAN_EQUAL | INSTANCE_OF | BANG_INSTANCE_OF | IN | BANG_IN | AS) )* expr9
+   *# expr9 ::= ( expr10 (DOUBLE_LESS_THAN | DOUBLE_GREATER_THAN | TRIPLE_GREATER_THAN) )* expr10
+   *# expr10 ::= ( expr11 (MINUS | PLUS) )* expr11
+   *# expr11 ::= ( expr12 (STAR | SLASH | PERCENT | PERCENT_PERCENT) )* expr12
+   *# expr12 ::= (QUESTION_QUESTION | GRAVE | BANG | MINUS_MINUS | PLUS_PLUS | MINUS | PLUS)? unary
+   *# expr13 ::= ( primary (DOT | QUESTION_DOT | LEFT_SQUARE | QUESTION_SQUARE | LEFT_PAREN | LEFT_BRACE) )* primary
+   *# unary ::= expr13 (MINUS_MINUS|PLUS_PLUS)?
+   *</pre>
+   * @param args args
+   */
+  public static void main(String[] args) {
+    System.out.println("  /*");
+    int i = 0;
+    int count = operatorsByPrecedence.size();
+    String unaryNext = null;
+    for (Pair<Boolean,List<TokenType>> pair: operatorsByPrecedence) {
+      String current   = "expr";
+      if (i > 0) {
+        current += i;
+      }
+      String next      = i+1 == count ? "primary" : "expr" + (i + 1);
+      String operators = pair.second.stream().map(Enum::name).collect(Collectors.joining(" | "));
+      if (pair.second.size() > 1) {
+        operators = "(" + operators + ")";
+      }
+      System.out.print("  *# ");
+      if (unaryOps.equals(pair.second)) {
+        System.out.println(current + " ::= " + operators + "? unary");
+        unaryNext = next;
+      }
+      else {
+        List<TokenType> ops = new ArrayList<>(pair.second);
+        if (ops.remove(QUESTION)) {
+          System.out.println(current + " ::= " + next + "a ( QUESTION " + next + "a COLON " + next + "a ) ?");
+          current = next + "a";
+          operators = ops.stream().map(Enum::name).collect(Collectors.joining(" | "));
+          System.out.print("  *# ");
+        }
+        if (pair.first) {
+          // Left associative
+          System.out.println(current + " ::= ( " + next + " " + operators + " )* " + next);
+        }
+        else {
+          // Right associative
+          System.out.println(current + " ::= " + next + " ( " + operators + " " + next + " ) *");
+        }
+      }
+      i++;
+    }
+    System.out.println("  *# unary ::= " + unaryNext + " (MINUS_MINUS|PLUS_PLUS)?");
+    System.out.println("  */");
+  }
 }
