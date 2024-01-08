@@ -184,6 +184,11 @@ public class Token extends Location {
     return this;
   }
 
+  public Token setEnd(int endOffset) {
+    this.length = endOffset - offset;
+    return this;
+  }
+
   /**
    * Set flag to indicate whether token is a keyword or not. This is
    * used in scenarios where a bare field name can be used and allows

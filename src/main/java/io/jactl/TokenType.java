@@ -172,6 +172,10 @@ public enum TokenType {
   EOL(),            // End of line
   EOF(),            // End of file
 
+  WHITESPACE(),     // Spaces/tabs
+  COMMENT(),        // Comment
+  ERROR(),          // Error state (e.g. EOF in multi-line comment/string)
+
   // Internal use only
   NUMBER();
 
@@ -232,6 +236,8 @@ public enum TokenType {
   public boolean isBitShift() {
     return this.is(DOUBLE_LESS_THAN,DOUBLE_GREATER_THAN,TRIPLE_GREATER_THAN);
   }
+
+  public boolean isNumber() { return this.is(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST); }
 
   @Override
   public String toString() {

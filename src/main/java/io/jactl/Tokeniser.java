@@ -69,6 +69,9 @@ public class Tokeniser {
   private final int    length;            // Length of source code
   private       int    offset = 0;        // The current position in the source code as offset
 
+  // Whether to return WHITESPACE and COMMENT tokens or just filter them out.
+  private boolean tokeniseCommentsAndWhitespace = false;
+
   private List<String> lines;
   private int[]        lineOffsets;
 
@@ -100,17 +103,21 @@ public class Tokeniser {
    * @param source the source code to tokenise
    */
   public Tokeniser(String source) {
-    // Strip trailing new lines so that EOF errors point to somewhere useful
-    this.source = source.replaceAll("\\R*$", "");
+    this.source = source;
     this.length = this.source.length();
     calculateLineOffsets();
   }
 
+  public Tokeniser(String source, boolean tokeniseCommentsAndWhitespace) {
+    this(source);
+    this.tokeniseCommentsAndWhitespace = tokeniseCommentsAndWhitespace;
+  }
+
   /**
-   * Get the next token. If we have been rewound then we return from that point in
+   * Get the next token. If we have been rewound, then we return from that point in
    * the stream of tokens rather than parsing a new one from the source code.
    * Special case for new lines is that we collapse a series of new lines into one
-   * since new lines are syntactically relevant but the number in a row has no
+   * since new lines are syntactically relevant, but the number in a row has no
    * significance.
    * @return the next token in the stream of tokens
    */
@@ -209,12 +216,15 @@ public class Tokeniser {
       if (previousToken != null) {
         previousToken.setNext(currentToken);
       }
-      // If we have already returned EOL last time then keep advancing until we get
-      // something that is not EOL
-      if (currentToken.is(EOL) && previousToken != null && previousToken.is(EOL)) {
-        while ((currentToken = parseToken()).is(EOL)) {
+
+      if (!tokeniseCommentsAndWhitespace) {
+        // If we have already returned EOL last time then keep advancing until we get
+        // something that is not EOL
+        if (currentToken.is(EOL) && previousToken != null && previousToken.is(EOL)) {
+          while ((currentToken = parseToken()).is(EOL)) {
+          }
+          previousToken.setNext(currentToken);
         }
-        previousToken.setNext(currentToken);
       }
     }
   }
@@ -224,10 +234,19 @@ public class Tokeniser {
    * @return the next token from the source code
    */
   private Token parseToken() {
-    skipSpacesAndComments();
+    Token token;
+    if (!tokeniseCommentsAndWhitespace) {
+      skipSpacesAndComments();
+    }
+    else {
+      token = getSpaceOrComment();
+      if (token != null) {
+        return token;
+      }
+    }
 
     // Create token before knowing type and length so we can record start position
-    Token token = createToken();
+    token = createToken();
 
     int remaining = source.length() - offset;
     if (remaining == 0) {
@@ -242,7 +261,7 @@ public class Tokeniser {
       return parseNextStringPart(token, remaining, c);
     }
 
-    if (c > 256) throw new CompileError("Unexpected character '" + (char) c + "'", token);
+    if (c > 256) return error("Unexpected character '" + (char) c + "'", token);
 
     // Find list of symbols that match o first character
     List<Symbol> symbols = symbolLookup[c];
@@ -271,7 +290,12 @@ public class Tokeniser {
     switch (sym.type) {
       case EOL: {
         if (!newLinesAllowed()) {
-          throw new CompileError("New line not allowed within single line string", token);
+          try {
+            return error("New line not allowed within single line string", token);
+          }
+          finally {
+            offset--;
+          }
         }
         return token.setType(EOL).setLength(1);
       }
@@ -281,7 +305,10 @@ public class Tokeniser {
         int     stringStart  = offset - 1;
         advance(tripleQuoted ? 2 : 0);
         Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true, false, stringStart);
-        advance(tripleQuoted ? 3 : 1);
+        if (!stringToken.is(ERROR)) {
+          advance(tripleQuoted ? 3 : 1);
+          stringToken.setEnd(offset);
+        }
         return stringToken;
       }
       case DOUBLE_QUOTE: {
@@ -295,11 +322,11 @@ public class Tokeniser {
         pushStringState(endChars, stringStart);
         advance(tripleQuote ? 2 : 0);
         token = parseString(true, endChars, newLinesAllowed(), true, false, stringStart);
-        return token.setType(EXPR_STRING_START);
+        return token.setType(EXPR_STRING_START).setEnd(offset);
       }
       case REGEX_SUBST_START: {
         pushStringState("/", offset - 1, true);
-        return token.setType(REGEX_SUBST_START);
+        return token.setType(REGEX_SUBST_START).setEnd(offset);
       }
       case DOLLAR_BRACE:
       case LEFT_BRACE: {
@@ -309,7 +336,7 @@ public class Tokeniser {
       case RIGHT_BRACE: {
         nestedBraces--;
         if (nestedBraces < 0) {
-          throw new CompileError("Closing brace '}' does not match any opening brace", token);
+          return error("Closing brace '}' does not match any opening brace", token);
         }
         if (stringState.size() > 0 && stringState.peek().braceLevel == nestedBraces) {
           // Go back into string mode if we have found closing '}' of our nested expression within the sring
@@ -394,7 +421,7 @@ public class Tokeniser {
           }
           token = parseIdentifier(createToken(), remaining);
           if (keyWords.contains(token.getChars())) {
-            throw new CompileError("Keyword found where identifier expected", token);
+            return error("Keyword found where identifier expected", token);
           }
         }
         return token;
@@ -422,7 +449,7 @@ public class Tokeniser {
             final String modifiers = modifierSb.toString();
             for (int i = 0; i < modifiers.length(); i++) {
               if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
-                throw new CompileError("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
+                return error("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
               }
             }
             return token.setType(EXPR_STRING_END)
@@ -443,7 +470,7 @@ public class Tokeniser {
       }
       case '\n': {
         if (!newLinesAllowed()) {
-          throw new CompileError("Unexpected new line within single line string", createToken());
+          return error("Unexpected new line within single line string", createToken());
         }
         break;
       }
@@ -461,7 +488,7 @@ public class Tokeniser {
     // Make sure that first character is legal for an identitifer
     int startChar = charAt(0);
     if (!isIdentifierStart(startChar) && startChar != '$') {
-      throw new CompileError("Unexpected character '" + (char) startChar + "': expecting start of identifier", token);
+      return error("Unexpected character '" + (char) startChar + "': expecting start of identifier", token);
     }
 
     // Search for first char that is not a valid identifier char
@@ -473,10 +500,10 @@ public class Tokeniser {
     }
 
     if (startChar == '$' && i == 1) {
-      throw new CompileError("Unexpected character '$'", token);
+      return error("Unexpected character '$'", token);
     }
     if (startChar == '$' && isDigits && digitCount == i - 1 && digitCount > 3) {
-      throw new CompileError("Capture variable number too large", token);
+      return error("Capture variable number too large", token);
     }
 
     TokenType tokenType = startChar == '$' ? DOLLAR_IDENTIFIER :
@@ -557,19 +584,19 @@ public class Tokeniser {
     token.setLength(numberLength);
     String value = token.getStringValue().substring(base == 10 ? 0 : 2);
     if (value.isEmpty()) {
-      throw new CompileError("Missing digits for numeric literal", token);
+      return error("Missing digits for numeric literal", token);
     }
     switch (type) {
       case INTEGER_CONST: {
         try {
           int num = Integer.parseUnsignedInt(value, base);
           if (num < 0 && base == 10) {
-            throw new CompileError("Number too large for integer constant", token);
+            return error("Number too large for integer constant", token);
           }
           token.setValue(num);
         }
         catch (NumberFormatException e) {
-          throw new CompileError("Number too large for integer constant", token);
+          return error("Number too large for integer constant", token);
         }
         break;
       }
@@ -577,12 +604,12 @@ public class Tokeniser {
         try {
           long num = Long.parseUnsignedLong(value, base);
           if (num < 0 && base == 10) {
-            throw new CompileError("Number too large for long constant", token);
+            return error("Number too large for long constant", token);
           }
           token.setValue(num);
         }
         catch (NumberFormatException e) {
-          throw new CompileError("Number too large for long constant", token);
+          return error("Number too large for long constant", token);
         }
         break;
       }
@@ -595,7 +622,7 @@ public class Tokeniser {
         break;
       }
     }
-    return token.setType(type);
+    return token.setType(type).setEnd(offset);
   }
 
   /**
@@ -638,54 +665,60 @@ public class Tokeniser {
     return c == ' ' || c == '\t' || c == '\r';
   }
 
-  private enum Mode {CODE, LINE_COMMENT, MULTI_LINE_COMMENT}
 
   private void skipSpacesAndComments() {
     if (inString) {
       return;  // can't have comments in a string
     }
-    Token startMultiLineOffset = null;
-    Mode  mode                 = Mode.CODE;
-    for (; available(1); advance(1)) {
-      int c = charAt(0);
-      if (isSpace(c)) {
-        continue;
-      }
+    while (getSpaceOrComment() != null) {}
+  }
 
-      if (mode == Mode.LINE_COMMENT) {
-        if (c == '\n') {
-          break;
-        }
-        continue;
-      }
-
-      if (mode == Mode.MULTI_LINE_COMMENT) {
-        if (c == '*' && available(2) && charAt(1) == '/') {
-          advance(1);
-          mode = Mode.CODE;
-        }
-        continue;
-      }
-
-      // CODE mode
-      if (c == '/' && available(2)) {
-        int nextChar = charAt(1);
-        if (nextChar == '/' || nextChar == '*') {
-          mode = nextChar == '/' ? Mode.LINE_COMMENT : Mode.MULTI_LINE_COMMENT;
-          startMultiLineOffset = createToken();
-          advance(1);
-          continue;
-        }
-      }
-
-      // If we have reached this far then we are not in a comment and we have something that
-      // is not whitespace
-      break;
+  private Token getSpaceOrComment() {
+    if (!available(1)) {
+      return null;
+    }
+    Token token = createToken();
+    if (isSpace(charAt(0))) {
+      do { advance(1); } while (available(1) && isSpace(charAt(0)));
+      return token.setType(WHITESPACE).setEnd(offset);
     }
 
-    if (!available(1) && mode == Mode.MULTI_LINE_COMMENT) {
-      throw new CompileError("Unexpected end of file in comment", startMultiLineOffset);
+    if (charAt(0) != '/' || !available(2) || charAt(1) != '/' && charAt(1) != '*') {
+      return null;  // Not start of line or multi-line comment
     }
+
+    advance(1);
+    if (charAt(0) == '/') {
+      // Single line comment
+      do { advance(1); } while (available(1) && charAt(0) != '\n');
+      return token.setType(COMMENT).setEnd(offset);
+    }
+
+    // Multi-line comment
+    advance(1);
+    while (available(2)) {
+      if (charAt(0) == '*' && charAt(1) == '/') {
+        advance(2);
+        return token.setType(COMMENT).setEnd(offset);
+      }
+      advance(1);
+    }
+
+    return error("Unexpected end of file in comment", token);
+  }
+
+  private Token error(String msg, Token token) {
+    if (tokeniseCommentsAndWhitespace) {
+      return token.setType(ERROR).setEnd(offset);
+    }
+    throw new CompileError(msg, token);
+  }
+
+  private Token eofError(String msg, Token token) {
+    if (tokeniseCommentsAndWhitespace) {
+      return token.setType(ERROR).setEnd(offset);
+    }
+    throw new EOFError(msg, token);
   }
 
   private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
@@ -710,13 +743,13 @@ public class Tokeniser {
         }
         case '\n': {
           if (!newlinesAllowed) {
-            throw new CompileError("New line not allowed nested within single line string", token);
+            return error("New line not allowed nested within single line string", token);
           }
           break;
         }
         case '\\': {
           if (!available(1)) {
-            throw new CompileError("Unexpected end of file after '\\' in string", createToken());
+            return error("Unexpected end of file after '\\' in string", token);
           }
           if (escapeChars) {
             advance(1);
@@ -752,12 +785,13 @@ public class Tokeniser {
       sb.append((char) c);
     }
     if (!finished) {
-      throw new EOFError("Unexpected end of file in string that started", createToken(stringStart));
+      return eofError("Unexpected end of file in string that started", createToken(stringStart));
     }
 
     advance(-1);     // Don't swallow '$' or ending quote
     return token.setType(STRING_CONST)
-                .setValue(sb.toString());
+                .setValue(sb.toString())
+                .setEnd(offset);
   }
 
   private int escapedChar(int c) {
@@ -784,10 +818,11 @@ public class Tokeniser {
   private Token createToken(int start) {
     int lineNum = lineNum(start);
     int colNum  = start - lineOffsets[lineNum];
-    return new Token(source, start, lines.get(lineNum), lineNum + 1, colNum + 1);
+    String line = lineNum < lines.size() ? lines.get(lineNum) : "";
+    return new Token(source, start, line, lineNum + 1, colNum + 1);
   }
 
-  private static boolean isIdentifier(String s) {
+  public static boolean isIdentifier(String s) {
     return isIdentifierStart(s.charAt(0)) &&
            s.chars().skip(1).allMatch(Tokeniser::isIdentifierPart);
   }
@@ -796,33 +831,36 @@ public class Tokeniser {
 
   private void calculateLineOffsets() {
     lines = RuntimeUtils.lines(source);
-    lineOffsets = new int[lines.size() + 1];
+    if (source.endsWith("\n")) {
+      lines.add("");
+    }
+    lineOffsets = new int[lines.size()+1];
     int pos = 0;
     int i;
     for (i = 0; i < lines.size(); i++) {
       lineOffsets[i] = pos;
       pos += lines.get(i).length() + 1;  // Include extra char for the newline
     }
-    lineOffsets[lines.size()] = source.length();
+    lineOffsets[lines.size()] = source.length() + 1;
   }
 
   private int lineNum(int pos) {
     int lower = 0;
-    int upper = lines.size();
+    int upper = lineOffsets.length - 1;
     while (true) {
       int line = lower + (upper - lower) / 2;
-      if (line == lines.size()) {
+      if (line == lineOffsets.length) {
         // EOF
         return line - 1;
       }
       if (pos < lineOffsets[line]) {
         upper = line;
       }
-      else if (pos >= lineOffsets[line + 1]) {
-        lower = line + 1;
+      else if (line == lineOffsets.length -1 || pos < lineOffsets[line+1]) {
+        return line;
       }
       else {
-        return line;
+        lower = line + 1;
       }
     }
   }
