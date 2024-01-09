@@ -3480,11 +3480,11 @@ You can use `min()` and `max()` to find the minimum or maximum element from a li
 ```groovy
 > [3, 4, -1, 1, 10, 5].min()
 -1
-        > [3, 4, -1, 1, 10, 5].max()
+> [3, 4, -1, 1, 10, 5].max()
 10
-        > ['this', 'is', 'a', 'list', 'of', 'words'].min()
+> ['this', 'is', 'a', 'list', 'of', 'words'].min()
 a
-        > ['this', 'is', 'a', 'list', 'of', 'words'].max()
+> ['this', 'is', 'a', 'list', 'of', 'words'].max()
 words
 ```
 
@@ -3494,9 +3494,9 @@ For example, to find the employee with the smallest or biggest salary:
 ```groovy
 > def employees = [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
 [[name:'Frank', salary:2000], [name:'Daisy', salary:3000], [name:'Joe', salary:1500]]
-        > employees.min{ it.salary }
+> employees.min{ it.salary }
 [name:'Joe', salary:1500]
-        > employees.max{ it.salary }
+> employees.max{ it.salary }
 [name:'Daisy', salary:3000]
 ```
 
@@ -3507,9 +3507,30 @@ list:
 ```groovy
 > [3, 4, -1, 1, 10, 5].sum()
 22
-        > [3, 4, -1, 1, 10, 5].avg()
+> [3, 4, -1, 1, 10, 5].avg()
 3.6666666667
 ```
+
+## groupBy()
+
+The `groupBy()` method takes a closure and applies the closure to each element of the List to get a key for that
+element.
+It creates a Map where the value for each key is a list of the elements of the List that returned the same key.
+
+For example, to group words with the same lengths:
+```groovy
+['list', 'of', 'words', 'with', 'different', 'sizes'].groupBy{ it.size().toString() }
+// Result: ['4':['list', 'with'], '2':['of'], '5':['words', 'sizes'], '9':['different']]
+```
+
+Or, to group people based on their first name:
+```groovy
+[ [first:'Fred',last:'Flinstone'], [first:'Barney',last:'Rubble'], [first:'Fred',last:'Fredson']].groupBy{ it.first }
+// Result: [Fred:[[first:'Fred', last:'Flinstone'], [first:'Fred', last:'Fredson']],
+//          Barney:[[first:'Barney', last:'Rubble']]]
+```
+
+Note that the closure must return a String as Maps only support keys that are of type String.
 
 # Checkpointing
 
@@ -4735,7 +4756,7 @@ x == 1       // evaluates to true
 ```
 
 If the compiler knows the type of the value being switched on and can tell that it can never
-match one of the literls in the `switch` expression you will get a compile error.
+match one of the literals in the `switch` expression you will get a compile error.
 
 # JSON Support
 
@@ -4992,6 +5013,7 @@ of collection such as Lists, Maps, and Strings (as well on numbers when they act
 | `sum()`            | Calculate sum of values                                         |
 | `avg()`            | Calculate average of values                                     |
 | `size()`           | Number of elements in the list                                  |
+| `groupBy()`        | Group elements by key returned from closure and create a Map    | 
 
 Following sections will list the other methods for these types as well as methods for other types.
 

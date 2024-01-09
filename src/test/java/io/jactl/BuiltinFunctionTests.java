@@ -323,6 +323,17 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = { it + it }; def x = 1; def y = 2; [x,y].map(f).sum()", 6);
   }
 
+  @Test public void groupBy() {
+    testError("['a','b','a','c','b'].groupBy()", "missing mandatory argument");
+    test("[].groupBy{ it }", Utils.mapOf());
+    test("['a','b','a','c','b'].groupBy{ it }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
+    test("['a','b','a','c','b'].map{ sleep(0,it) }.groupBy{ sleep(0,it) }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
+    testError("[1,2,3].groupBy{ it }", "closure must return a string value");
+    test("[1,2,3].groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
+    test("'some text to use to count characters'.filter{ it != ' '}.groupBy{ it }.map{ k,v -> [k,v.size()] } as Map as String", "[s:3, o:4, m:1, e:4, t:6, x:1, u:2, c:3, n:1, h:1, a:2, r:2]");
+    test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it.a as String }.toString()", "['1':[[a:1, b:2], [a:1, c:2]], '2':[[a:2, b:3]]]");
+  }
+
   @Test public void stringLength() {
     test("''.length()", 0);
     test("''.size()", 0);

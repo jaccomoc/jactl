@@ -21,7 +21,10 @@ import io.jactl.JactlType;
 import io.jactl.Utils;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Class that implements the reduce() method that iterates over a collection
@@ -30,8 +33,8 @@ import java.util.Arrays;
  * At the end the result is the last result from the call to closure on the
  * last element.
  * <p>
- * This class is also used for implementing min(), max(), sum(), and avg()
- * since the bulk of the async handling code is the same.
+ * This class is also used for implementing min(), max(), sum(), avg(), join(),
+ * and groupBy(), since the bulk of the async handling code is the same.
  * </p>
  */
 public class Reducer implements Checkpointable {
@@ -52,7 +55,8 @@ public class Reducer implements Checkpointable {
     MAX,
     AVG,
     SUM,
-    JOIN
+    JOIN,
+    GROUP_BY
   }
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
@@ -110,12 +114,12 @@ public class Reducer implements Checkpointable {
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
       boolean   hasNext   = true;
-      Object[]  nextValue = null;   // for MIN/MAX
+      Object[]  nextValue = null;   // for MIN/MAX/GROUP_BY
       // Implement as a simple state machine since iter.hasNext() and iter.next() can both throw a Continuation.
       // iter.hasNext() can throw if we have chained iterators and hasNext() needs to get the next value of the
       // previous iterator in the chain to see if it has a value.
       // We track our state using the methodLocation that we pass to our own Continuation when/if we throw.
-      // Even states are the synchronous behavior and the odd states are for handling the async case if the
+      // Even states are the synchronous behaviour, and the odd states are for handling the async case if the
       // synchronous state throws and is later continued.
       while (true) {
         switch (methodLocation) {
@@ -151,6 +155,7 @@ public class Reducer implements Checkpointable {
                 break;
               case MIN:
               case MAX:
+              case GROUP_BY:
                 nextValue = closure == null ? new Object[] { elem, elem }
                                             : new Object[] { closure.invoke(null, source, offset, new Object[]{elem}), elem };
                 break;
@@ -164,7 +169,7 @@ public class Reducer implements Checkpointable {
             methodLocation = 6;
             break;
           case 5:
-            if (type == Type.MIN || type == Type.MAX) {
+            if (type == Type.MIN || type == Type.MAX || type == Type.GROUP_BY) {
               nextValue = new Object[]{c.getResult(), elem};
             }
             else {
@@ -175,6 +180,19 @@ public class Reducer implements Checkpointable {
           case 6:
             if (type == Type.MIN || type == Type.MAX) {
               value = minMax(nextValue, value);
+            }
+            else if (type == Type.GROUP_BY) {
+              if (!(nextValue[0] instanceof String)) {
+                throw new RuntimeError("groupBy() closure must return a String value (not '" + RuntimeUtils.className(nextValue[0]) + "')", source, offset);
+              }
+              String key    = (String) nextValue[0];
+              Map    map    = (Map)value;
+              List   values = (List)map.get(key);
+              if (values == null) {
+                values = new ArrayList();
+                map.put(key, values);
+              }
+              values.add(nextValue[1]);   // add elem to end of list for the given key
             }
             methodLocation = 0;
             break;

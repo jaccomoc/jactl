@@ -162,6 +162,13 @@ public class BuiltinFunctions {
            .register();
 
       Jactl.method(ITERATOR)
+           .name("groupBy")
+           .asyncInstance(true)
+           .asyncParam("closure")
+           .impl(BuiltinFunctions.class, "iteratorGroupBy")
+           .register();
+
+      Jactl.method(ITERATOR)
            .name("skip")
            .asyncInstance(true)
            .param("count")
@@ -1377,6 +1384,13 @@ public class BuiltinFunctions {
   public static Object iteratorMaxData;
   public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return new Reducer(Reducer.Type.MAX, RuntimeUtils.createIterator(iterable), source, offset, null, closure).reduce(null);
+  }
+
+  // = groupBy
+
+  public static Object iteratorGroupByData;
+  public static Object iteratorGroupBy(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return new Reducer(Reducer.Type.GROUP_BY, RuntimeUtils.createIterator(iterable), source, offset, new LinkedHashMap<>(), closure).reduce(null);
   }
 
   //////////////////////////////////////
