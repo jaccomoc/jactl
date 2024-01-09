@@ -7,7 +7,7 @@ image:      /assets/logo-picture.jpg
 author:     "James Crawford"
 ---
 
-The forthcoming [Jactl](https://github.com/jaccomoc/jactl) release (1.5.0) introduces switch expressions which
+The forthcoming [Jactl](https://github.com/jaccomoc/jactl) release (2.0.0) introduces switch expressions which
 provide the same functionality as switch statements/expressions in Java but, in addition, also provides
 the ability to do powerful pattern matching with destructuring that is common in many functional languages.
 
