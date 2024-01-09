@@ -729,6 +729,16 @@ class TokeniserTest {
     Assertions.assertEquals(EOF, tokeniser.next().getType());
   }
 
+  @Test public void simpleStringUTF8() {
+    Tokeniser tokeniser = new Tokeniser("'abc🍟😀'");
+    Token     token     = tokeniser.next();
+    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals("abc🍟😀", token.getValue());
+    assertEquals("'abc🍟😀'", token.getChars());
+    assertEquals("'abc🍟😀'".length(), token.getChars().length());
+    Assertions.assertEquals(EOF, tokeniser.next().getType());
+  }
+
   @Test public void simpleStrings() {
     Tokeniser tokeniser = new Tokeniser("'abc''xyz'");
     Token     token     = tokeniser.next();

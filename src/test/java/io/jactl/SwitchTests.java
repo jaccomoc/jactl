@@ -1151,5 +1151,11 @@ public class SwitchTests extends BaseTest {
          "int x = 2; switch (x) { a -> 'a'; B -> 'b'; X.C -> 'c' }", "b");
     testError("class X { const int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A() -> 'a'; X.B -> 'b'; X.C -> 'c' }", "unknown class");
     test("class X { const int a=1, b=2, c=3 }; int x = 2; switch (x) { X.a -> 'a'; X.b -> 'b'; X.c -> 'c' }", "b");
+    test("const x = 2; switch(2) { x -> true }", true);
+    test("const X = 2; switch(2) { X -> true }", true);
+    test("def f() { const x = 2; switch(2) { x -> true } }; f()", true);
+    test("def f() { const X = 2; switch(2) { X -> true } }; f()", true);
+    test("const x = 2; def f() { switch(2) { x -> true } }; f()", true);
+    test("const X = 2; def f() { switch(2) { X -> true } }; f()", true);
   }
 }

@@ -374,9 +374,6 @@ public class SwitchResolver {
       }
       return constructorPattern;
     }
-    if (expr instanceof Expr.Literal || expr instanceof Expr.TypeExpr) {
-      return expr;
-    }
     if (expr instanceof Expr.VarDecl) {
       String name = ((Expr.VarDecl) expr).name.getStringValue();
       if (bindingVars.contains(name)) {
@@ -413,6 +410,20 @@ public class SwitchResolver {
             ((Expr.Identifier)expr).firstTimeInPattern = true;
             varsSeen.add(varName);
           }
+        }
+      }
+      return expr;
+    }
+    if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(CLASS,INSTANCE)) {
+      // Check that we don't have a constant that matches the class name of the TypeExpr
+      List<Expr> className = ((Expr.TypeExpr) expr).typeVal.getClassName();
+      if (className.size() == 1 && className.get(0) instanceof Expr.Identifier) {
+        Expr.Identifier ident   = (Expr.Identifier) className.get(0);
+        Expr.VarDecl    varDecl = resolver.lookup(ident.identifier.getStringValue(), ident.identifier, false, true);
+        if (varDecl != null && varDecl.isConstVar) {
+          Expr.Literal literal = (Expr.Literal) Resolver.literalDefaultValue(ident.identifier, varDecl.type);
+          literal.value.setValue(varDecl.constValue);
+          return literal;
         }
       }
       return expr;
