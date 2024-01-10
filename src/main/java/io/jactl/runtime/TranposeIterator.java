@@ -75,9 +75,9 @@ public class TranposeIterator extends JactlIterator {
     int i = 0;
     for (Object input: inputs) {
       i++;
-      JactlIterator iter = RuntimeUtils.createIterator(input);
+      JactlIterator iter = RuntimeUtils.createIteratorOrNull(input);
       if (iter == null) {
-        throw new RuntimeError(Utils.nth(i) + " input to zip() is not iterable (type is " + RuntimeUtils.className(input) + ")", source, offset);
+        throw new RuntimeError(Utils.nth(i) + " input to transpose() is invalid. Must be List/array (type is " + RuntimeUtils.className(input) + ")", source, offset);
       }
       inputIters.add(iter);
     }

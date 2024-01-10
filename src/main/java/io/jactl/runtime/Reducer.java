@@ -283,7 +283,7 @@ public class Reducer implements Checkpointable {
     if (object.getClass().isArray()) {
       return Array.getLength(object);
     }
-    throw new RuntimeError("Entries in source list must all be lists for transpose()", source, offset);
+    throw new RuntimeError("Entries in source list must be lists for transpose()", source, offset);
   }
 
   private Object listGet(Object object, int idx) {
@@ -293,6 +293,6 @@ public class Reducer implements Checkpointable {
     if (object.getClass().isArray()) {
       return Array.get(object, idx);
     }
-    throw new RuntimeError("Entries in source list must all be lists for transpose()", source, offset);
+    throw new RuntimeError("Entries in source list must be lists for transpose()", source, offset);
   }
 }

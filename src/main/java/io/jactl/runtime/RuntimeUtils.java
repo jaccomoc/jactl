@@ -1910,7 +1910,7 @@ public class RuntimeUtils {
    * @return an iterator that iterates over the object
    */
   public static JactlIterator createIteratorFlatMap(Object obj) {
-    JactlIterator iter = doCreateIterator(obj);
+    JactlIterator iter = createIteratorOrNull(obj);
     if (iter != null) {
       return iter;
     }
@@ -1921,7 +1921,7 @@ public class RuntimeUtils {
   }
 
   public static JactlIterator createIterator(Object obj) {
-    JactlIterator iter = doCreateIterator(obj);
+    JactlIterator iter = createIteratorOrNull(obj);
     if (iter != null) {
       return iter;
     }
@@ -1930,7 +1930,7 @@ public class RuntimeUtils {
     throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
   }
 
-  private static JactlIterator doCreateIterator(Object obj) {
+  public static JactlIterator createIteratorOrNull(Object obj) {
     if (obj instanceof JactlIterator) { return (JactlIterator)obj;               }
     if (obj instanceof List)          { return JactlIterator.of((List)obj);      }
     if (obj instanceof Map)           { return JactlIterator.of((Map)obj);       }

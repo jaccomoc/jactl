@@ -337,6 +337,12 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void listTranspose() {
     test("[].transpose()", Utils.listOf());
+    testError("[{ -> 1 }].transpose()", "must be list");
+    testError("[{ -> 1 }].map().transpose()", "must be list");
+    testError("[1].transpose()", "must be list");
+    testError("[1].map().transpose()", "must be list");
+    testError("['abc'].transpose()", "must be list");
+    testError("['abc'].map().transpose()", "must be list");
     test("[[1]].transpose()", Utils.listOf(Utils.listOf(1)));
     test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1,2)));
     test("[[1],[]].transpose()", Utils.listOf(Utils.listOf(1,null)));
