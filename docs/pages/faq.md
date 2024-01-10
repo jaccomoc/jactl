@@ -20,14 +20,15 @@ permalink: /faq
 * [Is Jactl strongly-typed?](#is-jactl-strongly-typed)
 * [How easy is Jactl to extend?](#how-easy-is-jactl-to-extend)
 * [Does Jactl provide any thread synchronisation mechanisms?](#does-jactl-provide-any-thread-synchronisation-mechanisms)
-* [Why can't classes have static data members?](#why-cant-classes-have-static-data-members)
+* [Can classes have static fields?](#can-classes-have-static-fields)
 * [Can closures mutate variables in outer scopes?](#can-closures-mutate-variables-in-outer-scopes)
 * [Do collection methods like `map` and `filter` create new collections?](#do-collection-methods-like-map-and-filter-create-new-collections)
 * [What is the performance of `switch` expressions?](#what-is-the-performance-of-switch-expressions)
 * [Why do Maps only support Strings for keys?](#why-do-maps-only-support-strings-for-keys)
 * [Why is there no Set type in Jactl?](#why-is-there-no-set-type-in-jactl)
+* [What is the difference between the % and %% operators?](#what-is-the-difference-between-the--and--operators)
+* [Why is there no do/while loop?](#why-is-there-no-dowhile-loop)
 * [I still didn't find the answer to my question](#i-still-didnt-find-the-answer-to-my-question)
-
 
 ### Why do we need yet another JVM language?
 
