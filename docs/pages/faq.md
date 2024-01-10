@@ -19,6 +19,7 @@ permalink: /faq
 * [Is the Jactl language Object-Oriented or Functional?](#is-the-jactl-language-object-oriented-or-functional)
 * [Is Jactl strongly-typed?](#is-jactl-strongly-typed)
 * [How easy is Jactl to extend?](#how-easy-is-jactl-to-extend)
+* [Is there an IntelliJ Plugin for Jactl?](#is-there-an-intellij-plugin-for-jactl)
 * [Does Jactl provide any thread synchronisation mechanisms?](#does-jactl-provide-any-thread-synchronisation-mechanisms)
 * [Can classes have static fields?](#can-classes-have-static-fields)
 * [Can closures mutate variables in outer scopes?](#can-closures-mutate-variables-in-outer-scopes)
@@ -210,6 +211,11 @@ def decoded = x.base64Decode()    // will be array of bytes: [1, 2, 3, 4]
 ```
 See the [Integration Guide](integration-guide.md) for more information.
 
+### Is there an IntelliJ Plugin for Jactl?
+
+At the moment, no, there is no plugin available but work is underway, so I hope to have
+a plugin available in the future.
+
 ### Does Jactl provide any thread synchronisation mechanisms?
 
 Jactl is intended to run in highly multithreaded, event-loop based applications.
@@ -220,14 +226,13 @@ control multiple threads accessing this data from within Jactl.
 
 ### Can classes have static fields?
 
-Jactl supports static final data fields for classes where the fields are simple types (primitives
-and Strings).
+Jactl supports constant data fields for classes using the `const` keyword, where the fields
+are simple types (primitives and Strings).
 This allows the user to create names for constant values that can then be used multiple times.
 
 Non-final static fields that would support modification are not allowed by Jactl.
 The reason that they are not allowed is twofold:
-1. 
-2. Jactl is intended to run in distributed applications where there are multiple instances running.
+1. Jactl is intended to run in distributed applications where there are multiple instances running.
    Having a static data member in a class for sharing information across all class instances makes
    no sense when there are multiple application instances running since there would then be multiple
    instances of the static data.
