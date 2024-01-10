@@ -20,11 +20,11 @@ package io.jactl.runtime;
 import io.jactl.JactlType;
 import io.jactl.Utils;
 
+import java.lang.reflect.Array;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Class that implements the reduce() method that iterates over a collection
@@ -56,7 +56,8 @@ public class Reducer implements Checkpointable {
     AVG,
     SUM,
     JOIN,
-    GROUP_BY
+    GROUP_BY,
+    TRANSPOSE
   }
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
@@ -165,6 +166,21 @@ public class Reducer implements Checkpointable {
                                          : joinStr == null ? ((String)value).concat(elemStr)
                                                            : ((String)value).concat(joinStr).concat(elemStr);
                 break;
+              case TRANSPOSE:
+                List<List> valueList = (List)value;
+                int elemListSize = sizeOf(elem);
+                // grow if needed
+                for (int i = valueList.size(); i < elemListSize; i++) {
+                  // New list has to have nulls for all earlier entries
+                  List initialNulls = valueList.size() == 0 ? Collections.EMPTY_LIST
+                                                            : IntStream.range(0,valueList.get(0).size()).mapToObj(j -> null).collect(Collectors.toList());
+                  valueList.add(new ArrayList<>(initialNulls));
+                }
+                // add elems to each list
+                for (int i = 0; i < valueList.size(); i++) {
+                  valueList.get(i).add(listGet(elem, i));
+                }
+                break;
             }
             methodLocation = 6;
             break;
@@ -255,9 +271,28 @@ public class Reducer implements Checkpointable {
         if (value instanceof Double)             { value = BigDecimal.valueOf((double)value); }
         else if (!(value instanceof BigDecimal)) { value = BigDecimal.valueOf(((Number)value).longValue()); }
         return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(counter), Utils.DEFAULT_MIN_SCALE, source, offset);
-      case REDUCE: case SUM:
-        // Fall through
+      default:
+        return value;
     }
-    return value;
+  }
+
+  private int sizeOf(Object object) {
+    if (object instanceof List) {
+      return ((List)object).size();
+    }
+    if (object.getClass().isArray()) {
+      return Array.getLength(object);
+    }
+    throw new RuntimeError("Entries in source list must all be lists for transpose()", source, offset);
+  }
+
+  private Object listGet(Object object, int idx) {
+    if (object instanceof List) {
+      return idx < ((List)object).size() ? ((List)object).get(idx) : null;
+    }
+    if (object.getClass().isArray()) {
+      return Array.get(object, idx);
+    }
+    throw new RuntimeError("Entries in source list must all be lists for transpose()", source, offset);
   }
 }

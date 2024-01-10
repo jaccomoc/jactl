@@ -330,8 +330,43 @@ public class BuiltinFunctionTests extends BaseTest {
     test("['a','b','a','c','b'].map{ sleep(0,it) }.groupBy{ sleep(0,it) }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
     testError("[1,2,3].groupBy{ it }", "closure must return a string value");
     test("[1,2,3].groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
+    test("([1,2,3] as int[]).groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
     test("'some text to use to count characters'.filter{ it != ' '}.groupBy{ it }.map{ k,v -> [k,v.size()] } as Map as String", "[s:3, o:4, m:1, e:4, t:6, x:1, u:2, c:3, n:1, h:1, a:2, r:2]");
     test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it.a as String }.toString()", "['1':[[a:1, b:2], [a:1, c:2]], '2':[[a:2, b:3]]]");
+  }
+
+  @Test public void listTranspose() {
+    test("[].transpose()", Utils.listOf());
+    test("[[1]].transpose()", Utils.listOf(Utils.listOf(1)));
+    test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1,2)));
+    test("[[1],[]].transpose()", Utils.listOf(Utils.listOf(1,null)));
+    test("[[1,2,3],[2]].transpose()", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,null),Utils.listOf(3,null)));
+    test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1,2)));
+    test("[[1,2],[2]].transpose()", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,null)));
+    test("[[1,2],[3,4],[5,6]].transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("def x = [[1,2],[3,4],[5,6]]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("def x = [[1,2],[3,4],[5,6]]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("int[][] x = [[1,2],[3,4],[5,6]]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("int[][] x = [[1,2],[3,4],[5,6]]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("def x = [[1,2],[3,4],[5,6]] as int[][]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("def x = [[1,2],[3,4],[5,6]] as int[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("Object[][] x = [[1,2],[3,4],[5,6]] as Object[][]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("Object[][] x = [[1,2],[3,4],[5,6]] as Object[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("def x = [[1,2],[3,4],[5,6]] as Object[][]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("def x = [[1,2],[3,4],[5,6]] as Object[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
+    test("[[1,2],[2,null]].transpose()", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,null)));
+    test("[[null,2],[2,null]].transpose()", Utils.listOf(Utils.listOf(null,2),Utils.listOf(2,null)));
+    test("[3.map{ sleep(0,[it,it]) }, 4.map{ sleep(0,[sleep(0,it),sleep(0,it)]) }].transpose().collect().toString()", "[[[0, 0], [0, 0]], [[1, 1], [1, 1]], [[2, 2], [2, 2]], [null, [3, 3]]]");
+    test("[[a:1],[b:2]].transpose() as String", "[[['a', 1], ['b', 2]]]");
+    test("def f = [[a:1],[b:2]].transpose; f() as String", "[[['a', 1], ['b', 2]]]");
+    test("[[a:1,c:3],[b:2]].transpose() as String", "[[['a', 1], ['b', 2]], [['c', 3], null]]");
+    test("[[a:1],[b:2]].transpose() == [[a:1].map(),[b:2].map()].transpose()", true);
+    test("[[a:1],[b:2]].transpose() == [[a:1].map{sleep(0,it)},[b:2].map{sleep(0,it)}].transpose()", true);
+    test("def f = [[a:1,aa:2].map{sleep(0,it)},[b:2,bb:3].map{sleep(0,it)},[c:3,cc:4].map()].transpose; f() == [[['a',1],['b',2],['c',3]],[['aa',2],['bb',3],['cc',4]]]", true);
+    test("def f = [[a:1,aa:2].map{sleep(0,it)},[b:2,bb:3].map{sleep(0,it)},[c:3,cc:4].map()].transpose; f().transpose() == [[['a',1],['aa',2]],[['b',2],['bb',3]],[['c',3],['cc',4]]]", true);
+    test("def x = [[a:1,aa:2].map{sleep(0,it)},[b:2,bb:3].map{sleep(0,it)},[c:3,cc:4].map()]; def f = x.transpose; f().transpose() == [[['a',1],['aa',2]],[['b',2],['bb',3]],[['c',3],['cc',4]]]", true);
+    test("def f = [[a:1,aa:2].map{sleep(0,it)},[b:2,bb:3].map{sleep(0,it)},[c:3,cc:4].map()].transpose; f().transpose().transpose() == [[['a',1],['b',2],['c',3]],[['aa',2],['bb',3],['cc',4]]]", true);
+    test("sleep(0,[[['a',1],['b',2],['c',3]],[['aa',2],['bb',3],['cc',4]]].map{ sleep(0,it) }.transpose()).transpose() == [[['a',1],['b',2],['c',3]],[['aa',2],['bb',3],['cc',4]]]", true);
   }
 
   @Test public void stringLength() {
@@ -1807,6 +1842,13 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f(x) {x*x}; f.toString() =~ /Function@(\\d+)/", true);
     test("def f = { x -> x*x}; f.toString() =~ /Function@(\\d+)/", true);
     test("def x = 'abc'; def f = x.toString; f()", "abc");
+    // For the moment toString() on iterators just returns "Iterator" to avoid having to make toString()
+    // async for all object types.
+    useAsyncDecorator = false;
+    test("1.map{ it } as String", "[0]");
+    test("1.map{ it }.toString()", "Iterator");
+    test("1.map{ sleep(0,it) } as String", "[0]");
+    test("1.map{ sleep(0,it) }.toString()", "Iterator");
   }
 
   @Test public void toJson() {

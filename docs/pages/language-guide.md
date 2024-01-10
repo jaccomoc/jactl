@@ -3224,6 +3224,49 @@ So `skip(-2)` means skip until there are only two elements left:
 [1, 2]
 ```
 
+## transpose()
+
+Jactl provides a `transpose()` method that takes a list of lists and performs a matrix tranpose on them.
+If you think of the list of lists as a table, then this has the effect of converting a list of rows into a list of columns.
+(In actual fact, converting a list of rows into a list of columns is the same as converting a list of columns into
+a list of rows.) 
+
+The list on which `transpose()` operates should be the list of input lists.
+For example:
+```groovy
+def i = ['a','b','c']
+def j = [1,2,3]
+[i,j].transpose()
+```
+Result will be:
+```groovy
+[['a', 1], ['b', 2], ['c', 3]]
+```
+In this case, the result is a list of pairs where each pair is a value from each of the two input lists.
+
+The `transpose()` method supports any number of input lists so the output list will consist of tuples that have as many
+elements as the number of input lists.
+
+If any of the input lists is shorter than the others `null` will be used to supply the missing values for it.
+For example:
+```groovy
+def i = ['a','b','c']
+def j = [1,2]
+def k = [10,20,30,40]
+[i,j,k].transpose(true)
+```
+Result will be:
+```groovy
+[['a', 1, 10], ['b', 2, 20], ['c', null, 30], [null, null, 40]]
+```
+
+Note that if the input is a true matrix (all lists are of the same size), then `transpose()` applied twice in
+a row will result in a value which is equal to the original list since `transpose()` is the inverse of itself:
+```groovy
+def x = [['a','b','c'],[1,2,3]]
+x.transpose().transpose() == x   // Result is true
+```
+
 ## Lazy Evaluation, Side Effects, and collect()
 
 In Jactl, if a collection method results in another list of values then most methods don't actually generate the

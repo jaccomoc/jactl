@@ -23,7 +23,6 @@ import org.objectweb.asm.MethodVisitor;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -292,6 +291,16 @@ public class BuiltinFunctions {
            .param("start")
            .param("end", Integer.MAX_VALUE)
            .impl(BuiltinFunctions.class, "listSubList")
+           .register();
+
+      Jactl.method(LIST)
+           .name("transpose")
+           .impl(BuiltinFunctions.class, "listTranspose")
+           .register();
+
+      Jactl.method(ITERATOR)
+           .name("transpose")
+           .impl(BuiltinFunctions.class, "iteratorTranspose")
            .register();
 
       // String methods
@@ -1389,8 +1398,22 @@ public class BuiltinFunctions {
   // = groupBy
 
   public static Object iteratorGroupByData;
-  public static Object iteratorGroupBy(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return new Reducer(Reducer.Type.GROUP_BY, RuntimeUtils.createIterator(iterable), source, offset, new LinkedHashMap<>(), closure).reduce(null);
+  public static Map iteratorGroupBy(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return (Map)new Reducer(Reducer.Type.GROUP_BY, RuntimeUtils.createIterator(iterable), source, offset, new LinkedHashMap<>(), closure).reduce(null);
+  }
+
+  // = transpose
+
+  public static Object listTransposeData;
+  public static JactlIterator listTranspose(List inputs, Continuation c, String source, int offset) {
+    return new TranposeIterator(inputs, source, offset);
+  }
+
+  // = transpose
+
+  public static Object iteratorTransposeData;
+  public static List iteratorTranspose(Object iterable, Continuation c, String source, int offset) {
+    return (List)new Reducer(Reducer.Type.TRANSPOSE, RuntimeUtils.createIterator(iterable), source, offset, new ArrayList(), null).reduce(null);
   }
 
   //////////////////////////////////////

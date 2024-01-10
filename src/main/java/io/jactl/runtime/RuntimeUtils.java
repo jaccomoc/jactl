@@ -1068,6 +1068,14 @@ public class RuntimeUtils {
       return "null";
     }
 
+    // Since iterating can be async and we don't want to make every call to toString() async due to the
+    // additional code that is generated we will (for the moment anyway) just return "Iterator" if toString()
+    // is invoked on an iterator. To actually get a toString() users can use "as String" or call collect()
+    // first or assign to a variable before invoking toString().
+    if (obj instanceof JactlIterator) {
+      return "Iterator";
+    }
+
     if (obj instanceof List || obj instanceof Map || obj instanceof JactlObject || obj.getClass().isArray()) {
       // If we have already visited this object then we have a circular reference so to avoid infinite recursion
       // we output "<CIRCULAR_REF>"
