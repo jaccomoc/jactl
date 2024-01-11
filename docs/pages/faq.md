@@ -241,6 +241,44 @@ The reason that they are not allowed is twofold:
    This means that Jactl does not need to provide any thread sychronisation mechanisms that are
    notoriously error-prone and avoids having to worry about deadlocks.
 
+### Can Functions/Methods be Overloaded?
+
+At the moment, Jactl does not support function or method overloading where the multiple functions/methods
+are declared with the same name but with different argument types.
+
+Jactl supports default values for arguments which goes someway to supporting similar type of
+functionality.
+
+One reason that Jactl does not support overloading is that functions and methods can be passed
+by value by simply referring to the name.
+If there are multiple versions of the function with the same name then this would no longer
+work since it would be ambiguous which function was being referred to.
+
+A future enhancement may allow overloading by providing a way to name the individual functions
+when overloading has been used.
+
+Instead of overloading, another approach is to use a `switch` based on type to descriminate
+between the different argument types.
+For example, suppose you have a function `f()` and you want these three overloaded versions:
+```groovy
+def f(int x) { x + x }
+def f(String x) { x * 2 }         // String repeat twice
+def f(String x, int y) { x * y }  // String repeat y times 
+```
+In Jactl, you could implement this:
+```groovy
+def f(x, y = null) {
+  switch ([x,y]) {
+    [int a, null]     -> a + a
+    [String a, null]  -> a * 2
+    [String a, int b] -> a * b 
+  }
+}
+```
+Note that you won't get compile-time checking of argument types, and you won't be able to
+have different return types, so you will need to use `def` or `Object` as the return type
+if the different implementations return incompatible types.
+
 ### Can closures mutate variables in outer scopes?
 
 In Jactl, unlike Java, closures (lambda functions in Java) and functions can mutate the value of variables
