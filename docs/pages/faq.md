@@ -211,10 +211,26 @@ def decoded = x.base64Decode()    // will be array of bytes: [1, 2, 3, 4]
 ```
 See the [Integration Guide](integration-guide.md) for more information.
 
-### Is there an IntelliJ Plugin for Jactl?
+### Is there an IntelliJ plugin for Jactl?
 
 At the moment, no, there is no plugin available but work is underway, so I hope to have
 a plugin available in the future.
+
+### How can I improve the runtime speed of my Jactl script?
+
+If you have a large script or class method it is possible that the compiled version exceeds the default
+threshold that the JVM uses to determine whether a method is a candidate for hotspot compilation and
+thus the JVM is not running the code in the most efficient way it can.
+Jactl will also generate additional bytecode to cater for invocation of asynchronous functions where it needs
+to capture state in order to suspend execution when an asynchronous function is invoked.
+This can also lead to scripts/methods exceeding the hotspot compilation threshold.
+
+To force the JVM to use hotspot compilation even on large methods add the `-XX:-DontCompileHugeMethods`
+command line flag to the `java` command.
+For example:
+```bash
+java -XX:-DontCompileHugeMethods -jar jactl-2.0.0-jar
+```
 
 ### Does Jactl provide any thread synchronisation mechanisms?
 

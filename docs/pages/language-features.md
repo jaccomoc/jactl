@@ -35,8 +35,8 @@ int fib(int x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 
 ## Dynamic Typing with Optional Static Typing
 
-Like Groovy, specifying types is optional in Jactl.
-Specifying a type will allow compile-time checking and some optimisations to be performed.
+Sppecifying types is optional in Jactl when declaring variables, parameters, and fields.
+If a type is specified then Jactl can perform compile-time checking and some optimisations.
 
 Static typing:
 ```groovy
@@ -122,7 +122,7 @@ g(40)
 applyArg(fib, 40)  // pass as arg to a function
 ```
 
-Methods passed as value are bound to owning object:
+Methods passed as value are bound to the owning object:
 ```groovy
 class Multiplier {
   int multiple = 1
@@ -200,7 +200,7 @@ totalTime = measure{ 40.each{ i -> fib(i + 1) } }
 
 Since functions and closures can be passed by value it is possible to write other functions that
 operate on a function.
-For example we can create a higher-order function `compose` that returns a new function that is
+For example, we can create a higher-order function `compose` that returns a new function that is
 the composition of two other functions:
 ```groovy
 def compose(f,g) { return { x -> f(g(x)) } }
@@ -236,7 +236,7 @@ over the subsequent number.
 ## Regex Support with Capture Variables $1, $2, ...
 
 Regular expression matching is part of the language rather than being delegated to library calls.
-The `=~` operator performs searches a string for a substring that matches the given pattern:
+The `=~` operator searches a string for a substring that matches the given pattern:
 ```groovy
 'abcxdef' =~ /x/     // Result is true
 ```
@@ -340,7 +340,7 @@ def fib(x) {
 }
 ```
 
-It is also possible to us `unless` instead of `if` if that is more natural:
+It is also possible to us `unless` instead of `if` when that is more natural:
 ```groovy
 def fib(x) {
   return 1 unless x > 2
@@ -495,7 +495,7 @@ You can use a multi-assignment to swap the values of two variables:
 
 ## Classes
 
-Users can define their own classes using a simplified syntax that is a subset of Java syntax:
+Users can define their own classes:
 ```groovy
 class X {
   int i
