@@ -32,11 +32,16 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static io.jactl.JactlType.*;
+import static io.jactl.JactlType.BOOLEAN;
+import static io.jactl.JactlType.BYTE;
+import static io.jactl.JactlType.DECIMAL;
 import static io.jactl.JactlType.DOUBLE;
+import static io.jactl.JactlType.INT;
 import static io.jactl.JactlType.LONG;
-import static io.jactl.TokenType.DOT;
-import static io.jactl.TokenType.EQUAL;
+import static io.jactl.JactlType.STRING;
+import static io.jactl.TokenType.*;
 import static org.objectweb.asm.Opcodes.*;
+import static org.objectweb.asm.Opcodes.NEW;
 
 public class Utils {
 
@@ -418,7 +423,7 @@ public class Utils {
         mv.visitInsn(L2I);
         Utils.loadConst(mv, 255);
         mv.visitInsn(IAND);
-      } else if (type.is(JactlType.BOOLEAN, JactlType.INT)) {
+      } else if (type.is(BOOLEAN, INT)) {
         mv.visitInsn(L2I);
       } else if (type.is(DOUBLE)) {
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "longBitsToDouble", "(J)D", false);
@@ -846,5 +851,45 @@ public class Utils {
     varDecl.isBindingVar = isBindingVar;
     varDecl.isConstVar = isConst;
     return varDecl;
+  }
+
+  public static Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func) {
+    return funcDescriptorToVarDecl(func, new Token(null,0));
+  }
+
+  public static Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func, Token tok) {
+    Function<TokenType,Token> token = t -> tok.setType(t);
+    List<Stmt.VarDecl> params = new ArrayList<>();
+    for (int i = 0; i < func.paramTypes.size(); i++) {
+      final Expr.VarDecl p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null, null);
+      p.type = func.paramTypes.get(i);
+      params.add(new Stmt.VarDecl(token.apply(p.type.tokenType()), p));
+    }
+    Expr.FunDecl funDecl = new Expr.FunDecl(null, null, func.returnType, params);
+    funDecl.functionDescriptor = func;
+    funDecl.wrapper = createWrapperFunDecl(tok, func);
+    Expr.VarDecl varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), token.apply(EQUAL), funDecl);
+    varDecl.funDecl = funDecl;
+    varDecl.type = FUNCTION;
+    return varDecl;
+  }
+
+  private static Expr.FunDecl createWrapperFunDecl(Token token, FunctionDescriptor func) {
+    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(token, func.implementingMethod, func.isStatic);
+    FunctionDescriptor wrapper = wrapperFunDecl.functionDescriptor;
+    wrapper.implementingClassName = func.implementingClassName;
+    wrapper.implementingMethod    = wrapperName(func.implementingMethod);
+    return wrapperFunDecl;
+  }
+
+  public static Expr.FunDecl createWrapperFunDecl(Token token, String name, boolean isStatic) {
+    List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
+    wrapperParams.add(createParam(token.newIdent(SOURCE_VAR_NAME), STRING));
+    wrapperParams.add(createParam(token.newIdent(OFFSET_VAR_NAME), INT));
+    wrapperParams.add(createParam(token.newIdent(ARGS_VAR_NAME), OBJECT_ARR));
+    Expr.FunDecl wrapperFunDecl = createFunDecl(token, token.newIdent(wrapperName(name)), ANY, wrapperParams, isStatic, false, false);
+    wrapperFunDecl.functionDescriptor.isWrapper = true;
+    wrapperFunDecl.isWrapper = true;
+    return wrapperFunDecl;
   }
 }

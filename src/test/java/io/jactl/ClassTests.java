@@ -1782,4 +1782,23 @@ public class ClassTests extends BaseTest {
     testError("class X { Y y = null }; class Y { Z[] z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z[2].x.y.z[0].i = 4; x.y.z[2].x.y.z[0].i", "null parent");
   }
 
+  @Test public void mapField() {
+    debugLevel = 1;
+    //test("class X { Map m = [a:1]; def f() { m.map{ it[0] }[0] } }; new X().f()", "a");
+    doTest("class File {\n" +
+         "  String name\n" +
+         "  int    size\n" +
+         "  def totalSize()   { size }\n" +
+         "  def descendants() { this }\n" +
+         "}\n" +
+         "\n" +
+         "class Dir extends File {\n" +
+         "  Dir parent\n" +
+         "  Map children = [:]\n" +
+         "  def totalSize()   { children.map{ it[1].totalSize() }.sum() }\n" +
+         "  def descendants() { [this] + children.map{ it[1] }.flatMap{ it.descendants() } }\n" +
+         "}\n" +
+         "def d = new Dir(name:'d',size:0,parent:new Dir('d2',0,null), children:[file:new File('file',3)])\n" +
+         "d.descendants().map{ it.totalSize() }", Utils.listOf(3,3));
+  }
 }

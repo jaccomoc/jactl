@@ -45,10 +45,10 @@ import static io.jactl.TokenType.UNDERSCORE;
 /**
  * Expr classes for our AST.
  */
-class Expr {
+class Expr extends JactlUserDataHolder {
 
   Token      location;
-  JactlType type;
+  JactlType  type;
   boolean    isResolved = false;
 
   boolean    isConst = false;   // Whether expression consists only of constants
@@ -250,7 +250,8 @@ class Expr {
     Expr.VarDecl       @varDecl;               // for variable references
     boolean            @couldBeFunctionCall = false;
     boolean            @firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
-    public FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
+    public FunctionDescriptor  getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
+    public JactlUserDataHolder getDeclaration()    { return varDecl; }
   }
 
   class ClassPath extends Expr {
@@ -411,6 +412,7 @@ class Expr {
     Token        startToken;
     Expr.FunDecl funDecl;
     boolean      noParamsDefined;
+    boolean      @closureIsBlock;  // True if closure turned out to just be a code block
   }
 
   class Return extends Expr {

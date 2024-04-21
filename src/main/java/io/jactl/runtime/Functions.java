@@ -17,6 +17,7 @@
 
 package io.jactl.runtime;
 
+import io.jactl.Expr;
 import io.jactl.JactlType;
 
 import java.lang.invoke.MethodHandle;
@@ -30,6 +31,11 @@ public class Functions {
   private static final Map<Class, ClassLookup>              classes        = new ConcurrentHashMap<>();
   private static final Map<String,List<FunctionDescriptor>> methods        = new ConcurrentHashMap<>();
   private static final FunctionDescriptor                   NO_SUCH_METHOD = new FunctionDescriptor();
+
+  static {
+    // Make sure builtin functions are registered if not already done
+    BuiltinFunctions.registerBuiltinFunctions();
+  }
 
   private static class ClassLookup {
     Map<String, FunctionDescriptor> methods = new ConcurrentHashMap<>();
@@ -63,6 +69,10 @@ public class Functions {
         methods.remove(name);
       }
     }
+  }
+
+  public static Expr.VarDecl getGlobalFunDecl(String name) {
+    return BuiltinFunctions.getGlobalFunDecl(name);
   }
 
   /**

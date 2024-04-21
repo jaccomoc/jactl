@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Reducer.Type.JOIN;
@@ -37,6 +38,8 @@ public class BuiltinFunctions {
   private static final Map<Class,Integer> classId     = new HashMap<>();
   private static final List<Class>        fnClasses   = new ArrayList<>();
 
+  private static final Map<String,Expr.VarDecl> globalFunDecls = new HashMap<>();
+
   static {
     allocateId(MatchCounter.class);
     allocateId(RuntimeUtils.class);
@@ -44,7 +47,6 @@ public class BuiltinFunctions {
     allocateId(CircularBuffer.class);
     allocateId(NamedArgsMap.class);
     allocateId(NamedArgsMapCopy.class);
-    BuiltinFunctions.registerBuiltinFunctions();
   }
 
   public static void registerBuiltinFunctions() {
@@ -537,8 +539,8 @@ public class BuiltinFunctions {
     return descriptor.wrapperHandle;
   }
 
-  public static Collection<FunctionDescriptor> getBuiltinFunctions() {
-    return globalFunctions.values();
+  static Expr.VarDecl getGlobalFunDecl(String name) {
+    return globalFunDecls.get(name);
   }
 
   ///////////////////////////////////////////////////
@@ -553,6 +555,7 @@ public class BuiltinFunctions {
     }
     else {
       function.aliases.forEach(alias -> globalFunctions.put(alias, function));
+      globalFunDecls.put(function.name, Utils.funcDescriptorToVarDecl(function));
     }
 
     allocateId(function.implementingClass);
@@ -592,6 +595,7 @@ public class BuiltinFunctions {
     }
     return fnClasses.get(id);
   }
+
 
   /////////////////////////////////////
   // Global Functions

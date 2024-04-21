@@ -44,7 +44,7 @@ import org.objectweb.asm.Label;
 /**
  * Stmt classes for our AST.
  */
-class Stmt {
+class Stmt extends JactlUserDataHolder {
 
   Token      location   = null;
   boolean    isResolved = false;

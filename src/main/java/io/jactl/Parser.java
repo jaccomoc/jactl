@@ -44,13 +44,13 @@ import static io.jactl.TokenType.*;
  * To extract the EBNF grammar from the comments grep out lines starting with '  *#'
  */
 public class Parser {
-  Tokeniser tokeniser;
-  List<CompileError>    errors      = new ArrayList<>();
-  Deque<Stmt.ClassDecl> classes     = new ArrayDeque<>();
-  boolean               ignoreEol   = false;   // Whether EOL should be treated as whitespace or not
+  Builder               tokeniser;
+  List<CompileError>    errors       = new ArrayList<>();
+  Deque<Stmt.ClassDecl> classes      = new ArrayDeque<>();
+  boolean               ignoreEol    = false;   // Whether EOL should be treated as whitespace or not
   String                packageName;
-  JactlContext context;
-  int          uniqueVarCnt         = 0;
+  JactlContext          context;
+  int                   uniqueVarCnt = 0;
 
   // Whether we are currently doing a lookahead in which case we don't bother keeping
   // track of state such as functions declared per block and nested functions.
@@ -59,6 +59,10 @@ public class Parser {
   int lookaheadCount = 0;
 
   public Parser(Tokeniser tokeniser, JactlContext context, String packageName) {
+    this(new BuilderImpl(tokeniser), context, packageName);
+  }
+
+  public Parser(Builder tokeniser, JactlContext context, String packageName) {
     this.tokeniser   = tokeniser;
     this.context     = context;
     this.packageName = packageName;
@@ -72,6 +76,8 @@ public class Parser {
    * @return the ClassDecl for the compiled script
    */
   public Stmt.ClassDecl parseScript(String scriptClassName) {
+    Marker mark = tokeniser.mark();
+//    Marker mark2 = tokeniser.mark();
     packageDecl();
     List<Stmt.Import> importStmts = importStmts();
     Token start = peek();
@@ -80,16 +86,13 @@ public class Parser {
     pushClass(scriptClass);
     try {
       scriptClass.scriptMain = script();
-      if (errors.size() > 1) {
-        throw new CompileError(errors);
-      }
-      if (errors.size() == 1) {
-        throw errors.get(0);
-      }
+//      mark2.done(scriptClass);
+      mark.done(scriptClass);
       return scriptClass;
     }
     finally {
       popClass();
+      tokeniser.done();
     }
   }
 
@@ -105,13 +108,15 @@ public class Parser {
    * @return the ClassDecl for the class
    */
   public Stmt.ClassDecl parseClass() {
+    Marker mark = tokeniser.mark();
     packageDecl();
     List<Stmt.Import> importStmts = importStmts();
-    expect(CLASS);
     Stmt.ClassDecl classDecl = classDecl();
     classDecl.imports = importStmts;
     matchAnyIgnoreEOL(SEMICOLON);
     expect(EOF);
+    mark.done(classDecl);
+    tokeniser.done();
     return classDecl;
   }
 
@@ -135,9 +140,9 @@ public class Parser {
       start = peek();
     }
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
-    // Script take a single parameter which is a Map of globals
-    Stmt.VarDecl globalsParam = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
-    Stmt.FunDecl funDecl      = parseFunDecl(scriptName, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
+    // Scripts take a single parameter which is a Map of globals
+    Stmt.VarDecl globalsParam  = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
+    Stmt.FunDecl funDecl       = parseFunDecl(scriptName, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
     Stmt.ClassDecl scriptClass = classes.peek();
     scriptClass.scriptMain     = funDecl;
     List<Stmt> scriptStmts     = scriptClass.scriptMain.declExpr.block.stmts.stmts;
@@ -199,21 +204,28 @@ public class Parser {
    *</pre>
    */
   private void packageDecl() {
-    if (matchAny(PACKAGE)) {
-      Token        packageToken = previous();
-      List<String> packagePath  = new ArrayList<>();
-      do {
-        packagePath.add(expect(IDENTIFIER).getStringValue());
-      } while (matchAny(DOT));
-      String pkg = String.join(".", packagePath);
-      if (packageName != null && !packageName.isEmpty() && !pkg.equals(packageName)) {
-        error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
+    Marker mark = tokeniser.mark();
+    try {
+      if (matchAny(PACKAGE)) {
+        Token        packageToken = previous();
+        List<String> packagePath  = new ArrayList<>();
+        do {
+          packagePath.add(expect(IDENTIFIER).getStringValue());
+        } while (matchAny(DOT));
+        String pkg = String.join(".", packagePath);
+        matchAnyIgnoreEOL(SEMICOLON);
+        if (packageName != null && !packageName.isEmpty() && !pkg.equals(packageName)) {
+          error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
+        }
+        packageName = pkg;
       }
-      packageName = pkg;
-      matchAnyIgnoreEOL(SEMICOLON);
+      if (packageName == null) {
+        error("Package name not declared or otherwise supplied", peek());
+      }
+      mark.done(new Stmt.Stmts(peek()));  // Need to pass something so build empty Stmt.Stmts for the moment
     }
-    if (packageName == null) {
-      error("Package name not declared or otherwise supplied");
+    catch (CompileError error) {
+      markError(mark, error);
     }
   }
 
@@ -259,12 +271,16 @@ public class Parser {
    *#
    * </pre>
    */
-  private Stmt.Block block(TokenType endBlock) {
-    return block(previous(), endBlock, () -> declaration());
+  private Stmt.Block block(TokenType blockStart, TokenType endBlock) {
+    return this.marked(() -> {
+      Token      openBlock = expect(blockStart);
+      Stmt.Block block     = block(openBlock, endBlock, this::declaration);
+      return block;
+    });
   }
 
   private Stmt.Block block(Token openBlock, TokenType endBlock) {
-    return block(openBlock, endBlock, () -> declaration());
+    return this.marked(() -> block(openBlock, endBlock, this::declaration));
   }
 
   private Stmt.Block block(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
@@ -274,7 +290,7 @@ public class Parser {
     Stmt.Block block = new Stmt.Block(openBlock, stmts);
     pushBlock(block);
     try {
-      stmts(stmts, stmtSupplier);
+      stmts(stmts, stmtSupplier, endBlock);
       expect(endBlock);
       return block;
     }
@@ -289,12 +305,12 @@ public class Parser {
    *# stmts ::= declaration*
    * </pre>
    */
-  private void stmts(Stmt.Stmts stmts, Supplier<Stmt> stmtSupplier) {
+  private void stmts(Stmt.Stmts stmts, Supplier<Stmt> stmtSupplier, TokenType endBlock) {
     Stmt previousStmt = null;
     stmts.location = peek();
     while (true) {
       matchAny(EOL);     // Ignore new lines if present
-      if (peek().is(EOF, RIGHT_BRACE)) {
+      if (peek().is(EOF,endBlock)) {
         break;
       }
 
@@ -308,9 +324,9 @@ public class Parser {
           }
           previousStmt = declaration;
 
-          if (!peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
-            unexpected("Expecting end of statement");
-          }
+//          if (!peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
+//            unexpected("Expecting end of statement");
+//          }
         }
       }
       catch (CompileError e) {
@@ -333,6 +349,24 @@ public class Parser {
   }
 
   private Stmt declaration(boolean inClassDecl) {
+    matchAny(EOL);
+    Marker mark = tokeniser.mark();
+    try {
+      Stmt decl = _declaration(inClassDecl);
+      if (decl != null && !peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
+        unexpected("Expecting end of statement");
+      }
+      mark.drop();
+      return decl;
+    }
+    catch (CompileError error) {
+      mark.error(error);
+      skipUntil(EOL,EOF,SEMICOLON,RIGHT_BRACE);
+      return null;
+    }
+  }
+
+  private Stmt _declaration(boolean inClassDecl) {
     // Look for multi var declaration: def (x, y) = [1,2]
     //                             or: def (int x, def y) = [1,2]
     if (lookahead(() -> expect(DEF) != null, () -> expect(LEFT_PAREN) != null)) {
@@ -341,20 +375,20 @@ public class Parser {
 
     // Look for function declaration: <type> <identifier> "(" ...
     if (isFunDecl(inClassDecl)) {
-      return funDecl(inClassDecl);
+      return this.marked(() -> funDecl(inClassDecl));
     }
     if (isVarDecl()) {
       return varDecl(inClassDecl);
     }
-    if (matchAny(CLASS)) {
-      return classDecl();
+    if (peek().is(CLASS)) {
+      return this.marked(this::classDecl);
     }
     if (matchAny(SEMICOLON)) {
       // Empty statement
       return null;
     }
     if (inClassDecl) {
-      error("Expected field, method, or class declaration");
+      unexpected("Expected field, method, or class declaration");
     }
     return statement();
   }
@@ -372,6 +406,20 @@ public class Parser {
    */
   private Stmt statement() {
     matchAny(EOL);
+    return this.marked(() -> _statement());
+//    Marker mark = tokeniser.mark();
+//    try {
+//      Stmt stmt = _statement();
+//      mark.done(stmt);
+//      return stmt;
+//    }
+//    catch (CompileError error) {
+//      markError(mark, error);
+//      return new Stmt.ExprStmt(null, new Expr.Noop(null));
+//    }
+  }
+
+  private Stmt _statement() {
     Stmt stmt = null;
     switch (peek().getType()) {
       case LEFT_BRACE:        if (isMapLiteral())       stmt = exprStmt();      break;
@@ -400,21 +448,6 @@ public class Parser {
       return stmt;
     }
     Stmt.ExprStmt exprStmt = (Stmt.ExprStmt)stmt;
-    // We need to check if exprStmt was a parameterless closure and if so convert back into
-    // statement block. The problem is that we can't tell the difference between a closure with
-    // no parameters and a code block until after we have parsed them. (If the parameterless
-    // closure is called immediately then we know it was a closure and we can tell that it was
-    // invoked because expression type won't be a closure.) Otherwise, if the type is a closure
-    // and it has no parameters we know it wasn't immediately invoked and we will treat it is a
-    // code block.
-    if (exprStmt.expr instanceof Expr.Closure) {
-      Expr.Closure closure = (Expr.Closure)exprStmt.expr;
-      if (closure.noParamsDefined) {
-        removeItParameter(closure.funDecl.block);
-        return closure.funDecl.block;   // Treat closure as code block since no parameters
-      }
-    }
-    else
     if (matchAny(IF,UNLESS)) {
       // For all other expressions we allow a following "if" or "unless" so if we have one
       // of those we will convert into an if statement
@@ -448,26 +481,35 @@ public class Parser {
    * @param ignoreArrayError
    */
   JactlType type(boolean varAllowed, boolean ignoreArrays, boolean ignoreArrayError) {
-    JactlType type;
-    Token     typeToken = null;
-    if (varAllowed ? matchAny(typesAndVar) : matchAny(types)) {
-      typeToken = previous();
-      type = JactlType.valueOf(typeToken.getType());
-    }
-    else {
-      type = JactlType.createInstanceType(className());
-    }
-    // Allow arrays for everything but "def" and "var"
-    if (!ignoreArrayError && typeToken != null && typeToken.is(VAR,DEF) && peek().is(LEFT_SQUARE)) {
-      error("Unexpected '[' after " + typeToken.getChars());
-    }
-    if (!ignoreArrays) {
-      while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
-        expect(RIGHT_SQUARE);
-        type = JactlType.arrayOf(type);
+    Marker mark = tokeniser.mark();
+    try {
+      JactlType type;
+      Token     location = peek();
+      Token     typeToken = null;
+      if (varAllowed ? matchAny(typesAndVar) : matchAny(types)) {
+        typeToken = previous();
+        type = JactlType.valueOf(typeToken.getType());
       }
+      else {
+        type = JactlType.createInstanceType(className());
+      }
+      // Allow arrays for everything but "def" and "var"
+      if (!ignoreArrayError && typeToken != null && typeToken.is(VAR, DEF) && peek().is(LEFT_SQUARE)) {
+        unexpected("Unexpected '[' after " + typeToken.getChars());
+      }
+      if (!ignoreArrays) {
+        while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
+          expect(RIGHT_SQUARE);
+          type = JactlType.arrayOf(type);
+        }
+      }
+      mark.done(type, location);
+      return type;
     }
-    return type;
+    catch (CompileError error){
+      markError(mark, error);
+      throw error;
+    }
   }
 
   private boolean isFunDecl(boolean inClassDecl) {
@@ -495,22 +537,32 @@ public class Parser {
     boolean isStatic = false;
     boolean isFinal  = false;
     if (inClassDecl) {
-      while (matchAnyIgnoreEOL(STATIC,FINAL)) {
+      while (matchAnyIgnoreEOL(STATIC, FINAL)) {
         if (previousWas(STATIC)) {
-          if (isStatic) { error("'static' cannot appear multiple times", previous()); }
-          if (isFinal)  { error("Unexpected token: 'static' cannot be combined with 'final' for methods", previous()); }
+          if (isStatic) {
+            error("'static' cannot appear multiple times", previous());
+          }
+          if (isFinal) {
+            error("Unexpected token: 'static' cannot be combined with 'final' for methods", previous());
+          }
           isStatic = true;
         }
         else {
-          if (isFinal)  { error("Unexpected token: 'final' cannot appear multiple times", previous()); }
-          if (isStatic) { error("Unexpected token: 'static' cannot be combined with 'final' for methods", previous()); }
+          if (isFinal) {
+            error("Unexpected token: 'final' cannot appear multiple times", previous());
+          }
+          if (isStatic) {
+            error("Unexpected token: 'static' cannot be combined with 'final' for methods", previous());
+          }
           isFinal = true;
         }
       }
     }
-    Token start = peek();
+    Token     start      = peek();
     JactlType returnType = type(false, false, false);
-    Token      name       = expect(IDENTIFIER);
+    Marker mark = tokeniser.mark();
+    Token     name       = expect(IDENTIFIER);
+    mark.done(new JactlName(name));
     expect(LEFT_PAREN);
     matchAny(EOL);
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
@@ -539,18 +591,21 @@ public class Parser {
   private List<Stmt.VarDecl> parameters(TokenType endToken) {
     List<Stmt.VarDecl> parameters = new ArrayList<>();
     while (!matchAny(endToken)) {
-      if (parameters.size() > 0) {
-        expect(COMMA);
+      if (!parameters.isEmpty()) {
+        expect(Utils.listOf(COMMA), Utils.listOf(COMMA, endToken, LEFT_BRACE));
         matchAny(EOL);
       }
       // Check for optional type. Default to "def".
       JactlType type = optionalType();
+      Stmt.VarDecl varDecl = marked(() -> {
+        // Note that unlike a normal varDecl where commas separate different vars of the same type,
+        // with parameters we expect a separate comma for parameter with a separate type for each one
+        // so we build up a list of singleVarDecl.
+        Stmt.VarDecl stmt = singleVarDecl(type, false, false);
+        stmt.declExpr.isParam = true;
+        return stmt;
+      }, COMMA, EOL, endToken, LEFT_BRACE, RIGHT_BRACE);
 
-      // Note that unlike a normal varDecl where commas separate different vars of the same type,
-      // with parameters we expect a separate comma for parameter with a separate type for each one
-      // so we build up a list of singleVarDecl.
-      Stmt.VarDecl varDecl = singleVarDecl(type, false, false);
-      varDecl.declExpr.isParam = true;
       parameters.add(varDecl);
       matchAny(EOL);
     }
@@ -563,18 +618,17 @@ public class Parser {
    * @return the type or ANY if no type specified
    */
   private JactlType optionalType() {
-    JactlType type = ANY;
+    JactlType type = null;
     if (peek().is(typesAndVar)) {
       type = type(true, false, false);
     }
-    if (!peek().is(IDENTIFIER)) {
-      unexpected("Expected valid type or parameter name");
-    }
-    // We have an identifier but we don't yet know if it is a parameter name or a class name
-    if (lookahead(() -> className() != null, () -> matchAny(IDENTIFIER))) {
+//    if (!peek().is(IDENTIFIER)) {
+//      unexpected("Expected valid type or parameter name");
+//    }
+    if (type == null && lookahead(() -> className() != null, () -> matchAny(IDENTIFIER))) {
       type = JactlType.createInstanceType(className());   // we have a class name
     }
-    return type;
+    return type == null ? ANY : type;
   }
 
   private boolean isVarDecl() {
@@ -620,10 +674,11 @@ public class Parser {
       type = type(true, false, false);
     }
     Stmt.Stmts stmts = new Stmt.Stmts(peek());
-    stmts.stmts.add(singleVarDecl(type, inClassDecl, isConst));
+    JactlType finalType = type;
+    stmts.stmts.add(this.marked(() -> singleVarDecl(finalType, inClassDecl, isConst)));
     while (matchAny(COMMA)) {
       matchAny(EOL);
-      stmts.stmts.add(singleVarDecl(type, inClassDecl, isConst));
+      stmts.stmts.add(this.marked(() -> singleVarDecl(finalType, inClassDecl, isConst)));
     }
     if (stmts.stmts.size() > 1) {
       // Multiple variables so return list of VarDecls
@@ -641,7 +696,7 @@ public class Parser {
       // Catches: const int[] x = [1,2,3] (for example)
       error("Constants can only be simple types", previous());
     }
-    Token identifier  = expect(IDENTIFIER);
+    Token identifier  = marked(() -> expect(IDENTIFIER));
     Expr  initialiser = null;
     Token equalsToken = null;
     if (matchAny(EQUAL)) {
@@ -788,25 +843,23 @@ public class Parser {
    */
   private Stmt doUntilStmt(Token label) {
     Token doToken = peek();
-    // We can't tell whether we have a do/until or simple do expression
-    // at this point so we will parse as an expression and then check if
-    // we have a following "until"
-    Stmt.ExprStmt stmt = exprStmt();
-    if (stmt.expr instanceof Expr.Block) {
+    Expr expr = expression();
+    if (expr instanceof Expr.Block) {
+      matchAny(EOL);
       if (matchAnyIgnoreEOL(UNTIL)) {
         expect(LEFT_PAREN);
         Expr       cond      = condition(false, RIGHT_PAREN);
         Stmt.While whileStmt = new Stmt.While(doToken, cond, label);
-        whileStmt.body = stmt;
+        whileStmt.body = ((Expr.Block)expr).block;
         whileStmt.isDoUntil = true;
         return stmtBlock(doToken, whileStmt);
       }
       else if (label != null) {
-        error("Labels can only be applied to for, while, and do/until loops", label);
+          error("Labels can only be applied to for, while, and do/until loops", label);
       }
     }
-    // Not do/while so return our ExprStmt
-    return stmt;
+    // Just an ExprStmt that starts with a do block
+    return createStmtExpr(expr);
   }
 
   /**
@@ -877,8 +930,7 @@ public class Parser {
    */
   Stmt.Block beginEndBlock() {
     Token blockType = expect(BEGIN, END);
-    expect(LEFT_BRACE);
-    Stmt.Block block = block(previous(), RIGHT_BRACE);
+    Stmt.Block block = block(TokenType.LEFT_BRACE, RIGHT_BRACE);
     block.isBeginBlock = blockType.is(BEGIN);
     block.isEndBlock   = blockType.is(END);
     return block;
@@ -889,10 +941,36 @@ public class Parser {
    *# exprStmt ::= expression
    * </pre>
    */
-  private Stmt.ExprStmt exprStmt() {
-    Expr  expr     = expression();
-    Stmt.ExprStmt stmt = createStmtExpr(expr);
-    return stmt;
+  private Stmt exprStmt() {
+//    Marker mark = tokeniser.mark();
+    try {
+      Expr expr = expression();
+      // We need to check if exprStmt was a parameterless closure and if so convert back into
+      // statement block. The problem is that we can't tell the difference between a closure with
+      // no parameters and a code block until after we have parsed them. (If the parameterless
+      // closure is called immediately then we know it was a closure and we can tell that it was
+      // invoked because expression type won't be a closure.) Otherwise, if the type is a closure
+      // and it has no parameters we know it wasn't immediately invoked and we will treat it is a
+      // code block.
+      if (expr instanceof Expr.Closure) {
+        Expr.Closure closure = (Expr.Closure) expr;
+        if (closure.noParamsDefined) {
+          if (closure.funDecl.block != null) {
+            removeItParameter(closure.funDecl.block);
+            closure.closureIsBlock = true;
+//            mark.drop();
+            return closure.funDecl.block;   // Treat closure as code block since no parameters
+          }
+        }
+      }
+//      mark.done(expr);
+      Stmt.ExprStmt stmt = createStmtExpr(expr);
+      return stmt;
+    }
+    catch (CompileError error) {
+//      markError(mark, error);
+      throw error;
+    }
   }
 
   private Stmt.ExprStmt createStmtExpr(Expr expr) {
@@ -915,47 +993,65 @@ public class Parser {
    * </pre>
    */
   private Stmt.ClassDecl classDecl() {
-    if (!isClassDeclAllowed()) {
-      error("Class declaration not allowed here", previous());
-    }
-    Token className      = expect(IDENTIFIER);
-    Token baseClassToken = null;
-    JactlType baseClass = null;
-    if (matchAny(EXTENDS)) {
-      baseClassToken = peek();
-      baseClass = JactlType.createClass(className());
-    }
-    Token leftBrace = expect(LEFT_BRACE);
-
-    Stmt.ClassDecl classDecl = new Stmt.ClassDecl(className, packageName, baseClassToken, baseClass, false);
-    pushClass(classDecl);
+    Marker classMark = tokeniser.mark();
+    CompileError classError = !isClassDeclAllowed() ? createError("Class declaration not allowed here", peek()) : null;
     try {
-      Stmt.Block classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
+      expect(CLASS);
+      Token     className      = expect(IDENTIFIER);
+      Token     baseClassToken = null;
+      JactlType baseClass      = null;
+      if (matchAny(EXTENDS)) {
+        baseClassToken = peek();
+        baseClass = JactlType.createClass(className());
+      }
+      Token leftBrace = expect(LEFT_BRACE);
 
-      // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
-      // separate lists:
-      List<Stmt> classStmts = classBlock.stmts.stmts;
-      List<Stmt.ClassDecl> innerClasses = classBlock.stmts.stmts.stream()
-                                                                .filter(stmt -> stmt instanceof Stmt.ClassDecl)
-                                                                .map(stmt -> (Stmt.ClassDecl) stmt)
-                                                                .collect(Collectors.toList());
+      Stmt.ClassDecl classDecl = new Stmt.ClassDecl(className, packageName, baseClassToken, baseClass, false);
+      pushClass(classDecl);
+      try {
+        Marker     mark = tokeniser.mark();
+        Stmt.Block classBlock;
+        try {
+          classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
+          mark.done(classBlock);
+        }
+        catch (CompileError error) {
+          markError(mark, error);
+          throw error;
+        }
 
-      // Since we allow multiple fields in the same declaration we need to check for Stmt.Stmts as well as
-      // just Stmt.VarDecl (e.g. int i,j=2  --> Stmt.Stmts(VarDecl i, VarDecl j) so we use flatMap to flatten
-      // to a single stream of Stmt objects.
-      classDecl.fields = classStmts.stream()
-                                   .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts) stmt).stmts.stream()
-                                                                               : Stream.of(stmt))
-                                   .filter(stmt -> stmt instanceof Stmt.VarDecl)
-                                   .map(stmt -> (Stmt.VarDecl) stmt)
-                                   .collect(Collectors.toList());
-      classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
-      classBlock.functions   = classDecl.methods;
-      classDecl.innerClasses = innerClasses;
-      return classDecl;
+        // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
+        // separate lists:
+        List<Stmt> classStmts = classBlock.stmts.stmts;
+        List<Stmt.ClassDecl> innerClasses = classBlock.stmts.stmts.stream()
+                                                                  .filter(stmt -> stmt instanceof Stmt.ClassDecl)
+                                                                  .map(stmt -> (Stmt.ClassDecl) stmt)
+                                                                  .collect(Collectors.toList());
+
+        // Since we allow multiple fields in the same declaration we need to check for Stmt.Stmts as well as
+        // just Stmt.VarDecl (e.g. int i,j=2  --> Stmt.Stmts(VarDecl i, VarDecl j) so we use flatMap to flatten
+        // to a single stream of Stmt objects.
+        classDecl.fields = classStmts.stream()
+                                     .flatMap(stmt -> stmt instanceof Stmt.Stmts ? ((Stmt.Stmts) stmt).stmts.stream()
+                                                                                 : Stream.of(stmt))
+                                     .filter(stmt -> stmt instanceof Stmt.VarDecl)
+                                     .map(stmt -> (Stmt.VarDecl) stmt)
+                                     .collect(Collectors.toList());
+        classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
+        classBlock.functions = classDecl.methods;
+        classDecl.innerClasses = innerClasses;
+        return classDecl;
+      } finally {
+        popClass();
+      }
     }
     finally {
-      popClass();
+      if (classError == null) {
+        classMark.drop();
+      }
+      else {
+        classMark.error(classError);
+      }
     }
   }
 
@@ -1010,14 +1106,24 @@ public class Parser {
    * Used for situations where we need a boolean condition.
    */
   private Expr condition(boolean mandatory, TokenType endOfCond) {
-    if (!mandatory) {
-      if (matchAnyIgnoreEOL(endOfCond)) {
-        return new Expr.Literal(new Token(TRUE, peek()).setValue(true));
+    Marker mark = tokeniser.mark();
+    try {
+      if (!mandatory) {
+        if (matchAnyIgnoreEOL(endOfCond)) {
+          Expr.Literal expr = new Expr.Literal(new Token(TRUE, peek()).setValue(true));
+          mark.done(expr);
+          return expr;
+        }
       }
+      Expr expr = expression(true);
+      mark.done(expr);
+      expect(endOfCond);
+      return expr;
     }
-    Expr expr = expression(true);
-    expect(endOfCond);
-    return expr;
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1045,11 +1151,21 @@ public class Parser {
    * </pre>
    */
   private Expr orExpression() {
-    Expr expr = andExpression();
-    while (matchAnyIgnoreEOL(OR)) {
-      expr = new Expr.Binary(expr, new Token(PIPE_PIPE, previous()), andExpression());
+    Marker mark = tokeniser.mark();
+    try {
+      Expr expr = andExpression();
+      while (matchAnyIgnoreEOL(OR)) {
+        expr = new Expr.Binary(expr, new Token(PIPE_PIPE, previous()), andExpression());
+        mark.done(expr);
+        mark = mark.precede();
+      }
+      mark.drop();
+      return expr;
     }
-    return expr;
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1058,11 +1174,21 @@ public class Parser {
    * </pre>
    */
   private Expr andExpression() {
-    Expr expr = notExpression();
-    while (matchAnyIgnoreEOL(AND)) {
-      expr = new Expr.Binary(expr, new Token(AMPERSAND_AMPERSAND, previous()), notExpression());
+    Marker mark = tokeniser.mark();
+    try {
+      Expr expr = notExpression();
+      while (matchAnyIgnoreEOL(AND)) {
+        expr = new Expr.Binary(expr, new Token(AMPERSAND_AMPERSAND, previous()), notExpression());
+        mark.done(expr);
+        mark = mark.precede();
+      }
+      mark.drop();
+      return expr;
     }
-    return expr;
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1072,29 +1198,47 @@ public class Parser {
    */
   private Expr notExpression() {
     Expr expr;
-    if (matchAnyIgnoreEOL(NOT)) {
-      Token notToken = previous();
-      expr = new Expr.PrefixUnary(new Token(BANG, notToken), notExpression());
-    }
-    else {
-      matchAny(EOL);
-      if (matchAny(RETURN))         { expr = returnExpr();                  } else
-      if (matchAny(PRINT,PRINTLN))  { expr = printExpr();                   } else
-      if (matchAny(DIE))            { expr = dieExpr();                     } else
-      if (matchAny(BREAK,CONTINUE)) {
-        Token type  = previous();
-        Token label = null;
-        if (peekNoEOL().is(IDENTIFIER)) {
-          label = expect(IDENTIFIER);
-        }
-        expr = type.is(BREAK) ? new Expr.Break(type, label)
-                              : new Expr.Continue(type, label);
+    Marker mark = tokeniser.mark();
+    try {
+      boolean doMark = true;
+      if (matchAnyIgnoreEOL(NOT)) {
+        Token notToken = previous();
+        expr = new Expr.PrefixUnary(new Token(BANG, notToken), notExpression());
       }
       else {
-        expr = parseExpression();
+        doMark = false;
+        matchAny(EOL);
+        switch(peek().getType()) {
+          case RETURN:               expr = marked(this::returnExpr); break;
+          case PRINT: case PRINTLN:  expr = marked(this::printExpr);  break;
+          case DIE:                  expr = marked(this::dieExpr);    break;
+          case BREAK: case CONTINUE:
+            expr = marked(() -> {
+              Token type  = expect(BREAK, CONTINUE);
+              Token label = null;
+              if (peekNoEOL().is(IDENTIFIER)) {
+                label = expect(IDENTIFIER);
+              }
+              return type.is(BREAK) ? new Expr.Break(type, label) : new Expr.Continue(type, label);
+            });
+            break;
+          default:
+            expr = parseExpression();
+            break;
+        }
       }
+      if (doMark) {
+        mark.done(expr);
+      }
+      else {
+        mark.drop();
+      }
+      return expr;
     }
-    return expr;
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1136,116 +1280,123 @@ public class Parser {
       return unary(level);
     }
 
-    Expr expr = parseExpression(level + 1);
+    Marker mark = tokeniser.mark();
+    try {
+      Expr expr = parseExpression(level + 1);
 
-    while (matchOp(operators)) {
-      Token operator = previous();
-      if (operator.is(INSTANCE_OF,BANG_INSTANCE_OF,AS)) {
-        Token token = peek();
-        JactlType type = type(false, false, false);
-        expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
-        continue;
-      }
-
-      if (operator.is(QUESTION)) {
-        Expr trueExpr = parseExpression(level);
-        Token operator2 = expect(COLON);
-        Expr falseExpr = parseExpression(level);
-        expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
-        continue;
-      }
-
-      // Call starts with "(" but sometimes can have just "{" if no args before
-      // a closure arg
-      if (operator.is(LEFT_PAREN,LEFT_BRACE)) {
-        expr = createCallExpr(expr, operator, arguments());
-        continue;
-      }
-
-      // Set flag if next token is '(' so that we can check for x.(y).z below
-      boolean bracketedExpression = peek().is(LEFT_PAREN);
-
-      Expr rhs;
-      if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
-        // '[' and '?[' can be followed by any expression and then a ']'
-        rhs = expression(true);
-      }
-      else {
-        if (operator.is(DOT,QUESTION_DOT)) {
-          if (peek().is(LEFT_SQUARE,QUESTION_SQUARE)) {
-            unexpected("invalid token after '" + operator.getChars() + "'");
-          }
+      while (peekOp(operators)) {
+        matchAny(EOL);
+        Token operator = advance();
+        if (operator.is(INSTANCE_OF, BANG_INSTANCE_OF, AS)) {
+          Token     token = peek();
+          JactlType type  = type(false, false, false);
+          expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
         }
-        rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
-      }
-
-      // For List/Map literals that are constant values (no expressions) we compile as class
-      // static consts if they are used in contexts where it is obvious that the values won't
-      // be mutated:
-      // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
-      if (operator.is(IN,BANG_IN,EQUAL_EQUAL,BANG_EQUAL_EQUAL,TRIPLE_EQUAL,BANG_EQUAL_EQUAL,LEFT_SQUARE,QUESTION_SQUARE)) {
-        if (expr.isLiteral() && isConstListOrMap(expr)) {
-          expr.isConst = true;
-          expr.constValue = literalValue(expr);
-          addClassConstant(expr);
+        else if (operator.is(QUESTION)) {
+          Expr  trueExpr  = parseExpression(level);
+          mark.done(trueExpr);
+          Token operator2 = expect(COLON);
+          mark = tokeniser.mark();
+          Expr  falseExpr = parseExpression(level);
+          expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
         }
-        if (rhs.isLiteral() && isConstListOrMap(rhs)) {
-          rhs.isConst = true;
-          rhs.constValue = literalValue(rhs);
-          addClassConstant(rhs);
-        }
-      }
-
-      // Check for lvalue for assignment operators
-      if (operator.getType().isAssignmentLike()) {
-        expr = convertToLValue(expr, operator, rhs, false, true);
-      }
-      else {
-        // Check for '.' and '?.' where we treat identifiers as literals for field access.
-        // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
-        // Note: we checked for '(' immediately after the '.' so we can use value of y if
-        // expression is something like x.(y)
-        if (operator.is(DOT,QUESTION_DOT) && rhs instanceof Expr.Identifier && !bracketedExpression) {
-          rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
-        }
-
-        // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
-        // by default, we need to strip off the "it =~" and replace with current one
-        if (operator.is(EQUAL_GRAVE,BANG_GRAVE)) {
-          if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
-            if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
-              error("Operator '!~' cannot be used with regex substitution", operator);
-            }
-            Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
-            regex.string = expr;
-            regex.operator = operator;
-            regex.implicitItMatch = false;
-            expr = regex;
-          }
-          else
-          if (isImplicitRegexSubstitute(rhs)) {
-            if (operator.is(BANG_GRAVE)) {
-              error("Operator '!~' cannot be used with regex substitution", operator);
-            }
-            Expr.RegexSubst regexSubst = (Expr.RegexSubst)((Expr.VarOpAssign)rhs).expr;
-            regexSubst.implicitItMatch = false;
-            expr = convertToLValue(expr, operator, regexSubst, false, false);
-          }
-          else {
-            expr = new Expr.RegexMatch(expr, operator, rhs, "", false);
-          }
+        else if (operator.is(LEFT_PAREN, LEFT_BRACE)) {
+          // Call starts with "(" but sometimes can have just "{" if no args before
+          // a closure arg
+          expr = createCallExpr(expr, operator, arguments());
         }
         else {
-          expr = new Expr.Binary(expr, operator, rhs);
-        }
-      }
-      // Check for closing ']' if required
-      if (operator.is(LEFT_SQUARE,QUESTION_SQUARE)) {
-        expect(RIGHT_SQUARE);
-      }
-    }
+          // Set flag if next token is '(' so that we can check for x.(y).z below
+          boolean bracketedExpression = peek().is(LEFT_PAREN);
 
-    return expr;
+          Expr rhs;
+          if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
+            // '[' and '?[' can be followed by any expression and then a ']'
+            rhs = expression(true);
+          }
+          else {
+            if (operator.is(DOT, QUESTION_DOT)) {
+              if (peek().is(LEFT_SQUARE, QUESTION_SQUARE)) {
+                unexpected("invalid token after '" + operator.getChars() + "'");
+              }
+            }
+            rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
+          }
+
+          // For List/Map literals that are constant values (no expressions) we compile as class
+          // static consts if they are used in contexts where it is obvious that the values won't
+          // be mutated:
+          // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
+          if (operator.is(IN, BANG_IN, EQUAL_EQUAL, BANG_EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL, LEFT_SQUARE, QUESTION_SQUARE)) {
+            if (expr.isLiteral() && isConstListOrMap(expr)) {
+              expr.isConst = true;
+              expr.constValue = literalValue(expr);
+              addClassConstant(expr);
+            }
+            if (rhs.isLiteral() && isConstListOrMap(rhs)) {
+              rhs.isConst = true;
+              rhs.constValue = literalValue(rhs);
+              addClassConstant(rhs);
+            }
+          }
+
+          // Check for lvalue for assignment operators
+          if (operator.getType().isAssignmentLike()) {
+            expr = convertToLValue(expr, operator, rhs, false, true);
+          }
+          else {
+            // Check for '.' and '?.' where we treat identifiers as literals for field access.
+            // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
+            // Note: we checked for '(' immediately after the '.' so we can use value of y if
+            // expression is something like x.(y)
+            if (operator.is(DOT, QUESTION_DOT) && rhs instanceof Expr.Identifier && !bracketedExpression) {
+              rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
+            }
+
+            // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
+            // by default, we need to strip off the "it =~" and replace with current one
+            if (operator.is(EQUAL_GRAVE, BANG_GRAVE)) {
+              if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
+                if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
+                  error("Operator '!~' cannot be used with regex substitution", operator);
+                }
+                Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
+                regex.string = expr;
+                regex.operator = operator;
+                regex.implicitItMatch = false;
+                expr = regex;
+              }
+              else if (isImplicitRegexSubstitute(rhs)) {
+                if (operator.is(BANG_GRAVE)) {
+                  error("Operator '!~' cannot be used with regex substitution", operator);
+                }
+                Expr.RegexSubst regexSubst = (Expr.RegexSubst) ((Expr.VarOpAssign) rhs).expr;
+                regexSubst.implicitItMatch = false;
+                expr = convertToLValue(expr, operator, regexSubst, false, false);
+              }
+              else {
+                expr = new Expr.RegexMatch(expr, operator, rhs, "", false);
+              }
+            }
+            else {
+              expr = new Expr.Binary(expr, operator, rhs);
+            }
+          }
+          // Check for closing ']' if required
+          if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
+            expect(RIGHT_SQUARE);
+          }
+        }
+        mark.done(expr);
+        mark = mark.precede();
+      }
+      mark.drop();
+      return expr;
+    }
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1258,64 +1409,117 @@ public class Parser {
   private Expr unary(int precedenceLevel) {
     Expr expr;
     matchAny(EOL);
-    if (isCast()) {
-      // Type cast. Rather than create a separate operator for each type case we just use the
-      // token for the type as the operator if we detect a type cast.
-      expect(LEFT_PAREN);
-      matchAny(EOL);
-      Token     typeToken = peek();
-      JactlType castType  = type(false, false, false);
-      matchAny(EOL);
-      expect(RIGHT_PAREN);
-      Expr unary = unary(precedenceLevel);
-      expr = new Expr.Cast(typeToken, castType, unary);
-    }
-    else
-    if (!isPlusMinusNumber() && matchAny(unaryOps)) {
-      // Ignore +number or -number where we want to parse as a number rather than as a unary expression
-      // This is to allow us to invoke methods on negative numbers (e.g. -6.toBase(2)) which wouldn't
-      // work normally since "." has higher precedence than "-". We will ignore here and deal with this
-      // in primary().
-
-      Token operator = previous();
-      Expr unary = unary(precedenceLevel);
-      if (operator.is(PLUS_PLUS,MINUS_MINUS) &&
-          unary instanceof Expr.Binary &&
-          ((Expr.Binary) unary).operator.is(fieldAccessOp)) {
-        // If we are acting on a field (rather than directly on a variable) then
-        // we might need to create intermediate fields etc so turn the inc/dec
-        // into the equivalent of:
-        //   ++a.b.c ==> a.b.c += 1
-        //   --a.b.c ==> a.b.c -= 1
-        // That way we can use the lvalue mechanism of creating missing fields if
-        // necessary.
-        expr = convertToLValue(unary, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
+    Marker mark = tokeniser.mark();
+    try {
+      if (isCast()) {
+        // Type cast. Rather than create a separate operator for each type case we just use the
+        // token for the type as the operator if we detect a type cast.
+        expect(LEFT_PAREN);
+        matchAny(EOL);
+        Token     typeToken = peek();
+        JactlType castType  = type(false, false, false);
+        matchAny(EOL);
+        expect(RIGHT_PAREN);
+        expr = marked(() -> {
+          Expr e = unary(precedenceLevel);
+          return new Expr.Cast(typeToken, castType, e);
+        });
+      }
+      else if (!isPlusMinusNumber() && peek().is(unaryOps)) {
+        // Ignore +number or -number where we want to parse as a number rather than as a unary expression
+        // This is to allow us to invoke methods on negative numbers (e.g. -6.toBase(2)) which wouldn't
+        // work normally since "." has higher precedence than "-". We will ignore here and deal with this
+        // in primary().
+        Marker mark2 = tokeniser.mark();
+        try {
+          Token operator = expect(unaryOps);
+          Expr  unary    = unary(precedenceLevel);
+          expr = new Expr.PrefixUnary(operator, unary);
+          mark2.done(expr);
+          if (operator.is(PLUS_PLUS, MINUS_MINUS) && unary instanceof Expr.Binary && ((Expr.Binary) unary).operator.is(fieldAccessOp)) {
+            // If we are acting on a field (rather than directly on a variable) then
+            // we might need to create intermediate fields etc so turn the inc/dec
+            // into the equivalent of:
+            //   ++a.b.c ==> a.b.c += 1
+            //   --a.b.c ==> a.b.c -= 1
+            // That way we can use the lvalue mechanism of creating missing fields if
+            // necessary.
+            expr = convertToLValue(unary, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
+          }
+        }
+        catch (CompileError error) {
+          mark2.error(error);
+          throw error;
+        }
       }
       else {
-        expr = new Expr.PrefixUnary(operator, unary);
+        expr = parseExpression(precedenceLevel + 1);
       }
+
+      if (matchAny(PLUS_PLUS, MINUS_MINUS)) {
+        Token operator = previous();
+        Expr postfix = new Expr.PostfixUnary(expr, operator);
+        mark.done(postfix);
+        if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(fieldAccessOp)) {
+          // If we are acting on a field (rather than directly on a variable) then
+          // we might need to create intermediate fields etc so turn the inc/dec
+          // into the equivalent of:
+          //   a.b.c++ ==> a.b.c += 1
+          //   a.b.c-- ==> a.b.c -= 1
+          // That way we can use the lvalue mechanism of creating missing fields if
+          // necessary.
+          // NOTE: for postfix we need the beforeValue if result is being used.
+          postfix = convertToLValue(expr, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), true, true);
+        }
+        return postfix;
+      }
+      mark.drop();
+      return expr;
+    }
+    catch (CompileError error) {
+      mark.drop();
+      throw error;
+    }
+  }
+
+  private <T> T marked(Supplier<T> lambda, TokenType... skipUntil) {
+    Marker mark = tokeniser.mark();
+    T item;
+    try {
+      item = lambda.get();
+      if (item != null) {
+        markDone(mark, item);
+      }
+      return item;
+    }
+    catch (CompileError error) {
+      markError(mark, error);
+      skipUntil(skipUntil);
+      throw error;
+    }
+  }
+
+  private void markDone(Marker mark, Object item) {
+    if (item instanceof Expr) {
+      mark.done((Expr)item);
+    }
+    else if (item instanceof Stmt) {
+      mark.done((Stmt)item);
+    }
+    else if (item instanceof Token && ((Token) item).is(IDENTIFIER)) {
+      mark.done(new JactlName((Token)item));
     }
     else {
-      expr = parseExpression(precedenceLevel + 1);
+      throw new IllegalStateException("Unexpected type for marking: " + item.getClass().getName());
     }
-    if (matchAny(PLUS_PLUS, MINUS_MINUS)) {
-      Token operator = previous();
-      if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(fieldAccessOp)) {
-        // If we are acting on a field (rather than directly on a variable) then
-        // we might need to create intermediate fields etc so turn the inc/dec
-        // into the equivalent of:
-        //   a.b.c++ ==> a.b.c += 1
-        //   a.b.c-- ==> a.b.c -= 1
-        // That way we can use the lvalue mechanism of creating missing fields if
-        // necessary.
-        // NOTE: for postfix we need the beforeValue if result is being used.
-        expr = convertToLValue(expr, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), true, true);
-      }
-      else {
-        expr = new Expr.PostfixUnary(expr, previous());
+  }
+
+  private void skipUntil(TokenType... types) {
+    if (lookaheadCount == 0 && types.length > 0) {
+      while (!peek().is(EOF) && peek().isNot(types)) {
+        advance();
       }
     }
-    return expr;
   }
 
   private boolean isCast() {
@@ -1348,10 +1552,10 @@ public class Parser {
     List<Expr> dimensions = new ArrayList<>();
     while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
       type = JactlType.arrayOf(type);
+      if (peek().is(RIGHT_SQUARE) && dimensions.size() == 0) {
+        unexpected("Need a size for array allocation");
+      }
       if (matchAnyIgnoreEOL(RIGHT_SQUARE)) {
-        if (dimensions.size() == 0) {
-          error("Need a size for array allocation");
-        }
         seenEmptyBrackets = true;
       }
       else {
@@ -1447,8 +1651,22 @@ public class Parser {
    * </pre>
    */
   private Expr primary() {
-    Token prev = previous();
+    Token prev = previous();                // Need to know if previous token was a '.' for parsing field names
     matchAny(EOL);
+    return marked(() -> _primary(prev));
+//    Marker mark = tokeniser.mark();
+//    try {
+//      Expr expr = _primary(prev);
+//      mark.done(expr);
+//      return expr;
+//    }
+//    catch (CompileError error) {
+//      mark.error(error);
+//      throw error;
+//    }
+  }
+
+  private Expr _primary(Token prev) {
     switch (peek().getType()) {
       case PLUS:          case MINUS:
       case BYTE_CONST:    case INTEGER_CONST: case TRUE:
@@ -1481,8 +1699,8 @@ public class Parser {
   Expr doBlock() {
     expect(DO);
     matchAny(EOL);
-    Token leftBrace = expect(LEFT_BRACE);
-    return new Expr.Block(leftBrace, block(RIGHT_BRACE));
+    Expr expr = new Expr.Block(peek(), block(TokenType.LEFT_BRACE, RIGHT_BRACE));
+    return expr;
   }
 
   /**
@@ -1592,34 +1810,39 @@ public class Parser {
    */
   private Expr.ClassPath classPath() {
     List<Token> path  = new ArrayList<>();
-    Token previous = previous();
-    Token current  = peek();
-    while (matchAny(IDENTIFIER)) {
-      Token       token = previous();
-      if (Utils.isLowerCase(token.getStringValue())) {
-        path.add(token);
-      }
-      else {
-        if (Utils.isValidClassName(token.getStringValue())) {
-          if (path.size() > 0) {
-            // We have a possible class path so check for package name
-            String pkg = String.join(".", path.stream().map(p -> p.getStringValue()).collect(Collectors.toList()));
-            if (pkg.equals(packageName) || context.packageExists(pkg)) {
-              return new Expr.ClassPath(path.get(0).newIdent(pkg), token);
+    Marker mark = tokeniser.mark();
+    try {
+      while (matchAny(IDENTIFIER)) {
+        Token token = previous();
+        if (Utils.isLowerCase(token.getStringValue())) {
+          path.add(token);
+        }
+        else {
+          if (Utils.isValidClassName(token.getStringValue())) {
+            if (path.size() > 0) {
+              // We have a possible class path so check for package name
+              String pkg = String.join(".", path.stream().map(p -> p.getStringValue()).collect(Collectors.toList()));
+              if (pkg.equals(packageName) || context.packageExists(pkg)) {
+                return new Expr.ClassPath(path.get(0).newIdent(pkg), token);
+              }
             }
           }
+          // not a classpath since class name does not start with upper case or we had no elements in package path
+          mark.rollback();
+          return null;
         }
-        // not a classpath since class name does not start with upper case or we had no elements in package path
-        tokeniser.rewind(previous, current);
-        return null;
+        if (!matchAny(DOT)) {
+          mark.rollback();
+          return null;
+        }
       }
-      if (!matchAny(DOT)) {
-        tokeniser.rewind(previous, current);
-        return null;
-      }
+      mark.rollback();
+      return null;
     }
-    tokeniser.rewind(previous, current);
-    return null;
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1850,11 +2073,11 @@ public class Parser {
         exprString.exprList.add(new Expr.Literal(previous()));
       }
       else
-      if (matchAny(IDENTIFIER,DOLLAR_IDENTIFIER)) {
+      if (matchAny(DOLLAR_IDENTIFIER)) {
         exprString.exprList.add(new Expr.Identifier(previous()));
       }
       else
-      if (matchAny(LEFT_BRACE)) {
+      if (peek().is(DOLLAR_BRACE)) {
         exprString.exprList.add(exprStringBlockExpr());
       }
       else {
@@ -1932,32 +2155,44 @@ public class Parser {
    *   "${stmt1; stmt2; return val}" -&gt; "${ {stmt1;stmt2;return val}() }"
    */
   private Expr exprStringBlockExpr() {
-    Token leftBrace = previous();
-    Stmt.Block block = block(RIGHT_BRACE);
-    if (block.stmts.stmts.size() == 0) {
-      return new Expr.Literal(new Token(NULL, leftBrace));
-    }
-    // If we have a single ExprStmt then our expression is just the expression inside the statement
-    if (block.stmts.stmts.size() == 1) {
-      Stmt stmt = block.stmts.stmts.get(0);
-      // If we have a single "simple" expression (no return, continue, break, and no regex match/substitutes),
-      // then we don't have to bother with a separate closure for the block.
-      // If there are regex matches or substitutes we create a closure since they might need their own RegexMatcher.
-      if (stmt instanceof Stmt.ExprStmt) {
-        Expr expr = ((Stmt.ExprStmt) stmt).expr;
-        if (isSimple(expr)) {
-          expr.isResultUsed = true;
-          return expr;
+    Marker mark = tokeniser.mark();
+    try {
+      Stmt.Block block     = block(DOLLAR_BRACE, RIGHT_BRACE);
+      Token      leftBrace = block.location;
+      if (block.stmts.stmts.size() == 0) {
+        Expr expr = new Expr.Literal(new Token(NULL, leftBrace));
+        mark.done(expr);
+        return expr;
+      }
+      // If we have a single ExprStmt then our expression is just the expression inside the statement
+      if (block.stmts.stmts.size() == 1) {
+        Stmt stmt = block.stmts.stmts.get(0);
+        // If we have a single "simple" expression (no return, continue, break, and no regex match/substitutes),
+        // then we don't have to bother with a separate closure for the block.
+        // If there are regex matches or substitutes we create a closure since they might need their own RegexMatcher.
+        if (stmt instanceof Stmt.ExprStmt) {
+          Expr expr = ((Stmt.ExprStmt) stmt).expr;
+          if (isSimple(expr)) {
+            expr.isResultUsed = true;
+            mark.drop();
+            return expr;
+          }
         }
       }
-    }
 
-    // We have more than one statement or statement is more than just a simple expression so convert
-    // block into a parameter-less closure and then invoke it.
-    Stmt.FunDecl closureFunDecl = convertBlockToClosure(leftBrace, block);
-    closureFunDecl.declExpr.isResultUsed = true;
-    Expr closure = new Expr.Closure(leftBrace, closureFunDecl.declExpr, true);
-    return createCallExpr(closure, leftBrace, Utils.listOf());
+      // We have more than one statement or statement is more than just a simple expression so convert
+      // block into a parameter-less closure and then invoke it.
+      Stmt.FunDecl closureFunDecl = convertBlockToClosure(leftBrace, block);
+      closureFunDecl.declExpr.isResultUsed = true;
+      Expr closure = new Expr.Closure(leftBrace, closureFunDecl.declExpr, true);
+      Expr expr    = createCallExpr(closure, leftBrace, Utils.listOf());
+      mark.done(expr);
+      return expr;
+    }
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
+    }
   }
 
   /**
@@ -1990,7 +2225,7 @@ public class Parser {
    * </pre>
    */
   private Expr.Return returnExpr() {
-    Token location = previous();
+    Token location = expect(RETURN);
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(NULL, location).setValue(null))
                                     : parseExpression();
     return new Expr.Return(location, expr, null);   // returnType will be set by Resolver
@@ -2002,7 +2237,7 @@ public class Parser {
    * </pre>
    */
   private Expr.Print printExpr() {
-    Token printToken = previous();
+    Token printToken = expect(PRINT,PRINTLN);
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, printToken).setValue(""))
                                     : parseExpression();
     return new Expr.Print(printToken, expr, printToken.is(PRINTLN));
@@ -2014,7 +2249,7 @@ public class Parser {
    * </pre>
    */
   private Expr.Die dieExpr() {
-    Token dieToken = previous();
+    Token dieToken = expect(DIE);
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, dieToken).setValue(""))
                                     : parseExpression();
     return new Expr.Die(dieToken, expr);
@@ -2099,6 +2334,7 @@ public class Parser {
       removeItParameter(block);
       block = (Stmt.Block)setLastResultIsUsed(block);
       expr = new Expr.Block(block.openBrace, block);
+      closure.closureIsBlock = true;
     }
     return expr;
   }
@@ -2148,84 +2384,92 @@ public class Parser {
    */
   private Expr switchPattern() {
     matchAny(EOL);
-    Expr expr = null;
-    if (isLiteral()) {
-      expr = literal();
-      expr.isConst = true;
-      expr.constValue = literalValue(expr);
-    }
-    else if (peek().is(LEFT_SQUARE)) {
-      expr = mapOrListPattern(LEFT_SQUARE, RIGHT_SQUARE, true);
-      if (isConstListOrMap(expr)) {
+    Marker mark = tokeniser.mark();
+    try {
+      Expr expr = null;
+      if (isLiteral()) {
+        expr = literal();
         expr.isConst = true;
         expr.constValue = literalValue(expr);
-        addClassConstant(expr);
       }
-    }
-    else if (peek().is(SLASH)) {
-      Expr.RegexMatch regex = (Expr.RegexMatch)exprString();
-      expr = regex;
-      if (regex.modifiers.isEmpty()) {
-        // Not an actual regex, just a slashy string
-        expr = regex.pattern;
-      }
-    }
-    else if (isType()) {
-      // Note that we can't actually tell the difference between X.Y.Z being a class name and X.Y.Z being
-      // a field Z inside the class X.Y. We build a TypeExpr anyway and let the Resolver take care of it.
-      expr = typeOrVarDecl();
-      // Check for class name and constructor args (named or not)
-      if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(JactlType.INSTANCE)) {
-        matchAny(EOL);
-        if (peek().is(LEFT_PAREN)) {
-          expr = new Expr.ConstructorPattern(((Expr.TypeExpr) expr).token, (Expr.TypeExpr) expr, mapOrListPattern(LEFT_PAREN, RIGHT_PAREN, false));
+      else if (peek().is(LEFT_SQUARE)) {
+        expr = mapOrListPattern(LEFT_SQUARE, RIGHT_SQUARE, true);
+        if (isConstListOrMap(expr)) {
+          expr.isConst = true;
+          expr.constValue = literalValue(expr);
+          addClassConstant(expr);
         }
       }
-    }
-    else if (matchAny(IDENTIFIER)){
-      // If there is just a single identifier we return it. Otherwise, we look for a dotted list of identifiers
-      // which would be a static field in a class and tunnel this list of identifiers in a TypeExpr as though
-      // it were actually a type.
-      // This is because if we had X.Y.Z we would detect it as a type and build a TypeExpr (see previous if)
-      // so we also build a TypeExpr if we have X.Y.z
-      // The Resolver will take care of checking whether X.Y.Z is an actual field reference or a class name
-      // and will also, therefore, cope with X.Y.z
-      List<Expr> exprs = new ArrayList<>();
-      exprs.add(new Expr.Identifier(previous()));
-      while (matchAnyIgnoreEOL(DOT)) {
-        expect(IDENTIFIER);
+      else if (peek().is(SLASH)) {
+        Expr.RegexMatch regex = (Expr.RegexMatch) exprString();
+        expr = regex;
+        if (regex.modifiers.isEmpty()) {
+          // Not an actual regex, just a slashy string
+          expr = regex.pattern;
+        }
+      }
+      else if (isType()) {
+        // Note that we can't actually tell the difference between X.Y.Z being a class name and X.Y.Z being
+        // a field Z inside the class X.Y. We build a TypeExpr anyway and let the Resolver take care of it.
+        expr = typeOrVarDecl();
+        // Check for class name and constructor args (named or not)
+        if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(JactlType.INSTANCE)) {
+          matchAny(EOL);
+          if (peek().is(LEFT_PAREN)) {
+            expr = new Expr.ConstructorPattern(((Expr.TypeExpr) expr).token, (Expr.TypeExpr) expr, mapOrListPattern(LEFT_PAREN, RIGHT_PAREN, false));
+          }
+        }
+      }
+      else if (matchAny(IDENTIFIER)) {
+        // If there is just a single identifier we return it. Otherwise, we look for a dotted list of identifiers
+        // which would be a static field in a class and tunnel this list of identifiers in a TypeExpr as though
+        // it were actually a type.
+        // This is because if we had X.Y.Z we would detect it as a type and build a TypeExpr (see previous if)
+        // so we also build a TypeExpr if we have X.Y.z
+        // The Resolver will take care of checking whether X.Y.Z is an actual field reference or a class name
+        // and will also, therefore, cope with X.Y.z
+        List<Expr> exprs = new ArrayList<>();
         exprs.add(new Expr.Identifier(previous()));
+        while (matchAnyIgnoreEOL(DOT)) {
+          expect(IDENTIFIER);
+          exprs.add(new Expr.Identifier(previous()));
+        }
+        expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, JactlType.createInstanceType(exprs));
       }
-      expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, JactlType.createInstanceType(exprs));
-    }
-    else if (peek().is(UNDERSCORE)) {
-      expr = identifier(UNDERSCORE);
-    }
-    else if (matchAny(DOLLAR_IDENTIFIER)) {
-      expr = new Expr.Identifier(previous());
-    }
-    else if (matchAny(DOLLAR_BRACE)) {
-      expr = blockExpr();
-    }
-    else if (isCast()) {
-      expect(LEFT_PAREN);
-      matchAny(EOL);
-      JactlType castType = type(false, false, false);
-      matchAny(EOL);
-      expect(RIGHT_PAREN);
-      if (!isLiteral()) {
-        error("Expected simple literal value after type cast");
+      else if (peek().is(UNDERSCORE)) {
+        expr = identifier(UNDERSCORE);
       }
-      Expr.Literal literal = literal();
-      literal.isConst = true;
-      literal.constValue = castTo(literal.value.getValue(),castType, literal.location);
-      literal.value = new Token(JactlType.typeOf(literal.constValue).constTokenType(literal.constValue),literal.location).setValue(literal.constValue);
-      expr = literal;
+      else if (matchAny(DOLLAR_IDENTIFIER)) {
+        expr = new Expr.Identifier(previous());
+      }
+      else if (matchAny(DOLLAR_BRACE)) {
+        expr = blockExpr();
+      }
+      else if (isCast()) {
+        expect(LEFT_PAREN);
+        matchAny(EOL);
+        JactlType castType = type(false, false, false);
+        matchAny(EOL);
+        expect(RIGHT_PAREN);
+        if (!isLiteral()) {
+          unexpected("Expected simple literal value after type cast");
+        }
+        Expr.Literal literal = literal();
+        literal.isConst = true;
+        literal.constValue = castTo(literal.value.getValue(), castType, literal.location);
+        literal.value = new Token(JactlType.typeOf(literal.constValue).constTokenType(literal.constValue), literal.location).setValue(literal.constValue);
+        expr = literal;
+      }
+      else {
+        unexpected("Expect const or regex or type in match case");
+      }
+      mark.done(expr);
+      return expr;
     }
-    else {
-      unexpected("Expect const or regex or type in match case");
+    catch (CompileError error ) {
+      markError(mark, error);
+      throw error;
     }
-    return expr;
   }
 
   private Object castTo(Object value, JactlType type, Token token) {
@@ -2378,13 +2622,20 @@ public class Parser {
    * If there is an EOL as first token then we ignore unless operator is one that could
    * start an expression and we are not already in a nested expression of some sort.
    */
-  boolean matchOp(List<TokenType> types) {
+  boolean peekOp(List<TokenType> types) {
     if (!peekIsEOL()) {
-      return matchAny(types);
+      return peek().is(types);
     }
     for (TokenType type: types) {
-      if (!ignoreEol && exprStartingOps.contains(type) ? matchAnyNoEOL(type) : matchAnyIgnoreEOL(type)) {
-        return true;
+      if (!ignoreEol && exprStartingOps.contains(type)) {
+        if (peekNoEOL().is(type)) {
+          return true;
+        }
+      }
+      else {
+        if (peekIgnoreEolIs(type)) {
+          return true;
+        }
       }
     }
     return false;
@@ -2409,11 +2660,14 @@ public class Parser {
    * @param block  the code block
    */
   private void removeItParameter(Stmt.Block block) {
-    // Remove the default parameter declaration for "it" from the statements in the block
-    Stmt itParameter = block.stmts.stmts.remove(0);
-    if (!(itParameter instanceof Stmt.VarDecl &&
-          ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals(Utils.IT_VAR))) {
-      throw new IllegalStateException("Internal error: expecting parameter declaration for 'it' but got " + itParameter);
+    // Allow empty block when there have been errors
+    if (!block.stmts.stmts.isEmpty()) {
+      // Remove the default parameter declaration for "it" from the statements in the block
+      Stmt itParameter = block.stmts.stmts.remove(0);
+      if (!(itParameter instanceof Stmt.VarDecl &&
+            ((Stmt.VarDecl) itParameter).declExpr.name.getStringValue().equals(Utils.IT_VAR))) {
+        throw new IllegalStateException("Internal error: expecting parameter declaration for 'it' but got " + itParameter);
+      }
     }
   }
 
@@ -2538,9 +2792,18 @@ public class Parser {
     funDecl.isScriptMain = isScriptMain;
     pushFunDecl(funDecl);
     try {
-      Stmt.Block block = block(peek(), endToken);
-      insertStmtsInto(params, block);
-      funDecl.block = block;
+      try {
+        Stmt.Block block = block(start, endToken);
+        insertStmtsInto(params, block);
+        funDecl.block = block;
+      }
+      catch (CompileError error) {
+        funDecl.block = new Stmt.Block(null, new Stmt.Stmts(null));
+        funDecl.block.stmts.stmts = new ArrayList<>();
+        if (!isScriptMain) {
+          throw error;
+        }
+      }
       return funDeclStmt;
     }
     finally {
@@ -2573,15 +2836,28 @@ public class Parser {
              mapKey() != null &&
              matchAnyIgnoreEOL(COLON) &&
              // Make sure we are not doing a label for while/for immediately after '{'
-             !(close == RIGHT_BRACE && matchAnyIgnoreEOL(WHILE,FOR));
+             !(close == RIGHT_BRACE && matchAnyIgnoreEOL(WHILE,FOR,DO));
     });
   }
 
   /////////////////////////////////////////////////
 
   private Token advance() {
-    Token token = tokeniser.next();
+    Token token = tokeniser.advance();
     return token;
+  }
+
+  private boolean peekIgnoreEolIs(TokenType... types) {
+    Token token = tokeniser.peek();
+    if (token.is(EOL)) {
+      // If ignoring EOL then we need to get following token but not consume existing
+      // one so save state and then restore after fetching following token
+      Marker mark = tokeniser.mark();
+      advance();
+      token = tokeniser.peek();
+      mark.rollback();
+    }
+    return token.is(types);
   }
 
   private Token peek() {
@@ -2589,11 +2865,10 @@ public class Parser {
     if (ignoreEol && token.is(EOL)) {
       // If ignoring EOL then we need to get following token but not consume existing
       // one so save state and then restore after fetching following token
-      Token current = token;
-      Token prev = previous();
+      Marker mark = tokeniser.mark();
       advance();
       token = tokeniser.peek();
-      tokeniser.rewind(prev, current);
+      mark.rollback();
     }
     return token;
   }
@@ -2603,7 +2878,7 @@ public class Parser {
   }
 
   private boolean peekIsEOL() {
-    return tokeniser.peek().is(EOL);
+    return peekNoEOL().is(EOL);
   }
 
   private Token previous() {
@@ -2671,7 +2946,7 @@ public class Parser {
    */
   private boolean matchAnyIgnoreEOL(TokenType... types) {
     // Remember current tokens in case we need to rewind
-    Token previous = previous();
+    Marker mark = tokeniser.mark();
     Token current  = tokeniser.peek();
 
     boolean eolConsumed = false;
@@ -2682,9 +2957,11 @@ public class Parser {
 
     for (TokenType type : types) {
       if (type.is(EOL) && eolConsumed) {
+        mark.drop();
         return true;    // we have already advanced
       }
       if (peek().is(type)) {
+        mark.drop();
         advance();
         return true;
       }
@@ -2692,14 +2969,17 @@ public class Parser {
 
     // No match so rewind if necessary
     if (eolConsumed) {
-      tokeniser.rewind(previous, current);
+      mark.rollback();
+    }
+    else {
+      mark.drop();
     }
     return false;
   }
 
   private boolean matchKeywordIgnoreEOL() {
     // Remember current tokens in case we need to rewind
-    Token previous = previous();
+    Marker mark = tokeniser.mark();
     Token current  = tokeniser.peek();
 
     boolean eolConsumed = false;
@@ -2709,13 +2989,17 @@ public class Parser {
     }
 
     if (peek().isKeyword()) {
+      mark.drop();
       advance();
       return true;
     }
 
     // No match so rewind if necessary
     if (eolConsumed) {
-      tokeniser.rewind(previous, current);
+      mark.rollback();
+    }
+    else {
+      mark.drop();
     }
     return false;
   }
@@ -2755,8 +3039,7 @@ public class Parser {
   @SafeVarargs
   private final boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
-    Token previous                   = previous();
-    Token current                    = tokeniser.peek();
+    Marker mark = tokeniser.mark();
     boolean currentIgnoreEol         = ignoreEol;
     List<CompileError> currentErrors = new ArrayList<>(errors);
 
@@ -2779,8 +3062,8 @@ public class Parser {
     }
     finally {
       // Restore state
-      tokeniser.rewind(previous, current);
-      errors        = currentErrors;
+      mark.rollback();
+      errors = currentErrors;
       lookaheadCount--;
       ignoreEol = currentIgnoreEol;
     }
@@ -2803,26 +3086,38 @@ public class Parser {
 
   /////////////////////////////////////
 
-  private Expr error(String msg) {
-    error(msg, peek());
-    return null;
+  private Expr error(String msg, Token token) {
+    throw createError(msg, token);
   }
 
-  private Expr error(String msg, Token token) {
-    // Don't bother with stack trace when doing lookahead
-    throw new CompileError(msg, token, lookaheadCount == 0);
+  private void markError(Marker marker, CompileError err) {
+    if (lookaheadCount == 0) {
+      marker.error(err);
+    }
+    else {
+      marker.drop();
+    }
   }
 
   private Expr unexpected(String msg) {
-    if (peek().getType().is(EOF)) {
-      throw new EOFError("Unexpected EOF: " + msg, peek(), lookaheadCount == 0);
+    Marker mark = tokeniser.mark();
+    Token token = advance();
+    CompileError error;
+    if (token.is(ERROR)) {
+      error = createError(token.getStringValue(), token);
     }
-    final String chars = peekIsEOL() ? "EOL" :
-                         peek().is(EXPR_STRING_START) ? "'\"'" :
-                         peek().is(STRING_CONST) ? "\"'\"" :
-                         "'" + peek().getChars() + "'";
-    error("Unexpected token " + chars + ": " + msg);
-    return null;
+    else if (token.is(EOF)) {
+      error = new EOFError("Unexpected EOF: " + msg, token, lookaheadCount == 0);
+    }
+    else {
+      final String chars = token.is(EOL) ? "EOL" :
+                           token.is(EXPR_STRING_START) ? "'\"'" :
+                           token.is(STRING_CONST) ? "\"'\"" :
+                           "'" + token.getChars() + "'";
+      error = createError("Unexpected token " + chars + " (type=" + token.getType() + "): " + msg, token);
+    }
+    markError(mark, error);
+    throw error;
   }
 
   /**
@@ -2855,6 +3150,27 @@ public class Parser {
 
   private Token expect(List<TokenType> types) {
     return expect(types.toArray(new TokenType[types.size()]));
+  }
+
+  /**
+   * Expect one of given types. If not of that type then scan until we match one
+   * of the types in the scanUntil list. Then throw error.
+   * @param types      expected one of these types
+   * @param scanUntil  scan until one of these types if no match
+   * @return matched token or throws error
+   */
+  private Token expect(List<TokenType> types, List<TokenType> scanUntil) {
+    try {
+      return expect(types.toArray(new TokenType[types.size()]));
+    }
+    catch (CompileError e) {
+      if (lookaheadCount == 0) {
+        while (!peek().is(EOF) && !peek().is(scanUntil)) {
+          advance();
+        }
+      }
+      throw e;
+    }
   }
 
   private Token peekExpect(TokenType ...types) {
@@ -3061,7 +3377,7 @@ public class Parser {
     // (map or list lookup), or fieldPath is just an identifier for a simple variable.
     if (variable instanceof Expr.Identifier) {
       if (((Expr.Identifier)variable).identifier.getStringValue().charAt(0) == '$') {
-        error("Capture variable cannot be modified (invalid lvalue)", variable.location);
+        return error("Capture variable cannot be modified (invalid lvalue)", variable.location);
       }
       if (arithmeticOp == null) {
         // Just a standard = or ?=
@@ -3081,14 +3397,14 @@ public class Parser {
     }
 
     if (!(variable instanceof Expr.Binary)) {
-      error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' operator (invalid lvalue)", variable.location);
+      return error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' operator (invalid lvalue)", assignmentOperator);
     }
 
     Expr.Binary fieldPath = (Expr.Binary)variable;
 
     // Make sure lhs is a valid lvalue
     if (!fieldPath.operator.is(fieldAccessOp)) {
-      error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' (invalid lvalue)", fieldPath.operator);
+      return error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' (invalid lvalue)", fieldPath.operator);
     }
 
     Expr parent = fieldPath.left;
@@ -3276,6 +3592,10 @@ public class Parser {
         return stmt;
       }
     });
+  }
+
+  private CompileError createError(String msg, Token token) {
+    return new CompileError(msg, token, lookaheadCount == 0);
   }
 
   private static final Map<TokenType,TokenType> arithmeticOperator =

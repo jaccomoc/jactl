@@ -49,7 +49,7 @@ public class Compiler {
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
-    Parser         parser = new Parser(new Tokeniser(source), jactlContext, packageName);
+    Parser         parser = new Parser(new Tokeniser(source, true), jactlContext, packageName);
     Stmt.ClassDecl script = parser.parseScript(className);
     Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);

@@ -235,7 +235,7 @@ public class ClassDescriptor {
   }
 
   public void addInnerClasses(List<ClassDescriptor> classes) {
-    innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.namePath, desc -> desc)));
+    innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.namePath, desc -> desc, (desc1,desc2) -> desc1)));
   }
 
   public ClassDescriptor getInnerClass(String className) {
@@ -252,6 +252,14 @@ public class ClassDescriptor {
 
   public ClassDescriptor getBaseClass() {
     return baseClass == null ? null : baseClass.getClassDescriptor();
+  }
+
+  /**
+   * For error situations where we have recursive base class hierarchy allow resetting
+   * of base class so that further error processing can occur.
+   */
+  public void resetBaseClas() {
+    baseClass = null;
   }
 
   public boolean isAssignableFrom(ClassDescriptor clss) {

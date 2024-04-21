@@ -39,7 +39,7 @@ import org.objectweb.asm.Label;
 /**
  * Stmt classes for our AST.
  */
-public abstract class Stmt {
+public abstract class Stmt extends JactlUserDataHolder {
 
   public abstract <T> T accept(Visitor<T> visitor);
 

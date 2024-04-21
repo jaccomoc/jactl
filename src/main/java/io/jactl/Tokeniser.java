@@ -76,7 +76,7 @@ public class Tokeniser {
   private int[]        lineOffsets;
 
   private boolean inString     = false;   // True if parsing expression string content (but not
-  // expression within string)
+                                          // expression within string)
   private int     nestedBraces = 0;
 
   // Stack of expression string states showing whether current nested string type is triple quoted
@@ -113,6 +113,10 @@ public class Tokeniser {
     this.tokeniseCommentsAndWhitespace = tokeniseCommentsAndWhitespace;
   }
 
+  public String getSource() {
+    return source;
+  }
+
   /**
    * Get the next token. If we have been rewound, then we return from that point in
    * the stream of tokens rather than parsing a new one from the source code.
@@ -128,9 +132,9 @@ public class Tokeniser {
     previousToken = currentToken;
     currentToken = previousToken.getNext();
 
-    if (result.isError()) {
-      throw result.getError();
-    }
+//    if (result.isError()) {
+//      throw result.getError();
+//    }
     return result;
   }
 
@@ -156,12 +160,23 @@ public class Tokeniser {
 
   /**
    * Rewind to an early position in the stream of tokens
-   * @param previous the previous token
-   * @param current  the token to rewind to
+   * @param state  the preiously saved state
    */
-  public void rewind(Token previous, Token current) {
-    previousToken = previous;
-    currentToken = current;
+  public void rewind(State state) {
+    previousToken = state.previous;
+    currentToken  = state.current;
+  }
+
+  public State saveState() {
+    return new State(previousToken, previousToken == null ? peek() : currentToken);
+  }
+
+  public static class State {
+    Token previous, current;
+    State(Token previous, Token current) {
+      this.previous = previous;
+      this.current  = current;
+    }
   }
 
   /**
@@ -206,23 +221,18 @@ public class Tokeniser {
    */
   private void populateCurrentToken() {
     if (currentToken == null) {
-      try {
-        currentToken = parseToken();
-      }
-      catch (CompileError e) {
-        currentToken = new Token(e);
-      }
-
       if (previousToken != null) {
-        previousToken.setNext(currentToken);
+        currentToken = previousToken.getNext();
       }
+      if (currentToken == null) {
+        try {
+          currentToken = parseToken();
+        }
+        catch (CompileError e) {
+          currentToken = new Token(e);
+        }
 
-      if (!tokeniseCommentsAndWhitespace) {
-        // If we have already returned EOL last time then keep advancing until we get
-        // something that is not EOL
-        if (currentToken.is(EOL) && previousToken != null && previousToken.is(EOL)) {
-          while ((currentToken = parseToken()).is(EOL)) {
-          }
+        if (previousToken != null) {
           previousToken.setNext(currentToken);
         }
       }
@@ -236,7 +246,10 @@ public class Tokeniser {
   private Token parseToken() {
     Token token;
     if (!tokeniseCommentsAndWhitespace) {
-      skipSpacesAndComments();
+      token = skipSpacesAndComments();
+      if (token != null) {
+        return token;
+      }
     }
     else {
       token = getSpaceOrComment();
@@ -261,7 +274,11 @@ public class Tokeniser {
       return parseNextStringPart(token, remaining, c);
     }
 
-    if (c > 256) return error("Unexpected character '" + (char) c + "'", token);
+    if (c > 127) {
+//      advance(1);
+//      return error("Unexpected character '\\u" + Long.toHexString(0x100000000L | c).substring(5) + "'", token);
+      return parseIdentifier(token, remaining);
+    }
 
     // Find list of symbols that match o first character
     List<Symbol> symbols = symbolLookup[c];
@@ -291,6 +308,8 @@ public class Tokeniser {
       case EOL: {
         if (!newLinesAllowed()) {
           try {
+            stringState.clear();
+            inString = false;
             return error("New line not allowed within single line string", token);
           }
           finally {
@@ -322,6 +341,9 @@ public class Tokeniser {
         pushStringState(endChars, stringStart);
         advance(tripleQuote ? 2 : 0);
         token = parseString(true, endChars, newLinesAllowed(), true, false, stringStart);
+        if (token.is(ERROR)) {
+          return token;
+        }
         return token.setType(EXPR_STRING_START).setEnd(offset);
       }
       case REGEX_SUBST_START: {
@@ -339,7 +361,7 @@ public class Tokeniser {
           return error("Closing brace '}' does not match any opening brace", token);
         }
         if (stringState.size() > 0 && stringState.peek().braceLevel == nestedBraces) {
-          // Go back into string mode if we have found closing '}' of our nested expression within the sring
+          // Go back into string mode if we have found closing '}' of our nested expression within the string
           inString = true;
         }
         return token.setType(RIGHT_BRACE).setLength(1);
@@ -400,10 +422,9 @@ public class Tokeniser {
           inString = false;
           // Remember where we are so that when we see matching '}' we go back into string expr mode
           currentStringState.braceLevel = nestedBraces++;
-          advance(1);
-          token = createToken().setType(LEFT_BRACE)
-                               .setLength(1);
-          advance(1);
+          token = createToken();
+          advance(2);
+          token.setType(DOLLAR_BRACE).setEnd(offset);
         }
         else {
           // If we are in a regex string then we allow '$' without requiring a valid identifier
@@ -412,16 +433,27 @@ public class Tokeniser {
           }
 
           // We know that we have an identifier following the '$' in this case because
-          // we would have already swollowed the '$' in previous parseString() call if there
+          // we would have already swallowed the '$' in previous parseString() call if there
           // was no identifier following the '$'. For capture vars the '$' is part of the name
           // so we don't advance past the '$'.
-          if (!Character.isDigit(nextChar)) {
+          boolean isDigit = Character.isDigit(nextChar);
+          int dollarOffset = offset;
+          if (!isDigit) {
             advance(1);  // Skip '$'
             remaining--;
           }
           token = parseIdentifier(createToken(), remaining);
-          if (keyWords.contains(token.getChars())) {
-            return error("Keyword found where identifier expected", token);
+          if (token.is(IDENTIFIER)) {
+            String chars = token.getChars();
+            if (keyWords.contains(chars)) {
+              return error("Keyword found where identifier expected", token);
+            }
+            token.setType(DOLLAR_IDENTIFIER);
+            if (!isDigit) {
+              // Need to account for '$' as not normally included for normal identifiers
+              token.setOffset(dollarOffset);
+              token.setLength(chars.length() + 1);
+            }
           }
         }
         return token;
@@ -470,13 +502,20 @@ public class Tokeniser {
       }
       case '\n': {
         if (!newLinesAllowed()) {
+          stringState.pop();
+          inString = false;
           return error("Unexpected new line within single line string", createToken());
         }
         break;
       }
     }
     // No embedded expression or end of string found so parse as STRING_CONST
-    return parseString(true, endChars, newLinesAllowed(), escapeChars, currentStringState.isReplace, currentStringState.stringOffset);
+    token = parseString(true, endChars, newLinesAllowed(), escapeChars, currentStringState.isReplace, offset);
+    if (token.is(ERROR)) {
+      stringState.pop();
+      inString = false;
+    }
+    return token;
   }
 
   /**
@@ -487,7 +526,9 @@ public class Tokeniser {
   private Token parseIdentifier(Token token, int remaining) {
     // Make sure that first character is legal for an identitifer
     int startChar = charAt(0);
+    int startOffset = offset;
     if (!isIdentifierStart(startChar) && startChar != '$') {
+      advance(1);
       return error("Unexpected character '" + (char) startChar + "': expecting start of identifier", token);
     }
 
@@ -498,6 +539,7 @@ public class Tokeniser {
     for (; i < remaining && (isDigits ? isDigit(charAt(i), 10) : isIdentifierPart(charAt(i))); i++) {
       digitCount += isDigit(charAt(i), 10) ? 1 : 0;
     }
+    advance(i);
 
     if (startChar == '$' && i == 1) {
       return error("Unexpected character '$'", token);
@@ -510,8 +552,10 @@ public class Tokeniser {
                           startChar == '_' && i == 1 ? UNDERSCORE
                                                      : IDENTIFIER;
 
-    advance(i);
+    String identifier = source.substring(startOffset, offset);
+
     return token.setType(tokenType)
+                .setValue(identifier)
                 .setLength(i);
   }
 
@@ -666,14 +710,26 @@ public class Tokeniser {
   }
 
 
-  private void skipSpacesAndComments() {
+  /**
+   * Skip spaces and comments.
+   * @return null or ERROR token if error.
+   */
+  private Token skipSpacesAndComments() {
     if (inString) {
-      return;  // can't have comments in a string
+      return null;  // can't have comments in a string
     }
-    while (getSpaceOrComment() != null) {}
+    while (true) {
+      Token token = getSpaceOrComment();
+      if (token == null || token.is(ERROR)) {
+        return token;
+      }
+    }
   }
 
   private Token getSpaceOrComment() {
+    if (inString) {
+      return null;
+    }
     if (!available(1)) {
       return null;
     }
@@ -708,17 +764,19 @@ public class Tokeniser {
   }
 
   private Token error(String msg, Token token) {
-    if (tokeniseCommentsAndWhitespace) {
-      return token.setType(ERROR).setEnd(offset);
-    }
-    throw new CompileError(msg, token);
+    return token.setType(ERROR).setEnd(offset).setValue(msg);
+//    if (tokeniseCommentsAndWhitespace) {
+//      return token.setType(ERROR).setEnd(offset);
+//    }
+//    throw new TokeniserError(msg, token.setType(ERROR).setEnd(offset));
   }
 
   private Token eofError(String msg, Token token) {
-    if (tokeniseCommentsAndWhitespace) {
-      return token.setType(ERROR).setEnd(offset);
-    }
-    throw new EOFError(msg, token);
+    return token.setType(ERROR).setEnd(offset).setValue(msg);
+//    if (tokeniseCommentsAndWhitespace) {
+//      return token.setType(ERROR).setEnd(offset);
+//    }
+//    throw new EOFError(msg, token.setType(ERROR).setEnd(offset));
   }
 
   private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
@@ -776,6 +834,9 @@ public class Tokeniser {
             if (nextChar == '{' || isIdentifierStart(nextChar) || Character.isDigit(nextChar)) {
               finished = true;
               continue;
+            }
+            else if (endChar != '/') {
+              return error("Unexpected " + (nextChar == -1 ? "end of file" : "character '" + (char)nextChar + "'") + " after '$' in expression string", createToken());
             }
           }
         }

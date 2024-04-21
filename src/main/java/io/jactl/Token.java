@@ -40,6 +40,9 @@ import static io.jactl.TokenType.*;
  */
 
 public class Token extends Location {
+
+  public Object     wrapper;      // Used by Intellij plugin
+
   private Token     next;         // Next token in the stream of tokens
   private TokenType type;         // Token type
   private int       length;       // Length of token
@@ -174,6 +177,10 @@ public class Token extends Location {
     return getType().isBooleanOperator();
   }
 
+  public void setOffset(int offset) {
+    this.offset = offset;
+  }
+
   /**
    * Set length of token
    * @param length  the length
@@ -253,9 +260,19 @@ public class Token extends Location {
 
   @Override
   public String toString() {
+    String tokenValue = getValue().toString();
+    if (tokenValue.length() == 1) {
+      switch (tokenValue.charAt(0)) {
+        case '\n': tokenValue = "\\n"; break;
+        case '\r': tokenValue = "\\r"; break;
+        case '\t': tokenValue = "\\t"; break;
+        case '\f': tokenValue = "\\f"; break;
+        case '\b': tokenValue = "\\b"; break;
+      }
+    }
     return "Token{" +
            "type='" + type +
-           "', value='" + getValue() + '\'' +
+           "', value='" + tokenValue + '\'' +
            '}';
   }
 

@@ -42,7 +42,7 @@ import java.util.Map;
  * Expr.type starts off as null but once the Resolver has resolved types and variables it will have an actual
  * type that the DelegatingJactlType will start delegating to.</p>
  */
-public class JactlType {
+public class JactlType extends JactlUserDataHolder {
 
   public enum TypeEnum {
     BOOLEAN,

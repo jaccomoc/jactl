@@ -40,13 +40,13 @@ import static io.jactl.TokenType.UNDERSCORE;
 /**
  * Expr classes for our AST.
  */
-public abstract class Expr {
+public abstract class Expr extends JactlUserDataHolder {
 
   public abstract <T> T accept(Visitor<T> visitor);
 
 
   public Token      location;
-  public JactlType type;
+  public JactlType  type;
   public boolean    isResolved = false;
 
   public boolean    isConst = false;   // Whether expression consists only of constants
@@ -342,7 +342,8 @@ public abstract class Expr {
     public Expr.VarDecl       varDecl;               // for variable references
     public boolean            couldBeFunctionCall = false;
     public boolean            firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
-    public FunctionDescriptor getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
+    public FunctionDescriptor  getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
+    public JactlUserDataHolder getDeclaration()    { return varDecl; }
     public Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
@@ -581,6 +582,7 @@ public abstract class Expr {
     public Token        startToken;
     public Expr.FunDecl funDecl;
     public boolean      noParamsDefined;
+    public boolean      closureIsBlock;  // True if closure turned out to just be a code block
     public Closure(Token startToken, Expr.FunDecl funDecl, boolean noParamsDefined) {
       this.startToken = startToken;
       this.funDecl = funDecl;

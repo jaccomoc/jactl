@@ -213,35 +213,37 @@ public class SwitchResolver {
     resolver.resolve(expr.typeExpr);
     resolver.resolve(expr.args);
     ClassDescriptor                   descriptor      = expr.typeExpr.patternType().getClassDescriptor();
-    List<Map.Entry<String,JactlType>> constructorArgs = descriptor.getAllMandatoryFields().entrySet().stream().collect(Collectors.toList());
-    // Transform unnamed args into named args
-    if (expr.args instanceof Expr.ListLiteral) {
-      Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.location);
-      mapLiteral.literalKeyMap = new HashMap<>();
-      List<Expr> exprs = ((Expr.ListLiteral) expr.args).exprs;
-      if (exprs.size() != constructorArgs.size()) {
-        resolver.error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.location);
-      }
-      for (int i = 0; i < exprs.size(); i++) {
-        Expr arg = exprs.get(i);
-        Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
-        if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
-          resolver.error("Argument value of type " + arg.type + " incompatible with type " + constructorParam.getValue() + " of field " + constructorParam.getKey(), arg.location);
+    if (descriptor != null) {
+      List<Map.Entry<String, JactlType>> constructorArgs = new ArrayList<>(descriptor.getAllMandatoryFields().entrySet());
+      // Transform unnamed args into named args
+      if (expr.args instanceof Expr.ListLiteral) {
+        Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.location);
+        mapLiteral.literalKeyMap = new HashMap<>();
+        List<Expr> exprs = ((Expr.ListLiteral) expr.args).exprs;
+        if (exprs.size() != constructorArgs.size()) {
+          resolver.error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.location);
         }
-        mapLiteral.literalKeyMap.put(constructorParam.getKey(), arg);
-        Expr.Literal fieldName = new Expr.Literal(arg.location.newIdent(constructorParam.getKey()));
-        resolver.resolve(fieldName);
-        mapLiteral.entries.add(Pair.create(fieldName, arg));
+        for (int i = 0; i < exprs.size(); i++) {
+          Expr                         arg              = exprs.get(i);
+          Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
+          if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
+            resolver.error("Argument value of type " + arg.type + " incompatible with type " + constructorParam.getValue() + " of field " + constructorParam.getKey(), arg.location);
+          }
+          mapLiteral.literalKeyMap.put(constructorParam.getKey(), arg);
+          Expr.Literal fieldName = new Expr.Literal(arg.location.newIdent(constructorParam.getKey()));
+          resolver.resolve(fieldName);
+          mapLiteral.entries.add(Pair.create(fieldName, arg));
+        }
+        expr.args = mapLiteral;
       }
-      expr.args = mapLiteral;
-    }
-    else {
-      // Validate that the fields listed actually exist
-      ((Expr.MapLiteral)expr.args).entries.stream()
-                                          .map(pair -> pair.first)
-                                          .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
-                                          .findFirst()
-                                          .ifPresent(field -> resolver.error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
+      else {
+        // Validate that the fields listed actually exist
+        ((Expr.MapLiteral) expr.args).entries.stream()
+                                             .map(pair -> pair.first)
+                                             .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
+                                             .findFirst()
+                                             .ifPresent(field -> resolver.error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
+      }
     }
     return expr.type = expr.typeExpr.patternType();
   }

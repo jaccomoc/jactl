@@ -291,7 +291,7 @@ public class BaseTest {
     }
 
     String         className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
-    Parser         parser    = new Parser(new Tokeniser(source), jactlContext, packageName);
+    Parser         parser    = new Parser(new Tokeniser(source, true), jactlContext, packageName);
     Stmt.ClassDecl code      = isScript ? parser.parseScript(className) : parser.parseClass();
     ExprDecorator decorator = !useAsyncDecorator ? new ExprDecorator(Function.identity())
                                                  : new ExprDecorator(

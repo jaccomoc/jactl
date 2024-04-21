@@ -48,7 +48,7 @@ public class CompileError extends JactlError {
     if (this.errors != null) {
       StringBuilder sb = new StringBuilder();
       sb.append(String.format("%d error%s found:\n", errors.size(), errors.size() > 1 ? "s" : ""));
-      errors.forEach(e -> sb.append(e.getMessage()).append('\n'));
+      errors.forEach(e -> { sb.append(e.getMessage()).append('\n'); /*e.printStackTrace();*/ });
       return sb.toString();
     }
     else {

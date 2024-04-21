@@ -103,7 +103,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private final JactlContext             jactlContext;
   private final Map<String,Object>       globals;
   private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
-  private final Map<String,Expr.VarDecl> builtinFunctions = new HashMap<>();
 
   private String packageName = null;
   private String scriptName  = null;  // If this is a script
@@ -116,7 +115,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private int lastLineNumber = -1;
   private boolean isScript = false;
 
+  private List<CompileError> errors = new ArrayList<>();
+
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
+
+  private static JactlType TYPE_FOR_BAD_REF = ANY;
 
   /**
    * Resolve variables, references, etc
@@ -126,36 +129,50 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    */
   public Resolver(JactlContext jactlContext, Map<String, Object> globals, Token location) {
     this.jactlContext = jactlContext;
-    this.globals        = globals == null ? Utils.mapOf() : globals;
+    this.globals      = globals == null ? Utils.mapOf() : globals;
     this.globals.keySet().forEach(name -> {
       if (!jactlContext.globalVars.containsKey(name)) {
         Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
         if (varDecl.type.is(INSTANCE)) {
           ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
           if (classDescriptor == null) {
-            throw new CompileError("Unknown class " + varDecl.type.getInternalName() + " for global var " + name, location);
+            error("Unknown class " + varDecl.type.getInternalName() + " for global var " + name, location);
           }
           varDecl.type.setClassDescriptor(classDescriptor);
         }
         jactlContext.globalVars.put(name, varDecl);
       }
     });
-    // Build map of built-in functions, making them look like internal functions for consistency
-    BuiltinFunctions.getBuiltinFunctions().forEach(f -> builtinFunctions.put(f.name, funcDescriptorToVarDecl(f)));
   }
 
   public void resolveClass(Stmt.ClassDecl classDecl) {
+    resolveClass(classDecl, true);
+  }
+
+  public List<CompileError> resolveClass(Stmt.ClassDecl classDecl, boolean throwError) {
     this.packageName = classDecl.packageName;
     classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
     prepareClass(classDecl);
     resolve(classDecl);
+    if (errors.size() > 0 && throwError) {
+      throw new CompileError(errors);
+    }
+    return errors;
   }
 
   public void resolveScript(Stmt.ClassDecl classDecl) {
+    resolveScript(classDecl, true);
+  }
+
+  public List<CompileError> resolveScript(Stmt.ClassDecl classDecl, boolean throwError) {
     isScript = true;
     this.scriptName  = classDecl.name.getStringValue();
-    resolveClass(classDecl);
+    resolveClass(classDecl, false);
+    if (errors.size() > 0 && throwError) {
+      throw new CompileError(errors);
+    }
+    return errors;
   }
 
   //////////////////////////////////////////////
@@ -221,10 +238,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (localClasses.put(classDescriptor.getNamePath(), classDescriptor) != null) {
       error("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
     }
-
-    // Do same for our inner classes where we now become the outerclass
-    classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
-    classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
+    else {
+      // Do same for our inner classes where we now become the outerclass
+      classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
+      classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
+    }
   }
 
   private void prepareClass(Stmt.ClassDecl classDecl) {
@@ -239,10 +257,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       resolve(baseClass);
       if (baseClass.getClassDescriptor() == classDescriptor) {
         if (previousBaseClass == null) {
-          throw new CompileError("Class cannot extend itself", classDecl.baseClassToken);
+          error("Class cannot extend itself", classDecl.baseClassToken);
         }
-        throw new CompileError("Class " + classDecl.name.getStringValue() + " extends another class " +
-                               "that has current class as a base class (" + previousBaseClass + ")", classDecl.baseClassToken);
+        else {
+          error("Class " + classDecl.name.getStringValue() + " extends another class " +
+                "that has current class as a base class (" + previousBaseClass + ")", classDecl.baseClassToken);
+        }
+        // We have recursive based classes so reset base class so we can perform additional processing before returning error
+        classDescriptor.resetBaseClas();
+        classDecl.baseClass = null;
+        break;
       }
       previousBaseClass = baseClass.getClassDescriptor().getNamePath();
     }
@@ -398,13 +422,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (funDecl.parameters.size() != baseMethod.paramCount) {
       error("Overriding method has different number of parameters than base method", funDecl.nameToken);
     }
-    for (int i = 0; i < baseMethod.paramCount; i++) {
+    int minParamCount = Math.min(funDecl.parameters.size(), baseMethod.paramCount);
+    for (int i = 0; i < minParamCount; i++) {
       if (!funDecl.functionDescriptor.paramTypes.get(i).equals(baseMethod.paramTypes.get(i))) {
         error("Overriding method has different parameter type to base method for parameter '" +
                                funDecl.functionDescriptor.paramNames.get(i) + "'", funDecl.parameters.get(i).location);
       }
     }
-    for (int i = 0; i < funDecl.parameters.size(); i++) {
+    for (int i = 0; i < minParamCount; i++) {
       if (!funDecl.functionDescriptor.paramNames.get(i).equals(baseMethod.paramNames.get(i))) {
         error("Overriding method has different parameter name to base method parameter '" +
                                baseMethod.paramNames.get(i) + "'", funDecl.parameters.get(i).location);
@@ -447,7 +472,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         Expr.VarDecl varDecl;
         if (funcDesc != null) {
-          varDecl = funcDescriptorToVarDecl(funcDesc, field.location);
+          varDecl = Utils.funcDescriptorToVarDecl(funcDesc, field.location);
           varDecl.constValue = varDecl.funDecl.wrapper.functionDescriptor;
         }
         else {
@@ -604,7 +629,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitExprList(Expr.ExprList expr) {
     error("Expression lists not supported", expr.location);
-    return null;
+    return expr.type = TYPE_FOR_BAD_REF;
   }
 
   @Override public JactlType visitRegexMatch(Expr.RegexMatch expr) {
@@ -640,11 +665,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     boolean globalMatch = !expr.isSubstitute && expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
     if (globalMatch) {
       if (!isWhileCondition) {
-        throw new CompileError("Cannot use '" + Utils.REGEX_GLOBAL + "' modifier outside of condition for while/for loop",
+        error("Cannot use '" + Utils.REGEX_GLOBAL + "' modifier outside of condition for while/for loop",
                                expr.pattern.location);
       }
-      if (findWhileLoop(expr.pattern.location, null).globalRegexMatches++ > 0) {
-        throw new CompileError("Regex match with global modifier can only occur once within while/for condition", expr.pattern.location);
+      else if (findWhileLoop(expr.pattern.location, null).globalRegexMatches++ > 0) {
+        error("Regex match with global modifier can only occur once within while/for condition", expr.pattern.location);
       }
     }
 
@@ -752,11 +777,22 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Non-numeric operand for " + expr.originalOperator.getChars(), expr.operator);
     }
 
-    expr.type = JactlType.result(expr.left.type, expr.operator, expr.right.type);
+    expr.type = resultType(expr.left.type, expr.operator, expr.right.type);
     if (expr.isConst) {
       return evaluateConstExpr(expr);
     }
     return expr.type;
+  }
+
+  private JactlType resultType(JactlType leftType, Token operator, JactlType rightType) {
+    JactlType type = TYPE_FOR_BAD_REF;
+    try {
+      type = JactlType.result(leftType, operator, rightType);
+    }
+    catch (CompileError e) {
+      error(e);
+    }
+    return type;
   }
 
   private Pair<JactlType,Boolean> getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
@@ -778,6 +814,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         else {
           if (parent.type.is(INSTANCE, CLASS, ARRAY)) {
             error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
+            return Pair.create(TYPE_FOR_BAD_REF, false);
           }
         }
       }
@@ -785,12 +822,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (fieldName == null) {
         if (parent.isSuper()) {
           error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
+          return Pair.create(TYPE_FOR_BAD_REF, false);
         }
         type = ANY;   // Can't determine type at compile time; wait for runtime
       }
       else {
         if (parent.isSuper() && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
           error("Field access for 'super' cannot be performed via '" + accessOperator.getChars() + "]'", accessOperator);
+          return Pair.create(TYPE_FOR_BAD_REF, false);
         }
 
         if (parent.type.is(INSTANCE, CLASS)) {
@@ -816,6 +855,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               // If we only want fields but have found a method then throw error
               if (fieldsOnly) {
                 error("Found method where field expected", field.location);
+                return Pair.create(TYPE_FOR_BAD_REF, false);
               }
               if (parent.type.is(CLASS) && !descriptor.isStatic) {
                 error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
@@ -832,6 +872,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
           if (type == null) {
             error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
+            return Pair.create(TYPE_FOR_BAD_REF, false);
           }
         }
         else {
@@ -848,6 +889,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
           else {
             error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
+            return Pair.create(TYPE_FOR_BAD_REF, false);
           }
         }
       }
@@ -871,7 +913,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (!expr.third.type.isCastableTo(expr.second.type)) {
       error("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
     }
-    return expr.type = JactlType.result(expr.second.type, expr.operator1, expr.third.type);
+    return expr.type = resultType(expr.second.type, expr.operator1, expr.third.type);
   }
 
   @Override public JactlType visitPrefixUnary(Expr.PrefixUnary expr) {
@@ -948,13 +990,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (value.length() != 1) {
           error((value.isEmpty() ? "Empty String" : "String with multiple chars") + " cannot be cast to int", expr.location);
         }
-        expr.isConst = true;
-        int charVal = value.charAt(0);
-        if (expr.type.is(INT)) {
-          expr.constValue = charVal;
-        }
         else {
-          expr.constValue = (byte) charVal;
+          expr.isConst = true;
+          int charVal = value.charAt(0);
+          if (expr.type.is(INT)) {
+            expr.constValue = charVal;
+          }
+          else {
+            expr.constValue = (byte) charVal;
+          }
         }
       }
       return expr.type;
@@ -1361,7 +1405,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (parent.type.is(LIST,ARRAY) && !field.type.is(ANY) && !field.type.isNumeric()) {
-      throw new CompileError("Non-numeric value for index for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
+      error("Non-numeric value for index for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
     }
 
     // Map, List, or we don't know...
@@ -1482,6 +1526,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // Could be a field that has a MethodHandle in it
       if (expr.parent.type.is(INSTANCE)) {
         ClassDescriptor classDescriptor = expr.parent.type.getClassDescriptor();
+        if (classDescriptor == null) {
+          // There has been an earlier error that prevented us creating a class descriptor
+          return expr.type = ANY;
+        }
         JactlType       fieldType       = classDescriptor.getField(expr.methodName);
         if (fieldType == null || !fieldType.is(FUNCTION,ANY)) {
           error("No such method/field '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
@@ -1648,7 +1696,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitClassPath(Expr.ClassPath expr) {
     ClassDescriptor descriptor = lookupClass(Utils.listOf(expr));
-    expr.type = JactlType.createClass(descriptor);
+    expr.type = descriptor == null ? TYPE_FOR_BAD_REF : JactlType.createClass(descriptor);
     return expr.type;
   }
 
@@ -1742,7 +1790,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (length < 0) {
           error("String repeat count must be >= 0", expr.right.location);
         }
-        expr.constValue = Utils.repeat(lhs, (int)length);
+        else {
+          expr.constValue = Utils.repeat(lhs, (int) length);
+        }
       }
       return expr.type;
     }
@@ -1772,15 +1822,20 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         expr.constValue = expr.operator.is(TRIPLE_EQUAL) == leftValue.equals(rightValue);
       }
       else {
-        expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
-                                                 RuntimeUtils.getOperatorType(expr.operator.getType()),
-                                                 expr.operator.getSource(), expr.operator.getOffset());
+        try {
+          expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
+                                                   RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                                   expr.operator.getSource(), expr.operator.getOffset());
+        }
+        catch (RuntimeError e) {
+          error(e);
+        }
       }
       return expr.type = BOOLEAN;
     }
 
-    if (leftValue == null)  { error("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); }
-    if (rightValue == null) { error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); }
+    if (leftValue == null)  { error("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); return expr.type = TYPE_FOR_BAD_REF; }
+    if (rightValue == null) { error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); return expr.type = TYPE_FOR_BAD_REF; }
 
     switch (expr.type.getType()) {
       case BYTE: case INT: {
@@ -1789,7 +1844,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_LESS_THAN)) {
           right = right & 0x07;
         }
-        throwIf(expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0, "Divide by zero error", expr.right.location);
+        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
+          error("Divide by zero error", expr.right.location);
+          return expr.type = TYPE_FOR_BAD_REF;
+        }
         switch (expr.operator.getType()) {
           case PLUS:                expr.constValue = left + right;   break;
           case MINUS:               expr.constValue = left - right;   break;
@@ -1813,7 +1871,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       case LONG: {
         long left  = Utils.toLong(leftValue);
         long right = Utils.toLong(rightValue);
-        throwIf(expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0, "Divide by zero error", expr.right.location);
+        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
+          error("Divide by zero error", expr.right.location);
+          return expr.type = TYPE_FOR_BAD_REF;
+        }
         switch (expr.operator.getType()) {
           case PLUS:                expr.constValue = left + right;        break;
           case MINUS:               expr.constValue = left - right;        break;
@@ -1848,7 +1909,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       case DECIMAL: {
         BigDecimal left  = Utils.toDecimal(leftValue);
         BigDecimal right = Utils.toDecimal(rightValue);
-        throwIf(expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO, "Divide by zero error", expr.right.location);
+        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO) {
+          error("Divide by zero error", expr.right.location);
+          return expr.type = TYPE_FOR_BAD_REF;
+        }
         expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jactlContext.minScale,
                                                               expr.operator.getSource(), expr.operator.getOffset());
         break;
@@ -1922,11 +1986,20 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  static void error(String msg, SourceLocation location) {
+  void error(String msg, SourceLocation location) {
     if (!(location instanceof Location)) {
       throw new IllegalStateException("Internal error: Expected location of type Location but got " + location.getClass().getName());
     }
-    throw new CompileError(msg, (Location)location);
+    error(new CompileError(msg, (Location) location));
+  }
+
+  private void error(RuntimeError error) {
+    error(error.getErrorMessage(), error.getLocation());
+  }
+
+  private void error(CompileError error) {
+    errors.add(error);
+    // throw error;
   }
 
   private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null, null);
@@ -2167,6 +2240,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return lookup(name, null, false, true) != null;
   }
 
+  public static Expr.VarDecl ERROR_VARDECL = new Expr.VarDecl(null, null, null);
+  static { ERROR_VARDECL.type = TYPE_FOR_BAD_REF; }
+
   // We look up variables in our local scope and parent scopes within the same function.
   // If we still can't find the variable we search in parent functions to see if the
   // variable exists there (at which point we close over it and it becomes a heap variable
@@ -2196,14 +2272,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (inStaticContext() && (name.equals(Utils.THIS_VAR) || name.equals(Utils.SUPER_VAR))) {
       error("Reference to '" + name + "' in static function", location);
+      return ERROR_VARDECL;
     }
 
     // We haven't found symbol yet so check super classes, class names, constants (from import static),
     // and built-in functions
-    if (varDecl == null) { varDecl = lookupClassMember(name);       }
-    if (varDecl == null) { varDecl = lookupClass(name, location);   }
-    if (varDecl == null) { varDecl = constants.get(name);           }
-    if (varDecl == null) { varDecl = builtinFunctions.get(name);    }
+    if (varDecl == null) { varDecl = lookupClassMember(name);                  }
+    if (varDecl == null) { varDecl = lookupClass(name, location);              }
+    if (varDecl == null) { varDecl = constants.get(name);                      }
+    if (varDecl == null) { varDecl = Functions.getGlobalFunDecl(name); }
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
     // if value does not already exist.
@@ -2222,6 +2299,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (varDecl == UNDEFINED) {
       error("Variable initialisation cannot refer to itself", location);
+      return ERROR_VARDECL;
     }
 
     if (varDecl != null) {
@@ -2231,9 +2309,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (varDecl.isField && inStaticContext()) {
         if (varDecl.funDecl == null && !varDecl.isConstVar) {
           error("Reference to non-static field in static function", location);
+          return ERROR_VARDECL;
         }
         if (varDecl.funDecl != null && !varDecl.funDecl.isStatic()) {
           error("Reference to non-static method in static function", location);
+          return ERROR_VARDECL;
         }
       }
 
@@ -2310,16 +2390,20 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (name.equals(Utils.CAPTURE_VAR)) {
       error("Reference to regex capture variable " + location.getStringValue() + " in scope where no regex match has occurred", location);
+      return ERROR_VARDECL;
     }
     else {
       if (!functionLookup) {
         if (classStack.peek().fieldVars.containsKey(name)) {
           error("Forward reference to field '" + name + "'", location);
         }
-        if (name.equals(Utils.SUPER_VAR)) {
+        else if (name.equals(Utils.SUPER_VAR)) {
           error("Reference to 'super' in class that does not extend any base class", location);
         }
-        error("Reference to unknown variable '" + name + "'", location);
+        else {
+          error("Reference to unknown variable '" + name + "'", location);
+        }
+        return ERROR_VARDECL;
       }
     }
     return null;
@@ -2356,12 +2440,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private boolean inStaticContext() {
     return getFunctions().stream().anyMatch(func -> func.isStatic());
-  }
-
-  private void throwIf(boolean condition, String msg, Token location) {
-    if (condition) {
-      error(msg, location);
-    }
   }
 
   /////////////////////////////////////////////////
@@ -2520,7 +2598,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Expr.Identifier offsetIdent = ident.apply(Utils.OFFSET_VAR_NAME);
     Expr.Identifier argsIdent   = ident.apply(Utils.ARGS_VAR_NAME);
 
-    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(startToken, funDecl.functionDescriptor.implementingMethod, funDecl.isStatic());
+    Expr.FunDecl wrapperFunDecl = Utils.createWrapperFunDecl(startToken, funDecl.functionDescriptor.implementingMethod, funDecl.isStatic());
     Stmt.Stmts stmts = new Stmt.Stmts(startToken);
     List<Stmt> stmtList = stmts.stmts;
     stmtList.addAll(wrapperFunDecl.parameters);
@@ -2959,46 +3037,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return new Stmt.Return(token, new Expr.Return(token, expr, type));
   }
 
-  private Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func) {
-    return funcDescriptorToVarDecl(func, new Token(null,0));
-  }
-
-  private Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func, Token tok) {
-    Function<TokenType,Token> token = t -> tok.setType(t);
-    List<Stmt.VarDecl> params = new ArrayList<>();
-    for (int i = 0; i < func.paramTypes.size(); i++) {
-      final Expr.VarDecl p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null, null);
-      p.type = func.paramTypes.get(i);
-      params.add(new Stmt.VarDecl(token.apply(p.type.tokenType()), p));
-    }
-    Expr.FunDecl funDecl = new Expr.FunDecl(null, null, func.returnType, params);
-    funDecl.functionDescriptor = func;
-    funDecl.wrapper = createWrapperFunDecl(tok, func);
-    Expr.VarDecl varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), token.apply(EQUAL), funDecl);
-    varDecl.funDecl = funDecl;
-    varDecl.type = FUNCTION;
-    return varDecl;
-  }
-
-  private Expr.FunDecl createWrapperFunDecl(Token token, FunctionDescriptor func) {
-    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(token, func.implementingMethod, func.isStatic);
-    FunctionDescriptor wrapper = wrapperFunDecl.functionDescriptor;
-    wrapper.implementingClassName = func.implementingClassName;
-    wrapper.implementingMethod    = Utils.wrapperName(func.implementingMethod);
-    return wrapperFunDecl;
-  }
-
-  private Expr.FunDecl createWrapperFunDecl(Token token, String name, boolean isStatic) {
-    List<Stmt.VarDecl> wrapperParams = new ArrayList<>();
-    wrapperParams.add(Utils.createParam(token.newIdent(Utils.SOURCE_VAR_NAME), STRING));
-    wrapperParams.add(Utils.createParam(token.newIdent(Utils.OFFSET_VAR_NAME), INT));
-    wrapperParams.add(Utils.createParam(token.newIdent(Utils.ARGS_VAR_NAME),   OBJECT_ARR));
-    Expr.FunDecl wrapperFunDecl = Utils.createFunDecl(token, token.newIdent(Utils.wrapperName(name)), ANY, wrapperParams, isStatic, false, false);
-    wrapperFunDecl.functionDescriptor.isWrapper = true;
-    wrapperFunDecl.isWrapper = true;
-    return wrapperFunDecl;
-  }
-
   static Expr literalDefaultValue(Token location, JactlType type) {
     Expr expr = _literalDefaultValue(location, type);
     expr.type = type;
@@ -3144,7 +3182,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void classNameValidation(Expr expr) {
-    if (expr == null || expr instanceof Expr.Noop) {
+    if (expr == null || expr.type == null || expr instanceof Expr.Noop) {
       return;
     }
     if (!(expr instanceof Expr.TypeExpr) && !(expr instanceof Expr.InvokeInit) && expr.type.is(CLASS)) {

@@ -38,6 +38,11 @@ class CompilerTest extends BaseTest {
     test("[1,2,3].map{\n // Strip '#' comments\nit}", Utils.listOf(1,2,3));
   }
 
+  @Test public void badChar() {
+    testError("@ = 2", "unexpected character '@'");
+    testError("$ = 2", "unexpected character '$'");
+  }
+
   @Test public void literals() {
     test("42", 42);
     test("0", 0);
@@ -460,12 +465,14 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void simpleVariableArithmetic() {
+    test("int sum = 1; sum + 2", 3);
     testError("int _ = 1", "expecting identifier");
     testError("int $a = 1", "expecting identifier");
     testError("int a = 1; $a", "unexpected token '$'");
     testError("int a = 1; $_", "unexpected token '$'");
     testError("int : = 1", "expected start of expression");
     test("int a = 1", 1);
+    test("def \u0100 = 2; \u0100", 2);
     test("int _1 = 1", 1);
     test("List x = [[1,2],[3,4]]; def h = x[1][0]\nh", 3);
     test("def x = [[1,2],[3,4]]; def h = x[1][0]\nh", 3);
@@ -1443,6 +1450,10 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void variableAssignments() {
+    testError(" = 1", "unexpected token '='");
+    testError("def x = 1 = 1", "invalid left-hand side for '='");
+    testError("def x = 1\n = 1", "invalid left-hand side for '='");
+    testError("def x = a\n = 1", "unknown variable");
     test("int v = 1; v = 2; v", 2);
     test("int v = 1; v = 2", 2);
     test("int v = 1; v = v + 1", 2);
@@ -3299,6 +3310,10 @@ class CompilerTest extends BaseTest {
     test("\"\"\"x${1 + 2}y\n${3.0*3}\"\"\"", "x3y\n9.0");
     test("def x = 3; \"x=$x=${\"\"\"${1+2}\"\"\"}\"", "x=3=3");
 
+    testError("def x = 3; \"\"\"$\"\"\" + 'abc'", "unexpected character '\"'");
+    testError("def x = 3; \"$\" + 'abc'", "unexpected character '\"'");
+    testError("def x = 3; \"$", "unexpected end of file");
+    testError("def x = 3; \"\"\"$", "unexpected end of file");
     testError("def x = 3; \"\"\"${1+2}$\"\"\" + 'abc'", "unexpected character '\"'");
     testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
     testError("def x = 3; \"\"\"${1+2}${\"\"\" + 'abc'", "unexpected end of file");
@@ -6010,7 +6025,6 @@ class CompilerTest extends BaseTest {
 
     comparisonTests.accept("4*2", "-3*-7");
   }
-
 
   @Test public void expressionComparisons() {
     //String init = "byte b2 = 2; int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
