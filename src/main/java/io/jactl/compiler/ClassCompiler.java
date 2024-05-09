@@ -35,6 +35,7 @@ import java.util.stream.Stream;
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.LONG;
+import static io.jactl.Utils.JACTL_PREFIX;
 import static java.util.stream.Collectors.groupingBy;
 import static org.objectweb.asm.ClassWriter.*;
 import static org.objectweb.asm.Opcodes.*;
@@ -158,7 +159,7 @@ public class ClassCompiler {
     // Create class static fields for all list/map constants
     classDecl.classConstants.forEach(c -> {
       assert c instanceof List || c instanceof Map;
-      String       fieldName  = Utils.JACTL_PREFIX + "constant_" + classConstantCnt++;
+      String       fieldName  = JACTL_PREFIX + "constant_" + classConstantCnt++;
       String       descriptor = c instanceof List ? LIST.descriptor() : MAP.descriptor();
       FieldVisitor fv         = cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, fieldName, descriptor, null, null);
       fv.visitEnd();
@@ -479,7 +480,7 @@ public class ClassCompiler {
     fieldVisitor.visitEnd();
 
     // If not an internal field
-    if (!name.startsWith(Utils.JACTL_PREFIX)) {
+    if (!name.startsWith(JACTL_PREFIX)) {
       // Initialise static fields
       if (varDecl.isConstVar) {
         // Store the field value (since it is a constant) in the static map of field/methods
@@ -1239,7 +1240,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     if (internalBaseName != null) {
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
-      mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, "_$j$checkpoint", "(Lio/jactl/runtime/Checkpointer;)V", false);
+      mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, JACTL_PREFIX + "checkpoint", "(Lio/jactl/runtime/Checkpointer;)V", false);
     }
 
     classDecl.fields.stream().filter(f -> !f.declExpr.isConstVar).forEach(f -> {
@@ -1298,7 +1299,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     if (internalBaseName != null) {
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitVarInsn(ALOAD, RESTORER_SLOT);
-      mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, "_$j$restore", "(Lio/jactl/runtime/Restorer;)V", false);
+      mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, JACTL_PREFIX + "restore", "(Lio/jactl/runtime/Restorer;)V", false);
     }
 
     classDecl.fields.stream().filter(f -> !f.declExpr.isConstVar).forEach(f -> {

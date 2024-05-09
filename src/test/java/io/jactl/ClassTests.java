@@ -19,11 +19,6 @@ package io.jactl;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.fail;
-
 public class ClassTests extends BaseTest {
 
   @Test public void nameScoping() {
@@ -1422,8 +1417,8 @@ public class ClassTests extends BaseTest {
     test("class Y extends X { def f(){2} }; class X { def f(){1} }; class Z extends Y { def f(){3} }; def g(X x){x.f()}; g(new Z())", 3);
     testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z = new Y()", "cannot convert");
     testError("class X { def f(){1} }; class Y extends X { def f(){2} }; class Z extends Y { def f(){3} }; Z z; z = new Y()", "cannot convert");
-    testError("class X extends Y{}; class Y extends X{}; new X()", "current class as a base class");
-    testError("class X extends Y{}; class Y extends Z{}; class Z extends X{}; new X()", "current class as a base class");
+    testError("class X extends Y{}; class Y extends X{}; new X()", "cyclic inheritance");
+    testError("class X extends Y{}; class Y extends Z{}; class Z extends X{}; new X()", "cyclic inheritance");
     testError("class X extends X{}; new X()", "class cannot extend itself");
   }
 
@@ -1623,6 +1618,10 @@ public class ClassTests extends BaseTest {
     replTest(2, "class X{ class Y{int i = 1} }", "class X{ class Y{int i = 2} }", "x = new X.Y()", "x.i");
   }
 
+  @Test public void testStuff() {
+    test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y.Z as A; new A().f()", 3);
+  }
+
   @Test public void importStatements() {
     useAsyncDecorator = false;
     packageName = null;
@@ -1641,6 +1640,9 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X; X.f()", 3);
     test(Utils.listOf("package a.b.c; class X{static def f(){3}}"), "package x.y.z; import a.b.c.X as Y; Y.f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y.Z; new Z().f()", 3);
+    testError(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.YYY.Z; new Z().f()", "unknown class a.b.c.X.YYY");
+    test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y.Z as A; new A().f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y as C; new C().f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{static def f(){3}} }"), "package x.y.z; import a.b.c.X; X.Y.f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X; new X.Y().f()", 3);
@@ -1783,9 +1785,8 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void mapField() {
-    debugLevel = 1;
-    //test("class X { Map m = [a:1]; def f() { m.map{ it[0] }[0] } }; new X().f()", "a");
-    doTest("class File {\n" +
+    test("class X { Map m = [a:1]; def f() { m.map{ it[0] }[0] } }; new X().f()", "a");
+    test("class File {\n" +
          "  String name\n" +
          "  int    size\n" +
          "  def totalSize()   { size }\n" +

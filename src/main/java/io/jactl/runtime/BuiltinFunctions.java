@@ -543,6 +543,10 @@ public class BuiltinFunctions {
     return globalFunDecls.get(name);
   }
 
+  static Set<String> getGlobalFunctionNames() {
+    return globalFunctions.keySet();
+  }
+
   ///////////////////////////////////////////////////
 
   public static void registerFunction(JactlFunction function) {

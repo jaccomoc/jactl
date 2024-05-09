@@ -54,26 +54,26 @@ public class Utils {
   public static final String JACTL_INIT_NOASYNC  = JACTL_PREFIX + "initNoAsync";
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
 
-  public static final String JACTL_FIELDS_METHODS_MAP           = "_$j$FieldsAndMethods";
-  public static final String JACTL_FIELDS_METHODS_GETTER        = "_$j$getFieldsAndMethods";
-  public static final String JACTL_STATIC_FIELDS_METHODS_MAP    = "_$j$StaticFieldsAndMethods";
-  public static final String JACTL_STATIC_FIELDS_METHODS_GETTER = "_$j$getStaticFieldsAndMethods";
-  public static final String JACTL_STATIC_FIELDS_METHODS_STATIC_GETTER = "_$j$StaticGetStaticFieldsAndMethods";
-  public static final String JACTL_PRETTY_NAME_FIELD            = "_$j$PackagedName";
-  public static final String JACTL_WRITE_JSON                   = "_$j$writeJson";
+  public static final String JACTL_FIELDS_METHODS_MAP           = JACTL_PREFIX + "FieldsAndMethods";
+  public static final String JACTL_FIELDS_METHODS_GETTER        = JACTL_PREFIX + "getFieldsAndMethods";
+  public static final String JACTL_STATIC_FIELDS_METHODS_MAP    = JACTL_PREFIX + "StaticFieldsAndMethods";
+  public static final String JACTL_STATIC_FIELDS_METHODS_GETTER = JACTL_PREFIX + "getStaticFieldsAndMethods";
+  public static final String JACTL_STATIC_FIELDS_METHODS_STATIC_GETTER = JACTL_PREFIX + "StaticGetStaticFieldsAndMethods";
+  public static final String JACTL_PRETTY_NAME_FIELD            = JACTL_PREFIX + "PackagedName";
+  public static final String JACTL_WRITE_JSON                   = JACTL_PREFIX + "writeJson";
   public static final String JACTL_FROM_JSON                    = "fromJson";
-  public static final String JACTL_READ_JSON                    = "_$j$readJson";
-  public static final String JACTL_INIT_MISSING                 = "_$j$initMissingFields";
-  public static final String JACTL_CHECKPOINT_FN                = "_$j$checkpoint";
-  public static final String JACTL_RESTORE_FN                   = "_$j$restore";
+  public static final String JACTL_READ_JSON                    = JACTL_PREFIX + "readJson";
+  public static final String JACTL_INIT_MISSING                 = JACTL_PREFIX + "initMissingFields";
+  public static final String JACTL_CHECKPOINT_FN                = JACTL_PREFIX + "checkpoint";
+  public static final String JACTL_RESTORE_FN                   = JACTL_PREFIX + "restore";
 
   public static final Class JACTL_MAP_TYPE  = LinkedHashMap.class;
   public static final Class JACTL_LIST_TYPE = ArrayList.class;
 
-  public static final String JACTL_GLOBALS_NAME   = JACTL_PREFIX + "globals";
-  public static final String SOURCE_VAR_NAME   = "_$source";
-  public static final String OFFSET_VAR_NAME   = "_$offset";
-  public static final String ARGS_VAR_NAME     = "_$args";
+  public static final String JACTL_GLOBALS_NAME = JACTL_PREFIX + "globals";
+  public static final String SOURCE_VAR_NAME    = JACTL_PREFIX + "source";
+  public static final String OFFSET_VAR_NAME    = JACTL_PREFIX + "offset";
+  public static final String ARGS_VAR_NAME      = JACTL_PREFIX + "args";
 
   public static final String EVAL_ERROR        = "$error";   // Name of output variable containing error (if any) for eval()
 
@@ -550,7 +550,7 @@ public class Utils {
   public static Expr createNewInstance(Token newToken, JactlType className, Token leftParen, List<Expr> args) {
     // We create the instance and then invoke _$j$init on it
     Expr.InvokeNew  invokeNew  = new Expr.InvokeNew(newToken, className);
-    Expr.MethodCall invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, args);
+    Expr.MethodCall invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, null, args);
     invokeInit.couldBeNull = false;
     return invokeInit;
   }
@@ -858,17 +858,17 @@ public class Utils {
   }
 
   public static Expr.VarDecl funcDescriptorToVarDecl(FunctionDescriptor func, Token tok) {
-    Function<TokenType,Token> token = t -> tok.setType(t);
+    Function<TokenType,Token> token = t -> new Token(t, tok);
     List<Stmt.VarDecl> params = new ArrayList<>();
     for (int i = 0; i < func.paramTypes.size(); i++) {
-      final Expr.VarDecl p = new Expr.VarDecl(token.apply(IDENTIFIER).setValue("p" + i), null, null);
+      final Expr.VarDecl p = new Expr.VarDecl(tok.newIdent(func.paramNames.get(i)), null, null);
       p.type = func.paramTypes.get(i);
       params.add(new Stmt.VarDecl(token.apply(p.type.tokenType()), p));
     }
     Expr.FunDecl funDecl = new Expr.FunDecl(null, null, func.returnType, params);
     funDecl.functionDescriptor = func;
     funDecl.wrapper = createWrapperFunDecl(tok, func);
-    Expr.VarDecl varDecl = new Expr.VarDecl(token.apply(IDENTIFIER).setValue(func.name), token.apply(EQUAL), funDecl);
+    Expr.VarDecl varDecl = new Expr.VarDecl(tok.newIdent(func.name), token.apply(EQUAL), funDecl);
     varDecl.funDecl = funDecl;
     varDecl.type = FUNCTION;
     return varDecl;

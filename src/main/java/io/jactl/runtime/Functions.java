@@ -75,6 +75,10 @@ public class Functions {
     return BuiltinFunctions.getGlobalFunDecl(name);
   }
 
+  public static Set<String> getGlobalFunctionNames() {
+    return BuiltinFunctions.getGlobalFunctionNames();
+  }
+
   /**
    * Lookup method at compile time and return FunctionDescriptor if method exists
    * @param type        the type that owns the method

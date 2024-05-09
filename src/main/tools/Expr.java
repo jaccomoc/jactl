@@ -30,6 +30,8 @@ package io.jactl;
 
 import java.util.*;
 
+import io.jactl.JactlType;
+import io.jactl.Stmt;
 import io.jactl.Utils;
 import io.jactl.runtime.ClassDescriptor;
 import io.jactl.runtime.SourceLocation;
@@ -49,6 +51,7 @@ class Expr extends JactlUserDataHolder {
 
   Token      location;
   JactlType  type;
+  JactlType  parentType = null;   // For use by Intellij plugin when needing to locate field within parent type
   boolean    isResolved = false;
 
   boolean    isConst = false;   // Whether expression consists only of constants
@@ -134,7 +137,6 @@ class Expr extends JactlUserDataHolder {
            this.type;
   }
 
-
   class Binary extends Expr {
     Expr  left;
     Token operator;
@@ -209,6 +211,7 @@ class Expr extends JactlUserDataHolder {
     Token          accessOperator; // Either '.' or '?.'
     String         methodName;     // Either the method name or field name that holds a MethodHandle
     SourceLocation methodNameLocation;
+    Expr           methodNameExpr;  // Needed for Intellij plugin so we can attach parentType to it for "goto definition"
     List<Expr> args;
 
     FunctionDescriptor @methodDescriptor;
@@ -230,7 +233,8 @@ class Expr extends JactlUserDataHolder {
   }
 
   class Literal extends Expr {
-    Token value;
+    Token   value;
+    boolean @isField = false;   // True if literal uses as field name
   }
 
   class ListLiteral extends Expr {
@@ -251,12 +255,13 @@ class Expr extends JactlUserDataHolder {
     boolean            @couldBeFunctionCall = false;
     boolean            @firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
     public FunctionDescriptor  getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
-    public JactlUserDataHolder getDeclaration()    { return varDecl; }
+    public JactlUserDataHolder getDeclaration()    { return varDecl == null ? null : varDecl.originalVarDecl == null ? varDecl : varDecl.originalVarDecl; }
   }
 
   class ClassPath extends Expr {
     Token pkg;
     Token className;
+    public String fullClassName() { return pkg.getStringValue() + "." + className.getStringValue(); }
   }
 
   class ExprString extends Expr {
@@ -403,6 +408,7 @@ class Expr extends JactlUserDataHolder {
    */
   class Noop extends Expr {
     Token operator;
+    Expr  @originalExpr;      // When Noop used to replace initialiser for parameters this points to original initialiser (used in Intellij plugin)
   }
 
   /**

@@ -71,9 +71,10 @@ public abstract class Stmt extends JactlUserDataHolder {
   public static class Block extends Stmt {
     public Token                    openBrace;
     public Stmts                    stmts;
-    public List<Stmt.FunDecl>       functions    = new ArrayList<>();
-
+    public List<Stmt.FunDecl>       functions  = new ArrayList<>();
     public Map<String,Expr.VarDecl> variables  = new LinkedHashMap<>();
+    public Block                    enclosingBlock;
+    public Stmt.ClassDecl           owningClass;
 
     public boolean isBeginBlock;
     public boolean isEndBlock;

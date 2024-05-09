@@ -56,10 +56,14 @@ public class JactlContext {
   public String javaPackage = Utils.JACTL_PKG;   // The Java package under which compiled classes will be generated
   public String internalJavaPackage;
 
-  Set<String>                  packages    = new HashSet<>();
-  Map<String, ClassDescriptor> classLookup = new HashMap<>();  // Keyed on internal name
+  Set<String>                  packages         = new HashSet<>();
+  Map<String, ClassDescriptor> classDescriptors = new HashMap<>();  // Keyed on internal name
 
-  DynamicClassLoader          classLoader = new DynamicClassLoader();
+  private PackageChecker       packageChecker = name -> packages.contains(name);
+  private ClassLookup          classLookup    = name -> classDescriptors.get(name);
+  private boolean              isIdePlugin    = false;
+
+  DynamicClassLoader           classLoader = new DynamicClassLoader();
 
   ///////////////////////////////
 
@@ -112,6 +116,9 @@ public class JactlContext {
     return clss;
   }
 
+  public interface PackageChecker { boolean exists(String name); }
+  public interface ClassLookup    { ClassDescriptor lookup(String name); }
+
   public class JactlContextBuilder {
     private JactlContextBuilder() {}
 
@@ -119,17 +126,21 @@ public class JactlContext {
     public JactlContextBuilder minScale(int scale)               { minScale           = scale;   return this; }
     public JactlContextBuilder javaPackage(String pkg)           { javaPackage        = pkg;     return this; }
     public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
+    public JactlContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
+
+    public JactlContextBuilder packageChecker(PackageChecker pc) { packageChecker     = pc;      return this; }
+    public JactlContextBuilder classLookup(ClassLookup lookup)   { classLookup        = lookup;  return this; }
+    public JactlContextBuilder idePlugin(boolean value)          { isIdePlugin = value;   return this; }
 
     // Testing only
     public JactlContextBuilder checkpoint(boolean value)         { checkpoint             = value;   return this; }
     public JactlContextBuilder restore(boolean value)            { restore                = value;   return this; }
 
     // The following are for internal use
-    JactlContextBuilder replMode(boolean mode)                { replMode               = mode;    return this; }
-    JactlContextBuilder evaluateConstExprs(boolean value)     { evaluateConstExprs     = value;   return this; }
-    JactlContextBuilder printLoop(boolean value)              { printLoop              = value;   return this; }
-    JactlContextBuilder nonPrintLoop(boolean value)           { nonPrintLoop           = value;   return this; }
-    JactlContextBuilder printSize(boolean value)              { printSize              = value;   return this; }
+    JactlContextBuilder replMode(boolean mode)      { replMode               = mode;    return this; }
+    JactlContextBuilder printLoop(boolean value)    { printLoop              = value;   return this; }
+    JactlContextBuilder nonPrintLoop(boolean value) { nonPrintLoop           = value;   return this; }
+    JactlContextBuilder printSize(boolean value)    { printSize              = value;   return this; }
 
     public JactlContext build() {
       if (executionEnv == null) {
@@ -144,6 +155,9 @@ public class JactlContext {
 
   public boolean printLoop()    { return printLoop; }
   public boolean nonPrintLoop() { return nonPrintLoop; }
+
+  // Whether running in an interactive IDE editor
+  public boolean isIdePlugin()  { return isIdePlugin; }
 
   // Testing
   public boolean testCheckpointing() { return checkpoint; }
@@ -161,18 +175,18 @@ public class JactlContext {
   }
 
   public boolean packageExists(String name) {
-    return packages.contains(name);
+    return packageChecker.exists(name);
   }
 
   public ClassDescriptor getClassDescriptor(String packageName, String className) {
     String pname = packageName == null || packageName.equals("") ? "" : packageName + '.';
     String name  = internalJavaPackage + '.' + pname + className.replaceAll("\\.", "$");
     name = name.replaceAll("\\.", "/");
-    return classLookup.get(name);
+    return getClassDescriptor(name);
   }
 
   public ClassDescriptor getClassDescriptor(String internalName) {
-    return classLookup.get(internalName);
+    return classLookup.lookup(internalName);
   }
 
   public Object getThreadContext() { return executionEnv.getThreadContext(); }
@@ -290,7 +304,7 @@ public class JactlContext {
   private void addClass(ClassDescriptor descriptor) {
     String packageName = descriptor.getPackageName();
     packages.add(packageName);
-    classLookup.put(descriptor.getInternalName(), descriptor);
+    classDescriptors.put(descriptor.getInternalName(), descriptor);
   }
 
   public class DynamicClassLoader extends ClassLoader {

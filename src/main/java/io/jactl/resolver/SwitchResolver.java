@@ -292,7 +292,7 @@ public class SwitchResolver {
     if (className.size() == 1 && className.get(0) instanceof Expr.Identifier) {
       // Check for a constant
       Expr.Identifier identifier = (Expr.Identifier)className.get(0);
-      Expr.VarDecl    constant   = resolver.constants.get(identifier.identifier.getStringValue());
+      Expr.VarDecl    constant   = resolver.getStaticImports().get(identifier.identifier.getStringValue());
       if (constant != null) {
         Expr.Literal literal = (Expr.Literal)resolver.literalDefaultValue(pattern.location, constant.type);
         literal.value.setValue(constant.constValue);

@@ -25,6 +25,8 @@ package io.jactl;
 
 import java.util.*;
 
+import io.jactl.JactlType;
+import io.jactl.Stmt;
 import io.jactl.Utils;
 import io.jactl.runtime.ClassDescriptor;
 import io.jactl.runtime.SourceLocation;
@@ -47,6 +49,7 @@ public abstract class Expr extends JactlUserDataHolder {
 
   public Token      location;
   public JactlType  type;
+  public JactlType  parentType = null;   // For use by Intellij plugin when needing to locate field within parent type
   public boolean    isResolved = false;
 
   public boolean    isConst = false;   // Whether expression consists only of constants
@@ -131,7 +134,6 @@ public abstract class Expr extends JactlUserDataHolder {
            this instanceof Expr.ConstructorPattern ? ((Expr.ConstructorPattern)this).typeExpr.typeVal :
            this.type;
   }
-
 
   public static class Binary extends Expr {
     public Expr  left;
@@ -272,6 +274,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public Token          accessOperator; // Either '.' or '?.'
     public String         methodName;     // Either the method name or field name that holds a MethodHandle
     public SourceLocation methodNameLocation;
+    public Expr           methodNameExpr;  // Needed for Intellij plugin so we can attach parentType to it for "goto definition"
     public List<Expr> args;
 
     public FunctionDescriptor methodDescriptor;
@@ -290,21 +293,23 @@ public abstract class Expr extends JactlUserDataHolder {
     // a side effect will still run and cause the side effects to happen even though the end result
     // is not actually used.
     public boolean isMethodCallTarget = false;
-    public MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, SourceLocation methodNameLocation, List<Expr> args) {
+    public MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, SourceLocation methodNameLocation, Expr methodNameExpr, List<Expr> args) {
       this.leftParen = leftParen;
       this.parent = parent;
       this.accessOperator = accessOperator;
       this.methodName = methodName;
       this.methodNameLocation = methodNameLocation;
+      this.methodNameExpr = methodNameExpr;
       this.args = args;
       this.location = leftParen;
     }
     @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitMethodCall(this); }
-    @Override public String toString() { return "MethodCall[" + "leftParen=" + leftParen + ", " + "parent=" + parent + ", " + "accessOperator=" + accessOperator + ", " + "methodName=" + methodName + ", " + "methodNameLocation=" + methodNameLocation + ", " + "args=" + args + "]"; }
+    @Override public String toString() { return "MethodCall[" + "leftParen=" + leftParen + ", " + "parent=" + parent + ", " + "accessOperator=" + accessOperator + ", " + "methodName=" + methodName + ", " + "methodNameLocation=" + methodNameLocation + ", " + "methodNameExpr=" + methodNameExpr + ", " + "args=" + args + "]"; }
   }
 
   public static class Literal extends Expr {
-    public Token value;
+    public Token   value;
+    public boolean isField = false;   // True if literal uses as field name
     public Literal(Token value) {
       this.value = value;
       this.location = value;
@@ -343,7 +348,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public boolean            couldBeFunctionCall = false;
     public boolean            firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
     public FunctionDescriptor  getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
-    public JactlUserDataHolder getDeclaration()    { return varDecl; }
+    public JactlUserDataHolder getDeclaration()    { return varDecl == null ? null : varDecl.originalVarDecl == null ? varDecl : varDecl.originalVarDecl; }
     public Identifier(Token identifier) {
       this.identifier = identifier;
       this.location = identifier;
@@ -355,6 +360,7 @@ public abstract class Expr extends JactlUserDataHolder {
   public static class ClassPath extends Expr {
     public Token pkg;
     public Token className;
+    public String fullClassName() { return pkg.getStringValue() + "." + className.getStringValue(); }
     public ClassPath(Token pkg, Token className) {
       this.pkg = pkg;
       this.className = className;
@@ -567,6 +573,7 @@ public abstract class Expr extends JactlUserDataHolder {
    */
   public static class Noop extends Expr {
     public Token operator;
+    public Expr  originalExpr;      // When Noop used to replace initialiser for parameters this points to original initialiser (used in Intellij plugin)
     public Noop(Token operator) {
       this.operator = operator;
       this.location = operator;

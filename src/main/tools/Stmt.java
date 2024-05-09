@@ -67,9 +67,10 @@ class Stmt extends JactlUserDataHolder {
   class Block extends Stmt {
     Token                    openBrace;
     Stmts                    stmts;
-    List<Stmt.FunDecl>       @functions    = new ArrayList<>();
-
+    List<Stmt.FunDecl>       @functions  = new ArrayList<>();
     Map<String,Expr.VarDecl> @variables  = new LinkedHashMap<>();
+    Block                    @enclosingBlock;
+    Stmt.ClassDecl           @owningClass;
 
     boolean @isBeginBlock;
     boolean @isEndBlock;

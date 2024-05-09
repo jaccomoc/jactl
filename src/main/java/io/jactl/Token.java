@@ -237,7 +237,7 @@ public class Token extends Location {
    * @return the actual characters parsed for the token
    */
   public String getChars() {
-    return source.substring(getOffset(), getOffset() + length);
+    return source == null ? "null" : source.substring(getOffset(), getOffset() + length);
   }
 
   public Token newIdent(String name) {

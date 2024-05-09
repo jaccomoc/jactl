@@ -18,17 +18,28 @@
 package io.jactl;
 
 /**
- * Used to capture the name of a function, variable declaration, or class.
+ * Used to capture the name of a function, variable declaration, class, or package.
  * Only exists so that we can distinguish types of IDENTIFIER tokens in Intellij plugin.
  * Class is not otherwise used in Jactl compiler.
  */
 public class JactlName extends JactlUserDataHolder {
   private Token name;
+  private boolean isPackageName;
+
   public JactlName(Token name) {
+    this(name, false);
+  }
+
+  public JactlName(Token name, boolean isPackageName) {
     this.name = name;
+    this.isPackageName = isPackageName;
   }
 
   public Token getName() {
     return name;
+  }
+
+  public boolean isPackageName() {
+    return isPackageName;
   }
 }

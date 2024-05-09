@@ -19,6 +19,7 @@ package io.jactl;
 
 public class JactlUserDataHolder {
   Object userData;
+  Stmt.Block block;
 
   public Object getUserData() {
     return userData;
@@ -37,6 +38,9 @@ public class JactlUserDataHolder {
    * @return the VarDecl corresponding to the identifier
    */
   public JactlUserDataHolder getDeclaration() {
-    return null;
+    return this;
   }
+
+  public Stmt.Block getBlock()           { return block; }
+  public void setBlock(Stmt.Block block) { this.block = block; }
 }

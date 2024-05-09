@@ -44,6 +44,7 @@ import static io.jactl.JactlType.MAP;
 import static io.jactl.JactlType.OBJECT_ARR;
 import static io.jactl.JactlType.STRING;
 import static io.jactl.TokenType.*;
+import static io.jactl.Utils.JACTL_PREFIX;
 
 /**
  * The Resolver visits all statements and all expressions and performs the following:
@@ -107,9 +108,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private String packageName = null;
   private String scriptName  = null;  // If this is a script
 
-  private final Map<String, ClassDescriptor> imports      = new HashMap<>();
-          final Map<String, Expr.VarDecl>    constants    = new HashMap<>();
-  private final Map<String,ClassDescriptor>  localClasses = new HashMap<>();
+  private final Map<String, ClassDescriptor> imports           = new HashMap<>();
+  private final Map<String, Expr.VarDecl>    importedConstants = new HashMap<>();
+  private final Map<String, Expr.VarDecl>    importedConstantsRenamed = new HashMap<>();
+  private final Map<String,ClassDescriptor>  localClasses      = new HashMap<>();
+  private final Map<String,Stmt.ClassDecl>   localClassDecls   = new HashMap<>();
 
   private boolean isWhileCondition = false;        // true while resolving while condition
   private int lastLineNumber = -1;
@@ -145,34 +148,51 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     });
   }
 
-  public void resolveClass(Stmt.ClassDecl classDecl) {
+  public synchronized void resolveClass(Stmt.ClassDecl classDecl) {
     resolveClass(classDecl, true);
   }
 
-  public List<CompileError> resolveClass(Stmt.ClassDecl classDecl, boolean throwError) {
+  public synchronized List<CompileError> resolveClass(Stmt.ClassDecl classDecl, boolean throwError) {
     this.packageName = classDecl.packageName;
     classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
     prepareClass(classDecl);
     resolve(classDecl);
     if (errors.size() > 0 && throwError) {
+      if (errors.size() == 1) {
+        throw errors.get(0);
+      }
       throw new CompileError(errors);
     }
     return errors;
   }
 
-  public void resolveScript(Stmt.ClassDecl classDecl) {
-    resolveScript(classDecl, true);
+  public synchronized void resolveScript(Stmt.ClassDecl classDecl) {
+    resolveScriptOrClass(classDecl, true);
   }
 
-  public List<CompileError> resolveScript(Stmt.ClassDecl classDecl, boolean throwError) {
-    isScript = true;
-    this.scriptName  = classDecl.name.getStringValue();
-    resolveClass(classDecl, false);
+  public synchronized List<CompileError> resolveScriptOrClass(Stmt.ClassDecl classDecl, boolean throwError) {
+    if (classDecl.scriptMain != null) {
+      isScript = true;
+      this.scriptName = classDecl.name.getStringValue();
+    }
+    resolveClass(classDecl, throwError);
     if (errors.size() > 0 && throwError) {
       throw new CompileError(errors);
     }
     return errors;
+  }
+
+  public Map<String,ClassDescriptor> getImports() {
+    return imports;
+  }
+
+  public Map<String,Expr.VarDecl> getStaticImports() {
+    return importedConstants;
+  }
+
+  public Stmt.ClassDecl getClassDecl(String name) {
+    return localClassDecls.get(name);
   }
 
   //////////////////////////////////////////////
@@ -180,6 +200,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   Void resolve(Stmt stmt) {
     if (stmt != null) {
       if (!stmt.isResolved) {
+        stmt.setBlock(getBlock());
         stmt.accept(this);
         stmt.isResolved = true;
       }
@@ -207,6 +228,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   JactlType doResolve(Expr expr) {
     if (expr != null) {
       if (!expr.isResolved) {
+        expr.setBlock(getBlock());
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
         if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
@@ -222,6 +244,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private void resolve(JactlType type) {
+    if (type == null)                      { return; }
+    type.setBlock(getBlock());
+    if (type.is(ARRAY)) {
+      resolve(type.getArrayElemType());
+      return;
+    }
+    if (type.is(INSTANCE, CLASS) && type.getClassDescriptor() == null) {
+      type.setClassDescriptor(lookupClass(type.getClassName()));
+    }
+  }
+
   //////////////////////////////////////////////////////////
 
   private void createClassDescriptors(Stmt.ClassDecl classDecl, Stmt.ClassDecl outerClassDecl) {
@@ -234,11 +268,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     ClassDescriptor classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, classDecl.baseClass, interfaces, allFieldsAreDefaults)
                                                          : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, classDecl.baseClass, interfaces, allFieldsAreDefaults);
     classDecl.classDescriptor = classDescriptor;
+    classDescriptor.setIsScriptClass(classDecl.isScriptClass());
+    classDescriptor.setUserData(classDecl);
 
     if (localClasses.put(classDescriptor.getNamePath(), classDescriptor) != null) {
       error("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
     }
     else {
+      localClassDecls.put(classDescriptor.getNamePath(), classDecl);
+
       // Do same for our inner classes where we now become the outerclass
       classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
       classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
@@ -255,16 +293,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     String previousBaseClass = null;
     for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType()) {
       resolve(baseClass);
+      if (baseClass.getClassDescriptor() == null) {
+        // We have some type of error which we have signalled already so no need to error again
+        break;
+      }
       if (baseClass.getClassDescriptor() == classDescriptor) {
         if (previousBaseClass == null) {
           error("Class cannot extend itself", classDecl.baseClassToken);
         }
         else {
-          error("Class " + classDecl.name.getStringValue() + " extends another class " +
-                "that has current class as a base class (" + previousBaseClass + ")", classDecl.baseClassToken);
+          error("Cyclic inheritance", classDecl.baseClassToken);
         }
         // We have recursive based classes so reset base class so we can perform additional processing before returning error
-        classDescriptor.resetBaseClas();
+        classDescriptor.resetBaseClass();
         classDecl.baseClass = null;
         break;
       }
@@ -443,6 +484,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
+    resolve(stmt.baseClass);
     stmt.nestedFunctions = new ArrayDeque<>();
     // Create a dummy function to hold class block
     Expr.FunDecl dummy = new Expr.FunDecl(stmt.name, stmt.name, createClass(stmt.classDescriptor), Utils.listOf());
@@ -462,17 +504,34 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public Void visitImport(Stmt.Import stmt) {
     if (stmt.staticImport) {
       Expr.Identifier field     = (Expr.Identifier)stmt.className.get(stmt.className.size() - 1);
-      ClassDescriptor classDesc = lookupClass(stmt.className.subList(0, stmt.className.size() - 1));
+      JactlType       type      = resolveClassPath(stmt.className.subList(0, stmt.className.size() - 1));
+      if (type == null) {
+        return null;
+      }
+      field.parentType = type;
+      ClassDescriptor classDesc = type.getClassDescriptor();
       String fieldName = field.identifier.getStringValue();
       Consumer<String> defineConst = name -> {
         Token              constName = field.location.newIdent(name);
-        FunctionDescriptor funcDesc   = classDesc.getMethod(name);
+        FunctionDescriptor funcDesc  = classDesc.getMethod(name);
         if (funcDesc != null && !funcDesc.isStatic) {
           error("Cannot use import static for non-static method", field.location);
         }
-        Expr.VarDecl varDecl;
+        Expr.VarDecl varDecl = null;
+        Stmt.ClassDecl classDecl = classDesc.getUserData(Stmt.ClassDecl.class);
         if (funcDesc != null) {
-          varDecl = Utils.funcDescriptorToVarDecl(funcDesc, field.location);
+          // If in Intellij plugin we will have a Stmt.ClassDecl we can use to get real FunDecl
+          if (classDecl != null) {
+            varDecl = classDecl.methods.stream()
+                                       .filter(m -> m.declExpr.nameToken.getStringValue().equals(fieldName))
+                                       .map(m -> m.declExpr.varDecl)
+                                       .findFirst()
+                                       .orElse(null);
+          }
+          if (varDecl == null) {
+            // Otherwise create a dummy one
+            varDecl = Utils.funcDescriptorToVarDecl(funcDesc, field.location);
+          }
           varDecl.constValue = varDecl.funDecl.wrapper.functionDescriptor;
         }
         else {
@@ -480,16 +539,31 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (fieldType == null) {
             error("No class static field/method called '" + name + "' in class " + classDesc.getClassName(), field.location);
           }
-          varDecl            = new Expr.VarDecl(constName, null, null);
+          if (classDecl != null) {
+            varDecl = classDecl.fieldVars.get(fieldName);
+          }
+          if (varDecl == null) {
+            varDecl = new Expr.VarDecl(constName, null, null);
+          }
           varDecl.type       = fieldType;
-          varDecl.constValue = classDesc.getStaticFieldValue(name);
+          if (fieldType != null) {
+            varDecl.constValue = classDesc.getStaticFieldValue(name);
+          }
         }
         varDecl.isConstVar = true;
         varDecl.isConst        = true;
         name = stmt.as == null ? name : stmt.as.getStringValue();
-        if (constants.put(name, varDecl) != null) {
+        if (importedConstants.put(name, varDecl) != null) {
           error("Duplicate constant name '" + name + "'", stmt.location);
         }
+        // Create a renamed VarDecl so Intellij plugin can have one with the aliased name
+        if (stmt.as != null) {
+          Expr.VarDecl newDecl = new Expr.VarDecl(varDecl.name.newIdent(name), varDecl.equals, varDecl.initialiser);
+          newDecl.type = varDecl.type;
+          newDecl.funDecl = varDecl.funDecl;
+          varDecl = newDecl;
+        }
+        importedConstantsRenamed.put(name, varDecl);
       };
       if (fieldName.equals(STAR.asString)) {
         // Import all static fields and methods
@@ -503,13 +577,59 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     }
     else {
-      ClassDescriptor classDesc = lookupClass(stmt.className);
-      String          name      = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
-      if (imports.put(name, classDesc) != null) {
-        error("Class of name '" + name + "' already imported", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+      JactlType type = resolveClassPath(stmt.className);
+      if (type != null && type.getClassDescriptor() != null) {
+        ClassDescriptor classDesc = type.getClassDescriptor();
+        String name = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
+        if (imports.put(name, classDesc) != null) {
+          error("Class of name '" + name + "' already imported", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+        }
       }
     }
     return null;
+  }
+
+  private JactlType resolveClassPath(List<Expr> classPath) {
+    Consumer<Integer> createError = i -> error("Unknown class " + classPath.subList(0,i+1)
+                                                                           .stream()
+                                                                           .map(expr -> expr instanceof Expr.ClassPath ? ((Expr.ClassPath) expr).fullClassName() : ((Expr.Identifier)expr).identifier.getStringValue())
+                                                                           .collect(Collectors.joining(".")), classPath.get(i).location);
+
+    JactlType classType = null;
+    Expr first = classPath.get(0);
+    if (first instanceof Expr.ClassPath) {
+      resolve(first);
+      if (first.type == null) {
+          return null;
+      }
+      classType = first.type;
+    }
+    else {
+      Expr.VarDecl varDecl = lookupClass(((Expr.Identifier) first).identifier.getStringValue(), first.location);
+      if (varDecl == null) {
+        createError.accept(0);
+        return null;
+      }
+      ClassDescriptor classDesc = varDecl.classDescriptor;
+      first.type = classType = (classDesc == null ? null : JactlType.createClass(classDesc));
+      if (classType == null) {
+        createError.accept(0);
+        return null;
+      }
+    }
+
+    for (int i = 1; i < classPath.size(); i++) {
+      Expr part = classPath.get(i);
+      part.parentType = classType;
+      Expr.Identifier identifier = (Expr.Identifier) part;
+      ClassDescriptor classDesc = classType.getClassDescriptor().getInnerClass(identifier.identifier.getStringValue());
+      identifier.type = classType = (classDesc == null ? null : JactlType.createClass(classDesc));
+      if (classType == null) {
+        createError.accept(i);
+        return null;
+      }
+    }
+    return classType;
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
@@ -531,6 +651,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitBlock(Stmt.Block stmt) {
+    Stmt.Block currentBlock      = getBlock();
+    if (currentBlock == null) {
+      // Create a block that holds the static imports (used by Intellij plugin)
+      currentBlock           = new Stmt.Block(stmt.location, new Stmt.Stmts(stmt.location));
+      currentBlock.variables = importedConstantsRenamed;
+    }
+    stmt.enclosingBlock          = currentBlock;
+    stmt.owningClass             = currentClass();
     Expr.FunDecl currentFunction = currentFunction();
     currentFunction.blocks.push(stmt);
     try {
@@ -547,6 +675,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     finally {
       currentFunction.blocks.pop();
     }
+  }
+
+  private Stmt.ClassDecl currentClass() {
+    return classStack.peek();
   }
 
   @Override public Void visitVarDecl(Stmt.VarDecl stmt) {
@@ -710,6 +842,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolve(expr.right);
 
+    if (expr.left == null || expr.right == null) {
+      return expr.type = ANY;
+    }
+
     expr.isConst = expr.left.isConst && expr.right.isConst && jactlContext.evaluateConstExprs;
 
     if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS, IN, BANG_IN)) {
@@ -833,6 +969,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
 
         if (parent.type.is(INSTANCE, CLASS)) {
+          // Store parent type so we can get easy access in Intellij plugin
+          field.parentType = parent.type;
+
           // Check for valid field/method name
           ClassDescriptor desc = parent.type.getClassDescriptor();
           type = fieldName != null ? desc.getField(fieldName) : null;
@@ -867,10 +1006,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               ClassDescriptor innerClass = parent.type.getClassDescriptor().getInnerClass(fieldName);
               if (innerClass != null) {
                 type = JactlType.createClass(innerClass);
+                field.type = type;
               }
             }
           }
           if (type == null) {
+            field.parentType = null;
             error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
             return Pair.create(TYPE_FOR_BAD_REF, false);
           }
@@ -1089,7 +1230,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         error("Constants must be initialised to simple constant values", expr.initialiser.location);
       }
       // If constant is a class field
-      Stmt.ClassDecl classDesc = classStack.peek();
+      Stmt.ClassDecl classDesc = currentClass();
       String         varName   = expr.name.getStringValue();
       expr.constValue = castToType(expr.initialiser.constValue, expr.type, expr.location);
       expr.isConst = true;
@@ -1103,10 +1244,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitFunDecl(Expr.FunDecl expr) {
-    ClassDescriptor classDescriptor   = classStack.peek().classDescriptor;
+    ClassDescriptor classDescriptor   = currentClass().classDescriptor;
     String          implementingClass = classDescriptor.getInternalName();
     expr.functionDescriptor.implementingClassName = implementingClass;
     String functionName = expr.nameToken == null ? null : expr.nameToken.getStringValue();
+
+    if (expr.varDecl != null) {
+      expr.varDecl.setBlock(getBlock());
+    }
 
     // Make sure that if overriding a base class method we have same signature (including param names)
     if (functionName != null && !expr.isStatic() && !expr.isInitMethod()) {
@@ -1285,6 +1430,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (from == null) {
       return;
     }
+    if (jactlContext.isIdePlugin() && from.type.is(INSTANCE) && to.is(INSTANCE) && (from.type.getClassDescriptor() == null || to.getClassDescriptor() == null)) {
+      // Allow unresolved class types during interactive editing in IDE
+      return;
+    }
     if (!from.type.isCastableTo(to) && !(toAndFrom && from.type.isAssignableFrom(to))) {
       error("Cannot convert from " + from.type + " to " + to, location);
     }
@@ -1323,7 +1472,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitNoop(Expr.Noop expr) {
     expr.isConst = false;
-    // Type will already have been set by parent (e.g. in visitVarOpAssign)
+    // Type will usually already have been set by parent (e.g. in visitVarOpAssign)
+    if (expr.type == null) {
+      expr.type = ANY;
+    }
     return expr.type;
   }
 
@@ -1478,8 +1630,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolve(expr.callee);
     expr.args.forEach(this::resolve);
+    if (expr.callee.type == null) {
+      error("Unknown function", expr.callee.location);
+      return expr.type = ANY;
+    }
+
     if (!expr.callee.type.is(FUNCTION,ANY)) {
-      error("Expression of type " + expr.callee.type + " cannot be called", expr.token);
+      error("Expression of type " + expr.callee.type + " cannot be called", expr.callee.location);
     }
     if (expr.callee.isConst && expr.callee.constValue == null) {
       error("Null value for Function", expr.token);
@@ -1514,6 +1671,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Then we need to have the exact number of arguments that match the expected parameter count.
     // If we have less args we will do runtime lookup of MethodHandle that gets to wrapper method.
     if (!expr.parent.type.is(ANY)) {
+      // For Intellij plugin to easily find class to which this method belongs
+      if (expr.methodNameExpr != null) {
+        expr.methodNameExpr.parentType = expr.parent.type;
+      }
+
       FunctionDescriptor descriptor = lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
         if (expr.parent.type.is(CLASS) && !descriptor.isStatic) {
@@ -1747,17 +1909,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       case Utils.OFFSET_VAR_NAME: return expr.type = INT;
     }
     throw new IllegalStateException("Internal error: unexpected special var name " + expr.name.getStringValue());
-  }
-
-  private void resolve(JactlType type) {
-    if (type == null)                      { return; }
-    if (type.is(ARRAY)) {
-      resolve(type.getArrayElemType());
-      return;
-    }
-    if (type.is(INSTANCE, CLASS) && type.getClassDescriptor() == null) {
-      type.setClassDescriptor(lookupClass(type.getClassName()));
-    }
   }
 
   ////////////////////////////////////////////
@@ -2016,8 +2167,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     }
 
+
     // If we have a field then get class block variables, otherwise get vars for current block
-    Map<String, Expr.VarDecl> vars = decl.isField ? classStack.peek().classBlock.variables : getVars(decl.isParam);
+    Map<String, Expr.VarDecl> vars = decl.isField ? currentClass().classBlock.variables : getVars(decl.isParam);
     if (!(jactlContext.replMode && isAtTopLevel())) {
       Expr.VarDecl existingDecl = vars.get(varName);
       // Allow fields to be shadowed by local variables
@@ -2031,17 +2183,24 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     vars.put(varName, UNDEFINED);
   }
 
+  private static String id(Object object) {
+    return "0x" + Long.toHexString(System.identityHashCode(object));
+  }
+
   private String currentFunctionName() {
     Expr.FunDecl currentFunction = currentFunction();
     if (currentFunction.nameToken == null) {
       return "closure<" + currentFunction.functionDescriptor.implementingMethod + ">";
+    }
+    if (currentFunction.isScriptMain) {
+      return "script";
     }
     return currentFunction.nameToken.getStringValue();
   }
 
   private void define(Token name, Expr.VarDecl decl) {
     // If we have a field then get class block variables, otherwise get vars for current block
-    Map<String, Expr.VarDecl> vars = decl.isField ? classStack.peek().classBlock.variables : getVars(decl.isParam);
+    Map<String, Expr.VarDecl> vars = decl.isField ? currentClass().classBlock.variables : getVars(decl.isParam);
 
     // In repl mode we don't have a top level block, and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
@@ -2068,8 +2227,21 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return getBlock().variables;
   }
 
+  /**
+   * Get current block within current function.
+   * If function has no blocks yet it means we want the enclosing block from
+   * the parent function in which current function has been declared.
+   * @return the current block
+   */
   private Stmt.Block getBlock() {
-    Stmt.Block block = currentFunction().blocks.peek();
+    Expr.FunDecl funDecl = currentFunction();
+    if (funDecl == null) {
+      return null;
+    }
+    if (funDecl.blocks.isEmpty()) {
+      funDecl = currentClass().nestedFunctions.stream().skip(1).findFirst().orElse(null);
+    }
+    Stmt.Block block = funDecl == null ? null : funDecl.blocks.peek();
     return block;
   }
 
@@ -2279,7 +2451,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // and built-in functions
     if (varDecl == null) { varDecl = lookupClassMember(name);                  }
     if (varDecl == null) { varDecl = lookupClass(name, location);              }
-    if (varDecl == null) { varDecl = constants.get(name);                      }
+    if (varDecl == null) { varDecl = importedConstants.get(name);                      }
     if (varDecl == null) { varDecl = Functions.getGlobalFunDecl(name); }
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
@@ -2394,7 +2566,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     else {
       if (!functionLookup) {
-        if (classStack.peek().fieldVars.containsKey(name)) {
+        if (currentClass().fieldVars.containsKey(name)) {
           error("Forward reference to field '" + name + "'", location);
         }
         else if (name.equals(Utils.SUPER_VAR)) {
@@ -2424,12 +2596,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private boolean isScriptScope() {
-    return classStack.size() == 1 && classStack.peek().scriptMain != null;
+    return classStack.size() == 1 && currentClass().scriptMain != null;
   }
 
   private Expr.VarDecl lookupClassMember(String name) {
     if (isScriptScope()) { return null; }
-    Stmt.ClassDecl classDecl = classStack.peek();
+    Stmt.ClassDecl classDecl = currentClass();
     // Note: we have already checked for any of our current fields since our class block is at the bottom of the
     // stack of blocks. We need to check for any fields from our base classes.
     ClassDescriptor baseClass = classDecl.classDescriptor.getBaseClass();
@@ -2612,17 +2784,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     //  : boolean _$isObjArr = true
-    String isObjArrName = "_$isObjArr";
+    String isObjArrName = JACTL_PREFIX + "isObjArr";
     stmtList.add(createVarDecl(startToken, wrapperFunDecl, isObjArrName, BOOLEAN, trueExpr));
     Expr.Identifier isObjArrIdent = ident.apply(isObjArrName);
 
     //  :   int _$argCount = _$args.length
-    String argCountName = "_$argCount";
+    String argCountName = JACTL_PREFIX + "argCount";
     stmtList.add(createVarDecl(startToken, wrapperFunDecl, argCountName, INT, new Expr.ArrayLength(startToken, argsIdent)));
     final Expr.Identifier argCountIdent = ident.apply(argCountName);
 
     //  :   Map _$mapCopy = null
-    String mapCopyName = "_$mapCopy";
+    String mapCopyName = JACTL_PREFIX + "mapCopy";
     stmtList.add(createVarDecl(startToken, wrapperFunDecl, mapCopyName, MAP, new Expr.Literal(token.apply(NULL))));
     Expr.Identifier mapCopyIdent = ident.apply(mapCopyName);
 
@@ -2811,7 +2983,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // parameter in this method and to field in wrapper method and during resolution one would overwrite the other.
     // Note that we do this after creating our FunDecl in order that the FunctionDescriptor for the init method
     // uses names that match the field names (for error reporting purposes).
-    Function<String,String> paramName = name -> "_$p" + name;
+    Function<String,String> paramName = name -> JACTL_PREFIX + "p" + name;
     mandatoryParams.forEach(p -> {
       String pname = paramName.apply(p.name.getStringValue());
       p.name = p.name.newIdent(pname);
@@ -2881,7 +3053,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     int    SOURCE_SLOT    = 2;
     String offsetName     = Utils.OFFSET_VAR_NAME;
     int    OFFSET_SLOT    = 3;
-    String objectArrName  = "_$objArr";             // Wrapper funcs always have Object[] parameter type.
+    String objectArrName  = JACTL_PREFIX + "objArr";             // Wrapper funcs always have Object[] parameter type.
     Token  classToken     = classDecl.name;
     Token  sourceToken    = classToken.newIdent(sourceName);
     Token  offsetToken    = classToken.newIdent(offsetName);
@@ -2921,7 +3093,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Expr.ArrayGet   arg0                = new Expr.ArrayGet(classToken, new Expr.Identifier(objectArrToken), zero);
     Expr.InstanceOf instanceOfNamedArgs = new Expr.InstanceOf(classToken, arg0, Type.getInternalName(NamedArgsMapCopy.class));
 
-    String          argMapName  = "_$argMap";
+    String          argMapName  = JACTL_PREFIX + "argMap";
     Expr.Identifier argMapIdent = new Expr.Identifier(classToken.newIdent(argMapName));
     Expr.Ternary initialiser           = new Expr.Ternary(instanceOfNamedArgs,
                                                           new Token(QUESTION, classToken),
@@ -2939,6 +3111,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                                    new Token(DOT, classToken),
                                                                    Utils.JACTL_INIT,
                                                                    new LocalLocation(SOURCE_SLOT, OFFSET_SLOT),
+                                                                   null,
                                                                    Utils.listOf(argMapIdent));
       invokeSuperInitWrapper.isResultUsed              = false;
       invokeSuperInitWrapper.validateArgsAtCompileTime = false;
@@ -3017,7 +3190,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Stmt.VarDecl paramVarDecl(Expr.FunDecl ownerFunDecl, Expr.VarDecl param, Expr init) {
     Stmt.VarDecl varDecl = Utils.createVarDecl(ownerFunDecl, param.name, param.type, init);
     varDecl.declExpr.paramVarDecl    = param;
-    param.initialiser                = new Expr.Noop(param.name);  // Use Noop rather than null so mandatory arg counting works
+    Expr.Noop noop = new Expr.Noop(param.name);
+    noop.originalExpr = param.initialiser;
+    param.initialiser                = noop;  // Use Noop rather than null so mandatory arg counting works
     param.initialiser.type           = param.type;
     varDecl.declExpr.isExplicitParam = true;
     varDecl.declExpr.type            = param.type;
@@ -3064,11 +3239,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private Deque<Expr.FunDecl> getFunctions() {
-    return classStack.peek().nestedFunctions;
+    Stmt.ClassDecl classDecl = currentClass();
+    if (classDecl == null) {
+      return null;
+    }
+    return classDecl.nestedFunctions;
   }
 
   private Expr.FunDecl currentFunction() {
-    return getFunctions().peek();
+    Deque<Expr.FunDecl> functions = getFunctions();
+    if (functions == null) {
+      return null;
+    }
+    return functions.peek();
   }
 
   private static Expr.VarDecl createGlobalVarDecl(String name, JactlType type) {
@@ -3111,6 +3294,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                                                          new Token(DOT, classToken),
                                                                                          Utils.JACTL_INIT_MISSING,
                                                                                          classToken,
+                                                                                         null,
                                                                                          Utils.listOf(new Expr.CheckCast(classToken, new Expr.Identifier(retValIdent), flagsType))),
                                                                      new Token(COLON, classToken),
                                                                      new Expr.Literal(new Token(NULL, classToken))),
@@ -3140,9 +3324,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // First invoke base class version of the method (if it exists)
     int baseFieldsCount = 0;
-    if (classDecl.baseClass != null) {
+    if (classDecl.baseClass != null && classDecl.baseClass.getClassDescriptor() != null) {
       Expr.MethodCall superMethodCall = new Expr.MethodCall(classToken, new Expr.Identifier(classToken.newIdent(Utils.SUPER_VAR)),
-                                                            new Token(DOT, classToken), Utils.JACTL_INIT_MISSING, classToken, Utils.listOf(new Expr.Identifier(classToken.newIdent(FLAGS))));
+                                                            new Token(DOT, classToken), Utils.JACTL_INIT_MISSING, classToken,
+                                                            null, Utils.listOf(new Expr.Identifier(classToken.newIdent(FLAGS))));
       superMethodCall.isResultUsed = false;
       stmts.stmts.add(new Stmt.ExprStmt(classToken, superMethodCall));
       baseFieldsCount = classDecl.classDescriptor.getBaseClass().getFields().size();
@@ -3185,7 +3370,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr == null || expr.type == null || expr instanceof Expr.Noop) {
       return;
     }
-    if (!(expr instanceof Expr.TypeExpr) && !(expr instanceof Expr.InvokeInit) && expr.type.is(CLASS)) {
+    if (!(expr instanceof Expr.TypeExpr) && !(expr instanceof Expr.InvokeInit) && !(expr instanceof Expr.ClassPath) && expr.type.is(CLASS)) {
       error("Class name not allowed here", expr.location);
     }
   }

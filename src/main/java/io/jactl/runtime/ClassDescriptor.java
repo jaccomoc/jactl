@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import io.jactl.JactlUserDataHolder;
 import io.jactl.Pair;
 import io.jactl.Utils;
 
@@ -25,7 +26,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class ClassDescriptor {
+public class ClassDescriptor extends JactlUserDataHolder {
 
   String                          className;     // Declared name: class Z { }
   String                          namePath;      // Name including outerclasses: _$j$Script123$X$Y$Z
@@ -40,8 +41,10 @@ public class ClassDescriptor {
   Map<String, JactlType>          mandatoryFields = new LinkedHashMap<>();
   Map<String, FunctionDescriptor> methods         = new LinkedHashMap<>();
   Map<String, ClassDescriptor>    innerClasses    = new LinkedHashMap<>();
+  ClassDescriptor                 enclosingClass  = null;
   FunctionDescriptor              initMethod;
   boolean                         allFieldsAreDefaults;
+  boolean                         isScriptClass   = false;       // Whether class for a script
   Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();
 
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
@@ -104,6 +107,14 @@ public class ClassDescriptor {
     return func;
   }
 
+  public void setIsScriptClass(boolean isScriptClasss) {
+    this.isScriptClass = isScriptClasss;
+  }
+
+  public boolean isScriptClass() {
+    return isScriptClass;
+  }
+
   /**
    * Add method to this class descriptor. We allow methods to override methods of the same
    * name in a base class as long as the signatures are identical.
@@ -120,7 +131,7 @@ public class ClassDescriptor {
 
   public JactlType getField(String name) {
     JactlType type = fields.get(name);
-    if (type == null && baseClass != null) {
+    if (type == null && getBaseClass() != null) {
       type = getBaseClass().getField(name);
     }
     return type;
@@ -222,8 +233,8 @@ public class ClassDescriptor {
    */
   public Map<String,JactlType> getAllMandatoryFields() {
     LinkedHashMap<String,JactlType> allMandatoryFields = new LinkedHashMap<>();
-    if (baseClass != null) {
-      allMandatoryFields.putAll(baseClass.getClassDescriptor().getAllMandatoryFields());
+    if (getBaseClass() != null) {
+      allMandatoryFields.putAll(getBaseClass().getAllMandatoryFields());
     }
     allMandatoryFields.putAll(mandatoryFields);
     return allMandatoryFields;
@@ -236,10 +247,18 @@ public class ClassDescriptor {
 
   public void addInnerClasses(List<ClassDescriptor> classes) {
     innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.namePath, desc -> desc, (desc1,desc2) -> desc1)));
+    classes.forEach(c -> c.enclosingClass = this);
   }
 
   public ClassDescriptor getInnerClass(String className) {
     return innerClasses.get(namePath + '$' + className);
+  }
+  public Collection<ClassDescriptor> getInnerClasses() {
+    return innerClasses.values();
+  }
+
+  public ClassDescriptor getEnclosingClass() {
+    return enclosingClass;
   }
 
   public boolean isInterface() {
@@ -258,7 +277,7 @@ public class ClassDescriptor {
    * For error situations where we have recursive base class hierarchy allow resetting
    * of base class so that further error processing can occur.
    */
-  public void resetBaseClas() {
+  public void resetBaseClass() {
     baseClass = null;
   }
 
