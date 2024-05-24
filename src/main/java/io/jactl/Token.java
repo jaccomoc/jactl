@@ -169,6 +169,15 @@ public class Token extends Location {
     return true;
   }
 
+  public boolean isNot(List<TokenType> types) {
+    for (TokenType type: types) {
+      if (this.type == type) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   public boolean isNumericOperator() {
     return getType().isNumericOperator();
   }

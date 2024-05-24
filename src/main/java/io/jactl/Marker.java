@@ -18,12 +18,13 @@
 package io.jactl;
 
 public interface Marker {
-  Marker precede();
-  void   rollback();
-  void   error(CompileError err);
-  void   drop();
-  void   done(JactlName name);
-  void   done(JactlType type, Token location);
-  void   done(Stmt stmt);
-  void   done(Expr expr);
+  Marker  precede();
+  void    rollback();
+  void    error(CompileError err);
+  boolean isError();
+  void    drop();
+  void    done(JactlName name);
+  void    done(JactlType type, Token location);
+  void    done(Stmt stmt);
+  void    done(Expr expr);
 }

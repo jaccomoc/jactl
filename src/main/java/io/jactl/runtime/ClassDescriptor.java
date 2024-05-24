@@ -17,10 +17,7 @@
 
 package io.jactl.runtime;
 
-import io.jactl.JactlType;
-import io.jactl.JactlUserDataHolder;
-import io.jactl.Pair;
-import io.jactl.Utils;
+import io.jactl.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,6 +33,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
   String                          internalName;  // io/jactl/pkg/a/b/c/_$j$Script123/X/Y/Z
   boolean                         isInterface;
   JactlType                       baseClass;
+  boolean                         isCyclicInheritance = false;
   List<ClassDescriptor>           interfaces;
   Map<String, JactlType>          fields          = new LinkedHashMap<>();
   Map<String, JactlType>          mandatoryFields = new LinkedHashMap<>();
@@ -98,7 +96,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
       return getInitMethod();
     }
     FunctionDescriptor func = methods.get(name);
-    if (func == null && baseClass != null) {
+    if (func == null && hasBaseClass()) {
       func = baseClass.getClassDescriptor().getMethod(name);
     }
     if (func == null) {
@@ -107,12 +105,27 @@ public class ClassDescriptor extends JactlUserDataHolder {
     return func;
   }
 
+  private boolean hasBaseClass() {
+    return baseClass != null && baseClass.getClassDescriptor() != null && !isCyclicInheritance;
+  }
+
   public void setIsScriptClass(boolean isScriptClasss) {
     this.isScriptClass = isScriptClasss;
   }
 
   public boolean isScriptClass() {
     return isScriptClass;
+  }
+
+  public boolean isEquivalent(ClassDescriptor other) {
+    if (this == other || this.internalName.equals(other.internalName)) {
+      return true;
+    }
+    return false;
+//    // For IDE check if we have a ClassDecl
+//    Stmt.ClassDecl classDecl = other.getUserData(Stmt.ClassDecl.class);
+//    String otherName = (classDecl.packageName.isEmpty() ? "" : classDecl.packageName + ".") + classDecl.name.getStringValue();
+//    return packagedName.equals(otherName);
   }
 
   /**
@@ -241,7 +254,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
   }
 
   public boolean allFieldsAreDefaults() {
-    boolean baseFieldsAreDefaults = baseClass == null || baseClass.getClassDescriptor().allFieldsAreDefaults();
+    boolean baseFieldsAreDefaults = getBaseClassType() == null || getBaseClassType().getClassDescriptor().allFieldsAreDefaults();
     return baseFieldsAreDefaults && allFieldsAreDefaults;
   }
 
@@ -266,19 +279,26 @@ public class ClassDescriptor extends JactlUserDataHolder {
   }
 
   public JactlType getBaseClassType() {
+    return getBaseClassType(false);
+  }
+
+  public JactlType getBaseClassType(boolean ignoreCyclicInheritance) {
+    if (isCyclicInheritance && !ignoreCyclicInheritance) {
+      return null;
+    }
     return baseClass;
   }
 
   public ClassDescriptor getBaseClass() {
-    return baseClass == null ? null : baseClass.getClassDescriptor();
+    return getBaseClassType() == null ? null : getBaseClassType().getClassDescriptor();
   }
 
   /**
    * For error situations where we have recursive base class hierarchy allow resetting
    * of base class so that further error processing can occur.
    */
-  public void resetBaseClass() {
-    baseClass = null;
+  public void markCyclicInheritance() {
+    isCyclicInheritance = true;
   }
 
   public boolean isAssignableFrom(ClassDescriptor clss) {
@@ -297,8 +317,8 @@ public class ClassDescriptor extends JactlUserDataHolder {
     if (clss.isInterface) {
       return interfaces.stream().anyMatch(intf -> intf.isSameOrChildOf(clss));
     }
-    if (baseClass != null) {
-      return baseClass.getClassDescriptor().isSameOrChildOf(clss);
+    if (hasBaseClass()) {
+      return getBaseClass().isSameOrChildOf(clss);
     }
     return false;
   }

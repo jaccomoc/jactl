@@ -23,23 +23,23 @@ package io.jactl;
  * Class is not otherwise used in Jactl compiler.
  */
 public class JactlName extends JactlUserDataHolder {
-  private Token name;
-  private boolean isPackageName;
+  private Token    name;
+  private NameType type;
 
-  public JactlName(Token name) {
-    this(name, false);
+  public enum NameType {
+    PACKAGE, CLASS, FUNCTION, METHOD, VARIABLE, PARAMETER
   }
 
-  public JactlName(Token name, boolean isPackageName) {
+  public JactlName(Token name, NameType type) {
     this.name = name;
-    this.isPackageName = isPackageName;
+    this.type = type;
   }
 
   public Token getName() {
     return name;
   }
 
-  public boolean isPackageName() {
-    return isPackageName;
+  public NameType getType() {
+    return type;
   }
 }

@@ -19,6 +19,9 @@ package io.jactl;
 
 import io.jactl.runtime.Location;
 
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.List;
 
 public class CompileError extends JactlError {
@@ -48,7 +51,15 @@ public class CompileError extends JactlError {
     if (this.errors != null) {
       StringBuilder sb = new StringBuilder();
       sb.append(String.format("%d error%s found:\n", errors.size(), errors.size() > 1 ? "s" : ""));
-      errors.forEach(e -> { sb.append(e.getMessage()).append('\n'); /*e.printStackTrace();*/ });
+      errors.forEach(e -> {
+        //sb.append(e.getMessage()).append('\n');
+        StringWriter stringWriter = new StringWriter();
+        try (PrintWriter out = new PrintWriter(stringWriter)) {
+          e.printStackTrace(out);
+          sb.append(stringWriter);
+        }
+        sb.append('\n');
+      });
       return sb.toString();
     }
     else {

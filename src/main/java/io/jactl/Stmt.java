@@ -123,7 +123,7 @@ public abstract class Stmt extends JactlUserDataHolder {
     public Token                name;
     public String               packageName;
     public Token                baseClassToken;
-    public JactlType           baseClass;
+    public JactlType            baseClass;
     public boolean              isInterface;
     public List<Stmt.Import>    imports;
     public Stmt.Block           classBlock;
@@ -142,6 +142,7 @@ public abstract class Stmt extends JactlUserDataHolder {
     // Used by Parser and Resolver
     public Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
+    public boolean         isPrimaryClass = false;                      // Whether top level class in a class file (i.e. not script)
     public ClassDescriptor classDescriptor;
 
     public boolean isScriptClass() { return scriptMain != null; }

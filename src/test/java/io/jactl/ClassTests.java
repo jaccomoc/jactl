@@ -243,7 +243,7 @@ public class ClassTests extends BaseTest {
     testError("class X { const x = [:] }; X.x", "simple constant value");
     testError("class X { const x = {1} }; X.x", "simple constant value");
     test("class Y { const int I = 1; const int J = I + 1 }; class X extends Y {}; X.I + X.J + Y.I + Y.J", 6);
-    testError("class Y { const int I = 1; const int J = I + 1 }; class X extends Y {}; X.I x", "unknown class");
+    testError("class Y { const int I = 1; const int J = I + 1 }; class X extends Y {}; X.I x", "unknown inner class");
   }
 
   @Test public void fieldClashWithBuiltinMethod() {
@@ -1213,7 +1213,7 @@ public class ClassTests extends BaseTest {
 
   @Test public void innerClassesStaticMethod() {
     useAsyncDecorator = false;
-    testError("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) } }; class Z { class ZZ { int i } }}; X.Y.f() instanceof X.Y.Z.ZZ", "unknown class");
+    testError("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) } }; class Z { class ZZ { int i } }}; X.Y.f() instanceof X.Y.Z.ZZ", "unknown inner class");
     test("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) }; class Z { class ZZ { int i } }}}; X.Y.f() instanceof X.Y.Z.ZZ", true);
     test("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) } }; class Z { class ZZ { int i } }}; X.Y.f().i", 3);
     test("class X { int i; class Y { int i; static def f() { return new Z.ZZ(3) }; class Z { class ZZ { int i; static def f(){4} } }}}; X.Y.Z.ZZ.f()", 4);
@@ -1385,6 +1385,7 @@ public class ClassTests extends BaseTest {
     testError("class X { int i = 3 }; class Y extends X { def i(x){x} }; Y y = new Y(); y.i + y.j", "method name 'i' clashes");
     testError("class X { int i = 2 }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", "too many arguments");
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
+    testError("class X extends Y { class Y {} }; new X()", "unknown class 'Y'");
   }
 
   @Test public void baseClassesNamedArgContructors() {
@@ -1545,6 +1546,10 @@ public class ClassTests extends BaseTest {
     testError(Utils.listOf("class X{def f(){1}}",
                  "class Y extends X{def f(){2 + super.f()}}",
                  "class X extends Y{def f(){3}}"),
+         "def x = new Y()", "cyclic inheritance");
+    testError(Utils.listOf("class X{def f(){1}}",
+                 "class Y extends X{def f(){2 + super.f()}}",
+                 "class X {def f(){3}}"),
          "def x = new Y(); ((X)x).f() + ((Y)x).f() + x.f()", "cannot be cast");
     test(Utils.listOf("class X { def f() { 'old X' } }",
                  "class Y extends X {}",
@@ -1616,10 +1621,6 @@ public class ClassTests extends BaseTest {
     replTest(1, "class X{ int i = 1 }", "x = new X()", "x.i");
     replTest(2, "class X{ int i = 1 }", "class X{ int i = 2 }", "x = new X()", "x.i");
     replTest(2, "class X{ class Y{int i = 1} }", "class X{ class Y{int i = 2} }", "x = new X.Y()", "x.i");
-  }
-
-  @Test public void testStuff() {
-    test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y.Z as A; new A().f()", 3);
   }
 
   @Test public void importStatements() {

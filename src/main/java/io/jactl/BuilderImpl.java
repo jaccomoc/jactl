@@ -39,6 +39,9 @@ public class BuilderImpl implements Builder {
   protected BuilderImpl() {}
 
   public void done() {
+    if (errors.size() == 1) {
+      throw errors.iterator().next();
+    }
     if (!errors.isEmpty()) {
       throw new CompileError(new ArrayList<>(errors));
     }
@@ -108,6 +111,8 @@ public class BuilderImpl implements Builder {
   protected class MarkerImpl implements Marker {
     Token           ourPreviousToken;
     Tokeniser.State savedState;
+    boolean         isError;
+
     MarkerImpl() {
       this.ourPreviousToken = previousToken;
       this.savedState       = tokeniser.saveState();
@@ -129,6 +134,13 @@ public class BuilderImpl implements Builder {
       if (!errors.add(err)) {
         drop();
       }
+      else {
+        isError = true;
+      }
+    }
+
+    @Override public boolean isError() {
+      return isError;
     }
 
     @Override public void done(JactlName name) {}
@@ -138,9 +150,11 @@ public class BuilderImpl implements Builder {
   }
 
   private static class DummyMarker implements Marker {
+    boolean isError = false;
     @Override public Marker precede() { return new DummyMarker(); }
     @Override public void rollback() {}
-    @Override public void error(CompileError err) {}
+    @Override public void error(CompileError err) { isError = true; }
+    @Override public boolean isError() { return isError; }
     @Override public void drop() {}
     @Override public void done(JactlName name) {}
     @Override public void done(JactlType type, Token location) {}

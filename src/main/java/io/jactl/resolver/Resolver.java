@@ -108,6 +108,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private String packageName = null;
   private String scriptName  = null;  // If this is a script
 
+  private Stmt.ClassDecl topLevelClass;      // Top level class (can be script class)
+  private Stmt.Block     topBlock;           // Top most block (dummy block used by Intellij plugin)
+
   private final Map<String, ClassDescriptor> imports           = new HashMap<>();
   private final Map<String, Expr.VarDecl>    importedConstants = new HashMap<>();
   private final Map<String, Expr.VarDecl>    importedConstantsRenamed = new HashMap<>();
@@ -154,6 +157,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   public synchronized List<CompileError> resolveClass(Stmt.ClassDecl classDecl, boolean throwError) {
     this.packageName = classDecl.packageName;
+    this.topLevelClass = classDecl;
+    if (!classDecl.isScriptClass()) {
+      classDecl.isPrimaryClass = true;
+    }
+
+    // Create a block that holds the static imports (used by Intellij plugin)
+    topBlock             = new Stmt.Block(classDecl.location, new Stmt.Stmts(classDecl.location));
+    topBlock.owningClass = this.topLevelClass;
+    topBlock.variables   = importedConstantsRenamed;
+
     classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
     prepareClass(classDecl);
@@ -284,6 +297,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void prepareClass(Stmt.ClassDecl classDecl) {
+    resolve(classDecl.baseClass);
     classStack.push(classDecl);
 
     ClassDescriptor classDescriptor = classDecl.classDescriptor;
@@ -291,24 +305,26 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Make sure we don't have circular extends relationship somewhere
     String previousBaseClass = null;
-    for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType()) {
-      resolve(baseClass);
+    Set<JactlType> seen = new HashSet<>();
+    for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType(true)) {
       if (baseClass.getClassDescriptor() == null) {
-        // We have some type of error which we have signalled already so no need to error again
+        // Means we have detected cyclic inheritance in base class already
+        error("Error in base class", classDecl.baseClassToken);
         break;
       }
-      if (baseClass.getClassDescriptor() == classDescriptor) {
+      if (seen.contains(baseClass) || baseClass.getClassDescriptor().isEquivalent(classDescriptor)) {
         if (previousBaseClass == null) {
           error("Class cannot extend itself", classDecl.baseClassToken);
         }
         else {
           error("Cyclic inheritance", classDecl.baseClassToken);
         }
-        // We have recursive based classes so reset base class so we can perform additional processing before returning error
-        classDescriptor.resetBaseClass();
-        classDecl.baseClass = null;
+        // We have recursive based classes so flag it to prevent infinite recursion
+        classDescriptor.markCyclicInheritance();
+        //classDecl.baseClass = null;
         break;
       }
+      seen.add(baseClass);
       previousBaseClass = baseClass.getClassDescriptor().getNamePath();
     }
 
@@ -484,7 +500,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    resolve(stmt.baseClass);
     stmt.nestedFunctions = new ArrayDeque<>();
     // Create a dummy function to hold class block
     Expr.FunDecl dummy = new Expr.FunDecl(stmt.name, stmt.name, createClass(stmt.classDescriptor), Utils.listOf());
@@ -621,9 +636,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     for (int i = 1; i < classPath.size(); i++) {
       Expr part = classPath.get(i);
       part.parentType = classType;
-      Expr.Identifier identifier = (Expr.Identifier) part;
-      ClassDescriptor classDesc = classType.getClassDescriptor().getInnerClass(identifier.identifier.getStringValue());
-      identifier.type = classType = (classDesc == null ? null : JactlType.createClass(classDesc));
+      Expr.Identifier identifier      = (Expr.Identifier) part;
+      ClassDescriptor classDescriptor = classType.getClassDescriptor();
+      ClassDescriptor inner           = classDescriptor == null ? null : classDescriptor.getInnerClass(identifier.identifier.getStringValue());
+      identifier.type = classType = (inner == null ? null : JactlType.createClass(inner));
       if (classType == null) {
         createError.accept(i);
         return null;
@@ -652,11 +668,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public Void visitBlock(Stmt.Block stmt) {
     Stmt.Block currentBlock      = getBlock();
-    if (currentBlock == null) {
-      // Create a block that holds the static imports (used by Intellij plugin)
-      currentBlock           = new Stmt.Block(stmt.location, new Stmt.Stmts(stmt.location));
-      currentBlock.variables = importedConstantsRenamed;
-    }
     stmt.enclosingBlock          = currentBlock;
     stmt.owningClass             = currentClass();
     Expr.FunDecl currentFunction = currentFunction();
@@ -2139,6 +2150,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   void error(String msg, SourceLocation location) {
     if (!(location instanceof Location)) {
+      if (jactlContext.isIdePlugin()) {
+        return;
+      }
       throw new IllegalStateException("Internal error: Expected location of type Location but got " + location.getClass().getName());
     }
     error(new CompileError(msg, (Location) location));
@@ -2236,13 +2250,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Stmt.Block getBlock() {
     Expr.FunDecl funDecl = currentFunction();
     if (funDecl == null) {
-      return null;
+      return topBlock;
     }
     if (funDecl.blocks.isEmpty()) {
       funDecl = currentClass().nestedFunctions.stream().skip(1).findFirst().orElse(null);
     }
     Stmt.Block block = funDecl == null ? null : funDecl.blocks.peek();
-    return block;
+    return block == null ? topBlock : block;
   }
 
   private FunctionDescriptor lookupMethod(JactlType type, String methodName) {
@@ -2282,13 +2296,25 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     else {
       firstClass = identStr.apply(classNameParts.get(0));
     }
-    classNameParts = classNameParts.subList(1, classNameParts.size());
 
-    // Build up rest of class name using '$' as separator
-    String subPath = classNameParts.stream().map(e -> identStr.apply(e)).collect(Collectors.joining("$"));
-    subPath = subPath.isEmpty() ? "" : '$' + subPath;
+    ClassDescriptor descriptor = lookupClass(classPkg, packageToken, firstClass, classToken, "", checkForExistence);
+    firstPart.type = descriptor == null ? null : JactlType.createClass(descriptor);
+    firstPart.setBlock(getBlock());
 
-    return lookupClass(classPkg, packageToken, firstClass, classToken, subPath, checkForExistence);
+    for (Iterator<Expr> partIter = classNameParts.subList(1, classNameParts.size()).iterator(); partIter.hasNext(); ) {
+      Expr.Identifier part = (Expr.Identifier)partIter.next();
+      descriptor = descriptor == null ? null : descriptor.getInnerClass(part.identifier.getStringValue());
+      if (descriptor == null) {
+        if (checkForExistence) { return null; }
+        error("Unknown inner class", part.location);
+      }
+      else {
+        part.type = JactlType.createClass(descriptor);
+        part.setBlock(getBlock());
+      }
+    }
+
+    return descriptor;
   }
 
   private Expr.VarDecl lookupClass(String className, Token location) {
@@ -2630,7 +2656,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         List<Stmt> stmts = stmt.stmts;
         if (stmts.isEmpty()) {
           if (returnType.isPrimitive()) {
-            error("Implicit return of null for not compatible with return type of " + returnType, stmt.location);
+            error("Implicit return of null not compatible with return type of " + returnType, stmt.location);
           }
           stmts.add(returnStmt(stmt.location, returnType));
         }
@@ -3324,7 +3350,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // First invoke base class version of the method (if it exists)
     int baseFieldsCount = 0;
-    if (classDecl.baseClass != null && classDecl.baseClass.getClassDescriptor() != null) {
+    if (classDecl.baseClass != null && classDecl.baseClass.getClassDescriptor() != null && classDecl.classDescriptor.getBaseClass() != null) {
       Expr.MethodCall superMethodCall = new Expr.MethodCall(classToken, new Expr.Identifier(classToken.newIdent(Utils.SUPER_VAR)),
                                                             new Token(DOT, classToken), Utils.JACTL_INIT_MISSING, classToken,
                                                             null, Utils.listOf(new Expr.Identifier(classToken.newIdent(FLAGS))));
