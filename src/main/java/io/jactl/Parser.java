@@ -24,6 +24,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.jactl.JactlName.NameType.FILE;
 import static io.jactl.JactlType.ANY;
 import static io.jactl.JactlType.UNKNOWN;
 import static io.jactl.TokenType.*;
@@ -102,15 +103,22 @@ public class Parser {
    * @return the Stmt.ClassDecl for the class or script as appropriate
    */
   public Stmt.ClassDecl parseScriptOrClass(String scriptName) {
-    Stmt.ClassDecl script = parseScript(scriptName);
-    List<Stmt>     stmts  = script.scriptMain.declExpr.block.stmts.stmts;
-    // Use stmt at index 1 since stmt at index 0 will be declaration for _j$globals
-    if (stmts.size() == 2 && stmts.get(1) instanceof Stmt.ClassDecl) {
-      Stmt.ClassDecl classDecl = (Stmt.ClassDecl) stmts.get(1);
-      classDecl.imports = script.imports;
-      return classDecl;
+    Marker fileMark = tokeniser.mark();
+    Token  start    = tokeniser.peek();
+    try {
+      Stmt.ClassDecl script = parseScript(scriptName);
+      List<Stmt>     stmts  = script.scriptMain.declExpr.block.stmts.stmts;
+      // Use stmt at index 1 since stmt at index 0 will be declaration for _j$globals
+      if (stmts.size() == 2 && stmts.get(1) instanceof Stmt.ClassDecl) {
+        Stmt.ClassDecl classDecl = (Stmt.ClassDecl) stmts.get(1);
+        classDecl.imports = script.imports;
+        return classDecl;
+      }
+      return script;
     }
-    return script;
+    finally {
+      fileMark.done(new JactlName(start, FILE));
+    }
   }
 
   private boolean isNotBeginEndBlock(Stmt stmt) {
@@ -653,7 +661,7 @@ public class Parser {
       // Note that unlike a normal varDecl where commas separate different vars of the same type,
       // with parameters we expect a separate comma for parameter with a separate type for each one,
       // so we build up a list of singleVarDecl.
-      Stmt.VarDecl varDecl = singleVarDecl(type, false, false, true);
+      Stmt.VarDecl varDecl = marked(() -> singleVarDecl(type, false, false, true));
       varDecl.declExpr.isParam = true;
       parameters.add(varDecl);
       matchAny(EOL);

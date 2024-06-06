@@ -42,6 +42,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
   ClassDescriptor                 enclosingClass  = null;
   FunctionDescriptor              initMethod;
   boolean                         allFieldsAreDefaults;
+  boolean                         isTopLevelClass = false;       // Whether class is a top level class in a class file
   boolean                         isScriptClass   = false;       // Whether class for a script
   Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();
 
@@ -107,6 +108,14 @@ public class ClassDescriptor extends JactlUserDataHolder {
 
   private boolean hasBaseClass() {
     return baseClass != null && baseClass.getClassDescriptor() != null && !isCyclicInheritance;
+  }
+
+  public void setIsTopLevelClass(boolean isTopLevelClass) {
+    this.isTopLevelClass = isTopLevelClass;
+  }
+
+  public boolean isTopLevelClass() {
+    return isTopLevelClass;
   }
 
   public void setIsScriptClass(boolean isScriptClasss) {

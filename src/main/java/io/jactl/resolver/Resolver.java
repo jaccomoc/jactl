@@ -281,6 +281,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     ClassDescriptor classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, classDecl.baseClass, interfaces, allFieldsAreDefaults)
                                                          : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, classDecl.baseClass, interfaces, allFieldsAreDefaults);
     classDecl.classDescriptor = classDescriptor;
+    classDescriptor.setIsTopLevelClass(classDecl.isPrimaryClass);
     classDescriptor.setIsScriptClass(classDecl.isScriptClass());
     classDescriptor.setUserData(classDecl);
 
