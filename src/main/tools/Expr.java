@@ -300,6 +300,8 @@ class Expr extends JactlUserDataHolder {
     // be async.
     boolean      @isFinal = true;
 
+    JactlType    @lastAssignedType;      // Track last type assigned for completions in Intellij plugin
+
     // When we are in the wrapper function we create a variable for every parameter.
     // This points to the parameter so we can turn it into HeapLocal if necessary and
     // to set its type (if it was declared as "var") once we know the type of the initialiser.

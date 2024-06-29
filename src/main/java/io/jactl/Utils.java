@@ -513,7 +513,8 @@ public class Utils {
 
   public static boolean isLowerCase(String s) {
     for (int i = 0; i < s.length(); i++) {
-      if (!Character.isLowerCase(s.charAt(i))) {
+      char ch = s.charAt(i);
+      if (!Character.isLowerCase(ch) && !Character.isDigit(ch) && ch != '_') {
         return false;
       }
     }

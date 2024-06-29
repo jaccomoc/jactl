@@ -102,7 +102,8 @@ public class BuilderImpl implements Builder {
     tokeniser.startRegex();
   }
 
-  private void skipCommentsAndWhiteSpace() {
+  @Override
+  public void skipCommentsAndWhiteSpace() {
     while (tokeniser.peek().is(COMMENT,WHITESPACE)) {
       _advance();
     }
@@ -147,6 +148,7 @@ public class BuilderImpl implements Builder {
     @Override public void done(JactlType type, Token location) {}
     @Override public void done(Stmt stmt) {}
     @Override public void done(Expr expr) {}
+    @Override public void done(List list) {}
   }
 
   private static class DummyMarker implements Marker {
@@ -160,5 +162,6 @@ public class BuilderImpl implements Builder {
     @Override public void done(JactlType type, Token location) {}
     @Override public void done(Stmt stmt) {}
     @Override public void done(Expr expr) {}
+    @Override public void done(List list) {}
   }
 }

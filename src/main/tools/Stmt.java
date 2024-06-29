@@ -57,7 +57,10 @@ class Stmt extends JactlUserDataHolder {
     Token token;
     List<Stmt> @stmts = new ArrayList<>();
 
-    int @currentIdx;     // Which statement we are currently resolving
+    // True if we have converted a single statement (e.g. var decl with multiple vars) into a list of statements
+    boolean @isSingleStmt = false;
+
+    int     @currentIdx;        // Which statement we are currently resolving
   }
 
   /**

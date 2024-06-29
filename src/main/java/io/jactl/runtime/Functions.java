@@ -19,10 +19,12 @@ package io.jactl.runtime;
 
 import io.jactl.Expr;
 import io.jactl.JactlType;
+import io.jactl.Utils;
 
 import java.lang.invoke.MethodHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import static io.jactl.JactlType.*;
 
@@ -141,5 +143,16 @@ public class Functions {
       match = functions.stream().filter(f -> f.type.is(ANY)).findFirst();
     }
     return match.orElse(NO_SUCH_METHOD);
+  }
+
+  public static List<FunctionDescriptor> getAllMethods(JactlType objType) {
+    if (objType.is(UNKNOWN)) {
+      return Utils.listOf();
+    }
+    return methods.keySet()
+                  .stream()
+                  .map(name -> findMatching(objType, name))
+                  .filter(m -> m != NO_SUCH_METHOD)
+                  .collect(Collectors.toList());
   }
 }

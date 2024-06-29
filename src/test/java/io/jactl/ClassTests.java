@@ -1570,6 +1570,8 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new x.y.z.X(y:new x.y.z.Y()).y.f()", 3);
     test(Utils.listOf("package x.y.z; class Y { def f(){3} }", "package x.y.z; class X { Y y = null }"), "new X(y:new Y()).y.f()", 3);
     test("package x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", 3);
+    test("//Test\npackage x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", 3);
+    testError("class XXX{}\npackage x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", "package declaration must occur before any other statement");
   }
 
   @Test public void packageStaticMethods() {
@@ -1655,6 +1657,7 @@ public class ClassTests extends BaseTest {
     testError(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as c; new c().f()", "must start with uppercase");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
+    testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; class XXX{}; import a.b.c.X; import a.b.c.X; new Y().f()", "import statements can only occur");
   }
 
   @Test public void staticImportStatements() {

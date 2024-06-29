@@ -125,7 +125,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
 
-  private static JactlType TYPE_FOR_BAD_REF = ANY;
+  private static JactlType TYPE_FOR_BAD_REF = UNKNOWN;
 
   /**
    * Resolve variables, references, etc
@@ -501,6 +501,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
 
   @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
+    resolve(stmt.baseClass);
     stmt.nestedFunctions = new ArrayDeque<>();
     // Create a dummy function to hold class block
     Expr.FunDecl dummy = new Expr.FunDecl(stmt.name, stmt.name, createClass(stmt.classDescriptor), Utils.listOf());
@@ -519,7 +520,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public Void visitImport(Stmt.Import stmt) {
     if (stmt.staticImport) {
-      Expr.Identifier field     = (Expr.Identifier)stmt.className.get(stmt.className.size() - 1);
+      Expr fieldExpr = stmt.className.isEmpty() ? null : stmt.className.get(stmt.className.size() - 1);
+      if (fieldExpr == null || !(fieldExpr instanceof Expr.Identifier)) {
+        return null;
+      }
+      Expr.Identifier field     = (Expr.Identifier)fieldExpr;
       JactlType       type      = resolveClassPath(stmt.className.subList(0, stmt.className.size() - 1));
       if (type == null) {
         return null;
@@ -606,6 +611,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private JactlType resolveClassPath(List<Expr> classPath) {
+    if (classPath.isEmpty()) {
+      return null;
+    }
     Consumer<Integer> createError = i -> error("Unknown class " + classPath.subList(0,i+1)
                                                                            .stream()
                                                                            .map(expr -> expr instanceof Expr.ClassPath ? ((Expr.ClassPath) expr).fullClassName() : ((Expr.Identifier)expr).identifier.getStringValue())
@@ -1236,6 +1244,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(expr.initialiser);
     checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
 
+    // Track last type assigned so we can supply better completions in Intellij plugin
+    expr.lastAssignedType = expr.initialiser == null ? null : expr.initialiser.type;
+
     // For constants make sure we have a const value since we need the value at compile time
     if (expr.isConstVar) {
       if (expr.initialiser == null || !expr.initialiser.isConst) {
@@ -1423,6 +1434,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Flag variable as non-final since it has had an assignment to it
     expr.identifierExpr.varDecl.isFinal = false;
+
+    // Track last type assigned so we can supply better completions in Intellij plugin
+    expr.identifierExpr.varDecl.lastAssignedType = expr.expr.type;
 
     return expr.type;
   }
@@ -1641,7 +1655,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       ((Expr.Identifier) expr.callee).couldBeFunctionCall = true;
     }
     resolve(expr.callee);
-    expr.args.forEach(this::resolve);
+    resolve(expr.args);
     if (expr.callee.type == null) {
       error("Unknown function", expr.callee.location);
       return expr.type = ANY;
@@ -2648,6 +2662,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * implicit returns in functions into explicit returns to simplify the job of the Resolver and Compiler phases.
    */
   private Stmt explicitReturn(Stmt stmt, JactlType returnType) {
+    stmt.setBlock(getBlock());
     return doExplicitReturn(stmt, returnType);
   }
 

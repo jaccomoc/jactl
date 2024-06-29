@@ -24,5 +24,6 @@ public interface Builder {
   Token advance();
   Token _advance();
   void startRegex();
+  void skipCommentsAndWhiteSpace();
   void done();
 }

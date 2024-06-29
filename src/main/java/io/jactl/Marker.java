@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import java.util.List;
+
 public interface Marker {
   Marker  precede();
   void    rollback();
@@ -27,4 +29,5 @@ public interface Marker {
   void    done(JactlType type, Token location);
   void    done(Stmt stmt);
   void    done(Expr expr);
+  void    done(List list);
 }

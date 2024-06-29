@@ -125,7 +125,6 @@ public enum TokenType {
   DECIMAL("Decimal"),
   STRING("String"),
   OBJECT("Object"),
-  VOID("void"),
   MAP("Map"),
   LIST("List"),
   FOR("for"),
@@ -137,9 +136,7 @@ public enum TokenType {
   CONTINUE("continue"),
   BREAK("break"),
   CLASS("class"),
-  INTERFACE("interface"),
   EXTENDS("extends"),
-  IMPLEMENTS("implements"),
   PACKAGE("package"),
   STATIC("static"),
   IMPORT("import"),
@@ -163,11 +160,16 @@ public enum TokenType {
   END("END"),
   DIE("die"),
   EVAL("eval"),
-  FINAL("final"),
   CONST("const"),
-  SEALED("sealed"),
   SWITCH("switch"),
   DEFAULT("default"),
+
+  // Not used but reserved
+  VOID("void"),
+  SEALED("sealed"),
+  IMPLEMENTS("implements"),
+  INTERFACE("interface"),
+  FINAL("final"),
 
   //= Special
   EOL(),            // End of line

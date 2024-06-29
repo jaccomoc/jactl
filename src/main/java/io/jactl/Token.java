@@ -155,6 +155,10 @@ public class Token extends Location {
     return is(types.toArray(new TokenType[types.size()]));
   }
 
+  public boolean isCommentOrWhiteSpace() {
+    return is(EOL,WHITESPACE,COMMENT);
+  }
+
   /**
    * Check if type of token is not the same as the types passed in
    * @param types  the types

@@ -160,7 +160,7 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType createInstanceType(ClassDescriptor clss) {
     JactlType type      = createRefType(TypeEnum.INSTANCE);
     type.classDescriptor = clss;
-    type.internalName    = type.classDescriptor.getInternalName();
+    type.internalName    = clss == null ? null : type.classDescriptor.getInternalName();
     return type;
   }
 

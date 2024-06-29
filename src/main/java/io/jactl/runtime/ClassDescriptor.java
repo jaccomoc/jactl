@@ -44,7 +44,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
   boolean                         allFieldsAreDefaults;
   boolean                         isTopLevelClass = false;       // Whether class is a top level class in a class file
   boolean                         isScriptClass   = false;       // Whether class for a script
-  Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();
+  Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();  // Map of name to Pair<type,value>
 
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
     this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces, allFieldsAreDefaults);
