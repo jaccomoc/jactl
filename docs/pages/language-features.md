@@ -512,3 +512,35 @@ class Y extends X {
 def y = new Y(i:4, field:'value1', anotherField:'value2')
 y.method()      // returns 'Y: value1:value2:4'
 ```
+
+## Packages and Import Statements
+
+Classes can be grouped into packages (libraries) just like in Java/Groovy using
+a package statement:
+
+```groovy
+package org.customer.utils
+
+class Useful {
+  static def func() {
+    ...
+  }
+}
+```
+
+Import statements allow you to use a class without needing to fully qualify
+it with its package name each time:
+```groovy
+import org.customer.utils.Useful
+def x = Useful.func()
+```
+Import allows you to give a class an alias using `as`:
+```groovy
+import org.customer.utils.Useful as U
+def x = U.func()
+```
+You can also import static functions and class constants using `import static`:
+```groovy
+import static org.customer.utils.Useful.func as f
+def x = f()   // invokes Useful.func()
+```
