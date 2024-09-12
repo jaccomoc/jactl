@@ -180,6 +180,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private       int           longArr = -1;
   private       int           objArr  = -1;
 
+  private List<CompileError>  errors = new ArrayList<>();
+
   private static boolean      localAliasForGlobals   = Boolean.parseBoolean(System.getProperty("jactl.opt.aliasedGlobals", "true"));
   private List<Label>         asyncLocations         = new ArrayList<>();
   private List<Runnable>      asyncStateRestorations = new ArrayList<>();
@@ -200,6 +202,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   void compile() {
     _compile();
+
+    if (!errors.isEmpty()) {
+      if (errors.size() == 1) {
+        throw errors.get(0);
+      }
+      throw new CompileError(errors);
+    }
 
     if (classCompiler.debug(2)) {
       mv.visitEnd();
@@ -2430,7 +2439,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * the object.</p>
    * @return true if args validated and false if validation should be deferred to runtime
    */
-  private static boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
+  private boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
     int       argCount = args.size();
     JactlType arg0Type = argCount > 0 ? args.get(0).type : null;
     if (!isInitMethod && argCount == 1 && arg0Type.is(ANY, LIST)) {
@@ -2493,7 +2502,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return true;
   }
 
-  private static void validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
+  private void validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
     List<String> missingArgs = new ArrayList<>();
 
     // For init methods the parameter names and types come from the ClassDescriptor because the init method only
@@ -2526,17 +2535,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   .filter(entry -> namedArgMap.containsKey(argName.apply(entry.first)))
                                   .map(entry -> entry.first)
                                   .collect(Collectors.toList());
-      throw new CompileError("No such " + Utils.plural(isInitMethod ? "field" : "parameter", namedArgMap.size()) + ": "
+      error("No such " + Utils.plural(isInitMethod ? "field" : "parameter", namedArgMap.size()) + ": "
                              + keys.stream().map(expr -> argName.apply(expr)).collect(Collectors.joining(", ")) +
                              (isInitMethod ? " in object of type " + initClass : ""),
                              keys.get(0).location);
     }
     if (missingArgs.size() > 0) {
-      throw new CompileError("Missing mandatory " + Utils.plural(isInitMethod ? "field" : "argument", missingArgs.size()) + ": " + String.join(", ", missingArgs), location);
+      error("Missing mandatory " + Utils.plural(isInitMethod ? "field" : "argument", missingArgs.size()) + ": " + String.join(", ", missingArgs), location);
     }
   }
 
-  private static void validateArg(Expr argExpr, JactlType paramType, Token location) {
+  private void validateArg(Expr argExpr, JactlType paramType, Token location) {
     if (argExpr.type.is(MAP) && paramType.is(INSTANCE)) {
       FunctionDescriptor initMethod = paramType.getClassDescriptor().getInitMethod();
       if (argExpr.isConstMap()) {
@@ -2546,7 +2555,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else
     if (!argExpr.type.isCastableTo(paramType)) {
       paramType = paramType.is(OBJECT_ARR) ? LIST : paramType;
-      throw new CompileError("Cannot convert argument of type " + argExpr.type + " to parameter type of " + paramType, location);
+      error("Cannot convert argument of type " + argExpr.type + " to parameter type of " + paramType, location);
     }
   }
 
@@ -2712,7 +2721,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
-      throw new CompileError("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
+      error("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
                              (plural?"s ":" ") + String.join(",", badVars.toArray(new String[badVars.size()])) +
                              " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
     }
@@ -3070,7 +3079,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
     if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull && couldBeNull(expr)) {
       if (expr.isNull()) {
-        throw new CompileError("Cannot convert null value to " + type, location);
+        error("Cannot convert null value to " + type, location);
       }
       throwIfNull("Cannot convert null value to " + type, location);
     }
@@ -3107,7 +3116,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
       }
     }
-    throw new CompileError("Cannot convert from " + peek() + " to " + type, location);
+    error("Cannot convert from " + peek() + " to " + type, location);
+    return null;
   }
 
   /**
@@ -3117,7 +3127,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void convertToBoolean(boolean negated, Expr expr) {
     if (expr instanceof Expr.RegexMatch && ((Expr.RegexMatch) expr).string == null) {
-      throw new CompileError("Regex string used in boolean context - add modifier if regex match required", expr.location);
+      error("Regex string used in boolean context - add modifier if regex match required", expr.location);
     }
     convertToBoolean(negated);
   }
@@ -3218,7 +3228,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         case INT:     break;
         case LONG:    mv.visitInsn(L2I);   break;
         case DOUBLE:  mv.visitInsn(D2I);   break;
-        default:      throw new CompileError("Cannot convert " + peek() + " to byte", (Token)location);
+        default:      error("Cannot convert " + peek() + " to byte", (Token)location);
       }
       _loadConst(255);
       mv.visitInsn(IAND);
@@ -3253,7 +3263,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       switch (peek().getType()) {
         case LONG:    mv.visitInsn(L2I);   break;
         case DOUBLE:  mv.visitInsn(D2I);   break;
-        default:      throw new CompileError("Cannot convert " + peek() + " to int", (Token)location);
+        default:      error("Cannot convert " + peek() + " to int", (Token)location);
       }
     }
     popType();
@@ -3288,7 +3298,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         case BYTE:
         case INT:     mv.visitInsn(I2L);   break;
         case DOUBLE:  mv.visitInsn(D2L);   break;
-        default:      throw new CompileError("Cannot convert " + peek() + " to long", (Token)location);
+        default:      error("Cannot convert " + peek() + " to long", (Token)location);
       }
     }
     popType();
@@ -3323,7 +3333,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         case BYTE:
         case INT:     mv.visitInsn(I2D);   break;
         case LONG:    mv.visitInsn(L2D);   break;
-        default:      throw new CompileError("Cannot convert " + peek() + " to double", (Token)location);
+        default:      error("Cannot convert " + peek() + " to double", (Token)location);
       }
     }
     popType();
@@ -3355,7 +3365,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case DECIMAL:
         break;
       default:
-        throw new CompileError("Cannot convert " + peek() + " to Decimal", (Token)location);
+        error("Cannot convert " + peek() + " to Decimal", (Token)location);
     }
     popType();
     pushType(DECIMAL);
@@ -3370,7 +3380,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToMap", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new CompileError("Cannot convert " + peek() + " to Map", (Token)location);
+    error("Cannot convert " + peek() + " to Map", (Token)location);
+    return null;
   }
 
   private Void castToList(SourceLocation location) {
@@ -3381,7 +3392,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new CompileError("Cannot convert " + peek() + " to List", (Token)location);
+    error("Cannot convert " + peek() + " to List", (Token)location);
+    return null;
   }
 
   private Void castToNumber(SourceLocation location) {
@@ -3395,7 +3407,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new CompileError("Cannot convert " + peek() + " to Number", (Token)location);
+    error("Cannot convert " + peek() + " to Number", (Token)location);
+    return null;
   }
 
   private Void castToFunction(SourceLocation location) {
@@ -3406,7 +3419,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, "castToFunction", Object.class, String.class, Integer.TYPE);
       return null;
     }
-    throw new CompileError("Cannot convert " + peek() + " to Function", (Token)location);
+    error("Cannot convert " + peek() + " to Function", (Token)location);
+    return null;
   }
 
   private Void convertToArray(JactlType type, Location location) {
@@ -3421,7 +3435,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       checkCast(type);
       return null;
     }
-    throw new CompileError("Cannot cast from " + peek() + " to " + type, location);
+    error("Cannot cast from " + peek() + " to " + type, location);
+    return null;
   }
 
   private Void convertToAny(SourceLocation location) {
@@ -4110,7 +4125,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     List<String> badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
-      throw new CompileError("Invocation of " + funDecl.nameToken.getStringValue() +
+      error("Invocation of " + funDecl.nameToken.getStringValue() +
                              " requires forward reference to closed over variable" + (plural?"s ":" ") +
                              String.join(",", badVars.toArray(new String[badVars.size()])) +
                              (plural ? " that have" : " that has") +
@@ -4936,7 +4951,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
    */
   private void storeArrayValue(Expr.FieldAssign expr) {
     if (!expr.accessType.is(LEFT_SQUARE)) {
-      throw new CompileError("Field access not supported for Array object", expr.accessType);
+      error("Field access not supported for Array object", expr.accessType);
     }
     JactlType arrayType = expr.parent.type.getArrayElemType();
     convertTo(arrayType, expr.expr, true, expr.expr.location);
@@ -5097,4 +5112,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     }
   }
 
+  private void error(String msg, Location location) {
+    throw new CompileError(msg, location);
+  }
 }

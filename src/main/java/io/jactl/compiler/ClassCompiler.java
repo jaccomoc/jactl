@@ -64,7 +64,7 @@ public class ClassCompiler {
   final         Map<Object,String> classConstantNames = new HashMap<>();
   private       int                classConstantCnt   = 0;
 
-  ClassCompiler(String source, JactlContext context, String jactlPkg, Stmt.ClassDecl classDecl, String sourceName) {
+  public ClassCompiler(String source, JactlContext context, String jactlPkg, Stmt.ClassDecl classDecl, String sourceName) {
     this.context         = context;
     this.pkg             = jactlPkg;
     this.className       = classDecl.name.getStringValue();

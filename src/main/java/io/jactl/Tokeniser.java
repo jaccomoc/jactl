@@ -214,6 +214,14 @@ public class Tokeniser {
     stringState.push(state);
   }
 
+  private void popStringState() {
+    stringState.pop();
+    inString = false;
+  }
+
+  private boolean newLinesAllowed() {
+    return stringState.isEmpty() || stringState.peek().allowNewLines;
+  }
 
   /**
    * If currentToken already has a value then do nothing. If we don't have a current
@@ -263,20 +271,33 @@ public class Tokeniser {
 
     int remaining = source.length() - offset;
     if (remaining == 0) {
+      // EOF
+      if (!stringState.isEmpty()) {
+        stringState.clear();
+        inString = false;
+        return eofError("Unexpected end of file in string", token);
+      }
       return token.setType(EOF);
     }
 
-    int c = charAt(0);
-
     // The inString flag indicates we are in an expression string and are just after an embedded
-    // '$' expression that we have already parsed
+    // '$' expression that we have already parsed or that we had an unexpected EOL or EOF inside
+    // a single line string.
     if (inString) {
-      return parseNextStringPart(token, remaining, c);
+      StringState currentState = stringState.peek();
+      if (!currentState.allowNewLines && charAt(0) == '\n') {
+        // Return error but don't consume the new line
+        for (StringState state = currentState; state != null && !state.allowNewLines; state = stringState.peek()) {
+          // Pop strings until we get to level where new lines allowed or there are no more strings
+          popStringState();
+        }
+        return error("Unexpected new line in string", token);
+      }
+      return parseNextStringPart(token, remaining, charAt(0));
     }
 
+    int c = charAt(0);
     if (c > 127) {
-//      advance(1);
-//      return error("Unexpected character '\\u" + Long.toHexString(0x100000000L | c).substring(5) + "'", token);
       return parseIdentifier(token, remaining);
     }
 
@@ -307,14 +328,9 @@ public class Tokeniser {
     switch (sym.type) {
       case EOL: {
         if (!newLinesAllowed()) {
-          try {
-            stringState.clear();
-            inString = false;
-            return error("New line not allowed within single line string", token);
-          }
-          finally {
-            offset--;
-          }
+          popStringState();
+          offset--;
+          return stringError("New line not allowed within single line string", token.setEnd(offset));
         }
         return token.setType(EOL).setLength(1);
       }
@@ -323,11 +339,9 @@ public class Tokeniser {
         boolean tripleQuoted = available(2) && charAt(0) == '\'' && charAt(1) == '\'';
         int     stringStart  = offset - 1;
         advance(tripleQuoted ? 2 : 0);
-        Token stringToken = parseString(false, tripleQuoted ? "'''" : "'", newLinesAllowed() && tripleQuoted, true, false, stringStart);
-        if (!stringToken.is(ERROR)) {
-          advance(tripleQuoted ? 3 : 1);
-          stringToken.setEnd(offset);
-        }
+        String endChars    = tripleQuoted ? "'''" : "'";
+        pushStringState(endChars, stringStart);
+        Token  stringToken = parseString(false, endChars, newLinesAllowed() && tripleQuoted, true, false, stringStart);
         return stringToken;
       }
       case DOUBLE_QUOTE: {
@@ -338,10 +352,11 @@ public class Tokeniser {
         boolean tripleQuote = available(2) && charAt(0) == '"' && charAt(1) == '"';
         String  endChars    = tripleQuote ? "\"\"\"" : "\"";
         int     stringStart = offset - 1;
-        pushStringState(endChars, stringStart);
         advance(tripleQuote ? 2 : 0);
+        pushStringState(endChars, stringStart);
         token = parseString(true, endChars, newLinesAllowed(), true, false, stringStart);
         if (token.is(ERROR)) {
+          popStringState();
           return token;
         }
         return token.setType(EXPR_STRING_START).setEnd(offset);
@@ -401,6 +416,85 @@ public class Tokeniser {
     return i == sym.length();
   }
 
+  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
+    char          endChar  = endChars.charAt(0);
+    Token         token    = createToken(stringStart);
+    StringBuilder sb       = new StringBuilder();
+    boolean       finished = false;
+    for (; !finished && available(1); ) {
+      int c = charAt(0);
+      switch (c) {
+        case '/':
+        case '\'':
+        case '"': {
+          if (c == endChar) {
+            // If close quote/quotes
+            if (charsAtEquals(0, endChars.length(), endChars)) {
+              finished = true;
+              if (!stringExpr) {
+                popStringState();
+                advance(endChars.length());
+              }
+              continue;
+            }
+          }
+          break;
+        }
+        case '\n': {
+          if (!newlinesAllowed) {
+            finished = true;
+            continue;
+          }
+          break;
+        }
+        case '\\': {
+          if (!available(1)) {
+            finished = true;
+            continue;
+          }
+          if (escapeChars) {
+            advance(1);
+            c = escapedChar(charAt(0));
+          }
+          else {
+            // Only thing we can escape is the end of string. For everything else leave '\' in the string as is.
+            int nextChar = charAt(1);
+            if (nextChar == endChar) {
+              advance(1);
+              c = nextChar;
+            }
+            else if (nextChar == '$' || c == '\\') {
+              sb.append('\\');
+              advance(1);
+              c = nextChar;
+            }
+          }
+          break;
+        }
+        case '$': {
+          if (stringExpr) {
+            int nextChar = available(2) ? charAt(1) : -1;
+            if (nextChar == '{' || isIdentifierStart(nextChar) || Character.isDigit(nextChar)) {
+              finished = true;
+              continue;
+            }
+            else if (endChar != '/') {
+              advance(1);
+              return stringError("Unexpected " + (nextChar == -1 ? "end of file" : "character '" + (char)nextChar + "'") + " after '$' in expression string", token);
+            }
+          }
+        }
+        default:
+          break;
+      }
+      sb.append((char) c);
+      advance(1);
+    }
+    return token.setType(STRING_CONST)
+                .setValue(sb.toString())
+                .setEnd(offset);
+  }
+
   /**
    * Handle scenario where we are in a string expr (interpolated string). We parse
    * string as STRING_EXPR_START followed by combinations of STRING_CONST or other
@@ -416,7 +510,7 @@ public class Tokeniser {
     boolean     isSubstitute       = currentStringState.isSubstitute;
     switch (c) {
       case '$': {
-        // We either have an identifer following or as '{'
+        // We either have an identifer following or a '{'
         int nextChar = charAt(1);
         if (nextChar == '{') {
           inString = false;
@@ -476,8 +570,7 @@ public class Tokeniser {
               modifierSb.append(modifier);
               advance(1);
             }
-            stringState.pop();
-            inString = false;
+            popStringState();
             final String modifiers = modifierSb.toString();
             for (int i = 0; i < modifiers.length(); i++) {
               if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
@@ -494,27 +587,21 @@ public class Tokeniser {
       case '"': {
         if (charsAtEquals(0, endChars.length(), endChars)) {
           advance(endChars.length());
-          stringState.pop();
-          inString = false;
+          popStringState();
           return token.setType(EXPR_STRING_END).setLength(endChars.length());
         }
         break;
       }
       case '\n': {
         if (!newLinesAllowed()) {
-          stringState.pop();
-          inString = false;
-          return error("Unexpected new line within single line string", createToken());
+          popStringState();
+          return stringError("Unexpected new line within single line string", createToken());
         }
         break;
       }
     }
     // No embedded expression or end of string found so parse as STRING_CONST
     token = parseString(true, endChars, newLinesAllowed(), escapeChars, currentStringState.isReplace, offset);
-    if (token.is(ERROR)) {
-      stringState.pop();
-      inString = false;
-    }
     return token;
   }
 
@@ -565,10 +652,6 @@ public class Tokeniser {
 
   private static boolean isIdentifierPart(int c) {
     return Character.isJavaIdentifierPart(c) && c != '$';
-  }
-
-  private boolean newLinesAllowed() {
-    return stringState.size() == 0 || stringState.peek().allowNewLines;
   }
 
   private boolean isDigit(int c, int base) {
@@ -763,6 +846,10 @@ public class Tokeniser {
     return error("Unexpected end of file in comment", token);
   }
 
+  private Token stringError(String msg, Token token) {
+    return error(msg, token);
+  }
+
   private Token error(String msg, Token token) {
     return token.setType(ERROR).setEnd(offset).setValue(msg);
 //    if (tokeniseCommentsAndWhitespace) {
@@ -777,82 +864,6 @@ public class Tokeniser {
 //      return token.setType(ERROR).setEnd(offset);
 //    }
 //    throw new EOFError(msg, token.setType(ERROR).setEnd(offset));
-  }
-
-  private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
-    char          endChar  = endChars.charAt(0);
-    Token         token    = createToken(stringStart);
-    StringBuilder sb       = new StringBuilder();
-    boolean       finished = false;
-    for (; !finished && available(1); advance(1)) {
-      int c = charAt(0);
-      switch (c) {
-        case '/':
-        case '\'':
-        case '"': {
-          if (c == endChar) {
-            // If close quote/quotes
-            if (charsAtEquals(0, endChars.length(), endChars)) {
-              finished = true;
-              continue;
-            }
-          }
-          break;
-        }
-        case '\n': {
-          if (!newlinesAllowed) {
-            return error("New line not allowed nested within single line string", token);
-          }
-          break;
-        }
-        case '\\': {
-          if (!available(1)) {
-            return error("Unexpected end of file after '\\' in string", token);
-          }
-          if (escapeChars) {
-            advance(1);
-            c = escapedChar(charAt(0));
-          }
-          else {
-            // Only thing we can escape is the end of string. For everything else leave '\' in the string as is.
-            int nextChar = charAt(1);
-            if (nextChar == endChar) {
-              advance(1);
-              c = nextChar;
-            }
-            else if (nextChar == '$' || c == '\\') {
-              sb.append('\\');
-              advance(1);
-              c = nextChar;
-            }
-          }
-          break;
-        }
-        case '$': {
-          if (stringExpr) {
-            int nextChar = available(2) ? charAt(1) : -1;
-            if (nextChar == '{' || isIdentifierStart(nextChar) || Character.isDigit(nextChar)) {
-              finished = true;
-              continue;
-            }
-            else if (endChar != '/') {
-              return error("Unexpected " + (nextChar == -1 ? "end of file" : "character '" + (char)nextChar + "'") + " after '$' in expression string", createToken());
-            }
-          }
-        }
-        default:
-          break;
-      }
-      sb.append((char) c);
-    }
-    if (!finished) {
-      return eofError("Unexpected end of file in string that started", createToken(stringStart));
-    }
-
-    advance(-1);     // Don't swallow '$' or ending quote
-    return token.setType(STRING_CONST)
-                .setValue(sb.toString())
-                .setEnd(offset);
   }
 
   private int escapedChar(int c) {

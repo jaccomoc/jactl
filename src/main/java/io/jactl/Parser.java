@@ -51,6 +51,7 @@ public class Parser {
   Deque<Stmt.ClassDecl> classes      = new ArrayDeque<>();
   boolean               ignoreEol    = false;   // Whether EOL should be treated as whitespace or not
   String                packageName;
+  Token                 packageToken;
   JactlContext          context;
   int                   uniqueVarCnt = 0;
 
@@ -83,7 +84,7 @@ public class Parser {
     packageDecl();
     List<Stmt.Import> importStmts = importStmts();
     Token             start       = peek();
-    Stmt.ClassDecl    scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, null, null, false);
+    Stmt.ClassDecl    scriptClass = new Stmt.ClassDecl(start.newIdent(scriptClassName), packageName, packageToken, null, null, false);
     scriptClass.imports = importStmts;
     pushClass(scriptClass);
     try {
@@ -237,20 +238,21 @@ public class Parser {
       if (matchAny(PACKAGE)) {
         Token        packageToken = previous();
         List<String> packagePath  = new ArrayList<>();
+        packageToken = peek();
         do {
           packagePath.add(expect(IDENTIFIER).getStringValue());
         } while (matchAny(DOT));
         String pkg = String.join(".", packagePath);
         matchAnyIgnoreEOL(SEMICOLON);
         if (packageName != null && !packageName.isEmpty() && !pkg.equals(packageName)) {
-          error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken);
+          error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken, false);
         }
         packageName = pkg;
         mark.done(new JactlName(packageToken, JactlName.NameType.PACKAGE));
         mark = null;
       }
       if (packageName == null) {
-        error("Package name not declared or otherwise supplied", peek());
+        error("Package name not declared or otherwise supplied", peek(), false);
       }
       else {
         if (mark != null) {
@@ -1097,7 +1099,7 @@ public class Parser {
         unexpected("Expected 'extends' or '{'", false);
         skipUntil(EOL, EOF, LEFT_BRACE, RIGHT_BRACE);
       }
-      Stmt.ClassDecl classDecl = new Stmt.ClassDecl(className, packageName, baseClassToken, baseClass, false);
+      Stmt.ClassDecl classDecl = new Stmt.ClassDecl(className, packageName, packageToken, baseClassToken, baseClass, false);
       Token leftBrace = expectOrNull(true, LEFT_BRACE);
       if (leftBrace == null) {
         return classDecl;
@@ -1382,13 +1384,15 @@ public class Parser {
 
       while (peekOp(operators)) {
         skipNewLines();
-        Token operator = advance();
+        Token operator = peek();
         if (operator.is(INSTANCE_OF, BANG_INSTANCE_OF, AS)) {
+          advance();
           Token     token = peek();
           JactlType type  = type(false, false, false, true);
           expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
         }
         else if (operator.is(QUESTION)) {
+          advance();
           Expr  trueExpr  = parseExpression(level);
           mark.done(trueExpr);
           Token operator2 = expectOrNull(true, COLON);
@@ -1402,6 +1406,8 @@ public class Parser {
           expr = createCallExpr(expr, operator, arguments());
         }
         else {
+          advance();
+
           // Set flag if next token is '(' so that we can check for x.(y).z below
           boolean bracketedExpression = peek().is(LEFT_PAREN);
 
@@ -1679,8 +1685,8 @@ public class Parser {
     Token     token = expect(NEW);
     JactlType type  = type(true, true, false, true);   // get the type and ignore the square brackets for now
     if (type.is(JactlType.INSTANCE)) {
-      if (matchAnyIgnoreEOL(LEFT_PAREN)) {
-        Token      leftParen = previous();
+      if (peekIgnoreEolIs(LEFT_PAREN)) {
+        Token      leftParen = peekIgnoreEOL();
         List<Expr> args      = arguments();
         return Utils.createNewInstance(token, type, leftParen, args);
       }
@@ -1733,15 +1739,20 @@ public class Parser {
    * </pre>
    */
   private List<Expr> arguments() {
-    // Check for named args
-    if (lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
-      // For named args we create a list with single entry being the map literal that represents
-      // the name:value pairs.
-      return Utils.listOf(mapEntries(RIGHT_PAREN));
-    }
-    else {
-      return marked(false, this::argList, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
-    }
+    return marked(false, () -> {
+      // Advance past '(' or '{'
+      advanceIgnoreEol();
+
+      // Check for named args
+      if (lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
+        // For named args we create a list with single entry being the map literal that represents
+        // the name:value pairs.
+        return Utils.listOf(mapEntries(RIGHT_PAREN));
+      }
+      else {
+        return argList();
+      }
+    }, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
   }
 
   /**
@@ -3036,6 +3047,12 @@ public class Parser {
   /////////////////////////////////////////////////
 
   private Token advance() {
+    Token token = tokeniser.advance();
+    return token;
+  }
+
+  private Token advanceIgnoreEol() {
+    skipNewLines();
     Token token = tokeniser.advance();
     return token;
   }

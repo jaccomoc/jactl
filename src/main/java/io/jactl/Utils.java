@@ -22,6 +22,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.security.MessageDigest;
@@ -893,4 +894,26 @@ public class Utils {
     wrapperFunDecl.isWrapper = true;
     return wrapperFunDecl;
   }
+
+  public static Method findStaticMethod(Class clss, String methodName) {
+    return findMethod(clss, methodName, true);
+  }
+
+  public static Method findMethod(Class clss, String methodName, boolean isStatic) {
+    if (clss == null) {
+      return null;
+    }
+    List<Method> methods = Arrays.stream(clss.getDeclaredMethods())
+                                 .filter(m -> m.getName().equals(methodName))
+                                 .filter(m -> isStatic == Modifier.isStatic(m.getModifiers()))
+                                 .collect(Collectors.toList());
+    if (methods.size() == 0) {
+      throw new IllegalArgumentException("Could not find " + (isStatic?"":"non-") + "static method " + methodName + " in class " + clss.getName());
+    }
+    if (methods.size() > 1) {
+      throw new IllegalArgumentException("Found multiple static methods called " + methodName + " in class " + clss.getName());
+    }
+    return methods.get(0);
+  }
+
 }

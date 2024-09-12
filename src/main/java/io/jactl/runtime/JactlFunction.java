@@ -241,8 +241,8 @@ public class JactlFunction extends FunctionDescriptor {
     if (name == null) {
       throw new IllegalArgumentException("Missing name for function");
     }
-    this.method               = findMethod(implementingClass, implementingMethod);
-    this.inlineMethod         = inlineMethodName == null ? null : findMethod(implementingClass, inlineMethodName);
+    this.method               = Utils.findStaticMethod(implementingClass, implementingMethod);
+    this.inlineMethod         = inlineMethodName == null ? null : Utils.findStaticMethod(implementingClass, inlineMethodName);
     Class<?>[] parameterTypes = method.getParameterTypes();
     this.methodHandle         = RuntimeUtils.lookupMethod(implementingClass, implementingMethod, method.getReturnType(), parameterTypes);
     this.argCount             = method.getParameterCount();
@@ -525,17 +525,4 @@ public class JactlFunction extends FunctionDescriptor {
     }
   }
 
-  private static Method findMethod(Class clss, String methodName) {
-    List<Method> methods = Arrays.stream(clss.getDeclaredMethods())
-                                 .filter(m -> m.getName().equals(methodName))
-                                 .filter(m -> Modifier.isStatic(m.getModifiers()))
-                                 .collect(Collectors.toList());
-    if (methods.size() == 0) {
-      throw new IllegalArgumentException("Could not find static method " + methodName + " in class " + clss.getName());
-    }
-    if (methods.size() > 1) {
-      throw new IllegalArgumentException("Found multiple static methods called " + methodName + " in class " + clss.getName());
-    }
-    return methods.get(0);
-  }
 }

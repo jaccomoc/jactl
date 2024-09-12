@@ -38,7 +38,7 @@ class TokeniserTest {
       Token     token     = tokeniser.next();
       assertEquals(type, token.getType());
       assertTrue(token.is(type));
-      Assertions.assertEquals(EOF, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
     };
     doTest.accept("(", TokenType.LEFT_PAREN);
     doTest.accept(")", TokenType.RIGHT_PAREN);
@@ -172,8 +172,8 @@ class TokeniserTest {
       Token     token     = tokeniser.next();
       assertEquals(type, token.getType());
       assertTrue(token.is(type));
-      Assertions.assertEquals(TokenType.BANG, tokeniser.next().getType());
-      Assertions.assertEquals(EOF, tokeniser.next().getType());
+      assertEquals(TokenType.BANG, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
     };
     doTest.accept("\n!", EOL);
     doTest.accept("\r\n!", EOL);
@@ -215,17 +215,17 @@ class TokeniserTest {
   @Test public void booleans() {
     Tokeniser tokeniser = new Tokeniser("true false");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.TRUE, token.getType());
+    assertEquals(TokenType.TRUE, token.getType());
     assertEquals(Boolean.TRUE, token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.FALSE, token.getType());
+    assertEquals(TokenType.FALSE, token.getType());
     assertEquals(Boolean.FALSE, token.getValue());
   }
 
   @Test public void nullSymbol() {
     Tokeniser tokeniser = new Tokeniser("null");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.NULL, token.getType());
+    assertEquals(TokenType.NULL, token.getType());
     assertEquals(null, token.getValue());
   }
 
@@ -233,9 +233,9 @@ class TokeniserTest {
     BiConsumer<String, Boolean> doTest = (source, isDollar) -> {
       Tokeniser tokeniser = new Tokeniser(source);
       Token     token     = tokeniser.next();
-      Assertions.assertEquals(isDollar ? TokenType.DOLLAR_IDENTIFIER : TokenType.IDENTIFIER, token.getType());
+      assertEquals(isDollar ? TokenType.DOLLAR_IDENTIFIER : TokenType.IDENTIFIER, token.getType());
       assertEquals(source, token.getValue());
-      Assertions.assertEquals(EOF, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
     };
 
     doTest.accept("_1", false);
@@ -271,7 +271,7 @@ class TokeniserTest {
         assertEquals(typeAndValue.second, token[0].getValue());
         token[0] = tokeniser.next();
       });
-      Assertions.assertEquals(EOF, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
     };
 
     doTest.accept("0", Utils.listOf(new Pair<>(TokenType.INTEGER_CONST, 0)));
@@ -300,7 +300,7 @@ class TokeniserTest {
       else {
         assertEquals(value, token.getValue());
       }
-      Assertions.assertEquals(EOF, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
     };
 
     doTest.accept("123456789.1234D", 123456789.1234);
@@ -400,7 +400,7 @@ class TokeniserTest {
       for (TokenType type: types) {
         assertEquals(type, tokeniser.next().getType());
       }
-      Assertions.assertEquals(EOF, tokeniser.next().getType());
+      assertEquals(EOF, tokeniser.next().getType());
     };
 
     doTest.accept("{}", Utils.listOf(TokenType.LEFT_BRACE, TokenType.RIGHT_BRACE));
@@ -432,77 +432,77 @@ class TokeniserTest {
     token = tokeniser.next();
     assertEquals(3, token.getLineNum());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
   }
 
   @Test public void lineColumnNumbers() {
     String    source    = "1a b\na\n\na 1.234D c\n{";
     Tokeniser tokeniser = new Tokeniser(source);
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
     assertEquals("1", token.getChars());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(2, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("b", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(4, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(2, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(2, token.getLineNum());
     assertEquals(2, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EOL, token.getType());
+    assertEquals(TokenType.EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(4, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOUBLE_CONST, token.getType());
+    assertEquals(TokenType.DOUBLE_CONST, token.getType());
     assertEquals(1.234, token.getValue());
     assertEquals("1.234D", token.getChars());
     assertEquals(4, token.getLineNum());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("c", token.getValue());
     assertEquals(4, token.getLineNum());
     assertEquals(10, token.getColumn());
 
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(4, token.getLineNum());
     assertEquals(11, token.getColumn());
 
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.LEFT_BRACE, token.getType());
+    assertEquals(TokenType.LEFT_BRACE, token.getType());
     assertEquals(5, token.getLineNum());
 
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
     assertEquals(5, token.getLineNum());
     assertEquals(2, token.getColumn());
     JactlError error = new EOFError("EOF", token);
     //System.out.println(error.getMessage());
     assertTrue(error.getMessage().contains("line 5, column 2"));
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void comments() {
@@ -515,60 +515,60 @@ class TokeniserTest {
                                         "Y 1.234D/*a\n" +
                                         "*/ /*//*/ c");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(6, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("b", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(8, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(1, token.getLineNum());
     assertEquals(9, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("X", token.getValue());
     assertEquals(2, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(2, token.getLineNum());
     assertEquals(11, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EOL, token.getType());
+    assertEquals(TokenType.EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EOL, token.getType());
+    assertEquals(TokenType.EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EOL, token.getType());
+    assertEquals(TokenType.EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EOL, token.getType());
+    assertEquals(TokenType.EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("Y", token.getValue());
     assertEquals(8, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOUBLE_CONST, token.getType());
+    assertEquals(TokenType.DOUBLE_CONST, token.getType());
     assertEquals(1.234, token.getValue());
     assertEquals("1.234D", token.getChars());
     assertEquals(8, token.getLineNum());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("c", token.getValue());
     assertEquals(9, token.getLineNum());
     assertEquals(11, token.getColumn());
 
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void comments2() {
@@ -581,84 +581,84 @@ class TokeniserTest {
                                         "Y 1.234D/*a\n" +
                                         "*/ /*//*/ c", true);
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.COMMENT, token.getType());
+    assertEquals(TokenType.COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(6, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(WHITESPACE, token.getType());
+    assertEquals(WHITESPACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("b", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(9, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(1, token.getLineNum());
     assertEquals(10, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(IDENTIFIER, token.getType());
+    assertEquals(IDENTIFIER, token.getType());
     assertEquals("X", token.getValue());
     assertEquals(2, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(2, token.getLineNum());
     assertEquals(11, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("Y", token.getValue());
     assertEquals(8, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(WHITESPACE, token.getType());
+    assertEquals(WHITESPACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOUBLE_CONST, token.getType());
+    assertEquals(TokenType.DOUBLE_CONST, token.getType());
     assertEquals(1.234, token.getValue());
     assertEquals("1.234D", token.getChars());
     assertEquals(8, token.getLineNum());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(WHITESPACE, token.getType());
+    assertEquals(WHITESPACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(COMMENT, token.getType());
+    assertEquals(COMMENT, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(WHITESPACE, token.getType());
+    assertEquals(WHITESPACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("c", token.getValue());
     assertEquals(9, token.getLineNum());
     assertEquals(11, token.getColumn());
 
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void commentsAndWhitespace() {
@@ -675,12 +675,12 @@ class TokeniserTest {
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(1, token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(6, token.getColumn());
@@ -689,16 +689,16 @@ class TokeniserTest {
     assertEquals(1, token.getLineNum());
     assertEquals(7, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("b", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(8, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(1, token.getLineNum());
     assertEquals(9, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("X", token.getValue());
     assertEquals(2, token.getLineNum());
     assertEquals(1, token.getColumn());
@@ -707,7 +707,7 @@ class TokeniserTest {
     assertEquals(2, token.getLineNum());
     assertEquals(2, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(2, token.getLineNum());
     assertEquals(11, token.getColumn());
     token = tokeniser.next();
@@ -715,7 +715,7 @@ class TokeniserTest {
     assertEquals(3, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(3, token.getLineNum());
     assertEquals(3, token.getColumn());
     token = tokeniser.next();
@@ -737,14 +737,14 @@ class TokeniserTest {
     assertEquals(1, token.getColumn());
     assertEquals(1, token.getChars().length());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("Y", token.getValue());
     assertEquals(7, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
     assertEquals(WHITESPACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOUBLE_CONST, token.getType());
+    assertEquals(TokenType.DOUBLE_CONST, token.getType());
     assertEquals(1.234, token.getValue());
     assertEquals("1.234D", token.getChars());
     assertEquals(7, token.getLineNum());
@@ -755,23 +755,27 @@ class TokeniserTest {
     assertEquals(WHITESPACE, token.getType());
     assertEquals(2, token.getChars().length());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("c", token.getValue());
     assertEquals(8, token.getLineNum());
     assertEquals(9, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.ERROR, token.getType());
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("ab", token.getValue());
+    assertEquals("'ab", token.getChars());
     assertEquals(8, token.getLineNum());
     assertEquals(10, token.getColumn());
     assertEquals(3, token.getChars().length());
-
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(TokenType.ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
     assertEquals(8, token.getLineNum());
     assertEquals(13, token.getColumn());
     assertEquals(1, token.getChars().length());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
     assertEquals(9, token.getLineNum());
     assertEquals(1, token.getColumn());
     assertEquals(0, token.getChars().length());
@@ -780,10 +784,14 @@ class TokeniserTest {
   @Test public void error() {
     Tokeniser tokeniser = new Tokeniser("'ab\n\ndef", true);
     Token     token     = tokeniser.next();
-    assertEquals(ERROR, token.getType());
+    assertEquals(STRING_CONST, token.getType());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     assertEquals("'ab", token.getChars());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertEquals(1, token.getLineNum());
+    assertEquals(4, token.getColumn());
     token = tokeniser.next();
     assertEquals(EOL, token.getType());
     assertEquals(1, token.getLineNum());
@@ -799,12 +807,12 @@ class TokeniserTest {
   @Test public void initialLineComment() {
     Tokeniser tokeniser = new Tokeniser("//\n\n123");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     assertEquals(1, token.getLineNum());
     assertEquals(3, token.getColumn());
     assertTrue(new RuntimeError("Error", token.getLine(), token.getColumn()).getMessage().contains("line 1, column 4"));
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
     assertTrue(token.is(INTEGER_CONST));
   }
@@ -829,102 +837,102 @@ class TokeniserTest {
 
   @Test public void rewind() {
     Tokeniser tokeniser = new Tokeniser("a 1 { ]>");
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.next().getType());
-    Assertions.assertEquals(TokenType.INTEGER_CONST, tokeniser.next().getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.next().getType());
+    assertEquals(TokenType.INTEGER_CONST, tokeniser.next().getType());
     Token prev  = tokeniser.previous();
     Tokeniser.State saved = tokeniser.saveState();
     Token token = tokeniser.next();
-    Assertions.assertEquals(TokenType.LEFT_BRACE, token.getType());
-    Assertions.assertEquals(TokenType.RIGHT_SQUARE, tokeniser.next().getType());
+    assertEquals(TokenType.LEFT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_SQUARE, tokeniser.next().getType());
     tokeniser.rewind(saved);
-    Assertions.assertEquals(TokenType.LEFT_BRACE, tokeniser.next().getType());
-    Assertions.assertEquals(TokenType.RIGHT_SQUARE, tokeniser.next().getType());
-    Assertions.assertEquals(TokenType.GREATER_THAN, tokeniser.next().getType());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(TokenType.LEFT_BRACE, tokeniser.next().getType());
+    assertEquals(TokenType.RIGHT_SQUARE, tokeniser.next().getType());
+    assertEquals(TokenType.GREATER_THAN, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void simpleString() {
     Tokeniser tokeniser = new Tokeniser("'abc'");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("abc", token.getValue());
     assertEquals("'abc'", token.getChars());
     assertEquals(5, token.getChars().length());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void simpleStringUTF8() {
     Tokeniser tokeniser = new Tokeniser("'abc🍟😀'");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("abc🍟😀", token.getValue());
     assertEquals("'abc🍟😀'", token.getChars());
     assertEquals("'abc🍟😀'".length(), token.getChars().length());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void simpleStrings() {
     Tokeniser tokeniser = new Tokeniser("'abc''xyz'");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("abc", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("xyz", token.getValue());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void strings() {
     Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'\n b = 2");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\fc", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
   }
 
   @Test public void strings2() {
     Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\fc", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
   }
 
   @Test public void stringsUnexpectedEndOfFile() {
     Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     try {
       token = tokeniser.next();
     }
@@ -936,15 +944,18 @@ class TokeniserTest {
   @Test public void stringsUnexpectedEndOfLine() {
     Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc\nz = 2");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("a\'b//\n/*\t*/\b\r\fc", token.getStringValue());
     token = tokeniser.next();
     assertEquals(ERROR, token.getType());
-    assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
     token = tokeniser.next();
     assertEquals(EOL, token.getType());
     token = tokeniser.next();
@@ -956,17 +967,17 @@ class TokeniserTest {
   @Test public void exprStringUnexpectedEndOfLine() {
     Tokeniser tokeniser = new Tokeniser("a=\"a'$b//\n/*\\t*/z\\b\\r\\fc\"\nx = 2", true);
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("a'", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
     assertEquals("b", token.getValue());
     //    try {
     //      token = tokeniser.next();
@@ -976,8 +987,12 @@ class TokeniserTest {
     //      assertTrue(e.getMessage().toLowerCase().contains("new line not allowed"));
     //    }
     token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("//", token.getChars());
+    token = tokeniser.next();
     assertEquals(ERROR, token.getType());
-    assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    assertEquals("", token.getChars());
     token = tokeniser.next();
     assertEquals(EOL, token.getType());
     token = tokeniser.next();
@@ -990,10 +1005,10 @@ class TokeniserTest {
   @Test public void exprStringUnexpectedEndOfLine2() {
     Tokeniser tokeniser = new Tokeniser("\"$x${\"\"\"${1\n+2}\"\"\"}\"", true);
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
     assertEquals("x", token.getValue());
     token = tokeniser.next();
     assertEquals(DOLLAR_BRACE, token.getType());
@@ -1003,6 +1018,9 @@ class TokeniserTest {
     assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
     assertEquals(INTEGER_CONST, token.getType());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
     token = tokeniser.next();
     assertEquals(ERROR, token.getType());
     assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
@@ -1019,15 +1037,102 @@ class TokeniserTest {
   @Test public void exprStringUnexpectedEndOfLine3() {
     Tokeniser tokeniser = new Tokeniser("a = \"a'//\n/*\\t*/\\b\\r\\fc\"\na = 2");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    assertTrue(token.is(ERROR));
-    assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
+    assertEquals(EXPR_STRING_START, token.getType());
+    assertEquals("\"a'//", token.getChars());
+    assertEquals("a'//", token.getStringValue());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(BACKSLASH, token.getType());
+  }
+
+  @Test public void stringUnexpectedEndOfLine() {
+    Tokeniser tokeniser = new Tokeniser("a='b//\nx", true);
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals("a", token.getValue());
+    assertEquals(1, token.getLineNum());
+    assertEquals(1, token.getColumn());
+    token = tokeniser.next();
+    assertEquals(TokenType.EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("b//", token.getStringValue());
+    assertEquals("'b//", token.getChars());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    assertEquals("", token.getChars());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("x", token.getStringValue());
+  }
+
+  @Test public void nestedStringUnexpectedEndOfLine() {
+    Tokeniser tokeniser = new Tokeniser("a=\"\"\"${'b//\nx", true);
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals("a", token.getValue());
+    assertEquals(1, token.getLineNum());
+    assertEquals(1, token.getColumn());
+    token = tokeniser.next();
+    assertEquals(TokenType.EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    assertEquals("", token.getStringValue());
+    assertEquals("\"\"\"", token.getChars());
+    token = tokeniser.next();
+    assertEquals(DOLLAR_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("b//", token.getStringValue());
+    assertEquals("'b//", token.getChars());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    assertEquals("", token.getChars());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(IDENTIFIER, token.getType());
+    assertEquals("x", token.getStringValue());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+  }
+
+  @Test public void stringUnexpectedEndOfFile() {
+    Tokeniser tokeniser = new Tokeniser("a='b//", true);
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals("a", token.getValue());
+    assertEquals(1, token.getLineNum());
+    assertEquals(1, token.getColumn());
+    token = tokeniser.next();
+    assertEquals(TokenType.EQUAL, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("b//", token.getStringValue());
+    assertEquals("'b//", token.getChars());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected end of file"));
+    assertEquals("", token.getChars());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
   }
 
   @Test public void simpleExprString() {
@@ -1047,7 +1152,7 @@ class TokeniserTest {
     String string = "'''a\\'b//\\n/*\\t*/\\b\\r\\f\nc'''";
     Tokeniser tokeniser = new Tokeniser(string);
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\f\nc", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
@@ -1057,50 +1162,50 @@ class TokeniserTest {
   @Test public void multiLineStrings() {
     Tokeniser tokeniser = new Tokeniser("a = '''a\\'b//\\n/*\\t*/\\b\\r\\f\nc'''\n b = 2");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\n/*\t*/\b\r\f\nc", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
   }
 
   @Test public void multiLineStringsWithCarriageReturns() {
     Tokeniser tokeniser = new Tokeniser("a = '''a\\'b//\r\n/*\\t*/\\b\\r\\f\r\nc'''\r\n b = 2");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     assertEquals(1, token.getLineNum());
     assertEquals(1, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("a'b//\r\n/*\t*/\b\r\f\r\nc", token.getValue());
     assertEquals("'''a\\'b//\r\n/*\\t*/\\b\\r\\f\r\nc'''", token.getChars());
     assertEquals(1, token.getLineNum());
     assertEquals(5, token.getColumn());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
   }
 
   @Test public void keywordFollowedByWordChar() {
@@ -1125,83 +1230,88 @@ class TokeniserTest {
   @Test public void stringExpr() {
     Tokeniser tokeniser = new Tokeniser("\"This is $abc. a test\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("This is ", token.getValue());
     assertEquals(0, token.getOffset());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(TokenType.DOLLAR_IDENTIFIER, token.getType());
     assertEquals("abc", token.getValue());
     assertEquals(9, token.getOffset());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals(". a test", token.getValue());
     assertEquals(13, token.getOffset());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     assertEquals(21, token.getOffset());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void nestedStringExpr() {
     Tokeniser tokeniser = new Tokeniser("\"\"\"This ${is}${abc + \"x${\"\"\"a\"\"\"}\"}. a test\"\"\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("This ", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOLLAR_BRACE, token.getType());
+    assertEquals(TokenType.DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("is", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("abc", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.PLUS, token.getType());
+    assertEquals(TokenType.PLUS, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("x", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("a", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals(". a test", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void multiLineStringInsideSingleLineString() {
     Tokeniser tokeniser = new Tokeniser("\"this is a ${'''\n'''} test\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals("", token.getStringValue());
     token = tokeniser.next();
     assertEquals(ERROR, token.getType());
-    assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
   }
 
   @Test public void dollarKeywordInStringExpr() {
     Tokeniser tokeniser = new Tokeniser("\"for $whilex$while\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
     assertEquals("whilex", token.getValue());
     token = tokeniser.next();
     assertEquals(ERROR, token.getType());
@@ -1227,260 +1337,336 @@ class TokeniserTest {
   @Test public void rightBraceInStringExpr() {
     Tokeniser tokeniser = new Tokeniser("\"${a}}\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("}", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
+  }
+
+  @Test public void eofAfterDollar() {
+    Tokeniser tokeniser = new Tokeniser("println \"x=$");
+    Token     token     = tokeniser.next();
+    assertEquals(PRINTLN, token.getType());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+  }
+
+  @Test public void endOfStringAfterDollarBrace() {
+    Tokeniser tokeniser = new Tokeniser("println \"x=${\"");
+    Token     token     = tokeniser.next();
+    assertEquals(PRINTLN, token.getType());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    token = tokeniser.next();
+    assertEquals(DOLLAR_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
   }
 
   @Test public void nestedExprStrings() {
     Tokeniser tokeniser = new Tokeniser("\"$x${\"${2*4}\" + 2}/*\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
     assertEquals("x", token.getValue());
+    assertEquals("$x", token.getChars());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.DOLLAR_BRACE, token.getType());
+    assertEquals(TokenType.DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(2, token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STAR, token.getType());
+    assertEquals(TokenType.STAR, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(4, token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.PLUS, token.getType());
+    assertEquals(TokenType.PLUS, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     assertEquals(2, token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("/*", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void newLineInExpressionInSingleLineString() {
     Tokeniser tokeniser = new Tokeniser("\"${a = \n2}\"");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
     assertEquals("", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EQUAL, token.getType());
+    assertEquals(TokenType.EQUAL, token.getType());
     token = tokeniser.next();
     assertEquals(ERROR, token.getType());
     assertTrue(token.getStringValue().toLowerCase().contains("new line not allowed"));
   }
 
+  @Test public void newLineInExpressionInSingleLineString2() {
+    Tokeniser tokeniser = new Tokeniser("println \"x=${x\"\n  ", true);
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.PRINTLN, token.getType());
+    token = tokeniser.next();
+    assertEquals(WHITESPACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals("x=", token.getValue());
+    token = tokeniser.next();
+    assertEquals(DOLLAR_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals("x", token.getValue());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    assertEquals("\"", token.getChars());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("unexpected new line"));
+    assertEquals("", token.getChars());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(WHITESPACE, token.getType());
+  }
+
+  @Test public void newLineInExpressionInSingleLineString3() {
+    Tokeniser tokeniser = new Tokeniser("println \"x=${x\n  ", true);
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.PRINTLN, token.getType());
+    token = tokeniser.next();
+    assertEquals(WHITESPACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(TokenType.EXPR_STRING_START, token.getType());
+    assertEquals("x=", token.getValue());
+    token = tokeniser.next();
+    assertEquals(DOLLAR_BRACE, token.getType());
+    token = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals("x", token.getValue());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertTrue(token.getStringValue().toLowerCase().contains("new line"));
+    assertEquals("", token.getChars());
+    token = tokeniser.next();
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(WHITESPACE, token.getType());
+  }
+
   @Test public void peek() {
     Tokeniser tokeniser = new Tokeniser("+ - *");
-    Assertions.assertEquals(TokenType.PLUS, tokeniser.peek().getType());
+    assertEquals(TokenType.PLUS, tokeniser.peek().getType());
     Token prev  = tokeniser.previous();
     Tokeniser.State saved = tokeniser.saveState();
     Token token = tokeniser.next();
-    Assertions.assertEquals(TokenType.PLUS, token.getType());
-    Assertions.assertEquals(TokenType.MINUS, tokeniser.peek().getType());
+    assertEquals(TokenType.PLUS, token.getType());
+    assertEquals(TokenType.MINUS, tokeniser.peek().getType());
     tokeniser.rewind(saved);
-    Assertions.assertEquals(TokenType.PLUS, tokeniser.peek().getType());
+    assertEquals(TokenType.PLUS, tokeniser.peek().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.PLUS, token.getType());
-    Assertions.assertEquals(TokenType.MINUS, tokeniser.peek().getType());
-    Assertions.assertEquals(TokenType.MINUS, tokeniser.next().getType());
-    Assertions.assertEquals(TokenType.STAR, tokeniser.next().getType());
-    Assertions.assertEquals(EOF, tokeniser.peek().getType());
-    Assertions.assertEquals(EOF, tokeniser.next().getType());
+    assertEquals(TokenType.PLUS, token.getType());
+    assertEquals(TokenType.MINUS, tokeniser.peek().getType());
+    assertEquals(TokenType.MINUS, tokeniser.next().getType());
+    assertEquals(TokenType.STAR, tokeniser.next().getType());
+    assertEquals(EOF, tokeniser.peek().getType());
+    assertEquals(EOF, tokeniser.next().getType());
   }
 
   @Test public void peekEmpty() {
     Tokeniser tokeniser = new Tokeniser("");
-    Assertions.assertEquals(EOF, tokeniser.peek().getType());
+    assertEquals(EOF, tokeniser.peek().getType());
     Token token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
-    Assertions.assertEquals(EOF, tokeniser.peek().getType());
+    assertEquals(EOF, token.getType());
+    assertEquals(EOF, tokeniser.peek().getType());
   }
 
   @Test public void peekEmptyComment() {
     Tokeniser tokeniser = new Tokeniser("/* no tokens */");
-    Assertions.assertEquals(EOF, tokeniser.peek().getType());
+    assertEquals(EOF, tokeniser.peek().getType());
     Token token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
-    Assertions.assertEquals(EOF, tokeniser.peek().getType());
+    assertEquals(EOF, token.getType());
+    assertEquals(EOF, tokeniser.peek().getType());
   }
 
   @Test public void newlines() {
     Tokeniser tokeniser = new Tokeniser("\n\na\nb\n\nc\n\n\n\n");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
-    Assertions.assertEquals(EOL, tokeniser.previous().getType());
+    assertEquals(EOL, token.getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
+    assertEquals(EOL, tokeniser.previous().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.previous().getType());
-    Assertions.assertEquals(EOL, tokeniser.peek().getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.previous().getType());
+    assertEquals(EOL, tokeniser.peek().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
-    Assertions.assertEquals(EOL, tokeniser.previous().getType());
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
+    assertEquals(EOL, token.getType());
+    assertEquals(EOL, tokeniser.previous().getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
   }
 
   @Test public void newlinesWithCarriageReturns() {
     Tokeniser tokeniser = new Tokeniser("\r\n\r\na\r\nb\r\n\r\nc\r\n\r\n\r\n\r\n");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
-    Assertions.assertEquals(EOL, tokeniser.previous().getType());
+    assertEquals(EOL, token.getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
+    assertEquals(EOL, tokeniser.previous().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.previous().getType());
-    Assertions.assertEquals(EOL, tokeniser.peek().getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.previous().getType());
+    assertEquals(EOL, tokeniser.peek().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
-    Assertions.assertEquals(EOL, tokeniser.previous().getType());
-    Assertions.assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
+    assertEquals(EOL, token.getType());
+    assertEquals(EOL, tokeniser.previous().getType());
+    assertEquals(TokenType.IDENTIFIER, tokeniser.peek().getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
   }
 
   @Test public void regexStrings() {
     Tokeniser tokeniser = new Tokeniser("a =~ /(a\\/$a${x\n+y}\\n/*2");
     Token     token     = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EQUAL_GRAVE, token.getType());
+    assertEquals(EQUAL_GRAVE, token.getType());
     Tokeniser.State saved = tokeniser.saveState();
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.SLASH, token.getType());
+    assertEquals(TokenType.SLASH, token.getType());
     Token previous   = tokeniser.previous();
     Token slashToken = token;
     tokeniser.startRegex();
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("(a/", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOL, token.getType());
+    assertEquals(EOL, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.PLUS, token.getType());
+    assertEquals(TokenType.PLUS, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.IDENTIFIER, token.getType());
+    assertEquals(TokenType.IDENTIFIER, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.RIGHT_BRACE, token.getType());
+    assertEquals(TokenType.RIGHT_BRACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("\\n", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STAR, token.getType());
+    assertEquals(TokenType.STAR, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.INTEGER_CONST, token.getType());
+    assertEquals(TokenType.INTEGER_CONST, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(EOF, token.getType());
+    assertEquals(EOF, token.getType());
 
     tokeniser.rewind(saved);
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.SLASH, token.getType());
+    assertEquals(TokenType.SLASH, token.getType());
     tokeniser.startRegex();
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("(a/", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_IDENTIFIER, token.getType());
+    assertEquals(DOLLAR_IDENTIFIER, token.getType());
     assertEquals("a", token.getValue());
     token = tokeniser.next();
-    Assertions.assertEquals(DOLLAR_BRACE, token.getType());
+    assertEquals(DOLLAR_BRACE, token.getType());
   }
 
   @Test public void regexSubstitute() {
     Tokeniser tokeniser = new Tokeniser("s/ab/de/g");
     Token token = tokeniser.next();
-    Assertions.assertEquals(TokenType.REGEX_SUBST_START, token.getType());
+    assertEquals(TokenType.REGEX_SUBST_START, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("ab", token.getStringValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.REGEX_REPLACE, token.getType());
+    assertEquals(TokenType.REGEX_REPLACE, token.getType());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals(TokenType.STRING_CONST, token.getType());
     assertEquals("de", token.getStringValue());
     token = tokeniser.next();
-    Assertions.assertEquals(TokenType.EXPR_STRING_END, token.getType());
+    assertEquals(TokenType.EXPR_STRING_END, token.getType());
     assertEquals("g", token.getStringValue());
   }
 

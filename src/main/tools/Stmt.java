@@ -105,6 +105,7 @@ class Stmt extends JactlUserDataHolder {
   class ClassDecl extends Stmt {
     Token                name;
     String               packageName;
+    Token                packageToken;
     Token                baseClassToken;
     JactlType            baseClass;
     boolean              isInterface;

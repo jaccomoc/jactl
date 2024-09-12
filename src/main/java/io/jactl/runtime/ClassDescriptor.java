@@ -29,8 +29,9 @@ public class ClassDescriptor extends JactlUserDataHolder {
   String                          namePath;      // Name including outerclasses: _$j$Script123$X$Y$Z
   String                          pkg;           // a.b.c
   String                          packagedName;  // a.b.c._$j$Script123$X$Y$Z
+  String                          javaPackagedName;  // io.jactl.a.b.c._$j$Script123$X$Y$Z
   String                          prettyName;    // a.b.c.X.Y.Z
-  String                          internalName;  // io/jactl/pkg/a/b/c/_$j$Script123/X/Y/Z
+  String                          internalName;  // io/jactl/pkg/a/b/c/_$j$Script123$X$Y$Z
   boolean                         isInterface;
   JactlType                       baseClass;
   boolean                         isCyclicInheritance = false;
@@ -76,6 +77,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
     }
     this.prettyName = (pkgName.equals("")?"":(pkgName + ".")) + prettyName;
     this.packagedName = (pkgName.equals("")?"":(pkgName + ".")) + namePath;
+    this.javaPackagedName = (javaPackage.equals("") ? "" : javaPackage + ".") + packagedName;
     this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
     this.allFieldsAreDefaults = allFieldsAreDefaults;
   }
@@ -84,6 +86,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
   public String     getNamePath()     { return namePath; }
   public String     getPackageName()  { return pkg; }
   public String     getPackagedName() { return packagedName; }
+  public String     getJavaPackagedName() { return javaPackagedName; }
   public String     getPrettyName()   { return prettyName; }
   public String     getInternalName() { return internalName; }
   public JactlType  getClassType()    { return JactlType.createClass(this); }

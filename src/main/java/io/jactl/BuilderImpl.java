@@ -20,6 +20,7 @@ package io.jactl;
 import io.jactl.*;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -45,6 +46,14 @@ public class BuilderImpl implements Builder {
     if (!errors.isEmpty()) {
       throw new CompileError(new ArrayList<>(errors));
     }
+  }
+
+  public boolean hasErrors() {
+    return !errors.isEmpty();
+  }
+
+  public Collection<CompileError> getErrors() {
+    return errors;
   }
 
   @Override public Marker mark() {

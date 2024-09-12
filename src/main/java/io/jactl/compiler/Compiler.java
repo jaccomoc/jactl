@@ -38,17 +38,23 @@ public class Compiler {
     return compiled.runSync(bindings);
   }
 
+  public static Object eval(String source, JactlContext jactlContext, String scriptClassName, String packageName, Map<String,Object> bindings) {
+    JactlScript compiled = compileScript(source, jactlContext, scriptClassName, packageName, bindings);
+    return compiled.runSync(bindings);
+  }
+
   public static JactlScript compileScript(String source, JactlContext jactlContext, Map<String, Object> bindings) {
-    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
-    return compileScript(source, jactlContext, className, Utils.DEFAULT_JACTL_PKG, bindings);
+    return compileScript(source, jactlContext, null, Utils.DEFAULT_JACTL_PKG, bindings);
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
-    String className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
-    return compileScript(source, jactlContext, className, packageName, bindings);
+    return compileScript(source, jactlContext, null, packageName, bindings);
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
+    if (className == null) {
+      className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
+    }
     Parser         parser = new Parser(new Tokeniser(source, true), jactlContext, packageName);
     Stmt.ClassDecl script = parser.parseScript(className);
     Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
@@ -87,7 +93,7 @@ public class Compiler {
   }
 
   public static void compileClass(String source, JactlContext jactlContext, String packageName, Stmt.ClassDecl clss) {
-    ClassCompiler compiler = new  ClassCompiler(source, jactlContext, packageName, clss, clss.name.getStringValue() + ".jactl");
+    ClassCompiler compiler = new ClassCompiler(source, jactlContext, packageName, clss, clss.name.getStringValue() + ".jactl");
     compiler.compileClass();
   }
 }

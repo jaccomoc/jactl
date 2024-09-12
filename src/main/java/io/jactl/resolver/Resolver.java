@@ -181,13 +181,21 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   public synchronized void resolveScript(Stmt.ClassDecl classDecl) {
-    resolveScriptOrClass(classDecl, true);
+    resolveScriptOrClass(classDecl, true, classDecl.name.getStringValue(), classDecl.packageName);
   }
 
-  public synchronized List<CompileError> resolveScriptOrClass(Stmt.ClassDecl classDecl, boolean throwError) {
+  public synchronized List<CompileError> resolveScriptOrClass(Stmt.ClassDecl classDecl, boolean throwError, String scriptName, String packageName) {
     if (classDecl.scriptMain != null) {
       isScript = true;
-      this.scriptName = classDecl.name.getStringValue();
+      this.scriptName = scriptName;
+      // For Intellij plugin we parse with a dummy name so we need to set the name here when we know the file name
+      classDecl.name.setValue(scriptName);
+      if (classDecl.packageName == null || classDecl.packageName.isEmpty()) {
+        classDecl.packageName = packageName;
+      }
+      else if (!classDecl.packageName.equals(packageName)) {
+        error("Package name " + classDecl.packageName + " does not match package based on file location (" + packageName + ")", classDecl.packageToken == null ? classDecl.name : classDecl.packageToken);
+      }
     }
     resolveClass(classDecl, throwError);
     if (errors.size() > 0 && throwError) {

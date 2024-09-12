@@ -19,6 +19,9 @@ package io.jactl;
 
 import io.jactl.runtime.*;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -61,7 +64,9 @@ public class JactlContext {
 
   private PackageChecker       packageChecker = name -> packages.contains(name);
   private ClassLookup          classLookup    = name -> classDescriptors.get(name);
+  private ClassAdder           classAdder     = this::_defineClass;
   private boolean              isIdePlugin    = false;
+  private File                 buildDir;
 
   DynamicClassLoader           classLoader = new DynamicClassLoader();
 
@@ -98,6 +103,10 @@ public class JactlContext {
     return null;
   }
 
+  public ClassDescriptor getExistingClassDescriptor(String internalName) {
+    return classDescriptors.get(internalName);
+  }
+
   ///////////////////////////////////
 
   private JactlContextBuilder getJactlContextBuilder() {
@@ -105,6 +114,10 @@ public class JactlContext {
   }
 
   public Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
+    return classAdder.addClass(descriptor, bytes);
+  }
+
+  private Class<?> _defineClass(ClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replaceAll("/", ".");
     if (classLoader.getClass(className) != null) {
       // Redefining existing class so create a new ClassLoader. This allows already defined classes that
@@ -113,11 +126,30 @@ public class JactlContext {
     }
     Class<?> clss = classLoader.defineClass(descriptor.getInternalName(), className, bytes);
     addClass(descriptor);
+    if (buildDir != null) {
+      String dirName  = descriptor.getJavaPackagedName().replaceAll("\\.[^\\.]*$", "");
+      String fileName = descriptor.getNamePath() + ".class";
+      File   pkg      = new File(buildDir, dirName);
+      if (!pkg.mkdirs()) {
+        throw new RuntimeException("Could not create package directory '" + pkg.getPath() + "'");
+      }
+      try {
+        FileOutputStream fileOutputStream = new FileOutputStream(new File(pkg, fileName));
+        fileOutputStream.write(bytes);
+        fileOutputStream.close();
+      }
+      catch (IOException e) {
+        throw new RuntimeException("Error writing class file for " + descriptor.getPackagedName() + ": " + e, e);
+      }
+    }
     return clss;
   }
 
   public interface PackageChecker { boolean exists(String name); }
-  public interface ClassLookup    { ClassDescriptor lookup(String name); }
+
+  // Helper that maps internal name (io.jactl.pkg.a.b.c.A$B$C) to class descriptor
+  public interface ClassLookup    { ClassDescriptor lookup(String internalName); }
+  public interface ClassAdder     { Class<?>        addClass(ClassDescriptor descriptor, byte[] bytes); }
 
   public class JactlContextBuilder {
     private JactlContextBuilder() {}
@@ -130,7 +162,22 @@ public class JactlContext {
 
     public JactlContextBuilder packageChecker(PackageChecker pc) { packageChecker     = pc;      return this; }
     public JactlContextBuilder classLookup(ClassLookup lookup)   { classLookup        = lookup;  return this; }
+    public JactlContextBuilder classAdder(ClassAdder adder)      { classAdder         = adder;   return this; }
     public JactlContextBuilder idePlugin(boolean value)          { isIdePlugin = value;   return this; }
+    public JactlContextBuilder buildDir(String buildPath) {
+      buildDir = new File(buildPath);
+      if (buildDir.exists()) {
+        if (!buildDir.isDirectory()) {
+          throw new IllegalArgumentException("'" + buildPath + "' is not a directory");
+        }
+      }
+      else {
+        if (!buildDir.mkdirs()) {
+          throw new IllegalArgumentException("Could not create directory '" + buildPath + "'");
+        }
+      }
+      return this;
+    }
 
     // Testing only
     public JactlContextBuilder checkpoint(boolean value)         { checkpoint             = value;   return this; }

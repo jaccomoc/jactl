@@ -3317,14 +3317,14 @@ class CompilerTest extends BaseTest {
     testError("def x = 3; \"\"\"${1+2}$\"\"\" + 'abc'", "unexpected character '\"'");
     testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
     testError("def x = 3; \"\"\"${1+2}${\"\"\" + 'abc'", "unexpected end of file");
-    testError("def x = 3; \"\"\"${1+2}${x\"\"\" + 'abc'", "unexpected end of file");
-    testError("def x = 3; \"\"\"${1+2}${x\"\"\"} + 'abc'", "unexpected end of file");
+    testError("def x = 3; \"\"\"${1+2}${x + \"\"\" + 'abc'", "unexpected end of file");
+    testError("def x = 3; \"\"\"${1+2}${x + \"\"\"} + 'abc'", "unexpected end of file");
     testError("def x = 3; \"$x=${\"\"\"${1+2}${\"\"\"}\"", "unexpected end of file");
     testError("def x = 3; \"$x=${\"\"\"${1+2}$\"\"\"}\"", "expecting start of identifier");
     testError("def x = 3; \"\"\"${1+2}$\"\"\" + 'abc'", "expecting start of identifier");
 
     testError("def x = 3; \"$x=${\"\"\"${1\n+2}\"\"\"}\"", "new line not allowed");
-    testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "new line not allowed");
+    testError("def x = 3; \"$x=${\"\"\"\n${1\n+2}\n\"\"\"}\"", "unexpected new line");
 
     test("def x = (byte)1; /$x/", "1");
     test("def x = 1; /$x/", "1");

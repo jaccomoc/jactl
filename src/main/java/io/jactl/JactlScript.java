@@ -17,11 +17,20 @@
 
 package io.jactl;
 
+import io.jactl.runtime.Continuation;
+import io.jactl.runtime.JactlScriptObject;
+import io.jactl.runtime.RuntimeError;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * A compiled JactlScript.
@@ -34,6 +43,63 @@ public class JactlScript {
   public JactlScript(JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
     this.jactlContext = jactlContext;
     this.script        = script;
+  }
+
+  public static JactlScript createScript(Function<Map<String, Object>, Object> invoker, JactlContext context) {
+    return new JactlScript(context, (map,completion) -> {
+      try {
+        Object result = invoker.apply(map);
+        completion.accept(result);
+      }
+      catch (Continuation c) {
+        context.asyncWork(completion, c, c.scriptInstance);
+      }
+      catch (JactlError | IllegalStateException | IllegalArgumentException e) {
+        completion.accept(e);
+      }
+      catch (Throwable t) {
+        completion.accept(new IllegalStateException("Invocation error: " + t, t));
+      }
+    });
+  }
+
+  public static Function<Map<String,Object>,Object> createInvoker(Class clazz, JactlContext context) {
+    try {
+      Method       method     = Utils.findMethod(clazz, Utils.JACTL_SCRIPT_MAIN, false);
+      MethodType   methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
+      MethodHandle mh         = MethodHandles.publicLookup().findVirtual(clazz, Utils.JACTL_SCRIPT_MAIN, methodType);
+      boolean      isAsync    = method.getParameterTypes().length != 1;
+      return map -> {
+        JactlScriptObject instance = null;
+        try {
+          instance        = (JactlScriptObject)clazz.getDeclaredConstructor().newInstance();
+          Object result   = isAsync ? mh.invoke(instance, (Continuation) null, map)
+                                    : mh.invoke(instance, map);
+          cleanUp(instance, context);
+          return result;
+        }
+        catch (Continuation c) {
+          throw c;
+        }
+        catch (RuntimeError e) {
+          cleanUp(instance, context);
+          throw e;
+        }
+        catch (Throwable e) {
+          cleanUp(instance, context);
+          throw new RuntimeException(e);
+        }
+      };
+    }
+    catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new IllegalStateException("Internal error: " + e, e);
+    }
+  }
+
+  private static void cleanUp(JactlScriptObject instance, JactlContext context) {
+    if (instance.isCheckpointed()) {
+      context.deleteCheckpoint(instance.getInstanceId(), instance.checkpointId());
+    }
   }
 
   /**

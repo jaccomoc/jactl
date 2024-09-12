@@ -18,15 +18,9 @@
 package io.jactl.compiler;
 
 import io.jactl.*;
-import io.jactl.runtime.Continuation;
-import io.jactl.runtime.RuntimeError;
-import io.jactl.runtime.*;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -34,7 +28,7 @@ import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 
 public class ScriptCompiler extends ClassCompiler {
 
-  ScriptCompiler(String source, JactlContext context, Stmt.ClassDecl classDecl) {
+  public ScriptCompiler(String source, JactlContext context, Stmt.ClassDecl classDecl) {
     super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jactl");
   }
 
@@ -45,25 +39,10 @@ public class ScriptCompiler extends ClassCompiler {
    */
   JactlScript compileWithCompletion() {
     Function<Map<String, Object>, Object> scriptMain = compile();
-
-    return new JactlScript(context, (map,completion) -> {
-      try {
-        Object result = scriptMain.apply(map);
-        completion.accept(result);
-      }
-      catch (Continuation c) {
-        context.asyncWork(completion, c, c.scriptInstance);
-      }
-      catch (JactlError | IllegalStateException | IllegalArgumentException e) {
-        completion.accept(e);
-      }
-      catch (Throwable t) {
-        completion.accept(new IllegalStateException("Invocation error: " + t, t));
-      }
-    });
+    return JactlScript.createScript(scriptMain, context);
   }
 
-  Function<Map<String,Object>, Object> compile() {
+  public Function<Map<String,Object>, Object> compile() {
     FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
     globalVars.visitEnd();
 
@@ -72,35 +51,10 @@ public class ScriptCompiler extends ClassCompiler {
     compileJactlObjectFunctions();
     finishClassCompile();
 
-    try {
-      MethodType   methodType = MethodCompiler.getMethodType(classDecl.scriptMain.declExpr);
-      boolean      isAsync    = classDecl.scriptMain.declExpr.functionDescriptor.isAsync;
-      MethodHandle mh         = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACTL_SCRIPT_MAIN, methodType);
-      return map -> {
-        JactlScriptObject instance = null;
-        try {
-          instance        = (JactlScriptObject)compiledClass.getDeclaredConstructor().newInstance();
-          Object result   = isAsync ? mh.invoke(instance, (Continuation) null, map)
-                                    : mh.invoke(instance, map);
-          cleanUp(instance);
-          return result;
-        }
-        catch (Continuation c) {
-          throw c;
-        }
-        catch (RuntimeError e) {
-          cleanUp(instance);
-          throw e;
-        }
-        catch (Throwable e) {
-          cleanUp(instance);
-          throw new RuntimeException(e);
-        }
-      };
+    if (compiledClass == null) {
+      return null;
     }
-    catch (NoSuchMethodException | IllegalAccessException e) {
-      throw new IllegalStateException("Internal error: " + e, e);
-    }
+    return JactlScript.createInvoker(compiledClass, context);
   }
 
   private void compileScriptMain() {
@@ -111,9 +65,4 @@ public class ScriptCompiler extends ClassCompiler {
     addHandleToClass(method);
   }
 
-  private void cleanUp(JactlScriptObject instance) {
-    if (instance.isCheckpointed()) {
-      context.deleteCheckpoint(instance.getInstanceId(), instance.checkpointId());
-    }
-  }
 }

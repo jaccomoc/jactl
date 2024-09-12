@@ -125,6 +125,7 @@ public abstract class Stmt extends JactlUserDataHolder {
   public static class ClassDecl extends Stmt {
     public Token                name;
     public String               packageName;
+    public Token                packageToken;
     public Token                baseClassToken;
     public JactlType            baseClass;
     public boolean              isInterface;
@@ -149,16 +150,17 @@ public abstract class Stmt extends JactlUserDataHolder {
     public ClassDescriptor classDescriptor;
 
     public boolean isScriptClass() { return scriptMain != null; }
-    public ClassDecl(Token name, String packageName, Token baseClassToken, JactlType baseClass, boolean isInterface) {
+    public ClassDecl(Token name, String packageName, Token packageToken, Token baseClassToken, JactlType baseClass, boolean isInterface) {
       this.name = name;
       this.packageName = packageName;
+      this.packageToken = packageToken;
       this.baseClassToken = baseClassToken;
       this.baseClass = baseClass;
       this.isInterface = isInterface;
       this.location = name;
     }
     @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitClassDecl(this); }
-    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "baseClassToken=" + baseClassToken + ", " + "baseClass=" + baseClass + ", " + "isInterface=" + isInterface + "]"; }
+    @Override public String toString() { return "ClassDecl[" + "name=" + name + ", " + "packageName=" + packageName + ", " + "packageToken=" + packageToken + ", " + "baseClassToken=" + baseClassToken + ", " + "baseClass=" + baseClass + ", " + "isInterface=" + isInterface + "]"; }
   }
 
   /**

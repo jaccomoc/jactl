@@ -18,15 +18,14 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
-import io.jactl.runtime.BuiltinFunctions;
-import io.jactl.runtime.JactlFunction;
-import io.jactl.runtime.RuntimeError;
-import io.jactl.runtime.RuntimeState;
+import io.jactl.runtime.*;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -227,22 +226,37 @@ public class Jactl {
    * @throws IOException if an error occurs
    */
   public static void main(String[] args) throws IOException {
-    String usage = "Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]* \n" +
-                   "         -p           : run in a print loop reading input from stdin or files\n" +
-                   "         -n           : run in a loop without printing each line\n" +
-                   "         -e script    : script string is interpreted as Jactl code (programFile not used)\n" +
-                   "         -v           : show verbose errors (give stack trace)\n" +
-                   "         -V var=value : initialise Jactl variable before running script\n" +
-                   "         -d           : debug: output generated code\n" +
-                   "         -c           : do not read .jactlrc config file\n" +
-                   "         -h           : print this help\n";
-    Map<Character, Object> argMap = Utils.parseArgs(args, "d*vcpne:V:*",
-                                                    usage);
+    new Jactl().run(args);
+  }
+
+  ////////////////////////////////////
+
+  final static String usage =
+    "Usage: jactl [options] [programFile] [inputFile]* [--] [arguments]* \n" +
+    "         -p               : run in a print loop reading input from stdin or files\n" +
+    "         -n               : run in a loop without printing each line\n" +
+    "         -e script        : script string is interpreted as Jactl code (programFile not used)\n" +
+    "         -v               : show verbose errors (give stack trace)\n" +
+    "         -V var=value     : initialise Jactl variable before running script\n" +
+    "         -P path,path,... : paths to package root for importing classes\n" +
+    "         -k pkgName       : run script as though it belongs to this package\n" +
+    "         -d               : debug: output generated code\n" +
+    "         -c               : do not read .jactlrc config file\n" +
+    "         -h               : print this help\n";
+
+  JactlContext context;
+  boolean      verbose;
+
+  private void run(String[] args) throws IOException {
+    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*vcCpne:P:V:*", usage);
     List<String> files     = (List<String>) argMap.get('*');
     List<String> arguments = (List<String>) argMap.get('@');
-    String       script;
+    String       script    = null;
+    verbose = argMap.containsKey('v');
+    String scriptClassName;
     if (argMap.containsKey('e')) {
       script = (String) argMap.get('e');
+      scriptClassName = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(script);
     }
     else {
       if (files.size() == 0) {
@@ -250,7 +264,15 @@ public class Jactl {
         throw new IllegalArgumentException("Missing '-e' option and no programFile specified");
       }
       String file = files.remove(0);
-      script = new String(Files.readAllBytes(Paths.get(file)));
+      if (argMap.containsKey('C')) {
+        // If -C option then programFile is actually a class name
+        scriptClassName = file;
+      }
+      else {
+        script = new String(Files.readAllBytes(Paths.get(file)));
+        scriptClassName = file.replaceAll("^.*" + File.separatorChar, "")
+                              .replaceAll("\\.[^\\.]*$", "");
+      }
     }
     Map<String,Object> globals   = new HashMap<>();
     if (argMap.containsKey('V')) {
@@ -293,29 +315,54 @@ public class Jactl {
       RuntimeState.setInput(input);
       RuntimeState.setOutput(output);
 
-      JactlContext context = JactlContext.create()
-                                         .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
-                                         .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
-                                         .printLoop(argMap.containsKey('p'))
-                                         .nonPrintLoop(argMap.containsKey('n'))
-                                         .build();
+      JactlContext.JactlContextBuilder builder = JactlContext.create()
+                                                             .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
+                                                             .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
+                                                             .printLoop(argMap.containsKey('p'))
+                                                             .nonPrintLoop(argMap.containsKey('n'));
+
+      if (argMap.containsKey('P')) {
+        String[] paths = ((String)argMap.get('P')).split(",");
+        List<File> roots = Arrays.stream(paths).map(p -> {
+          File root = new File(p);
+          if (!root.exists()) {
+            error("Class package root '" + p + "' does not exist");
+          }
+          if (!root.isDirectory()) {
+            error("Class package root '" + p + "' is not a directory");
+          }
+          return root;
+        }).collect(Collectors.toList());
+        builder = builder.packageChecker(pkgName -> roots.stream().anyMatch(root -> {
+                           File file = new File(root, pkgName.replace('.', File.separatorChar));
+                           return file.exists() && file.isDirectory();
+                         }))
+                         .classLookup(name -> lookup(name, roots));
+      }
+
+      context = builder.build();
+
       Object result = null;
-      result = Compiler.eval(script, context, globals);
+      if (argMap.containsKey('C')) {
+        Class           clazz     = Class.forName(scriptClassName);
+        AtomicReference resultRef = new AtomicReference();
+        Function<Map<String,Object>,Object> invoker = JactlScript.createInvoker(clazz, context);
+        JactlScript     jactlScript = JactlScript.createScript(invoker, context);
+
+        result = jactlScript.runSync(globals);
+      }
+      else {
+        result = Compiler.eval(script, context, scriptClassName, argMap.containsKey('k') ? (String) argMap.get('k') : Utils.DEFAULT_JACTL_PKG, globals);
+      }
+
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
       if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
         System.out.println(result);
       }
     }
-    catch (Throwable e) {
-      if (argMap.containsKey('v')) {
-        e.printStackTrace();
-      }
-      else {
-        System.err.println(e.getMessage());
-      }
-      System.exit(1);
+    catch (Throwable t) {
+      error(t);
     }
-
     System.exit(0);
   }
 
@@ -344,5 +391,72 @@ public class Jactl {
       System.exit(1);
       return null;
     }
+  }
+
+  private void error(Throwable t) {
+    if (t instanceof CompileError) {
+      error(((CompileError)t).getMessage(verbose));
+    }
+    if (verbose) {
+      t.printStackTrace(System.err);
+      System.exit(1);
+    }
+    else {
+      error(t.getClass().getName() + ": " + t.getMessage());
+    }
+  }
+
+  private static void error(String msg) {
+    System.err.println(msg);
+    System.exit(1);
+  }
+
+  private ClassDescriptor lookup(String internalName, List<File> roots) {
+    ClassDescriptor classDescriptor = context.getExistingClassDescriptor(internalName);
+    if (classDescriptor != null) {
+      return classDescriptor;
+    }
+
+    String jactlName;
+    if (internalName.startsWith(context.internalJavaPackage)) {
+      jactlName = internalName.substring(context.internalJavaPackage.length() + 1);
+    }
+    else {
+      throw new IllegalStateException("Class package must begin with " + context.internalJavaPackage + " but was '" + internalName + "'");
+    }
+
+    // Get base a.b.c.X name without any inner class names
+    int dollarIdx = jactlName.indexOf('$');
+    String fileClass = jactlName;
+    if (dollarIdx != -1) {
+      fileClass = jactlName.substring(0, dollarIdx);
+    }
+    fileClass = fileClass + ".jactl";
+
+    String fileName = fileClass;
+    File file = roots.stream()
+                     .map(root -> new File(root,fileName))
+                     .filter(f -> f.exists() && !f.isDirectory())
+                     .findFirst()
+                     .orElse(null);
+
+    if (file == null) {
+      return null;
+    }
+
+    try {
+      String text = new String(Files.readAllBytes(file.toPath()));
+
+      // Compile the class since we haven't yet encountered it
+      Jactl.compileClass(text, context);
+      return context.getExistingClassDescriptor(internalName);
+    }
+    catch (CompileError e) {
+      error(e.getMessage(verbose));
+    }
+    catch (Throwable t) {
+      error(t.getMessage());
+    }
+    return null;
   }
 }
