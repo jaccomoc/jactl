@@ -335,7 +335,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
-    analyse(expr.initialiser);
+    if (!expr.isField) {
+      analyse(expr.initialiser);
+    }
     return null;
   }
 

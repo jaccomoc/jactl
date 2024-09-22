@@ -20,7 +20,6 @@ package io.jactl;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -171,6 +170,7 @@ public class Parser {
     // Scripts take a single parameter which is a Map of globals
     Stmt.VarDecl   globalsParam = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
     Stmt.FunDecl   funDecl      = parseFunDecl(scriptName, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
+    expectOrNull(true, EOF);
     Stmt.ClassDecl scriptClass  = classes.peek();
     scriptClass.scriptMain = funDecl;
     List<Stmt> scriptStmts = scriptClass.scriptMain.declExpr.block.stmts.stmts;
@@ -322,16 +322,17 @@ public class Parser {
   private Stmt.Block block(TokenType blockStart, TokenType endBlock) {
     return this.marked(true, () -> {
       Token      openBlock = expect(blockStart);
-      Stmt.Block block     = block(openBlock, endBlock, this::declaration);
+      Stmt.Block block     = blockBody(openBlock, endBlock, this::declaration);
+      expect(endBlock);
       return block;
     });
   }
 
-  private Stmt.Block markedBlock(Token openBlock, TokenType endBlock) {
-    return this.marked(true, () -> block(openBlock, endBlock, this::declaration));
+  private Stmt.Block markedBlockBody(Token openBlock, TokenType endBlock) {
+    return this.marked(true, () -> blockBody(openBlock, endBlock, this::declaration));
   }
 
-  private Stmt.Block block(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
+  private Stmt.Block blockBody(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
     boolean currentIgnoreEol = ignoreEol;
     ignoreEol = false;
     Stmt.Stmts stmts = new Stmt.Stmts(openBlock);
@@ -339,7 +340,6 @@ public class Parser {
     pushBlock(block);
     try {
       stmts(stmts, stmtSupplier, endBlock);
-      expectOrNull(true, endBlock);
       return block;
     }
     finally {
@@ -625,6 +625,7 @@ public class Parser {
     expectOrSkip(true, Utils.listOf(LEFT_BRACE), Utils.listOf(EOL, RIGHT_BRACE));
     matchAny(EOL);
     Stmt.FunDecl funDecl = parseFunDecl(start, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
+    expectOrNull(true, RIGHT_BRACE);
     Utils.createVariableForFunction(funDecl);
     funDecl.declExpr.varDecl.isField = inClassDecl;
     return funDecl;
@@ -1109,13 +1110,14 @@ public class Parser {
         Marker     mark = tokeniser.mark();
         Stmt.Block classBlock;
         try {
-          classBlock = block(leftBrace, RIGHT_BRACE, () -> declaration(true));
+          classBlock = blockBody(leftBrace, RIGHT_BRACE, () -> declaration(true));
           mark.done(classBlock);
         }
         catch (CompileError error) {
           markError(mark, error);
           throw error;
         }
+        expectOrNull(true, RIGHT_BRACE);
 
         // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
         // separate lists:
@@ -1134,7 +1136,9 @@ public class Parser {
                                      .filter(stmt -> stmt instanceof Stmt.VarDecl)
                                      .map(stmt -> (Stmt.VarDecl) stmt)
                                      .collect(Collectors.toList());
-        classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
+        // Create fieldVar map of name to VarDecl
+        classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(),
+                                                                  field.declExpr));
         classBlock.functions = classDecl.methods;
         classDecl.innerClasses = innerClasses;
         return classDecl;
@@ -1313,7 +1317,7 @@ public class Parser {
             expr = marked(true, () -> {
               Token type  = expect(BREAK, CONTINUE);
               Token label = null;
-              if (peekNoEOL().is(IDENTIFIER)) {
+              if (peekIgnoreEOL().is(IDENTIFIER)) {
                 label = expect(IDENTIFIER);
               }
               return type.is(BREAK) ? new Expr.Break(type, label) : new Expr.Continue(type, label);
@@ -1403,7 +1407,8 @@ public class Parser {
         else if (operator.is(LEFT_PAREN, LEFT_BRACE)) {
           // Call starts with "(" but sometimes can have just "{" if no args before
           // a closure arg
-          expr = createCallExpr(expr, operator, arguments());
+          List<Expr> arguments = arguments();
+          expr = createCallExpr(expr, operator, arguments);
         }
         else {
           advance();
@@ -1722,6 +1727,7 @@ public class Parser {
    * </pre>
    */
   private List<Expr> expressionList(TokenType endToken) {
+    advanceIgnoreEol();  // advance past start token
     List<Expr> exprs = new ArrayList<>();
     while (!matchAnyIgnoreEOL(endToken)) {
       if (!exprs.isEmpty() && expectOrSkip(true, Utils.listOf(COMMA), Utils.listOf(EOL, COMMA, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE)) == null && !matchAny(COMMA)) {
@@ -1741,12 +1747,13 @@ public class Parser {
   private List<Expr> arguments() {
     return marked(false, () -> {
       // Advance past '(' or '{'
-      advanceIgnoreEol();
+      Token token = peekIgnoreEOL();
 
       // Check for named args
-      if (lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
+      if (token.is(LEFT_PAREN) && lookahead(() -> advanceIgnoreEol().is(LEFT_PAREN), () -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
         // For named args we create a list with single entry being the map literal that represents
         // the name:value pairs.
+        advanceIgnoreEol();
         return Utils.listOf(mapEntries(RIGHT_PAREN));
       }
       else {
@@ -1761,13 +1768,11 @@ public class Parser {
    * </pre>
    */
   private List<Expr> argList() {
-    Token token = previous();
+    Token token = peekIgnoreEOL();
     List<Expr> args = new ArrayList<>();
     if (token.is(LEFT_PAREN)) {
       args.addAll(expressionList(RIGHT_PAREN));
-      if (peek().is(LEFT_BRACE)) {
-        token = expect(LEFT_BRACE);
-      }
+      token = peek();
     }
     // If closure appears immediately after a function call it is passed as last argument.
     // E.g.:  execNtimes(10) { println it } --> execNtimes(10, { println it })
@@ -1779,7 +1784,7 @@ public class Parser {
     if (token.is(LEFT_BRACE)) {
       do {
         args.add(closure());
-      } while (matchAny(LEFT_BRACE));
+      } while (peek().is(LEFT_BRACE));
     }
     return args;
   }
@@ -1805,16 +1810,6 @@ public class Parser {
     Token prev = previous();                // Need to know if previous token was a '.' for parsing field names
     skipNewLines();
     return marked(true, () -> _primary(prev));
-//    Marker mark = tokeniser.mark();
-//    try {
-//      Expr expr = _primary(prev);
-//      mark.done(expr);
-//      return expr;
-//    }
-//    catch (CompileError error) {
-//      mark.error(error);
-//      throw error;
-//    }
   }
 
   private Expr _primary(Token prev) {
@@ -2105,7 +2100,6 @@ public class Parser {
     if (isMapLiteral()) {
       return mapLiteral();
     }
-    expect(LEFT_BRACE);
     return closure();
   }
 
@@ -2405,22 +2399,25 @@ public class Parser {
    * </pre>
    */
   private Expr closure() {
-    Token openBrace = previous();
-    skipNewLines();
-    // We need to do a lookahead to see if we have a parameter list or not
-    List<Stmt.VarDecl> parameters;
-    boolean noParamsDefined = false;
-    if (lookahead(() -> parameters(ARROW) != null)) {
-      parameters = parameters(ARROW);
-    }
-    else {
-      // No parameter and no "->" so fill in with default "it" parameter
-      noParamsDefined = true;
-      parameters = Utils.listOf(createItParam(openBrace));
-    }
-    Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false, false, true);
-    funDecl.declExpr.isResultUsed = true;
-    return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
+    return marked(false, () -> {
+      Token openBrace = advanceIgnoreEol();
+      skipNewLines();
+      // We need to do a lookahead to see if we have a parameter list or not
+      List<Stmt.VarDecl> parameters;
+      boolean            noParamsDefined = false;
+      if (lookahead(() -> parameters(ARROW) != null)) {
+        parameters = parameters(ARROW);
+      }
+      else {
+        // No parameter and no "->" so fill in with default "it" parameter
+        noParamsDefined = true;
+        parameters = Utils.listOf(createItParam(openBrace));
+      }
+      Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false, false, true);
+      expectOrNull(true, RIGHT_BRACE);
+      funDecl.declExpr.isResultUsed = true;
+      return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
+    }, RIGHT_BRACE, EOL);
   }
 
   /**
@@ -2646,7 +2643,7 @@ public class Parser {
       else if (matchAny(DOLLAR_IDENTIFIER)) {
         expr = new Expr.Identifier(previous());
       }
-      else if (matchAny(DOLLAR_BRACE)) {
+      else if (peekIgnoreEolIs(DOLLAR_BRACE)) {
         expr = blockExpr();
       }
       else if (isCast()) {
@@ -2997,7 +2994,7 @@ public class Parser {
     pushFunDecl(funDecl);
     try {
       try {
-        Stmt.Block block = isScriptMain ? block(start, endToken, this::declaration) : markedBlock(start, endToken);
+        Stmt.Block block = isScriptMain ? blockBody(start, endToken, this::declaration) : markedBlockBody(start, endToken);
         insertStmtsInto(params, block);
         funDecl.block = block;
       }

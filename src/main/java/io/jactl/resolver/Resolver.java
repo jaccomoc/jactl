@@ -221,7 +221,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   Void resolve(Stmt stmt) {
     if (stmt != null) {
       if (!stmt.isResolved) {
-        stmt.setBlock(getBlock());
+        Stmt.Block block = getBlock();
+        if (block != null) {
+          stmt.setBlock(block);
+        }
         stmt.accept(this);
         stmt.isResolved = true;
       }
@@ -312,30 +315,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     ClassDescriptor classDescriptor = classDecl.classDescriptor;
     JactlType       classType       = JactlType.createClass(classDescriptor);
 
-    // Make sure we don't have circular extends relationship somewhere
-    String previousBaseClass = null;
-    Set<JactlType> seen = new HashSet<>();
-    for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType(true)) {
-      if (baseClass.getClassDescriptor() == null) {
-        // Means we have detected cyclic inheritance in base class already
-        error("Error in base class", classDecl.baseClassToken);
-        break;
-      }
-      if (seen.contains(baseClass) || baseClass.getClassDescriptor().isEquivalent(classDescriptor)) {
-        if (previousBaseClass == null) {
-          error("Class cannot extend itself", classDecl.baseClassToken);
-        }
-        else {
-          error("Cyclic inheritance", classDecl.baseClassToken);
-        }
-        // We have recursive based classes so flag it to prevent infinite recursion
-        classDescriptor.markCyclicInheritance();
-        //classDecl.baseClass = null;
-        break;
-      }
-      seen.add(baseClass);
-      previousBaseClass = baseClass.getClassDescriptor().getNamePath();
-    }
+    checkForCyclicInheritance(classDecl, classDescriptor);
 
     // Find our functions and fields and add them to the ClassDescriptor if not script class
     if (!classDecl.isScriptClass()) {
@@ -428,19 +408,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStmts.stmts.addAll(superStmts);
       classStmts.stmts.addAll(classDecl.innerClasses);
       classStmts.stmts.add(thisStmt);
-      classStmts.stmts.addAll(classDecl.fields.stream().filter(decl -> decl.declExpr.isConstVar).collect(Collectors.toList()));
-      // Replace the field VarDecls with ones that have no initialisation because we will move the
-      // initialisation into a separate init method
-      List<Stmt.VarDecl> fields = classDecl.fields.stream()
-                                                  .filter(decl -> !decl.declExpr.isConstVar)
-                                                  .map(decl -> {
-                                                    Expr.VarDecl newDecl = new Expr.VarDecl(decl.name, null, null);
-                                                    newDecl.isField = true;
-                                                    newDecl.type    = decl.declExpr.type;
-                                                    return newDecl; })
-                                                  .map(decl -> new Stmt.VarDecl(decl.name, decl))
-                                                  .collect(Collectors.toList());
-      classStmts.stmts.addAll(fields);
+//      // Update the field VarDecls to remove initialisation because we will move the
+//      // initialisation into a separate init method
+//      classDecl.fields.stream()
+//                      .filter(decl -> !decl.declExpr.isConstVar)
+//                      .forEach(decl -> decl.declExpr.initialiser = null);
+      classStmts.stmts.addAll(classDecl.fields);
       classStmts.stmts.addAll(classDecl.methods);
     }
 
@@ -448,6 +421,33 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     classDecl.innerClasses.forEach(innerClass -> prepareClass(innerClass));
 
     classStack.pop();
+  }
+
+  private void checkForCyclicInheritance(Stmt.ClassDecl classDecl, ClassDescriptor classDescriptor) {
+    // Make sure we don't have circular extends relationship somewhere
+    String previousBaseClass = null;
+    Set<JactlType> seen = new HashSet<>();
+    for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType(true)) {
+      if (baseClass.getClassDescriptor() == null) {
+        // Means we have detected cyclic inheritance in base class already
+        error("Error in base class", classDecl.baseClassToken);
+        break;
+      }
+      if (seen.contains(baseClass) || baseClass.getClassDescriptor().isEquivalent(classDescriptor)) {
+        if (previousBaseClass == null) {
+          error("Class cannot extend itself", classDecl.baseClassToken);
+        }
+        else {
+          error("Cyclic inheritance", classDecl.baseClassToken);
+        }
+        // We have recursive based classes so flag it to prevent infinite recursion
+        classDescriptor.markCyclicInheritance();
+        //classDecl.baseClass = null;
+        break;
+      }
+      seen.add(baseClass);
+      previousBaseClass = baseClass.getClassDescriptor().getNamePath();
+    }
   }
 
   private Stmt.VarDecl fieldDecl(Token token, String name, JactlType instanceType) {
@@ -508,17 +508,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   // = Stmt
 
 
-  @Override public Void visitClassDecl(Stmt.ClassDecl stmt) {
-    resolve(stmt.baseClass);
-    stmt.nestedFunctions = new ArrayDeque<>();
+  @Override public Void visitClassDecl(Stmt.ClassDecl classDecl) {
+    resolve(classDecl.baseClass);
+    classDecl.nestedFunctions = new ArrayDeque<>();
     // Create a dummy function to hold class block
-    Expr.FunDecl dummy = new Expr.FunDecl(stmt.name, stmt.name, createClass(stmt.classDescriptor), Utils.listOf());
+    Expr.FunDecl dummy = new Expr.FunDecl(classDecl.name, classDecl.name, createClass(classDecl.classDescriptor), Utils.listOf());
     dummy.functionDescriptor = new FunctionDescriptor();
-    stmt.nestedFunctions.push(dummy);
-    classStack.push(stmt);
+    classDecl.nestedFunctions.push(dummy);
+    classStack.push(classDecl);
     try {
-      resolve(stmt.classBlock);
-      resolve(stmt.scriptMain);
+      resolve(classDecl.classBlock);
+      resolve(classDecl.scriptMain);
     }
     finally {
       classStack.pop();
@@ -2792,17 +2792,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     //-----------------------------------
     // Some helper lambdas...
-    Function<TokenType,Token>        token      = type -> new Token(type, startToken);
-    Function<String,Token>           identToken = name -> token.apply(IDENTIFIER).setValue(name);
-    Function<String,Expr.Identifier> ident      = name -> new Expr.Identifier(identToken.apply(name));
-    Function<Object,Expr.Literal>    intLiteral = value -> new Expr.Literal(new Token(INTEGER_CONST, startToken).setValue(value));
-    Function<String,Expr.Literal> strLiteral = value -> new Expr.Literal(new Token(STRING_CONST, startToken).setValue(value));
-    Expr.Literal                  trueExpr   = new Expr.Literal(token.apply(TRUE).setValue(true));
-    Expr.Literal                  falseExpr  = new Expr.Literal(token.apply(FALSE).setValue(false));
+    Function<TokenType,Token>        token       = type -> new Token(type, startToken);
+    Function<String,Token>           identToken  = name -> token.apply(IDENTIFIER).setValue(name);
+    Function<String,Expr.Identifier> ident       = name -> new Expr.Identifier(identToken.apply(name));
+    Function<Object,Expr.Literal>    intLiteral  = value -> new Expr.Literal(new Token(INTEGER_CONST, startToken).setValue(value));
+    Function<String,Expr.Literal>    strLiteral  = value -> new Expr.Literal(new Token(STRING_CONST, startToken).setValue(value));
+    Expr.Literal                     trueExpr    = new Expr.Literal(token.apply(TRUE).setValue(true));
+    Expr.Literal                     falseExpr   = new Expr.Literal(token.apply(FALSE).setValue(false));
     Function<TokenType,Expr.Literal> typeLiteral = type  -> new Expr.Literal(token.apply(type));
-    BiFunction<Expr,JactlType,Expr> instOfExpr = (name,type) -> new Expr.Binary(name,
-                                                                                 token.apply(INSTANCE_OF),
-                                                                                 new Expr.TypeExpr(startToken, type));
+    BiFunction<Expr,JactlType,Expr> instOfExpr   = (name,type) -> new Expr.Binary(name,
+                                                                                  token.apply(INSTANCE_OF),
+                                                                                  new Expr.TypeExpr(startToken, type));
     BiFunction<String,Expr,Stmt>     assignStmt = (name,value) -> {
       Stmt.ExprStmt assign = new Stmt.ExprStmt(startToken, new Expr.VarAssign(ident.apply(name), token.apply(EQUAL), value));
       assign.expr.isResultUsed = false;
@@ -2814,7 +2814,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return Utils.createParam(funDecl.startToken.newIdent(name), type, null, false, true);
       };
     //-----------------------------------
-
 
     Expr.Identifier sourceIdent = ident.apply(Utils.SOURCE_VAR_NAME);
     Expr.Identifier offsetIdent = ident.apply(Utils.OFFSET_VAR_NAME);
@@ -2926,7 +2925,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // so no need to recheck each time.)
       Expr initialiser;
       if (param.initialiser == null) {
-        Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "removeOrThrow",
+        Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
                                                  Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
                                                  Utils.listOf(mapCopyIdent, paramNameIdent,
                                                          falseLiteral,
@@ -3174,7 +3173,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr.VarDecl varDecl          = entry.getValue();
       Token        fieldToken       = varDecl.name;
       Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
-      Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.class, "removeOrThrow",
+      Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
                                                                         Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
                                                                         Utils.listOf(argMapIdent, fieldNameLiteral,
                                                                                trueLiteral, new Expr.Identifier(sourceToken), new Expr.Identifier(offsetToken)))

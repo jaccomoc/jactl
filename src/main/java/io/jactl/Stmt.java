@@ -132,7 +132,6 @@ public abstract class Stmt extends JactlUserDataHolder {
     public List<Stmt.Import>    imports;
     public Stmt.Block           classBlock;
     public List<Stmt.FunDecl>   methods = new ArrayList<>();
-    public Stmt.FunDecl         initMethod;
     public List<Stmt.ClassDecl> innerClasses = new ArrayList<>();
 
     public List<List<Expr>>     interfaces = new ArrayList<>();

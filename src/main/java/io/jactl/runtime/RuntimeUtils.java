@@ -2876,6 +2876,7 @@ public class RuntimeUtils {
     return new NamedArgsMapCopy((Map)arg);
   }
 
+  public static final String REMOVE_OR_THROW = "removeOrThrow";
   public static Object removeOrThrow(Map map, String key, boolean isInitMethod, String source, int offset) {
     if (map.containsKey(key)) {
       return map.remove(key);
@@ -2884,7 +2885,7 @@ public class RuntimeUtils {
   }
 
   public static boolean checkForExtraArgs(Map<String,Object> map, boolean isInitMethod, String source, int offset) {
-    if (map.size() > 0) {
+    if (!map.isEmpty()) {
       String names = map.keySet().stream().collect(Collectors.joining(", "));
       throw new RuntimeError("No such " + (isInitMethod ? "field" : "parameter") + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
     }

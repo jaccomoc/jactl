@@ -308,18 +308,17 @@ public class ClassTests extends BaseTest {
 
   @Test public void fieldsWithInitialisers() {
     test("class X { byte x; byte i = 1; long j = i + 2 }; new X(1).j", 3L);
-    test("class X { byte x; byte i = j+1; long j = i + 2 }; new X(1).j", 3L);
+    testError("class X { byte x; byte i = j+1; long j = i + 2 }; new X(1).j", "forward reference");
     test("class X { byte x; byte i = 1; long j = i+1; long k = j+1 }; new X(1).k", 3L);
     test("class X { byte x; byte i = 1; long j = this.i+2 }; new X(1).j", 3L);
     test("class X { byte x; byte i = this.j+1; long j = this.i+2 }; new X(1).j", 3L);
     test("class X { int x; int i = 1; long j = i + 2 }; new X(1).j", 3L);
-    test("class X { int x; int i = j+1; long j = i + 2 }; new X(1).j", 3L);
     test("class X { int x; int i = 1; long j = i+1; long k = j+1 }; new X(1).k", 3L);
     test("class X { int x; int i = 1; long j = this.i+2 }; new X(1).j", 3L);
     test("class X { int x; int i = this.j+1; long j = this.i+2 }; new X(1).j", 3L);
 
-    test("class X { int x; def z={++x + ++y}; def y=++x+2 }; new X(3).z()", 12);
     test("class X { int x; def z(){++x + ++y}; def y=++x+2 }; new X(3).z()", 12);
+    testError("class X { int x; def z={++x + ++y}; def y=++x+2 }; new X(3).z()", "forward reference");
     test("class X { int x; def y=++x+2; def z={++x + ++y} }; new X(3).z()", 12);
     test("class X { int x; def y=++x+2; def z={++x + ++y} }; new X(x:3,y:2).z()", 7);
     test("class X { int x; def y=++x+2; def z={++x + ++y} }; def x = new X(0); x.x++; x.z()", 7);
@@ -1287,6 +1286,7 @@ public class ClassTests extends BaseTest {
 
   @Test public void newlinesInClassDecl() {
     useAsyncDecorator = false;
+    test("class X { int i = 1; def f() { i+i } }; new X().i", 1);
     test("class\nX\n{\nint\ni=\n1\ndef\nf(\n)\n{\ni\n+\ni\n}\n}\nnew\nX\n(\n)\n.\ni", 1);
   }
 
@@ -1572,6 +1572,7 @@ public class ClassTests extends BaseTest {
     test("package x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", 3);
     test("//Test\npackage x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", 3);
     testError("class XXX{}\npackage x.y.z\nclass X{ int i = 3 }\nnew x.y.z.X().i\n", "package declaration must occur before any other statement");
+    test(Utils.listOf("package x.y.z; class CCC{ const fff = 3; def f(){fff} }"), "new x.y.z.CCC().f()", 3);
   }
 
   @Test public void packageStaticMethods() {

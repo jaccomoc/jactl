@@ -46,7 +46,7 @@ import static org.objectweb.asm.Opcodes.NEW;
 
 public class Utils {
 
-  public static final String JACTL_PKG           = "io.jactl.pkg";
+  public static final String JACTL_PKG           = "jactl.pkg";   // Java base package for Jactl classes
   public static final String DEFAULT_JACTL_PKG   = "";
   public static final String JACTL_PREFIX        = "_$j$";
   public static final String JACTL_SCRIPT_MAIN   = JACTL_PREFIX + "main";
@@ -670,6 +670,44 @@ public class Utils {
     return result;
   }
 
+  private static void copyBaseFields(Expr oldExpr, Expr newExpr) {
+    newExpr.location      = oldExpr.location;
+    newExpr.type          = oldExpr.type;
+    newExpr.parentType    = oldExpr.parentType;
+    newExpr.isResolved    = oldExpr.isResolved;
+    newExpr.isConst       = oldExpr.isConst;
+    newExpr.constValue    = oldExpr.constValue;
+    newExpr.isCallee      = oldExpr.isCallee;
+    newExpr.couldBeNull   = oldExpr.couldBeNull;
+    newExpr.isAsync       = oldExpr.isAsync;
+    newExpr.isResultUsed  = oldExpr.isResultUsed;
+    newExpr.wasNested     = oldExpr.wasNested;
+  }
+
+  public static Expr.VarDecl copyVarDecl(Expr.VarDecl varDecl) {
+    Expr.VarDecl newDecl = new Expr.VarDecl(varDecl.name, varDecl.equals, varDecl.initialiser);
+    copyBaseFields(varDecl, newDecl);
+    newDecl.owner                = varDecl.owner;
+    newDecl.isGlobal             = varDecl.isGlobal;
+    newDecl.isHeapLocal          = varDecl.isHeapLocal;
+    newDecl.isPassedAsHeapLocal  = varDecl.isPassedAsHeapLocal;
+    newDecl.isParam              = varDecl.isParam;
+    newDecl.isExplicitParam      = varDecl.isExplicitParam;
+    newDecl.isField              = varDecl.isField;
+    newDecl.isConstVar           = varDecl.isConstVar;
+    newDecl.isBindingVar         = varDecl.isBindingVar;
+    newDecl.slot                 = varDecl.slot;
+    newDecl.nestingLevel         = varDecl.nestingLevel;
+    newDecl.declLabel            = varDecl.declLabel;
+    newDecl.funDecl              = varDecl.funDecl;
+    newDecl.classDescriptor      = varDecl.classDescriptor;
+    newDecl.parentVarDecl        = varDecl.parentVarDecl;
+    newDecl.originalVarDecl      = varDecl.originalVarDecl;
+    newDecl.isFinal              = varDecl.isFinal;
+    newDecl.lastAssignedType     = varDecl.lastAssignedType;
+    newDecl.paramVarDecl         = varDecl.paramVarDecl;
+    return newDecl;
+  }
 
   /**
    * Create a new VarDecl that is a copy of the supplied value. This is to allow us to

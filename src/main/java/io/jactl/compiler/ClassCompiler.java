@@ -489,7 +489,7 @@ public class ClassCompiler {
 
         // TODO: Need to something about List/Map values here (and wrap them in Collections.immutableList() etc)
         // ... or not support them...
-        Utils.loadConst(classInit, varDecl.constValue);
+        Utils.loadConst(classInit, varDecl.initialiser.constValue);
         if (varDecl.type.is(ANY)) {
           Utils.box(classInit, varDecl.initialiser.type);
         }

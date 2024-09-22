@@ -112,7 +112,6 @@ class Stmt extends JactlUserDataHolder {
     List<Stmt.Import>    @imports;
     Stmt.Block           @classBlock;
     List<Stmt.FunDecl>   @methods = new ArrayList<>();
-    Stmt.FunDecl         @initMethod;
     List<Stmt.ClassDecl> @innerClasses = new ArrayList<>();
 
     List<List<Expr>>     @interfaces = new ArrayList<>();
