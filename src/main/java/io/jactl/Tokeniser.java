@@ -448,26 +448,22 @@ public class Tokeniser {
           break;
         }
         case '\\': {
-          if (!available(1)) {
-            finished = true;
-            continue;
-          }
-          if (escapeChars) {
+          if (!available(2)) {
+            Token tok = createToken();
             advance(1);
+            return stringError("Unexpected EOF after '\\'", tok);
+          }
+          advance(1);
+          if (escapeChars) {
             c = escapedChar(charAt(0));
           }
           else {
             // Only thing we can escape is the end of string. For everything else leave '\' in the string as is.
-            int nextChar = charAt(1);
-            if (nextChar == endChar) {
-              advance(1);
-              c = nextChar;
-            }
-            else if (nextChar == '$' || c == '\\') {
+            int nextChar = charAt(0);
+            if (nextChar != endChar) {
               sb.append('\\');
-              advance(1);
-              c = nextChar;
             }
+            c = nextChar;
           }
           break;
         }
@@ -574,7 +570,7 @@ public class Tokeniser {
             final String modifiers = modifierSb.toString();
             for (int i = 0; i < modifiers.length(); i++) {
               if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
-                return error("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", createToken());
+                return error("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", token);
               }
             }
             return token.setType(EXPR_STRING_END)

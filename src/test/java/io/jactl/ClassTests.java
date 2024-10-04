@@ -1208,6 +1208,8 @@ public class ClassTests extends BaseTest {
     test("class A { class B { class Y { def f() {3} } }; class X extends B { class Y { def f() {1} }}\n" + " class Z extends X { int g(){ new Y().f() } } }; new A.Z().g()", 1);
     test("class A { class B { class Y { def f() {3} } }; class X extends B { }\n" + " class Z extends X { int g(){ new Y().f() } } }; new A.Z().g()", 3);
     test("class X { int i; class Y { int i; def f() {i} }}; class Z extends X { int g(){ new Y(4).f() } }; new Z(3).g()", 4);
+    test("class X { int i; class Y { int i; def f() {i} }}; class Z extends X { int g(){ new Y(4).f() } }; new Z(3).g()", 4);
+    test("class X { int i; class X { int j; def f(){j} }}; new X.X(4).f()", 4);
   }
 
   @Test public void innerClassesStaticMethod() {
@@ -1590,6 +1592,7 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("class X { static def f(){3}; }"), "new X().f()", 3);
     test(Utils.listOf("class X { def f(){3} }"), "new X().f()", 3);
     test(Utils.listOf("class X { class Y { def f(){3} } }"), "new X.Y().f()", 3);
+    testError(Utils.listOf("class X { static def f(){3} }", "package a.b; import X; class Y { static def g(){ X.f() } }"), "Y.g()", "unknown class X");
     packageName = null;
     test(Utils.listOf("package x.y.z; class X { class Y { def f(){3} } }"), "package a; new x.y.z.X.Y().f()", 3);
   }

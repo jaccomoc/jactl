@@ -296,16 +296,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     classDescriptor.setIsScriptClass(classDecl.isScriptClass());
     classDescriptor.setUserData(classDecl);
 
-    if (localClasses.put(classDescriptor.getNamePath(), classDescriptor) != null) {
+    String namePath = classDescriptor.getNamePath();
+    if (localClasses.containsKey(namePath)) {
       error("Class '" + classDecl.name.getStringValue() + "' already exists", classDecl.location);
+      namePath += '$' + errors.size();   // Create a unique name for duplicate
     }
-    else {
-      localClassDecls.put(classDescriptor.getNamePath(), classDecl);
 
-      // Do same for our inner classes where we now become the outerclass
-      classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
-      classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
-    }
+    localClasses.put(namePath, classDescriptor);
+    localClassDecls.put(namePath, classDecl);
+
+    // Do same for our inner classes where we now become the outerclass
+    classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
+    classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
   }
 
   private void prepareClass(Stmt.ClassDecl classDecl) {
@@ -2176,7 +2178,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (jactlContext.isIdePlugin()) {
         return;
       }
-      throw new IllegalStateException("Internal error: Expected location of type Location but got " + location.getClass().getName());
+      //throw new IllegalStateException("Internal error: Expected location of type Location but got " + location.getClass().getName());
     }
     error(new CompileError(msg, (Location) location));
   }
@@ -2193,6 +2195,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private static Expr.VarDecl UNDEFINED = new Expr.VarDecl(null, null, null);
 
   private void declare(Expr.VarDecl decl) {
+    if (decl.name == null) {
+      return;
+    }
     String varName = decl.name.getStringValue();
 
     // For binding variables make sure we don't shadow an existing variable of same name to prevent

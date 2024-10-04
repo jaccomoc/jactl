@@ -23,8 +23,12 @@ import java.math.BigDecimal;
 
 public class SwitchTests extends BaseTest {
 
+  @Test public void testStuff() {
+    test("switch([1,2,3]\nas\nint[]\n)\n{\n [1,2,3]\n ->\n 2\n;\n default\n ->\n 0\n }\n", 2);
+  }
+
   @Test public void switchExprs() {
-    test("switch (1) {}", null);
+    test("switch (1) {\n}", null);
     test("switch (1) { 1 -> 2 }", 2);
     testError("switch (1) { 1 -> 2; 1 -> 3 }", "literal match occurs multiple times");
     testError("switch (1) { 1,1 -> 2; 2 -> 3 }", "literal match occurs multiple times");
@@ -80,6 +84,7 @@ public class SwitchTests extends BaseTest {
     test("def it = 'abc'; def x = switch (it[0]) { 'a' -> it; default -> 2 }; it + x", "abca");
     test("switch([1,2,3].map{it+it}) { [2,4,6] -> 3; default -> 0 }", 3);
     test("switch([1,2,3] as int[]) { [1,2,3] -> 2; default -> 0 }", 2);
+    test("switch([1,2,3]\nas\nint[]\n)\n{\n [1,2,3]\n ->\n 2\n;\n default\n ->\n 0\n }\n", 2);
     test("def x = [1,2,3].map{it+it}; switch (x) { [2,4,6] -> 3; default -> 0 }", 3);
     test("def x = [1,2,3] as int[]; switch (x) { [1,2,3] -> 2; default -> 0 }", 2);
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2; default -> 0 }", 2);

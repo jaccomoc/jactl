@@ -3289,6 +3289,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void exprStrings() {
+    testError("/\n/int\n", "unrecognised regex modifier 't'");
     test("def x = 1; \"$x\"", "1");
     test("def x = 1; \"\\$x\"", "$x");
     test("def x = 1; \"$x\\\"\"", "1\"");
@@ -3380,6 +3381,8 @@ class CompilerTest extends BaseTest {
     test("\"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }\"", "5 pyramid numbers: 1, 5, 14, 30, 55");
     test("def p(x){x*x}; \"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }: ${p(3)}\"", "5 pyramid numbers: 1, 5, 14, 30, 55: 9");
     test("['a','b'].map{\"\"\"\"$it=\" + $it\"\"\" }.join(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
+
+    testError("XYZ.fromJson(\"{\\", "unexpected EOF");
   }
 
   @Test public void regexMatch() {
@@ -6821,6 +6824,16 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void forLoops() {
+    testError("for (int i = 0;", "Unexpected EOF");
+    testError("for (int i = 0;\n", "Unexpected EOF");
+    testError("for (int i = 0; i < 10;", "Unexpected EOF");
+    testError("for (int i = 0; i < 10; i++", "Unexpected EOF");
+    testError("for (int i = 0)", "Unexpected token ')'");
+    testError("for (int i = 0\n)", "Unexpected token ')'");
+    testError("for (int i = 0;)", "Unexpected token ')'");
+    testError("for (int i = 0;\n)", "Unexpected token ')'");
+    testError("for (int i = 0; i < 10;)", "Unexpected EOF");
+    testError("for (int i = 0; i < 10; i++)", "Unexpected EOF");
     test("int sum = 0; for (int i = 0; i < 10; i++) sum += i; sum", 45);
     testError("int sum = 0; for (int i = 0; i < 10; i++) sum += i; i", "unknown variable");
     test("int sum = 0; for (int i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 100);
@@ -7163,6 +7176,7 @@ class CompilerTest extends BaseTest {
     testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing mandatory argument: c");
     test("def f(a = '',b = 2) {a+b}; f('',null)", "null");
     test("def f(a = '',b = 2) {a+b}; f(a:'',b:null)", "null");
+    testError("def f(a,b) {a+b}; f(a:123,", "Unexpected EOF");
   }
 
   @Test public void simpleClosures() {

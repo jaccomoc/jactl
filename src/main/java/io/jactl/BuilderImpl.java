@@ -44,6 +44,7 @@ public class BuilderImpl implements Builder {
       throw errors.iterator().next();
     }
     if (!errors.isEmpty()) {
+      //throw errors.iterator().next();
       throw new CompileError(new ArrayList<>(errors));
     }
   }

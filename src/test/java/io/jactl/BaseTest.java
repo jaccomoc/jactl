@@ -455,7 +455,13 @@ public class BaseTest {
     }
     catch (JactlError e) {
       if (!e.getMessage().toLowerCase().contains(expectedError.toLowerCase())) {
-        e.printStackTrace();
+        if (e instanceof CompileError) {
+          CompileError ce = (CompileError) e;
+          ce.getErrors().forEach(e1 -> e1.printStackTrace());
+        }
+        else {
+          e.printStackTrace();
+        }
         fail("Message did not contain expected string <" + expectedError + ">. Message=" + e.getMessage());
       }
     }

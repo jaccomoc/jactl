@@ -20,14 +20,24 @@ package io.jactl;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlName.NameType.FILE;
-import static io.jactl.JactlType.ANY;
-import static io.jactl.JactlType.UNKNOWN;
+import static io.jactl.JactlType.*;
 import static io.jactl.TokenType.*;
+import static io.jactl.TokenType.BOOLEAN;
+import static io.jactl.TokenType.BYTE;
+import static io.jactl.TokenType.CLASS;
+import static io.jactl.TokenType.DECIMAL;
+import static io.jactl.TokenType.DOUBLE;
+import static io.jactl.TokenType.INT;
+import static io.jactl.TokenType.LIST;
+import static io.jactl.TokenType.LONG;
+import static io.jactl.TokenType.MAP;
+import static io.jactl.TokenType.STRING;
 
 /**
  * Recursive descent parser for parsing the Jactl language.
@@ -169,7 +179,7 @@ public class Parser {
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
     // Scripts take a single parameter which is a Map of globals
     Stmt.VarDecl   globalsParam = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
-    Stmt.FunDecl   funDecl      = parseFunDecl(scriptName, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
+    Stmt.FunDecl   funDecl      = parseFunDecl(false, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
     expectOrNull(true, EOF);
     Stmt.ClassDecl scriptClass  = classes.peek();
     scriptClass.scriptMain = funDecl;
@@ -622,10 +632,7 @@ public class Parser {
       mark.drop();
     }
     matchAny(EOL);
-    expectOrSkip(true, Utils.listOf(LEFT_BRACE), Utils.listOf(EOL, RIGHT_BRACE));
-    matchAny(EOL);
-    Stmt.FunDecl funDecl = parseFunDecl(start, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
-    expectOrNull(true, RIGHT_BRACE);
+    Stmt.FunDecl funDecl       = parseFunDecl(true, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
     Utils.createVariableForFunction(funDecl);
     funDecl.declExpr.varDecl.isField = inClassDecl;
     return funDecl;
@@ -651,14 +658,8 @@ public class Parser {
           return null;
         }
       }
-      Stmt.VarDecl varDecl = marked(false, () -> {
-        // Check for optional type. Default to "def".
-        JactlType type = optionalType();
-        // Note that unlike a normal varDecl where commas separate different vars of the same type,
-        // with parameters we expect a separate comma for parameter with a separate type for each one,
-        // so we build up a list of singleVarDecl.
-        return singleVarDecl(type, false, false, true);
-      });
+      Stmt.VarDecl varDecl = peekIgnoreEolIs(COMMA,endToken) ? null
+                                                             : marked(false, this::singleVarWithOptionalType);
       if (varDecl != null) {
         varDecl.declExpr.isParam = true;
         parameters.add(varDecl);
@@ -675,6 +676,15 @@ public class Parser {
     return parameters;
   }
 
+  private Stmt.VarDecl singleVarWithOptionalType() {
+    // Check for optional type. Default to "def".
+    JactlType type = optionalType();
+    // Note that unlike a normal varDecl where commas separate different vars of the same type,
+    // with parameters we expect a separate comma for parameter with a separate type for each one,
+    // so we build up a list of singleVarDecl.
+    return singleVarDecl(type, false, false, true);
+  }
+
   /**
    * This is used in situations where we either have a type followed by an identifier or an identifier
    * on its own.
@@ -688,7 +698,7 @@ public class Parser {
       type = type(true, false, false, false);
     }
     if (type == null && !peek().is(IDENTIFIER)) {
-      unexpected("Expected valid type or parameter name", false);
+      unexpected("Expected valid type or parameter name", false, EOL, LEFT_BRACE, RIGHT_BRACE, RIGHT_PAREN);
       mark.drop();
       return ANY;
     }
@@ -728,11 +738,11 @@ public class Parser {
   }
 
   private Stmt doVarDecl(boolean inClassDecl) {
-    if (matchAny(STATIC,FINAL)) {
+    if (matchAny(STATIC, FINAL)) {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
-    boolean isConst = matchAny(CONST);
-    JactlType type = isConst ? JactlType.createUnknown() : ANY;
+    boolean   isConst = matchAny(CONST);
+    JactlType type    = isConst ? JactlType.createUnknown() : ANY;
     if (isConst) {
       if (peek().is(simpleTypes)) {
         // Only simple types allowed for constants. If no type given then will work like 'var' and
@@ -746,12 +756,19 @@ public class Parser {
     else {
       type = type(true, false, false, false);
     }
-    Stmt.Stmts stmts = new Stmt.Stmts(peek());
-    JactlType finalType = type;
-    stmts.stmts.add(singleVarDecl(finalType, inClassDecl, isConst, false));
-    while (matchAny(COMMA)) {
-      matchAny(EOL);
-      stmts.stmts.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false)));
+    Stmt.Stmts stmts     = new Stmt.Stmts(peek());
+    JactlType  finalType = type;
+    stmts.stmts = marked(false, () -> {
+      List<Stmt> varDecls = new ArrayList<>();
+      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false));
+      while (matchAny(COMMA)) {
+        matchAny(EOL);
+        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false)));
+      }
+      return varDecls;
+    });
+    if (stmts.stmts == null) {
+      return null;
     }
     if (stmts.stmts.size() > 1) {
       // Multiple variables so return list of VarDecls
@@ -775,7 +792,7 @@ public class Parser {
       Token next = peek();
       if (!next.is(IDENTIFIER)) {
         unexpected("expecting identifier", false, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
-        return next.newIdent(next.isKeyword() ? next.getStringValue() : "<invalid>");
+        return next.newIdent(next.isKeyword() ? next.getChars() : "<invalid>");
       }
       else {
         return advance();
@@ -901,6 +918,7 @@ public class Parser {
     Token ifToken = expect(IF);
     expect(LEFT_PAREN);
     Expr cond      = condition(true, RIGHT_PAREN);
+    expectOrNull(true, RIGHT_PAREN);
     Stmt trueStmt  = statement();
     Stmt falseStmt = null;
     if (lookahead(() -> skipNewLines() || true, () -> matchAny(ELSE))) {
@@ -919,6 +937,7 @@ public class Parser {
     Token whileToken = expect(WHILE);
     expect(LEFT_PAREN);
     Expr       cond      = condition(false, RIGHT_PAREN);
+    expectOrNull(true, RIGHT_PAREN);
     Stmt.While whileStmt = new Stmt.While(whileToken, cond, label);
     whileStmt.body = statement();
     return stmtBlock(whileToken, whileStmt);
@@ -937,6 +956,7 @@ public class Parser {
       if (matchAnyIgnoreEOL(UNTIL)) {
         expect(LEFT_PAREN);
         Expr       cond      = condition(false, RIGHT_PAREN);
+        expectOrNull(true, RIGHT_PAREN);
         Stmt.While whileStmt = new Stmt.While(doToken, cond, label);
         whileStmt.body = ((Expr.Block)expr).block;
         whileStmt.isDoUntil = true;
@@ -968,9 +988,13 @@ public class Parser {
       if (!previous().is(SEMICOLON)) {
         expectOrNull(true, SEMICOLON);
       }
-      forParts.add(marked(false, () -> condition(false, SEMICOLON)));
-      forParts.add(commaSeparatedStatements());
-      expectOrNull(true, RIGHT_PAREN);
+      forParts.add(peekIgnoreEolIs(SEMICOLON,EOF,RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
+                                                              : marked(false, () -> condition(false, SEMICOLON)));
+      expectOrNull(true, SEMICOLON);
+      forParts.add(peekIgnoreEolIs(EOF,RIGHT_PAREN) ? null : commaSeparatedStatements());
+      if (!peekIgnoreEolIs(EOF)) {
+        expectOrNull(true, RIGHT_PAREN);
+      }
     }
     catch (CompileError error) {
       // Ignore
@@ -1006,7 +1030,7 @@ public class Parser {
   Stmt.Stmts commaSeparatedStatements() {
     skipNewLines();
     Token start = peek();
-    if (start.is(RIGHT_PAREN)) {
+    if (start.is(RIGHT_PAREN,SEMICOLON)) {
       return null;
     }
     List<Stmt> stmtList = marked(false, () -> {
@@ -1101,23 +1125,21 @@ public class Parser {
         skipUntil(EOL, EOF, LEFT_BRACE, RIGHT_BRACE);
       }
       Stmt.ClassDecl classDecl = new Stmt.ClassDecl(className, packageName, packageToken, baseClassToken, baseClass, false);
-      Token leftBrace = expectOrNull(true, LEFT_BRACE);
-      if (leftBrace == null) {
-        return classDecl;
-      }
       pushClass(classDecl);
       try {
         Marker     mark = tokeniser.mark();
         Stmt.Block classBlock;
         try {
+          skipNewLines();
+          Token leftBrace = expect(LEFT_BRACE);
           classBlock = blockBody(leftBrace, RIGHT_BRACE, () -> declaration(true));
+          expectOrNull(true, RIGHT_BRACE);
           mark.done(classBlock);
         }
         catch (CompileError error) {
           markError(mark, error);
-          throw error;
+          return classDecl;
         }
-        expectOrNull(true, RIGHT_BRACE);
 
         // We have a block of field, method, and class declarations. We strip out the fields, methods and classes into
         // separate lists:
@@ -1137,8 +1159,9 @@ public class Parser {
                                      .map(stmt -> (Stmt.VarDecl) stmt)
                                      .collect(Collectors.toList());
         // Create fieldVar map of name to VarDecl
-        classDecl.fields.forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(),
-                                                                  field.declExpr));
+        classDecl.fields.stream()
+                        .filter(field -> field.name != null)
+                        .forEach(field -> classDecl.fieldVars.put(field.name.getStringValue(), field.declExpr));
         classBlock.functions = classDecl.methods;
         classDecl.innerClasses = innerClasses;
         return classDecl;
@@ -1210,7 +1233,7 @@ public class Parser {
     Marker mark = tokeniser.mark();
     try {
       if (!mandatory) {
-        if (matchAnyIgnoreEOL(endOfCond)) {
+        if (peekIgnoreEolIs(endOfCond)) {
           Expr.Literal expr = new Expr.Literal(new Token(TRUE, peek()).setValue(true));
           mark.done(expr);
           return expr;
@@ -1218,7 +1241,6 @@ public class Parser {
       }
       Expr expr = expression(true);
       mark.done(expr);
-      expectOrNull(true, endOfCond);
       return expr;
     }
     catch (CompileError error ) {
@@ -1609,22 +1631,32 @@ public class Parser {
     }
   }
 
+
+
   private <T> T marked(boolean throwIfError, Supplier<T> lambda, TokenType... skipUntil) {
-    Marker mark = tokeniser.mark();
+    return maybeMarked(true, throwIfError, lambda, skipUntil);
+  }
+
+  private <T> T maybeMarked(boolean shouldMark, boolean throwIfError, Supplier<T> lambda, TokenType... skipUntil) {
+    Marker mark = shouldMark ? tokeniser.mark() : null;
     T item;
     try {
       Token token = peek();
       item = lambda.get();
-      if (item != null && !isLookahead()) {
+      if (item != null && !isLookahead() && shouldMark) {
         markDone(mark, item, token);
       }
       else {
-        mark.drop();
+        if (shouldMark) {
+          mark.drop();
+        }
       }
       return item;
     }
     catch (CompileError error) {
-      markError(mark, error);
+      if (shouldMark) {
+        markError(mark, error);
+      }
       skipUntil(skipUntil);
       if (isLookahead() || throwIfError) {
         throw error;
@@ -1727,10 +1759,9 @@ public class Parser {
    * </pre>
    */
   private List<Expr> expressionList(TokenType endToken) {
-    advanceIgnoreEol();  // advance past start token
     List<Expr> exprs = new ArrayList<>();
     while (!matchAnyIgnoreEOL(endToken)) {
-      if (!exprs.isEmpty() && expectOrSkip(true, Utils.listOf(COMMA), Utils.listOf(EOL, COMMA, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE)) == null && !matchAny(COMMA)) {
+      if (!exprs.isEmpty() && expectOrSkip(true, Utils.listOf(endToken,COMMA), Utils.listOf(EOL, COMMA, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE)) == null && !matchAny(COMMA)) {
         break;
       }
       exprs.add(expression(true));
@@ -1745,21 +1776,23 @@ public class Parser {
    * </pre>
    */
   private List<Expr> arguments() {
-    return marked(false, () -> {
-      // Advance past '(' or '{'
-      Token token = peekIgnoreEOL();
-
-      // Check for named args
-      if (token.is(LEFT_PAREN) && lookahead(() -> advanceIgnoreEol().is(LEFT_PAREN), () -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
-        // For named args we create a list with single entry being the map literal that represents
-        // the name:value pairs.
-        advanceIgnoreEol();
-        return Utils.listOf(mapEntries(RIGHT_PAREN));
-      }
-      else {
-        return argList();
-      }
-    }, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+    // Advance past '('
+    Token token = peekIgnoreEOL().is(LEFT_PAREN) ? advanceIgnoreEol() : null;
+    // Check for named args
+    if (token != null && lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
+      // For named args we create a list with single entry being the map literal that represents
+      // the name:value pairs.
+      List<Expr> entries = marked(false, () -> {
+                                    Expr.MapLiteral mapLiteral = mapEntries(RIGHT_PAREN);
+                                    expectOrNull(true, RIGHT_PAREN);
+                                    return Utils.listOf(mapLiteral);
+                                  },
+                                  EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+      return entries;
+    }
+    else {
+      return argList(token);
+    }
   }
 
   /**
@@ -1767,13 +1800,13 @@ public class Parser {
    *# argList ::= expressionList ? ( LEFT_BRACE closure RIGHT_BRACE ) *
    * </pre>
    */
-  private List<Expr> argList() {
-    Token token = peekIgnoreEOL();
+  private List<Expr> argList(Token token) {
     List<Expr> args = new ArrayList<>();
-    if (token.is(LEFT_PAREN)) {
-      args.addAll(expressionList(RIGHT_PAREN));
-      token = peek();
+    // If we have a token we know we had a LEFT_PAREN
+    if (token != null) {
+      args.addAll(marked(false, () -> expressionList(RIGHT_PAREN), EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE));
     }
+    token = peekIgnoreEOL();
     // If closure appears immediately after a function call it is passed as last argument.
     // E.g.:  execNtimes(10) { println it } --> execNtimes(10, { println it })
     // In fact any number of closures immediately following will be added to the args and
@@ -1783,7 +1816,7 @@ public class Parser {
     //      ntimes(10){ fib(10) }{ println "done" }  --> ntimes(10, {fib(10)},{ println "done" })
     if (token.is(LEFT_BRACE)) {
       do {
-        args.add(closure());
+        args.add(marked(false, this::closure, RIGHT_BRACE, EOL));
       } while (peek().is(LEFT_BRACE));
     }
     return args;
@@ -2079,18 +2112,24 @@ public class Parser {
     Expr.ListLiteral expr = new Expr.ListLiteral(start);
     try {
       while (true) {
-        if (peekIgnoreEolIs(RIGHT_SQUARE) || !expr.exprs.isEmpty()) {
-          Token token = expectOrNull(true, COMMA, RIGHT_SQUARE);
-          if (token == null || token.is(RIGHT_SQUARE)) {
+        if (peekIgnoreEolIs(RIGHT_SQUARE)) {
+          mark.done(expr.exprs);
+          expectOrNull(true, RIGHT_SQUARE);
+          return expr;
+        }
+        if (!expr.exprs.isEmpty()) {
+          if (!peekIgnoreEolIs(COMMA)) {
             mark.done(expr.exprs);
+            expectOrNull(true, COMMA);
             return expr;
           }
+          expectOrNull(true, COMMA);
         }
         expr.exprs.add(expression(true));
       }
     }
     catch (CompileError error) {
-      markError(mark, error);
+      mark.done(expr.exprs);
       skipUntil(EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
       return expr;
     }
@@ -2116,57 +2155,73 @@ public class Parser {
   private Expr.MapLiteral mapLiteral() {
     expect(LEFT_SQUARE, LEFT_BRACE);
     TokenType endToken = previous().is(LEFT_BRACE) ? RIGHT_BRACE : RIGHT_SQUARE;
-    Expr.MapLiteral mapLiteral = mapEntries(endToken);
-    return mapLiteral;
+    Marker mark = tokeniser.mark();
+    try {
+      Expr.MapLiteral mapLiteral = mapEntries(endToken);
+      mark.done(mapLiteral.entries);
+      expectOrNull(true, endToken);
+      return mapLiteral;
+    }
+    catch (CompileError error) {
+      mark.drop();
+      throw error;
+    }
   }
 
   /**
    *# mapEntries ::= mapKey COLON expression (COMMA mapKey COLON expression) *
    */
   private Expr.MapLiteral mapEntries(TokenType endToken) {
-    Marker mark = tokeniser.mark();
-    Expr.MapLiteral expr = new Expr.MapLiteral(previous());
-    try {
-      boolean           isNamedArgs   = endToken.is(RIGHT_PAREN);
-      String            paramOrKey    = isNamedArgs ? "Parameter" : "Map key";
-      Map<String, Expr> literalKeyMap = new HashMap<>();
-      if (matchAnyIgnoreEOL(COLON)) {
-        // Empty map
-        expectOrNull(true, endToken);
-      }
-      else {
-        while (!matchAnyIgnoreEOL(endToken)) {
-          if (!expr.entries.isEmpty()) {
+    Expr.MapLiteral   expr          = new Expr.MapLiteral(previous());
+    boolean           isNamedArgs   = endToken.is(RIGHT_PAREN);
+    String            paramOrKey    = isNamedArgs ? "Parameter" : "Map key";
+    Map<String, Expr> literalKeyMap = new HashMap<>();
+    if (matchAnyIgnoreEOL(COLON)) {
+      // Empty map
+    }
+    else {
+      while (!peekIgnoreEolIs(endToken, EOF)) {
+        if (!expr.entries.isEmpty()) {
+          if (!matchAnyIgnoreEOL(COMMA)) {
+            if (endToken.is(RIGHT_BRACE) && expr.entries.size() == 1) {
+              unexpected("Label applied to statement that is not for/while/until loop or malformed Map literal using '{}' form.", false);
+            }
+            unexpected("Was Expecting ','", false);
+            skipUntil(COMMA, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
             if (!matchAnyIgnoreEOL(COMMA)) {
-              if (endToken.is(RIGHT_BRACE) && expr.entries.size() == 1) {
-                unexpected("Label applied to statement that is not for/while/until loop or malformed Map literal using '{}' form.", false);
-              }
-              unexpected("Was Expecting ','", false);
-              skipUntil(COMMA, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
-              if (!matchAnyIgnoreEOL(COMMA)) {
-                break;
-              }
+              break;
             }
           }
-          Expr   key       = mapKey();
-          String keyString = null;
-          if (key instanceof Expr.Literal) {
-            Expr.Literal literal = (Expr.Literal) key;
-            Object       value   = literal.value.getValue();
-            if (!(value instanceof String)) {
-              error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location, false);
+        }
+        Expr   key       = mapKey();
+        String keyString = null;
+        if (key instanceof Expr.Literal) {
+          Expr.Literal literal = (Expr.Literal) key;
+          Object       value   = literal.value.getValue();
+          if (!(value instanceof String)) {
+            error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location, false);
+          }
+          keyString = literal.value.getStringValue();
+          if (literalKeyMap.containsKey(keyString)) {
+            error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location, false);
+          }
+        }
+        else {
+          if (isNamedArgs) {
+            if (!peekIgnoreEolIs(EOF)) {
+              error("Invalid parameter name", advanceIgnoreEol(), false);
+              skipUntil(COMMA,COLON,EOL,RIGHT_SQUARE,RIGHT_BRACE,EOF);
             }
-            keyString = literal.value.getStringValue();
-            if (literalKeyMap.containsKey(keyString)) {
-              error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location, false);
+            else {
+              error("Unexpected EOF", peekIgnoreEOL(), false);
+              return expr;
             }
           }
-          else {
-            if (isNamedArgs) {
-              error("Invalid parameter name", previous(), false);
-            }
-          }
-          expectOrNull(true, COLON);
+        }
+        if (expectOrNull(true, COLON) == null) {
+          skipUntil(COMMA,COLON,EOL,RIGHT_SQUARE,RIGHT_BRACE,EOF);
+        }
+        else {
           Expr value = expression(true);
           expr.entries.add(new Pair(key, value));
           if (keyString != null) {
@@ -2174,20 +2229,14 @@ public class Parser {
           }
         }
       }
-      expr.isNamedArgs = isNamedArgs;
-      // If we have had keys that are only string literals then we create a map based on these string keys.
-      // This can be used during named arg validation.
-      if (literalKeyMap.size() == expr.entries.size()) {
-        expr.literalKeyMap = literalKeyMap;
-      }
-      mark.done(expr.entries);
-      return expr;
     }
-    catch (CompileError error) {
-      markError(mark, error);
-      skipUntil(EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
-      return expr;
+    expr.isNamedArgs = isNamedArgs;
+    // If we have had keys that are only string literals then we create a map based on these string keys.
+    // This can be used during named arg validation.
+    if (literalKeyMap.size() == expr.entries.size()) {
+      expr.literalKeyMap = literalKeyMap;
     }
+    return expr;
   }
 
   /**
@@ -2399,25 +2448,22 @@ public class Parser {
    * </pre>
    */
   private Expr closure() {
-    return marked(false, () -> {
-      Token openBrace = advanceIgnoreEol();
-      skipNewLines();
-      // We need to do a lookahead to see if we have a parameter list or not
-      List<Stmt.VarDecl> parameters;
-      boolean            noParamsDefined = false;
-      if (lookahead(() -> parameters(ARROW) != null)) {
-        parameters = parameters(ARROW);
-      }
-      else {
-        // No parameter and no "->" so fill in with default "it" parameter
-        noParamsDefined = true;
-        parameters = Utils.listOf(createItParam(openBrace));
-      }
-      Stmt.FunDecl funDecl = parseFunDecl(openBrace, null, ANY, parameters, RIGHT_BRACE, false, false, true);
-      expectOrNull(true, RIGHT_BRACE);
-      funDecl.declExpr.isResultUsed = true;
-      return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
-    }, RIGHT_BRACE, EOL);
+    Token openBrace = advanceIgnoreEol();
+    skipNewLines();
+    // We need to do a lookahead to see if we have a parameter list or not
+    List<Stmt.VarDecl> parameters;
+    boolean            noParamsDefined = false;
+    if (peekIgnoreEolIs(ARROW) || lookahead(() -> singleVarWithOptionalType() != null, () -> peekIgnoreEolIs(COMMA,ARROW))) {
+      parameters = parameters(ARROW);
+    }
+    else {
+      // No parameter and no "->" so fill in with default "it" parameter
+      noParamsDefined = true;
+      parameters = Utils.listOf(createItParam(openBrace));
+    }
+    Stmt.FunDecl funDecl = parseClosure(openBrace, parameters);
+    funDecl.declExpr.isResultUsed = true;
+    return new Expr.Closure(openBrace, funDecl.declExpr, noParamsDefined);
   }
 
   /**
@@ -2478,7 +2524,7 @@ public class Parser {
    */
   Expr.Switch switchExpr() {
     Token matchToken = expect(SWITCH);
-    Expr subject = null;
+    Expr subject;
     if (matchAny(LEFT_PAREN)) {
       subject = expression(true);
       expect(RIGHT_PAREN);
@@ -2486,34 +2532,39 @@ public class Parser {
     else {
       subject = new Expr.Identifier(matchToken.newIdent(Utils.IT_VAR));
     }
-    expect(LEFT_BRACE);
-    Expr                  defaultCase = null;
+    Token                 leftBrace   = expect(LEFT_BRACE);
+    AtomicReference<Expr> defaultCase = new AtomicReference<>();
     List<Expr.SwitchCase> cases       = new ArrayList<>();
-    while (!matchAny(RIGHT_BRACE)) {
-      List<Pair<Expr,Expr>> patterns = null;
-      if (matchAny(DEFAULT)) {
-        if (defaultCase != null) {
-          unexpected("cannot have multiple 'default' cases in switch expression");
+    while (!matchAnyIgnoreEOL(RIGHT_BRACE)) {
+      // Wrap each case in an ExprStmt to help with indenting in Intellij plugin
+      marked(true, () -> {
+        Token                  nextToken = peek();
+        List<Pair<Expr, Expr>> patterns  = null;
+        if (matchAnyIgnoreEOL(DEFAULT)) {
+          if (defaultCase.get() != null) {
+            unexpected("cannot have multiple 'default' cases in switch expression");
+          }
         }
-      }
-      else {
-        patterns = switchPatterns();
-      }
-      expect(ARROW);
-      Expr expr = expression();
-      if (expr instanceof Expr.Closure) {
-        expr = convertClosureToBlockExpr(expr);
-      }
-      expr.isResultUsed = true;
-      if (patterns == null) {
-        defaultCase = expr;
-      }
-      else {
-        Expr.SwitchCase switchCase = new Expr.SwitchCase(patterns, expr);
-        switchCase.switchSubject = subject;
-        cases.add(switchCase);
-      }
-      matchAny(SEMICOLON, EOL);
+        else {
+          patterns = switchPatterns();
+        }
+        expect(ARROW);
+        Expr expr = expression();
+        if (expr instanceof Expr.Closure) {
+          expr = convertClosureToBlockExpr(expr);
+        }
+        expr.isResultUsed = true;
+        if (patterns == null) {
+          defaultCase.set(expr);
+        }
+        else {
+          Expr.SwitchCase switchCase = new Expr.SwitchCase(patterns, expr);
+          switchCase.switchSubject = subject;
+          cases.add(switchCase);
+        }
+        matchAnyIgnoreEOL(SEMICOLON, EOL);
+        return new Stmt.ExprStmt(nextToken, null);
+      });
     }
 
     // Make sure that patterns that are literals don't occur multiple times. Build a map that we won't use
@@ -2524,7 +2575,7 @@ public class Parser {
          .collect(Collectors.toMap(expr -> expr.constValue,
                                    expr -> expr,
                                    (expr1, expr2) -> error("Literal match occurs multiple times in switch: " + expr2.constValue, expr2.location)));
-    return new Expr.Switch(matchToken, subject, cases, defaultCase);
+    return new Expr.Switch(matchToken, subject, cases, defaultCase.get());
   }
 
   private Expr convertClosureToBlockExpr(Expr expr) {
@@ -2975,15 +3026,16 @@ public class Parser {
     return functionStack().size() == 1 && functionStack().peek().isScriptMain && blockStack().size() == 1;
   }
 
-  private Stmt.FunDecl parseFunDecl(Token start,
+  private Stmt.FunDecl parseFunDecl(boolean expectBrace,
                                     Token name,
                                     JactlType returnType,
                                     List<Stmt.VarDecl> params,
                                     TokenType endToken,
                                     boolean isScriptMain,
                                     boolean isStatic, boolean isFinal) {
+    Token start = expectBrace ? peekIgnoreEOL() : name;
     params.forEach(p -> p.declExpr.isExplicitParam = true);
-    Expr.FunDecl funDecl = Utils.createFunDecl(start, name, returnType, params, isStatic, false, isFinal);
+    Expr.FunDecl funDecl     = Utils.createFunDecl(start, name, returnType, params, isStatic, false, isFinal);
     Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(start, funDecl);
     if (!isScriptMain && !funDecl.isClosure()) {
       // Add to functions in block, so we can support forward references during Resolver phase
@@ -2991,21 +3043,38 @@ public class Parser {
       addFunDecl(funDeclStmt);
     }
     funDecl.isScriptMain = isScriptMain;
+    funDecl.block = maybeMarked(!isScriptMain, false, () -> {
+      if (expectBrace) { expectOrNull(true, LEFT_BRACE); }
+      Stmt.Block block = parseFunctionBody(params, endToken, !isScriptMain, funDecl, start);
+      if (expectBrace) { expectOrNull(true, RIGHT_BRACE); }
+      return block;
+    });
+    return funDeclStmt;
+  }
+
+  private Stmt.FunDecl parseClosure(Token openBrace, List<Stmt.VarDecl> params) {
+    params.forEach(p -> p.declExpr.isExplicitParam = true);
+    Expr.FunDecl funDecl     = Utils.createFunDecl(openBrace, null, ANY, params, false, false, true);
+    Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(openBrace, funDecl);
+    funDecl.block = parseFunctionBody(params, RIGHT_BRACE, true, funDecl, openBrace);
+    expectOrNull(true, RIGHT_BRACE);
+    return funDeclStmt;
+  }
+
+  private Stmt.Block parseFunctionBody(List<Stmt.VarDecl> params, TokenType endToken, boolean throwError, Expr.FunDecl funDecl, Token start) {
     pushFunDecl(funDecl);
     try {
-      try {
-        Stmt.Block block = isScriptMain ? blockBody(start, endToken, this::declaration) : markedBlockBody(start, endToken);
-        insertStmtsInto(params, block);
-        funDecl.block = block;
+      Stmt.Block block = blockBody(start, endToken, this::declaration);
+      insertStmtsInto(params, block);
+      return block;
+    }
+    catch (CompileError error) {
+      if (throwError) {
+        throw error;
       }
-      catch (CompileError error) {
-        funDecl.block = new Stmt.Block(null, new Stmt.Stmts(null));
-        funDecl.block.stmts.stmts = new ArrayList<>();
-        if (!isScriptMain) {
-          throw error;
-        }
-      }
-      return funDeclStmt;
+      Stmt.Block block = new Stmt.Block(null, new Stmt.Stmts(null));
+      block.stmts.stmts = new ArrayList<>();
+      return block;
     }
     finally {
       popFunDecl();
@@ -3379,6 +3448,9 @@ public class Parser {
       return previous();
     }
     try {
+      if (ignoreEol) {
+        skipNewLines();
+      }
       expectError(types);
     }
     catch (CompileError ignore) {
