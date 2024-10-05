@@ -797,7 +797,7 @@ public class Parser {
       else {
         return advance();
       }
-    }, isParameter ? JactlName.NameType.PARAMETER : JactlName.NameType.VARIABLE);
+    }, isParameter ? JactlName.NameType.PARAMETER : inClassDecl ? JactlName.NameType.FIELD : JactlName.NameType.VARIABLE);
     Expr  initialiser = null;
     Token equalsToken = null;
     if (matchAny(EQUAL)) {

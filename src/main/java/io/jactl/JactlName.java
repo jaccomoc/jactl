@@ -27,7 +27,7 @@ public class JactlName extends JactlUserDataHolder {
   private NameType type;
 
   public enum NameType {
-    FILE, PACKAGE, CLASS, FUNCTION, METHOD, VARIABLE, PARAMETER
+    FILE, PACKAGE, CLASS, FUNCTION, METHOD, FIELD, VARIABLE, PARAMETER
   }
 
   public JactlName(Token name, NameType type) {
