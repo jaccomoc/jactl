@@ -23,10 +23,6 @@ import java.math.BigDecimal;
 
 public class SwitchTests extends BaseTest {
 
-  @Test public void testStuff() {
-    test("switch([1,2,3]\nas\nint[]\n)\n{\n [1,2,3]\n ->\n 2\n;\n default\n ->\n 0\n }\n", 2);
-  }
-
   @Test public void switchExprs() {
     test("switch (1) {\n}", null);
     test("switch (1) { 1 -> 2 }", 2);

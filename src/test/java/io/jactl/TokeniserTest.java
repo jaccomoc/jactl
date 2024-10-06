@@ -963,6 +963,71 @@ class TokeniserTest {
     assertEquals("z", token.getValue());
   }
 
+  @Test public void exprStringUnexpectedEndOfFileAfterBackslash() {
+    Tokeniser tokeniser = new Tokeniser("a=\"{\\");
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EQUAL, token.getType());
+    assertEquals(1, token.getOffset());
+    assertEquals(1, token.getLength());
+    token = tokeniser.next();
+    assertEquals(EXPR_STRING_START, token.getType());
+    assertEquals(2, token.getOffset());
+    assertEquals(2, token.getLength());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertEquals(4, token.getOffset());
+    assertEquals(1, token.getLength());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+  }
+
+  @Test public void slashStringUnexpectedEndOfFileAfterBackslash() {
+    Tokeniser tokeniser = new Tokeniser("a=~/{\\");
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EQUAL_GRAVE, token.getType());
+    assertEquals(1, token.getOffset());
+    assertEquals(2, token.getLength());
+    token = tokeniser.next();
+    assertEquals(SLASH, token.getType());
+    assertEquals(3, token.getOffset());
+    assertEquals(1, token.getLength());
+    tokeniser.startRegex();
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals(4, token.getOffset());
+    assertEquals(1, token.getLength());
+    assertEquals("{", token.getStringValue());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertEquals(5, token.getOffset());
+    assertEquals(1, token.getLength());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+  }
+
+  @Test public void stringUnexpectedEndOfFileAfterBackslash() {
+    Tokeniser tokeniser = new Tokeniser("a='{\\");
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.IDENTIFIER, token.getType());
+    token = tokeniser.next();
+    assertEquals(EQUAL, token.getType());
+    assertEquals(1, token.getOffset());
+    assertEquals(1, token.getLength());
+    token = tokeniser.next();
+    assertEquals(STRING_CONST, token.getType());
+    assertEquals(2, token.getOffset());
+    assertEquals(2, token.getLength());
+    token = tokeniser.next();
+    assertEquals(ERROR, token.getType());
+    assertEquals(4, token.getOffset());
+    assertEquals(1, token.getLength());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+  }
 
   @Test public void exprStringUnexpectedEndOfLine() {
     Tokeniser tokeniser = new Tokeniser("a=\"a'$b//\n/*\\t*/z\\b\\r\\fc\"\nx = 2", true);

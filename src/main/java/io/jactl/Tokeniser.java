@@ -152,8 +152,8 @@ public class Tokeniser {
    */
   public Token peek() {
     populateCurrentToken();
-    if (currentToken.isError()) {
-      throw currentToken.getError();
+    if (currentToken.isException()) {
+      throw currentToken.getException();
     }
     return currentToken;
   }
@@ -293,7 +293,11 @@ public class Tokeniser {
         }
         return error("Unexpected new line in string", token);
       }
-      return parseNextStringPart(token, remaining, charAt(0));
+      token = parseNextStringPart(token, remaining, charAt(0));
+      if (token.isError()) {
+        popStringState();
+      }
+      return token;
     }
 
     int c = charAt(0);
@@ -355,7 +359,7 @@ public class Tokeniser {
         advance(tripleQuote ? 2 : 0);
         pushStringState(endChars, stringStart);
         token = parseString(true, endChars, newLinesAllowed(), true, false, stringStart);
-        if (token.is(ERROR)) {
+        if (token.isError()) {
           popStringState();
           return token;
         }
@@ -449,9 +453,15 @@ public class Tokeniser {
         }
         case '\\': {
           if (!available(2)) {
-            Token tok = createToken();
-            advance(1);
-            return stringError("Unexpected EOF after '\\'", tok);
+            if (stringStart == offset) {
+              // Backslash is first char in this part of sting and we have reached EOF so return error
+              Token tok = createToken();
+              advance(1);
+              return stringError("Unexpected EOF after '\\'", tok);
+            }
+            // Otherwise return what we have so far and return error next itme
+            finished = true;
+            continue;
           }
           advance(1);
           if (escapeChars) {
@@ -566,13 +576,13 @@ public class Tokeniser {
               modifierSb.append(modifier);
               advance(1);
             }
-            popStringState();
             final String modifiers = modifierSb.toString();
             for (int i = 0; i < modifiers.length(); i++) {
               if (REGEX_MODIFIERS.indexOf(modifiers.charAt(i)) == -1) {
                 return error("Unrecognised regex modifier '" + modifiers.charAt(i) + "'", token);
               }
             }
+            popStringState();
             return token.setType(EXPR_STRING_END)
                         .setValue(modifiers)
                         .setLength(endChars.length() + modifierSb.length());

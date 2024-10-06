@@ -97,11 +97,18 @@ public class Token extends Location {
     this.type = EOF;
   }
 
+  public int getLength() { return length; }
+
   public boolean isError() {
+    // True if exception or ERROR
+    return error != null || type.is(ERROR);
+  }
+
+  public boolean isException() {
     return error != null;
   }
 
-  public JactlError getError() {
+  public JactlError getException() {
     return error;
   }
 
