@@ -1239,7 +1239,7 @@ public class Parser {
           return expr;
         }
       }
-      Expr expr = expression(true);
+      Expr expr = ifUnlessExpr(true);
       mark.done(expr);
       return expr;
     }
@@ -1247,6 +1247,31 @@ public class Parser {
       markError(mark, error);
       return null;
     }
+  }
+
+  /**
+   * <pre>
+   *# ifUnlessExpr :== expression (( "if" | "unless" ) expression ) ?
+   * </pre>
+   */
+  private Expr ifUnlessExpr(boolean ignoreEol) {
+    Expr  expr = expression(ignoreEol);
+    if (matchAny(IF,UNLESS)) {
+      Token ifToken = previous();
+      Expr  condition = expression(ignoreEol);
+      Stmt  stmt;
+      Stmt.ExprStmt exprStmt = new Stmt.ExprStmt(expr.location, expr);
+      if (ifToken.is(IF)) {
+        stmt = new Stmt.If(ifToken, condition, exprStmt, null);
+      }
+      else {
+        stmt = new Stmt.If(ifToken, condition, null, exprStmt);
+      }
+      Stmt.Stmts stmts = new Stmt.Stmts(expr.location);
+      stmts.stmts.add(stmt);
+      expr = new Expr.Block(expr.location, new Stmt.Block(expr.location, stmts));
+    }
+    return expr;
   }
 
   /**
@@ -1764,7 +1789,7 @@ public class Parser {
       if (!exprs.isEmpty() && expectOrSkip(true, Utils.listOf(endToken,COMMA), Utils.listOf(EOL, COMMA, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE)) == null && !matchAny(COMMA)) {
         break;
       }
-      exprs.add(expression(true));
+      exprs.add(ifUnlessExpr(true));
       skipNewLines();
     }
     return exprs;
@@ -1898,7 +1923,7 @@ public class Parser {
     List<Expr> exprs    = new ArrayList<>();
     // Keep building list while we have COMMA
     do {
-      exprs.add(expression(true));
+      exprs.add(ifUnlessExpr(true));
     } while (matchAnyIgnoreEOL(COMMA));
     skipNewLines();
     expectOrNull(true, RIGHT_PAREN);
@@ -2125,7 +2150,7 @@ public class Parser {
           }
           expectOrNull(true, COMMA);
         }
-        expr.exprs.add(expression(true));
+        expr.exprs.add(ifUnlessExpr(true));
       }
     }
     catch (CompileError error) {
@@ -2222,7 +2247,7 @@ public class Parser {
           skipUntil(COMMA,COLON,EOL,RIGHT_SQUARE,RIGHT_BRACE,EOF);
         }
         else {
-          Expr value = expression(true);
+          Expr value = ifUnlessExpr(true);
           expr.entries.add(new Pair(key, value));
           if (keyString != null) {
             literalKeyMap.put(keyString, value);
@@ -2252,7 +2277,7 @@ public class Parser {
       case EXPR_STRING_START:                return exprString();
       case LEFT_PAREN:  {
         advance();
-        Expr expr = expression(true);
+        Expr expr = ifUnlessExpr(true);
         expect(RIGHT_PAREN);
         return expr;
       }
@@ -2526,7 +2551,7 @@ public class Parser {
     Token matchToken = expect(SWITCH);
     Expr subject;
     if (matchAny(LEFT_PAREN)) {
-      subject = expression(true);
+      subject = ifUnlessExpr(true);
       expect(RIGHT_PAREN);
     }
     else {

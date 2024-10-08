@@ -502,7 +502,7 @@ public class Utils {
   }
 
   public static Map mapOf(Object... elems) {
-    Map result = new HashMap();
+    Map result = new LinkedHashMap();
     if ((elems.length % 2) != 0) {
       throw new IllegalStateException("Internal error: mapOf needs even number of args");
     }

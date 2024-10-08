@@ -1712,6 +1712,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       dupVal();
       Expr key = entry.first;
       compile(key);
+      throwIfNull("Map key must not be null", key.location);
       convertTo(STRING, key, true, key.location);
       compile(entry.second);
       box();

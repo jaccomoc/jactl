@@ -1447,6 +1447,7 @@ class CompilerTest extends BaseTest {
     test("int i = 1,j=3; i + j", 4);
     test("int i =\n1,\nj =\n3\n; i + j", 4);
     test("var x = 13, y = 13 * x; y", 13*13);
+    test("var x = (13 if true), y = (13 * x unless false); y", 13*13);
   }
 
   @Test public void variableAssignments() {
@@ -1518,6 +1519,8 @@ class CompilerTest extends BaseTest {
     test("List a = [1,2,3]; int y; (a[1],y) = a; y", 1);
     test("int[] a = [1,2,3]; int y; (a[1],y) = a; y", 1);
     test("def (x,y) = [1,2]; (x,y) = [y,x]; \"$x:$y\"", "2:1");
+    test("def (x,y) = [1,2]; (x,y) = [3 if true,4 unless true]; \"$x:$y\"", "3:null");
+    test("def (x,y) = [1,2]; (x,y) = [y if true,x unless true]; \"$x:$y\"", "2:null");
     test("def (x,y) = [1,2]; ((x,y) = [y,x])", 1);
     test("def (x,y) = [1,2]; ((x,y) = [y,x]) as String", "1");
 
@@ -1554,6 +1557,7 @@ class CompilerTest extends BaseTest {
     test("1 + 2 ?: 3 + 4 ?: 5 * 6 ?: 7", 3);
     test("def x; x ?: 2", 2);
     test("def x; x ? 1 : 2", 2);
+    test("def x; x ? (1 if true): 2", 2);
     testError("true ? 'abc':1", "not compatible");
     test("false ? 'abc':'1'", "1");
     test("def x = 'abc'; true ? x:1", "abc");
@@ -2923,6 +2927,7 @@ class CompilerTest extends BaseTest {
     test("?? true", true);
     test("?? (byte)1", true);
     test("?? 1", true);
+    test("?? (1 if false)", false);
     test("?? 1D", true);
     test("?? 1.0", true);
     test("?? 'abc'", true);
@@ -2987,6 +2992,8 @@ class CompilerTest extends BaseTest {
     test("'abc' + ''", "abc");
     test("'abc' + 1", "abc1");
     test("'abc' + (byte)1", "abc1");
+    test("'abc' + ('xxx' if true)", "abcxxx");
+    test("'abc' + ('xxx' if false)", "abcnull");
   }
 
   @Test
@@ -3760,6 +3767,23 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2,3]; x[-1] = 4; x", Utils.listOf(1,2,4));
     test("List x = [1,2,3]; x[-1] = 4; x", Utils.listOf(1,2,4));
     testError("List x = [1,2,3]; x[-4] = 4; x", "out of range");
+    test("[1 if true, 2 if false].flatMap()", Utils.listOf(1));
+  }
+
+  @Test public void ifexpr() {
+    test("123 if (false)\n{ 456 }\n", 456);
+    test("123 if\n (false)\n{ 456 }\n", 456);
+    test("123\nif (false)\n{ 456 }\n", null);
+    test("return 123 if true", 123);
+    test("return (123 if true) if true", 123);
+    test("return (123 if true) if false", null);
+    test("123 unless (true)\n{ 456 }\n", 456);
+    test("123 unless\n (true)\n{ 456 }\n", 456);
+    testError("123\nunless (true)\n{ 456 }\n", "unexpected token");
+    test("return 123 unless false", 123);
+    test("return (123 unless false) unless false", 123);
+    test("return (123 unless false) unless true", null);
+    test("(123 if true) + 456", 579);
   }
 
   @Test public void nullIndexes() {
@@ -3809,9 +3833,12 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void mapLiterals() {
+    testError("def x; [(x):1]", "map key must not be null");
+    testError("def x = [:]; def y; x[y] = 1", "null value for field name");
     test("[:]", new HashMap<>());
     test("[a:(byte)1]", Utils.mapOf("a",(byte)1));
     test("[a:1]", Utils.mapOf("a",1));
+    test("[null:1]", Utils.mapOf("null",1));
     test("[a:1] if true", Utils.mapOf("a",1));
     testError("[:", "unexpected EOF");
     testError("[:123]", "unexpected token");
@@ -3884,6 +3911,9 @@ class CompilerTest extends BaseTest {
     test("{a:1}['a']", 1);
     testError("{(1):2}", "map key must be string");
     testError("{a:2,b:3,a:4}", "key 'a' occurs multiple times");
+    test("[('a' if true):2 if true, b:1]", Utils.mapOf("a", 2,"b", 1));
+    test("[('a' unless false):2 unless false, b:1]", Utils.mapOf("a", 2,"b", 1));
+    testError("[('a' if false):2 if true, b:1]", "map key must not be null");
   }
 
   @Test public void listMapVariables() {
@@ -5507,6 +5537,8 @@ class CompilerTest extends BaseTest {
 
   @Test public void stringIndexing() {
     test("'abc'[0]", "a");
+    test("'abc'[0 if true]", "a");
+    test("'abc'[0 if false]", "a");
     testError("''[0]", "index out of bounds");
     testError("''[-1]", "index out of bounds");
     test("def x = 'abcdef'; def i = 3; x[(byte)i]", "d");

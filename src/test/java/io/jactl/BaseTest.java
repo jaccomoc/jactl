@@ -99,6 +99,9 @@ public class BaseTest {
       Object result   = compiled.runSync(bindings);
       checkEqual(expected, result);
     }
+    catch (CompileError e) {
+      e.getErrors().forEach(Throwable::printStackTrace);
+    }
     catch (Exception e) {
       e.printStackTrace();
       fail(e);
