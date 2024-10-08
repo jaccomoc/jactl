@@ -3768,6 +3768,8 @@ class CompilerTest extends BaseTest {
     test("List x = [1,2,3]; x[-1] = 4; x", Utils.listOf(1,2,4));
     testError("List x = [1,2,3]; x[-4] = 4; x", "out of range");
     test("[1 if true, 2 if false].flatMap()", Utils.listOf(1));
+    test("[1,2,3][2 if true]", 3);
+    testError("[1,2,3][3 if false]", "null value for index");
   }
 
   @Test public void ifexpr() {
@@ -3788,6 +3790,7 @@ class CompilerTest extends BaseTest {
 
   @Test public void nullIndexes() {
     testError("String s; s[null]", "null value");
+    testError("String s; s[1 if false]", "null value");
     testError("''[null]", "null value");
     testError("def y; ''[y]", "null value");
     testError("String x = ''; x[null]", "null value");
@@ -3813,6 +3816,7 @@ class CompilerTest extends BaseTest {
     testError("[:][null]", "null value for field");
     testError("def y; [:][y]", "null value for field");
     testError("Map x = [:]; x[null]", "null value for field");
+    testError("Map x = [:]; x['a' unless true]", "null value for field");
     testError("Map x = [:]; def y; x[y]", "null value for field");
     testError("[a:1,b:2][null]", "null value for field");
     testError("def y; [a:1,b:2,c:3][y]", "null value for field");
@@ -5538,7 +5542,7 @@ class CompilerTest extends BaseTest {
   @Test public void stringIndexing() {
     test("'abc'[0]", "a");
     test("'abc'[0 if true]", "a");
-    test("'abc'[0 if false]", "a");
+    testError("'abc'[0 if false]", "cannot convert null value to int");
     testError("''[0]", "index out of bounds");
     testError("''[-1]", "index out of bounds");
     test("def x = 'abcdef'; def i = 3; x[(byte)i]", "d");
@@ -6835,6 +6839,8 @@ class CompilerTest extends BaseTest {
     test("int i = 1; while (false) ;", null);
     test("byte i = 1; while (++i < 10); i", (byte)10);
     test("int i = 1; while (++i < 10); i", 10);
+    test("int i = 1; while (i if false) { i++ }; i", 1);
+    test("int i = 1; while (true if i < 10) { i++ }; i", 10);
     test("int i = 1; while() { break if i > 4; i++ }; i", 5);
     testError("LABEL: int i = 1", "labels can only be applied to for, while, and do/until");
   }
@@ -6849,6 +6855,7 @@ class CompilerTest extends BaseTest {
     testError("do { i++ } until (true);", "unknown variable 'i'");
     test("byte i = 1; do { i++ } until (true); i", (byte)2);
     test("int i = 1; do { i++ } until (true); i", 2);
+    test("int i = 1; do { i++ } until (true if true); i", 2);
     test("int i = 1; do {} until (true)", null);
     test("int i = 1; LABEL: do { break LABEL if i > 4; i++ } until (false); i", 5);
     test("int i = 1; LABEL:\ndo { break LABEL if i > 4; i++ } until (false); i", 5);
@@ -6867,6 +6874,7 @@ class CompilerTest extends BaseTest {
     testError("for (int i = 0; i < 10;)", "Unexpected EOF");
     testError("for (int i = 0; i < 10; i++)", "Unexpected EOF");
     test("int sum = 0; for (int i = 0; i < 10; i++) sum += i; sum", 45);
+    test("int sum = 0; for (int i = (0 if true); i < 10 if true; i++ if true) sum += i; sum", 45);
     testError("int sum = 0; for (int i = 0; i < 10; i++) sum += i; i", "unknown variable");
     test("int sum = 0; for (int i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 100);
     test("int sum = 0; int i,j; for (sum = 20, i = 0,j=10; i < 10; i++,j--) sum += i + j; sum", 120);
@@ -7011,6 +7019,7 @@ class CompilerTest extends BaseTest {
 
     test("def f(int x) { x }; f(1L)", 1);
     test("def f(byte x) { x }; f(1L)", (byte)1);
+    test("def f(byte x, byte y) { x+y }; f(1L if true, 2 unless false)", (byte)3);
   }
 
   @Test public void functionsAsValues() {
@@ -7208,6 +7217,8 @@ class CompilerTest extends BaseTest {
     testError("def f(a, b, c) { c(a+b) }; f(a:2,b:3) { it*it }", "missing mandatory argument: c");
     test("def f(a = '',b = 2) {a+b}; f('',null)", "null");
     test("def f(a = '',b = 2) {a+b}; f(a:'',b:null)", "null");
+    test("def f(a = '',b = 2) {a+b}; f(a:'' if true,b:null unless true)", "null");
+    test("def f(a = ('' if true),b = 2) {a+b}; f(a:'' if true,b:null unless true)", "null");
     testError("def f(a,b) {a+b}; f(a:123,", "Unexpected EOF");
   }
 

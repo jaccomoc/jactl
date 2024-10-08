@@ -1466,7 +1466,7 @@ public class Parser {
           Expr rhs;
           if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
             // '[' and '?[' can be followed by any expression and then a ']'
-            rhs = expression(true);
+            rhs = ifUnlessExpr(true);
           }
           else {
             if (operator.is(DOT, QUESTION_DOT)) {
