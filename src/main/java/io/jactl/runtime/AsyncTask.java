@@ -45,5 +45,16 @@ public abstract class AsyncTask {
   public String       getSource()       { return source;       }
   public int          getOffset()       { return offset;       }
 
-  public abstract void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume);
+  public final void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume) {
+    ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+    try {
+      Thread.currentThread().setContextClassLoader(context.getClassLoader());
+      doExecute(context, instance, data, resume);
+    }
+    finally {
+      Thread.currentThread().setContextClassLoader(contextClassLoader);
+    }
+  }
+
+  protected abstract void doExecute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume);
 }

@@ -62,7 +62,7 @@ public class Jactl {
    * @throws RuntimeError if error during invocation
    */
   public static Object eval(String source) {
-    return eval(source, new LinkedHashMap<String,Object>());
+    return eval(source, new JactlMapImpl());
   }
 
   /**
@@ -76,6 +76,20 @@ public class Jactl {
    * @throws RuntimeError if error during invocation
    */
   public static Object eval(String source, Map<String,Object> vars) {
+    return eval(source, new JactlMapImpl(vars));
+  }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, JactlMap vars) {
     return Compiler.eval(source, JactlContext.create().build(), vars);
   }
 
@@ -91,6 +105,21 @@ public class Jactl {
    * @throws RuntimeError if error during invocation
    */
   public static Object eval(String source, Map<String,Object> vars, JactlContext context) {
+    return eval(source, context.createMap(vars), context);
+  }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map, JactlContext)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @param context the JactlContext
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, JactlMap vars, JactlContext context) {
     return Compiler.eval(source, context, vars);
   }
 
@@ -104,6 +133,19 @@ public class Jactl {
    * @throws CompileError if error during compile
    */
   public static JactlScript compileScript(String source, Map<String, Object> globals) {
+    return compileScript(source, new JactlMapImpl(globals));
+  }
+
+  /**
+   * <p>Compile the given Jactl source code into a JactlScript object.</p>
+   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
+   * The value of the globals at compile time is irrelevant.</p>
+   * @param source   the source code
+   * @param globals  Map of global variables the script can reference
+   * @return a JactlScript object that can be invoked
+   * @throws CompileError if error during compile
+   */
+  public static JactlScript compileScript(String source, JactlMap globals) {
     return Compiler.compileScript(source, JactlContext.create().build(), Utils.DEFAULT_JACTL_PKG, globals);
   }
 
@@ -118,6 +160,20 @@ public class Jactl {
    * @throws CompileError if error during compile
    */
   public static JactlScript compileScript(String source, Map<String, Object> globals, JactlContext context) {
+    return compileScript(source, context.createMap(globals), context);
+  }
+
+  /**
+   * <p>Compile the given Jactl source code into a JactlScript object.</p>
+   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
+   * The value of the globals at compile time is irrelevant.</p>
+   * @param source   the source code
+   * @param globals  Map of global variables the script can reference
+   * @param context  the JactlContext
+   * @return a JactlScript object that can be invoked
+   * @throws CompileError if error during compile
+   */
+  public static JactlScript compileScript(String source, JactlMap globals, JactlContext context) {
     return Compiler.compileScript(source, context, Utils.DEFAULT_JACTL_PKG, globals);
   }
 
@@ -137,6 +193,25 @@ public class Jactl {
    * @throws CompileError if error during compile
    */
   public static JactlScript compileScript(String source, Map<String, Object> globals, JactlContext context, String pkgName) {
+    return compileScript(source, context.createMap(globals), context, pkgName);
+  }
+
+  /**
+   * <p>Compile the given Jactl source code into a JactlScript object.</p>
+   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
+   * The value of the globals at compile time is irrelevant.</p>
+   * <p>This method allows explicitly setting the Jactl package which the script lives in.
+   * If script doesn't declare a package or declares a package of same name then the script
+   * will be compiled into the given package. If the script declares a different package name
+   * then this will result in a CompilerError.</p>
+   * @param source   the source code
+   * @param globals  Map of global variables the script can reference
+   * @param context  the JactlContext
+   * @param pkgName  the Jactl package to compile the script into
+   * @return a JactlScript object that can be invoked
+   * @throws CompileError if error during compile
+   */
+  public static JactlScript compileScript(String source, JactlMap globals, JactlContext context, String pkgName) {
     return Compiler.compileScript(source, context, pkgName, globals);
   }
 
@@ -274,7 +349,7 @@ public class Jactl {
                               .replaceAll("\\.[^\\.]*$", "");
       }
     }
-    Map<String,Object> globals   = new HashMap<>();
+    JactlMap globals   = new JactlMapImpl();
     if (argMap.containsKey('V')) {
       List<String> variables = (List<String>) argMap.get('V');
       variables.forEach(varValue -> {
@@ -346,7 +421,7 @@ public class Jactl {
       if (argMap.containsKey('C')) {
         Class           clazz     = Class.forName(scriptClassName);
         AtomicReference resultRef = new AtomicReference();
-        Function<Map<String,Object>,Object> invoker = JactlScript.createInvoker(clazz, context);
+        Function<JactlMap,Object> invoker = JactlScript.createInvoker(clazz, context);
         JactlScript     jactlScript = JactlScript.createScript(invoker, context);
 
         result = jactlScript.runSync(globals);

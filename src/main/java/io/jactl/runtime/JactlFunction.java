@@ -17,6 +17,7 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Utils;
 import org.objectweb.asm.Type;
@@ -385,7 +386,7 @@ public class JactlFunction extends FunctionDescriptor {
   public Object wrapper(Object obj, Continuation c, String source, int offset, Object[] args) {
     // Named args
     if (args.length == 1 && args[0] instanceof NamedArgsMap) {
-      Map<String,Object> argMap = new LinkedHashMap((Map)args[0]);
+      JactlMap argMap = RuntimeUtils.createMap((JactlMap)args[0]);
       args = new Object[argCount];
       int i = commonArgs(obj, source, offset, args);
       for (int p = 0; p < paramNamesArr.length; p++) {
@@ -400,8 +401,8 @@ public class JactlFunction extends FunctionDescriptor {
             throw new RuntimeError("Missing value for mandatory parameter '" + paramName + "'", source, offset);
           }
         }
-        if (isVarArgs && p == paramNamesArr.length - 1 && (value instanceof List || value instanceof Object[])) {
-          Object[] vargs = value instanceof List ? ((List)value).toArray() : (Object[])value;
+        if (isVarArgs && p == paramNamesArr.length - 1 && (value instanceof JactlList || value instanceof Object[])) {
+          Object[] vargs = value instanceof JactlList ? ((JactlList)value).toArray() : (Object[])value;
           args = addVarArgs(args, i, vargs);
           i += vargs.length;
         }
@@ -419,10 +420,10 @@ public class JactlFunction extends FunctionDescriptor {
       // Check for case where list of args passed in. If we have a single parameter (or a single
       // mandatory parameter) then we assume list is the value for that parameter. Otherwise, we
       // treat the list as a list of arg values.
-      if (args.length == 1 && args[0] instanceof List) {
+      if (args.length == 1 && args[0] instanceof JactlList) {
         boolean passListAsList = paramNamesArr.length == 1 || mandatoryArgCount == 1;
         if (!passListAsList) {
-          args = ((List) args[0]).toArray();
+          args = ((JactlList) args[0]).toArray();
         }
       }
 

@@ -19,9 +19,7 @@ package io.jactl;
 
 import io.jactl.compiler.Compiler;
 import io.jactl.resolver.Resolver;
-import io.jactl.runtime.BuiltinFunctions;
-import io.jactl.runtime.RuntimeError;
-import io.jactl.runtime.RuntimeUtils;
+import io.jactl.runtime.*;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -89,7 +87,7 @@ public class BaseTest {
     try {
       JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint);
 
-      Map<String, Object> bindings = createGlobals();
+      JactlMap bindings = createGlobals();
 
       Function<Expr,Expr> asyncDecorator = testAsync ? expr -> sleepify(expr) : null;
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, asyncDecorator));
@@ -101,6 +99,7 @@ public class BaseTest {
     }
     catch (CompileError e) {
       e.getErrors().forEach(Throwable::printStackTrace);
+      fail(e);
     }
     catch (Exception e) {
       e.printStackTrace();
@@ -155,7 +154,7 @@ public class BaseTest {
       JactlContext jactlContext1 = getJactlContext(true, false, false);
       JactlContext jactlContext2 = getJactlContext(true, false, false);
 
-      Map<String, Object> bindings = createGlobals();
+      JactlMap bindings = createGlobals();
 
       Function<Expr,Expr> asyncDecorator = expr -> checkpointify(expr);
       classCode.forEach(code -> compileClass(code, jactlContext1, packageName, asyncDecorator));
@@ -191,7 +190,7 @@ public class BaseTest {
     }
   }
 
-  private static void checkEqual(Object expected, Object result) {
+  protected static void checkEqual(Object expected, Object result) {
     if (expected instanceof String && ((String) expected).startsWith("#")) {
       expected = new BigDecimal(((String) expected).substring(1));
     }
@@ -225,7 +224,12 @@ public class BaseTest {
           assertArrayEquals((String[]) expected, (String[]) result);
         case "[Ljava.lang.Object;":
           assertTrue(result instanceof Object[]);
-          assertArrayEquals((Object[]) expected, (Object[]) result);
+          Object[] expectedArray = (Object[]) expected;
+          Object[] actualArray = (Object[]) result;
+          assertEquals(expectedArray.length, actualArray.length);
+          for (int i = 0; i < expectedArray.length; i++) {
+            checkEqual(expectedArray[i], actualArray[i]);
+          }
           break;
         case "[Ljava.math.BigDecimal;":
           assertTrue(result instanceof BigDecimal[]);
@@ -258,21 +262,37 @@ public class BaseTest {
     return jactlContext;
   }
 
-  private static void checkEquality(Object o1, Object o2) {
-    if (o1 == null && o2 == null) {
+  protected static void checkEquality(Object expected, Object result) {
+    if (expected == null && result == null) {
       return;
     }
-    assertTrue(o1 != null, "Expected " + o1 + " but was " + o2);
-    assertTrue(o2 != null, "Expected " + o1 + " but was " + o2);
-    if (!o1.getClass().isArray() && !o2.getClass().isArray()) {
-      assertEquals(o1, o2);
+    assertTrue(expected != null, "Expected " + expected + " but was " + result);
+    assertTrue(result != null, "Expected " + expected + " but was " + result);
+    if (expected instanceof List && result instanceof JactlList) {
+      List expectedList = (List) expected;
+      JactlList resultList = (JactlList) result;
+      assertEquals(expectedList.size(), resultList.size());
+      for (int i = 0; i < expectedList.size(); i++) {
+        checkEquality(expectedList.get(i), resultList.get(i));
+      }
       return;
     }
-    assertEquals(o1.getClass().isArray(), o2.getClass().isArray());
-    assertEquals(o1.getClass().getComponentType(), o2.getClass().getComponentType());
-    assertEquals(Array.getLength(o1), Array.getLength(o2));
-    for (int i = 0; i < Array.getLength(o1); i++) {
-      checkEquality(Array.get(o1, i), Array.get(o2, i));
+    if (expected instanceof Map && result instanceof JactlMap) {
+      Map expectedMap = (Map) expected;
+      JactlMap resultMap = (JactlMap) result;
+      assertEquals(expectedMap.size(), resultMap.size());
+      expectedMap.forEach((k,v) -> checkEquality(expectedMap.get(k), resultMap.get(k)));
+      return;
+    }
+    if (!expected.getClass().isArray() && !result.getClass().isArray()) {
+      assertEquals(expected, result);
+      return;
+    }
+    assertEquals(expected.getClass().isArray(), result.getClass().isArray());
+    assertEquals(expected.getClass().getComponentType(), result.getClass().getComponentType());
+    assertEquals(Array.getLength(expected), Array.getLength(result));
+    for (int i = 0; i < Array.getLength(expected); i++) {
+      checkEquality(Array.get(expected, i), Array.get(result, i));
     }
   }
 
@@ -280,11 +300,11 @@ public class BaseTest {
     doCompile(false, source, jactlContext, packageName, exprDecorator, null);
   }
 
-  public JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, Map<String, Object> bindings) {
+  public JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, JactlMap bindings) {
     return doCompile(true, source, jactlContext, packageName, exprDecorator, bindings);
   }
 
-  public JactlScript doCompile(boolean isScript, String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, Map<String, Object> bindings) {
+  public JactlScript doCompile(boolean isScript, String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, JactlMap bindings) {
     if (exprDecorator == null) {
       if (isScript) {
         return Compiler.compileScript(source, jactlContext, packageName, bindings);
@@ -423,7 +443,7 @@ public class BaseTest {
                                                  .debug(debugLevel)
                                                  .build();
 
-      Map<String, Object> bindings = createGlobals();
+      JactlMap bindings = createGlobals();
       Object              result[] = new Object[1];
       Arrays.stream(code).forEach(scriptCode -> {
         JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, null, bindings);
@@ -451,7 +471,7 @@ public class BaseTest {
                                                  .replMode(replMode)
                                                  .debug(debugLevel)
                                                  .build();
-      Map<String, Object> bindings = createGlobals();
+      JactlMap bindings = createGlobals();
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, null));
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
       fail("Expected JactlError");
@@ -470,9 +490,9 @@ public class BaseTest {
     }
   }
 
-  protected Map<String, Object> createGlobals() {
-    HashMap<String, Object> map = new HashMap<String, Object>();
-    map.putAll(globals);
+  protected JactlMap createGlobals() {
+    JactlMap map = new JactlMapImpl();
+    globals.forEach((k,v) -> map.put(k,v));
     return map;
   }
 
@@ -482,8 +502,7 @@ public class BaseTest {
                                                .replMode(true)
                                                .debug(0)
                                                .build();
-    Map<String, Object> globals = new HashMap<>();
-    return Compiler.compileScript(code, jactlContext, globals);
+    return Compiler.compileScript(code, jactlContext, new JactlMapImpl());
   }
 
   protected boolean asyncAutoCreate() {

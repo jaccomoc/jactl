@@ -43,7 +43,7 @@ public class NonBlockingAsyncTask extends AsyncTask {
   }
 
   @Override
-  public void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resumer) {
+  public void doExecute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resumer) {
     asyncWork.accept(context, data, resumer);
   }
 }

@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.Continuation;
+import io.jactl.runtime.JactlMap;
 import io.jactl.runtime.JactlScriptObject;
 import io.jactl.runtime.RuntimeError;
 
@@ -25,7 +26,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
@@ -37,17 +37,19 @@ import java.util.function.Function;
  */
 public class JactlScript {
 
-  private BiConsumer<Map<String,Object>,Consumer<Object>> script;
+  private BiConsumer<JactlMap,Consumer<Object>> script;
   private JactlContext jactlContext;
 
-  public JactlScript(JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
+  public JactlScript(JactlContext jactlContext, BiConsumer<JactlMap, Consumer<Object>> script) {
     this.jactlContext = jactlContext;
     this.script        = script;
   }
 
-  public static JactlScript createScript(Function<Map<String, Object>, Object> invoker, JactlContext context) {
+  public static JactlScript createScript(Function<JactlMap,Object> invoker, JactlContext context) {
     return new JactlScript(context, (map,completion) -> {
+      ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
       try {
+        Thread.currentThread().setContextClassLoader(context.getClassLoader());
         Object result = invoker.apply(map);
         completion.accept(result);
       }
@@ -60,10 +62,13 @@ public class JactlScript {
       catch (Throwable t) {
         completion.accept(new IllegalStateException("Invocation error: " + t, t));
       }
+      finally {
+        Thread.currentThread().setContextClassLoader(contextClassLoader);
+      }
     });
   }
 
-  public static Function<Map<String,Object>,Object> createInvoker(Class clazz, JactlContext context) {
+  public static Function<JactlMap,Object> createInvoker(Class clazz, JactlContext context) {
     try {
       Method       method     = Utils.findMethod(clazz, Utils.JACTL_SCRIPT_MAIN, false);
       MethodType   methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
@@ -126,7 +131,7 @@ public class JactlScript {
    * @param globals     a Map of global variables and their values
    * @param completion  code to be run once script finishes
    */
-  public void run(Map<String,Object> globals, Consumer<Object> completion) {
+  public void run(JactlMap globals, Consumer<Object> completion) {
     script.accept(globals, completion);
   }
 
@@ -154,7 +159,7 @@ public class JactlScript {
    * @param globals     a Map of global variables and their values
    * @return the result returned from the script
    */
-  public Object runSync(Map<String,Object> globals) {
+  public Object runSync(JactlMap globals) {
     CompletableFuture<Object> future = new CompletableFuture<Object>();
     jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, future::complete));
     try {

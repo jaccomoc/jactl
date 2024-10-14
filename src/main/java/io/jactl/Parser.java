@@ -17,6 +17,9 @@
 
 package io.jactl;
 
+import io.jactl.runtime.JactlListImpl;
+import io.jactl.runtime.JactlMap;
+import io.jactl.runtime.JactlMapImpl;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
@@ -162,8 +165,8 @@ public class Parser {
   // = Stmt
 
   public static final TokenType[]     simpleTypes  = new TokenType[]{BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL, STRING};
-  public static final List<TokenType> builtinTypes = RuntimeUtils.concat(simpleTypes, new TokenType[]{DEF, OBJECT, MAP, LIST});
-  public static final List<TokenType> typesAndVar  = RuntimeUtils.concat(builtinTypes, VAR);
+  public static final List<TokenType> builtinTypes = Utils.concat(simpleTypes, new TokenType[]{DEF, OBJECT, MAP, LIST});
+  public static final List<TokenType> typesAndVar  = Utils.concat(builtinTypes, VAR);
 
   /**
    * <pre>
@@ -1215,7 +1218,7 @@ public class Parser {
       new Pair(true, Utils.listOf(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
       //      Utils.listOf(STAR_STAR)
       new Pair(true, unaryOps),
-      new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
+      new Pair(true, Utils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
     );
 
   // Binary operators which can also sometimes be the start of an expression. We need to know
@@ -3898,10 +3901,10 @@ public class Parser {
       return ((Expr.Literal) expr).value.getValue();
     }
     if (expr instanceof Expr.ListLiteral) {
-      return ((Expr.ListLiteral) expr).exprs.stream().map(this::literalValue).collect(Collectors.toList());
+      return new JactlListImpl(((Expr.ListLiteral) expr).exprs.stream().map(this::literalValue).collect(Collectors.toList()));
     }
     if (expr instanceof Expr.MapLiteral) {
-      Map map = new LinkedHashMap();
+      JactlMap map = new JactlMapImpl();
       ((Expr.MapLiteral) expr).entries.stream().forEach(pair -> map.put(literalValue(pair.first), literalValue(pair.second)));
       return map;
     }

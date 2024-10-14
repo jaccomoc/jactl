@@ -20,7 +20,6 @@ package io.jactl.runtime;
 import io.jactl.JactlType;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 
@@ -128,17 +127,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     }
   }
 
-  public static <T> JactlIterator<T> of(List<T> list) {
-    ListIterator<T> iter = new ListIterator<T>();
+  public static JactlIterator<Object> of(JactlList list) {
+    ListIterator iter = new ListIterator();
     iter.list = list;
     return iter;
   }
 
-  private static class ListIterator<T> extends JactlIterator<T> {
-    int     idx = 0;
-    List<T> list;
+  private static class ListIterator extends JactlIterator<Object> {
+    int       idx = 0;
+    JactlList list;
     @Override public boolean hasNext() { return idx < list.size(); }
-    @Override public T       next()    { return list.get(idx++);   }
+    @Override public Object  next()    { return list.get(idx++);   }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
       checkpointer.writeCint(IteratorType.LIST.ordinal());
@@ -150,29 +149,29 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
       restorer.expectCint(IteratorType.LIST.ordinal(), "Expected LIST");
       restorer.expectCint(VERSION, "Bad version");
-      list = (List<T>)restorer.readObject();
+      list = (JactlList)restorer.readObject();
       idx = restorer.readCint();
     }
   }
 
-  public static <K,V> JactlIterator<Map.Entry<K,V>> of(Map<K,V> map) {
-    return new MapEntryIterator<K,V>().setMap(map);
+  public static JactlIterator<Map.Entry<String,Object>> of(JactlMap map) {
+    return new MapEntryIterator().setMap(map);
   }
 
-  private static class MapEntryIterator<K,V> extends JactlIterator<Map.Entry<K,V>> {
-    Map<K,V>                 map;
-    Iterator<Map.Entry<K,V>> iter;
-    int                      count = 0;
-    MapEntryIterator<K,V> setMap(Map<K,V> map)     {
+  private static class MapEntryIterator extends JactlIterator<Map.Entry<String,Object>> {
+    JactlMap                           map;
+    Iterator<Map.Entry<String,Object>> iter;
+    int                                count = 0;
+    MapEntryIterator setMap(JactlMap map)     {
       this.map  = map;
-      this.iter = map.entrySet().iterator();
+      this.iter = map.entryStream().iterator();
       return this;
     }
     @Override public boolean hasNext() {
       if (iter == null) { initIter(); }
       return iter.hasNext();
     }
-    @Override public Map.Entry<K,V> next() {
+    @Override public Map.Entry<String,Object> next() {
       if (iter == null) { initIter(); }
       count++;
       return iter.next();
@@ -188,14 +187,14 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
       restorer.expectCint(IteratorType.MAP.ordinal(), "Expected MAP");
       restorer.expectCint(VERSION, "Bad version");
-      map = (Map)restorer.readObject();
+      map = (JactlMap)restorer.readObject();
       count = restorer.readCint();
       // Can't initialise iterator until map has been fully populated
     }
     void initIter() {
       // After restore our iterator will be null so initialise and advance to
       // point where we were when we were checkpointed.
-      iter = map.entrySet().iterator();
+      iter = map.entryStream().iterator();
       for (int i = 0; i < count; i++) {
         // Get back to where we were
         iter.next();

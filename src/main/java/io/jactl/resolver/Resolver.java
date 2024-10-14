@@ -102,7 +102,7 @@ import static io.jactl.Utils.JACTL_PREFIX;
 public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private final JactlContext             jactlContext;
-  private final Map<String,Object>       globals;
+  private final JactlMap                 globals;
   private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
 
   private String packageName = null;
@@ -133,9 +133,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * @param globals  map of global variables (which themselves can be Maps or Lists or simple values)
    * @param location location for error
    */
-  public Resolver(JactlContext jactlContext, Map<String, Object> globals, Token location) {
+  public Resolver(JactlContext jactlContext, JactlMap globals, Token location) {
     this.jactlContext = jactlContext;
-    this.globals      = globals == null ? Utils.mapOf() : globals;
+    this.globals      = globals == null ? jactlContext.createMap() : globals;
     this.globals.keySet().forEach(name -> {
       if (!jactlContext.globalVars.containsKey(name)) {
         Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
@@ -374,7 +374,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
         }
       });
-      classDecl.methods = RuntimeUtils.concat(initMethod, classDecl.methods);
+      classDecl.methods = Utils.concat(initMethod, classDecl.methods);
 
       // Create varDecl for "this"
       Stmt.VarDecl thisDecl = fieldDecl(classDecl.name, Utils.THIS_VAR, JactlType.createInstanceType(classDescriptor));
@@ -1958,154 +1958,233 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private JactlType evaluateConstExpr(Expr.Binary expr) {
-    final Object leftValue  = expr.left.constValue;
-    final Object rightValue = expr.right.constValue;
-    if (expr.type.is(STRING)) {
-      if (expr.operator.isNot(PLUS, STAR)) { throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings"); }
-      if (expr.operator.is(PLUS)) {
-        if (leftValue == null) {
-          error("Left-hand side of '+' cannot be null", expr.operator);
+    ClassLoader loader = Thread.currentThread().getContextClassLoader();
+    try {
+      Thread.currentThread().setContextClassLoader(jactlContext.getClassLoader());
+      final Object leftValue  = expr.left.constValue;
+      final Object rightValue = expr.right.constValue;
+      if (expr.type.is(STRING)) {
+        if (expr.operator.isNot(PLUS, STAR)) {
+          throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for Strings");
         }
-        expr.constValue = Utils.toString(leftValue) + Utils.toString(rightValue);
-      }
-      else {
-        if (rightValue == null) {
-          error("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
-        }
-        String lhs    = Utils.toString(leftValue);
-        long   length = Utils.toLong(rightValue);
-        if (length < 0) {
-          error("String repeat count must be >= 0", expr.right.location);
+        if (expr.operator.is(PLUS)) {
+          if (leftValue == null) {
+            error("Left-hand side of '+' cannot be null", expr.operator);
+          }
+          expr.constValue = Utils.toString(leftValue) + Utils.toString(rightValue);
         }
         else {
-          expr.constValue = Utils.repeat(lhs, (int) length);
+          if (rightValue == null) {
+            error("Right-hand side of string repeat operator must be numeric but was null", expr.operator);
+          }
+          String lhs    = Utils.toString(leftValue);
+          long   length = Utils.toLong(rightValue);
+          if (length < 0) {
+            error("String repeat count must be >= 0", expr.right.location);
+          }
+          else {
+            expr.constValue = Utils.repeat(lhs, (int) length);
+          }
+        }
+        return expr.type;
+      }
+
+      if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
+        expr.constValue = RuntimeUtils.mapAdd((JactlMap) leftValue, (JactlMap) rightValue, false);
+        return expr.type;
+      }
+
+      if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
+        expr.constValue = RuntimeUtils.listAdd((JactlList) leftValue, rightValue, false);
+      }
+
+      if (expr.operator.is(AMPERSAND_AMPERSAND)) {
+        expr.constValue = RuntimeUtils.isTruth(leftValue, false) &&
+                          RuntimeUtils.isTruth(rightValue, false);
+        return expr.type;
+      }
+      if (expr.operator.is(PIPE_PIPE)) {
+        expr.constValue = RuntimeUtils.isTruth(leftValue, false) ||
+                          RuntimeUtils.isTruth(rightValue, false);
+        return expr.type;
+      }
+
+      if (expr.operator.getType().isBooleanOperator()) {
+        if (expr.operator.is(TRIPLE_EQUAL, BANG_EQUAL_EQUAL) && (leftValue instanceof JactlList || leftValue instanceof JactlMap)) {
+          expr.constValue = expr.operator.is(TRIPLE_EQUAL) == leftValue.equals(rightValue);
+        }
+        else {
+          try {
+            expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
+                                                     RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                                     expr.operator.getSource(), expr.operator.getOffset());
+          }
+          catch (RuntimeError e) {
+            error(e);
+          }
+        }
+        return expr.type = BOOLEAN;
+      }
+
+      if (leftValue == null) {
+        error("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator);
+        return expr.type = TYPE_FOR_BAD_REF;
+      }
+      if (rightValue == null) {
+        error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator);
+        return expr.type = TYPE_FOR_BAD_REF;
+      }
+
+      switch (expr.type.getType()) {
+        case BYTE:
+        case INT: {
+          int left  = Utils.toInt(leftValue);
+          int right = Utils.toInt(rightValue);
+          if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_LESS_THAN)) {
+            right = right & 0x07;
+          }
+          if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
+            error("Divide by zero error", expr.right.location);
+            return expr.type = TYPE_FOR_BAD_REF;
+          }
+          switch (expr.operator.getType()) {
+            case PLUS:
+              expr.constValue = left + right;
+              break;
+            case MINUS:
+              expr.constValue = left - right;
+              break;
+            case STAR:
+              expr.constValue = left * right;
+              break;
+            case SLASH:
+              expr.constValue = left / right;
+              break;
+            case PERCENT_PERCENT:
+              expr.constValue = left % right;
+              break;
+            case PERCENT:
+              expr.constValue = ((left % right) + right) % right;
+              break;
+            case AMPERSAND:
+              expr.constValue = left & right;
+              break;
+            case PIPE:
+              expr.constValue = left | right;
+              break;
+            case ACCENT:
+              expr.constValue = left ^ right;
+              break;
+            case DOUBLE_LESS_THAN:
+              expr.constValue = left << right;
+              break;
+            case DOUBLE_GREATER_THAN:
+              expr.constValue = left >> right;
+              break;
+            case TRIPLE_GREATER_THAN:
+              expr.constValue = left >>> right;
+              break;
+            default:
+              throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
+          }
+          if (expr.type.is(BYTE)) {
+            expr.constValue = (byte) (int) expr.constValue;
+          }
+          break;
+        }
+        case LONG: {
+          long left  = Utils.toLong(leftValue);
+          long right = Utils.toLong(rightValue);
+          if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
+            error("Divide by zero error", expr.right.location);
+            return expr.type = TYPE_FOR_BAD_REF;
+          }
+          switch (expr.operator.getType()) {
+            case PLUS:
+              expr.constValue = left + right;
+              break;
+            case MINUS:
+              expr.constValue = left - right;
+              break;
+            case STAR:
+              expr.constValue = left * right;
+              break;
+            case SLASH:
+              expr.constValue = left / right;
+              break;
+            case PERCENT_PERCENT:
+              expr.constValue = left % right;
+              break;
+            case PERCENT:
+              expr.constValue = ((left % right) + right) % right;
+              break;
+            case AMPERSAND:
+              expr.constValue = left & right;
+              break;
+            case PIPE:
+              expr.constValue = left | right;
+              break;
+            case ACCENT:
+              expr.constValue = left ^ right;
+              break;
+            case DOUBLE_LESS_THAN:
+              expr.constValue = left << (int) right;
+              break;
+            case DOUBLE_GREATER_THAN:
+              expr.constValue = left >> (int) right;
+              break;
+            case TRIPLE_GREATER_THAN:
+              expr.constValue = left >>> (int) right;
+              break;
+            default:
+              throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
+          }
+          break;
+        }
+        case DOUBLE: {
+          double left  = Utils.toDouble(leftValue);
+          double right = Utils.toDouble(rightValue);
+          switch (expr.operator.getType()) {
+            case PLUS:
+              expr.constValue = left + right;
+              break;
+            case MINUS:
+              expr.constValue = left - right;
+              break;
+            case STAR:
+              expr.constValue = left * right;
+              break;
+            case SLASH:
+              expr.constValue = left / right;
+              break;
+            case PERCENT_PERCENT:
+              expr.constValue = left % right;
+              break;
+            case PERCENT:
+              expr.constValue = ((left % right) + right) % right;
+              break;
+            default:
+              throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
+          }
+          break;
+        }
+        case DECIMAL: {
+          BigDecimal left  = Utils.toDecimal(leftValue);
+          BigDecimal right = Utils.toDecimal(rightValue);
+          if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO) {
+            error("Divide by zero error", expr.right.location);
+            return expr.type = TYPE_FOR_BAD_REF;
+          }
+          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jactlContext.minScale,
+                                                                expr.operator.getSource(), expr.operator.getOffset());
+          break;
         }
       }
       return expr.type;
     }
-
-    if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
-      expr.constValue = RuntimeUtils.mapAdd((Map) leftValue, (Map) rightValue, false);
-      return expr.type;
+    finally {
+      Thread.currentThread().setContextClassLoader(loader);
     }
-
-    if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
-      expr.constValue = RuntimeUtils.listAdd((List) leftValue, rightValue, false);
-    }
-
-    if (expr.operator.is(AMPERSAND_AMPERSAND)) {
-      expr.constValue = RuntimeUtils.isTruth(leftValue, false) &&
-                        RuntimeUtils.isTruth(rightValue, false);
-      return expr.type;
-    }
-    if (expr.operator.is(PIPE_PIPE)) {
-      expr.constValue = RuntimeUtils.isTruth(leftValue, false) ||
-                        RuntimeUtils.isTruth(rightValue, false);
-      return expr.type;
-    }
-
-    if (expr.operator.getType().isBooleanOperator()) {
-      if (expr.operator.is(TRIPLE_EQUAL,BANG_EQUAL_EQUAL) && (leftValue instanceof List || leftValue instanceof Map)) {
-        expr.constValue = expr.operator.is(TRIPLE_EQUAL) == leftValue.equals(rightValue);
-      }
-      else {
-        try {
-          expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
-                                                   RuntimeUtils.getOperatorType(expr.operator.getType()),
-                                                   expr.operator.getSource(), expr.operator.getOffset());
-        }
-        catch (RuntimeError e) {
-          error(e);
-        }
-      }
-      return expr.type = BOOLEAN;
-    }
-
-    if (leftValue == null)  { error("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); return expr.type = TYPE_FOR_BAD_REF; }
-    if (rightValue == null) { error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); return expr.type = TYPE_FOR_BAD_REF; }
-
-    switch (expr.type.getType()) {
-      case BYTE: case INT: {
-        int left  = Utils.toInt(leftValue);
-        int right = Utils.toInt(rightValue);
-        if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_LESS_THAN)) {
-          right = right & 0x07;
-        }
-        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
-          error("Divide by zero error", expr.right.location);
-          return expr.type = TYPE_FOR_BAD_REF;
-        }
-        switch (expr.operator.getType()) {
-          case PLUS:                expr.constValue = left + right;   break;
-          case MINUS:               expr.constValue = left - right;   break;
-          case STAR:                expr.constValue = left * right;   break;
-          case SLASH:               expr.constValue = left / right;   break;
-          case PERCENT_PERCENT:     expr.constValue = left % right;   break;
-          case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
-          case AMPERSAND:           expr.constValue = left & right;   break;
-          case PIPE:                expr.constValue = left | right;   break;
-          case ACCENT:              expr.constValue = left ^ right;   break;
-          case DOUBLE_LESS_THAN:    expr.constValue = left << right;  break;
-          case DOUBLE_GREATER_THAN: expr.constValue = left >> right;  break;
-          case TRIPLE_GREATER_THAN: expr.constValue = left >>> right; break;
-          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
-        }
-        if (expr.type.is(BYTE)) {
-          expr.constValue = (byte)(int)expr.constValue;
-        }
-        break;
-      }
-      case LONG: {
-        long left  = Utils.toLong(leftValue);
-        long right = Utils.toLong(rightValue);
-        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
-          error("Divide by zero error", expr.right.location);
-          return expr.type = TYPE_FOR_BAD_REF;
-        }
-        switch (expr.operator.getType()) {
-          case PLUS:                expr.constValue = left + right;        break;
-          case MINUS:               expr.constValue = left - right;        break;
-          case STAR:                expr.constValue = left * right;        break;
-          case SLASH:               expr.constValue = left / right;        break;
-          case PERCENT_PERCENT:     expr.constValue = left % right;        break;
-          case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
-          case AMPERSAND:           expr.constValue = left & right;        break;
-          case PIPE:                expr.constValue = left | right;        break;
-          case ACCENT:              expr.constValue = left ^ right;        break;
-          case DOUBLE_LESS_THAN:    expr.constValue = left << (int)right;  break;
-          case DOUBLE_GREATER_THAN: expr.constValue = left >> (int)right;  break;
-          case TRIPLE_GREATER_THAN: expr.constValue = left >>> (int)right; break;
-          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
-        }
-        break;
-      }
-      case DOUBLE: {
-        double left  = Utils.toDouble(leftValue);
-        double right = Utils.toDouble(rightValue);
-        switch (expr.operator.getType()) {
-          case PLUS:            expr.constValue = left + right;                     break;
-          case MINUS:           expr.constValue = left - right;                     break;
-          case STAR:            expr.constValue = left * right;                     break;
-          case SLASH:           expr.constValue = left / right;                     break;
-          case PERCENT_PERCENT: expr.constValue = left % right;                     break;
-          case PERCENT:         expr.constValue = ((left % right) + right) % right; break;
-          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
-        }
-        break;
-      }
-      case DECIMAL: {
-        BigDecimal left  = Utils.toDecimal(leftValue);
-        BigDecimal right = Utils.toDecimal(rightValue);
-        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO) {
-          error("Divide by zero error", expr.right.location);
-          return expr.type = TYPE_FOR_BAD_REF;
-        }
-        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jactlContext.minScale,
-                                                              expr.operator.getSource(), expr.operator.getOffset());
-        break;
-      }
-    }
-    return expr.type;
   }
 
   private void addHeapLocalToParents(String name, Expr.VarDecl varDecl) {
@@ -2869,7 +2948,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       //:   }
       Expr       arg0IsList  = instOfExpr.apply(new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)), LIST);
       Stmt.Stmts ifTrueStmts = new Stmt.Stmts(startToken);
-      Expr.ArrayGet getArg0     = new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0));
+      Expr.ArrayGet getArg0   = new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0));
       Expr.InvokeUtility toObjectArr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", Utils.listOf(Object.class), Utils.listOf(getArg0));
       ifTrueStmts.stmts.add(assignStmt.apply(Utils.ARGS_VAR_NAME, toObjectArr));
       ifTrueStmts.stmts.add(assignStmt.apply(argCountName, new Expr.ArrayLength(startToken, argsIdent)));
@@ -2931,7 +3010,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr initialiser;
       if (param.initialiser == null) {
         Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
-                                                 Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
+                                                 Utils.listOf(JactlMap.class, String.class, boolean.class, String.class, int.class),
                                                  Utils.listOf(mapCopyIdent, paramNameIdent,
                                                          falseLiteral,
                                                          sourceIdent, offsetIdent));
@@ -2950,10 +3029,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // :                                                         : param.initialiser
         initialiser = new Expr.Ternary(new Expr.Binary(new Expr.PrefixUnary(new Token(BANG, param.name), isObjArrIdent),
                                                        new Token(AMPERSAND_AMPERSAND, param.name),
-                                                       new Expr.InvokeUtility(param.name, Map.class, "containsKey",
+                                                       new Expr.InvokeUtility(param.name, JactlMap.class, "containsKey",
                                                                               Utils.listOf(Object.class), Utils.listOf(mapCopyIdent, paramNameIdent))),
                                        new Token(QUESTION, param.name),
-                                       new Expr.InvokeUtility(param.name, Map.class, "remove",
+                                       new Expr.InvokeUtility(param.name, JactlMap.class, "remove",
                                                               Utils.listOf(Object.class), Utils.listOf(mapCopyIdent, paramNameIdent)),
                                        new Token(COLON, param.name),
                                        new Expr.Ternary(new Expr.Binary(isObjArrIdent, new Token(AMPERSAND_AMPERSAND, param.name), new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent)),
@@ -2979,7 +3058,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                               new Expr.InvokeUtility(startToken,
                                                                            RuntimeUtils.class,
                                                                            "checkForExtraArgs",
-                                                                           Utils.listOf(Map.class, boolean.class, String.class, int.class),
+                                                                           Utils.listOf(JactlMap.class, boolean.class, String.class, int.class),
                                                                            Utils.listOf(mapCopyIdent,
                                                                                    falseLiteral,
                                                                                    sourceIdent,
@@ -3179,14 +3258,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Token        fieldToken       = varDecl.name;
       Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
       Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
-                                                                        Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
+                                                                        Utils.listOf(JactlMap.class, String.class, boolean.class, String.class, int.class),
                                                                         Utils.listOf(argMapIdent, fieldNameLiteral,
                                                                                trueLiteral, new Expr.Identifier(sourceToken), new Expr.Identifier(offsetToken)))
-                                               : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, Map.class, "containsKey",
+                                               : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, JactlMap.class, "containsKey",
                                                                                         Utils.listOf(Object.class), Utils.listOf(argMapIdent, fieldNameLiteral)),
                                                                  new Token(QUESTION, fieldToken),
                                                                  new Expr.Cast(fieldToken, varDecl.type,
-                                                                               new Expr.InvokeUtility(fieldToken, Map.class, "remove",
+                                                                               new Expr.InvokeUtility(fieldToken, JactlMap.class, "remove",
                                                                                                       Utils.listOf(Object.class), Utils.listOf(argMapIdent, fieldNameLiteral))),
                                                                  new Token(COLON, fieldToken),
                                                                  new Expr.Cast(fieldToken, varDecl.type, varDecl.initialiser));
@@ -3202,7 +3281,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // If we created arg map copy (arg0 isn't NamedArgsMapCopy) then check that there are no additional arg values left in named args map
     Expr.InvokeUtility checkForExtraArgs = new Expr.InvokeUtility(classToken, RuntimeUtils.class, "checkForExtraArgs",
-                                                                  Utils.listOf(Map.class, boolean.class, String.class, int.class),
+                                                                  Utils.listOf(JactlMap.class, boolean.class, String.class, int.class),
                                                                   Utils.listOf(argMapIdent, trueLiteral, new Expr.Identifier(sourceToken),
                                                            new Expr.Identifier(offsetToken)));
     checkForExtraArgs.isResultUsed = false;

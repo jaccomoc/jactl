@@ -691,8 +691,8 @@ public class JactlType extends JactlUserDataHolder {
       case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class  : double.class);
       case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
       case STRING:         return Type.getDescriptor(String.class);
-      case MAP:            return Type.getDescriptor(Map.class);
-      case LIST:           return Type.getDescriptor(List.class);
+      case MAP:            return Type.getDescriptor(JactlMap.class);
+      case LIST:           return Type.getDescriptor(JactlList.class);
       case INSTANCE:       return "L" + getInternalName() + ";";
       case CLASS:          return "L" + getInternalName() + ";";
       case ANY:            return Type.getDescriptor(Object.class);
@@ -715,8 +715,8 @@ public class JactlType extends JactlUserDataHolder {
       case DOUBLE:         return Type.getType(isBoxed() ? Double.class  : double.class);
       case DECIMAL:        return Type.getType(BigDecimal.class);
       case STRING:         return Type.getType(String.class);
-      case MAP:            return Type.getType(Map.class);
-      case LIST:           return Type.getType(List.class);
+      case MAP:            return Type.getType(JactlMap.class);
+      case LIST:           return Type.getType(JactlList.class);
       case INSTANCE:       return Type.getType(descriptor());
       case CLASS:          return Type.getType(descriptor());
       case ARRAY:          return Type.getType(descriptor());
@@ -740,8 +740,8 @@ public class JactlType extends JactlUserDataHolder {
       case DOUBLE:       return Type.getInternalName(isBoxed() ? Double.class  : double.class);
       case DECIMAL:      return Type.getInternalName(BigDecimal.class);
       case STRING:       return Type.getInternalName(String.class);
-      case MAP:          return Type.getInternalName(Map.class);
-      case LIST:         return Type.getInternalName(List.class);
+      case MAP:          return Type.getInternalName(JactlMap.class);
+      case LIST:         return Type.getInternalName(JactlList.class);
       case ANY:          return Type.getInternalName(Object.class);
       case FUNCTION:     return Type.getInternalName(JactlMethodHandle.class);
       case HEAPLOCAL:    return Type.getInternalName(HeapLocal.class);
@@ -777,8 +777,8 @@ public class JactlType extends JactlUserDataHolder {
     if (obj instanceof Double)            return DOUBLE;
     if (obj instanceof BigDecimal)        return DECIMAL;
     if (obj instanceof String)            return STRING;
-    if (obj instanceof Map)               return MAP;
-    if (obj instanceof List)              return LIST;
+    if (obj instanceof JactlMap)          return MAP;
+    if (obj instanceof JactlList)         return LIST;
     if (obj instanceof JactlMethodHandle) return FUNCTION;
     if (obj instanceof HeapLocal)         return HEAPLOCAL;
     if (obj instanceof long[])            return LONG_ARR;
@@ -812,8 +812,8 @@ public class JactlType extends JactlUserDataHolder {
     if (clss == Double.class)              { return BOXED_DOUBLE;  }
     if (clss == BigDecimal.class)          { return DECIMAL;       }
     if (clss == String.class)              { return STRING;        }
-    if (Map.class.isAssignableFrom(clss))  { return MAP;           }
-    if (List.class.isAssignableFrom(clss)) { return LIST;          }
+    if (JactlMap.class.isAssignableFrom(clss))  { return MAP;           }
+    if (JactlList.class.isAssignableFrom(clss)) { return LIST;          }
     if (clss == JactlMethodHandle.class)   { return FUNCTION;      }
     if (clss == HeapLocal.class)           { return HEAPLOCAL;     }
     if (clss == JactlIterator.class)       { return ITERATOR;      }
@@ -841,8 +841,8 @@ public class JactlType extends JactlUserDataHolder {
         case DOUBLE:        return isBoxed() ? Double.class  : double.class;
         case DECIMAL:       return BigDecimal.class;
         case STRING:        return String.class;
-        case MAP:           return Map.class;
-        case LIST:          return List.class;
+        case MAP:           return JactlMap.class;
+        case LIST:          return JactlList.class;
         case INSTANCE:      return JactlObject.class;
         case ANY:           return Object.class;
         case FUNCTION:      return JactlMethodHandle.class;

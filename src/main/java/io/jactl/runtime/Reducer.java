@@ -147,7 +147,7 @@ public class Reducer implements Checkpointable {
             elem = RuntimeUtils.mapEntryToList(elem);
             switch (type) {
               case REDUCE:
-                value = closure.invoke(null, source, offset, new Object[]{ Arrays.asList(value, elem) });
+                value = closure.invoke(null, source, offset, new Object[]{ RuntimeUtils.createList(value, elem) });
                 break;
               case AVG:
                 counter++;    // Fall through
@@ -167,18 +167,18 @@ public class Reducer implements Checkpointable {
                                                            : ((String)value).concat(joinStr).concat(elemStr);
                 break;
               case TRANSPOSE:
-                List<List> valueList = (List)value;
+                JactlList valueList = (JactlList)value;
                 int elemListSize = sizeOf(elem);
                 // grow if needed
                 for (int i = valueList.size(); i < elemListSize; i++) {
                   // New list has to have nulls for all earlier entries
-                  List initialNulls = valueList.size() == 0 ? Collections.EMPTY_LIST
-                                                            : IntStream.range(0,valueList.get(0).size()).mapToObj(j -> null).collect(Collectors.toList());
-                  valueList.add(new ArrayList<>(initialNulls));
+                  JactlList initialNulls = valueList.size() == 0 ? RuntimeUtils.createList()
+                                                                 : RuntimeUtils.createList(IntStream.range(0,((JactlList)valueList.get(0)).size()).mapToObj(j -> null));
+                  valueList.add(RuntimeUtils.createList(initialNulls));
                 }
                 // add elems to each list
                 for (int i = 0; i < valueList.size(); i++) {
-                  valueList.get(i).add(listGet(elem, i));
+                  ((JactlList)valueList.get(i)).add(listGet(elem, i));
                 }
                 break;
             }
@@ -201,11 +201,11 @@ public class Reducer implements Checkpointable {
               if (!(nextValue[0] instanceof String)) {
                 throw new RuntimeError("groupBy() closure must return a String value (not '" + RuntimeUtils.className(nextValue[0]) + "')", source, offset);
               }
-              String key    = (String) nextValue[0];
-              Map    map    = (Map)value;
-              List   values = (List)map.get(key);
+              String   key    = (String) nextValue[0];
+              JactlMap map    = (JactlMap)value;
+              JactlList   values = (JactlList)map.get(key);
               if (values == null) {
-                values = new ArrayList();
+                values = RuntimeUtils.createList();
                 map.put(key, values);
               }
               values.add(nextValue[1]);   // add elem to end of list for the given key
@@ -277,8 +277,8 @@ public class Reducer implements Checkpointable {
   }
 
   private int sizeOf(Object object) {
-    if (object instanceof List) {
-      return ((List)object).size();
+    if (object instanceof JactlList) {
+      return ((JactlList)object).size();
     }
     if (object.getClass().isArray()) {
       return Array.getLength(object);
@@ -287,8 +287,9 @@ public class Reducer implements Checkpointable {
   }
 
   private Object listGet(Object object, int idx) {
-    if (object instanceof List) {
-      return idx < ((List)object).size() ? ((List)object).get(idx) : null;
+    if (object instanceof JactlList) {
+      JactlList list = (JactlList) object;
+      return idx < list.size() ? list.get(idx) : null;
     }
     if (object.getClass().isArray()) {
       return Array.get(object, idx);

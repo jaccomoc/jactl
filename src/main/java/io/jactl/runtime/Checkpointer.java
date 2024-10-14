@@ -144,8 +144,8 @@ public class Checkpointer {
     if (obj instanceof Checkpointable) {
       ((Checkpointable)obj)._$j$checkpoint(this);
     }
-    else if (obj instanceof Map)            { writeMap((Map)obj);       }
-    else if (obj instanceof List)           { writeList((List)obj);     }
+    else if (obj instanceof JactlMap)       { writeMap((JactlMap)obj);       }
+    else if (obj instanceof JactlList)      { writeList((JactlList)obj);     }
     else if (obj instanceof String)         { writeString((String)obj); }
     else if (obj.getClass().isArray())      { writeArray(obj);          }
     else if (obj instanceof StringBuffer)   { writeStringBuffer((StringBuffer)obj); }
@@ -211,19 +211,19 @@ public class Checkpointer {
     writeObject(Type.getInternalName(clss));
   }
 
-  void writeMap(Map<String,Object> map) {
+  void writeMap(JactlMap map) {
     int size = map.size();
     ensureCapacity(1 + 5);
     buf[idx++] = (byte)MAP.getType().ordinal();
     _writeCint(size);
-    for (Iterator<Map.Entry<String, Object>> iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
-      Map.Entry<String, Object> entry = iterator.next();
+    for (Iterator<Map.Entry<String,Object>> iterator = map.entryStream().iterator(); iterator.hasNext(); ) {
+      Map.Entry<String,Object> entry = iterator.next();
       writeObject(entry.getKey());
       writeObject(entry.getValue());
     }
   }
 
-  private void writeList(List list) {
+  private void writeList(JactlList list) {
     writeType(LIST);
     writeCint(list.size());
     for (int i = 0; i < list.size(); i++) {

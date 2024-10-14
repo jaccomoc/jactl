@@ -268,7 +268,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // FieldAssign globals map to field so we can access it from anywhere
       mv.visitVarInsn(ALOAD, 0);
       mv.visitVarInsn(ALOAD, methodFunDecl.globalsVar());
-      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class));
+      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(JactlMap.class));
     }
 
     if (classCompiler.classDecl.isScriptClass()) {
@@ -1063,7 +1063,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(2);
       box();
       loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
-      invokeMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
+      invokeMethod(RuntimeUtils.class, "listAdd", JactlList.class, Object.class, boolean.class);
       return null;
     }
 
@@ -1074,7 +1074,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(2);
       box();
       loadConst(expr.originalOperator != null && expr.originalOperator.is(DOUBLE_LESS_THAN_EQUAL));
-      invokeMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
+      invokeMethod(RuntimeUtils.class, "listAddSingle", JactlList.class, Object.class, boolean.class);
       return null;
     }
 
@@ -1085,11 +1085,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(2);
       loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL, MINUS_EQUAL));
       if (expr.operator.is(PLUS)) {
-        invokeMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
+        invokeMethod(RuntimeUtils.class, "mapAdd", JactlMap.class, JactlMap.class, boolean.class);
       }
       else {
         loadLocation(expr.operator);
-        invokeMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
+        invokeMethod(RuntimeUtils.class, "mapSubtract", JactlMap.class, Object.class, boolean.class, String.class, int.class);
       }
       return null;
     }
@@ -1687,14 +1687,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    _newInstance(Type.getInternalName(Utils.JACTL_LIST_TYPE));
-    pushType(LIST);
+    invokeMethod(RuntimeUtils.class, RuntimeUtils.CREATE_LIST);
     expr.exprs.forEach(entry -> {
       dupVal();
       compile(entry);
       expect(2);
       box();
-      invokeMethod(List.class, "add", Object.class);
+      invokeMethod(JactlList.class, "add", Object.class);
       popVal();    // Pop boolean return value of add
     });
     return null;
@@ -1706,8 +1705,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    _newInstance(expr.isNamedArgs ? NamedArgsMap.class : Utils.JACTL_MAP_TYPE);
-    pushType(MAP);
+    if (expr.isNamedArgs) {
+      _newInstance(NamedArgsMap.class);
+      pushType(MAP);
+    }
+    else {
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.CREATE_MAP);
+    }
     expr.entries.forEach(entry -> {
       dupVal();
       Expr key = entry.first;
@@ -1716,7 +1720,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertTo(STRING, key, true, key.location);
       compile(entry.second);
       box();
-      invokeMethod(Map.class, "put", Object.class, Object.class);
+      invokeMethod(JactlMap.class, "put", Object.class, Object.class);
       popVal();    // Ignore return value from put
     });
     return null;
@@ -1974,7 +1978,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          () -> {
                            List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
                            if (method.isBuiltin && !method.isGlobalFunction) {
-                             paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
+                             paramTypes = Utils.concat(method.firstArgtype, paramTypes);
                            }
                            if (method.isBuiltin) {
                              invokeMethodHandle();
@@ -2135,7 +2139,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        invokeMethod(Object.class, "getClass");
                        invokeMethod(Class.class, "getClassLoader");
                      },
-                     () -> invokeMethod(RuntimeUtils.class, "evalScript", Continuation.class, String.class, Map.class, ClassLoader.class));
+                     () -> invokeMethod(RuntimeUtils.class, "evalScript", Continuation.class, String.class, JactlMap.class, ClassLoader.class));
     return null;
   }
 
@@ -2294,7 +2298,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitTypeInsn(INSTANCEOF, varType.getInternalName());
       mv.visitJumpInsn(IFNE, end);
       mv.visitInsn(DUP);
-      mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Map.class));
+      mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(JactlMap.class));
       _throwIfFalseWithClassName(" cannot be cast to " + varType, runtimeLocation);
       mv.visitInsn(POP);
     }
@@ -2993,7 +2997,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param obj  object to load on stack
    */
   Void loadConst(Object obj) {
-    if (obj instanceof List || obj instanceof Map) {
+    if (obj instanceof JactlList || obj instanceof JactlMap) {
       loadClassConstant(obj);
     }
     else {
@@ -3026,12 +3030,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         pushType(MATCHER);
         break;
       case MAP:
-        _newInstance(Utils.JACTL_MAP_TYPE);
-        pushType(MAP);
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.CREATE_MAP);
         break;
       case LIST:
-        _newInstance(Utils.JACTL_LIST_TYPE);
-        pushType(LIST);
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.CREATE_LIST);
         break;
       case ARRAY:
         loadConst(null);
@@ -4256,7 +4258,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   void invokeMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {
-    Method method = findMethod(clss, methodName, paramTypes);
+    Method method = Utils.findMethod(clss, methodName, paramTypes);
     if (Modifier.isStatic(method.getModifiers())) {
       expect(paramTypes.length);
       mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(clss), methodName, Type.getMethodDescriptor(method), false);
@@ -4270,23 +4272,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (!method.getReturnType().equals(void.class)) {
       pushType(method.getReturnType());
-    }
-  }
-
-  /**
-   * Search class for method for given name and given parameter types. If parameter types not supplied
-   * then expects that there is only one method of given name.
-   * @param clss       class containing method
-   * @param methodName name of the method
-   * @param paramTypes optional array of paramter types to narrow down search if multiple methods
-   */
-  private Method findMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {
-    try {
-      return clss.getDeclaredMethod(methodName, paramTypes);
-    }
-    catch (NoSuchMethodException e) {
-      throw new IllegalStateException("Internal error: could not find static method " + methodName + " for class " +
-                                      clss.getName() + " with param types " + Arrays.toString(paramTypes));
     }
   }
 
@@ -4413,12 +4398,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadClassConstant(Object obj) {
-    assert obj instanceof List || obj instanceof Map;
+    assert obj instanceof JactlList || obj instanceof JactlMap;
     String fieldName = classCompiler.classConstantNames.get(obj);
     if (fieldName == null) {
       throw new IllegalStateException("Internal error: missing class constant for constant value " + obj);
     }
-    loadClassField(classCompiler.internalName, fieldName, obj instanceof List ? LIST : MAP, true);
+    loadClassField(classCompiler.internalName, fieldName, obj instanceof JactlList ? LIST : MAP, true);
   }
 
   void loadClassField(String internalClassName, String fieldName, JactlType type, boolean isStatic) {
@@ -4485,7 +4470,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int slot = stack.globalVarSlot(varName);
     loadGlobals();
     loadConst(varName);
-    invokeMethod(Map.class, "get", Object.class);
+    invokeMethod(JactlMap.class, "get", Object.class);
     if (create) {
       tryCatch(ClassCastException.class, false,
                () -> Utils.checkCast(mv, varDecl.type),
@@ -4513,7 +4498,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       loadGlobals();
       loadConst(varName);
-      invokeMethod(Map.class, "get", Object.class);
+      invokeMethod(JactlMap.class, "get", Object.class);
       checkCast(varDecl.type);
       popType();
       pushType(varDecl.type.boxed());
@@ -4612,7 +4597,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       swap();
       loadConst(varName);
       swap();
-      invokeMethod(Map.class, "put", Object.class, Object.class);
+      invokeMethod(JactlMap.class, "put", Object.class, Object.class);
       // Pop result of put since we are not interested in previous value
       popVal();
       return;
@@ -4895,10 +4880,10 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
       invokeMethod(String.class, "length");
     }
     else if (parentType.is(LIST)) {
-      invokeMethod(List.class, "size");
+      invokeMethod(JactlList.class, "size");
     }
     else if (parentType.is(MAP)) {
-      invokeMethod(Map.class, "size");
+      invokeMethod(JactlMap.class, "size");
     }
     else if (parentType.is(ARRAY)) {
       popType();
@@ -4930,7 +4915,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
       loadArrayElem(parentType);
     }
     else if (parentType.is(LIST)) {
-      invokeMethod(List.class, "get", int.class);
+      invokeMethod(JactlList.class, "get", int.class);
     }
     else if (parentType.is(ANY)) {
       loadLocation(location);
@@ -5039,7 +5024,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     expect(3);
     if (peek2().is(MAP)) {
       loadLocation(accessOperator);
-      invokeMethod(RuntimeUtils.class, "storeMapField", Object.class, Map.class, Object.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.class, "storeMapField", Object.class, JactlMap.class, Object.class, String.class, int.class);
     }
     else {
       loadConst(accessOperator.is(DOT, QUESTION_DOT));

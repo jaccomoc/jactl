@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.resolver.Resolver;
+import io.jactl.runtime.JactlMapImpl;
 import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +29,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class AsyncTest {
+public class AsyncTest extends BaseTest {
 
   int debugLevel = 0;
 
@@ -39,7 +40,7 @@ public class AsyncTest {
   private boolean isAsync(String source, JactlContext context) {
     Parser         parser = new Parser(new Tokeniser(source), context, Utils.DEFAULT_JACTL_PKG);
     Stmt.ClassDecl script   = parser.parseScript("AsyncScriptTest");
-    Resolver       resolver = new Resolver(context, Utils.mapOf(), script.location);
+    Resolver       resolver = new Resolver(context, new JactlMapImpl(), script.location);
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(context);
     analyser.analyseClass(script);
@@ -72,7 +73,7 @@ public class AsyncTest {
     assertEquals(isAsync, isAsync(source, context), isAsync ? "Was not async" : "Was not sync");
     RuntimeState.setInput(new BufferedReader(new StringReader(input)));
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
-    assertEquals(expected, script.runSync(Utils.mapOf()));
+    checkEquality(expected, script.runSync(new JactlMapImpl()));
   }
 
   @Test public void asyncTests() {

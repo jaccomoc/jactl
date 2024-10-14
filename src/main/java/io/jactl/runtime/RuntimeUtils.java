@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class RuntimeUtils {
 
@@ -79,7 +80,7 @@ public class RuntimeUtils {
   public static final String DOUBLE_GREATER_THAN = ">>";
   public static final String TRIPLE_GREATER_THAN = ">>>";
 
-  private static final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
+  private static final Map<String, Function<JactlMap,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(Map.Entry eldest) {
@@ -262,9 +263,9 @@ public class RuntimeUtils {
       int result = ((Comparable) obj1).compareTo(obj2);
       return result < 0 ? -1 : result == 0 ? 0 : 1;
     }
-    if (obj1 instanceof List && obj2 instanceof List) {
-      List list1 = (List)obj1;
-      List list2 = (List)obj2;
+    if (obj1 instanceof JactlList && obj2 instanceof JactlList) {
+      JactlList list1 = (JactlList)obj1;
+      JactlList list2 = (JactlList)obj2;
       for (int i = 0; i < list1.size(); i++) {
         if (i >= list2.size()) {
           return 1;
@@ -329,24 +330,24 @@ public class RuntimeUtils {
       }
     }
 
-    if (left instanceof List) {
+    if (left instanceof JactlList) {
       if (operator != PLUS) {
         throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
       }
-      return listAdd((List) left, right, originalOperator == PLUS_EQUAL);
+      return listAdd((JactlList) left, right, originalOperator == PLUS_EQUAL);
     }
 
-    if (left instanceof Map) {
+    if (left instanceof JactlMap) {
       if (operator != PLUS && operator != MINUS) {
         throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
       }
       if (operator == PLUS) {
-        if (!(right instanceof Map)) {
+        if (!(right instanceof JactlMap)) {
           throw new RuntimeError("Cannot add " + className(right) + " to Map", source, offset);
         }
-        return mapAdd((Map) left, (Map) right, originalOperator == PLUS_EQUAL);
+        return mapAdd((JactlMap) left, (JactlMap) right, originalOperator == PLUS_EQUAL);
       }
-      return mapSubtract((Map)left, right, originalOperator == MINUS_EQUAL, source, offset);
+      return mapSubtract((JactlMap)left, right, originalOperator == MINUS_EQUAL, source, offset);
     }
 
     // All other operations expect numbers so check we have numbers
@@ -470,7 +471,7 @@ public class RuntimeUtils {
   }
 
   public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
-    if (left instanceof Map) {
+    if (left instanceof JactlMap) {
       return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
     }
     if (!(left instanceof Number)) {
@@ -663,8 +664,8 @@ public class RuntimeUtils {
 
     // We are left with the comparison operators
     if ((operator == EQUAL_EQUAL || operator == BANG_EQUAL)) {
-      if (left instanceof List || left instanceof Map || left instanceof JactlObject ||
-          right instanceof List || right instanceof Map || right instanceof JactlObject ||
+      if (left instanceof JactlList || left instanceof JactlMap || left instanceof JactlObject ||
+          right instanceof JactlList || right instanceof JactlMap || right instanceof JactlObject ||
           left.getClass().isArray() || right.getClass().isArray()) {
         return equality(left, right, operator, source, offset);
       }
@@ -698,13 +699,13 @@ public class RuntimeUtils {
     if (leftObj == rightObj)                 { return operator == EQUAL_EQUAL; }
     if (leftObj == null || rightObj == null) { return operator == BANG_EQUAL; }
 
-    if (leftObj instanceof List || rightObj instanceof List || leftObj.getClass().isArray() || rightObj.getClass().isArray()) {
+    if (leftObj instanceof JactlList || rightObj instanceof JactlList || leftObj.getClass().isArray() || rightObj.getClass().isArray()) {
       return listEquals(leftObj, rightObj, operator, source, offset);
     }
 
-    if (leftObj instanceof Map && rightObj instanceof Map) {
-      Map<String,Object> left = (Map<String,Object>)leftObj;
-      Map<String,Object> right = (Map<String,Object>)rightObj;
+    if (leftObj instanceof JactlMap && rightObj instanceof JactlMap) {
+      JactlMap left = (JactlMap)leftObj;
+      JactlMap right = (JactlMap)rightObj;
       if (left.size() != right.size()) { return operator == BANG_EQUAL; }
       for (String key: left.keySet()) {
         if (!right.containsKey(key)) {
@@ -740,8 +741,8 @@ public class RuntimeUtils {
       return operator == EQUAL_EQUAL;
     }
 
-    if (leftObj instanceof JactlObject && rightObj instanceof Map || leftObj instanceof Map && rightObj instanceof JactlObject) {
-      Map<String,Object> map = (Map<String,Object>)(leftObj instanceof Map ? leftObj : rightObj);
+    if (leftObj instanceof JactlObject && rightObj instanceof JactlMap || leftObj instanceof JactlMap && rightObj instanceof JactlObject) {
+      JactlMap map = (JactlMap)(leftObj instanceof JactlMap ? leftObj : rightObj);
       JactlObject       obj = (JactlObject)(leftObj instanceof JactlObject ? leftObj : rightObj);
       Set<String>         mapKeys         = new HashSet<>(map.keySet());
       Map<String, Object> fieldAndMethods = obj._$j$getFieldsAndMethods();
@@ -774,10 +775,10 @@ public class RuntimeUtils {
    * Compare lists or arrays
    */
   private static boolean listEquals(Object leftObj, Object rightObj, String operator, String source, int offset) {
-    boolean leftIsList     = leftObj  instanceof List;
-    boolean rightIsList    = rightObj instanceof List;
-    List    left  = leftIsList  ? (List)leftObj  : null;
-    List    right = rightIsList ? (List)rightObj : null;
+    boolean leftIsList     = leftObj  instanceof JactlList;
+    boolean rightIsList    = rightObj instanceof JactlList;
+    JactlList    left  = leftIsList  ? (JactlList)leftObj  : null;
+    JactlList    right = rightIsList ? (JactlList)rightObj : null;
 
     if (leftIsList && rightIsList) {
       if (left.size() != right.size()) { return operator == BANG_EQUAL; }
@@ -790,7 +791,7 @@ public class RuntimeUtils {
     }
 
     if (leftIsList || rightIsList) {
-      List   list = leftIsList ? left : right;
+      JactlList   list = leftIsList ? left : right;
       Object obj  = leftIsList ? rightObj : leftObj;
       if (!obj.getClass().isArray())           { return operator == BANG_EQUAL; }
       if (list.size() != Array.getLength(obj)) { return operator == BANG_EQUAL; }
@@ -832,8 +833,8 @@ public class RuntimeUtils {
    * @return the result of the operation
    */
   public static Object bitOperation(Object left, Object right, String operator, boolean isAssignment, String source, int offset) {
-    if (left instanceof List && operator == DOUBLE_LESS_THAN) {
-      return listAddSingle((List)left, right, isAssignment);
+    if (left instanceof JactlList && operator == DOUBLE_LESS_THAN) {
+      return listAddSingle((JactlList)left, right, isAssignment);
     }
 
     boolean isShift = operator == DOUBLE_LESS_THAN || operator == DOUBLE_GREATER_THAN || operator == TRIPLE_GREATER_THAN;
@@ -954,11 +955,11 @@ public class RuntimeUtils {
    * @param isPlusEqual whether we are doing += or just +
    * @return new list which is result of adding second object to first list
    */
-  public static List listAdd(List list, Object obj, boolean isPlusEqual) {
+  public static JactlList listAdd(JactlList list, Object obj, boolean isPlusEqual) {
     // If ++= then add to existing list rather than creating a new one
-    List result = isPlusEqual ? list : new ArrayList<>(list);
-    if (obj instanceof List) {
-      result.addAll((List) obj);
+    JactlList result = isPlusEqual ? list : createList(list);
+    if (obj instanceof JactlList) {
+      result.addAll((JactlList) obj);
     }
     else {
       result.add(obj);
@@ -973,8 +974,8 @@ public class RuntimeUtils {
    * @param isAssignment true if &lt;&lt;= (add to existing list), false creates a new list
    * @return the list (same list for &lt;&lt;= and new list for &lt;&lt;)
    */
-  public static List listAddSingle(List list, Object elem, boolean isAssignment) {
-    List result = isAssignment ? list : new ArrayList(list);
+  public static JactlList listAddSingle(JactlList list, Object elem, boolean isAssignment) {
+    JactlList result = isAssignment ? list : createList(list);
     result.add(elem);
     return result;
   }
@@ -988,21 +989,26 @@ public class RuntimeUtils {
    * @param isPlusEqual  true if using += rather than just +
    * @return a new map which is the combination of the two maps
    */
-  public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual) {
+  public static JactlMap mapAdd(JactlMap map1, JactlMap map2, boolean isPlusEqual) {
     // If plusEqual then just merge map2 into map1
-    Map result = isPlusEqual ? map1 : new LinkedHashMap(map1);
+    JactlMap result = isPlusEqual ? map1 : createMap(map1);
     result.putAll(map2);
     return result;
   }
 
-  public static Map mapSubtract(Map map1, Object obj2, boolean isMinusEqual, String source, int offset) {
-    Map result = isMinusEqual ? map1 : new LinkedHashMap(map1);
-    if (obj2 instanceof Map) {
-      ((Map)obj2).keySet().forEach(result::remove);
+  public static JactlMap mapSubtract(JactlMap map1, Object obj2, boolean isMinusEqual, String source, int offset) {
+    JactlMap result = isMinusEqual ? map1 : createMap(map1);
+    if (obj2 instanceof JactlMap) {
+      ((JactlMap)obj2).keySet().forEach(result::remove);
       return result;
     }
-    if (obj2 instanceof List) {
-      ((List)obj2).forEach(result::remove);
+    if (obj2 instanceof JactlList) {
+      ((JactlList)obj2).stream().forEach(elem -> {
+        if (!(elem instanceof String)) {
+          throw new RuntimeError("Cannot remove non-String key from map (type was " + className(elem), source, offset);
+        }
+        result.remove((String)elem);
+      });
       return result;
     }
     throw new RuntimeError("Cannot subtract object of type " + className(obj2) + " from Map", source, offset);
@@ -1031,9 +1037,9 @@ public class RuntimeUtils {
     if (value instanceof Long)       { return negated == ((long) value == 0); }
     if (value instanceof Double)     { return negated == ((double) value == 0); }
     if (value instanceof BigDecimal) { return negated == ((BigDecimal) value).stripTrailingZeros().equals(BigDecimal.ZERO); }
-    if (value instanceof List)       { return negated == ((List) value).isEmpty(); }
-    if (value instanceof Map)        { return negated == ((Map) value).isEmpty(); }
-    if (value instanceof Object[])    { return negated == (((Object[]) value).length == 0); }
+    if (value instanceof JactlList)  { return negated == ((JactlList) value).isEmpty(); }
+    if (value instanceof JactlMap)   { return negated == ((JactlMap) value).isEmpty(); }
+    if (value instanceof Object[])   { return negated == (((Object[]) value).length == 0); }
     return !negated;
   }
 
@@ -1076,7 +1082,7 @@ public class RuntimeUtils {
       return "Iterator";
     }
 
-    if (obj instanceof List || obj instanceof Map || obj instanceof JactlObject || obj.getClass().isArray()) {
+    if (obj instanceof JactlList || obj instanceof JactlMap || obj instanceof JactlObject || obj.getClass().isArray()) {
       // If we have already visited this object then we have a circular reference so to avoid infinite recursion
       // we output "<CIRCULAR_REF>"
       if (!previousObjects.add(System.identityHashCode(obj))) {
@@ -1085,7 +1091,7 @@ public class RuntimeUtils {
     }
 
     if (obj instanceof Object[]) {
-      obj = Arrays.asList((Object[]) obj);
+      obj = createList((Object[]) obj);
     }
     if (obj instanceof boolean[]) { return Arrays.toString((boolean[])obj); }
     if (obj instanceof byte[])    { return byteArrayToString((byte[])obj); }
@@ -1094,10 +1100,10 @@ public class RuntimeUtils {
     if (obj instanceof double[])  { return Arrays.toString((double[])obj); }
 
     try {
-      if (obj instanceof List) {
+      if (obj instanceof JactlList) {
         StringBuilder sb = new StringBuilder();
         sb.append('[');
-        List list = (List) obj;
+        JactlList list = (JactlList) obj;
         for (int i = 0; i < list.size(); i++) {
           if (i > 0) {
             sb.append(", ");
@@ -1128,11 +1134,11 @@ public class RuntimeUtils {
         }
       }
 
-      if (obj instanceof JactlObject || obj instanceof Map) {
-        boolean       isMap = obj instanceof Map;
+      if (obj instanceof JactlObject || obj instanceof JactlMap) {
+        boolean       isMap = obj instanceof JactlMap;
         StringBuilder sb    = new StringBuilder();
         sb.append('[');
-        Iterator<Map.Entry<String, Object>> iterator = isMap ? ((Map<String, Object>) obj).entrySet().iterator()
+        Iterator<Map.Entry<String, Object>> iterator = isMap ? ((JactlMap) obj).entryStream().iterator()
                                                              : ((JactlObject) obj)._$j$getFieldsAndMethods()
                                                    .entrySet()
                                                    .stream()
@@ -1272,8 +1278,8 @@ public class RuntimeUtils {
     else {
       // Fields of a map cannot override built-in methods so look up method first
       value = onlyField ? null : Functions.lookupWrapper(parent, field);
-      if (value == null && parent instanceof Map) {
-        value = ((Map) parent).get(field);
+      if (value == null && parent instanceof JactlMap) {
+        value = ((JactlMap) parent).get(field);
       }
     }
 
@@ -1315,7 +1321,7 @@ public class RuntimeUtils {
       throw new NullError("Null value for parent during field access", source, offset);
     }
     if (field == null) {
-      if (parent instanceof Map || parent instanceof JactlObject) {
+      if (parent instanceof JactlMap || parent instanceof JactlObject) {
         throw new NullError("Null value for field", source, offset);
       }
       else {
@@ -1323,7 +1329,7 @@ public class RuntimeUtils {
       }
     }
 
-    if (parent instanceof Map) {
+    if (parent instanceof JactlMap) {
       return loadMapField(parent, field, source, offset);
     }
 
@@ -1350,7 +1356,7 @@ public class RuntimeUtils {
     }
 
     String parentString = null;
-    if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
+    if (!(parent instanceof JactlList) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
       throw new RuntimeError("Invalid parent object type (" + className(parent) + "): expected Map/List" +
                              (isDot ? "" : " or String"), source, offset);
     }
@@ -1363,8 +1369,8 @@ public class RuntimeUtils {
     int index = -1;
     try { index = ((Number) field).intValue(); }  catch (ClassCastException e) { throw new RuntimeError("Non-numeric value for indexed access", source, offset); }
 
-    if (parent instanceof List) {
-      return loadListElem((List) parent, index, source, offset);
+    if (parent instanceof JactlList) {
+      return loadListElem((JactlList) parent, index, source, offset);
     }
 
     if (parentString != null) {
@@ -1395,7 +1401,7 @@ public class RuntimeUtils {
       throw new NullError("Null value for parent during field access", source, offset);
     }
 
-    if (parent instanceof Map) {
+    if (parent instanceof JactlMap) {
       return loadOrCreateMapField(parent, field, source, offset, isMap);
     }
 
@@ -1408,7 +1414,7 @@ public class RuntimeUtils {
     }
 
     String parentString = null;
-    if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
+    if (!(parent instanceof JactlList) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
       throw new RuntimeError("Invalid parent object type (" + className(parent) + "): expected Map/List" +
                              (isDot ? "" : " or String"), source, offset);
     }
@@ -1432,11 +1438,11 @@ public class RuntimeUtils {
       return loadObjectArrElem((Object[]) parent, index, source, offset);
     }
 
-    return loadOrCreateListElem((List) parent, index, isMap, source, offset);
+    return loadOrCreateListElem((JactlList) parent, index, isMap, source, offset);
   }
 
-  private static Object loadOrCreateListElem(List parent, int index, boolean isMap, String source, int offset) {
-    List   list  = parent;
+  private static Object loadOrCreateListElem(JactlList parent, int index, boolean isMap, String source, int offset) {
+    JactlList   list  = parent;
     Object value = null;
     if (index < 0) {
       int newIndex = list.size() + index;
@@ -1450,7 +1456,7 @@ public class RuntimeUtils {
     }
 
     if (value == null) {
-      value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
+      value = isMap ? createMap() : createList();
       for (int i = list.size(); i < index + 1; i++) {
         list.add(null);
       }
@@ -1459,8 +1465,8 @@ public class RuntimeUtils {
     return value;
   }
 
-  private static Object loadListElem(List parent, int index, String source, int offset) {
-    List   list  = parent;
+  private static Object loadListElem(JactlList parent, int index, String source, int offset) {
+    JactlList   list  = parent;
     Object value = null;
     if (index < 0) {
       int newIndex = list.size() + index;
@@ -1536,10 +1542,10 @@ public class RuntimeUtils {
       throw new NullError("Null value for field name", source, offset);
     }
     String fieldName = field.toString();
-    Map    map       = (Map) parent;
+    JactlMap    map       = (JactlMap) parent;
     Object value     = map.get(fieldName);
     if (value == null) {
-      value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
+      value = isMap ? createMap() : createList();
       map.put(fieldName, value);
     }
     if (value == null) {
@@ -1565,7 +1571,7 @@ public class RuntimeUtils {
     if (field == null) {
       throw new NullError("Null value for field name", source, offset);
     }
-    Map map = (Map) parent;
+    JactlMap map = (JactlMap) parent;
     String fieldName = field.toString();
     Object value = map.get(fieldName);
     if (value == null) {
@@ -1584,8 +1590,8 @@ public class RuntimeUtils {
         String str = (String)parent;
         return String.valueOf(str.charAt(idx >= 0 ? idx : idx + str.length()));
       }
-      if (parent instanceof List) {
-        return ((List)parent).get(idx);
+      if (parent instanceof JactlList) {
+        return ((JactlList)parent).get(idx);
       }
       if (parent instanceof int[]) {
         int[] arr = (int[])parent;
@@ -1705,8 +1711,8 @@ public class RuntimeUtils {
           else {
             // Check field is of compatible type
             if (fieldType == Object.class ||
-                isMap && fieldType.isAssignableFrom(Map.class) ||
-                fieldType.isAssignableFrom(List.class)) {
+                isMap && fieldType.isAssignableFrom(JactlMap.class) ||
+                fieldType.isAssignableFrom(JactlList.class)) {
               value = defaultValue(isMap ? Utils.JACTL_MAP_TYPE : Utils.JACTL_LIST_TYPE, source, offset);
               classField.set(parent, value);
             }
@@ -1781,11 +1787,11 @@ public class RuntimeUtils {
   }
 
   public static Object defaultValue(Class clss, String source, int offset) {
-    if (Map.class.isAssignableFrom(clss)) {
-      return new LinkedHashMap<>();
+    if (JactlMap.class.isAssignableFrom(clss)) {
+      return createMap();
     }
-    if (List.class.isAssignableFrom(clss)) {
-      return new ArrayList<>();
+    if (JactlList.class.isAssignableFrom(clss)) {
+      return createList();
     }
     if (String.class.isAssignableFrom(clss)) {
       return "";
@@ -1813,8 +1819,8 @@ public class RuntimeUtils {
   }
 
   public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, String source, int offset) {
-    if (parent instanceof Map) {
-      return storeMapField(value, (Map)parent, field, source, offset);
+    if (parent instanceof JactlMap) {
+      return storeMapField(value, (JactlMap)parent, field, source, offset);
     }
 
     if (parent == null) {
@@ -1831,7 +1837,7 @@ public class RuntimeUtils {
       return storeInstanceField(parent, field, value, source, offset);
     }
 
-    if (!(parent instanceof List)) {
+    if (!(parent instanceof JactlList)) {
       throw new RuntimeError("Invalid object type (" + className(parent) + ") for storing value: expected Map/List/Array", source, offset);
     }
 
@@ -1840,10 +1846,10 @@ public class RuntimeUtils {
       throw new RuntimeError("Field access not supported for object of type " + className(parent), source, offset);
     }
 
-    return storeListField((List) parent, field, value, source, offset);
+    return storeListField((JactlList) parent, field, value, source, offset);
   }
 
-  private static Object storeListField(List parent, Object field, Object value, String source, int offset) {
+  private static Object storeListField(JactlList parent, Object field, Object value, String source, int offset) {
     int index = -1;
     try { index = ((Number)field).intValue(); } catch (ClassCastException e) { throw new RuntimeError("Non-numeric value for index during List access", source, offset); }
     if (index < 0) {
@@ -1887,7 +1893,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object storeMapField(Object value, Map parent, Object field, String source, int offset) {
+  public static Object storeMapField(Object value, JactlMap parent, Object field, String source, int offset) {
     if (parent == null) {
       throw new NullError("Null value for Map/List/Object storing field value", source, offset);
     }
@@ -1932,8 +1938,8 @@ public class RuntimeUtils {
 
   public static JactlIterator createIteratorOrNull(Object obj) {
     if (obj instanceof JactlIterator) { return (JactlIterator)obj;               }
-    if (obj instanceof List)          { return JactlIterator.of((List)obj);      }
-    if (obj instanceof Map)           { return JactlIterator.of((Map)obj);       }
+    if (obj instanceof JactlList)          { return JactlIterator.of((JactlList)obj);      }
+    if (obj instanceof JactlMap)           { return JactlIterator.of((JactlMap)obj);       }
     if (obj instanceof Object[])      { return JactlIterator.of((Object[])obj);  }
     if (obj instanceof int[])         { return JactlIterator.of((int[])obj);     }
     if (obj instanceof byte[])        { return JactlIterator.of((byte[])obj);    }
@@ -1943,19 +1949,56 @@ public class RuntimeUtils {
     return null;
   }
 
-  public static List concat(Object... objs) {
-    ArrayList<Object> result = new ArrayList<>();
+  public static JactlList concat(Object... objs) {
+    JactlList result = createList();
     for (Object obj: objs) {
-      if (obj instanceof List) {
-        result.addAll((List) obj);
+      if (obj instanceof JactlList) {
+        result.addAll((JactlList) obj);
       }
       else
       if (obj instanceof Object[]) {
-        result.addAll(Arrays.asList((Object[])obj));
+        Object[] objArr = (Object[]) obj;
+        for (int i = 0; i < objArr.length; i++) {
+          result.add(objArr[i]);
+        }
       }
       else {
         result.add(obj);
       }
+    }
+    return result;
+  }
+
+  public static final String CREATE_MAP = "createMap";
+  public static JactlMap createMap() {
+    return JactlContext.getJactlContext().createMap();
+  }
+
+  public static JactlMap createMap(JactlMap map) {
+    return JactlContext.getJactlContext().createMap(map);
+  }
+
+  public static final String CREATE_LIST = "createList";
+  public static JactlList createList() {
+    return JactlContext.getJactlContext().createList();
+  }
+
+  public static JactlList createList(int size) {
+    return JactlContext.getJactlContext().createList(size);
+  }
+
+  public static JactlList createList(JactlList list) {
+    return JactlContext.getJactlContext().createList(list);
+  }
+
+  public static <T> JactlList createList(Stream<T> stream) {
+    return JactlContext.getJactlContext().createList(stream);
+  }
+
+  public static JactlList createList(Object... objArr) {
+    JactlList result = createList(objArr.length);
+    for (int i = 0; i < objArr.length; i++) {
+      result.add(objArr[i]);
     }
     return result;
   }
@@ -1981,8 +2024,8 @@ public class RuntimeUtils {
     double.class, FieldType.DOUBLE,
     BigDecimal.class, FieldType.DECIMAL,
     String.class, FieldType.STRING,
-    Map.class, FieldType.MAP,
-    List.class, FieldType.LIST,
+    JactlMap.class, FieldType.MAP,
+    JactlList.class, FieldType.LIST,
     JactlMethodHandle.class, FieldType.FUNCTION
   );
 
@@ -2042,9 +2085,9 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot convert object of type " + className(obj) + " to String", source, offset);
   }
 
-  public static Map castToMap(Object obj, String source, int offset) {
-    if (obj instanceof Map) {
-      return (Map) obj;
+  public static JactlMap castToMap(Object obj, String source, int offset) {
+    if (obj instanceof JactlMap) {
+      return (JactlMap) obj;
     }
     if (obj == null) {
       return null;
@@ -2052,12 +2095,12 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
   }
 
-  public static List castToList(Object obj, String source, int offset) {
-    if (obj instanceof List) {
-      return (List) obj;
+  public static JactlList castToList(Object obj, String source, int offset) {
+    if (obj instanceof JactlList) {
+      return (JactlList) obj;
     }
     if (obj instanceof Object[]) {
-      return Arrays.asList((Object[]) obj);
+      return createList((Object[])obj);
     }
     if (obj == null) {
       return null;
@@ -2070,14 +2113,14 @@ public class RuntimeUtils {
     return convertIteratorToList(c.localObjects[1], c);
   }
 
-  public static List convertIteratorToList(Object iterable, Continuation c) {
+  public static JactlList convertIteratorToList(Object iterable, Continuation c) {
     JactlIterator iter = createIterator(iterable);
 
     // If we are continuing (c != null) then get objects we have stored previously.
     // Object arr will have: result
     Object[] objects = c == null ? null : c.localObjects;
 
-    List result = objects == null ? new ArrayList() : (List) objects[0];
+    JactlList result = objects == null ? createList() : (JactlList) objects[0];
 
     int methodLocation = c == null ? 0 : c.methodLocation;
     try {
@@ -2113,7 +2156,7 @@ public class RuntimeUtils {
           case 4:                      // Have result of iter.next()
             if (elem instanceof Map.Entry) {
               Map.Entry entry = (Map.Entry) elem;
-              elem = Utils.listOf(entry.getKey(), entry.getValue());
+              elem = RuntimeUtils.listOf(entry.getKey(), entry.getValue());
             }
             result.add(elem);
             methodLocation = 0;       // Back to initial state
@@ -2239,8 +2282,8 @@ public class RuntimeUtils {
       return obj;
     }
     Class  componentType = clss.getComponentType();
-    if (obj instanceof List) {
-      List   list = (List)obj;
+    if (obj instanceof JactlList) {
+      JactlList   list = (JactlList)obj;
       Object arr  = Array.newInstance(componentType, list.size());
       for (int i = 0; i < list.size(); i++) {
         Array.set(arr, i, castToType(list.get(i), componentType, isCast, source, offset));
@@ -2308,8 +2351,8 @@ public class RuntimeUtils {
     if (obj == null)                           { return true; }
     if (clss.isAssignableFrom(obj.getClass())) { return true; }
     Class  componentType = clss.getComponentType();
-    if (obj instanceof List) {
-      List   list = (List)obj;
+    if (obj instanceof JactlList) {
+      JactlList   list = (JactlList)obj;
       for (int i = 0; i < list.size(); i++) {
         if (!canCastToType(list.get(i), componentType, componentType)) {
           return false;
@@ -2351,9 +2394,9 @@ public class RuntimeUtils {
     if (o2 instanceof Byte && o1 instanceof Integer) {
       return ((Byte) o2).intValue() == ((Integer) o1).intValue();
     }
-    if (o1 instanceof List && o2 instanceof List) {
-      List l1 = (List)o1;
-      List l2 = (List)o2;
+    if (o1 instanceof JactlList && o2 instanceof JactlList) {
+      JactlList l1 = (JactlList)o1;
+      JactlList l2 = (JactlList)o2;
       if (l1.size() != l2.size()) { return false; }
       for (int i = 0; i < l1.size(); i++) {
         if (!switchEquals(l1.get(i),l2.get(i))) {
@@ -2362,8 +2405,8 @@ public class RuntimeUtils {
       }
       return true;
     }
-    if (o1.getClass().isArray() && o2 instanceof List) {
-      List l2 = (List)o2;
+    if (o1.getClass().isArray() && o2 instanceof JactlList) {
+      JactlList l2 = (JactlList)o2;
       if (Array.getLength(o1) != l2.size()) { return false; }
       for (int i = 0; i < l2.size(); i++) {
         if (!switchEquals(Array.get(o1,i),l2.get(i))) {
@@ -2372,9 +2415,9 @@ public class RuntimeUtils {
       }
       return true;
     }
-    if (o1 instanceof Map && o2 instanceof Map) {
-      Map<String,Object> m1 = (Map)o1;
-      Map<String,Object> m2 = (Map)o2;
+    if (o1 instanceof JactlMap && o2 instanceof JactlMap) {
+      JactlMap m1 = (JactlMap)o1;
+      JactlMap m2 = (JactlMap)o2;
       if (m1.size() != m2.size()) { return false; }
       for (String key: m1.keySet()) {
         if (!switchEquals(m1.get(key), m2.get(key))) {
@@ -2412,7 +2455,7 @@ public class RuntimeUtils {
     if (obj instanceof JactlObject) {
       return clss.isAssignableFrom(obj.getClass());
     }
-    if (clss.equals(List.class) && obj.getClass().isArray()) {
+    if (clss.equals(JactlList.class) && obj.getClass().isArray()) {
       return true;
     }
     if (clss.isAssignableFrom(obj.getClass())) {
@@ -2424,8 +2467,8 @@ public class RuntimeUtils {
   public static boolean isArrayType(Object obj, Class clss) {
     if (clss.isAssignableFrom(obj.getClass())) { return true; }
     Class  componentType = clss.getComponentType();
-    if (obj instanceof List) {
-      List   list = (List)obj;
+    if (obj instanceof JactlList) {
+      JactlList   list = (JactlList)obj;
       for (int i = 0; i < list.size(); i++) {
         if (!isPatternCompatible(list.get(i), componentType)) {
           return false;
@@ -2489,8 +2532,8 @@ public class RuntimeUtils {
     if (obj instanceof Byte)              { return "byte"; }
     if (obj instanceof Integer)           { return "int"; }
     if (obj instanceof Boolean)           { return "boolean"; }
-    if (obj instanceof Map)               { return "Map"; }
-    if (obj instanceof List)              { return "List"; }
+    if (obj instanceof JactlMap)               { return "Map"; }
+    if (obj instanceof JactlList)              { return "List"; }
     if (obj instanceof JactlIterator)          { return "JactlIterator"; }
     if (obj instanceof JactlMethodHandle) { return "Function"; }
     if (obj.getClass().isArray())         { return componentType(obj.getClass().getComponentType()) + "[]"; }
@@ -2513,8 +2556,8 @@ public class RuntimeUtils {
     if (clss.equals(Long.class))              { return "long"; }
     if (clss.equals(Integer.class))           { return "int"; }
     if (clss.equals(Boolean.class))           { return "boolean"; }
-    if (clss.equals(Map.class))               { return "Map"; }
-    if (clss.equals(List.class))              { return "List"; }
+    if (clss.equals(JactlMap.class))               { return "Map"; }
+    if (clss.equals(JactlList.class))              { return "List"; }
     if (clss.equals(JactlIterator.class))          { return "Iterator"; }
     if (clss.equals(JactlMethodHandle.class)) { return "Function"; }
     if (clss.isArray())                       { return componentType(clss.getComponentType()) + "[]"; }
@@ -2637,13 +2680,13 @@ public class RuntimeUtils {
   public static Object mapEntryToList(Object elem) {
     if (elem instanceof Map.Entry) {
       Map.Entry entry = (Map.Entry) elem;
-      elem = Arrays.asList(entry.getKey(), entry.getValue());
+      elem = listOf(entry.getKey(), entry.getValue());
     }
     return elem;
   }
 
   public static Object[] listToObjectArray(Object obj) {
-    return ((List)obj).toArray();
+    return ((JactlList)obj).toArray();
   }
 
   public static boolean inOperator(Object elem, Object collection, boolean isIn, String source, int offset) {
@@ -2654,8 +2697,8 @@ public class RuntimeUtils {
       }
       return ((String)collection).contains((String)elem) == isIn;
     }
-    if (collection instanceof List) {
-      List list = (List)collection;
+    if (collection instanceof JactlList) {
+      JactlList list = (JactlList)collection;
       int size = list.size();
       for (int i = 0; i < size; i++) {
         if (isEquals(list.get(i), elem, source, offset)) {
@@ -2664,16 +2707,19 @@ public class RuntimeUtils {
       }
       return !isIn;
     }
-    if (collection instanceof Map) {
-      return ((Map)collection).containsKey(elem) == isIn;
+    if (collection instanceof JactlMap) {
+      if (!(elem instanceof String)) {
+        throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting key of type String for left-hand side not " + className(elem), source, offset);
+      }
+      return ((JactlMap)collection).containsKey(elem) == isIn;
     }
     throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting String/List/Map for right-hand side not " + className(collection), source, offset);
   }
 
   public static final String LENGTH = "length";
   public static int length(Object obj, String source, int offset) {
-    if (obj instanceof List)      { return ((List)obj).size(); }
-    if (obj instanceof Map)       { return ((Map)obj).size();  }
+    if (obj instanceof JactlList)      { return ((JactlList)obj).size(); }
+    if (obj instanceof JactlMap)       { return ((JactlMap)obj).size();  }
     if (obj instanceof String)    { return ((String)obj).length(); }
     if (obj.getClass().isArray()) { return Array.getLength(obj); }
     throw new RuntimeError("Cannot get array length/list size of object of type " + className(obj), source, offset);
@@ -2745,20 +2791,20 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid Decimal", source, offset); }
   }
 
-  public static List asList(Object obj, String source, int offset) {
-    if (obj == null)           { return null; }
-    if (obj instanceof List)   { return (List)obj; }
-    if (obj instanceof String) { return ((String)obj).chars().mapToObj(c -> String.valueOf((char)c)).collect(Collectors.toList()); }
-    if (obj instanceof Map) {
-      Map<Object,Object> map = (Map)obj;
-      return map.entrySet().stream().map(e -> Utils.listOf(e.getKey(), e.getValue())).collect(Collectors.toList());
+  public static JactlList asList(Object obj, String source, int offset) {
+    if (obj == null)               { return null; }
+    if (obj instanceof JactlList)  { return (JactlList)obj; }
+    if (obj instanceof String)     { return createList(((String)obj).chars().mapToObj(c -> String.valueOf((char)c))); }
+    if (obj instanceof JactlMap)   {
+      JactlMap map = (JactlMap)obj;
+      return createList(map.entryStream().map(e -> listOf(e.getKey(), e.getValue())));
     }
     if (obj instanceof Object[]) {
-      return Arrays.asList((Object[])obj);
+      return createList((Object[])obj);
     }
     if (obj instanceof int[]) {
       int[] arr = (int[])obj;
-      List list = new ArrayList(arr.length);
+      JactlList list = createList(arr.length);
       for (int i = 0; i < arr.length; i++) {
         list.add(arr[i]);
       }
@@ -2766,7 +2812,7 @@ public class RuntimeUtils {
     }
     if (obj instanceof byte[]) {
       byte[] arr = (byte[])obj;
-      List list = new ArrayList(arr.length);
+      JactlList list = createList(arr.length);
       for (int i = 0; i < arr.length; i++) {
         list.add(arr[i]);
       }
@@ -2774,7 +2820,7 @@ public class RuntimeUtils {
     }
     if (obj instanceof long[]) {
       long[] arr = (long[])obj;
-      List list = new ArrayList(arr.length);
+      JactlList list = createList(arr.length);
       for (int i = 0; i < arr.length; i++) {
         list.add(arr[i]);
       }
@@ -2782,7 +2828,7 @@ public class RuntimeUtils {
     }
     if (obj instanceof boolean[]) {
       boolean[] arr = (boolean[])obj;
-      List list = new ArrayList(arr.length);
+      JactlList list = createList(arr.length);
       for (int i = 0; i < arr.length; i++) {
         list.add(arr[i]);
       }
@@ -2790,7 +2836,7 @@ public class RuntimeUtils {
     }
     if (obj instanceof double[]) {
       double[] arr = (double[])obj;
-      List list = new ArrayList(arr.length);
+      JactlList list = createList(arr.length);
       for (int i = 0; i < arr.length; i++) {
         list.add(arr[i]);
       }
@@ -2799,23 +2845,23 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to List", source, offset);
   }
 
-  public static Map asMap(Object obj, String source, int offset) {
+  public static JactlMap asMap(Object obj, String source, int offset) {
     return doAsMap(obj, source, offset, new HashMap<>());
   }
 
-  private static Map doAsMap(Object obj, String source, int offset, Map<Object,Map> fieldValues) {
-    if (obj == null)           { return null; }
-    if (obj instanceof Map)    { return (Map)obj; }
-    if (obj instanceof List) {
-      List list = (List)obj;
-      Map result = new LinkedHashMap();  // Utils.JACTL_MAP_TYPE
-      list.forEach(elem -> addMapEntry(result, elem, source, offset));
+  private static JactlMap doAsMap(Object obj, String source, int offset, Map<Object,JactlMap> fieldValues) {
+    if (obj == null)              { return null; }
+    if (obj instanceof JactlMap)  { return (JactlMap)obj; }
+    if (obj instanceof JactlList) {
+      JactlList list = (JactlList)obj;
+      JactlMap result = createMap();  // Utils.JACTL_MAP_TYPE
+      list.stream().forEach(elem -> addMapEntry(result, elem, source, offset));
       return result;
     }
     if (obj instanceof JactlObject) {
       Map<String,Object> fieldsAndMethods = ((JactlObject)obj)._$j$getFieldsAndMethods();
-      Map result = new LinkedHashMap();   // Utils.JACTL_MAP_TYPE
-      fieldValues.put(obj,result);        // We use this to detect circular references
+      JactlMap result = createMap();
+      fieldValues.put(obj,result);                  // We use this to detect circular references
       fieldsAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).forEach(entry -> {
         String field = entry.getKey();
         try {
@@ -2838,8 +2884,8 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to Map", source, offset);
   }
 
-  public static void addMapEntry(Map mapObj, Object elem, String source, int offset) {
-    Map map = mapObj;
+  public static void addMapEntry(JactlMap mapObj, Object elem, String source, int offset) {
+    JactlMap map = mapObj;
     Object key;
     Object value;
     int length = 0;
@@ -2850,8 +2896,8 @@ public class RuntimeUtils {
       value  = length == 2 ? keyVal[1] : null;
     }
     else
-    if (elem instanceof List) {
-      List list = (List) elem;
+    if (elem instanceof JactlList) {
+      JactlList list = (JactlList) elem;
       length = list.size();
       key    = length == 2 ? list.get(0) : null;
       value  = length == 2 ? list.get(1) : null;
@@ -2865,26 +2911,26 @@ public class RuntimeUtils {
     if (!(key instanceof String)) {
       throw new RuntimeError("Expected String type for key of Map but got " + className(key), source, offset);
     }
-    map.put(key, value);
+    map.put((String)key, value);
   }
 
-  public static Map copyArg0AsMap(Object[] args) {
-    return new LinkedHashMap((Map)args[0]);
+  public static JactlMap copyArg0AsMap(Object[] args) {
+    return createMap((JactlMap)args[0]);
   }
 
-  public static Map copyNamedArgs(Object arg) {
-    return new NamedArgsMapCopy((Map)arg);
+  public static JactlMap copyNamedArgs(Object arg) {
+    return new NamedArgsMapCopy((JactlMap)arg);
   }
 
   public static final String REMOVE_OR_THROW = "removeOrThrow";
-  public static Object removeOrThrow(Map map, String key, boolean isInitMethod, String source, int offset) {
+  public static Object removeOrThrow(JactlMap map, String key, boolean isInitMethod, String source, int offset) {
     if (map.containsKey(key)) {
       return map.remove(key);
     }
     throw new RuntimeError("Missing value for mandatory " + (isInitMethod ? "field" : "parameter") + " '" + key + "'", source, offset);
   }
 
-  public static boolean checkForExtraArgs(Map<String,Object> map, boolean isInitMethod, String source, int offset) {
+  public static boolean checkForExtraArgs(JactlMap map, boolean isInitMethod, String source, int offset) {
     if (!map.isEmpty()) {
       String names = map.keySet().stream().collect(Collectors.joining(", "));
       throw new RuntimeError("No such " + (isInitMethod ? "field" : "parameter") + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
@@ -2897,14 +2943,14 @@ public class RuntimeUtils {
     return data;
   }
 
-  public static Object evalScript(Continuation c, String code, Map bindings, ClassLoader classLoader) {
+  public static Object evalScript(Continuation c, String code, JactlMap bindings, ClassLoader classLoader) {
     if (c != null) {
       return c.getResult();
     }
     try {
-      bindings = bindings == null ? new LinkedHashMap() : bindings;
-      Function<Map<String, Object>, Object> script = compileScript(code, bindings, ((JactlContext.DynamicClassLoader)classLoader).getJactlContext());
-      Object                                result = script.apply(bindings);
+      bindings = bindings == null ? createMap() : bindings;
+      Function<JactlMap, Object> script = compileScript(code, bindings, ((JactlContext.DynamicClassLoader)classLoader).getJactlContext());
+      Object                     result = script.apply(bindings);
       return result;
     }
     catch (Continuation cont) {
@@ -2922,15 +2968,15 @@ public class RuntimeUtils {
     return evalScript(c, null, null, null);
   }
 
-  private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
-    Function<Map<String, Object>, Object> script = evalScriptCache.get(code);
+  private static Function<JactlMap,Object> compileScript(String code, JactlMap bindings, JactlContext context) {
+    Function<JactlMap,Object> script = evalScriptCache.get(code);
     if (script == null) {
       // For eval we want to be able to cache the scripts but the problem is that if the bindings
       // are typed (e.g. x is an Integer) but then when script is rerun a global has had its type
       // changed (e.g. x is now a Long) the script will fail because the types don't match. So
       // we erase all types and make everything ANY. This is obviously less efficient but for eval()
       // efficiency should not be a big issue.
-      HashMap erasedBindings = new HashMap();
+      JactlMap erasedBindings = createMap();
       bindings.keySet().forEach(k -> erasedBindings.put(k, null));
       script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACTL_PKG, erasedBindings);
       evalScriptCache.put(code, script);
@@ -2993,5 +3039,9 @@ public class RuntimeUtils {
   public static final String ERROR_WITH_MSG = "errorWithMsg";
   public static RuntimeError errorWithMsg(String msg, String prefix, String source, int offset) {
     return new RuntimeError(prefix + (msg == null ? "" : ": " + msg), source, offset);
+  }
+
+  public static JactlList listOf(Object... objs) {
+    return createList(objs);
   }
 }

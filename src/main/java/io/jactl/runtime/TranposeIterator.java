@@ -40,8 +40,8 @@ public class TranposeIterator extends JactlIterator {
   private static int VERSION = 1;
   String              source;
   int                 offset;
-  List<JactlIterator> inputIters;
-  List                current;
+  JactlList           inputIters;
+  JactlList           current;
   boolean             nonEmptySeen;
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
@@ -61,17 +61,17 @@ public class TranposeIterator extends JactlIterator {
     restorer.expectCint(VERSION, "Bad version");
     source   = (String)restorer.readObject();
     offset   = restorer.readCint();
-    inputIters = (List<JactlIterator>) restorer.readObject();
-    current  = (List)restorer.readObject();
+    inputIters = (JactlList) restorer.readObject();
+    current  = (JactlList)restorer.readObject();
     nonEmptySeen = restorer.readBoolean();
   }
 
   TranposeIterator() {}
 
-  TranposeIterator(List inputs, String source, int offset) {
+  TranposeIterator(JactlList inputs, String source, int offset) {
     this.source = source;
     this.offset = offset;
-    this.inputIters = new ArrayList();
+    this.inputIters = RuntimeUtils.createList();
     int i = 0;
     for (Object input: inputs) {
       i++;
@@ -85,7 +85,7 @@ public class TranposeIterator extends JactlIterator {
   }
 
   private void reset() {
-    current = new ArrayList();
+    current = RuntimeUtils.createList();
     nonEmptySeen = false;
   }
 
@@ -122,7 +122,7 @@ public class TranposeIterator extends JactlIterator {
             if (current.size() == inputIters.size()) {
                 return nonEmptySeen;
             }
-            JactlIterator iter = inputIters.get(current.size());
+            JactlIterator iter = (JactlIterator)inputIters.get(current.size());
             iterHasNext = iter.hasNext();
             location = 2;
             break;
@@ -140,7 +140,7 @@ public class TranposeIterator extends JactlIterator {
             }
             else {
               nonEmptySeen = true;
-              iterNext = inputIters.get(current.size()).next();
+              iterNext = ((JactlIterator)inputIters.get(current.size())).next();
               location = 4;
             }
             break;
@@ -201,7 +201,7 @@ public class TranposeIterator extends JactlIterator {
             if (!hasNext) {
               return null;
             }
-            List result = current;
+            JactlList result = current;
             reset();
             return result;
           }

@@ -110,10 +110,10 @@ public class JsonDecoder {
     return null;
   }
 
-  List decodeList() {
+  JactlList decodeList() {
     if (offset >= length) error("Unexpected end of JSON decoding list");
-    ArrayList<Object> list  = new ArrayList<Object>();
-    boolean           first = true;
+    JactlList list  = RuntimeUtils.createList();
+    boolean   first = true;
     while (true) {
       char c = skipWhitespace();
       if (c == EOS) error("Unexpected end of JSON decoding list");
@@ -131,10 +131,10 @@ public class JsonDecoder {
     return list;
   }
 
-  Map decodeMap() {
+  JactlMap decodeMap() {
     if (offset >= length) error("Unexpected end of JSON decoding map");
-    LinkedHashMap<String, Object> map   = new LinkedHashMap<String, Object>();
-    boolean                       first = true;
+    JactlMap map   = RuntimeUtils.createMap();
+    boolean  first = true;
     while (true) {
       char c = nextChar();
       if (c == EOS) error("Unexpected end of JSON decoding map");
@@ -499,14 +499,14 @@ public class JsonDecoder {
     return BigDecimal.valueOf(num.longValue());
   }
 
-  public Map getMap() {
+  public JactlMap getMap() {
     if (expectOrNull('{')) {
       return decodeMap();
     }
     return null;
   }
 
-  public List getList() {
+  public JactlList getList() {
     if (expectOrNull('[')) {
       return decodeList();
     }

@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.Continuation;
+import io.jactl.runtime.JactlMapImpl;
 import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.Test;
 
@@ -438,8 +439,8 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test public void substring() {
     test("''.substring(0)", "");
     test("''.substring(0,0)", "");
-    testError("''.substring(-1)", "string index out of range");
-    testError("''.substring(1)", "string index out of range");
+    testError("''.substring(-1)", "substring error");
+    testError("''.substring(1)", "substring error");
     test("'abc'.substring(0,0)", "");
     test("'abc'.substring(1,1)", "");
     test("'abc'.substring(0)", "abc");
@@ -449,7 +450,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("'abc'.substring(start:3)", "");
     test("def f = 'abc'.substring; f(start:3)", "");
     testError("def f = 'abc'.substring; f(start:3,end:4,xxx:3)", "no such parameter");
-    testError("'abc'.substring(4)", "string index out of range");
+    testError("'abc'.substring(4)", "substring error");
     test("'abcdef'.substring(1,4)", "bcd");
     test("'abcdef'.substring(1,6)", "bcdef");
     test("'abcdef'.substring(start:1,end:6)", "bcdef");
@@ -465,13 +466,13 @@ public class BuiltinFunctionTests extends BaseTest {
     test("/a${'bc'}def/.substring(2,5)", "cde");
 
     test("def x = ''; x.substring(0)", "");
-    testError("def x = ''; x.substring(-1)", "string index out of range");
-    testError("def x = ''; x.substring(1)", "string index out of range");
+    testError("def x = ''; x.substring(-1)", "substring error");
+    testError("def x = ''; x.substring(1)", "substring error");
     test("def x = 'abc'; x.substring(0)", "abc");
     test("def x = 'abc'; x.substring(1)", "bc");
     test("def x = 'abc'; x.substring(2)", "c");
     test("def x = 'abc'; x.substring(3)", "");
-    testError("def x = 'abc'; x.substring(4)", "string index out of range");
+    testError("def x = 'abc'; x.substring(4)", "substring error");
     test("def x = 'abcdef'; x.substring(1,4)", "bcd");
     test("def x = 'abcdef'; x.substring(1,6)", "bcdef");
     testError("def x = 'abcdef'; x.substring(1,7)", "StringIndexOutOfBoundsException");
@@ -2199,7 +2200,7 @@ public class BuiltinFunctionTests extends BaseTest {
     };
     JactlContext context = getJactlContext();
     JactlScript script = Jactl.compileScript("_checkpoint(123)", Utils.mapOf(), context);
-    assertEquals(123, script.runSync(Utils.mapOf()));
+    assertEquals(123, script.runSync(new JactlMapImpl()));
     assertEquals(1, checkpoints.size());
     CompletableFuture result = new CompletableFuture();
     context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
@@ -2224,7 +2225,7 @@ public class BuiltinFunctionTests extends BaseTest {
     };
     JactlContext context = getJactlContext();
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
-    assertEquals(commitExpected, script.runSync(Utils.mapOf()));
+    checkEquality(commitExpected, script.runSync(new JactlMapImpl()));
     assertEquals(1, checkpoints.size());
     UUID                        key  = checkpoints.keySet().iterator().next();
     List<Pair<Integer, byte[]>> list = checkpoints.get(key);
@@ -2240,10 +2241,10 @@ public class BuiltinFunctionTests extends BaseTest {
         fail(((Throwable) result).getMessage());
       }
       if (i == list.size() - 1) {
-        assertEquals(recoverExpected, result);
+        checkEquality(recoverExpected, result);
       }
       else {
-        assertEquals(commitExpected, result);
+        checkEquality(commitExpected, result);
       }
     }
     if (list.size() > 1) {

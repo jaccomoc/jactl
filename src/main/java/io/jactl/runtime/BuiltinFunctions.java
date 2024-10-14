@@ -875,12 +875,12 @@ public class BuiltinFunctions {
   // = remove
 
   public static Object mapRemoveData;
-  public static Object mapRemove(Map map, String field) {
+  public static Object mapRemove(JactlMap map, String field) {
     return map.remove(field);
   }
 
   public static Object listRemoveData;
-  public static Object listRemove(List list, String source, int offset, int index) {
+  public static Object listRemove(JactlList list, String source, int offset, int index) {
     if (index < 0) {
       index += list.size();
     }
@@ -896,7 +896,7 @@ public class BuiltinFunctions {
   // = add
 
   public static Object listAddData;
-  public static List listAdd(List list, Object elem) {
+  public static JactlList listAdd(JactlList list, Object elem) {
     list.add(elem);
     return list;
   }
@@ -904,7 +904,7 @@ public class BuiltinFunctions {
   // = addAt
 
   public static Object listAddAtData;
-  public static List listAddAt(List list, String source, int offset, int index, Object elem) {
+  public static JactlList listAddAt(JactlList list, String source, int offset, int index, Object elem) {
     if (index < 0) {
       index += list.size();
     }
@@ -922,18 +922,18 @@ public class BuiltinFunctions {
   // = size
 
   public static Object mapSizeData;
-  public static int mapSize(Map map) { return map.size(); }
+  public static int mapSize(JactlMap map) { return map.size(); }
 
   public static Object listSizeData;
-  public static int listSize(List list) {
+  public static int listSize(JactlList list) {
     return list.size();
   }
 
   public static Object iteratorSizeData;
   public static int iteratorSize(Object iterable, Continuation c) {
     try {
-      List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
-                            : (List) c.getResult();
+      JactlList list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
+                            : (JactlList) c.getResult();
       return list.size();
     }
     catch (Continuation cont) {
@@ -949,7 +949,7 @@ public class BuiltinFunctions {
 
   // = sublist
   public static Object listSubListData;
-  public static List listSubList(List list, String source, int offset, int start, int end) {
+  public static JactlList listSubList(JactlList list, String source, int offset, int start, int end) {
     try {
       if (end == Integer.MAX_VALUE) {
         end = list.size();
@@ -968,14 +968,14 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorSubListData;
-  public static List iteratorSubList(Object iterable, Continuation c, String source, int offset, int start, int end) {
+  public static JactlList iteratorSubList(Object iterable, Continuation c, String source, int offset, int start, int end) {
     source = c == null ? source : (String)c.localObjects[1];
     offset = c == null ? offset : (int)c.localPrimitives[0];
     start  = c == null ? start  : (int)c.localPrimitives[1];
     end    = c == null ? end    : (int)c.localPrimitives[2];
     try {
-      List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
-                            : (List) c.getResult();
+      JactlList list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
+                            : (JactlList) c.getResult();
       return listSubList(list, source, offset, start, end == Integer.MAX_VALUE ? list.size() : end);
     }
     catch (Continuation cont) {
@@ -1003,11 +1003,11 @@ public class BuiltinFunctions {
   // = reverse
 
   public static Object iteratorReverseData;
-  public static List iteratorReverse(Object iterable, Continuation c) {
+  public static JactlList iteratorReverse(Object iterable, Continuation c) {
     try {
-      List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
-                            : (List) c.getResult();
-      List result = new ArrayList(list.size());
+      JactlList list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
+                            : (JactlList) c.getResult();
+      JactlList result = RuntimeUtils.createList(list.size());
       for (int i = list.size() - 1; i >= 0; i--) {
         result.add(list.get(i));
       }
@@ -1203,7 +1203,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorCollectData;
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new ArrayList(), false, source, offset, closure, null);
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), RuntimeUtils.createList(), false, source, offset, closure, null);
   }
   public static Object doIteratorCollect(JactlIterator iter, Object result, boolean isCollectEntries, String source, int offset, JactlMethodHandle closure, Continuation c) {
     int methodLocation = c == null ? 0 : c.methodLocation;
@@ -1249,10 +1249,10 @@ public class BuiltinFunctions {
             break;
           case 6:
             if (isCollectEntries) {
-              RuntimeUtils.addMapEntry((Map)result, transformedElem, source, offset);
+              RuntimeUtils.addMapEntry((JactlMap)result, transformedElem, source, offset);
             }
             else {
-              ((List)result).add(transformedElem);
+              ((JactlList)result).add(transformedElem);
             }
             methodLocation = 0;
             break;
@@ -1326,7 +1326,7 @@ public class BuiltinFunctions {
   // = avg
 
   public static Object listAvgData;
-  public static Object listAvg(List list, String source, int offset) {
+  public static Object listAvg(JactlList list, String source, int offset) {
     int size = list.size();
     if (size == 0) {
       throw new RuntimeError("Empty list for avg() function", source, offset);
@@ -1345,7 +1345,7 @@ public class BuiltinFunctions {
   // = sum
 
   public static Object listSumData;
-  public static Object listSum(List list, String source, int offset) {
+  public static Object listSum(JactlList list, String source, int offset) {
     Object sum = 0;
     int size = list.size();
     for (int i = 0; i < size; i++) {
@@ -1362,7 +1362,7 @@ public class BuiltinFunctions {
   // = min/max
 
   public static Object listMinData;
-  public static Object listMin(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
+  public static Object listMin(JactlList list, Continuation c, String source, int offset, JactlMethodHandle closure) {
     if (closure != null) {
       return iteratorMin(list, c, source, offset, closure);
     }
@@ -1378,7 +1378,7 @@ public class BuiltinFunctions {
   }
 
   public static Object listMaxData;
-  public static Object listMax(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
+  public static Object listMax(JactlList list, Continuation c, String source, int offset, JactlMethodHandle closure) {
     if (closure != null) {
       return iteratorMax(list, c, source, offset, closure);
     }
@@ -1406,22 +1406,22 @@ public class BuiltinFunctions {
   // = groupBy
 
   public static Object iteratorGroupByData;
-  public static Map iteratorGroupBy(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return (Map)new Reducer(Reducer.Type.GROUP_BY, RuntimeUtils.createIterator(iterable), source, offset, new LinkedHashMap<>(), closure).reduce(null);
+  public static JactlMap iteratorGroupBy(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    return (JactlMap)new Reducer(Reducer.Type.GROUP_BY, RuntimeUtils.createIterator(iterable), source, offset, RuntimeUtils.createMap(), closure).reduce(null);
   }
 
   // = transpose
 
   public static Object listTransposeData;
-  public static JactlIterator listTranspose(List inputs, Continuation c, String source, int offset) {
+  public static JactlIterator listTranspose(JactlList inputs, Continuation c, String source, int offset) {
     return new TranposeIterator(inputs, source, offset);
   }
 
   // = transpose
 
   public static Object iteratorTransposeData;
-  public static List iteratorTranspose(Object iterable, Continuation c, String source, int offset) {
-    return (List)new Reducer(Reducer.Type.TRANSPOSE, RuntimeUtils.createIterator(iterable), source, offset, new ArrayList(), null).reduce(null);
+  public static JactlList iteratorTranspose(Object iterable, Continuation c, String source, int offset) {
+    return (JactlList)new Reducer(Reducer.Type.TRANSPOSE, RuntimeUtils.createIterator(iterable), source, offset, RuntimeUtils.createList(), null).reduce(null);
   }
 
   //////////////////////////////////////
@@ -1430,7 +1430,7 @@ public class BuiltinFunctions {
 
   public static Object iteratorCollectEntriesData;
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new HashMap(), true, source, offset, closure, null);
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), RuntimeUtils.createMap(), true, source, offset, closure, null);
   }
 
   /////////////////////////////
@@ -1445,17 +1445,17 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorSortData;
-  public static List iteratorSort(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    List result = null;
+  public static JactlList iteratorSort(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    JactlList result = null;
     int location = c == null ? 0 : c.methodLocation;
     try {
       if (location == 0) {
-        result = iterable instanceof List ? new ArrayList((List) iterable)
+        result = iterable instanceof JactlList ? RuntimeUtils.createList((JactlList)iterable)
                                           : RuntimeUtils.convertIteratorToList(RuntimeUtils.createIterator(iterable), null);
         location = 2;
       }
       if (location == 1) {
-        result = (List) c.getResult();
+        result = (JactlList) c.getResult();
         location = 2;
       }
       if (location == 2) {
@@ -1469,11 +1469,11 @@ public class BuiltinFunctions {
           }
         }
         else {
-          return (List) mergeSort(result, closure, source, offset, null);
+          return (JactlList) mergeSort(result, closure, source, offset, null);
         }
       }
       else {
-        return (List) c.getResult();
+        return (JactlList) c.getResult();
       }
     }
     catch (Continuation cont) {
@@ -1491,19 +1491,19 @@ public class BuiltinFunctions {
    * @return the sorted list
    * @throws Continuation if closure invokes async operation which suspends
    */
-  public static Object mergeSort(List list, JactlMethodHandle closure, String source, Integer offset, Continuation c) {
+  public static Object mergeSort(JactlList list, JactlMethodHandle closure, String source, Integer offset, Continuation c) {
     int size = list.size();
-    List src;
-    List dst;
+    JactlList src;
+    JactlList dst;
     int width = 1;
 
     if (c == null) {
       src = list;
-      dst = new ArrayList(size);
+      dst = RuntimeUtils.createList(size);
     }
     else {
-      src = (List)c.localObjects[0];
-      dst = (List)c.localObjects[1];
+      src = (JactlList)c.localObjects[0];
+      dst = (JactlList)c.localObjects[1];
       width = (int)c.localPrimitives[0];
     }
     for (; width < size; width *= 2) {
@@ -1518,14 +1518,14 @@ public class BuiltinFunctions {
           throw new Continuation(cont, mergeSort$cHandle, 0, new long[] {width, i, offset }, new Object[] {src, dst, list, closure, source });
         }
       }
-      List tmp = src;
+      JactlList tmp = src;
       src = dst;
       dst = tmp;
     }
     return src;
   }
   public static Object mergeSort$c(Continuation c) {
-    return mergeSort((List)c.localObjects[2], (JactlMethodHandle)c.localObjects[3], (String)c.localObjects[4], (int)c.localPrimitives[2], c);
+    return mergeSort((JactlList)c.localObjects[2], (JactlMethodHandle)c.localObjects[3], (String)c.localObjects[4], (int)c.localPrimitives[2], c);
   }
   public static JactlMethodHandle mergeSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "mergeSort$c",
                                                                                 Object.class, Continuation.class);
@@ -1533,13 +1533,13 @@ public class BuiltinFunctions {
   public static JactlMethodHandle merge$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "merge$c",
                                                                             Object.class, Continuation.class);
   public static Object merge$c(Continuation c) {
-    return merge((List)c.localObjects[0], (List)c.localObjects[1], (int)c.localPrimitives[3], (int)c.localPrimitives[4],
+    return merge((JactlList)c.localObjects[0], (JactlList)c.localObjects[1], (int)c.localPrimitives[3], (int)c.localPrimitives[4],
                  (int)c.localPrimitives[5], (int)c.localPrimitives[6], (JactlMethodHandle)c.localObjects[2],
                  (String)c.localObjects[3], (int)c.localPrimitives[7], c);
   }
 
   // Merge two sorted sublists of src into same position in dst
-  public static Object merge(List src, List dst, int start1, int end1, int start2, int end2, JactlMethodHandle comparator, String source, int offset, Continuation c) {
+  public static Object merge(JactlList src, JactlList dst, int start1, int end1, int start2, int end2, JactlMethodHandle comparator, String source, int offset, Continuation c) {
     int count = end1 - start1 + end2 - start2;
     int i1 = start1;
     int i2 = start2;
@@ -1570,7 +1570,7 @@ public class BuiltinFunctions {
         Object elem2 = src.get(i2);
         if (comparison == null) {
           try {
-            comparison = comparator.invoke((Continuation) null, source, (int)offset, new Object[]{ Utils.listOf(elem1, elem2) });
+            comparison = comparator.invoke((Continuation) null, source, (int)offset, new Object[]{ RuntimeUtils.listOf(elem1, elem2) });
           }
           catch (Continuation cont) {
             throw new Continuation(cont, merge$cHandle,
@@ -1608,7 +1608,7 @@ public class BuiltinFunctions {
   // = lines
   public static Object stringLinesData;
   public static JactlIterator stringLines(String str) {
-    return JactlIterator.of(RuntimeUtils.lines(str));
+    return JactlIterator.of(RuntimeUtils.createList(RuntimeUtils.lines(str).stream()));
   }
 
   // = length

@@ -18,6 +18,8 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
+import io.jactl.runtime.JactlMap;
+import io.jactl.runtime.JactlMapImpl;
 import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.Test;
 
@@ -6813,14 +6815,14 @@ class CompilerTest extends BaseTest {
     test("'b' !in [a:1]", true);
     test("'b' in [a:1,b:[1,2,3]]", true);
     test("'b' !in [a:1,b:[1,2,3]]", false);
-    test("[] in [:]", false);
+    testError("[] in [:]", "expecting key of type string");
     test("def x = 'a'; def y = [:]; x in y", false);
     test("def x = 'a' ; def y = [:]; x !in y", true);
     test("def x = 'b' ; def y = [a:1]; x in y", false);
     test("def x = 'b' ; def y = [a:1]; x !in y", true);
     test("def x = 'b' ; def y = [a:1,b:[1,2,3]]; x in y", true);
     test("def x = 'b' ; def y = [a:1,b:[1,2,3]]; x !in y", false);
-    test("def x = [] ; def y = [:]; x in y", false);
+    testError("def x = [] ; def y = [:]; x in y", "expecting key of type string");
     test("'a' in [a:1,b:2].map{ a,b -> a }", true);
     test("'a' !in [a:1,b:2].map{ a,b -> a }", false);
     test("def x = 'a'; x in [a:1,b:2].map{ a,b -> a }", true);
@@ -7506,7 +7508,6 @@ class CompilerTest extends BaseTest {
     test("[1,2].flatMap{ [it,it] } << [a:1]", Utils.listOf(1,1,2,2,Utils.mapOf("a",1)));
   }
 
-
   @Test public void mapAdd() {
     test("[:] + [:]", Utils.mapOf());
     test("def x = [:]; x + x", Utils.mapOf());
@@ -7797,9 +7798,9 @@ class CompilerTest extends BaseTest {
                                                .build();
 
     Jactl.compileClass("class Z { int i }", jactlContext);
-    Object z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
+    Object z = Jactl.eval("new Z(2)", new JactlMapImpl(), jactlContext);
 
-    Map<String,Object> globals = createGlobals();
+    JactlMap globals = createGlobals();
     globals.put("z", z);
     BiConsumer<String,Object> runtest = (code,expected) -> {
       Object result = Compiler.eval(code, jactlContext, globals);
@@ -7919,6 +7920,11 @@ class CompilerTest extends BaseTest {
 //    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
   }
 
+  @Test public void testStuff() {
+    replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
+                    "[1,2]\n[3]\n\n", Utils.listOf(3), "");
+  }
+
   @Test public void nextLine() {
     replTest.accept("nextLine() == null", null,true, "");
     replTest.accept("nextLine() == 'x'", "x",true, "");
@@ -7986,7 +7992,7 @@ class CompilerTest extends BaseTest {
     BiConsumer<Integer,Runnable> ntimes = (n,runnable) -> IntStream.range(0,n).forEach(i -> runnable.run());
 
     final int ITERATIONS = 0;
-    Map<String,Object> globals   = new HashMap<>();
+    JactlMap globals = new JactlMapImpl();
     JactlScript        scriptDef = compile(fibDef + "; fib(40)");
     JactlScript        scriptInt = compile(fibInt + "; fib(40)");
     JactlScript scriptSleepDef = compile(fibDefSleep + "; fib(20)");

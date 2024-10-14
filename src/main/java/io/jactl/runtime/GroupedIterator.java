@@ -38,7 +38,7 @@ public class GroupedIterator extends JactlIterator {
   boolean       sliding = false;
   boolean       haveNext = false;
   boolean       finished = false;
-  List<Object>  group = null;
+  JactlList     group = null;
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
@@ -65,7 +65,7 @@ public class GroupedIterator extends JactlIterator {
     sliding  = restorer.readBoolean();
     haveNext = restorer.readBoolean();
     finished = restorer.readBoolean();
-    group    = (List<Object>)restorer.readObject();
+    group    = (JactlList)restorer.readObject();
   }
 
   GroupedIterator() {}
@@ -136,15 +136,15 @@ public class GroupedIterator extends JactlIterator {
           case 3:  elem = c.getResult();                 location = 4; break;
           case 4:
             elem = RuntimeUtils.mapEntryToList(elem);
-            group = group == null ? new ArrayList<>(size) : group;
+            group = group == null ? RuntimeUtils.createList(size) : group;
             group.add(elem);
             location = 0;
             break;
         }
       }
-      List<Object> result = group;
+      JactlList result = group;
       // If sliding window then save list starting after first element
-      group = sliding ? new ArrayList<>(group.subList(1,group.size())) : null;
+      group = sliding ? RuntimeUtils.createList(group.subList(1,group.size())) : null;
       return result;
     }
     catch (Continuation cont) {

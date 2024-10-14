@@ -27,7 +27,7 @@ public class CheckpointTask extends AsyncTask {
   }
 
   @Override
-  public void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resumer) {
+  public void doExecute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resumer) {
     instance.incrementCheckpointId();
     continuation.scriptInstance = instance;
     byte[] buf = Checkpointer.checkpoint(continuation, source, offset);

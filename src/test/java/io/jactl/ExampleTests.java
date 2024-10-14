@@ -17,6 +17,8 @@
 
 package io.jactl;
 
+import io.jactl.runtime.JactlMap;
+import io.jactl.runtime.JactlMapImpl;
 import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.Test;
 
@@ -41,8 +43,8 @@ public class ExampleTests {
   }
 
   @Test public void example2() {
-    HashMap<String, Object> globals = new HashMap<String,Object>();
-    JactlScript             script  = Jactl.compileScript("3 + 4", globals);
+    JactlMap    globals = new JactlMapImpl();
+    JactlScript script  = Jactl.compileScript("3 + 4", globals);
     Object result      = script.runSync(globals);          // result will be 7
     assertEquals(7, result);
   }
@@ -52,8 +54,7 @@ public class ExampleTests {
     globals.put("x", null);
     globals.put("y", null);
     JactlScript script = Jactl.compileScript("x + y", globals);
-
-    HashMap<String, Object> globalValues = new HashMap<String,Object>();
+    JactlMap globalValues = new JactlMapImpl();
     globalValues.put("x", 7);
     globalValues.put("y", 3);
     script.run(globalValues, result -> System.out.println("Result is " + result));
@@ -63,7 +64,7 @@ public class ExampleTests {
     JactlContext context = JactlContext.create()
                                        .build();
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("13 * 17", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));    // Output will be: "Result is 221"
 
@@ -75,7 +76,7 @@ public class ExampleTests {
     JactlContext context = JactlContext.create().build();
     Jactl.compileClass("class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));
   }
@@ -84,7 +85,7 @@ public class ExampleTests {
     JactlContext context = JactlContext.create().build();
     Jactl.compileClass("package a.b.c; class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));
 

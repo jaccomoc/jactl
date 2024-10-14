@@ -18,6 +18,7 @@
 package io.jactl.compiler;
 
 import io.jactl.*;
+import io.jactl.runtime.JactlMap;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
 
@@ -38,12 +39,12 @@ public class ScriptCompiler extends ClassCompiler {
    * @return the script
    */
   JactlScript compileWithCompletion() {
-    Function<Map<String, Object>, Object> scriptMain = compile();
+    Function<JactlMap,Object> scriptMain = compile();
     return JactlScript.createScript(scriptMain, context);
   }
 
-  public Function<Map<String,Object>, Object> compile() {
-    FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
+  public Function<JactlMap,Object> compile() {
+    FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(JactlMap.class), null, null);
     globalVars.visitEnd();
 
     compileInnerClasses();

@@ -26,12 +26,12 @@ import java.util.Map;
  * Used a bit like a marker interface to indicate to runtime argument handling that the Map
  * being passed in should be treated as named args rather than a single argument of type Map.
  */
-public class NamedArgsMap extends LinkedHashMap implements Checkpointable {
+public class NamedArgsMap extends JactlMapImpl implements Checkpointable {
   private static int VERSION = 1;
 
   public NamedArgsMap() {}
 
-  protected NamedArgsMap(Map map) {
+  protected NamedArgsMap(JactlMap map) {
     super(map);
   }
 

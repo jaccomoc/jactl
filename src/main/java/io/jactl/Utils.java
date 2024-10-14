@@ -18,6 +18,8 @@
 package io.jactl;
 
 import io.jactl.runtime.FunctionDescriptor;
+import io.jactl.runtime.JactlList;
+import io.jactl.runtime.JactlMap;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -68,8 +70,8 @@ public class Utils {
   public static final String JACTL_CHECKPOINT_FN                = JACTL_PREFIX + "checkpoint";
   public static final String JACTL_RESTORE_FN                   = JACTL_PREFIX + "restore";
 
-  public static final Class JACTL_MAP_TYPE  = LinkedHashMap.class;
-  public static final Class JACTL_LIST_TYPE = ArrayList.class;
+  public static final Class JACTL_MAP_TYPE  = JactlMap.class;
+  public static final Class JACTL_LIST_TYPE = JactlList.class;
 
   public static final String JACTL_GLOBALS_NAME = JACTL_PREFIX + "globals";
   public static final String SOURCE_VAR_NAME    = JACTL_PREFIX + "source";
@@ -954,4 +956,39 @@ public class Utils {
     return methods.get(0);
   }
 
+  public static List concat(Object... objs) {
+    ArrayList<Object> result = new ArrayList<>();
+    for (Object obj: objs) {
+      if (obj instanceof List) {
+        result.addAll((List) obj);
+      }
+      else
+      if (obj instanceof Object[]) {
+        result.addAll(Arrays.asList((Object[])obj));
+      }
+      else {
+        result.add(obj);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Search class for method for given name and given parameter types. If parameter types not supplied
+   * then expects that there is only one method of given name.
+   * @param clss       class containing method
+   * @param methodName name of the method
+   * @param paramTypes optional array of paramter types to narrow down search if multiple methods
+   * @return the Method
+   * @throws IllegalStateException if method cannot be found
+   */
+  public static Method findMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {
+    try {
+      return clss.getDeclaredMethod(methodName, paramTypes);
+    }
+    catch (NoSuchMethodException e) {
+      throw new IllegalStateException("Internal error: could not find static method " + methodName + " for class " +
+                                      clss.getName() + " with param types " + Arrays.toString(paramTypes));
+    }
+  }
 }

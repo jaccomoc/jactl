@@ -39,7 +39,7 @@ public class BlockingAsyncTask extends AsyncTask {
   }
 
   @Override
-  public void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume) {
+  public void doExecute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resume) {
     Object executionContext = context.getThreadContext();     // current thread, so we can resume on same thread if possible
     context.scheduleBlocking(() -> {
       Object asyncResult = asyncWork.apply(data);

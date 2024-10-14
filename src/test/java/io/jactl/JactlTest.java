@@ -17,12 +17,9 @@
 
 package io.jactl;
 
-import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.JactlMap;
+import io.jactl.runtime.JactlMapImpl;
 import org.junit.jupiter.api.Test;
-
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,7 +27,7 @@ class JactlTest {
 
   @Test void eval() {
     assertEquals(7, Jactl.eval("3 + 4"));
-    Map<String,Object> bindings = new HashMap<String,Object>(){{ put("x", 3); put("y", 4); }};
+    JactlMap bindings = new JactlMapImpl(){{ put("x", 3); put("y", 4); }};
     assertEquals(7, Jactl.eval("x + y", bindings));
     assertEquals(7, Jactl.eval("x += 4", bindings));
     assertEquals(7, bindings.get("x"));
@@ -44,7 +41,7 @@ class JactlTest {
   }
 
   @Test void eval2() {
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     globals.put("x", null);
     JactlContext context = JactlContext.create().build();
     Jactl.eval("class X { int x; def f(n) { x * n } }; x = new X(2)", globals, context);
@@ -53,19 +50,19 @@ class JactlTest {
   }
 
   @Test void compileRunSync() {
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("3 + 4", globals);
     Object result = script.runSync(globals);          // result will be 7
     assertEquals(7, result);
   }
 
   @Test void compileRunWithCompletion() {
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     globals.put("x", null);
     globals.put("y", null);
     JactlScript script = Jactl.compileScript("x + y", globals);
 
-    HashMap<String, Object> globalValues = new HashMap<String,Object>();
+    JactlMap globalValues = new JactlMapImpl();
     globalValues.put("x", 7);
     globalValues.put("y", 3);
     script.run(globalValues, result -> System.out.println("Result is " + result));
@@ -75,8 +72,8 @@ class JactlTest {
     JactlContext context = JactlContext.create()
                                        .build();
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
-    JactlScript             script  = Jactl.compileScript("13 * 17", globals, context);
+    JactlMap    globals = new JactlMapImpl();
+    JactlScript script  = Jactl.compileScript("13 * 17", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));
 
     Object result = Jactl.eval("13 * 17", globals, context);
@@ -86,9 +83,9 @@ class JactlTest {
   @Test public void scriptPackageName() {
     JactlContext context = JactlContext.create().build();
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
-    JactlScript             script  = Jactl.compileScript("13 * 17", globals, context, "x.y.z");
-    Object[]                result  = new Object[1];
+    JactlMap    globals = new JactlMapImpl();
+    JactlScript script  = Jactl.compileScript("13 * 17", globals, context, "x.y.z");
+    Object[]    result  = new Object[1];
     script.run(globals, res -> result[0] = res);
     assertEquals(221, result[0]);
   }
@@ -96,9 +93,9 @@ class JactlTest {
   @Test public void scriptPackageNameWithPkgDecl() {
     JactlContext context = JactlContext.create().build();
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
-    JactlScript             script  = Jactl.compileScript("package x.y.z; 13 * 17", globals, context, "x.y.z");
-    Object[]                result  = new Object[1];
+    JactlMap    globals = new JactlMapImpl();
+    JactlScript script  = Jactl.compileScript("package x.y.z; 13 * 17", globals, context, "x.y.z");
+    Object[]    result  = new Object[1];
     script.run(globals, res -> result[0] = res);
     assertEquals(221, result[0]);
   }
@@ -106,7 +103,7 @@ class JactlTest {
   @Test public void scriptPackageNameWithDifferingPkgDecl() {
     JactlContext context = JactlContext.create().build();
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap globals = new JactlMapImpl();
     try {
       Jactl.compileScript("package a.b.c; 13 * 17", globals, context, "x.y.z");
       fail("Expected compile error");
@@ -120,7 +117,7 @@ class JactlTest {
     JactlContext context = JactlContext.create().build();
     Jactl.compileClass("class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap    globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context);
     Object[]                result  = new Object[1];
     script.run(globals, res -> result[0] = res);
@@ -131,7 +128,7 @@ class JactlTest {
     JactlContext context = JactlContext.create().build();
     Jactl.compileClass("package x.y.z; class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap    globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17)", globals, context, "x.y.z");
     Object[]                result  = new Object[1];
     script.run(globals, res -> result[0] = res);
@@ -142,7 +139,7 @@ class JactlTest {
     JactlContext context = JactlContext.create().build();
     Jactl.compileClass("package a.b.c; class Multiplier { int n; def mult(x){ n * x } }", context);
 
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMap    globals = new JactlMapImpl();
     JactlScript             script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
     Object[]                result  = new Object[1];
     script.run(globals, res -> result[0] = res);

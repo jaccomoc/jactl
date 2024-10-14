@@ -17,6 +17,7 @@
 
 package io.jactl;
 import io.jactl.runtime.Continuation;
+import io.jactl.runtime.JactlMap;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Attribute;
 import org.objectweb.asm.ClassReader;
@@ -361,7 +362,7 @@ public class TestCompile implements Opcodes {
     JactlContext.DynamicClassLoader classLoader = JactlContext.create().build().classLoader;
     Class                           clss        = classLoader.defineClass(className, className.replaceAll("/", "."), dump());
     Object obj = clss.getDeclaredConstructor().newInstance();
-    Method jmain = clss.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class);
+    Method jmain = clss.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, JactlMap.class);
     jmain.invoke(obj, null, Utils.mapOf());
   }
 }

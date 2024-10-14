@@ -1,6 +1,7 @@
 package io.jactl.compiler;
 
 import io.jactl.*;
+import io.jactl.runtime.JactlMap;
 import io.jactl.runtime.RuntimeUtils;
 import org.objectweb.asm.Label;
 
@@ -323,7 +324,7 @@ public class SwitchCompiler {
               loadValue.accept(MAP);
               mc.compile(keyVal.first);
               mc.expect(2);
-              mc.invokeMethod(Map.class, "containsKey", Object.class);
+              mc.invokeMethod(JactlMap.class, "containsKey", Object.class);
               mc._dupVal();
               mc.mv.visitJumpInsn(IFEQ, endCheck);
               mc.popVal();
@@ -332,7 +333,7 @@ public class SwitchCompiler {
             loadValue.accept(MAP);
             mc.compile(keyVal.first);
             mc.expect(2);
-            mc.invokeMethod(Map.class, "get", Object.class);
+            mc.invokeMethod(JactlMap.class, "get", Object.class);
             mc._dupVal();
             subElemSlot = subElemSlots.get(ANY);
             mc.storeLocal(subElemSlot);
@@ -340,7 +341,7 @@ public class SwitchCompiler {
             mc.mv.visitJumpInsn(IFNONNULL, isNotNull);
             mc._loadConst(false);
             mc.mv.visitJumpInsn(GOTO, endCheck);
-            isNotNull:
+           isNotNull:
             mc.mv.visitLabel(isNotNull);
             break;
           }

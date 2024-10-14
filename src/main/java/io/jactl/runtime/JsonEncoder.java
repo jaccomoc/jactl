@@ -106,8 +106,8 @@ public class JsonEncoder {
       writeString(((boolean) obj) ? "true" : "false", false);
       return;
     }
-    if (obj instanceof List) {
-      List list = (List) obj;
+    if (obj instanceof JactlList) {
+      JactlList list = (JactlList) obj;
       writeByte('[');
       for (int i = 0; i < list.size(); i++) {
         if (i > 0) {
@@ -118,9 +118,9 @@ public class JsonEncoder {
       writeByte(']');
       return;
     }
-    if (obj instanceof Map) {
+    if (obj instanceof JactlMap) {
       writeByte('{');
-      Iterator<Map.Entry<String, Object>> iterator = ((Map<String, Object>) obj).entrySet().iterator();
+      Iterator<Map.Entry<String, Object>> iterator = ((JactlMap) obj).entryStream().iterator();
       boolean                             first    = true;
       while (iterator.hasNext()) {
         if (!first) {

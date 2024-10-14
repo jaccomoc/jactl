@@ -99,17 +99,17 @@ public class ClassCompiler {
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, superName, "<init>", "()V", false);
 
-    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
+    classInit.visitTypeInsn(NEW, Type.getInternalName(LinkedHashMap.class));
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(LinkedHashMap.class), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
-    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
+    classInit.visitTypeInsn(NEW, Type.getInternalName(LinkedHashMap.class));
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(LinkedHashMap.class), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, "Ljava/util/Map;");
     fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class), null, null);
     fieldVisitor.visitEnd();
@@ -143,11 +143,11 @@ public class ClassCompiler {
 
     if (classDecl.baseClass != null) {
       // Add all fields/methods from parent class to this one
-      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor());
-      classInit.visitFieldInsn(GETSTATIC, classDecl.baseClass.getInternalName(), Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor());
+      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class));
+      classInit.visitFieldInsn(GETSTATIC, classDecl.baseClass.getInternalName(), Utils.JACTL_STATIC_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class));
       classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "putAll", "(Ljava/util/Map;)V", true);
-      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
-      classInit.visitFieldInsn(GETSTATIC, classDecl.baseClass.getInternalName(), Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
+      classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class));
+      classInit.visitFieldInsn(GETSTATIC, classDecl.baseClass.getInternalName(), Utils.JACTL_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class));
       classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "putAll", "(Ljava/util/Map;)V", true);
     }
 
@@ -158,9 +158,11 @@ public class ClassCompiler {
 
     // Create class static fields for all list/map constants
     classDecl.classConstants.forEach(c -> {
-      assert c instanceof List || c instanceof Map;
+      boolean isList = c instanceof JactlList;
+      boolean isMap  = c instanceof JactlMap;
+      assert isList || isMap;
       String       fieldName  = JACTL_PREFIX + "constant_" + classConstantCnt++;
-      String       descriptor = c instanceof List ? LIST.descriptor() : MAP.descriptor();
+      String       descriptor = isList ? LIST.descriptor() : MAP.descriptor();
       FieldVisitor fv         = cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, fieldName, descriptor, null, null);
       fv.visitEnd();
       loadConstant(c);
@@ -345,7 +347,7 @@ public class ClassCompiler {
       // For methods/functions store in either _$j$FieldsAndMethods or _$j$StaticMethods as appropriate
       if (!funDecl.isClosure()) {
         String mapName = funDecl.isStatic() ? Utils.JACTL_STATIC_FIELDS_METHODS_MAP : Utils.JACTL_FIELDS_METHODS_MAP;
-        classInit.visitFieldInsn(GETSTATIC, internalName, mapName, MAP.descriptor());
+        classInit.visitFieldInsn(GETSTATIC, internalName, mapName, Type.getDescriptor(Map.class));
         classInit.visitInsn(SWAP);
         Utils.loadConst(classInit, funDecl.nameToken.getStringValue());
         classInit.visitInsn(SWAP);
@@ -484,7 +486,7 @@ public class ClassCompiler {
       // Initialise static fields
       if (varDecl.isConstVar) {
         // Store the field value (since it is a constant) in the static map of field/methods
-        classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor());
+        classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class));
         Utils.loadConst(classInit,name);
 
         // TODO: Need to something about List/Map values here (and wrap them in Collections.immutableList() etc)
@@ -501,7 +503,7 @@ public class ClassCompiler {
       }
       else {
         // Add code to class initialiser to find a VarHandle and add to our static fieldsAndMethods map
-        classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
+        classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, Type.getDescriptor(Map.class));
         Utils.loadConst(classInit, name);
 
         classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
@@ -1401,35 +1403,29 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
   }
 
   private void loadConstant(Object obj) {
-    if (obj instanceof List) {
-      List list = (List)obj;
-      String listClassName = Type.getInternalName(Utils.JACTL_LIST_TYPE);
-      classInit.visitTypeInsn(NEW, listClassName);
-      classInit.visitInsn(DUP);
-      classInit.visitMethodInsn(INVOKESPECIAL, listClassName, "<init>", "()V", false);
+    if (obj instanceof JactlList) {
+      JactlList list = (JactlList) obj;
+      classInit.visitMethodInsn(INVOKESTATIC, Type.getInternalName(RuntimeUtils.class), "createList", Type.getMethodDescriptor(Type.getType(JactlList.class)), false);
       list.forEach(elem -> {
         classInit.visitInsn(DUP);
         loadConstant(elem);
-        classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
+        classInit.visitMethodInsn(INVOKEINTERFACE, "io/jactl/runtime/JactlList", "add", "(Ljava/lang/Object;)Z", true);
         classInit.visitInsn(POP);   // don't need result of add
       });
-      classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;", false);
+//      classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;", false);
       return;
     }
-    if (obj instanceof Map) {
-      Map map = (Map)obj;
-      String mapClassName = Type.getInternalName(Utils.JACTL_MAP_TYPE);
-      classInit.visitTypeInsn(NEW, mapClassName);
-      classInit.visitInsn(DUP);
-      classInit.visitMethodInsn(INVOKESPECIAL, mapClassName, "<init>", "()V", false);
-      map.forEach((key,value) -> {
+    if (obj instanceof JactlMap) {
+      JactlMap map = (JactlMap)obj;
+      classInit.visitMethodInsn(INVOKESTATIC, Type.getInternalName(RuntimeUtils.class), "createMap", Type.getMethodDescriptor(Type.getType(JactlMap.class)), false);
+      map.entryStream().forEach(e -> {
         classInit.visitInsn(DUP);
-        loadConstant(key);
-        loadConstant(value);
-        classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
+        loadConstant(e.getKey());
+        loadConstant(e.getValue());
+        classInit.visitMethodInsn(INVOKEINTERFACE, "io/jactl/runtime/JactlMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
         classInit.visitInsn(POP);   // don't need result of put
       });
-      classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;", false);
+//      classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;", false);
       return;
     }
     // Must be a simple value

@@ -19,6 +19,8 @@ package io.jactl.compiler;
 
 import io.jactl.*;
 import io.jactl.resolver.Resolver;
+import io.jactl.runtime.JactlMap;
+import io.jactl.runtime.RuntimeUtils;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -28,30 +30,30 @@ import java.util.function.Function;
  * for compiling and running scripts.
  */
 public class Compiler {
-  public static Object eval(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
+  public static Object eval(String source, JactlContext jactlContext, String packageName, JactlMap bindings) {
     JactlScript compiled = compileScript(source, jactlContext, packageName, bindings);
     return compiled.runSync(bindings);
   }
 
-  public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings) {
+  public static Object eval(String source, JactlContext jactlContext, JactlMap bindings) {
     JactlScript compiled = compileScript(source, jactlContext, bindings);
     return compiled.runSync(bindings);
   }
 
-  public static Object eval(String source, JactlContext jactlContext, String scriptClassName, String packageName, Map<String,Object> bindings) {
+  public static Object eval(String source, JactlContext jactlContext, String scriptClassName, String packageName, JactlMap bindings) {
     JactlScript compiled = compileScript(source, jactlContext, scriptClassName, packageName, bindings);
     return compiled.runSync(bindings);
   }
 
-  public static JactlScript compileScript(String source, JactlContext jactlContext, Map<String, Object> bindings) {
+  public static JactlScript compileScript(String source, JactlContext jactlContext, JactlMap bindings) {
     return compileScript(source, jactlContext, null, Utils.DEFAULT_JACTL_PKG, bindings);
   }
 
-  public static JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
+  public static JactlScript compileScript(String source, JactlContext jactlContext, String packageName, JactlMap bindings) {
     return compileScript(source, jactlContext, null, packageName, bindings);
   }
 
-  public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
+  public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, JactlMap bindings) {
     if (className == null) {
       className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     }
@@ -65,7 +67,7 @@ public class Compiler {
   }
 
   // For internal use by eval() function.
-  public static Function<Map<String, Object>,Object> compileScriptInternal(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
+  public static Function<JactlMap,Object> compileScriptInternal(String source, JactlContext jactlContext, String packageName, JactlMap bindings) {
     String         className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     Parser         parser    = new Parser(new Tokeniser(source), jactlContext, packageName);
     Stmt.ClassDecl script    = parser.parseScript(className);
@@ -80,7 +82,7 @@ public class Compiler {
   public static void compileClass(String source, JactlContext jactlContext, String packageName) {
     Parser         parser      = new Parser(new Tokeniser(source), jactlContext, packageName);
     Stmt.ClassDecl scriptClass = parser.parseClass();
-    Resolver       resolver    = new Resolver(jactlContext, Utils.mapOf(), scriptClass.location);
+    Resolver       resolver    = new Resolver(jactlContext, jactlContext.createMap(), scriptClass.location);
     resolver.resolveClass(scriptClass);
     Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(scriptClass);

@@ -24,7 +24,6 @@ import io.jactl.Pair;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
-import java.util.*;
 import java.util.function.Function;
 
 import static io.jactl.JactlType.ARRAY;
@@ -237,9 +236,9 @@ public class Restorer {
       // references.
       switch (JactlType.TypeEnum.values()[ordinal]) {
         case STRING:         result = readString();                                    break;
-        case STRING_BUFFER:  result = readStringBuffer();                             break;
-        case MAP:            result = add.apply(new LinkedHashMap<>());                break;
-        case LIST:           result = add.apply(new ArrayList<>());                    break;
+        case STRING_BUFFER:  result = readStringBuffer();                              break;
+        case MAP:            result = add.apply(RuntimeUtils.createMap());             break;
+        case LIST:           result = add.apply(RuntimeUtils.createList());            break;
         case INSTANCE:       result = add.apply(createInstance());                     break;
         case FUNCTION:       result = add.apply(JactlMethodHandle.create(readCint())); break;
         case ARRAY:          result = add.apply(createArray());                        break;
@@ -274,8 +273,8 @@ public class Restorer {
       else {
         int ordinal = buf[idx++];
         switch (JactlType.TypeEnum.values()[ordinal]) {
-          case MAP:   restoreMap((Map)obj);     break;
-          case LIST:  restoreList((List)obj);   break;
+          case MAP:   restoreMap((JactlMap)obj);     break;
+          case LIST:  restoreList((JactlList)obj);   break;
           case ARRAY: restoreArray(obj);        break;
           case CLASS: break;
           default:    throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
@@ -287,14 +286,14 @@ public class Restorer {
     }
   }
 
-  void restoreMap(Map map) {
+  void restoreMap(JactlMap map) {
     int size = readCint();
     for (int i = 0; i < size; i++) {
       map.put((String)readObject(), readObject());
     }
   }
 
-  private void restoreList(List list) {
+  private void restoreList(JactlList list) {
     int size = readCint();
     for (int i = 0; i < size; i++) {
       list.add(readObject());
@@ -361,8 +360,8 @@ public class Restorer {
       case DOUBLE:     return Array.newInstance(double.class, dimensions);
       case DECIMAL:    return Array.newInstance(BigDecimal.class, dimensions);
       case STRING:     return Array.newInstance(String.class, dimensions);
-      case LIST:       return Array.newInstance(List.class, dimensions);
-      case MAP:        return Array.newInstance(Map.class, dimensions);
+      case LIST:       return Array.newInstance(JactlList.class, dimensions);
+      case MAP:        return Array.newInstance(JactlMap.class, dimensions);
       case INSTANCE:   return Array.newInstance(getJactlClass(type.getInternalName()), dimensions);
       default:         return Array.newInstance(Object.class, dimensions);
     }

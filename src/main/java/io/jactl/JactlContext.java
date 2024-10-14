@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 public class JactlContext {
 
@@ -70,6 +71,33 @@ public class JactlContext {
 
   DynamicClassLoader           classLoader = new DynamicClassLoader();
 
+  public interface ListCreator {
+    JactlList create();
+    JactlList create(int size);
+    JactlList create(JactlList other);
+  }
+
+  public interface MapCreator {
+    JactlMap create();
+    JactlMap create(JactlMap map);
+    default JactlMap create(Map map) {
+      JactlMap result = create();
+      map.forEach((k,v) -> result.put((String)k,v));
+      return result;
+    }
+  }
+
+  public ListCreator listCreator = new ListCreator() {
+    @Override public JactlList create()                { return new JactlListImpl(); }
+    @Override public JactlList create(int size)        { return new JactlListImpl(size); }
+    @Override public JactlList create(JactlList other) { return new JactlListImpl(other); }
+  };
+
+  public MapCreator mapCreator = new MapCreator() {
+    @Override public JactlMap create()             { return new JactlMapImpl(); }
+    @Override public JactlMap create(JactlMap map) { return new JactlMapImpl(map); }
+  };
+
   ///////////////////////////////
 
   public static JactlContextBuilder create() {
@@ -89,6 +117,26 @@ public class JactlContext {
       return ((DynamicClassLoader)loader).getJactlContext();
     }
     throw new IllegalStateException("Expected class loader of type " + DynamicClassLoader.class.getName() + " but found " + loader.getClass().getName());
+  }
+
+  public static JactlContext getJactlContext() {
+    ClassLoader loader = Thread.currentThread().getContextClassLoader();
+    JactlContext jactlContext = getJactlContext(loader);
+    if (jactlContext == null) {
+      throw new RuntimeError("Classloader is not a Jactl class loader", "", 0);
+    }
+    return jactlContext;
+  }
+
+  public static JactlContext getJactlContext(ClassLoader classLoader) {
+    if (classLoader instanceof DynamicClassLoader) {
+      return ((DynamicClassLoader) classLoader).getJactlContext();
+    }
+    return null;
+  }
+
+  public ClassLoader getClassLoader() {
+    return classLoader;
   }
 
   /**
@@ -160,6 +208,9 @@ public class JactlContext {
     public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
     public JactlContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
 
+    public JactlContextBuilder mapCreator(MapCreator creator)    { mapCreator         = creator; return this; }
+    public JactlContextBuilder listCreator(ListCreator creator)  { listCreator        = creator; return this; }
+
     public JactlContextBuilder packageChecker(PackageChecker pc) { packageChecker     = pc;      return this; }
     public JactlContextBuilder classLookup(ClassLookup lookup)   { classLookup        = lookup;  return this; }
     public JactlContextBuilder classAdder(ClassAdder adder)      { classAdder         = adder;   return this; }
@@ -199,6 +250,44 @@ public class JactlContext {
   }
 
   //////////////////////////////////
+
+  public JactlMap createMap() {
+    return mapCreator.create();
+  }
+
+  public JactlMap createMap(JactlMap map) {
+    return mapCreator.create(map);
+  }
+
+  public JactlMap createMap(Map map) {
+    return mapCreator.create(map);
+  }
+
+  public JactlList createList() {
+    return listCreator.create();
+  }
+
+  public JactlList createList(int size) {
+    return listCreator.create(size);
+  }
+
+  public JactlList createList(JactlList list) {
+    return listCreator.create(list);
+  }
+
+  public <T> JactlList createList(Stream<T> stream) {
+    JactlList list = createList();
+    stream.forEach(list::add);
+    return list;
+  }
+
+  public JactlList createList(Object[] objArr) {
+    JactlList result = createList(objArr.length);
+    for (int i = 0; i < objArr.length; i++) {
+      result.add(objArr[i]);
+    }
+    return result;
+  }
 
   public boolean printLoop()    { return printLoop; }
   public boolean nonPrintLoop() { return nonPrintLoop; }
@@ -277,10 +366,17 @@ public class JactlContext {
    * @param resultHandler  handler to be invoked with final script result
    */
   public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler) {
-    Continuation cont = (Continuation)Restorer.restore(this, checkpoint);
-    // If two args then we have commit closure and recovery closure so return recovery closure on recover
-    Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
-    scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance));
+    ClassLoader loader = Thread.currentThread().getContextClassLoader();
+    try {
+      Thread.currentThread().setContextClassLoader(classLoader);
+      Continuation cont = (Continuation) Restorer.restore(this, checkpoint);
+      // If two args then we have commit closure and recovery closure so return recovery closure on recover
+      Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
+      scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance));
+    }
+    finally {
+      Thread.currentThread().setContextClassLoader(loader);
+    }
   }
 
   //////////////////////////////////
@@ -326,7 +422,9 @@ public class JactlContext {
   }
 
   private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont, JactlScriptObject instance) {
+    ClassLoader oldClassLoader = Thread.currentThread().getContextClassLoader();
     try {
+      Thread.currentThread().setContextClassLoader(classLoader);
       Object result = cont.continueExecution(asyncResult);
       // We finally get the real result out of the script execution
       cleanUp(instance);
@@ -338,6 +436,9 @@ public class JactlContext {
     catch (Throwable t) {
       cleanUp(instance);
       completion.accept(t);
+    }
+    finally {
+      Thread.currentThread().setContextClassLoader(oldClassLoader);
     }
   }
 

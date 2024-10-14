@@ -34,7 +34,7 @@ public class NamedArgsMapCopy extends NamedArgsMap {
   // For Restorer
   public NamedArgsMapCopy() {}
 
-  public NamedArgsMapCopy(Map arg) {
+  public NamedArgsMapCopy(JactlMap arg) {
     super(arg);
   }
 }
