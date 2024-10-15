@@ -49,6 +49,32 @@ public class JactlMapImpl implements JactlMap {
     return map.entrySet().stream();
   }
 
+  @Override public JactlMap createMap(Object key, String source, int offset) {
+    Object value = map.get(key);
+    if (value != null) {
+      if (value instanceof JactlMap) {
+        return (JactlMap)value;
+      }
+      throw new RuntimeError("Expected map at field " + key + " but was " + RuntimeUtils.className(value), source, offset);
+    }
+    JactlMap field = RuntimeUtils.createMap();
+    map.put(key, field);
+    return field;
+  }
+
+  @Override public JactlList createList(Object key, String source, int offset) {
+    Object value = map.get(key);
+    if (value != null) {
+      if (value instanceof JactlList) {
+        return (JactlList)value;
+      }
+      throw new RuntimeError("Expected list at field " + key + " but was " + RuntimeUtils.className(value), source, offset);
+    }
+    JactlList field = RuntimeUtils.createList();
+    map.put(key, field);
+    return field;
+  }
+
   @Override public boolean equals(Object o) {
     if (this == o) return true;
     if (!(o instanceof JactlMap)) return false;

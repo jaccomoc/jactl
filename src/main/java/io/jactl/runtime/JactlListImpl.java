@@ -73,6 +73,48 @@ public class JactlListImpl implements JactlList {
     return true;
   }
 
+  @Override
+  public JactlMap createMap(int index, String source, int offset) {
+    if (index < size()) {
+      Object value = list.get(index);
+      if (value != null) {
+        if (value instanceof JactlMap) {
+          return (JactlMap)value;
+        }
+        else {
+          throw new RuntimeError("Expected map at index " + index + " but was " + RuntimeUtils.className(value), source, offset);
+        }
+      }
+    }
+    JactlMap map = RuntimeUtils.createMap();
+    for (int i = list.size(); i < index + 1; i++) {
+      list.add(null);
+    }
+    list.set(index, map);
+    return map;
+  }
+
+  @Override
+  public JactlList createList(int index, String source, int offset) {
+    if (index < size()) {
+      Object value = list.get(index);
+      if (value != null) {
+        if (value instanceof JactlList) {
+          return (JactlList)value;
+        }
+        else {
+          throw new RuntimeError("Expected list at index " + index + " but was " + RuntimeUtils.className(value), source, offset);
+        }
+      }
+    }
+    JactlList elem = RuntimeUtils.createList();
+    for (int i = list.size(); i < index + 1; i++) {
+      list.add(null);
+    }
+    list.set(index, elem);
+    return elem;
+  }
+
   @Override public int hashCode() {
     return Objects.hash(list);
   }

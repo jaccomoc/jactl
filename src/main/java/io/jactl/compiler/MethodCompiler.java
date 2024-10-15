@@ -525,6 +525,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
+    if (expr.type.is(UNKNOWN)) {
+      // Special case for "for" statements where no type was declared and we instead
+      // are reinitialising an existing var
+      compile(expr.initialiser);
+      return null;
+    }
+
     if (expr.isParam) {
       defineVar(expr);
       return null;     // Nothing else to do since value is already stored for parameters
@@ -4180,6 +4187,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
+    // If we are in script method (not in a class) then install some context in
+    // ThreadLocal for use by functions. In particular store the globals var.
+    if (classCompiler.classDecl.isScriptClass()) {
+      loadGlobals();
+      invokeMethod(RuntimeUtils.class, "installGlobals", MAP.classFromType());
+    }
+
     // We invoke wrapper for named args or if we don't have enough args since it will fill
     // in missing values for optional parameters. We need last param to be of type Object[]
     // since this means varArgs.

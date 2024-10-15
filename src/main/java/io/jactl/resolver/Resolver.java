@@ -1239,6 +1239,25 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitVarDecl(Expr.VarDecl expr) {
+    if (expr.type.is(OPTIONAL)) {
+      // Allow variables to be initialised in for loops by creating dummy VarDecl with UNKNOWN type.
+      // Now we have to find the actual VarDecl or create a real variable.
+      Expr.VarDecl varDecl = lookup(expr.name.getStringValue(), expr.name, false, true);
+      if (varDecl == null) {
+        // This is a brand-new variable which will have type corresponding to the initialiser
+        expr.type = JactlType.createUnknown();
+        expr.type.typeDependsOn(expr.initialiser);
+      }
+      else {
+        // Treat initialiser just like a normal statement since we are reinitialising an existing variable
+        expr.initialiser = new Expr.VarAssign(new Expr.Identifier(varDecl.name), expr.initialiser.location, expr.initialiser);
+        expr.initialiser.isResultUsed = false;
+        resolve(expr.initialiser);
+        expr.owner = currentFunction();
+        expr.type = JactlType.createUnknown();
+        return expr.initialiser.type;
+      }
+    }
     resolve(expr.type);
     expr.owner = currentFunction();
 

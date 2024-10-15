@@ -69,6 +69,7 @@ public class JactlType extends JactlUserDataHolder {
     NULL_TYPE,
     STRING_BUFFER,
     NAMED_ARGS_MAP,
+    OPTIONAL,       // Used for "for" variables which may have already been declared
     BUILTIN,        // Used during checkpoint/restore
     UNKNOWN         // Used as placeholder for "var" until we know type of initialiser for a variable
   }
@@ -102,6 +103,7 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType INSTANCE     = createInstanceType(ClassDescriptor.getJactlObjectDescriptor());
   public static JactlType CLASS        = createRefType(TypeEnum.CLASS);
   public static JactlType UNKNOWN      = createRefType(TypeEnum.UNKNOWN);
+  public static JactlType OPTIONAL     = createRefType(TypeEnum.OPTIONAL);
 
   private TypeEnum type;
   private boolean  boxed;

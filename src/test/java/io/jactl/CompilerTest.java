@@ -6865,6 +6865,10 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void forLoops() {
+    test("def x = 5; for (i = 0; i < 10; i++) { x++ }; x", 15);
+    test("def i = 5; for (i = 0; i < 10; i++) {}; i", 10);
+    test("int i = 5; for (i = 0; i < 10; i++) {}; i", 10);
+    test("int i = 3, j = 6; for (i = 0; i < 5; i++) { j++ }; j", 11);
     testError("for (int i = 0;", "Unexpected EOF");
     testError("for (int i = 0;\n", "Unexpected EOF");
     testError("for (int i = 0; i < 10;", "Unexpected EOF");
@@ -7918,11 +7922,6 @@ class CompilerTest extends BaseTest {
     replTest.accept("END { x = 7 }; x = 2; BEGIN { x = 3 }", null, 7, "");
     replTest.accept("BEGIN { def x = 7 }; x = 2; END { x + x }", null, 4, "");
 //    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
-  }
-
-  @Test public void testStuff() {
-    replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
-                    "[1,2]\n[3]\n\n", Utils.listOf(3), "");
   }
 
   @Test public void nextLine() {

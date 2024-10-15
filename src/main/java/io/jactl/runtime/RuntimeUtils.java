@@ -1451,18 +1451,7 @@ public class RuntimeUtils {
       }
       index = newIndex;
     }
-    if (index < list.size()) {
-      value = list.get(index);
-    }
-
-    if (value == null) {
-      value = isMap ? createMap() : createList();
-      for (int i = list.size(); i < index + 1; i++) {
-        list.add(null);
-      }
-      list.set(index, value);
-    }
-    return value;
+    return isMap ? list.createMap(index, source, offset) : list.createList(index, source, offset);
   }
 
   private static Object loadListElem(JactlList parent, int index, String source, int offset) {
@@ -1543,10 +1532,12 @@ public class RuntimeUtils {
     }
     String fieldName = field.toString();
     JactlMap    map       = (JactlMap) parent;
-    Object value     = map.get(fieldName);
-    if (value == null) {
-      value = isMap ? createMap() : createList();
-      map.put(fieldName, value);
+    Object value;
+    try {
+      value = isMap ? map.createMap(fieldName, source, offset) : map.createList(fieldName, source, offset);
+    }
+    catch (Exception e) {
+      throw new RuntimeError(e.getMessage(), source, offset);
     }
     if (value == null) {
       // If we still can't find a field then if we have a method of the name return
@@ -3043,5 +3034,16 @@ public class RuntimeUtils {
 
   public static JactlList listOf(Object... objs) {
     return createList(objs);
+  }
+
+  private static ThreadLocal<JactlMap> GLOBALS = new ThreadLocal<>();
+
+  public static final String INSTALL_GLOBALS = "installGlobals";
+  public static void installGlobals(JactlMap globals) {
+    GLOBALS.set(globals);
+  }
+
+  public static JactlMap getGlobals() {
+    return GLOBALS.get();
   }
 }

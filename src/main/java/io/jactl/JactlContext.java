@@ -74,7 +74,11 @@ public class JactlContext {
   public interface ListCreator {
     JactlList create();
     JactlList create(int size);
-    JactlList create(JactlList other);
+    default JactlList create(JactlList other) {
+      JactlList result = create();
+      other.stream().forEach(result::add);
+      return result;
+    }
   }
 
   public interface MapCreator {

@@ -1451,7 +1451,7 @@ public class BuiltinFunctions {
     try {
       if (location == 0) {
         result = iterable instanceof JactlList ? RuntimeUtils.createList((JactlList)iterable)
-                                          : RuntimeUtils.convertIteratorToList(RuntimeUtils.createIterator(iterable), null);
+                                               : RuntimeUtils.convertIteratorToList(RuntimeUtils.createIterator(iterable), null);
         location = 2;
       }
       if (location == 1) {

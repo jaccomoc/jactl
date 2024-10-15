@@ -31,6 +31,26 @@ public interface JactlList extends Iterable<Object> {
   Stream stream();
   Object[] toArray();
 
+  /**
+   * Create map at given index (if allowed)
+   *
+   * @param index  the index
+   * @param source the source code
+   * @param offset offset into source where call is occurring
+   * @return the new map or throws a RuntimeError if list is not of correct type
+   */
+  JactlMap createMap(int index, String source, int offset);
+
+  /**
+   * Create list at given index (if allowed)
+   *
+   * @param index  the index
+   * @param source the source code
+   * @param offset offset into source where call is occurring
+   * @return the new list or throws a RuntimeError if list is not of correct type
+   */
+  JactlList createList(int index, String source, int offset);
+
   JactlList subList(int fromIndex, int toIndex);
 
   /**

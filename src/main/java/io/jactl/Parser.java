@@ -541,7 +541,15 @@ public class Parser {
         type = JactlType.valueOf(typeToken.getType());
       }
       else {
-        type = JactlType.createInstanceType(className(throwIfError));
+        if (lookahead(() -> className(true) != null)){
+          type = JactlType.createInstanceType(className(throwIfError));
+        }
+        else {
+          if (throwIfError) {
+            unexpected("Expected type", true);
+          }
+          return JactlType.OPTIONAL;
+        }
       }
       // Allow arrays for everything but "def" and "var"
       if (!ignoreArrayError && typeToken != null && typeToken.is(VAR, DEF) && peek().is(LEFT_SQUARE)) {
@@ -569,7 +577,9 @@ public class Parser {
         while (matchAnyIgnoreEOL(STATIC,FINAL)) {}
         matchAny(EOL);
       }
-      type(false, false, false, true);
+      if (type(false, false, false, true).is(JactlType.OPTIONAL)) {
+        return false;
+      }
       if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeyWord()) {
         return false;
       }
@@ -729,6 +739,16 @@ public class Parser {
     });
   }
 
+  private boolean isForVarDecl() {
+    if (lookahead(() -> matchAnyIgnoreEOL(IDENTIFIER), () -> matchAnyIgnoreEOL(EQUAL))) {
+      return true;
+    }
+    return lookahead(() -> {
+      type(true, false, true, true);
+      return matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeyWord();
+    });
+  }
+
   /**
    * <pre>
    *# varDecl ::= type singleVarDecl ? ( COMMA singleVarDecl ? ) *
@@ -737,14 +757,14 @@ public class Parser {
    *       a list of VarDecls if multiple variables declared.
    */
   private Stmt varDecl(boolean inClassDecl) {
-    return doVarDecl(inClassDecl);
+    return doVarDecl(inClassDecl, false);
   }
 
-  private Stmt doVarDecl(boolean inClassDecl) {
+  private Stmt doVarDecl(boolean inClassDecl, boolean loopVar) {
     if (matchAny(STATIC, FINAL)) {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
-    boolean   isConst = matchAny(CONST);
+    boolean   isConst = !loopVar && matchAny(CONST);
     JactlType type    = isConst ? JactlType.createUnknown() : ANY;
     if (isConst) {
       if (peek().is(simpleTypes)) {
@@ -986,8 +1006,8 @@ public class Parser {
     List forParts = new ArrayList();
     Marker mark = tokeniser.mark();
     try {
-      forParts.add(isVarDecl() ? marked(false, () -> varDecl(false), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, EOL)
-                               : commaSeparatedStatements());
+      forParts.add(isForVarDecl() ? marked(false, () -> varDecl(false), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, EOL)
+                                  : commaSeparatedStatements());
       if (!previous().is(SEMICOLON)) {
         expectOrNull(true, SEMICOLON);
       }
@@ -3444,7 +3464,7 @@ public class Parser {
       advance();
     }
     CompileError error;
-    if (token.is(ERROR)) {
+    if (token.is(TokenType.ERROR)) {
       error = createError(token.getStringValue(), token);
     }
     else if (token.is(EOF)) {

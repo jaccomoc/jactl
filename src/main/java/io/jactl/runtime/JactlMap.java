@@ -39,6 +39,26 @@ public interface JactlMap {
    */
   Object remove(Object key);
 
+  /**
+   * Create a map at given field and return it
+   *
+   * @param key    the field name (String)
+   * @param source the source code
+   * @param offset offset into source where call is occurring
+   * @return the new JactlMap or RuntimeError if field cannot be a map
+   */
+  JactlMap createMap(Object key, String source, int offset);
+
+  /**
+   * Create a list at given field and return it
+   *
+   * @param key    the field name (String)
+   * @param source the source code
+   * @param offset offset into source where call is occurring
+   * @return the new JactlLidt or RuntimeError if field cannot be a list
+   */
+  JactlList createList(Object key, String source, int offset);
+
   boolean containsKey(Object key);
   void putAll(JactlMap map);
   int size();
