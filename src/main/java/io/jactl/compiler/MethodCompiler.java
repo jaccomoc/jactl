@@ -525,6 +525,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
+    if (expr.type.is(UNKNOWN)) {
+      // Special case for "for" statements where no type was declared and we instead
+      // are reinitialising an existing var
+      compile(expr.initialiser);
+      return null;
+    }
+
     if (expr.isParam) {
       defineVar(expr);
       return null;     // Nothing else to do since value is already stored for parameters

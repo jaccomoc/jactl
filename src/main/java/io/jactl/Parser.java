@@ -538,7 +538,15 @@ public class Parser {
         type = JactlType.valueOf(typeToken.getType());
       }
       else {
-        type = JactlType.createInstanceType(className(throwIfError));
+        if (lookahead(() -> className(true) != null)){
+          type = JactlType.createInstanceType(className(throwIfError));
+        }
+        else {
+          if (throwIfError) {
+            unexpected("Expected type", true);
+          }
+          return JactlType.OPTIONAL;
+        }
       }
       // Allow arrays for everything but "def" and "var"
       if (!ignoreArrayError && typeToken != null && typeToken.is(VAR, DEF) && peek().is(LEFT_SQUARE)) {
@@ -566,7 +574,9 @@ public class Parser {
         while (matchAnyIgnoreEOL(STATIC,FINAL)) {}
         matchAny(EOL);
       }
-      type(false, false, false, true);
+      if (type(false, false, false, true).is(JactlType.OPTIONAL)) {
+        return false;
+      }
       if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeyWord()) {
         return false;
       }
@@ -726,6 +736,16 @@ public class Parser {
     });
   }
 
+  private boolean isForVarDecl() {
+    if (lookahead(() -> matchAnyIgnoreEOL(IDENTIFIER), () -> matchAnyIgnoreEOL(EQUAL))) {
+      return true;
+    }
+    return lookahead(() -> {
+      type(true, false, true, true);
+      return matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeyWord();
+    });
+  }
+
   /**
    * <pre>
    *# varDecl ::= type singleVarDecl ? ( COMMA singleVarDecl ? ) *
@@ -734,10 +754,6 @@ public class Parser {
    *       a list of VarDecls if multiple variables declared.
    */
   private Stmt varDecl(boolean inClassDecl) {
-    return doVarDecl(inClassDecl);
-  }
-
-  private Stmt doVarDecl(boolean inClassDecl) {
     if (matchAny(STATIC, FINAL)) {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
@@ -983,8 +999,8 @@ public class Parser {
     List forParts = new ArrayList();
     Marker mark = tokeniser.mark();
     try {
-      forParts.add(isVarDecl() ? marked(false, () -> varDecl(false), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, EOL)
-                               : commaSeparatedStatements());
+      forParts.add(isForVarDecl() ? marked(false, () -> varDecl(false), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, EOL)
+                                  : commaSeparatedStatements());
       if (!previous().is(SEMICOLON)) {
         expectOrNull(true, SEMICOLON);
       }
@@ -1009,10 +1025,33 @@ public class Parser {
     Stmt forStmt;
     Stmt initialisation = (Stmt)forParts.get(0);
     if (initialisation != null) {
-      // If there are initialisers then wrap the while loop in a block that has
-      // the initialisers as the first statements (this way any vars declared
-      // will have a scope that includes only the for/while loop)
-      forStmt = stmtBlock(forToken, initialisation, whileStmt);
+      Stmt       firstStmt = initialisation;
+      Stmt.Stmts stmts     = null;
+      if (initialisation instanceof Stmt.Stmts) {
+        stmts = (Stmt.Stmts) initialisation;
+        firstStmt = stmts.stmts.get(0);
+      }
+      if (firstStmt instanceof Stmt.VarDecl && ((Stmt.VarDecl) firstStmt).declExpr.type.is(OPTIONAL)) {
+        // If there are optionally typed initialisers then we just make the initialisation
+        // as a separate statement before the while loop since we want the scope to be
+        // outside the for loop so that we can refer to the loop variable after the
+        // loop has finished.
+        // Add the while to the stmts rather than creating a new block scope
+        if (stmts == null) {
+          // Initialiser was not Stmts so create one
+          stmts = new Stmt.Stmts(forToken);
+          stmts.stmts.add(firstStmt);
+        }
+        // Add while to stmts
+        stmts.stmts.add(whileStmt);
+        forStmt = stmts;
+      }
+      else {
+        // If there are typed initialisers then wrap the while loop in a block
+        // that has the initialisers as the first statements (this way any vars
+        // declared will have a scope that includes only the for/while loop)
+        forStmt = stmtBlock(forToken, initialisation, whileStmt);
+      }
     }
     else {
       // If we don't have any initialisation we just turn into a while loop
@@ -3441,7 +3480,7 @@ public class Parser {
       advance();
     }
     CompileError error;
-    if (token.is(ERROR)) {
+    if (token.is(TokenType.ERROR)) {
       error = createError(token.getStringValue(), token);
     }
     else if (token.is(EOF)) {

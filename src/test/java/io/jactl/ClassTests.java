@@ -84,8 +84,8 @@ public class ClassTests extends BaseTest {
 
   @Test public void newOperator() {
     test("class X{int i = 4}\ndef x = 1\nnew X().i", 4);
-    testError("class X{int i = 4}; new new X().i", "expecting identifier");
-    testError("class X{int i = 4}; new + new X().i", "expecting identifier");
+    testError("class X{int i = 4}; new new X().i", "expected type");
+    testError("class X{int i = 4}; new + new X().i", "expected type");
     test("class X{int i = 4}; ++ new X().i", 5);
     test("class X{int i = 4}; def x; ++ (x = new X()).i", 5);
     test("class X{int i = 4}; def x; ++ (x = new X()).i; x.i", 5);

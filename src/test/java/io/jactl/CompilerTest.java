@@ -6864,6 +6864,18 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void forLoops() {
+    testError("for (const i = 0; i < 10; i++) {}", "unexpected token 'const'");
+    testError("for (int i = 0;", "Unexpected end-of-file");
+    testError("for (int i = 0;\n", "Unexpected end-of-file");
+    testError("for (int i = 0; i < 10;", "Unexpected end-of-file");
+    testError("for (int i = 0; i < 10; i++", "Unexpected end-of-file");
+    test("def x = 5; for (i = 0; i < 10; i++) { x++ }; x", 15);
+    test("def x = 5; for (i = 0; i < 10; i++) { x++ }; x", 15);
+    test("def x = 0; for (i = 0; i < 10; i++) {}; i", 10);
+    test("def x = 0; for (i = 0, j = 5; i < 10; i++,j++) {}; i + j", 25);
+    test("int i, j; for (i = 0, j = 5; i < 10; i++,j++) {}; i + j", 25);
+    test("int i = 5; for (i = 0; i < 10; i++) {}; i", 10);
+    test("int i = 3, j = 6; for (i = 0; i < 5; i++) { j++ }; j", 11);
     testError("for (int i = 0;", "Unexpected end-of-file");
     testError("for (int i = 0;\n", "Unexpected end-of-file");
     testError("for (int i = 0; i < 10;", "Unexpected end-of-file");
