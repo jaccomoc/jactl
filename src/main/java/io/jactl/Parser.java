@@ -3704,7 +3704,18 @@ public class Parser {
         // Get potential method name if right-hand side of '.' is a string or identifier
         String methodName = getStringValue(binaryExpr.right);
         if (methodName != null) {
-          return new Expr.MethodCall(leftParen, binaryExpr.left, binaryExpr.operator, methodName, binaryExpr.right.location, binaryExpr.right, args);
+          // Special case for a.b.c.remove() which we treat as a.b.remove('c') for
+          // backwards compatibility reasons. Ugly as hell but oh well...
+          if (methodName.equals("remove") &&
+              args.isEmpty() &&
+              binaryExpr.left instanceof Expr.Binary &&
+              ((Expr.Binary)binaryExpr.left).operator.is(DOT,QUESTION_DOT)) {
+            Expr.Binary left = (Expr.Binary)binaryExpr.left;
+            return new Expr.MethodCall(leftParen, left.left, binaryExpr.operator, methodName, binaryExpr.right.location, binaryExpr.right, Utils.listOf(left.right));
+          }
+          else {
+            return new Expr.MethodCall(leftParen, binaryExpr.left, binaryExpr.operator, methodName, binaryExpr.right.location, binaryExpr.right, args);
+          }
         }
       }
     }
