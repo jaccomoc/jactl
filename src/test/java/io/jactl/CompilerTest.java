@@ -5343,6 +5343,16 @@ class CompilerTest extends BaseTest {
     test("double[] x = [1, 2]; x == [1,2] as int[]", true);
   }
 
+  @Test public void testStuff() {
+    useAsyncDecorator = false;
+    test("def x; x.a = 1; x.a", 1);
+    test("Map x; x.a = 1; x.a", 1);
+    testError("List x; x.a = 1; x.a", "invalid object type");
+    test("def x; x[0] = 1; x[0]", 1);
+    test("List x; x[0] = 1; x[0]", 1);
+    test("Map x; x[0] = 1; x[0]", 1);
+  }
+
   @Test public void fieldAssignments() {
     testError("Map m = [a:1]; m*a = 2", "invalid lvalue");
     test("Map m = [:]; m.a = 1", 1);
@@ -5353,11 +5363,6 @@ class CompilerTest extends BaseTest {
     test("def m = [:]; m.a = 1; m.a", 1);
     test("Map m; m.a = 1; m.a", 1);
     test("Map m; m.a = 1", 1);
-
-    // def without initialiser is always null. We don't automatically create
-    // the value for m itself. Only subfields are automatically created if
-    // required when used as lvalues.
-    testError("def m; m.a = 1", "null value");
 
     test("Map m; m.a.b = (byte)1", (byte)1);
     test("Map m; m.a.b = (byte)1; m.a.b", (byte)1);
@@ -7796,10 +7801,10 @@ class CompilerTest extends BaseTest {
 
   @Test public void globals() {
     JactlContext jactlContext = JactlContext.create()
-                                               .evaluateConstExprs(true)
-                                               .replMode(true)
-                                               .debug(debugLevel)
-                                               .build();
+                                            .evaluateConstExprs(true)
+                                            .replMode(true)
+                                            .debug(debugLevel)
+                                            .build();
 
     Jactl.compileClass("class Z { int i }", jactlContext);
     Object z = Jactl.eval("new Z(2)", new JactlMapImpl(), jactlContext);
