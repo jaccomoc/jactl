@@ -1488,6 +1488,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def m = [:]; m.remove('a'); m", Utils.mapOf());
     test("Map m = [a:1]; m.remove('a')", 1);
     test("Map m = [a:[b:1]]; m.a.remove('b')", 1);
+    test("Map m = [a:[b:1]]; m.a.remove('b'); m.a.b", null);
     test("Map m = [a:[b:1]]; m.a.b.remove()", 1);
     test("def m = [a:1]; m.remove('a')", 1);
     test("Map m = [a:1]; m.remove('a'); m", Utils.mapOf());

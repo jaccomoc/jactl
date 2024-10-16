@@ -5432,6 +5432,8 @@ class CompilerTest extends BaseTest {
     test("Map x; (x?:[:]).a = 2", 2);
     test("Map x; x.('a' + 'b') = 2; x.ab", 2);
     test("Map x; x.(true ? 'a' : 'b') = 2; x.a", 2);
+//    test("def x; x.(true ? 'a' : 'b') = 2; x.a", 2);
+//    test("def x; x.\"${true ? 'a' : 'b'}\" = 2; x.a", 2);
   }
 
   @Test public void conditionalAssignment() {
@@ -7235,6 +7237,8 @@ class CompilerTest extends BaseTest {
 
   @Test public void simpleClosures() {
     test("{;}()", null);
+    test("int i = 1, j = 2; boolean b = i == j-1; b == true",  true);
+    test("{ int i = 1, j = 2; boolean b = i == j-1; b == true }()",  true);
     test("def f = { -> 10 }; f()", 10);
     test("var f = { -> 10 }; var g = {20}; f = g; f()", 20);
     testError("def f = { -> 10 }; f(3)", "too many arguments");
