@@ -5343,7 +5343,7 @@ class CompilerTest extends BaseTest {
     test("double[] x = [1, 2]; x == [1,2] as int[]", true);
   }
 
-  @Test public void testStuff() {
+  @Test public void testTopLevelAutoCreation() {
     useAsyncDecorator = false;
     test("def x; x.a = 1; x.a", 1);
     test("Map x; x.a = 1; x.a", 1);
@@ -5431,9 +5431,16 @@ class CompilerTest extends BaseTest {
     test("def x; (x?:[:]).a = 2", 2);
     test("Map x; (x?:[:]).a = 2", 2);
     test("Map x; x.('a' + 'b') = 2; x.ab", 2);
+
+    // Can't autocreate top level when async testing since when wrapped
+    // in sleep() we don't know the variable to store the created value into
+    useAsyncDecorator = false;
+    test("def x; x.\"${true ? 'a' : 'b'}\" = 2; x.a", 2);
+    test("def a, f='b'; a.\"${f}\".cd = 1234; a.b.cd",  1234);
+    test("def a, f='b'; a[1].\"${f}\".cd = 1234; a[1].b.cd",  1234);
+    test("def a, f='b'; a.\"${f}\"[1] = 1234; a.b[1]",  1234);
     test("Map x; x.(true ? 'a' : 'b') = 2; x.a", 2);
-//    test("def x; x.(true ? 'a' : 'b') = 2; x.a", 2);
-//    test("def x; x.\"${true ? 'a' : 'b'}\" = 2; x.a", 2);
+    test("def x; x.(true ? 'a' : 'b') = 2; x.a", 2);
   }
 
   @Test public void conditionalAssignment() {

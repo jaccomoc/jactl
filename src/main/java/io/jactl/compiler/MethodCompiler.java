@@ -713,20 +713,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         box();
         compile(expr.parent);
-        // If parent is top level variable and is null then auto-create
-        if (expr.parent instanceof Expr.Identifier && expr.parent.type.is(ANY,MAP,LIST)) {
-          Expr.Identifier identifier = (Expr.Identifier)expr.parent;
-          emitIf(false, IfTest.IS_NULL, this::dupVal,
-                 () -> {
-                   dupType();   // Preserve parent type
-                   popVal();
-                   invokeMethod(RuntimeUtils.class, expr.accessType.is(LEFT_SQUARE) ? RuntimeUtils.CREATE_LIST : RuntimeUtils.CREATE_MAP);
-                   dupVal();
-                   storeVar(identifier.varDecl);
-                   popType();
-                 },
-                 null);
-        }
+        // If parent is top level variable and is null then auto-create if necessary
+        autoCreateIfNeeded(expr.parent, expr.accessType.is(LEFT_SQUARE,QUESTION_SQUARE));
         compile(expr.field);
         box();
         storeValueParentField(expr.accessType);
@@ -787,6 +775,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       storeFieldValue.run();
     }
     return null;
+  }
+
+  private void autoCreateIfNeeded(Expr parent, boolean isListAccess) {
+    if (parent instanceof Expr.Identifier && parent.type.is(ANY,MAP,LIST)) {
+      Expr.Identifier identifier = (Expr.Identifier)parent;
+      emitIf(false, IfTest.IS_NULL, this::dupVal,
+             () -> {
+               dupType();   // Preserve parent type
+               popVal();
+               invokeMethod(RuntimeUtils.class, isListAccess ? RuntimeUtils.CREATE_LIST : RuntimeUtils.CREATE_MAP);
+               dupVal();
+               storeVar(identifier.varDecl);
+               popType();
+             },
+             null);
+    }
   }
 
   @Override public Void visitFieldOpAssign(Expr.FieldOpAssign expr) {
@@ -1203,6 +1207,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           }
           else {
             // No async allowed so can revert to loadOrCreateField for all types
+
+            // Auto-create parent if needed
+            autoCreateIfNeeded(expr.left, expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE));
             compile(expr.right);
             loadOrCreateField(expr.operator, expr.type, expr.right.location);
           }
