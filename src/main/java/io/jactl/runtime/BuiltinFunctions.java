@@ -51,6 +51,8 @@ public class BuiltinFunctions {
 
   public static void registerBuiltinFunctions() {
     if (!initialised) {
+      initialised = true;
+
       // Collection methods
       Jactl.method(LIST)
            .name("size")
@@ -522,8 +524,6 @@ public class BuiltinFunctions {
            .register();
 
       BuiltinArrayFunctions.registerFunctions();
-
-      initialised = true;
     }
   }
 

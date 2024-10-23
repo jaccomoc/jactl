@@ -242,13 +242,14 @@ public class Jactl {
     "         -k pkgName       : run script as though it belongs to this package\n" +
     "         -d               : debug: output generated code\n" +
     "         -c               : do not read .jactlrc config file\n" +
+    "         -g path          : run script to get map of global variable values\n" +
     "         -h               : print this help\n";
 
   JactlContext context;
   boolean      verbose;
 
   private void run(String[] args) throws IOException {
-    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*vcCpne:P:V:*", usage);
+    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*vcCpng:e:P:V:*", usage);
     List<String> files     = (List<String>) argMap.get('*');
     List<String> arguments = (List<String>) argMap.get('@');
     String       script    = null;
@@ -274,6 +275,7 @@ public class Jactl {
                               .replaceAll("\\.[^\\.]*$", "");
       }
     }
+
     Map<String,Object> globals   = new HashMap<>();
     if (argMap.containsKey('V')) {
       List<String> variables = (List<String>) argMap.get('V');
@@ -342,7 +344,23 @@ public class Jactl {
 
       context = builder.build();
 
+      if (argMap.containsKey('g')) {
+        String globalsScriptFile = (String) argMap.get('g');
+        String globalsScript = new String(Files.readAllBytes(Paths.get(globalsScriptFile)));
+        try {
+          Object globalsObj = Jactl.eval(globalsScript, globals, context);
+          if (globalsObj != null && !(globalsObj instanceof Map)) {
+            error("Script '" + globalsScriptFile + "' for global variables returned non-map object of type: " + RuntimeUtils.className(globalsObj));
+          }
+          globals.putAll((Map) globalsObj);
+        }
+        catch (CompileError e) {
+          error("Error in globals script file '" + globalsScriptFile + "': " + e.getErrors().get(0).getMessage());
+        }
+      }
+
       Object result = null;
+      BuiltinFunctions.registerBuiltinFunctions();
       if (argMap.containsKey('C')) {
         Class           clazz     = Class.forName(scriptClassName);
         AtomicReference resultRef = new AtomicReference();

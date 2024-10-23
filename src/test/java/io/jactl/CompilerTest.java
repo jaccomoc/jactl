@@ -3389,7 +3389,7 @@ class CompilerTest extends BaseTest {
     test("def p(x){x*x}; \"5 pyramid numbers: ${ def p(n){ n == 1 ? 1 : n*n + p(n-1) }; [1,2,3,4,5].map{p(it)}.join(', ') }: ${p(3)}\"", "5 pyramid numbers: 1, 5, 14, 30, 55: 9");
     test("['a','b'].map{\"\"\"\"$it=\" + $it\"\"\" }.join(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
 
-    testError("XYZ.fromJson(\"{\\", "unexpected EOF");
+    testError("XYZ.fromJson(\"{\\", "unexpected end-of-file");
   }
 
   @Test public void regexMatch() {
@@ -3739,7 +3739,7 @@ class CompilerTest extends BaseTest {
   @Test public void listLiterals() {
     test("[]", Utils.listOf());
     test("[1]", Utils.listOf(1));
-    testError("[1,", "unexpected EOF");
+    testError("[1,", "unexpected end-of-file");
     test("[(byte)1,2,3]", Utils.listOf((byte)1,2,3));
     test("[1,2,3]", Utils.listOf(1,2,3));
     test("[1,2+3,3]", Utils.listOf(1,5,3));
@@ -3844,7 +3844,7 @@ class CompilerTest extends BaseTest {
     test("[a:1]", Utils.mapOf("a",1));
     test("[null:1]", Utils.mapOf("null",1));
     test("[a:1] if true", Utils.mapOf("a",1));
-    testError("[:", "unexpected EOF");
+    testError("[:", "unexpected end-of-file");
     testError("[:123]", "unexpected token");
     test("[for:1]", Utils.mapOf("for",1));
     test("['for':1]", Utils.mapOf("for",1));
@@ -3856,7 +3856,7 @@ class CompilerTest extends BaseTest {
     test("{:}", new HashMap<>());
     test("{a:1}", Utils.mapOf("a",1));
     test("{a:1} if true", Utils.mapOf("a",1));
-    testError("{:", "unexpected EOF");
+    testError("{:", "unexpected end-of-file");
     test("{for:1}", Utils.mapOf("for",1));
     test("{'for':1}", Utils.mapOf("for",1));
     test("{a:1,b:2}", Utils.mapOf("a",1, "b", 2));
@@ -3878,7 +3878,7 @@ class CompilerTest extends BaseTest {
     test("String x = '' + [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
     test("['1':['2':3]].1.2", 3);
     test("['1':['2':3]].(1).2", 3);
-    testError("['1':[null:['2':3]].(1).(null).2", "unexpected EOF");
+    testError("['1':[null:['2':3]].(1).(null).2", "unexpected end-of-file");
     testError("['1':[null:['2':3]]].(1).(null).2", "null value for field");
     test("['1':[null:['2':3]]].(1).null.2", 3);
     test("[\"a${1+2}\":1,b:2]", Utils.mapOf("a3",1, "b", 2));
@@ -3905,7 +3905,7 @@ class CompilerTest extends BaseTest {
     test("String x = '' + {a:[1,{b:2},3]}", "[a:[1, [b:2], 3]]");
     test("{'1':{'2':3}}.1.2", 3);
     test("{'1':{'2':3}}.(1).2", 3);
-    testError("{'1':{null:{'2':3}}.(1).(null).2", "unexpected EOF");
+    testError("{'1':{null:{'2':3}}.(1).(null).2", "unexpected end-of-file");
     testError("{'1':{null:{'2':3}}}.(1).(null).2", "null value for field");
     test("{'1':{null:{'2':3}}}.(1).null.2", 3);
     test("{\"a${1+2}\":1,b:2}", Utils.mapOf("a3",1, "b", 2));
@@ -6863,16 +6863,16 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void forLoops() {
-    testError("for (int i = 0;", "Unexpected EOF");
-    testError("for (int i = 0;\n", "Unexpected EOF");
-    testError("for (int i = 0; i < 10;", "Unexpected EOF");
-    testError("for (int i = 0; i < 10; i++", "Unexpected EOF");
+    testError("for (int i = 0;", "Unexpected end-of-file");
+    testError("for (int i = 0;\n", "Unexpected end-of-file");
+    testError("for (int i = 0; i < 10;", "Unexpected end-of-file");
+    testError("for (int i = 0; i < 10; i++", "Unexpected end-of-file");
     testError("for (int i = 0)", "Unexpected token ')'");
     testError("for (int i = 0\n)", "Unexpected token ')'");
     testError("for (int i = 0;)", "Unexpected token ')'");
     testError("for (int i = 0;\n)", "Unexpected token ')'");
-    testError("for (int i = 0; i < 10;)", "Unexpected EOF");
-    testError("for (int i = 0; i < 10; i++)", "Unexpected EOF");
+    testError("for (int i = 0; i < 10;)", "Unexpected end-of-file");
+    testError("for (int i = 0; i < 10; i++)", "Unexpected end-of-file");
     test("int sum = 0; for (int i = 0; i < 10; i++) sum += i; sum", 45);
     test("int sum = 0; for (int i = (0 if true); i < 10 if true; i++ if true) sum += i; sum", 45);
     testError("int sum = 0; for (int i = 0; i < 10; i++) sum += i; i", "unknown variable");
@@ -7219,7 +7219,7 @@ class CompilerTest extends BaseTest {
     test("def f(a = '',b = 2) {a+b}; f(a:'',b:null)", "null");
     test("def f(a = '',b = 2) {a+b}; f(a:'' if true,b:null unless true)", "null");
     test("def f(a = ('' if true),b = 2) {a+b}; f(a:'' if true,b:null unless true)", "null");
-    testError("def f(a,b) {a+b}; f(a:123,", "Unexpected EOF");
+    testError("def f(a,b) {a+b}; f(a:123,", "Unexpected end-of-file");
   }
 
   @Test public void simpleClosures() {
@@ -7861,7 +7861,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void eof() {
-    testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected eof");
+    testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected end-of-file");
   }
 
   @Test public void globalsOptimisation() {

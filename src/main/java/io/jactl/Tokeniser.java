@@ -457,7 +457,7 @@ public class Tokeniser {
               // Backslash is first char in this part of sting and we have reached EOF so return error
               Token tok = createToken();
               advance(1);
-              return stringError("Unexpected EOF after '\\'", tok);
+              return stringError("Unexpected end-of-file after '\\'", tok);
             }
             // Otherwise return what we have so far and return error next itme
             finished = true;

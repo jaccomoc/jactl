@@ -2238,7 +2238,7 @@ public class Parser {
               skipUntil(COMMA,COLON,EOL,RIGHT_SQUARE,RIGHT_BRACE,EOF);
             }
             else {
-              error("Unexpected EOF", peekIgnoreEOL(), false);
+              error("Unexpected end-of-file", peekIgnoreEOL(), false);
               return expr;
             }
           }
@@ -3445,14 +3445,15 @@ public class Parser {
       error = createError(token.getStringValue(), token);
     }
     else if (token.is(EOF)) {
-      error = new EOFError("Unexpected EOF: " + msg, token, !isLookahead());
+      error = new EOFError("Unexpected end-of-file: " + msg, token, !isLookahead());
     }
     else {
-      final String chars = token.is(EOL) ? "EOL" :
-                           token.is(EXPR_STRING_START) ? "'\"'" :
-                           token.is(STRING_CONST) ? "\"'\"" :
-                           "'" + token.getChars() + "'";
-      error = createError("Unexpected token " + chars + ": " + msg, token);
+      final String chars = token.is(EOL)               ? "new-line" :
+                           token.is(EOF)               ? "end-of-file" :
+                           token.is(EXPR_STRING_START) ? "token " + "'\"'" :
+                           token.is(STRING_CONST)      ? "token " + "\"'\""
+                                                       : "token " + "'" + token.getChars() + "'";
+      error = createError("Unexpected " + chars + ": " + msg, token);
     }
     markError(mark, error);
     if (lookaheadCount > 0 || throwError) {

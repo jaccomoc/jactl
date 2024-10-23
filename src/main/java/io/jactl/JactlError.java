@@ -57,9 +57,16 @@ public class JactlError extends RuntimeException {
   @Override
   public String getMessage() {
     if (location == null || location.getSource() == null) {
+      return getSingleLineMessage();
+    }
+    return getSingleLineMessage() + "\n" + location.getMarkedSourceLine();
+  }
+
+  public String getSingleLineMessage() {
+    if (location == null || location.getSource() == null) {
       return String.format("%s @ unknown location", errorMessage);
     }
-    return String.format("%s @ line %d, column %d%n%s", errorMessage, location.getLineNum(), location.getColumn(), location.getMarkedSourceLine());
+    return String.format("%s @ line %d, column %d", errorMessage, location.getLineNum(), location.getColumn());
   }
 
   public String getErrorMessage() {

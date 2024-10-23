@@ -61,7 +61,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
     this.baseClass    = baseClass;
     this.isInterface  = isInterface;
     this.interfaces   = interfaces != null ? interfaces : new ArrayList<>();
-    this.pkg          = pkgName;
+    this.pkg          = pkgName == null ? "" : pkgName;
     this.prettyName   = namePath;
     int idx = namePath.indexOf(Utils.JACTL_SCRIPT_PREFIX);
     // Strip off script name if we are an embedded class
@@ -75,8 +75,8 @@ public class ClassDescriptor extends JactlUserDataHolder {
     else {
       this.prettyName = prettyName.replaceAll("\\$",".");
     }
-    this.prettyName = (pkgName.equals("")?"":(pkgName + ".")) + prettyName;
-    this.packagedName = (pkgName.equals("")?"":(pkgName + ".")) + namePath;
+    this.prettyName = (pkg.equals("")?"":(pkg + ".")) + prettyName;
+    this.packagedName = (pkg.equals("")?"":(pkg + ".")) + namePath;
     this.javaPackagedName = (javaPackage.equals("") ? "" : javaPackage + ".") + packagedName;
     this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
     this.allFieldsAreDefaults = allFieldsAreDefaults;

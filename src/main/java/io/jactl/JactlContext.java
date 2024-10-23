@@ -381,8 +381,14 @@ public class JactlContext {
       if (clss != null) {
         return clss;
       }
-      return Thread.currentThread().getContextClassLoader().loadClass(name);
-      //return super.findClass(name);
+      try {
+        clss = Thread.currentThread().getContextClassLoader().loadClass(name);
+        if (clss != null) {
+          return clss;
+        }
+      }
+      catch (ClassNotFoundException e) {}
+      return this.getClass().getClassLoader().loadClass(name);
     }
 
     Class findClassByInternalName(String internalName) {
