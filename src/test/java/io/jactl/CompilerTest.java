@@ -3649,6 +3649,7 @@ class CompilerTest extends BaseTest {
     test("'abcdefg' =~ s/(..)/${ $1 =~ s/(.)/${$1 + $1}/rg }/rg", "aabbccddeeffg");
     test("'abcdefg' =~ s/(..)/${ $1 + ('abcdefg' =~ s/(..)/x/rg) }/rg", "abxxxgcdxxxgefxxxgg");
     testError("for(int i = 0; i < 10; i++) { 'abc' =~ s/(.)/${ continue }/rg }", "must be within a while/for loop");
+    test("def x = 7; for (int i=0;i<10;i++) { i == 3 and continue\ni in [1,2,3] and x++\ni==4 and break\nx++}\nx", 12);
   }
 
   @Test public void doBlock() {

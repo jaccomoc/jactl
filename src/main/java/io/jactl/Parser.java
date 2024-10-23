@@ -1364,7 +1364,7 @@ public class Parser {
             expr = marked(true, () -> {
               Token type  = expect(BREAK, CONTINUE);
               Token label = null;
-              if (peekIgnoreEOL().is(IDENTIFIER)) {
+              if (peek().is(IDENTIFIER)) {
                 label = expect(IDENTIFIER);
               }
               return type.is(BREAK) ? new Expr.Break(type, label) : new Expr.Continue(type, label);
