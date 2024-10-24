@@ -1692,7 +1692,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expr.exprs.forEach(entry -> {
       dupVal();
       compile(entry);
-      expect(2);
+      expect(3);
       box();
       invokeMethod(List.class, "add", Object.class);
       popVal();    // Pop boolean return value of add

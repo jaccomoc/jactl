@@ -8015,6 +8015,6 @@ class CompilerTest extends BaseTest {
   }
 
   private interface InputOutputTest {
-    public void accept(String code, String input, Object expectedResult, String expectedOutput);
+    void accept(String code, String input, Object expectedResult, String expectedOutput);
   }
 }

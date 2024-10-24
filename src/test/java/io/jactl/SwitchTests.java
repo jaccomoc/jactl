@@ -1159,4 +1159,11 @@ public class SwitchTests extends BaseTest {
     test("const x = 2; def f() { switch(2) { x -> true } }; f()", true);
     test("const X = 2; def f() { switch(2) { X -> true } }; f()", true);
   }
+
+  @Test public void scriptIssue() {
+    test("''.map{ switch { /(c)/r -> [$1.size()] } }", Utils.listOf());
+    test("def x = ''.map{ switch { /(c)/r -> [$1.size()] } }; x.toString()", "[]");
+    test("'abc'.map{ switch { /(c)/r -> [$1.size()] } }", Utils.listOf(null,null,Utils.listOf(1)));
+    test("''.map{ switch {\n /broadcaster.*-> *(.*)/r -> ['broadcaster', $1.split(/, */)]\n  /^([&%])(.*) *-> *(.*)/r -> [$1, $2, $3]\n}}\n", Utils.listOf());
+  }
 }
