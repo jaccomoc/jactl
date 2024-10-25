@@ -2517,7 +2517,7 @@ public class Parser {
     // We need to do a lookahead to see if we have a parameter list or not
     List<Stmt.VarDecl> parameters;
     boolean            noParamsDefined = false;
-    if (peekIgnoreEolIs(ARROW) || lookahead(() -> singleVarWithOptionalType() != null, () -> peekIgnoreEolIs(COMMA,ARROW))) {
+    if (peekIgnoreEolIs(ARROW) || lookahead(() -> parameters(ARROW) != null)) {
       parameters = parameters(ARROW);
     }
     else {

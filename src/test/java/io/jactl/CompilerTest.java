@@ -7248,6 +7248,8 @@ class CompilerTest extends BaseTest {
 
   @Test public void simpleClosures() {
     test("{;}()", null);
+    test("int i = 1, j = 2; boolean b = i == j-1; b == true",  true);
+    test("{ int i = 1, j = 2; j - i == i }()",  true);
     test("def f = { -> 10 }; f()", 10);
     test("var f = { -> 10 }; var g = {20}; f = g; f()", 20);
     testError("def f = { -> 10 }; f(3)", "too many arguments");
