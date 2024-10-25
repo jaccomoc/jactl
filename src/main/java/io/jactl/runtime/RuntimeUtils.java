@@ -1960,6 +1960,21 @@ public class RuntimeUtils {
     return result;
   }
 
+  public static final String CREATE_MAP = "createMap";
+  public static Map createMap() {
+    return new LinkedHashMap();
+  }
+
+  public static Map createMap(Map map) {
+    return new LinkedHashMap(map);
+  }
+
+  public static final String CREATE_LIST = "createList";
+  public static List createList() {
+    return new ArrayList();
+  }
+
+
   private enum FieldType {
     BOOLEAN,
     BYTE,

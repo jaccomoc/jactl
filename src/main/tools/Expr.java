@@ -254,6 +254,8 @@ class Expr extends JactlUserDataHolder {
     Expr.VarDecl       @varDecl;               // for variable references
     boolean            @couldBeFunctionCall = false;
     boolean            @firstTimeInPattern  = false;   // used in switch patterns to detect first use of a binding var
+    boolean            @createIfMissing     = false;
+    boolean            @createAsList        = false;
     public FunctionDescriptor  getFuncDescriptor() { return varDecl.funDecl.functionDescriptor; }
     public JactlUserDataHolder getDeclaration()    { return varDecl == null ? null : varDecl.originalVarDecl == null ? varDecl : varDecl.originalVarDecl; }
   }

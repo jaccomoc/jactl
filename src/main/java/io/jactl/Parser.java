@@ -3831,7 +3831,7 @@ public class Parser {
     // Now set createIfMissing flag on all field access operations (but only those at the "top" level)
     // and only up to the last field. So a.b.c only has the a.b lookup changed to set "createIfMissing".
     if (createIfMissing) {
-      setCreateIfMissing(parent);
+      setCreateIfMissing(parent, fieldPath.operator);
     }
 
     Token     accessOperator = fieldPath.operator;
@@ -3901,13 +3901,18 @@ public class Parser {
     return block;
   }
 
-  private void setCreateIfMissing(Expr expr) {
+  private void setCreateIfMissing(Expr expr, Token operator) {
     if (expr instanceof Expr.Binary) {
       Expr.Binary binary = (Expr.Binary) expr;
       if (binary.operator.is(fieldAccessOp)) {
         binary.createIfMissing = true;
       }
-      setCreateIfMissing(binary.left);
+      setCreateIfMissing(binary.left, binary.operator);
+    }
+    else if (expr instanceof Expr.Identifier) {
+      Expr.Identifier identifier = (Expr.Identifier) expr;
+      identifier.createIfMissing = true;
+      identifier.createAsList    = operator.is(LEFT_SQUARE,QUESTION_SQUARE);
     }
   }
 

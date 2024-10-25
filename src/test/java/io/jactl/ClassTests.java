@@ -1237,6 +1237,7 @@ public class ClassTests extends BaseTest {
       testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
     }
     test("class X { Y y }; class Y { byte i = 3 }; X x = new X(null); x.y.i = 4; x.y.i", (byte)4);
+    test("class X { Y y = null }; class Y { byte i = 3 }; X x; x.y.i = 4; x.y.i", (byte)4);
     test("class X { Y y }; class Y { byte i = 3 }; def x = new X(null); x.y.i = 4; x.y.i", (byte)4);
     test("class X { Y y }; class Y { int i = 3 }; X x = new X(null); x.y.i = 4; x.y.i", 4);
     test("class X { Y y }; class Y { int i = 3 }; def x = new X(null); x.y.i = 4; x.y.i", 4);
@@ -1790,6 +1791,7 @@ public class ClassTests extends BaseTest {
     useAsyncDecorator = asyncAutoCreate();
     test("class X { Y y = null }; class Y { Z[] z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z = new Z[1]; x.y.z[0]", null);
     testError("class X { Y y = null }; class Y { Z[] z = null }; class Z { int i = 3; X x = null }; X x = new X(); x.y.z[2].x.y.z[0].i = 4; x.y.z[2].x.y.z[0].i", "null parent");
+    testError("class X{ int i = 1 }; X[] x; x[0].i = 2", "null parent");  // can't auto-create arrays since we don't know what size they should be
   }
 
   @Test public void mapField() {

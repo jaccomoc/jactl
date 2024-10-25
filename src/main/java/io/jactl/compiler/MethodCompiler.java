@@ -1757,6 +1757,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       loadVar(expr.varDecl);
     }
+
+    // Auto-create if possible for ANY,LIST,MAP, and INSTANCE types
+    if (expr.createIfMissing) {
+      // If INSTANCE type then we can only auto-create if all fields have defaults
+      if (expr.type.is(INSTANCE) && expr.type.getClassDescriptor().allFieldsAreDefaults() && !expr.createAsList ||
+          expr.type.is(ANY, MAP, LIST)) {
+        emitIf(false, IfTest.IS_NULL, this::dupVal,
+               () -> {
+                 dupType();   // Preserve type
+                 popVal();
+                 if (expr.type.is(INSTANCE)) {
+                   newInstance(expr.type);
+                 }
+                 else {
+                   invokeMethod(RuntimeUtils.class, expr.createAsList ? RuntimeUtils.CREATE_LIST : RuntimeUtils.CREATE_MAP);
+                 }
+                 dupVal();
+                 storeVar(expr.varDecl);
+                 popType();
+               },
+               null);
+      }
+    }
+
     return null;
   }
 
@@ -2394,7 +2418,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> {
                  popVal();             // pop the duplicate null
                  // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
-                 loadDefaultValueOrNewInstance(finalFieldType.is(ANY) ? expr.type : finalFieldType, expr);
+                 loadDefaultValueOrNewInstance(finalFieldType.is(ANY) ? expr.type : finalFieldType, expr.location);
                  setStackType(finalFieldType);
                  expect(2);
                  dupValX1();          // Copy value and move it two slots
@@ -4823,24 +4847,24 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return classCompiler.context.autoCreateAsync();
   }
 
-  private void loadDefaultValueOrNewInstance(JactlType type, Expr expr) {
+  private void loadDefaultValueOrNewInstance(JactlType type, Token location) {
     if (type.is(INSTANCE)) {
       // If there is no no-arg constructor (i.expr. there is at least one mandatory field) then we have to throw
       // a NullError since field is currently null
       FunctionDescriptor initMethod = type.getClassDescriptor().getInitMethod();
       if (initMethod.paramCount > 0) {
-        throwNullError("Null value during field access and type " + type + " cannot be auto-created due to mandatory fields", expr.location);
+        throwNullError("Null value during field access and type " + type + " cannot be auto-created due to mandatory fields", location);
       }
       else {
         if (asyncAutoCreateAllowed()) {
-          invokeMaybeAsync(initMethod.isAsync, type, 0, expr.location,
+          invokeMaybeAsync(initMethod.isAsync, type, 0, location,
                            () -> {
                              newInstance(type);
                              if (initMethod.isAsync) {
                                loadNullContinuation();
                              }
                              if (initMethod.needsLocation) {
-                               loadLocation(expr.location);
+                               loadLocation(location);
                              }
                            },
                            () -> {
@@ -4849,7 +4873,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         else {
           newInstance(type);
-          loadLocation(expr.location);
+          loadLocation(location);
           invokeMethod(false, false, type.getClassDescriptor().getInternalName(), Utils.JACTL_INIT_NOASYNC, type, Utils.listOf(STRING, INT));
         }
       }

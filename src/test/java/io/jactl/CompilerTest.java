@@ -5342,7 +5342,23 @@ class CompilerTest extends BaseTest {
     test("double[] x = [1, 2]; x == [1,2] as int[]", true);
   }
 
+  @Test public void autoCreateTopLevel() {
+    useAsyncDecorator = false;
+    test("def x; x.a = 1; x.a", 1);
+    test("def x\nx.a.b[0] = 'abc'", "abc");
+    test("Map x; x.a = 1; x.a", 1);
+    testError("List x; x.a = 1; x.a", "invalid object type");
+    test("def x; x[0] = 1; x[0]", 1);
+    test("List x; x[0] = 1; x[0]", 1);
+    test("Map x; x[0] = 1; x[0]", 1);
+    test("def x; x[0].a.b[0] = 1; x[0].a.b[0]", 1);
+    testError("def f(){}; f().a.b.c = 1", "null value");
+    testError("def f(){}; def x = f; x.a.b.c = 1", "invalid parent");
+    testError("int[] i; i[0] = 1", "null value for array");
+  }
+
   @Test public void fieldAssignments() {
+    // Autocreation tests
     testError("Map m = [a:1]; m*a = 2", "invalid lvalue");
     test("Map m = [:]; m.a = 1", 1);
     test("Map m = [:]; m.a = 1; m.a", 1);
@@ -5352,11 +5368,6 @@ class CompilerTest extends BaseTest {
     test("def m = [:]; m.a = 1; m.a", 1);
     test("Map m; m.a = 1; m.a", 1);
     test("Map m; m.a = 1", 1);
-
-    // def without initialiser is always null. We don't automatically create
-    // the value for m itself. Only subfields are automatically created if
-    // required when used as lvalues.
-    testError("def m; m.a = 1", "null value");
 
     test("Map m; m.a.b = (byte)1", (byte)1);
     test("Map m; m.a.b = (byte)1; m.a.b", (byte)1);
@@ -5435,7 +5446,7 @@ class CompilerTest extends BaseTest {
     test("def x; int i; i ?= x.a", null);
     test("def x = [a:3]; long y; y ?= x.a", 3L);
     test("Map x; int i; i ?= x.a", null);
-    test("Map x = [a:[:]]; byte i = 5; i ?= x.a.b.c; i", (byte)5);
+    test("Map x = [a:[:]]; byte i = 5; i ?= x.a.b.c; i", (byte) 5);
     test("Map x = [a:[:]]; int i = 5; i ?= x.a.b.c; i", 5);
     test("Map x = [a:[:]]; int i = 5; i ?= x.a.b[0].c; i", 5);
     test("Map x = [a:[]]; int i = 5; i ?= x.a[2].b[0].c; i", 5);
@@ -5447,7 +5458,7 @@ class CompilerTest extends BaseTest {
     test("Map m; def x; m.a.b.c ?= x.a", null);
     test("Map m; def x; m.a.b.c ?= x.a; m.a", null);
     test("Map m; def x; m.a.b.c ?= x.a; m.a?.b", null);
-    test("Map m; def x = [a:3]; m.a.b.c ?= x.a; m.a?.b", Utils.mapOf("c",3));
+    test("Map m; def x = [a:3]; m.a.b.c ?= x.a; m.a?.b", Utils.mapOf("c", 3));
     test("Map m; def x = [a:3]; m.a.b ?= 3", 3);
     test("def x; x ?= 2", 2);
     test("def x; x ?= 2L", 2L);
@@ -7804,10 +7815,10 @@ class CompilerTest extends BaseTest {
 
   @Test public void globals() {
     JactlContext jactlContext = JactlContext.create()
-                                               .evaluateConstExprs(true)
-                                               .replMode(true)
-                                               .debug(debugLevel)
-                                               .build();
+                                            .evaluateConstExprs(true)
+                                            .replMode(true)
+                                            .debug(debugLevel)
+                                            .build();
 
     Jactl.compileClass("class Z { int i }", jactlContext);
     Object z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
