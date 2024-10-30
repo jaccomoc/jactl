@@ -1439,6 +1439,9 @@ class CompilerTest extends BaseTest {
     testError("const x = 13, y = 13 * x; y = 4", "cannot modify a constant");
     testError("def (const int x, const int y) = [13,14]; x + y", "unexpected token 'const'");
     testError("const x = 'abc'.length(); x", "simple constant value");
+
+    test("def x\n  = 1", 1);
+    test("def x\n = 1 +\n 2\n + 3", 6);
   }
 
   @Test public void multipleVarDecls() {
@@ -7877,7 +7880,9 @@ class CompilerTest extends BaseTest {
     test("def f(x\n,\ny\n)\n{\nx\n+\ny\n}\nf(1,2)", 3);
     testError("4\n/2", "unexpected end of file in string");
     test("4\n-3*2", -6);
-    testError("int\ni\n=\n3\n", "unexpected token '='");
+    test("int\ni\n=\n3\n", 3);
+    test("int\ni\ni\n=\n3\n", 3);
+    test("int\ni\ni\n=\n3\ni", 3);
     test("int\ni =\n3\n", 3);
     test("int\ni =\n1,\nj =\n2,\nk\ni+j", 3);
     test("for\n(\nint\ni =\n4-\n3,\nj =\n4/\n2\n;\ni\n<\n10\n;\ni++\n)\n;", null);

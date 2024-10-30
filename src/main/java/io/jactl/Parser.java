@@ -816,7 +816,7 @@ public class Parser {
     }, isParameter ? JactlName.NameType.PARAMETER : inClassDecl ? JactlName.NameType.FIELD : JactlName.NameType.VARIABLE);
     Expr  initialiser = null;
     Token equalsToken = null;
-    if (matchAny(EQUAL)) {
+    if (matchAnyIgnoreEOL(EQUAL)) {
       equalsToken = previous();
       skipNewLines();
       initialiser = parseExpression();
