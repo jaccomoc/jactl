@@ -545,14 +545,14 @@ public class Parser {
           if (throwIfError) {
             unexpected("Expected type", true);
           }
-          return JactlType.OPTIONAL;
+          type = JactlType.OPTIONAL;
         }
       }
       // Allow arrays for everything but "def" and "var"
       if (!ignoreArrayError && typeToken != null && typeToken.is(VAR, DEF) && peek().is(LEFT_SQUARE)) {
         unexpected("Unexpected '[' after " + typeToken.getChars(), throwIfError);
       }
-      if (!ignoreArrays) {
+      if (type != OPTIONAL && !ignoreArrays) {
         while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
           type = JactlType.arrayOf(type);
           expectOrSkip(true, Utils.listOf(RIGHT_SQUARE), Utils.listOf(EOL,COMMA,RIGHT_PAREN,RIGHT_BRACE,RIGHT_SQUARE));
@@ -819,7 +819,15 @@ public class Parser {
     if (matchAnyIgnoreEOL(EQUAL)) {
       equalsToken = previous();
       skipNewLines();
-      initialiser = parseExpression();
+      Marker rhsMark = tokeniser.mark();
+      try {
+        initialiser = parseExpression();
+        rhsMark.doneExpr(initialiser);
+      }
+      catch (Throwable throwable) {
+        rhsMark.drop();
+        throw throwable;
+      }
     }
 
     if ((type.is(UNKNOWN) || isConst) && initialiser == null) {
@@ -1222,41 +1230,6 @@ public class Parser {
 
   // = Expr
 
-  private static TokenType[] fieldAccessOp = new TokenType[] { DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
-
-  // NOTE: type cast also has same precedence as unaryOps but has no specific operator
-  private static List<TokenType> unaryOps = Utils.listOf(QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
-
-  // Operators from least precedence to highest precedence. Each entry in list is
-  // a pair of a boolean and a list of the operators at that level of precedence.
-  // The boolean indicates whether the operators are left-associative (true) or
-  // right-associative (false).
-  private static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
-    Utils.listOf(
-      // These are handled separately in separate productions to parseExpression:
-      //      new Pair(true, Utils.listOf(OR)),
-      //      new Pair(true, Utils.listOf(AND)),
-      //      new Pair(true, Utils.listOf(NOT)),
-
-      new Pair(false, Utils.listOf(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
-      /* STAR_STAR_EQUAL, */ DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
-         PIPE_EQUAL, ACCENT_EQUAL)),
-      new Pair(true, Utils.listOf(QUESTION, QUESTION_COLON)),
-      new Pair(true, Utils.listOf(PIPE_PIPE)),
-      new Pair(true, Utils.listOf(AMPERSAND_AMPERSAND)),
-      new Pair(true, Utils.listOf(PIPE)),
-      new Pair(true, Utils.listOf(ACCENT)),
-      new Pair(true, Utils.listOf(AMPERSAND)),
-      new Pair(true, Utils.listOf(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL)),
-      new Pair(true, Utils.listOf(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
-      new Pair(true, Utils.listOf(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
-      new Pair(true, Utils.listOf(MINUS, PLUS)),
-      new Pair(true, Utils.listOf(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
-      //      Utils.listOf(STAR_STAR)
-      new Pair(true, unaryOps),
-      new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
-    );
-
   // Binary operators which can also sometimes be the start of an expression. We need to know
   // when we are checking if an expression continues on the next line whether the next operator
   // should be treated as part of the current expression or the start of a new one.
@@ -1325,11 +1298,10 @@ public class Parser {
   private Expr expression() {
     return expression(false);
   }
+
   private Expr expression(boolean ignoreEol) {
-    if (ignoreEol) {
-      return (Expr) ignoreNewLines(() -> orExpression());
-    }
-    return orExpression();
+    return ignoreEol ? (Expr)ignoreNewLines(this::orExpression)
+                     : orExpression();
   }
 
   /**
@@ -1452,22 +1424,23 @@ public class Parser {
     skipNewLines();
 
     // If we have reached highest precedence
-    if (level == operatorsByPrecedence.size()) {
+    if (level == Utils.operatorsByPrecedence.size()) {
       return primary();
     }
 
     // Get list of operators at this level of precedence along with flag
     // indicating whether they are left-associative or not.
-    Pair<Boolean, List<TokenType>> operatorsPair     = operatorsByPrecedence.get(level);
+    Pair<Boolean, List<TokenType>> operatorsPair     = Utils.operatorsByPrecedence.get(level);
     boolean                        isLeftAssociative = operatorsPair.first;
     List<TokenType> operators = operatorsPair.second;
 
     // If this level of precedence is for our unary operators (includes type cast)
-    if (operators == unaryOps) {
+    if (operators == Utils.unaryOps) {
       return unary(level);
     }
 
     Marker mark = tokeniser.mark();
+    Marker rhsMark = null;
     Expr expr = new Expr.Noop(peek());  // Default to Noop so if we get an error we still return something non-null
     try {
       expr = parseExpression(level + 1);
@@ -1484,9 +1457,7 @@ public class Parser {
         else if (operator.is(QUESTION)) {
           advance();
           Expr  trueExpr  = parseExpression(level);
-          mark.done(trueExpr);
           Token operator2 = expectOrNull(true, COLON);
-          mark = tokeniser.mark();
           Expr  falseExpr = parseExpression(level);
           expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
         }
@@ -1502,6 +1473,9 @@ public class Parser {
           // Set flag if next token is '(' so that we can check for x.(y).z below
           boolean bracketedExpression = peek().is(LEFT_PAREN);
 
+          if (operator.getType().isAssignmentLike()) {
+            rhsMark = tokeniser.mark();
+          }
           Expr rhs;
           if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
             // '[' and '?[' can be followed by any expression and then a ']'
@@ -1535,6 +1509,8 @@ public class Parser {
 
           // Check for lvalue for assignment operators
           if (operator.getType().isAssignmentLike()) {
+            rhsMark.doneExpr(rhs);
+            rhsMark = null;
             expr = convertToLValue(expr, operator, rhs, false, true);
           }
           else {
@@ -1591,6 +1567,11 @@ public class Parser {
       skipUntil(EOL, EOF, COMMA);
       return expr;
     }
+    finally {
+      if (rhsMark != null) {
+        rhsMark.drop();
+      }
+    }
   }
 
   /**
@@ -1619,18 +1600,18 @@ public class Parser {
           return new Expr.Cast(typeToken, castType, e);
         });
       }
-      else if (!isPlusMinusNumber() && peek().is(unaryOps)) {
+      else if (!isPlusMinusNumber() && peek().is(Utils.unaryOps)) {
         // Ignore +number or -number where we want to parse as a number rather than as a unary expression
         // This is to allow us to invoke methods on negative numbers (e.g. -6.toBase(2)) which wouldn't
         // work normally since "." has higher precedence than "-". We will ignore here and deal with this
         // in primary().
         Marker mark2 = tokeniser.mark();
         try {
-          Token operator   = expect(unaryOps);
+          Token operator   = expect(Utils.unaryOps);
           Expr  unary      = unary(precedenceLevel);
           Expr  prefixExpr = new Expr.PrefixUnary(operator, unary);
           expr = prefixExpr;
-          if (operator.is(PLUS_PLUS, MINUS_MINUS) && unary instanceof Expr.Binary && ((Expr.Binary) unary).operator.is(fieldAccessOp)) {
+          if (operator.is(PLUS_PLUS, MINUS_MINUS) && unary instanceof Expr.Binary && ((Expr.Binary) unary).operator.is(Utils.fieldAccessOp)) {
             // If we are acting on a field (rather than directly on a variable) then
             // we might need to create intermediate fields etc so turn the inc/dec
             // into the equivalent of:
@@ -1655,7 +1636,7 @@ public class Parser {
         Token operator = previous();
         Expr postfix = new Expr.PostfixUnary(expr, operator);
         mark.done(postfix);
-        if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(fieldAccessOp)) {
+        if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(Utils.fieldAccessOp)) {
           // If we are acting on a field (rather than directly on a variable) then
           // we might need to create intermediate fields etc so turn the inc/dec
           // into the equivalent of:
@@ -2517,6 +2498,7 @@ public class Parser {
     // We need to do a lookahead to see if we have a parameter list or not
     List<Stmt.VarDecl> parameters;
     boolean            noParamsDefined = false;
+//    if (peekIgnoreEolIs(ARROW) || lookahead(() -> singleVarWithOptionalType() != null, () -> peekIgnoreEolIs(COMMA,ARROW))) {
     if (peekIgnoreEolIs(ARROW) || lookahead(() -> parameters(ARROW) != null)) {
       parameters = parameters(ARROW);
     }
@@ -3822,7 +3804,7 @@ public class Parser {
     Expr.Binary fieldPath = (Expr.Binary)variable;
 
     // Make sure lhs is a valid lvalue
-    if (!fieldPath.operator.is(fieldAccessOp)) {
+    if (!fieldPath.operator.is(Utils.fieldAccessOp)) {
       return error("Invalid left-hand side for '" + assignmentOperator.getChars() + "' (invalid lvalue)", fieldPath.operator);
     }
 
@@ -3904,7 +3886,7 @@ public class Parser {
   private void setCreateIfMissing(Expr expr, Token operator) {
     if (expr instanceof Expr.Binary) {
       Expr.Binary binary = (Expr.Binary) expr;
-      if (binary.operator.is(fieldAccessOp)) {
+      if (binary.operator.is(Utils.fieldAccessOp)) {
         binary.createIfMissing = true;
       }
       setCreateIfMissing(binary.left, binary.operator);
@@ -4073,9 +4055,9 @@ public class Parser {
   public static void main(String[] args) {
     System.out.println("  /*");
     int i = 0;
-    int count = operatorsByPrecedence.size();
+    int count = Utils.operatorsByPrecedence.size();
     String unaryNext = null;
-    for (Pair<Boolean,List<TokenType>> pair: operatorsByPrecedence) {
+    for (Pair<Boolean,List<TokenType>> pair: Utils.operatorsByPrecedence) {
       String current   = "expr";
       if (i > 0) {
         current += i;
@@ -4086,7 +4068,7 @@ public class Parser {
         operators = "(" + operators + ")";
       }
       System.out.print("  *# ");
-      if (unaryOps.equals(pair.second)) {
+      if (Utils.unaryOps.equals(pair.second)) {
         System.out.println(current + " ::= " + operators + "? unary");
         unaryNext = next;
       }

@@ -158,6 +158,7 @@ public class BuilderImpl implements Builder {
     @Override public void done(JactlType type, Token location) {}
     @Override public void done(Stmt stmt) {}
     @Override public void done(Expr expr) {}
+    @Override public void doneExpr(Expr expr) {}
     @Override public void done(List list) {}
   }
 
@@ -172,6 +173,7 @@ public class BuilderImpl implements Builder {
     @Override public void done(JactlType type, Token location) {}
     @Override public void done(Stmt stmt) {}
     @Override public void done(Expr expr) {}
+    @Override public void doneExpr(Expr expr) {}
     @Override public void done(List list) {}
   }
 }

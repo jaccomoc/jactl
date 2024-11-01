@@ -29,5 +29,6 @@ public interface Marker {
   void    done(JactlType type, Token location);
   void    done(Stmt stmt);
   void    done(Expr expr);
+  void    doneExpr(Expr expr);   // For complete expressions (e.g. rhs of assignment)
   void    done(List list);
 }

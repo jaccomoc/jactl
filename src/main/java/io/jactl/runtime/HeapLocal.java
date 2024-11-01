@@ -20,6 +20,7 @@ package io.jactl.runtime;
 import io.jactl.JactlType;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 import static io.jactl.JactlType.HEAPLOCAL;
 
@@ -66,5 +67,9 @@ public class HeapLocal extends Number implements Checkpointable {
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.HEAPLOCAL);
     value = restorer.readObject();
+  }
+
+  @Override public String toString() {
+    return Objects.toString(value);
   }
 }

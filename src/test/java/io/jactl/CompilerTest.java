@@ -7889,6 +7889,7 @@ class CompilerTest extends BaseTest {
     test("def x = [1,2]; if\n(\nx\n[\n0\n]\n)\n4", 4);
     test("def x = [1,2]; def i = 0; while\n(\nx\n[\n0\n]\n>\n10\n||\ni++\n<2\n)\nx[\n2\n]\n=\n7\nx[2]", 7);
     test("def (i\n,\nj\n)\n=\n[\n1\n,\n2\n]\ni+j\n", 3);
+    test("(1 + 2)\n + 3\n", 6);
   }
 
   @Test public void eof() {
