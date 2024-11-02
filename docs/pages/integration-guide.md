@@ -89,6 +89,23 @@ Object result = (int)Jactl.eval("x.f(3)", globals, context);
 assertEquals(6, result);
 ```
 
+### Setting input/output for scripts
+
+If the script uses the `nextLine()` function to read lines from some input then you can specify a `BufferedReader`
+as for the script's input.
+Similarly, you can also supply a `PrintStream` object that will be where any output from `print` or `println` 
+is put.
+
+For example:
+
+```java
+Map<String,Object> globals = new HashMap<>();
+globals.put("prefix", "DEBUG:");
+BufferedReader input  = new BufferedReader(new InputStreamReader(System.in));
+PrintStream    output = System.out;
+Jactl.eval("stream(nextLine).each{ println \"$prefix: $it\n\" }", globals, input, output);
+```
+
 ### Jactl.compile()
 
 The preferred way to run Jactl scripts is to compile them using `Jactl.compile()`.
@@ -151,6 +168,11 @@ globalValues.put("x", 7);
 globalValues.put("y", 3);
 script.run(globalValues, result -> System.out.println("Result is " + result));
 ```
+
+### Input/Output
+
+Both `run()` and `runSync()` have overloaded verisons that also accept a `BufferedReader` and `PrintStream`
+for the input/output of the script.
 
 ### Errors
 
@@ -266,6 +288,15 @@ The supported values are:
 * `1` &mdash; output instructions
 * `2` &mdash; output instructions with additional information about code locations
 
+### classAccessToGlobals(boolean accessAllowed)
+
+This method controls whether access to the global variables is allowed from within a class
+(methods and field initialisers).
+
+By default, classes are not allowed to access globals and access will result in a compile-time error.
+If for your application it makes sense for classes to have access to globals then you can invoke this method
+with `true`.
+
 ### Chaining Method Calls
 
 The methods for building a `JactlContext` can be chained in any order (apart from `create()` which must be first
@@ -276,6 +307,7 @@ JactlContext context = JactlContext.create()
                                    .javaPackage("io.jactl.pkg")
                                    .environment(new io.jactl.DefaultEnv())
                                    .minScale(10)
+                                   .classAccessToGlobals(false)
                                    .debug(0)
                                    .build();
 
@@ -865,7 +897,7 @@ Since we can't do this on an event-loop thread, we could schedule all of this to
 ```
 
 > **Note**<br/>
-> Any errors that occur on the blocking thread should be **returned** (not thrown) as `RuntimeError` objects as shown.
+> Any errors that occur on the blocking thread should be **returned** (not thrown) as `RuntimeError` objects, as shown.
 
 The use of `Continuation.suspendBlocking()` like this should be when the work being done requires using a blocking API
 and there is no away to avoid having thread blocked while the work is being performed.

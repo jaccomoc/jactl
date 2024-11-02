@@ -20,6 +20,8 @@ package io.jactl.compiler;
 import io.jactl.*;
 import io.jactl.resolver.Resolver;
 
+import java.io.BufferedReader;
+import java.io.PrintStream;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -34,8 +36,11 @@ public class Compiler {
   }
 
   public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings) {
+    return eval(source, jactlContext, bindings, null, null);
+  }
+  public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings, BufferedReader input, PrintStream output) {
     JactlScript compiled = compileScript(source, jactlContext, bindings);
-    return compiled.runSync(bindings);
+    return compiled.runSync(bindings, input, output);
   }
 
   public static Object eval(String source, JactlContext jactlContext, String scriptClassName, String packageName, Map<String,Object> bindings) {
@@ -78,9 +83,13 @@ public class Compiler {
   }
 
   public static void compileClass(String source, JactlContext jactlContext, String packageName) {
+    compileClass(source, jactlContext, packageName, Utils.mapOf());
+  }
+
+  public static void compileClass(String source, JactlContext jactlContext, String packageName, Map<String, Object> globals) {
     Parser         parser      = new Parser(new Tokeniser(source), jactlContext, packageName);
     Stmt.ClassDecl scriptClass = parser.parseClass();
-    Resolver       resolver    = new Resolver(jactlContext, Utils.mapOf(), scriptClass.location);
+    Resolver       resolver    = new Resolver(jactlContext, globals, scriptClass.location);
     resolver.resolveClass(scriptClass);
     Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(scriptClass);

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import java.io.BufferedReader;
 import java.io.PrintStream;
+import java.util.Map;
 
 /**
  * For the moment we hold the input and output here.
@@ -26,30 +27,54 @@ import java.io.PrintStream;
  * checkpoint and restore them.
  */
 public class RuntimeState {
-  static PrintStream    output;
-  static BufferedReader input;
+  private Map<String, Object> globals;
+  private PrintStream         output;
+  private BufferedReader      input;
 
-  private static ThreadLocal<RuntimeState> state = ThreadLocal.withInitial(() -> new RuntimeState());
+  private static ThreadLocal<RuntimeState> threadLocalState = ThreadLocal.withInitial(RuntimeState::new);
 
-  static RuntimeState getState() {
-    return state.get();
-  }
-
-  static void setState(RuntimeState value) {
-    state.set(value);
-  }
-
-  public static void setOutput(Object out) {
-    if (out != null && !(out instanceof PrintStream)) {
-      throw new IllegalArgumentException("Global 'out' must be a PrintStream not " + out.getClass().getName());
+  public static RuntimeState getState() {
+    RuntimeState state = threadLocalState.get();
+    if (state == null) {
+      state = new RuntimeState();
+      threadLocalState.set(state);
     }
-    output = (PrintStream)out;
+    return state;
   }
 
-  public static void setInput(Object in) {
-    if (in != null && !(in instanceof BufferedReader)) {
-      throw new IllegalArgumentException("Global 'in' must be a BufferedReader not " + in.getClass().getName());
+  public static String GET_CURRENT_GLOBALS = "getCurrentGlobals";
+  public static Map getCurrentGlobals() {
+    RuntimeState state = getState();
+    if (state == null) {
+      return null;
     }
-    input = (BufferedReader)in;
+    return state.globals;
+  }
+
+  public static void setState(RuntimeState value) {
+    threadLocalState.set(value);
+  }
+
+  public static void resetState() {
+    threadLocalState.set(null);
+  }
+
+  public static void setState(Map<String, Object> globals, BufferedReader input, PrintStream output) {
+    RuntimeState state = getState();
+    state.input = input;
+    state.output = output;
+    state.globals = globals;
+  }
+
+  public BufferedReader getInput() {
+    return input;
+  }
+
+  public PrintStream getOutput() {
+    return output;
+  }
+
+  public Map<String, Object> getGlobals() {
+    return globals;
   }
 }

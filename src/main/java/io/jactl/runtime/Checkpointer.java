@@ -109,7 +109,10 @@ public class Checkpointer {
     return idx;
   }
 
-  public static byte[] checkpoint(Object obj, String source, int offset) {
+  public static byte[] checkpoint(Object obj, RuntimeState state, String source, int offset) {
+    // Add globals to checkpoint
+    obj = Arrays.asList(state.getGlobals(), obj);
+
     Checkpointer checkpointer = Checkpointer.get(source, offset);
     checkpointer._checkpoint(obj);
     byte[] buf = new byte[checkpointer.getLength()];

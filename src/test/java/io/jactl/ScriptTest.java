@@ -40,8 +40,7 @@ public class ScriptTest {
     String                expected = readResource("/io/jactl/Expr.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
-    RuntimeState.setOutput(out);
-    Jactl.eval(script, Utils.mapOf("source", source));
+    Jactl.eval(script, Utils.mapOf("source", source), null, out);
     String actualOutput = baos.toString().trim();
     diff(expected, actualOutput);
   }
@@ -52,9 +51,7 @@ public class ScriptTest {
     String                expected = readResource("/io/jactl/Stmt.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
     PrintStream           out    = new PrintStream(baos);
-    RuntimeState.setOutput(out);
-
-    Jactl.eval(script, Utils.mapOf("source", source));
+    Jactl.eval(script, Utils.mapOf("source", source), null, out);
     String actualOutput = baos.toString().trim();
 
     diff(expected, actualOutput);

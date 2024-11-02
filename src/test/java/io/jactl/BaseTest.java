@@ -27,6 +27,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.io.StringReader;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.*;
@@ -37,20 +41,30 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
-  private   static int         scriptNum = 1;
-  protected int                debugLevel  = 0;
-  protected String             packageName = Utils.DEFAULT_JACTL_PKG;
-  protected Map<String,Object> globals     = new HashMap<>();
-  protected boolean            useAsyncDecorator   = true;
-  protected boolean            alwaysEvalConsts    = false;
-  protected boolean            replModeEnabled     = true;
-  protected boolean            skipCheckpointTests = false;
-  protected JactlEnv           jactlEnv = new DefaultEnv();
+  protected int                debugLevel;
+  protected String             packageName;
+  protected Map<String,Object> globals;
+  protected boolean            useAsyncDecorator;
+  protected boolean            classAccessToGlobals;
+  protected boolean            alwaysEvalConsts;
+  protected boolean            replModeEnabled;
+  protected boolean            skipCheckpointTests;
+  protected JactlEnv           jactlEnv;
 
   protected static int testCounter = 0;
 
   @BeforeEach
   public void setUp() {
+    debugLevel           = 0;
+    packageName          = Utils.DEFAULT_JACTL_PKG;
+    globals              = new HashMap<>();
+    useAsyncDecorator    = true;
+    classAccessToGlobals = false;
+    alwaysEvalConsts     = false;
+    replModeEnabled      = true;
+    skipCheckpointTests  = false;
+    jactlEnv             = new DefaultEnv();
+
     Jactl.function()
          .name("_checkpoint")
          .param("data", null)
@@ -84,6 +98,10 @@ public class BaseTest {
   }
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
+    doTest(classCode, scriptCode, null, null, evalConsts, replMode, testAsync, testCheckpoint, expected);
+  }
+
+  protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
     RuntimeUtils.clearScriptCache();
     testCounter++;
     try {
@@ -92,12 +110,21 @@ public class BaseTest {
       Map<String, Object> bindings = createGlobals();
 
       Function<Expr,Expr> asyncDecorator = testAsync ? expr -> sleepify(expr) : null;
-      classCode.forEach(code -> compileClass(code, jactlContext, packageName, asyncDecorator));
+      classCode.forEach(code -> compileClass(code, jactlContext, packageName, asyncDecorator, createGlobals()));
 
       JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
 
-      Object result   = compiled.runSync(bindings);
-      checkEqual(expected, result);
+      if (input == null && output == null) {
+        Object result = compiled.runSync(bindings);
+        checkEqual(expected, result);
+      }
+      else {
+        Object result = compiled.runSync(bindings,
+                                         input == null ? null : new BufferedReader(new StringReader(input)),
+                                         output == null ? null: new PrintStream(output));
+        checkEqual(expected, result);
+      }
+
     }
     catch (CompileError e) {
       e.getErrors().forEach(Throwable::printStackTrace);
@@ -158,8 +185,8 @@ public class BaseTest {
       Map<String, Object> bindings = createGlobals();
 
       Function<Expr,Expr> asyncDecorator = expr -> checkpointify(expr);
-      classCode.forEach(code -> compileClass(code, jactlContext1, packageName, asyncDecorator));
-      classCode.forEach(code -> compileClass(code, jactlContext2, packageName, asyncDecorator));
+      classCode.forEach(code -> compileClass(code, jactlContext1, packageName, asyncDecorator, bindings));
+      classCode.forEach(code -> compileClass(code, jactlContext2, packageName, asyncDecorator, bindings));
 
       JactlScript compiled = compileScript(scriptCode, jactlContext1, packageName, asyncDecorator, bindings);
       compileScript(scriptCode, jactlContext2, packageName, asyncDecorator, bindings);
@@ -249,6 +276,7 @@ public class BaseTest {
   protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint) {
     JactlContext jactlContext = JactlContext.create()
                                             .environment(jactlEnv)
+                                            .classAccessToGlobals(classAccessToGlobals)
                                             .evaluateConstExprs(evalConsts)
                                             .replMode(replMode)
                                             .debug(debugLevel)
@@ -276,8 +304,8 @@ public class BaseTest {
     }
   }
 
-  public void compileClass(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator) {
-    doCompile(false, source, jactlContext, packageName, exprDecorator, null);
+  public void compileClass(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, Map<String, Object> bindings) {
+    doCompile(false, source, jactlContext, packageName, exprDecorator, bindings);
   }
 
   public JactlScript compileScript(String source, JactlContext jactlContext, String packageName, Function<Expr,Expr> exprDecorator, Map<String, Object> bindings) {
@@ -289,7 +317,7 @@ public class BaseTest {
       if (isScript) {
         return Compiler.compileScript(source, jactlContext, packageName, bindings);
       }
-      Compiler.compileClass(source, jactlContext, packageName);
+      Compiler.compileClass(source, jactlContext, packageName, bindings);
       return null;
     }
 
@@ -418,10 +446,11 @@ public class BaseTest {
     }
     try {
       JactlContext jactlContext = JactlContext.create()
-                                                 .evaluateConstExprs(true)
-                                                 .replMode(true)
-                                                 .debug(debugLevel)
-                                                 .build();
+                                              .evaluateConstExprs(true)
+                                              .replMode(true)
+                                              .classAccessToGlobals(classAccessToGlobals)
+                                              .debug(debugLevel)
+                                              .build();
 
       Map<String, Object> bindings = createGlobals();
       Object              result[] = new Object[1];
@@ -452,7 +481,7 @@ public class BaseTest {
                                                  .debug(debugLevel)
                                                  .build();
       Map<String, Object> bindings = createGlobals();
-      classCode.forEach(code -> compileClass(code, jactlContext, packageName, null));
+      classCode.forEach(code -> compileClass(code, jactlContext, packageName, null, bindings));
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
       fail("Expected JactlError");
     }

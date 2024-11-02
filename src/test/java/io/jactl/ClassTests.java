@@ -19,6 +19,9 @@ package io.jactl;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+
 public class ClassTests extends BaseTest {
 
   @Test public void nameScoping() {
@@ -1811,5 +1814,21 @@ public class ClassTests extends BaseTest {
          "}\n" +
          "def d = new Dir(name:'d',size:0,parent:new Dir('d2',0,null), children:[file:new File('file',3)])\n" +
          "d.descendants().map{ it.totalSize() }", Utils.listOf(3,3));
+  }
+
+  @Test public void classAccessToGlobals() {
+    replModeEnabled      = false;
+    classAccessToGlobals = true;
+    globals = new HashMap<String,Object>() {{
+      put("GVAR", 1);
+      put("GMAP", new LinkedHashMap<String,Object>() {{
+        put("x", "value");
+        put("y", 123); }});
+    }};
+    test(Utils.listOf("class X { int f() { GVAR } }"), "new X().f()", 1);
+    test(Utils.listOf("class X { int i = GVAR }"), "new X().i", 1);
+    test(Utils.listOf("class X { int i = GVAR; int f() { i + GMAP.y } }"), "new X().f()", 124);
+    test(Utils.listOf("class X { static int f() { GVAR + GMAP.y } }"), "X.f()", 124);
+    test(Utils.listOf("class X { static int f() { sleep(1,GVAR) + sleep(1,sleep(1,GMAP).y) } }"), "X.f()", 124);
   }
 }

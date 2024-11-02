@@ -18,7 +18,6 @@
 package io.jactl;
 
 import io.jactl.resolver.Resolver;
-import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -70,9 +69,8 @@ public class AsyncTest {
     }
     classSources.forEach(s -> Jactl.compileClass(s, context));
     assertEquals(isAsync, isAsync(source, context), isAsync ? "Was not async" : "Was not sync");
-    RuntimeState.setInput(new BufferedReader(new StringReader(input)));
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
-    assertEquals(expected, script.runSync(Utils.mapOf()));
+    assertEquals(expected, script.runSync(Utils.mapOf(), new BufferedReader(new StringReader(input)), null));
   }
 
   @Test public void asyncTests() {

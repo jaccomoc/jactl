@@ -82,6 +82,39 @@ public class Jactl {
   /**
    * <p>Evaluate a Jactl script and return the result.</p>
    * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @param input   input to feed to script (if it uses nextLine())
+   * @param output  where print/println output will go
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, Map<String,Object> vars, BufferedReader input, PrintStream output) {
+    return Compiler.eval(source, JactlContext.create().build(), vars, input, output);
+  }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, Map)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @param context the JactlContext
+   * @param input   input to feed to script (if it uses nextLine())
+   * @param output  where print/println output will go
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, Map<String,Object> vars, JactlContext context, BufferedReader input, PrintStream output) {
+    return Compiler.eval(source, context, vars, input, output);
+  }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
    * See {@link #compileScript(String, Map, JactlContext)}</p>
    * @param source  the source code to run
    * @param vars    a map of variables that the script can read and modify
@@ -314,9 +347,6 @@ public class Jactl {
         }
       };
 
-      RuntimeState.setInput(input);
-      RuntimeState.setOutput(output);
-
       JactlContext.JactlContextBuilder builder = JactlContext.create()
                                                              .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
                                                              .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
@@ -367,10 +397,11 @@ public class Jactl {
         Function<Map<String,Object>,Object> invoker = JactlScript.createInvoker(clazz, context);
         JactlScript     jactlScript = JactlScript.createScript(invoker, context);
 
-        result = jactlScript.runSync(globals);
+        result = jactlScript.runSync(globals, input, output);
       }
       else {
-        result = Compiler.eval(script, context, scriptClassName, argMap.containsKey('k') ? (String) argMap.get('k') : Utils.DEFAULT_JACTL_PKG, globals);
+        JactlScript compiled = Compiler.compileScript(script, context, scriptClassName, argMap.containsKey('k') ? (String) argMap.get('k') : Utils.DEFAULT_JACTL_PKG, globals);
+        result = compiled.runSync(globals, input, output);
       }
 
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself

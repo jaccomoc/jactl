@@ -29,10 +29,18 @@ public abstract class AsyncTask {
   protected Continuation     continuation;   // the continuation to invoke once work has completed
   protected String           source;
   protected int              offset;
+  protected RuntimeState     runtimeState;
 
   public AsyncTask(String source, int offset) {
     this.source = source;
     this.offset = offset;
+    // Preserve current thread local state so we can restore it on resume
+    runtimeState = RuntimeState.getState();
+    RuntimeState.resetState();
+  }
+
+  public RuntimeState getRuntimeState() {
+    return runtimeState;
   }
 
   public void setContinuation(Continuation continuation) {

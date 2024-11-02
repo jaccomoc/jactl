@@ -60,7 +60,10 @@ public class Restorer {
 
   public static Object restore(JactlContext context, byte[] buf) {
     Restorer restorer = get(context, buf);
-    return restorer.restore();
+    // We checkpoint a two element list (globals, continuation) so restore the globals and return the continuation
+    List restored = (List)restorer.restore();
+    RuntimeState.setState((Map<String, Object>)restored.get(0), null, null);
+    return restored.get(1);
   }
 
   private Object restore() {

@@ -179,6 +179,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private       int           offsetVar = -1;
   private       int           longArr = -1;
   private       int           objArr  = -1;
+  private       int           globalsVar = -1;    // For when access globals from classes
 
   private List<CompileError>  errors = new ArrayList<>();
 
@@ -271,13 +272,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class));
     }
 
-    if (classCompiler.classDecl.isScriptClass()) {
+    if (classCompiler.classDecl.isScriptClass() || classCompiler.context.classAccessToGlobals) {
       // Allocate slot for all globals if using local alias optimisation (and not in repl mode)
       createAliases(true);
     }
 
     // Compile statements.
     compile(methodFunDecl.block);
+
+    stack.freeSlot(globalsVar);
 
     if (methodFunDecl.functionDescriptor.isAsync) {
       mv.visitLabel(isContinuation);      // :isContinuation
@@ -4439,8 +4442,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadGlobals() {
-    loadLocal(0);
-    loadClassField(classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, MAP, false);
+    if (classCompiler.classDecl.isScriptClass()) {
+      loadLocal(0);
+      loadClassField(classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, MAP, false);
+    }
+    else if (classCompiler.context.classAccessToGlobals) {
+      if (globalsVar == -1) {
+        globalsVar = stack.allocateSlot(MAP);
+        invokeMethod(RuntimeState.class, RuntimeState.GET_CURRENT_GLOBALS);
+        storeLocal(globalsVar);
+      }
+      loadLocal(globalsVar);
+    }
+    else {
+      throw new IllegalStateException("Internal error: Attempt to compile access to globals from Class when JactlContext.classAccessToGlobals() not set");
+    }
   }
 
   private void loadClassConstant(Object obj) {

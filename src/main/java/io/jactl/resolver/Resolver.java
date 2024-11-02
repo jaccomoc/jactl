@@ -521,6 +521,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     try {
       resolve(classDecl.classBlock);
       resolve(classDecl.scriptMain);
+
+      // Make sure any references to globals in field initialisers are captured in _j$init and _j$initMissing methods
+      classDecl.methods.forEach(f -> {
+        String name = f.declExpr.nameToken.getStringValue();
+        if (name.equals(Utils.JACTL_INIT) || name.equals(Utils.JACTL_INIT_MISSING)) {
+          f.declExpr.globals.putAll(dummy.globals);
+          f.declExpr.wrapper.globals.putAll(dummy.globals);
+        }
+      });
     }
     finally {
       classStack.pop();
@@ -2659,7 +2668,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Even if class is nested within script we don't allow access since it requires
     // access to "this" for the script itself which we don't have.
     Expr.VarDecl global = jactlContext.globalVars.get(name);
-    if (isScriptScope()) {
+    if (isScriptScope() || jactlContext.classAccessToGlobals) {
       return global;
     }
     if (global != null) {

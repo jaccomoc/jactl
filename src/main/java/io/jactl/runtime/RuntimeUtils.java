@@ -2471,7 +2471,7 @@ public class RuntimeUtils {
   private static boolean doPrint(String obj, boolean newLine) {
     if (obj == null) { obj = "null"; }
     RuntimeState state = RuntimeState.getState();
-    PrintStream  out   = state.output;
+    PrintStream  out   = state.getOutput();
     if (out == null) {
       out = System.out;
     }
