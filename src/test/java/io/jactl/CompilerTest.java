@@ -7067,7 +7067,7 @@ class CompilerTest extends BaseTest {
   }
 
   @Test public void functionArgInitialisation() {
-    debugLevel = 1;
+    //debugLevel = 3;
     doTest("def f(int i = 7,\nint j = i +\n  1 +\n  2) {\n++i + j\nj + i\n}\nf(3)", 10);
   }
 
