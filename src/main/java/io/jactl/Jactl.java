@@ -55,7 +55,7 @@ public class Jactl {
   /**
    * <p>Evaluate a Jactl script and return the result.</p>
    * <p>NOTE: the preferred way is to compile the script and then execute the script.
-   * See {@link #compileScript(String, Map)}</p>
+   * See {@link #compileScript(String, JactlMap)}</p>
    * @param source  the source code to run
    * @return the result returned from the script
    * @throws CompileError if error during compile
@@ -68,21 +68,7 @@ public class Jactl {
   /**
    * <p>Evaluate a Jactl script and return the result.</p>
    * <p>NOTE: the preferred way is to compile the script and then execute the script.
-   * See {@link #compileScript(String, Map)}</p>
-   * @param source  the source code to run
-   * @param vars    a map of variables that the script can read and modify
-   * @return the result returned from the script
-   * @throws CompileError if error during compile
-   * @throws RuntimeError if error during invocation
-   */
-  public static Object eval(String source, Map<String,Object> vars) {
-    return eval(source, new JactlMapImpl(vars));
-  }
-
-  /**
-   * <p>Evaluate a Jactl script and return the result.</p>
-   * <p>NOTE: the preferred way is to compile the script and then execute the script.
-   * See {@link #compileScript(String, Map)}</p>
+   * See {@link #compileScript(String, JactlMap)}</p>
    * @param source  the source code to run
    * @param vars    a map of variables that the script can read and modify
    * @return the result returned from the script
@@ -96,16 +82,34 @@ public class Jactl {
   /**
    * <p>Evaluate a Jactl script and return the result.</p>
    * <p>NOTE: the preferred way is to compile the script and then execute the script.
-   * See {@link #compileScript(String, Map, JactlContext)}</p>
+   * See {@link #compileScript(String, JactlMap)}</p>
    * @param source  the source code to run
    * @param vars    a map of variables that the script can read and modify
-   * @param context the JactlContext
+   * @param input   input to feed to script (if it uses nextLine())
+   * @param output  where print/println output will go
    * @return the result returned from the script
    * @throws CompileError if error during compile
    * @throws RuntimeError if error during invocation
    */
-  public static Object eval(String source, Map<String,Object> vars, JactlContext context) {
-    return eval(source, context.createMap(vars), context);
+  public static Object eval(String source, JactlMap vars, BufferedReader input, PrintStream output) {
+    return Compiler.eval(source, JactlContext.create().build(), vars, input, output);
+  }
+
+  /**
+   * <p>Evaluate a Jactl script and return the result.</p>
+   * <p>NOTE: the preferred way is to compile the script and then execute the script.
+   * See {@link #compileScript(String, JactlMap)}</p>
+   * @param source  the source code to run
+   * @param vars    a map of variables that the script can read and modify
+   * @param context the JactlContext
+   * @param input   input to feed to script (if it uses nextLine())
+   * @param output  where print/println output will go
+   * @return the result returned from the script
+   * @throws CompileError if error during compile
+   * @throws RuntimeError if error during invocation
+   */
+  public static Object eval(String source, JactlMap vars, JactlContext context, BufferedReader input, PrintStream output) {
+    return Compiler.eval(source, context, vars, input, output);
   }
 
   /**
@@ -121,19 +125,6 @@ public class Jactl {
    */
   public static Object eval(String source, JactlMap vars, JactlContext context) {
     return Compiler.eval(source, context, vars);
-  }
-
-  /**
-   * <p>Compile the given Jactl source code into a JactlScript object.</p>
-   * <p>NOTE: the globals is only used at compile time whether a global variable exists.
-   * The value of the globals at compile time is irrelevant.</p>
-   * @param source   the source code
-   * @param globals  Map of global variables the script can reference
-   * @return a JactlScript object that can be invoked
-   * @throws CompileError if error during compile
-   */
-  public static JactlScript compileScript(String source, Map<String, Object> globals) {
-    return compileScript(source, new JactlMapImpl(globals));
   }
 
   /**
@@ -387,9 +378,6 @@ public class Jactl {
         }
       };
 
-      RuntimeState.setInput(input);
-      RuntimeState.setOutput(output);
-
       JactlContext.JactlContextBuilder builder = JactlContext.create()
                                                              .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
                                                              .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
@@ -424,10 +412,11 @@ public class Jactl {
         Function<JactlMap,Object> invoker = JactlScript.createInvoker(clazz, context);
         JactlScript     jactlScript = JactlScript.createScript(invoker, context);
 
-        result = jactlScript.runSync(globals);
+        result = jactlScript.runSync(globals, input, output);
       }
       else {
-        result = Compiler.eval(script, context, scriptClassName, argMap.containsKey('k') ? (String) argMap.get('k') : Utils.DEFAULT_JACTL_PKG, globals);
+        JactlScript compiled = Compiler.compileScript(script, context, scriptClassName, argMap.containsKey('k') ? (String) argMap.get('k') : Utils.DEFAULT_JACTL_PKG, globals);
+        result = compiled.runSync(globals, input, output);
       }
 
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself

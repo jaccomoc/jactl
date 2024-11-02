@@ -24,6 +24,7 @@ import io.jactl.Pair;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.function.Function;
 
 import static io.jactl.JactlType.ARRAY;
@@ -59,7 +60,10 @@ public class Restorer {
 
   public static Object restore(JactlContext context, byte[] buf) {
     Restorer restorer = get(context, buf);
-    return restorer.restore();
+    // We checkpoint a two element list (globals, continuation) so restore the globals and return the continuation
+    JactlList restored = (JactlList)restorer.restore();
+    RuntimeState.setState((JactlMap)restored.get(0), null, null);
+    return restored.get(1);
   }
 
   private Object restore() {

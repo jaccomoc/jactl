@@ -17,6 +17,9 @@
 
 package io.jactl;
 
+import io.jactl.runtime.JactlMap;
+import io.jactl.runtime.JactlMapImpl;
+
 import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -61,9 +64,9 @@ public class JactlOptions {
 
   public static JactlOptions initOptions() {
     String defaultEnvClass = DefaultEnv.class.getName();
-    Map<String,Object> options = new LinkedHashMap<>(Utils.mapOf(ENV_CLASS, defaultEnvClass,
-                                                            FUNC_CLASSES, new ArrayList(),
-                                                            EXTRA_JARS, new ArrayList()));
+    JactlMap options = new JactlMapImpl(Utils.mapOf(ENV_CLASS, defaultEnvClass,
+                                                    FUNC_CLASSES, new ArrayList(),
+                                                    EXTRA_JARS, new ArrayList()));
     if (!new File(OPTIONS_FILE).exists()) {
       return new JactlOptions(new DefaultEnv());
     }

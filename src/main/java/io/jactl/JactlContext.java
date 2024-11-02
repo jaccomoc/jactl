@@ -32,11 +32,12 @@ public class JactlContext {
 
   JactlEnv executionEnv     = null;
 
-  public boolean printSize          = false;
-  public boolean evaluateConstExprs = true;
-  public boolean printLoop          = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
-  public boolean nonPrintLoop       = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
-  public boolean autoCreateAsync    = false;   // Whether to allow async functions in initialisers during auto-creation
+  public boolean printSize            = false;
+  public boolean evaluateConstExprs   = true;
+  public boolean printLoop            = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
+  public boolean nonPrintLoop         = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
+  public boolean autoCreateAsync      = false;   // Whether to allow async functions in initialisers during auto-creation
+  public boolean classAccessToGlobals = false;   // Whether to allow class methods to access globals
 
   // Testing
   boolean checkpoint = false;
@@ -209,6 +210,10 @@ public class JactlContext {
     public JactlContextBuilder environment(JactlEnv env)         { executionEnv       = env;     return this; }
     public JactlContextBuilder minScale(int scale)               { minScale           = scale;   return this; }
     public JactlContextBuilder javaPackage(String pkg)           { javaPackage        = pkg;     return this; }
+    public JactlContextBuilder classAccessToGlobals(boolean accessAllowed) {
+      classAccessToGlobals = accessAllowed;
+      return this;
+    }
     public JactlContextBuilder debug(int value)                  { debugLevel         = value;   return this; }
     public JactlContextBuilder evaluateConstExprs(boolean value) { evaluateConstExprs = value;   return this; }
 
@@ -373,10 +378,11 @@ public class JactlContext {
     ClassLoader loader = Thread.currentThread().getContextClassLoader();
     try {
       Thread.currentThread().setContextClassLoader(classLoader);
-      Continuation cont = (Continuation) Restorer.restore(this, checkpoint);
+      Continuation cont = (Continuation)Restorer.restore(this, checkpoint);
       // If two args then we have commit closure and recovery closure so return recovery closure on recover
       Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
-      scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance));
+      RuntimeState state = RuntimeState.getState();
+      scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance, state));
     }
     finally {
       Thread.currentThread().setContextClassLoader(loader);
@@ -396,20 +402,20 @@ public class JactlContext {
 
       // Test mode
       if (testCheckpointing() && !(asyncTask instanceof CheckpointTask)) {
-        byte[] buf = Checkpointer.checkpoint(asyncTaskCont, asyncTask.getSource(), asyncTask.getOffset());
+        byte[] buf = Checkpointer.checkpoint(asyncTaskCont, RuntimeState.getState(), asyncTask.getSource(), asyncTask.getOffset());
         //System.out.println("DEBUG: checkpoint = \n" + Utils.dumpHex(checkpointer.getBuffer(), checkpointer.getLength()) + "\n");
         checkpointCount.getAndIncrement();
         checkpointSize.addAndGet(buf.length);
         if (restore()) {
           Continuation cont1 = (Continuation)Restorer.restore(this, buf);
-          asyncTask.execute(this, instance, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1, instance));
+          asyncTask.execute(this, instance, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1, instance, asyncTask.getRuntimeState()));
         }
         else {
-          asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance));
+          asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance, asyncTask.getRuntimeState()));
         }
       }
       else {
-        asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance));
+        asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance, asyncTask.getRuntimeState()));
       }
     }
     catch (Throwable t) {
@@ -425,8 +431,9 @@ public class JactlContext {
     checkpointSize  = new AtomicLong(0);
   }
 
-  private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont, JactlScriptObject instance) {
+  private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont, JactlScriptObject instance, RuntimeState state) {
     ClassLoader oldClassLoader = Thread.currentThread().getContextClassLoader();
+    RuntimeState.setState(state);
     try {
       Thread.currentThread().setContextClassLoader(classLoader);
       Object result = cont.continueExecution(asyncResult);
@@ -447,6 +454,7 @@ public class JactlContext {
   }
 
   private void cleanUp(JactlScriptObject instance) {
+    RuntimeState.resetState();
     if (instance.isCheckpointed()) {
       instance.incrementCheckpointId();
       deleteCheckpoint(instance.getInstanceId(), instance.checkpointId());

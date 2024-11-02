@@ -35,8 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ExampleTests {
   @Test public void example1() {
     JactlContext context = JactlContext.create().build();
-    Object       x       = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", Utils.mapOf(), context);
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    Object       x       = Jactl.eval("class X { int i; def f(n) { i * n } }; new X(2)", new JactlMapImpl(), context);
+    JactlMap globals = new JactlMapImpl();
     globals.put("x", x);
     int result = (int)Jactl.eval("x.f(3)", globals, context);         // result will be 6
     assertEquals(6, result);
@@ -50,7 +50,7 @@ public class ExampleTests {
   }
 
   @Test public void example3() {
-    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlMapImpl globals = new JactlMapImpl();
     globals.put("x", null);
     globals.put("y", null);
     JactlScript script = Jactl.compileScript("x + y", globals);

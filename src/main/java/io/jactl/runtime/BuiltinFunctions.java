@@ -695,7 +695,7 @@ public class BuiltinFunctions {
   // = nextLine()
   public static Object nextLineData;
   public static String nextLine(Continuation c, String source, int offset) {
-    BufferedReader input = RuntimeState.getState().input;
+    BufferedReader input = RuntimeState.getState().getInput();
     if (input == null) {
       return null;
     }
@@ -711,7 +711,7 @@ public class BuiltinFunctions {
     }
     catch (IOException ignored) {}
     if (result == null) {
-      RuntimeState.setInput(null);
+      RuntimeState.resetState();
     }
     return result;
   }
