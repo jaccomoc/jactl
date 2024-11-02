@@ -77,6 +77,7 @@ public class AsyncTest {
     async("sleep(0,2)", 2);
     async("def f = sleep; f(0,2)", 2);
     sync("def f(x){x}; f(2)", 2);
+    sync("def f(int i = 3, int j = i + 1) { i + j }; f()", 7);
     sync("def f(x){x}; def g = f; g(2)", 2);                       // g is final
     async("def f(x){x}; def g; g = f; g(2)", 2);                   // g is not final
     sync("def f(x){sleep(0,x)}; def g; g = f; 2", 2);              // f not invoked

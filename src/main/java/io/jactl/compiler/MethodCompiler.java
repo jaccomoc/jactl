@@ -202,6 +202,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   void compile() {
+    classCompiler.printNewTrace();
     _compile();
 
     if (!errors.isEmpty()) {
@@ -330,6 +331,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _loadConst(Utils.repeat("  ", --indent) + "<== " + stmt.getClass().getName() + "<" + stmt.hashCode() + ">");
         mv.visitInsn(POP);
       }
+      classCompiler.printNewTrace();
     }
   }
 
@@ -466,45 +468,49 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr == null) {
       return null;
     }
-    if (expr.isConst) {
-      if (expr.isResultUsed) {
-        loadConst(expr.constValue);
-        if (expr.constValue == null) {
-          popType();
-          pushType(expr.type);
-        }
-      }
-      return null;
-    }
-
-    if (expr.location != null && expr.location.getLineNum() != currentLineNum) {
-      currentLineNum = expr.location.getLineNum();
-      Label label = new Label();
-      mv.visitLabel(label);
-      mv.visitLineNumber(currentLineNum, label);
-    }
     try {
-      if (classCompiler.annotate()) {
-        _loadConst(Utils.repeat("  ", indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
-        mv.visitInsn(POP);
+      if (expr.isConst) {
+        if (expr.isResultUsed) {
+          loadConst(expr.constValue);
+          if (expr.constValue == null) {
+            popType();
+            pushType(expr.type);
+          }
+        }
+        return null;
       }
-      expr.accept(this);
 
-      if (!expr.isResultUsed) {
-        // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
-        // special cases since they already check to see whether they should leave something on
-        // the stack.
-        if (!(expr instanceof Expr.ManagesResult)) {
-          popVal();
+      if (expr.location != null && expr.location.getLineNum() != currentLineNum) {
+        currentLineNum = expr.location.getLineNum();
+        Label label = new Label();
+        mv.visitLabel(label);
+        mv.visitLineNumber(currentLineNum, label);
+      }
+      try {
+        if (classCompiler.annotate()) {
+          _loadConst(Utils.repeat("  ", indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
+          mv.visitInsn(POP);
+        }
+        expr.accept(this);
+
+        if (!expr.isResultUsed) {
+          // If result never used then pop is off the stack. Note that VarDecl and VarAssign are
+          // special cases since they already check to see whether they should leave something on
+          // the stack.
+          if (!(expr instanceof Expr.ManagesResult)) {
+            popVal();
+          }
+        }
+        return null;
+      } finally {
+        if (classCompiler.annotate()) {
+          _loadConst(Utils.repeat("  ", --indent) + "<== " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
+          mv.visitInsn(POP);
         }
       }
-      return null;
     }
     finally {
-      if (classCompiler.annotate()) {
-        _loadConst(Utils.repeat("  ", --indent) + "<== " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
-        mv.visitInsn(POP);
-      }
+      classCompiler.printNewTrace();
     }
   }
 
@@ -549,7 +555,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (expr.initialiser != null) {
         compile(expr.initialiser);
         // No need to cast if null
-        if (expr.type.isRef() && expr.isNull()) {
+        if (expr.type.isRef() && expr.initialiser.isNull()) {
           popType();
           pushType(expr.type);
         }

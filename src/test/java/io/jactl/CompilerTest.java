@@ -7066,6 +7066,11 @@ class CompilerTest extends BaseTest {
     test("def f(x){x*x}; def m = [g:f, if:f, true:f, false:f, null:f]; m.g(2) + m.if(3) + m.true(4) + m.false(5) + m.null(6)", 4+9+16+25+36);
   }
 
+  @Test public void functionArgInitialisation() {
+    debugLevel = 1;
+    doTest("def f(int i = 7,\nint j = i +\n  1 +\n  2) {\n++i + j\nj + i\n}\nf(3)", 10);
+  }
+
   @Test public void functionsForwardReference() {
     test("def x = f(2); def f(z){3*z}; x", 6);
     test("def y=3; def x=f(2); def f(z){y*z}; x", 6);

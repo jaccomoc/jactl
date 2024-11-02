@@ -56,6 +56,8 @@ public class ClassCompiler {
   protected MethodVisitor   classInit;   // MethodVisitor for static class initialiser
   protected ClassDescriptor classDescriptor;
   protected Class           compiledClass;
+  protected Textifier printer;
+  protected int       printSize = 0;
 
   private   Label           classInitTryStart   = new Label();
   private   Label           classInitTryEnd     = new Label();
@@ -75,7 +77,8 @@ public class ClassCompiler {
     this.sourceName      = sourceName;
     cv = cw = new JactlClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
     if (debug()) {
-      cv = new TraceClassVisitor(cw, new Textifier(), new PrintWriter(System.out));
+      printer = new Textifier();
+      cv = new TraceClassVisitor(cw, printer, new PrintWriter(System.out));
       //cv = new TraceClassVisitor(cw, new ASMifier(), new PrintWriter(System.out));
     }
 
@@ -167,6 +170,20 @@ public class ClassCompiler {
       classInit.visitFieldInsn(PUTSTATIC, internalName, fieldName, descriptor);
       classConstantNames.put(c, fieldName);
     });
+  }
+
+  protected void printNewTrace() {
+    if (printer == null && debug(4)) {
+      return;
+    }
+    List<String> lines = printer.text.stream()
+                                     .flatMap(o -> o instanceof List ? ((List<String>)o).stream() : Stream.of((String)o))
+                                     .collect(Collectors.toList());
+
+    if (lines.size() > printSize) {
+      lines.stream().skip(printSize).forEach(System.out::print);
+    }
+    printSize = lines.size();
   }
 
   public void compileClass() {
