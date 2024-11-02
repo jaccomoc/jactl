@@ -173,7 +173,7 @@ public class ClassCompiler {
   }
 
   protected void printNewTrace() {
-    if (printer == null && !debug(3)) {
+    if (printer == null || !debug(3)) {
       return;
     }
     List<String> lines = printer.text.stream()
