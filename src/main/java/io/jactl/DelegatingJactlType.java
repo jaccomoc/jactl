@@ -50,6 +50,7 @@ public class DelegatingJactlType extends JactlType {
     return expr.type;
   }
 
+  // JactlType
   @Override public JactlType createInstanceType()                      { return getDelegate().createInstanceType();    }
   @Override public TypeEnum getType()                                  { return getDelegate().getType();               }
   @Override public boolean isBoxed()                                   { return getDelegate().isBoxed();               }
@@ -71,7 +72,11 @@ public class DelegatingJactlType extends JactlType {
   @Override public String toString()                                   { return getDelegate().toString();              }
   @Override public void setClassDescriptor(ClassDescriptor descriptor) { getDelegate().setClassDescriptor(descriptor); }
   @Override public ClassDescriptor getClassDescriptor()                { return getDelegate().getClassDescriptor();    }
-  @Override public JactlType getArrayElemType()                            { return getDelegate().getArrayElemType();          }
+  @Override public JactlType getArrayElemType()                        { return getDelegate().getArrayElemType();          }
   @Override public boolean isAssignableFrom(JactlType otherType)       { return getDelegate().isAssignableFrom(otherType); }
   @Override public boolean equals(Object obj)                          { return getDelegate().equals(obj);             }
+
+  // JactlUserDataHolder
+  @Override public Stmt.Block getBlock()           { return delegate.getBlock(); }
+  @Override public void setBlock(Stmt.Block block) { delegate.setBlock(block);   }
 }
