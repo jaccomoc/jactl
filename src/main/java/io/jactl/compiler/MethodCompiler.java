@@ -1046,18 +1046,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         convertTo(expr.type, null, false, expr.left.location);
       }
       else {
-        Label isNotNull = new Label();
+        Label isNull = new Label();
+        Label end = new Label();
         expect(1);
-        popType();
         mv.visitInsn(DUP);
-        mv.visitJumpInsn(IFNONNULL, isNotNull);
+        mv.visitJumpInsn(IFNULL, isNull);
+        convertTo(expr.type, expr.left, true, expr.left.location);
+        popType();
+        mv.visitJumpInsn(GOTO, end);
+        mv.visitLabel(isNull);   // :isNotNull
         mv.visitInsn(POP);
         compile(expr.right);
         convertTo(expr.type, expr.right, true, expr.right.location);
-        Label end = new Label();
-        mv.visitJumpInsn(GOTO, end);
-        mv.visitLabel(isNotNull);   // :isNotNull
-        convertTo(expr.type, expr.left, true, expr.left.location);
         mv.visitLabel(end);         // :end
       }
       return null;

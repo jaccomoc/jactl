@@ -1600,6 +1600,7 @@ class CompilerTest extends BaseTest {
     test("def x = (byte)1; def y = 2; true ? x : y", (byte)1);
     test("def x = (byte)1; def y = 2; true ? x : (int)y", (byte)1);
     test("(2 ?: 1)\n 1+2\n", 3);
+    test("def f(String s) { s }; def x; f('a' + x ?: 'b')", "anull");
   }
 
   @Test public void bracketedExpressionsEndOfStatment() {
