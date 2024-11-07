@@ -64,16 +64,37 @@ public class ClassDescriptor extends JactlUserDataHolder {
     this.pkg          = pkgName == null ? "" : pkgName;
     this.prettyName   = namePath;
     int idx = namePath.indexOf(Utils.JACTL_SCRIPT_PREFIX);
-    // Strip off script name if we are an embedded class
-    if (idx != -1) {
-      int dollarIdx = namePath.indexOf('$',idx + Utils.JACTL_SCRIPT_PREFIX.length());
+    if (idx != -1 ) {
+      int dollarIdx = namePath.indexOf('$', Utils.JACTL_SCRIPT_PREFIX.length());
       if (dollarIdx != -1) {
-        this.prettyName = namePath.substring(0, idx) + namePath.substring(dollarIdx + 1);
-        this.prettyName = prettyName.replaceAll("\\$",".");
+        idx = dollarIdx + 1;
+      }
+      else {
+        // No embedded class so leave as ScriptXYZ
+        this.prettyName = namePath.substring(Utils.JACTL_PREFIX.length());
+        idx = -1;
       }
     }
     else {
-      this.prettyName = prettyName.replaceAll("\\$",".");
+      // If not script prefix then could be Jactl$$ prefix which is used by IntelliJ plugin
+      idx = namePath.indexOf("Jactl$$");
+      if (idx != -1) {
+        int dollarIdx = namePath.indexOf('$', "Jactl$$".length());
+        if (dollarIdx != -1) {
+          idx = dollarIdx + 1;
+        }
+        else {
+          this.prettyName = namePath;
+          idx = -1;
+        }
+      }
+    }
+    // Strip off script name if we are an embedded class
+    if (idx != -1) {
+      this.prettyName = namePath.substring(idx).replace('$','.');
+    }
+    else {
+      this.prettyName = prettyName.replace('$','.');
     }
     this.prettyName = (pkg.equals("")?"":(pkg + ".")) + prettyName;
     this.packagedName = (pkg.equals("")?"":(pkg + ".")) + namePath;

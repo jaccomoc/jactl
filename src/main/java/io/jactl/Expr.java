@@ -135,6 +135,14 @@ public abstract class Expr extends JactlUserDataHolder {
            this.type;
   }
 
+  public boolean shouldReportLineNumber() {
+    // Don't generate line numbers for expressions whose line number is not
+    // necessarily the start of the expression
+    return !(this instanceof Expr.Binary || this instanceof Expr.Return || this instanceof MethodCall);
+  }
+
+  ////////////////////////////////////////////////////////////////
+
   public static class Binary extends Expr {
     public Expr  left;
     public Token operator;

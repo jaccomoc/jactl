@@ -469,6 +469,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     try {
+      if (expr.location != null && expr.location.isGenerateLineNumber() && expr.location.getLineNum() != currentLineNum && expr.shouldReportLineNumber()) {
+        currentLineNum = expr.location.getLineNum();
+        Label label = new Label();
+        mv.visitLabel(label);
+        mv.visitLineNumber(currentLineNum, label);
+      }
+
       if (expr.isConst) {
         if (expr.isResultUsed) {
           loadConst(expr.constValue);
@@ -480,12 +487,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
       }
 
-      if (expr.location != null && expr.location.getLineNum() != currentLineNum) {
-        currentLineNum = expr.location.getLineNum();
-        Label label = new Label();
-        mv.visitLabel(label);
-        mv.visitLineNumber(currentLineNum, label);
-      }
       try {
         if (classCompiler.annotate()) {
           _loadConst(Utils.repeat("  ", indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
@@ -4441,8 +4442,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return;
     }
     JactlType type = varDecl.isHeapLocal ? ANY : varDecl.type;
-    mv.visitLocalVariable(varDecl.name.getStringValue(), type.descriptor(), null,
-                          varDecl.declLabel, endBlock, varDecl.slot);
+    if (!varDecl.name.getStringValue().startsWith(Utils.JACTL_PREFIX)) {
+      // Add debug info for variables (but not internal ones)
+      mv.visitLocalVariable(varDecl.name.getStringValue(), type.descriptor(), null,
+                            varDecl.declLabel, endBlock, varDecl.slot);
+    }
     stack.freeSlot(varDecl.slot);
     varDecl.slot = -1;
   }

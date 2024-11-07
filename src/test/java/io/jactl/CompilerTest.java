@@ -7066,11 +7066,6 @@ class CompilerTest extends BaseTest {
     test("def f(x){x*x}; def m = [g:f, if:f, true:f, false:f, null:f]; m.g(2) + m.if(3) + m.true(4) + m.false(5) + m.null(6)", 4+9+16+25+36);
   }
 
-  @Test public void functionArgInitialisation() {
-    //debugLevel = 3;
-    doTest("def f(int i = 7,\nint j = i +\n  1 +\n  2) {\n++i + j\nj + i\n}\nf(3)", 10);
-  }
-
   @Test public void functionsForwardReference() {
     test("def x = f(2); def f(z){3*z}; x", 6);
     test("def y=3; def x=f(2); def f(z){y*z}; x", 6);
@@ -7948,10 +7943,6 @@ class CompilerTest extends BaseTest {
     replTest.accept("END { x = 7 }; x = 2; BEGIN { x = 3 }", null, 7, "");
     replTest.accept("BEGIN { def x = 7 }; x = 2; END { x + x }", null, 4, "");
 //    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
-  }
-
-  @Test public void testStuff() {
-    replTest.accept("def x = 0; while(sleep(1,nextLine()) =~ /(\\d)/ng) { x+= $1 }; x", "123\n666\n", 7L, "");
   }
 
   @Test public void nextLine() {

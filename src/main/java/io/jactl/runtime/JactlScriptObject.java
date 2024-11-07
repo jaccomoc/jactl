@@ -20,33 +20,33 @@ package io.jactl.runtime;
 import java.util.UUID;
 
 public class JactlScriptObject implements Checkpointable {
-  private UUID instanceId   = RuntimeUtils.randomUUID();
-  private int  checkpointId = 0;
+  private UUID _$j$instanceId   = RuntimeUtils.randomUUID();
+  private int  _$j$checkpointId = 0;
 
-  public UUID getInstanceId() {
-    return instanceId;
+  public UUID _$j$getInstanceId() {
+    return _$j$instanceId;
   }
 
-  public boolean isCheckpointed() {
-    return checkpointId > 0;
+  public boolean _$j$isCheckpointed() {
+    return _$j$checkpointId > 0;
   }
 
-  public int checkpointId() {
-    return checkpointId;
+  public int _$j$checkpointId() {
+    return _$j$checkpointId;
   }
 
-  public void incrementCheckpointId() {
-    checkpointId++;
+  public void _$j$incrementCheckpointId() {
+    _$j$checkpointId++;
   }
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
-    checkpointer.writeLong(instanceId.getMostSignificantBits());
-    checkpointer.writeLong(instanceId.getLeastSignificantBits());
-    checkpointer.writeCint(checkpointId);
+    checkpointer.writeLong(_$j$instanceId.getMostSignificantBits());
+    checkpointer.writeLong(_$j$instanceId.getLeastSignificantBits());
+    checkpointer.writeCint(_$j$checkpointId);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
-    instanceId   = new UUID(restorer.readLong(), restorer.readLong());
-    checkpointId = restorer.readCint();
+    _$j$instanceId = new UUID(restorer.readLong(), restorer.readLong());
+    _$j$checkpointId = restorer.readCint();
   }
 }

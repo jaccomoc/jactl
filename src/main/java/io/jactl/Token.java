@@ -49,6 +49,9 @@ public class Token extends Location {
   private Object    value;        // Value of token - int, long, string, etc if literal
   private boolean   isKeyword;    // Whether token is a keyword or not
 
+  // Whether to generate lineNumber for debugging purposes
+  private boolean   generateLineNumber = true;
+
   private JactlError error;
 
   /**
@@ -79,10 +82,11 @@ public class Token extends Location {
    */
   public Token(TokenType type, Token token) {
     super(token);
-    this.type      = type;
-    this.length    = token.length;
-    this.value     = token.value;
-    this.isKeyword = token.isKeyword;
+    this.type               = type;
+    this.length             = token.length;
+    this.value              = token.value;
+    this.isKeyword          = token.isKeyword;
+    this.generateLineNumber = token.generateLineNumber;
   }
 
   /**
@@ -95,6 +99,15 @@ public class Token extends Location {
     super(e.getLocation());
     this.error = e;
     this.type = EOF;
+  }
+
+  public Token setGenerateLineNumber(boolean generateLineNumber) {
+    this.generateLineNumber = generateLineNumber;
+    return this;
+  }
+
+  public boolean isGenerateLineNumber() {
+    return generateLineNumber;
   }
 
   public int getLength() { return length; }

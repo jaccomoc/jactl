@@ -35,7 +35,7 @@ public class DelegatingJactlType extends JactlType {
   JactlType delegate;
   Expr       expr;
 
-  DelegatingJactlType(JactlType delegate) {
+  public DelegatingJactlType(JactlType delegate) {
     this.delegate = delegate;
   }
 

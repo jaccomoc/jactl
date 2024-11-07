@@ -178,8 +178,8 @@ public class Parser {
     }
     Token scriptName = start.newIdent(Utils.JACTL_SCRIPT_MAIN);
     // Scripts take a single parameter which is a Map of globals
-    Stmt.VarDecl   globalsParam = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME), JactlType.MAP);
-    Stmt.FunDecl   funDecl      = parseFunDecl(false, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
+    Stmt.VarDecl   globalsParam = Utils.createParam(start.newIdent(Utils.JACTL_GLOBALS_NAME).setGenerateLineNumber(false), JactlType.MAP);
+    Stmt.FunDecl   funDecl      = parseFunDecl(scriptName, false, scriptName, ANY, Utils.listOf(globalsParam), EOF, true, false, false);
     expectOrNull(true, EOF);
     Stmt.ClassDecl scriptClass  = classes.peek();
     scriptClass.scriptMain = funDecl;
@@ -642,7 +642,7 @@ public class Parser {
       mark.drop();
     }
     matchAny(EOL);
-    Stmt.FunDecl funDecl       = parseFunDecl(true, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
+    Stmt.FunDecl funDecl       = parseFunDecl(start, true, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
     Utils.createVariableForFunction(funDecl);
     funDecl.declExpr.varDecl.isField = inClassDecl;
     return funDecl;
@@ -2988,7 +2988,7 @@ public class Parser {
   }
 
   private Stmt.VarDecl createItParam(Token token) {
-    return Utils.createParam(token.newIdent(Utils.IT_VAR), ANY, new Expr.Literal(new Token(NULL, token)), true, false);
+    return Utils.createParam(token.newIdent(Utils.IT_VAR).setGenerateLineNumber(false), ANY, new Expr.Literal(new Token(NULL, token).setGenerateLineNumber(false)), true, false);
   }
 
   // Create parameter for class instance initialiser method
@@ -3072,14 +3072,14 @@ public class Parser {
     return functionStack().size() == 1 && functionStack().peek().isScriptMain && blockStack().size() == 1;
   }
 
-  private Stmt.FunDecl parseFunDecl(boolean expectBrace,
+  private Stmt.FunDecl parseFunDecl(Token start,
+                                    boolean expectBrace,
                                     Token name,
                                     JactlType returnType,
                                     List<Stmt.VarDecl> params,
                                     TokenType endToken,
                                     boolean isScriptMain,
                                     boolean isStatic, boolean isFinal) {
-    Token start = expectBrace ? peekIgnoreEOL() : name;
     params.forEach(p -> p.declExpr.isExplicitParam = true);
     Expr.FunDecl funDecl     = Utils.createFunDecl(start, name, returnType, params, isStatic, false, isFinal);
     Stmt.FunDecl funDeclStmt = new Stmt.FunDecl(start, funDecl);

@@ -102,19 +102,19 @@ public class ClassCompiler {
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, superName, "<init>", "()V", false);
 
-    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
     classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
     classInit.visitInsn(DUP);
     classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
-    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
     classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
     classInit.visitInsn(DUP);
     classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, "Ljava/util/Map;");
-    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class), null, null);
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class), null, null);
     fieldVisitor.visitEnd();
     classInit.visitLdcInsn(classDescriptor.getPrettyName());
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class));
@@ -164,7 +164,7 @@ public class ClassCompiler {
       assert c instanceof List || c instanceof Map;
       String       fieldName  = JACTL_PREFIX + "constant_" + classConstantCnt++;
       String       descriptor = c instanceof List ? LIST.descriptor() : MAP.descriptor();
-      FieldVisitor fv         = cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, fieldName, descriptor, null, null);
+      FieldVisitor fv         = cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, fieldName, descriptor, null, null);
       fv.visitEnd();
       loadConstant(c);
       classInit.visitFieldInsn(PUTSTATIC, internalName, fieldName, descriptor);
@@ -268,7 +268,7 @@ public class ClassCompiler {
     Consumer<Expr.FunDecl> createContinuationHandle = (decl) -> {
       String       continuationMethod = Utils.continuationMethod(decl.functionDescriptor.implementingMethod);
       String       handleName         = Utils.continuationHandle(decl.functionDescriptor.implementingMethod);
-      FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, handleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+      FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, handleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
       handleVar.visitEnd();
 
       classInit.visitVarInsn(ALOAD, 0);
@@ -386,14 +386,14 @@ public class ClassCompiler {
     // so that we can pass the method by value (by passing the method handle).
     String       wrapperMethodName = method.wrapper.functionDescriptor.implementingMethod;
     String       staticHandleName  = Utils.staticHandleName(wrapperMethodName);
-    FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, staticHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+    FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, staticHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
     handleVar.visitEnd();
     if (!method.isStatic() && method.isClosure()) {
       // For non-static closures we also create a non-static method handle for the wrapper method
       // that will be bound to the instance. For non-static functions we bind the handle when we
       // compile the declaration and store it in the variable.
       String instanceHandleName = Utils.handleName(wrapperMethodName);
-      handleVar = cv.visitField(ACC_PUBLIC, instanceHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+      handleVar = cv.visitField(ACC_PUBLIC | ACC_SYNTHETIC, instanceHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
       handleVar.visitEnd();
 
       // Add code to constructor to initialise this handle

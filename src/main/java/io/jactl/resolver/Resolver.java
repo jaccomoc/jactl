@@ -2821,7 +2821,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * <p>The wrapper function will also take care of named argument passing.</p>
    */
   private Expr.FunDecl createVarArgWrapper(Expr.FunDecl funDecl) {
-    Token startToken = funDecl.startToken;
+    // Copy token so we can set flag that means we won't generate line numbers during code generation
+    Token startToken = new Token(funDecl.startToken.getType(), funDecl.startToken);
+    startToken.setGenerateLineNumber(false);
 
     //-----------------------------------
     // Some helper lambdas...
@@ -2958,6 +2960,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // so no need to recheck each time.)
       Expr initialiser;
       if (param.initialiser == null) {
+        param.location.setGenerateLineNumber(false);
         Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
                                                  Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
                                                  Utils.listOf(mapCopyIdent, paramNameIdent,
@@ -3023,7 +3026,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Now invoke the real function (unless we are the init method). For init method we already initialise
     // the fields in the varargs wrapper, so we don't need to invoke the non-wrapper version of the function.
     Stream<Expr> args = funDecl.parameters.stream()
-                                          .map(p -> new Expr.LoadParamValue(p.declExpr.name, p.declExpr));
+                                          .map(p -> new Expr.LoadParamValue(startToken.newIdent(p.declExpr.name.getStringValue()), p.declExpr));
     if (funDecl.functionDescriptor.needsLocation) {
       args = Stream.concat(Stream.of(sourceIdent, offsetIdent), args);
     }
