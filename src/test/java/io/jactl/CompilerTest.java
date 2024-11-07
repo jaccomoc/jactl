@@ -5604,6 +5604,10 @@ class CompilerTest extends BaseTest {
     test("if (true) { if(true){1}; if(true){1} }", 1);
     testError("int f() { if (true) { println } }; f()", "implicit return of null");
     test("if (true) {}", null);
+    testError("if (false) false; else true", "unexpected token 'else'");
+    testError("if (false) false; else if (true) true", "unexpected token 'else'");
+    testError("if (false) false;\nelse true", "unexpected token 'else'");
+    testError("if (false) false;\nelse if (true) true", "unexpected token 'else'");
   }
 
   @Test public void ifUnless() {
@@ -7913,6 +7917,8 @@ class CompilerTest extends BaseTest {
     test("def g(n) { x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
     test("def g(n) { if (false) { sleep(0) }; x = n }; x = 1; def f = g; def y = (x += 1) + x + f(3); y += x; x = 3; y += x; f(1); y + x", 14);
     test("sleep(0); x if true; sleep(0,x)", 123);
+    test("def f() { def m = [:]; x ?= m.a.b() }; f()", null);
+    test("def m = [:]; x ?= m.a.b()", null);
   }
 
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {

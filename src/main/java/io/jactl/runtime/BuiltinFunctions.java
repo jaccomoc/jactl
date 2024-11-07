@@ -558,8 +558,10 @@ public class BuiltinFunctions {
       function.aliases.forEach(alias -> Functions.registerMethod(alias, function));
     }
     else {
+      // Aliases also includes primary name
       function.aliases.forEach(alias -> globalFunctions.put(alias, function));
-      globalFunDecls.put(function.name, Utils.funcDescriptorToVarDecl(function));
+      Expr.VarDecl varDecl = Utils.funcDescriptorToVarDecl(function);
+      function.aliases.forEach(alias -> globalFunDecls.put(alias, varDecl));
     }
 
     allocateId(function.implementingClass);
@@ -581,6 +583,8 @@ public class BuiltinFunctions {
   public static void deregisterFunction(String name) {
     FunctionDescriptor fn = globalFunctions.remove(name);
     if (fn instanceof JactlFunction) {
+      // Aliases also includes primary name
+      ((JactlFunction)fn).aliases.forEach(globalFunDecls::remove);
       ((JactlFunction)fn).cleanUp();
     }
   }

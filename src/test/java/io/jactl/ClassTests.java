@@ -1830,5 +1830,6 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("class X { int i = GVAR; int f() { i + GMAP.y } }"), "new X().f()", 124);
     test(Utils.listOf("class X { static int f() { GVAR + GMAP.y } }"), "X.f()", 124);
     test(Utils.listOf("class X { static int f() { sleep(1,GVAR) + sleep(1,sleep(1,GMAP).y) } }"), "X.f()", 124);
+    test(Utils.listOf("class X { static def f() { def m = [:]; GVAR ?= m.a.b() } }"), "X.f()", null);
   }
 }

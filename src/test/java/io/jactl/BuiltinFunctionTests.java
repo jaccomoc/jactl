@@ -17,7 +17,9 @@
 
 package io.jactl;
 
+import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.Continuation;
+import io.jactl.runtime.Functions;
 import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,25 @@ import static io.jactl.JactlType.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BuiltinFunctionTests extends BaseTest {
+
+  @Test public void aliasedFunction() {
+    Jactl.function()
+         .name("testFunction")
+         .alias("testFunction2")
+         .impl(BuiltinFunctionTests.class, "testFunction")
+         .register();
+
+    test("testFunction()", 3);
+    test("testFunction2()", 3);
+
+    BuiltinFunctions.deregisterFunction("testFunction");
+
+    testError("testFunction()", "unknown");
+    testError("testFunction2()", "unknown");
+  }
+
+  public static Object testFunctionData;
+  public static int testFunction() { return 3; }
 
   @Test public void sleep() {
     test("sleep(0,1)", 1);
