@@ -46,7 +46,6 @@ import org.objectweb.asm.Label;
  */
 class Stmt extends JactlUserDataHolder {
 
-  Token      location   = null;
   boolean    isResolved = false;
   boolean    isAsync    = false;   // Whether statement contains an async call
 
@@ -74,6 +73,7 @@ class Stmt extends JactlUserDataHolder {
     Map<String,Expr.VarDecl> @variables  = new LinkedHashMap<>();
     Block                    @enclosingBlock;
     Stmt.ClassDecl           @owningClass;
+    Expr.FunDecl             @owningFunction;
 
     boolean @isBeginBlock;
     boolean @isEndBlock;

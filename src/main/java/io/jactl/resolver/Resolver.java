@@ -118,8 +118,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private final Map<String,Stmt.ClassDecl>   localClassDecls   = new HashMap<>();
 
   private boolean isWhileCondition = false;        // true while resolving while condition
-  private int lastLineNumber = -1;
+  private int     lastLineNumber = -1;
   private boolean isScript = false;
+  private Token   contextLocation;                 // Used by Intellij plugin when resolving expression within an existing context
 
   private List<CompileError> errors = new ArrayList<>();
 
@@ -204,6 +205,34 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return errors;
   }
 
+  /**
+   * Used by Intellij plugin when resolving a debugger evaluate expression where we need
+   * to pretend to be embedded inside an existing script to work out what symbols are
+   * viisible.
+   * Note that the location passed to the constructor will also be used when working out
+   * visibility of variables to check if variable was declared before the location or not.
+   * @param context    the block inside which the expression should be evaluated
+   * @param expr       the expression
+   * @param location   location within the context at which expression should be evaluated
+   * @return list of any compile errors
+   */
+  public synchronized List<CompileError> resolveExpr(Stmt.Block context, Expr expr, Token location) {
+    this.contextLocation = location;
+    expr.setBlock(context);
+    classStack.push(context.owningClass);
+    getFunctions().push(context.owningFunction);
+    currentFunction().blocks.push(context);
+    try {
+      resolve(expr);
+    }
+    finally {
+      currentFunction().blocks.pop();
+      getFunctions().pop();
+      classStack.pop();
+    }
+    return errors;
+  }
+
   public Map<String,ClassDescriptor> getImports() {
     return imports;
   }
@@ -270,7 +299,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private void resolve(JactlType type) {
     if (type == null)                      { return; }
-    type.setBlock(getBlock());
     if (type.is(ARRAY)) {
       resolve(type.getArrayElemType());
       return;
@@ -591,7 +619,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
         }
         varDecl.isConstVar = true;
-        varDecl.isConst        = true;
+        varDecl.isConst    = true;
         name = stmt.as == null ? name : stmt.as.getStringValue();
         if (importedConstants.put(name, varDecl) != null) {
           error("Duplicate constant name '" + name + "'", stmt.location);
@@ -601,6 +629,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           Expr.VarDecl newDecl = new Expr.VarDecl(varDecl.name.newIdent(name), varDecl.equals, varDecl.initialiser);
           newDecl.type = varDecl.type;
           newDecl.funDecl = varDecl.funDecl;
+          newDecl.isConst = true;
+          newDecl.isConstVar = true;
           varDecl = newDecl;
         }
         importedConstantsRenamed.put(name, varDecl);
@@ -699,6 +729,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     stmt.enclosingBlock          = currentBlock;
     stmt.owningClass             = currentClass();
     Expr.FunDecl currentFunction = currentFunction();
+    stmt.owningFunction          = currentFunction;
     currentFunction.blocks.push(stmt);
     try {
       // We first define our nested functions so that we can support
@@ -1377,9 +1408,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     Expr.FunDecl parent = currentFunction();
     expr.owner = parent;
+    resolve(expr.returnType);
     getFunctions().push(expr);
     try {
-      resolve(expr.returnType);
       // Add explicit return in places where we would implicity return the result
       explicitReturn(expr.block, expr.returnType);
       resolve(expr.block);
@@ -2511,15 +2542,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     Expr.VarDecl varDecl = null;
     Stmt.Block block = null;
-    FUNC_LOOP:
-    for (Iterator<Expr.FunDecl> funcIt = getFunctions().iterator(); funcIt.hasNext(); ) {
-      Expr.FunDecl funDecl = funcIt.next();
-      for (Iterator<Stmt.Block> it = funDecl.blocks.iterator(); it.hasNext(); ) {
-        block = it.next();
-        varDecl = block.variables.get(name);
-        if (varDecl != null) {
-          break FUNC_LOOP;  // Break out of both loops
+    for (block = getBlock(); block != null && block != topBlock; block = block.enclosingBlock) {
+      varDecl = block.variables.get(name);
+      if (varDecl != null) {
+        // If resolving within a context (IntelliJ plugin) then make sure variable was declared
+        // before location where we are resolving. Normally we declare as we go so we don't need
+        // this check but when evaluating debugger expressions we are resolving a new expression
+        // within the context of an already resolved script.
+        if (contextLocation == null || Utils.isEarlier(varDecl.location, contextLocation)) {
+          break;
         }
+        varDecl = null;
       }
     }
     if (varDecl == null) {  block = null;  }
@@ -2669,6 +2702,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // access to "this" for the script itself which we don't have.
     Expr.VarDecl global = jactlContext.globalVars.get(name);
     if (isScriptScope() || jactlContext.classAccessToGlobals) {
+      // Support globals that are automatically created when asking for them
+      if (global == null && globals.containsKey(name)) {
+        global = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
+        jactlContext.globalVars.put(name, global);
+      }
       return global;
     }
     if (global != null) {

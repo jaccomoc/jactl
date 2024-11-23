@@ -548,12 +548,13 @@ public class LocalTypes {
     return slot;
   }
 
-  public void allocateGlobalVarSlot(String name, JactlType type) {
+  public int allocateGlobalVarSlot(String name, JactlType type) {
     int slot = allocateSlot(type);
     LocalEntry localEntry = locals.get(slot);
     localEntry.isGlobalVar = true;
     minimumSlot = locals.size();
     globalAliases.put(name, localEntry);
+    return slot;
   }
 
   public int globalVarSlot(String name) {

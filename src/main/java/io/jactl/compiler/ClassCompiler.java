@@ -77,9 +77,13 @@ public class ClassCompiler {
     this.sourceName      = sourceName;
     cv = cw = new JactlClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
     if (debug()) {
-      printer = new Textifier();
-      cv = new TraceClassVisitor(cw, printer, new PrintWriter(System.out));
-      //cv = new TraceClassVisitor(cw, new ASMifier(), new PrintWriter(System.out));
+      cv = new TraceClassVisitor(cw, new JactlTextifier(), new PrintWriter(System.out) {
+        { super.print(": "); }
+        @Override
+        public void print(String s) {
+          super.print(s.replaceAll("\n", "\n: "));
+        }
+      });
     }
 
     internalBaseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : null;
@@ -1452,5 +1456,21 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     // Must be a simple value
     Utils.loadConst(classInit, obj);
     Utils.box(classInit, JactlType.typeOf(obj));
+  }
+
+  /**
+   * Textifier that truncates long strings when outputing LDC instructions
+   */
+  private static class JactlTextifier extends Textifier {
+    JactlTextifier() { super(ASM8); }
+    @Override public void visitLdcInsn(Object v) {
+      super.visitLdcInsn(v instanceof String && ((String) v).length() > 80 ? ((String) v).substring(0, 80) + " ..." : v);
+    }
+    @Override public Textifier visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+      super.visitMethod(access, name, descriptor, signature, exceptions);
+      Textifier textifier = new JactlTextifier();
+      text.add(textifier.getText());
+      return textifier;
+    }
   }
 }

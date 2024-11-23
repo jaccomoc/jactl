@@ -184,6 +184,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private List<CompileError>  errors = new ArrayList<>();
 
   private static boolean      localAliasForGlobals   = Boolean.parseBoolean(System.getProperty("jactl.opt.aliasedGlobals", "true"));
+  private Label               globalsLabel;
+  private Map<String,Integer> globalSlots            = new HashMap<>();
   private List<Label>         asyncLocations         = new ArrayList<>();
   private List<Runnable>      asyncStateRestorations = new ArrayList<>();
 
@@ -265,6 +267,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       objArr  = stack.allocateSlot(OBJECT_ARR);
     }
 
+    globalsLabel = new Label();
+    mv.visitLabel(globalsLabel);
+
     // If main script method then initialise our globals field
     if (methodFunDecl.isScriptMain) {
       // FieldAssign globals map to field so we can access it from anywhere
@@ -283,6 +288,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     stack.freeSlot(globalsVar);
 
+    Label end = new Label();
+    mv.visitLabel(end);
+    methodFunDecl.heapLocals.values().stream().filter(v -> !v.isParam).forEach(varDecl -> undefineVar(varDecl, end));
+
+    if (classCompiler.classDecl.isScriptClass() || classCompiler.context.classAccessToGlobals) {
+      // This will call mv.visitLocalVariable() in order to create debug symbols for globals
+      undefineAliases();
+    }
+
     if (methodFunDecl.functionDescriptor.isAsync) {
       mv.visitLabel(isContinuation);      // :isContinuation
       Label defaultLabel = new Label();
@@ -299,6 +313,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       mv.visitLabel(defaultLabel);
       throwError("Internal error: Invalid location in continuation", methodFunDecl.location);
+    }
+
+    // Generate debug output for "this"
+    if (!methodFunDecl.isStatic()) {
+      mv.visitLocalVariable("this", "L" + classCompiler.internalName + ";", null, globalsLabel, end, 0);
     }
 
     check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
@@ -584,6 +603,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       dupVal();
     }
 
+    if (expr.declLabel == null) {
+      mv.visitLabel(expr.declLabel = new Label());
+    }
     storeVar(expr);
     return null;
   }
@@ -2671,9 +2693,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(end);                   // :end
   }
 
-  private void allocateHeapLocal(int slot) {
+  private void allocateHeapLocal(Expr.VarDecl varDecl) {
     _newInstance(HeapLocal.class);
-    _storeLocal(slot);
+    mv.visitLabel(varDecl.declLabel = new Label());
+    _storeLocal(varDecl.slot);
   }
 
   private void newInstance(JactlType type) {
@@ -2709,7 +2732,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Allocate new slot for the HeapLocal
     varDecl.slot = stack.allocateSlot(HEAPLOCAL);
-    allocateHeapLocal(varDecl.slot);
+    allocateHeapLocal(varDecl);
 
     // Store value into new HeapLocal
     storeVar(varDecl);
@@ -4425,12 +4448,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (var.isExplicitParam && !var.isPassedAsHeapLocal && !methodFunDecl.isWrapper) {
       type = var.type;
     }
-    mv.visitLabel(var.declLabel = new Label());   // Label for debugger
     var.slot = stack.allocateSlot(type, var.isParam);
 
-    // Store an empty HeapLocal into the slot if HEAPLOCAL and not already passed as HeapLocal parameter
     if (type.is(HEAPLOCAL) && !var.isPassedAsHeapLocal && !var.isParam) {
-      allocateHeapLocal(var.slot);
+      // Store an empty HeapLocal into the slot if HEAPLOCAL and not already passed as HeapLocal parameter
+      // Also creates debug label for variable
+      allocateHeapLocal(var);
+    }
+    else if (!type.is(FUNCTION) && (!var.isHeapLocal || var.isPassedAsHeapLocal)) {
+      // Create label for debug info unless we have a parameter about to be converted or we are a function
+      // (because functions need to create bound method handle before creating label)
+      mv.visitLabel(var.declLabel = new Label());   // Label for debugger
     }
   }
 
@@ -4530,6 +4558,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private void undefineAliases() {
+    Label end = new Label();
+    mv.visitLabel(end);
+    if (globalAliases()) {
+      methodFunDecl.globals.forEach((name, varDecl) -> {
+        Integer slot = globalSlots.get(name);
+        mv.visitLocalVariable(name, varDecl.type.descriptor(), null, globalsLabel, end, slot);
+        stack.freeSlot(slot);
+      });
+    }
+  }
+
   /**
    * Create or refresh local alias for a global variable and store the value in the local
    * @param varName  variable name
@@ -4537,7 +4577,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void createAlias(String varName, Expr.VarDecl varDecl, boolean create) {
     if (create) {
-      stack.allocateGlobalVarSlot(varName, varDecl.type);
+      int slot = stack.allocateGlobalVarSlot(varName, varDecl.type);
+      globalSlots.put(varDecl.name.getStringValue(), slot);
     }
     int slot = stack.globalVarSlot(varName);
     loadGlobals();

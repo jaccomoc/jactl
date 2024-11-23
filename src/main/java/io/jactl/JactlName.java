@@ -25,14 +25,20 @@ package io.jactl;
 public class JactlName extends JactlUserDataHolder {
   private Token    name;
   private NameType type;
+  private Stmt     blockProvider;
 
   public enum NameType {
     FILE, PACKAGE, CLASS, FUNCTION, METHOD, FIELD, VARIABLE, PARAMETER
   }
 
   public JactlName(Token name, NameType type) {
+    this(name, type, null);
+  }
+
+  public JactlName(Token name, NameType type, Stmt blockProvider) {
     this.name = name;
     this.type = type;
+    this.blockProvider = blockProvider;
   }
 
   public Token getName() {
@@ -41,5 +47,13 @@ public class JactlName extends JactlUserDataHolder {
 
   public NameType getType() {
     return type;
+  }
+
+  @Override
+  public Stmt.Block getBlock() {
+    if (blockProvider != null) {
+      return blockProvider.getBlock();
+    }
+    return super.getBlock();
   }
 }

@@ -44,7 +44,6 @@ public abstract class Stmt extends JactlUserDataHolder {
   public abstract <T> T accept(Visitor<T> visitor);
 
 
-  public Token      location   = null;
   public boolean    isResolved = false;
   public boolean    isAsync    = false;   // Whether statement contains an async call
 
@@ -78,6 +77,7 @@ public abstract class Stmt extends JactlUserDataHolder {
     public Map<String,Expr.VarDecl> variables  = new LinkedHashMap<>();
     public Block                    enclosingBlock;
     public Stmt.ClassDecl           owningClass;
+    public Expr.FunDecl             owningFunction;
 
     public boolean isBeginBlock;
     public boolean isEndBlock;

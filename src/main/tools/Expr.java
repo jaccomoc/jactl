@@ -49,7 +49,6 @@ import static io.jactl.TokenType.UNDERSCORE;
  */
 class Expr extends JactlUserDataHolder {
 
-  Token      location;
   JactlType  type;
   JactlType  parentType = null;   // For use by Intellij plugin when needing to locate field within parent type
   boolean    isResolved = false;

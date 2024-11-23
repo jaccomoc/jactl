@@ -115,7 +115,8 @@ public class Parser {
    */
   public Stmt.ClassDecl parseScriptOrClass(String scriptName) {
     Marker fileMark = tokeniser.mark();
-    Token  start    = tokeniser.peek();
+    Token  start   = tokeniser.peek();
+    Stmt firstStmt = null;
     try {
       Stmt.ClassDecl script = parseScript(scriptName);
       List<Stmt>     stmts  = script.scriptMain.declExpr.block.stmts.stmts;
@@ -123,12 +124,14 @@ public class Parser {
       if (stmts.size() == 2 && stmts.get(1) instanceof Stmt.ClassDecl) {
         Stmt.ClassDecl classDecl = (Stmt.ClassDecl) stmts.get(1);
         classDecl.imports = script.imports;
+        firstStmt = classDecl;
         return classDecl;
       }
+      firstStmt = stmts.get(0);
       return script;
     }
     finally {
-      fileMark.done(new JactlName(start, FILE));
+      fileMark.done(new JactlName(start, FILE, firstStmt));
     }
   }
 
@@ -539,13 +542,13 @@ public class Parser {
       }
       else {
         if (lookahead(() -> className(true) != null)){
-          type = JactlType.createInstanceType(className(throwIfError));
+          type = createInstanceType(className(throwIfError));
         }
         else {
           if (throwIfError) {
             unexpected("Expected type", true);
           }
-          type = JactlType.OPTIONAL;
+          type = OPTIONAL;
         }
       }
       // Allow arrays for everything but "def" and "var"
@@ -554,7 +557,7 @@ public class Parser {
       }
       if (type != OPTIONAL && !ignoreArrays) {
         while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
-          type = JactlType.arrayOf(type);
+          type = arrayOf(type);
           expectOrSkip(true, Utils.listOf(RIGHT_SQUARE), Utils.listOf(EOL,COMMA,RIGHT_PAREN,RIGHT_BRACE,RIGHT_SQUARE));
         }
       }
@@ -574,7 +577,7 @@ public class Parser {
         while (matchAnyIgnoreEOL(STATIC,FINAL)) {}
         matchAny(EOL);
       }
-      if (type(false, false, false, true).is(JactlType.OPTIONAL)) {
+      if (type(false, false, false, true).is(OPTIONAL)) {
         return false;
       }
       if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeyWord()) {
@@ -631,11 +634,11 @@ public class Parser {
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
     if (inClassDecl && !isStatic && name.getStringValue().equals(Utils.TO_STRING)) {
       if (!returnType.is(JactlType.STRING, ANY)) {
-        mark.error(new CompileError(Utils.TO_STRING + "() must return String or use 'def'", start));
+        mark.error(createError(Utils.TO_STRING + "() must return String or use 'def'", start));
       }
       else
       if (!parameters.isEmpty()) {
-        mark.error(new CompileError(Utils.TO_STRING + "() cannot have parameters", parameters.get(0).name));
+        mark.error(createError(Utils.TO_STRING + "() cannot have parameters", parameters.get(0).name));
       }
     }
     if (!mark.isError()) {
@@ -713,7 +716,7 @@ public class Parser {
       return ANY;
     }
     if (type == null && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
-      type = JactlType.createInstanceType(className(false));   // we have a class name
+      type = createInstanceType(className(false));   // we have a class name
     }
     if (type == null) {
       mark.drop();
@@ -758,7 +761,7 @@ public class Parser {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
     boolean   isConst = matchAny(CONST);
-    JactlType type    = isConst ? JactlType.createUnknown() : ANY;
+    JactlType type    = isConst ? createUnknown() : ANY;
     if (isConst) {
       if (peek().is(simpleTypes)) {
         // Only simple types allowed for constants. If no type given then will work like 'var' and
@@ -838,14 +841,14 @@ public class Parser {
     }
     if (type.is(UNKNOWN)) {
       // Create a new one in case we are in a multi-variable declaration where we need a separate type per variable
-      type = JactlType.createUnknown();
+      type = createUnknown();
       type.typeDependsOn(initialiser);   // Once initialiser type is known the type will then be known
     }
 
     // If we have an instance and initialiser is not "new X(...)" then convert to "initilaliser as X" to
     // convert rhs into instance of X.
     //   X x = [i:1,j:2]  ==> X x = [i:1,j:2] as X
-    if (type.is(JactlType.INSTANCE) && initialiser != null && !initialiser.isNull() && !initialiser.isNewInstance()) {
+    if (type.is(INSTANCE) && initialiser != null && !initialiser.isNull() && !initialiser.isNewInstance()) {
       initialiser = asExpr(type, initialiser);
     }
 
@@ -911,7 +914,7 @@ public class Parser {
       // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
       // end of current scope - could handle this better but not a high priority since not an actual leak.
       //: def _$jmultiAssignN = expression() as List
-      stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, isInClassDecl, false));
+      stmts.stmts.add(createVarDecl(rhsName, ANY, equalToken, rhsExpr, isInClassDecl, false));
       for (int i = 0; i < identifiers.size(); i++) {
         Token varName = identifiers.get(i).third;
         // def variable = _$jmultiAssignN[i]
@@ -1102,7 +1105,7 @@ public class Parser {
    */
   Stmt.Block beginEndBlock() {
     Token blockType = expect(BEGIN, END);
-    Stmt.Block block = block(TokenType.LEFT_BRACE, RIGHT_BRACE);
+    Stmt.Block block = block(LEFT_BRACE, RIGHT_BRACE);
     block.isBeginBlock = blockType.is(BEGIN);
     block.isEndBlock   = blockType.is(END);
     return block;
@@ -1165,7 +1168,7 @@ public class Parser {
       JactlType baseClass      = null;
       if (matchAny(EXTENDS)) {
         baseClassToken = peek();
-        baseClass = marked(true, () -> JactlType.createClass(className(false)));
+        baseClass = marked(true, () -> createClass(className(false)));
       }
       else if (peek().is(IDENTIFIER)) {
         unexpected("Expected 'extends' or '{'", false);
@@ -1766,7 +1769,7 @@ public class Parser {
   private Expr newInstance() {
     Token     token = expect(NEW);
     JactlType type  = type(true, true, false, true);   // get the type and ignore the square brackets for now
-    if (type.is(JactlType.INSTANCE)) {
+    if (type.is(INSTANCE)) {
       if (peekIgnoreEolIs(LEFT_PAREN)) {
         Token      leftParen = peekIgnoreEOL();
         List<Expr> args      = arguments();
@@ -1780,7 +1783,7 @@ public class Parser {
     boolean seenEmptyBrackets = false;
     List<Expr> dimensions = new ArrayList<>();
     while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
-      type = JactlType.arrayOf(type);
+      type = arrayOf(type);
       if (peek().is(RIGHT_SQUARE) && dimensions.isEmpty()) {
         unexpected("Need a size for array allocation");
       }
@@ -1928,7 +1931,7 @@ public class Parser {
   Expr doBlock() {
     expect(DO);
     skipNewLines();
-    Expr expr = new Expr.Block(peek(), block(TokenType.LEFT_BRACE, RIGHT_BRACE));
+    Expr expr = new Expr.Block(peek(), block(LEFT_BRACE, RIGHT_BRACE));
     return expr;
   }
 
@@ -2474,10 +2477,7 @@ public class Parser {
 
       // We have more than one statement or statement is more than just a simple expression so convert
       // block into a parameter-less closure and then invoke it.
-      Stmt.FunDecl closureFunDecl = convertBlockToClosure(leftBrace, block);
-      closureFunDecl.declExpr.isResultUsed = true;
-      Expr closure = new Expr.Closure(leftBrace, closureFunDecl.declExpr, true);
-      Expr expr    = createCallExpr(closure, leftBrace, Utils.listOf());
+      Expr expr = convertBlockToInvokedClosure(block);
       mark.done(expr);
       return expr;
     }
@@ -2485,6 +2485,14 @@ public class Parser {
       markError(mark, error);
       throw error;
     }
+  }
+
+  public static Expr convertBlockToInvokedClosure(Stmt.Block block) {
+    Stmt.FunDecl closureFunDecl = convertBlockToClosure(block.location, block);
+    closureFunDecl.declExpr.isResultUsed = true;
+    Expr closure = new Expr.Closure(block.location, closureFunDecl.declExpr, true);
+    Expr expr    = createCallExpr(closure, block.location, Utils.listOf());
+    return expr;
   }
 
   /**
@@ -2711,7 +2719,7 @@ public class Parser {
         // a field Z inside the class X.Y. We build a TypeExpr anyway and let the Resolver take care of it.
         expr = typeOrVarDecl();
         // Check for class name and constructor args (named or not)
-        if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(JactlType.INSTANCE)) {
+        if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(INSTANCE)) {
           skipNewLines();
           if (peek().is(LEFT_PAREN)) {
             expr = new Expr.ConstructorPattern(((Expr.TypeExpr) expr).token, (Expr.TypeExpr) expr, mapOrListPattern(LEFT_PAREN, RIGHT_PAREN, false));
@@ -2732,7 +2740,7 @@ public class Parser {
           expect(IDENTIFIER);
           exprs.add(new Expr.Identifier(previous()));
         }
-        expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, JactlType.createInstanceType(exprs));
+        expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, createInstanceType(exprs));
       }
       else if (peek().is(UNDERSCORE)) {
         expr = identifier(UNDERSCORE);
@@ -2755,7 +2763,7 @@ public class Parser {
         Expr.Literal literal = literal();
         literal.isConst = true;
         literal.constValue = castTo(literal.value.getValue(), castType, literal.location);
-        literal.value = new Token(JactlType.typeOf(literal.constValue).constTokenType(literal.constValue), literal.location).setValue(literal.constValue);
+        literal.value = new Token(typeOf(literal.constValue).constTokenType(literal.constValue), literal.location).setValue(literal.constValue);
         expr = literal;
       }
       else {
@@ -3131,11 +3139,11 @@ public class Parser {
    * Convert a stmt block into an anonymous closure with no parameters.
    * This is used in expression strings when the embedded expression is more than a simple expression.
    */
-  private Stmt.FunDecl convertBlockToClosure(Token start, Stmt.Block block) {
+  private static Stmt.FunDecl convertBlockToClosure(Token start, Stmt.Block block) {
     return convertBlockToFunction(start, block, ANY, Utils.listOf(), false);
   }
 
-  private Stmt.FunDecl convertBlockToFunction(Token name, Stmt.Block block, JactlType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
+  private static Stmt.FunDecl convertBlockToFunction(Token name, Stmt.Block block, JactlType returnType, List<Stmt.VarDecl> params, boolean isStatic) {
     Expr.FunDecl funDecl = Utils.createFunDecl(name, null, returnType, params, isStatic, false, false);
     insertStmtsInto(params, block);
     funDecl.block = block;
@@ -3462,7 +3470,7 @@ public class Parser {
       advance();
     }
     CompileError error;
-    if (token.is(TokenType.ERROR)) {
+    if (token.is(ERROR)) {
       error = createError(token.getStringValue(), token);
     }
     else if (token.is(EOF)) {
@@ -3680,7 +3688,7 @@ public class Parser {
    * method or an Expr.MethodCall if we have enough information that we might be
    * able to do a compile time lookup during Resolver phase.
    */
-  private Expr createCallExpr(Expr callee, Token leftParen, List<Expr> args) {
+  private static Expr createCallExpr(Expr callee, Token leftParen, List<Expr> args) {
     // When calling a method on an object where we don't know the type we must be
     // able to dynamically lookup up the method. The problem is that the method
     // name might also be the name of a field in a map but we still want to invoke
@@ -3712,7 +3720,7 @@ public class Parser {
     return expr;
   }
 
-  private String getStringValue(Expr expr) {
+  private static String getStringValue(Expr expr) {
     if (expr instanceof Expr.Literal) {
       Object value = ((Expr.Literal) expr).value.getValue();
       if (value instanceof String) {
@@ -3862,7 +3870,7 @@ public class Parser {
     // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
     // end of current scope - could handle this better but not a high priority since not an actual leak.
     //: def _$jmultiAssignN = expression()
-    stmts.stmts.add(createVarDecl(rhsName, JactlType.ANY, equalToken, rhsExpr, false, false));
+    stmts.stmts.add(createVarDecl(rhsName, ANY, equalToken, rhsExpr, false, false));
 
     List<Expr> lhs = lhsExprs.exprs;
     // For each expression in lhs create a "lvalue = _$jmultiAssignN[i]"

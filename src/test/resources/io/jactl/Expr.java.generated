@@ -47,7 +47,6 @@ public abstract class Expr extends JactlUserDataHolder {
   public abstract <T> T accept(Visitor<T> visitor);
 
 
-  public Token      location;
   public JactlType  type;
   public JactlType  parentType = null;   // For use by Intellij plugin when needing to locate field within parent type
   public boolean    isResolved = false;

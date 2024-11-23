@@ -18,8 +18,10 @@
 package io.jactl;
 
 public class JactlUserDataHolder {
-  Object userData;
+  Object     userData;
   Stmt.Block block;
+
+  public Token location;
 
   public Object getUserData() {
     return userData;
@@ -43,4 +45,6 @@ public class JactlUserDataHolder {
 
   public Stmt.Block getBlock()           { return block; }
   public void setBlock(Stmt.Block block) { this.block = block; }
+
+  public Token getLocation() { return location; }
 }
