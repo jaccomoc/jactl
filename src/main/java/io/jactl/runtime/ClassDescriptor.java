@@ -335,6 +335,9 @@ public class ClassDescriptor extends JactlUserDataHolder {
   }
 
   public boolean isAssignableFrom(ClassDescriptor clss) {
+    if (clss == null) {
+      return false;
+    }
     return clss.isSameOrChildOf(this);
   }
 

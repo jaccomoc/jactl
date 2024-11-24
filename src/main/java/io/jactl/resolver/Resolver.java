@@ -254,6 +254,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (block != null) {
           stmt.setBlock(block);
         }
+        if (contextLocation != null) {
+          stmt.setContextLocation(contextLocation);
+        }
+
         stmt.accept(this);
         stmt.isResolved = true;
       }
@@ -282,6 +286,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr != null) {
       if (!expr.isResolved) {
         expr.setBlock(getBlock());
+        if (contextLocation != null) {
+          expr.setContextLocation(contextLocation);
+        }
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
         if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
@@ -508,8 +515,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolve(funDecl.returnType);
     resolve(baseMethod.returnType);
+    ClassDescriptor baseClassDesc = baseMethod.returnType.getClassDescriptor();
     if (funDecl.returnType.getType() != baseMethod.returnType.getType() ||
-        funDecl.returnType.is(INSTANCE) && !baseMethod.returnType.getClassDescriptor().isAssignableFrom(funDecl.returnType.getClassDescriptor())) {
+        funDecl.returnType.is(INSTANCE) && (baseClassDesc == null || !baseClassDesc.isAssignableFrom(funDecl.returnType.getClassDescriptor()))) {
       error("Method " + baseMethod.name + "(): return type '" + funDecl.returnType +
                              "' not compatible with return type of base method '" + baseMethod.returnType + "'",
                              funDecl.location);
@@ -578,6 +586,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       field.parentType = type;
       ClassDescriptor classDesc = type.getClassDescriptor();
+      if (classDesc == null) {
+        error("Could not find class descriptor for " + type, stmt.location);
+        return null;
+      }
       String fieldName = field.identifier.getStringValue();
       Consumer<String> defineConst = name -> {
         Token              constName = field.location.newIdent(name);
@@ -1044,6 +1056,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
           // Check for valid field/method name
           ClassDescriptor desc = parent.type.getClassDescriptor();
+          if (desc == null) {
+            error("Could not get class descriptor for " + parent.type, parent.location);
+            return null;
+          }
           type = fieldName != null ? desc.getField(fieldName) : null;
           if (type != null && parent.type.is(CLASS)) {
             error("Static access to non-static field '" + fieldName, field.location);
@@ -1073,7 +1089,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
             }
             if (descriptor == null && parent.type.is(CLASS)) {
               // Look for an inner class if parent is a Class
-              ClassDescriptor innerClass = parent.type.getClassDescriptor().getInnerClass(fieldName);
+              ClassDescriptor innerClass = parent.type.getClassDescriptor() == null ? null : parent.type.getClassDescriptor().getInnerClass(fieldName);
               if (innerClass != null) {
                 type = JactlType.createClass(innerClass);
                 field.type = type;
@@ -2168,6 +2184,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void addHeapLocalToParents(String name, Expr.VarDecl varDecl) {
+    // Nothing to do if we are just resolving expressions in IntelliJ debugger
+    if (contextLocation != null) {
+      return;
+    }
+
     Expr.VarDecl childVarDecl = varDecl;
 
     // Now iterate through parents linking VarDecls until we get to one that already
@@ -2549,7 +2570,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // before location where we are resolving. Normally we declare as we go so we don't need
         // this check but when evaluating debugger expressions we are resolving a new expression
         // within the context of an already resolved script.
-        if (contextLocation == null || Utils.isEarlier(varDecl.location, contextLocation)) {
+        if (contextLocation == null) { break; }              // not resolving debugger expression
+        if (!contextLocation.getSource().equals(varDecl.location.getSource())) {
+          // variable must be local to debugger expression
+          break;
+        }
+        if (Utils.isEarlier(varDecl.location, contextLocation)) {
           break;
         }
         varDecl = null;

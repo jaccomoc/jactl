@@ -22,6 +22,7 @@ public class JactlUserDataHolder {
   Stmt.Block block;
 
   public Token location;
+  private Token contextLocation;
 
   public Object getUserData() {
     return userData;
@@ -47,4 +48,7 @@ public class JactlUserDataHolder {
   public void setBlock(Stmt.Block block) { this.block = block; }
 
   public Token getLocation() { return location; }
+
+  public void  setContextLocation(Token contextLocation) { this.contextLocation = contextLocation; }
+  public Token getContextLocation() { return contextLocation; }
 }
