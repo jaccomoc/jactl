@@ -1601,6 +1601,9 @@ class CompilerTest extends BaseTest {
     test("def x = (byte)1; def y = 2; true ? x : (int)y", (byte)1);
     test("(2 ?: 1)\n 1+2\n", 3);
     test("def f(String s) { s }; def x; f('a' + x ?: 'b')", "anull");
+    test("Map m = [:]; m.a.b ?: 'abc'", "abc");
+    test("def f() { null }; f() + f() ?: 'abc'", "abc");
+    test("int f() { 3 }; f() + f() ?: 7", 6);
   }
 
   @Test public void bracketedExpressionsEndOfStatment() {
@@ -3839,6 +3842,7 @@ class CompilerTest extends BaseTest {
     testError("int[] x = [1,2,3]; def y; x[y]", "null value");
     testError("def x = [1,2,3] as int[]; x[null]", "null value");
     testError("def x = [1,2,3] as int[]; def y; x[y]", "null value");
+    testError("def x = [1,2,3] as int[]; def y; def f(z) { z[y] }; f(x)", "null value");
   }
 
   @Test public void mapLiterals() {

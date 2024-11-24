@@ -1245,7 +1245,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private Object castToType(Object value, JactlType type, Token location) {
     try {
-      return RuntimeUtils.castTo(type.classFromType(), value, location.getSource(), location.getOffset());
+      return RuntimeUtils.castTo(type.classFromType(), value, true, location.getSource(), location.getOffset());
     }
     catch (RuntimeError e) {
       error(e.getErrorMessage(), location);

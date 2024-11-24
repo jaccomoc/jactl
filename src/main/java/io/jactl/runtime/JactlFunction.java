@@ -406,7 +406,7 @@ public class JactlFunction extends FunctionDescriptor {
           i += vargs.length;
         }
         else {
-          value = value == null ? null : RuntimeUtils.castTo(paramClassesArr[p], value, source, offset);
+          value = value == null ? null : RuntimeUtils.castTo(paramClassesArr[p], value, true, source, offset);
           args[i++] = value;
         }
       }
@@ -439,7 +439,7 @@ public class JactlFunction extends FunctionDescriptor {
           i += varArgCount;
         }
         else {
-          argVals[i++] = RuntimeUtils.castTo(paramClassesArr[p], args[p], source, offset);
+          argVals[i++] = RuntimeUtils.castTo(paramClassesArr[p], args[p], true, source, offset);
         }
       }
       if (i < argCount) {

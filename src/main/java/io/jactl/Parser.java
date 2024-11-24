@@ -2000,7 +2000,7 @@ public class Parser {
     Token sign = previous();
     Token num  = expect(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST);
     if (sign.is(MINUS)) {
-      num = new Token(num.getType(), num).setValue(RuntimeUtils.negateNumber(num.getValue(), num.getSource(), num.getOffset()));
+      num = new Token(num.getType(), num).setValue(RuntimeUtils.negateNumber(num.getValue(), true, num.getSource(), num.getOffset()));
     }
     return new Expr.Literal(num);
   }
@@ -2780,7 +2780,7 @@ public class Parser {
 
   private Object castTo(Object value, JactlType type, Token token) {
     try {
-      return RuntimeUtils.castTo(type.classFromType(), value, token.getSource(), token.getOffset());
+      return RuntimeUtils.castTo(type.classFromType(), value, true, token.getSource(), token.getOffset());
     }
     catch (JactlError e) {
       error(e.getErrorMessage(), token);

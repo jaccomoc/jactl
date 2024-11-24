@@ -287,19 +287,20 @@ public class RuntimeUtils {
    * Perform binary operation when types are not known at compile time. NOTE: operator is a String that must be one of
    * the static strings defined in this class as '==' is used to compare the strings for performance reasons.
    *
-   * @param left             left operand
-   * @param right            right operand
-   * @param operator         operator (as a String)
-   * @param originalOperator original operator (as a String) (will be -- or ++ if inc/dec turned into binaryOp or null
-   *                         otherwise)
-   * @param minScale         maximum scale for BigDecimal operations
-   * @param source           source code
-   * @param offset           offset into source code of operator
+   * @param left              left operand
+   * @param right             right operand
+   * @param operator          operator (as a String)
+   * @param originalOperator  original operator (as a String) (will be -- or ++ if inc/dec turned into binaryOp or null
+   *                          otherwise)
+   * @param minScale          maximum scale for BigDecimal operations
+   * @param captureStackTrace
+   * @param source            source code
+   * @param offset            offset into source code of operator
    * @return result of operation
    */
-  public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  private static Object binaryOp(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (left == null) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     String rightString = castToString(right);
     if (left == DEFAULT_VALUE && rightString != null && operator == PLUS) {
@@ -351,10 +352,10 @@ public class RuntimeUtils {
 
     // All other operations expect numbers so check we have numbers
     if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     if (operator != PLUS && operator != MINUS) {
@@ -392,13 +393,14 @@ public class RuntimeUtils {
     return result;
   }
 
-  public static Object plus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  public static String PLUS_METHOD = "plus";
+  public static Object plus(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (left == DEFAULT_VALUE || !(left instanceof Number)) {
-      return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
+      return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
     }
 
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -429,16 +431,17 @@ public class RuntimeUtils {
     return lhs + rhs;
   }
 
-  public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  public static String MULTIPLY_METHOD = "multiply";
+  public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (isString(left)) {
-      return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
+      return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
     }
 
     if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -469,15 +472,16 @@ public class RuntimeUtils {
     return lhs * rhs;
   }
 
-  public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  public static String MINUS_METHOD = "minus";
+  public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (left instanceof Map) {
-      return binaryOp(left, right, operator, originalOperator, minScale, source, offset);
+      return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
     }
     if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -508,12 +512,13 @@ public class RuntimeUtils {
     return lhs - rhs;
   }
 
-  public static Object divide(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  public static String DIVIDE_METHOD = "divide";
+  public static Object divide(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -549,12 +554,13 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object remainder(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  public static String REMAINDER_METHOD = "remainder";
+  public static Object remainder(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -590,12 +596,13 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object modulo(Object left, Object right, String operator, String originalOperator, int minScale, String source, int offset) {
+  public static String MODULO_METHOD = "modulo";
+  public static Object modulo(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, source, offset);
+      throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
     if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, source, offset);
+      throwOperandError(right, false, operator, captureStackTrace, source, offset);
     }
 
     // Must be numeric so convert to appropriate type and perform operation
@@ -631,9 +638,9 @@ public class RuntimeUtils {
     }
   }
 
-  private static void throwOperandError(Object obj, boolean isLeft, String operator, String source, int offset) {
+  private static void throwOperandError(Object obj, boolean isLeft, String operator, boolean captureStackTrace, String source, int offset) {
     if (obj == null) {
-      throw new NullError("Null operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "'", source, offset);
+      throw new NullError("Null operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "'", source, offset, captureStackTrace);
     }
     throw new RuntimeError("Non-numeric operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
   }
@@ -908,8 +915,9 @@ public class RuntimeUtils {
     return (byte)~(byte)obj;
   }
 
-  public static Object negateNumber(Object obj, String source, int offset) {
-    ensureNonNull(obj, source, offset);
+  public static String NEGATE_NUMBER = "negateNumber";
+  public static Object negateNumber(Object obj, boolean captureStackTrace, String source, int offset) {
+    ensureNonNull(obj, captureStackTrace, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal) obj).negate(); }
     if (obj instanceof Double)     { return -(double) obj; }
     if (obj instanceof Long)       { return -(long) obj; }
@@ -918,31 +926,34 @@ public class RuntimeUtils {
     throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset);
   }
 
-  public static Object incNumber(Object obj, String operator, String source, int offset) {
-    ensureNonNull(obj, source, offset);
+  public static String INC_NUMBER = "incNumber";
+  public static Object incNumber(Object obj, String operator, boolean captureStackTrace, String source, int offset) {
+    ensureNonNull(obj, captureStackTrace, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal) obj).add(BigDecimal.ONE);  }
     if (obj instanceof Double)     { return (double) obj + 1;                        }
     if (obj instanceof Long)       { return (long) obj + 1;                          }
     if (obj instanceof Integer)    { return (int) obj + 1;                           }
     if (obj instanceof Byte)       { return (byte)((byte)obj + 1);                   }
-    return binaryOp(obj, 1, PLUS, operator, -1, source, offset);
+    return binaryOp(obj, 1, PLUS, operator, -1, captureStackTrace, source, offset);
   }
 
-  public static Object decNumber(Object obj, String operator, String source, int offset) {
-    ensureNonNull(obj, source, offset);
+  public static String DEC_NUMBER = "decNumber";
+  public static Object decNumber(Object obj, String operator, boolean captureStackTrace, String source, int offset) {
+    ensureNonNull(obj, captureStackTrace, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal) obj).subtract(BigDecimal.ONE); }
     if (obj instanceof Double)     { return (double) obj - 1;                            }
     if (obj instanceof Long)       { return (long) obj - 1;                              }
     if (obj instanceof Integer)    { return (int) obj - 1;                               }
     if (obj instanceof Byte)       { return (byte)((byte)obj - 1);                       }
-    return binaryOp(obj, 1, MINUS, operator, -1, source, offset);
+    return binaryOp(obj, 1, MINUS, operator, -1, captureStackTrace, source, offset);
   }
 
-  public static String stringRepeat(String str, int count, String source, int offset) {
+  public static String STRING_REPEAT = "stringRepeat";
+  public static String stringRepeat(String str, int count, boolean captureStackTrace, String source, int offset) {
     if (count < 0) {
       throw new RuntimeError("String repeat count must be >= 0", source, offset);
     }
-    ensureNonNull(str, source, offset);
+    ensureNonNull(str, captureStackTrace, source, offset);
     return Utils.repeat(str, count);
   }
 
@@ -1249,20 +1260,22 @@ public class RuntimeUtils {
    * @param offset       offset into source for operation
    * @return the field value or the default value
    */
-  public static Object loadFieldOrDefault(Object parent, Object field, boolean isDot, boolean isOptional, Object defaultValue, String source, int offset) {
-    Object value = loadField(parent, field, isDot, isOptional, source, offset);
+  public static Object loadFieldOrDefault(Object parent, Object field, boolean isDot, boolean isOptional, Object defaultValue, boolean captureStackTrace, String source, int offset) {
+    Object value = loadField(parent, field, isDot, isOptional, captureStackTrace, source, offset);
     if (value == null) {
       return defaultValue;
     }
     return value;
   }
+  public static String LOAD_FIELD_OR_DEFAULT = "loadFieldOrDefault";
 
-  public static Object invokeMethodOrField(Object parent, String field, boolean onlyField, boolean isOptional, Object[] args, String source, int offset) {
+  public static String INVOKE_METHOD_OR_FIELD = "invokeMethodOrField";
+  public static Object invokeMethodOrField(Object parent, String field, boolean onlyField, boolean isOptional, Object[] args, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
       }
-      throw new NullError("Tried to invoke method on null value", source, offset);
+      throw new NullError("Tried to invoke method on null value", source, offset, captureStackTrace);
     }
 
     Object value = null;
@@ -1303,28 +1316,29 @@ public class RuntimeUtils {
    * @param field      field (field name or list index)
    * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
    * @param isOptional true if access type is '?.' or '?['
+   * @param captureStackTrace true if stack trace should be captured if NullError thrown
    * @param source     source code
    * @param offset     offset into source for operation
    * @return the field value or null
    */
-  public static Object loadField(Object parent, Object field, boolean isDot, boolean isOptional, String source, int offset) {
+  public static Object loadField(Object parent, Object field, boolean isDot, boolean isOptional, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
       }
-      throw new NullError("Null value for parent during field access", source, offset);
+      throw new NullError("Null value for parent during field access", source, offset, captureStackTrace);
     }
     if (field == null) {
       if (parent instanceof Map || parent instanceof JactlObject) {
-        throw new NullError("Null value for field", source, offset);
+        throw new NullError("Null value for field", source, offset, captureStackTrace);
       }
       else {
-        throw new NullError("Null value for index", source, offset);
+        throw new NullError("Null value for index", source, offset, captureStackTrace);
       }
     }
 
     if (parent instanceof Map) {
-      return loadMapField(parent, field, source, offset);
+      return loadMapField(parent, field, captureStackTrace, source, offset);
     }
 
     if (parent instanceof JactlObject) {
@@ -1382,21 +1396,22 @@ public class RuntimeUtils {
    * @param isDot      true if access type is '.' or '?.' (false for '[' or '?[')
    * @param isOptional true if access type is '?.' or '?['
    * @param isMap      if creating missing field we create a Map if true or a List if false
+   * @param captureStackTrace true if we should capture stack trace when throwing NullError
    * @param source     source code
    * @param offset     offset into source for operation
    * @return the field value or null
    */
   public static Object loadOrCreateField(Object parent, Object field, boolean isDot, boolean isOptional,
-                                         boolean isMap, String source, int offset) {
+                                         boolean isMap, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
       }
-      throw new NullError("Null value for parent during field access", source, offset);
+      throw new NullError("Null value for parent during field access", source, offset, captureStackTrace);
     }
 
     if (parent instanceof Map) {
-      return loadOrCreateMapField(parent, field, source, offset, isMap);
+      return loadOrCreateMapField(parent, field, captureStackTrace, source, offset, isMap);
     }
 
     if (parent instanceof Class) {
@@ -1434,6 +1449,7 @@ public class RuntimeUtils {
 
     return loadOrCreateListElem((List) parent, index, isMap, source, offset);
   }
+  public static String LOAD_OR_CREATE_FIELD = "loadOrCreateField";
 
   private static Object loadOrCreateListElem(List parent, int index, boolean isMap, String source, int offset) {
     List   list  = parent;
@@ -1531,9 +1547,9 @@ public class RuntimeUtils {
     }
   }
 
-  private static Object loadOrCreateMapField(Object parent, Object field, String source, int offset, boolean isMap) {
+  private static Object loadOrCreateMapField(Object parent, Object field, boolean captureStackTrace, String source, int offset, boolean isMap) {
     if (field == null) {
-      throw new NullError("Null value for field name", source, offset);
+      throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
     String fieldName = field.toString();
     Map    map       = (Map) parent;
@@ -1551,19 +1567,20 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static Object loadMapField(Object parent, Object field, boolean isOptional, String source, int offset) {
+  public static String LOAD_MAP_FIELD = "loadMapField";
+  public static Object loadMapField(Object parent, Object field, boolean isOptional, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
       }
-      throw new NullError("Null value for parent during field access", source, offset);
+      throw new NullError("Null value for parent during field access", source, offset, captureStackTrace);
     }
-    return loadMapField(parent, field, source, offset);
+    return loadMapField(parent, field, captureStackTrace, source, offset);
   }
 
-  private static Object loadMapField(Object parent, Object field, String source, int offset) {
+  private static Object loadMapField(Object parent, Object field, boolean captureStackTrace, String source, int offset) {
     if (field == null) {
-      throw new NullError("Null value for field name", source, offset);
+      throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
     Map map = (Map) parent;
     String fieldName = field.toString();
@@ -1761,10 +1778,11 @@ public class RuntimeUtils {
     }
   }
 
-  public static Field getFieldGetter(Object parentObj, Object field, String source, int offset) {
+  public static String GET_FIELD_GETTER = "getFieldGetter";
+  public static Field getFieldGetter(Object parentObj, Object field, boolean captureStackTrace, String source, int offset) {
     JactlObject parent = (JactlObject) parentObj;
     if (field == null) {
-      throw new NullError("Null value for field name", source, offset);
+      throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
     if (!(field instanceof String)) {
       throw new RuntimeError("Expected String for field name, not " + className(field), source, offset);
@@ -1808,27 +1826,29 @@ public class RuntimeUtils {
     throw new RuntimeError("Default value for " + clss.getName() + " not supported", source, offset);
   }
 
-  public static Object storeParentFieldValue(Object parent, Object field, Object value, boolean isDot, String source, int offset) {
-    return storeValueParentField(value, parent, field, isDot, source, offset);
+  public static String STORE_PARENT_FIELD_VALUE = "storeParentFieldValue";
+  public static Object storeParentFieldValue(Object parent, Object field, Object value, boolean isDot, boolean captureStackTrace, String source, int offset) {
+    return storeValueParentField(value, parent, field, isDot, captureStackTrace, source, offset);
   }
 
-  public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, String source, int offset) {
+  public static String STORE_VALUE_PARENT_FIELD = "storeValueParentField";
+  public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, boolean captureStackTrace, String source, int offset) {
     if (parent instanceof Map) {
-      return storeMapField(value, (Map)parent, field, source, offset);
+      return storeMapField(value, (Map)parent, field, captureStackTrace, source, offset);
     }
 
     if (parent == null) {
-      throw new NullError("Null value for Map/List/Object storing field value", source, offset);
+      throw new NullError("Null value for Map/List/Object storing field value", source, offset, captureStackTrace);
     }
 
     if (!isDot && parent.getClass().isArray()) {
-      value = castTo(parent.getClass().getComponentType(), value, source, offset);
+      value = castTo(parent.getClass().getComponentType(), value, captureStackTrace, source, offset);
       storeArrayField(parent, field, value, source, offset);
       return value;
     }
 
     if (parent instanceof JactlObject) {
-      return storeInstanceField(parent, field, value, source, offset);
+      return storeInstanceField(parent, field, value, captureStackTrace, source, offset);
     }
 
     if (!(parent instanceof List)) {
@@ -1863,7 +1883,7 @@ public class RuntimeUtils {
     return value;
   }
 
-  private static Object storeInstanceField(Object parent, Object field, Object value, String source, int offset) {
+  private static Object storeInstanceField(Object parent, Object field, Object value, boolean captureStackTrace, String source, int offset) {
     String       fieldName     = field.toString();
     JactlObject jactlObj     = (JactlObject) parent;
     Object       fieldOrMethod = jactlObj._$j$getFieldsAndMethods().get(fieldName);
@@ -1878,7 +1898,7 @@ public class RuntimeUtils {
     }
     try {
       Field fieldRef = (Field) fieldOrMethod;
-      value = castTo(fieldRef.getType(), value, source, offset);
+      value = castTo(fieldRef.getType(), value, captureStackTrace, source, offset);
       fieldRef.set(parent, value);
       return value;
     }
@@ -1887,13 +1907,14 @@ public class RuntimeUtils {
     }
   }
 
-  public static Object storeMapField(Object value, Map parent, Object field, String source, int offset) {
+  public static String STORE_MAP_FIELD = "storeMapField";
+  public static Object storeMapField(Object value, Map parent, Object field, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
-      throw new NullError("Null value for Map/List/Object storing field value", source, offset);
+      throw new NullError("Null value for Map/List/Object storing field value", source, offset, captureStackTrace);
     }
 
     if (field == null) {
-      throw new NullError("Null value for field name", source, offset);
+      throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
     String fieldName = field.toString();
     parent.put(fieldName, value);
@@ -2001,9 +2022,9 @@ public class RuntimeUtils {
     JactlMethodHandle.class, FieldType.FUNCTION
   );
 
-  public static Object castTo(Class clss, Object value, String source, int offset) {
+  public static Object castTo(Class clss, Object value, boolean captureStackTrace, String source, int offset) {
     if (clss.isArray()) {
-      return castToArray(value, clss, source, offset);
+      return castToArray(value, clss, captureStackTrace, source, offset);
     }
     FieldType type = classToType.get(clss);
     if (type == null) {
@@ -2014,33 +2035,35 @@ public class RuntimeUtils {
     else {
       switch (type) {
         case BOOLEAN:  return isTruth(value, false);
-        case BYTE:     return castToByte(value, source, offset);
-        case INT:      return castToInt(value, source, offset);
-        case LONG:     return castToLong(value, source, offset);
-        case DOUBLE:   return castToDouble(value, source, offset);
+        case BYTE:     return castToByte(value, captureStackTrace, source, offset);
+        case INT:      return castToInt(value, captureStackTrace, source, offset);
+        case LONG:     return castToLong(value, captureStackTrace, source, offset);
+        case DOUBLE:   return castToDouble(value, captureStackTrace, source, offset);
         case DECIMAL:  return castToDecimal(value, source, offset);
         case STRING:   return castToString(value, source, offset);
         case MAP:      return castToMap(value, source, offset);
         case LIST:     return castToList(value, source, offset);
-        case FUNCTION: return castToFunction(value, source, offset);
+        case FUNCTION: return castToFunction(value, captureStackTrace, source, offset);
       }
     }
     throw new RuntimeError("Cannot convert from " + className(value) + " to type " + clss.getName(), source, offset);
   }
 
-  public static int castToIntValue(Object obj, String source, int offset) {
+  public static String CAST_TO_INT_VALUE = "castToIntValue";
+  public static int castToIntValue(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Integer) { return (int) obj; }
     if (obj instanceof Long)    { return (int)(long) obj; }
     if (obj instanceof Byte)    { return (byte)obj; }
-    if (obj == null)            { throw new NullError("Null value for int", source, offset); }
+    if (obj == null)            { throw new NullError("Null value for int", source, offset, captureStackTrace); }
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to int", source, offset);
   }
 
-  public static long castToLongValue(Object obj, String source, int offset) {
+  public static String CAST_TO_LONG_VALUE = "castToLongValue";
+  public static long castToLongValue(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Long)    { return (long) obj; }
     if (obj instanceof Integer) { return (int) obj; }
     if (obj instanceof Byte)    { return (byte) obj; }
-    if (obj == null)            { throw new NullError("Null value for long", source, offset); }
+    if (obj == null)            { throw new NullError("Null value for long", source, offset, captureStackTrace); }
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to long", source, offset);
   }
 
@@ -2146,7 +2169,8 @@ public class RuntimeUtils {
     return Byte.valueOf(b >= 128 ? (byte)(b - 256) : (byte)b);
   }
 
-  public static byte castToByte(Object obj, String source, int offset) {
+  public static String CAST_TO_BYTE = "castToByte";
+  public static byte castToByte(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Number) {
       return ((Number) obj).byteValue();
     }
@@ -2158,12 +2182,13 @@ public class RuntimeUtils {
       return (byte) (value.charAt(0));
     }
     if (obj == null) {
-      throw new NullError("Cannot convert null value to byte", source, offset);
+      throw new NullError("Cannot convert null value to byte", source, offset, captureStackTrace);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to byte", source, offset);
   }
 
-  public static int castToInt(Object obj, String source, int offset) {
+  public static String CAST_TO_INT = "castToInt";
+  public static int castToInt(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Byte) {
       return ((int)(byte)obj) & 0xff;
     }
@@ -2178,20 +2203,21 @@ public class RuntimeUtils {
       return (int) (value.charAt(0));
     }
     if (obj == null) {
-      throw new NullError("Cannot convert null value to int", source, offset);
+      throw new NullError("Cannot convert null value to int", source, offset, captureStackTrace);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to int", source, offset);
   }
 
-  public static Number castToLong(Object obj, String source, int offset) {
-    return castToNumber(obj, source, offset).longValue();
+  public static Number castToLong(Object obj, boolean captureStackTrace, String source, int offset) {
+    return castToNumber(obj, captureStackTrace, source, offset).longValue();
   }
 
-  public static Number castToDouble(Object obj, String source, int offset) {
-    return castToNumber(obj, source, offset).doubleValue();
+  public static Number castToDouble(Object obj, boolean captureStackTrace, String source, int offset) {
+    return castToNumber(obj, captureStackTrace, source, offset).doubleValue();
   }
 
-  public static Number castToNumber(Object obj, String source, int offset) {
+  public static String CAST_TO_NUMBER = "castToNumber";
+  public static Number castToNumber(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Byte) {
       return ((int)(byte)obj) & 0xff;
     }
@@ -2199,7 +2225,7 @@ public class RuntimeUtils {
       return (Number) obj;
     }
     if (obj == null) {
-      throw new NullError("Cannot convert null value to Number", source, offset);
+      throw new NullError("Cannot convert null value to Number", source, offset, captureStackTrace);
     }
     if (obj instanceof String) {
       String value = (String)obj;
@@ -2228,25 +2254,28 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
   }
 
-  public static JactlMethodHandle castToFunction(Object obj, String source, int offset) {
+  public static String CAST_TO_FUNCTION = "castToFunction";
+  public static JactlMethodHandle castToFunction(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof JactlMethodHandle) {
       return (JactlMethodHandle) obj;
     }
     if (obj == null) {
-      throw new NullError("Null value for Function", source, offset);
+      throw new NullError("Null value for Function", source, offset, captureStackTrace);
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Function", source, offset);
   }
 
-  public static Object asArray(Object obj, Class clss, String source, int offset) {
-    return convertToArray(obj, clss, false, source, offset);
+  public static String AS_ARRAY = "asArray";
+  public static Object asArray(Object obj, Class clss, boolean captureStackTrace, String source, int offset) {
+    return convertToArray(obj, clss, false, captureStackTrace, source, offset);
   }
 
-  public static Object castToArray(Object obj, Class clss, String source, int offset) {
-    return convertToArray(obj, clss, true, source, offset);
+  public static String CAST_TO_ARRAY = "castToArray";
+  public static Object castToArray(Object obj, Class clss, boolean captureStackTrace, String source, int offset) {
+    return convertToArray(obj, clss, true, captureStackTrace, source, offset);
   }
 
-  public static Object convertToArray(Object obj, Class clss, boolean isCast, String source, int offset) {
+  private static Object convertToArray(Object obj, Class clss, boolean isCast, boolean captureStackTrace, String source, int offset) {
     if (obj == null) {
       return null;
     }
@@ -2258,7 +2287,7 @@ public class RuntimeUtils {
       List   list = (List)obj;
       Object arr  = Array.newInstance(componentType, list.size());
       for (int i = 0; i < list.size(); i++) {
-        Array.set(arr, i, castToType(list.get(i), componentType, isCast, source, offset));
+        Array.set(arr, i, castToType(list.get(i), componentType, isCast, captureStackTrace, source, offset));
       }
       return arr;
     }
@@ -2266,7 +2295,7 @@ public class RuntimeUtils {
       int    length = Array.getLength(obj);
       Object arr    = Array.newInstance(componentType, length);
       for (int i = 0; i < length; i++) {
-        Array.set(arr, i, castToType(Array.get(obj, i), componentType, isCast, source, offset));
+        Array.set(arr, i, castToType(Array.get(obj, i), componentType, isCast, captureStackTrace, source, offset));
       }
       return arr;
     }
@@ -2276,10 +2305,10 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot cast from " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
   }
 
-  private static Object castToType(Object obj, Class clss, boolean isCast, String source, int offset) {
-    if (clss.isArray())                        { return convertToArray(obj, clss, isCast, source, offset); }
+  private static Object castToType(Object obj, Class clss, boolean isCast, boolean captureStackTrace, String source, int offset) {
+    if (clss.isArray())                        { return convertToArray(obj, clss, isCast, captureStackTrace, source, offset); }
     if (clss.isPrimitive() || clss == BigDecimal.class) {
-      ensureNonNull(obj, source, offset);
+      ensureNonNull(obj, captureStackTrace, source, offset);
       if (clss == boolean.class)               { return isTruth(obj, false); }
       if (obj instanceof String && ((String)obj).length() == 1) {
         obj = (int)((String)obj).charAt(0);
@@ -2544,9 +2573,9 @@ public class RuntimeUtils {
     return clss.getName();
   }
 
-  private static void ensureNonNull(Object obj, String source, int offset) {
+  private static void ensureNonNull(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null) {
-      throw new NullError("Null value encountered where null not allowed", source, offset);
+      throw new NullError("Null value encountered where null not allowed", source, offset, captureStackTrace);
     }
   }
 
@@ -2702,8 +2731,8 @@ public class RuntimeUtils {
   // "as" operator tries to convert anything where it makes sense to do so whereas with cast the object
   // must already be the right type (or very close to it - e.g for numbers).
 
-  public static byte asByte(Object obj, String source, int offset) {
-    if (obj == null)              { throw new NullError("Null value cannot be coerced to byte", source, offset); }
+  public static byte asByte(Object obj, boolean captureStackTrace, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to byte", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).byteValue(); }
     if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to byte", source, offset); }
     try {
@@ -2712,8 +2741,8 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid number", source, offset, e); }
   }
 
-  public static int asInt(Object obj, String source, int offset) {
-    if (obj == null)              { throw new NullError("Null value cannot be coerced to int", source, offset); }
+  public static int asInt(Object obj, boolean captureStackTrace, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to int", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).intValue(); }
     if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to int", source, offset); }
     try {
@@ -2722,8 +2751,8 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid int", source, offset, e); }
   }
 
-  public static long asLong(Object obj, String source, int offset) {
-    if (obj == null)              { throw new NullError("Null value cannot be coerced to long", source, offset); }
+  public static long asLong(Object obj, boolean captureStackTrace, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to long", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).longValue(); }
     if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to long", source, offset); }
     try {
@@ -2732,8 +2761,8 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid long", source, offset, e); }
   }
 
-  public static double asDouble(Object obj, String source, int offset) {
-    if (obj == null)              { throw new NullError("Null value cannot be coerced to double", source, offset); }
+  public static double asDouble(Object obj, boolean captureStackTrace, String source, int offset) {
+    if (obj == null)              { throw new NullError("Null value cannot be coerced to double", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).doubleValue(); }
     if (!(obj instanceof String)) { throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to double", source, offset); }
     try {
@@ -2742,8 +2771,8 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid double", source, offset, e); }
   }
 
-  public static BigDecimal asDecimal(Object obj, String source, int offset) {
-    if (obj == null)               { throw new NullError("Null value cannot be coerced to Decimal", source, offset); }
+  public static BigDecimal asDecimal(Object obj, boolean captureStackTrace, String source, int offset) {
+    if (obj == null)               { throw new NullError("Null value cannot be coerced to Decimal", source, offset, captureStackTrace); }
     if (obj instanceof BigDecimal) { return (BigDecimal)obj; }
     if (obj instanceof Number) {
       if (obj instanceof Double) {
@@ -2760,7 +2789,7 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid Decimal", source, offset); }
   }
 
-  public static List asList(Object obj, String source, int offset) {
+  public static List asList(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)           { return null; }
     if (obj instanceof List)   { return (List)obj; }
     if (obj instanceof String) { return ((String)obj).chars().mapToObj(c -> String.valueOf((char)c)).collect(Collectors.toList()); }
@@ -2814,7 +2843,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to List", source, offset);
   }
 
-  public static Map asMap(Object obj, String source, int offset) {
+  public static Map asMap(Object obj, boolean captureStackTrace, String source, int offset) {
     return doAsMap(obj, source, offset, new HashMap<>());
   }
 
