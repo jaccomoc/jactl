@@ -1256,6 +1256,7 @@ public class RuntimeUtils {
    * @param isDot        true if access type is '.' or '?.' (false for '[' or '?[')
    * @param isOptional   true if access type is '?.' or '?['
    * @param defaultValue default value to return if field does not exist
+   * @param captureStackTrace whether to capture stack trace for any NullError generated
    * @param source       source code
    * @param offset       offset into source for operation
    * @return the field value or the default value

@@ -215,8 +215,11 @@ See the [Integration Guide](integration-guide.md) for more information.
 
 ### Is there an IntelliJ plugin for Jactl?
 
-At the moment, no, there is no plugin available but work is underway, so I hope to have
-a plugin available in the future.
+Yes, there is an IntelliJ plugin.
+It is in the process of being released into the Intellij marketplace for plugins and should be available from within
+IntelliJ shortly.
+
+The source code for the plugin can be found here: [Jactl IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin)
 
 ### How can I improve the runtime speed of my Jactl script?
 
@@ -231,7 +234,7 @@ To force the JVM to use hotspot compilation even on large methods add the `-XX:-
 command line flag to the `java` command.
 For example:
 ```bash
-java -XX:-DontCompileHugeMethods -jar jactl-2.0.0-jar
+java -XX:-DontCompileHugeMethods -jar jactl-2.1.0-jar
 ```
 
 ### Does Jactl provide any thread synchronisation mechanisms?

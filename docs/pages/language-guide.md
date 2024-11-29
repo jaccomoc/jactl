@@ -4512,6 +4512,14 @@ switch(x) {
 }
 ```
 
+The `*` can appear only once but can appear anywhere in the list pattern (not just at the end):
+```groovy
+switch (x) {
+  [*,'abc']         -> 1
+  ['xyz',*,'abc',_] -> 2
+}
+```
+
 If you want to be able to specify the type of the wildcard you can use a type name instead of `_`:
 ```groovy
 switch(x) {
@@ -4535,6 +4543,14 @@ switch(x) {
 
 Note that for map literals, only the value can be bound to a binding variable.
 The keys themselves are literal values, not binding variables.
+
+You can bind a variable to the `*` part of a list pattern by specifying a name after the `*`:
+```groovy
+switch (x) {
+  [h,*t]   -> "First element is $h, rest of the list is $t"
+  [h,*m,t] -> "Middle of the list is $m" 
+}
+```
 
 Binding variables can occur multiple times but will only match if the value for the variable is the same in all places
 where it is used:

@@ -74,6 +74,16 @@ switch (x) {
 }
 ```
 
+A simple quicksort:
+```groovy
+def qsort(x) {
+  switch (x) {
+    [],[_] -> x
+    [p,*t] -> qsort(t.filter{it <= p}) + p + qsort(t.filter{it > p})
+  }
+}
+```
+
 See [Language Features](https://jactl.io/language-features) for more language features and examples.
 
 ### Compiles to Java bytecode
@@ -160,7 +170,7 @@ features.
 ## Download
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/2.0.0/jactl-2.0.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.0.0/jactl-2.0.0.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/2.1.0/jactl-2.1.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.1.0/jactl-2.1.0.jar)
 
 To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
 [jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
@@ -198,7 +208,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '2.0.0'
+implementation group: 'io.jactl', name: 'jactl', version: '2.1.0'
 ```
 
 ### Maven
@@ -208,7 +218,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>2.0.0</version>
+ <version>2.1.0</version>
 </dependency>
 ```
 
