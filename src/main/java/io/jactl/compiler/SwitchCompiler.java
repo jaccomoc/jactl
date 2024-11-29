@@ -307,15 +307,13 @@ public class SwitchCompiler {
                   mc.loadLocation(subExpr.location);
                   mc.invokeMethod(RuntimeUtils.class, "asList", Object.class, boolean.class, String.class, int.class);
                 }
-                if (i == 0) {
-                  mc.loadLocation(subExpr.location);
-                  mc.loadConst(0);
-                  mc.loadConst(-1);
+                mc.loadLocation(subExpr.location);
+                mc.loadConst(i);
+                if (i == size - 1) {
+                  mc.loadConst(Integer.MAX_VALUE);
                 }
                 else {
-                  mc.loadLocation(subExpr.location);
-                  mc.loadConst(1);
-                  mc.loadConst(Integer.MAX_VALUE);
+                  mc.loadConst(i - size + 1);   // negative to count from end
                 }
                 mc.invokeMethod(BuiltinFunctions.class, "listSubList", List.class, String.class, int.class, int.class, int.class);
                 subElemSlot = subElemSlots.get(LIST);

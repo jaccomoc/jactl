@@ -2014,6 +2014,11 @@ public class BuiltinFunctionTests extends BaseTest {
     test("class X { int i; }; X.fromJson('null')", null);
     test("class X { int i; X x = sleep(0,null) }; X.fromJson('{\"i\":3}').i", 3);
     test("class X { int i; String x }; def f = X.fromJson; f('{\"i\":3,\"x\":null}').i", 3);
+    test("class X { int i; List x }; def f = X.fromJson; f('{\"i\":3,\"x\":[]}').x", Utils.listOf());
+    test("class X { int i; int[] x }; def f = X.fromJson; f('{\"i\":3,\"x\":[]}').x", new int[0]);
+    test("class X { int i; int[] x }; def f = X.fromJson; f('{\"i\":3,\"x\":[1,2,3]}').x", new int[]{1,2,3});
+    test("class X { int i; int[][] x }; def f = X.fromJson; f('{\"i\":3,\"x\":[[1],[2],[3]]}').x", new int[][]{new int[]{1},new int[]{2},new int[]{3}});
+    test("class Y { int i }; class X { int i; Y[] y }; def f = X.fromJson; f('{\"i\":3,\"y\":[{\"i\":1},{\"i\":2},{\"i\":3}]}').y.size()", 3);
 
     // Test with fields that map to same hashCode:
     test("class X { int Aa; String BB }; X.fromJson('{\"Aa\":3,\"BB\":null}').Aa", 3);
