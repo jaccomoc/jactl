@@ -138,6 +138,26 @@ public class SwitchTests extends BaseTest {
     test("def f(it) { switch { [a,b] -> f(a)+f(b); [c] -> c; d -> d } }; f([[1,2],[[5],[1,2]]])", 11);
   }
 
+  @Test public void switchWithListBinding() {
+    test("switch ([1]) { [int i, *] -> i }", 1);
+    test("switch ([1]) { [int i, *rest] -> i }", 1);
+    test("switch ([1,2,3]) { [int i, *rest] -> rest.sum() }", 5);
+    test("switch ([1,2,3] as int[]) { [int i, *rest] -> i }", 1);
+    test("switch ([1,2,3] as int[]) { [int i, *rest] -> rest.sum() }", 5);
+    test("switch ([1,2,3] as int[]) { [*rest, int i] -> rest.sum() }", 3);
+    test("switch ([1,2,[3,4,5]]) { [int i, *, [_,*rest]] -> rest.sum() }", 9);
+    test("switch ([1,2,[3,4,5]]) { [int i, *, [*rest,_]] -> rest.sum() }", 7);
+    test("switch ([[1],[2],[3,4,5]] as int[][]) { [[int i], *, [_,*rest]] -> rest.sum() + i }", 10);
+    test("switch ([1,2,3] as long[]) { [long i, *rest] -> i }", 1L);
+    test("switch ([1,2,3] as long[]) { [long i, *rest] -> rest.sum() }", 5L);
+    test("switch ([1,2,3] as long[]) { [*rest, long i] -> rest.sum() }", 3L);
+    test("switch ([1L,2,[3,4,5]]) { [long i, *, [_,*rest]] -> rest.sum() }", 9);
+    test("switch ([1L,2,[3,4,5]]) { [long i, *, [*rest,_]] -> rest.sum() }", 7);
+    test("switch ([[1L],[2],[3,4,5]] as long[][]) { [[long i], *, [_,*rest]] -> rest.sum() + i }", 10L);
+    test("def qsort(x) { switch (x) { [] -> x; [p, *rest] -> qsort(rest.filter{ it <= p }) + p + qsort(rest.filter{ it > p }) }}; qsort([10,8,9,4,5,1,7,2,6,3])", Utils.listOf(1,2,3,4,5,6,7,8,9,10));
+    test("def qsort(x) { switch (x) { [] -> x; [*rest, p] -> qsort(rest.filter{ it <= p }) + p + qsort(rest.filter{ it > p }) }}; qsort([10,8,9,4,5,1,7,2,6,3])", Utils.listOf(1,2,3,4,5,6,7,8,9,10));
+  }
+
   @Test public void switchWithExpansions() {
     test("def i = 1; switch (1) { $i -> true; _ -> false }", true);
     test("def i = 1; switch ([1]) { [$i] -> true; _ -> false }", true);

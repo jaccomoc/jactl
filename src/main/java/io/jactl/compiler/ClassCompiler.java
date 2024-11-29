@@ -20,6 +20,7 @@ package io.jactl.compiler;
 import io.jactl.*;
 import io.jactl.runtime.*;
 import org.objectweb.asm.*;
+import org.objectweb.asm.util.CheckClassAdapter;
 import org.objectweb.asm.util.Textifier;
 import org.objectweb.asm.util.TraceClassVisitor;
 
@@ -76,8 +77,12 @@ public class ClassCompiler {
     this.source          = source;
     this.sourceName      = sourceName;
     cv = cw = new JactlClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
+    if (context.checkClasses()) {
+      cv = new CheckClassAdapter(cw);
+    }
     if (debug()) {
-      cv = new TraceClassVisitor(cw, new JactlTextifier(), new PrintWriter(System.out) {
+      printer = new JactlTextifier();
+      cv = new TraceClassVisitor(cv, printer, new PrintWriter(System.out) {
         { super.print(": "); }
         @Override
         public void print(String s) {
@@ -244,11 +249,6 @@ public class ClassCompiler {
 
     classInit.visitLabel(end);
     classInit.visitInsn(RETURN);
-
-    if (debug(3)) {
-      classInit.visitEnd();
-      cv.visitEnd();
-    }
 
     classInit.visitMaxs(0, 0);
     classInit.visitEnd();
@@ -487,10 +487,6 @@ public class ClassCompiler {
     Utils.box(mv, funDecl.returnType);   // Box if primitive
     mv.visitInsn(ARETURN);               // Always return Object from continuation wrapper
 
-    if (debug(3)) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -542,7 +538,7 @@ public class ClassCompiler {
   }
 
   boolean annotate() {
-    return context.debugLevel == 2 || context.debugLevel == 4;
+    return context.debugLevel == 4;
   }
 
   //////////////////////////////////////
@@ -631,6 +627,7 @@ public class ClassCompiler {
                                                                            Type.getMethodDescriptor(Type.getType(void.class), Type.getType(type)),
                                                                            false);
 
+    mv.visitCode();
     mv.visitVarInsn(ALOAD, BUFF_SLOT);
     Utils.loadConst(mv, '{');
     invoke.accept("writeByte", char.class);
@@ -692,10 +689,6 @@ public class ClassCompiler {
     invoke.accept("writeByte", char.class);
     mv.visitInsn(RETURN);
 
-    if (debug(3)) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -801,7 +794,7 @@ NEXT:   mv.visitLabel(NEXT);
 
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(Type.getType(long[].class), Type.getType(JsonDecoder.class)),
                                       null, null);
-
+    mv.visitCode();
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     Utils.loadConst(mv, '{');
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expectOrNull", Type.getMethodDescriptor(Type.getType(boolean.class), Type.getType(char.class)), false);
@@ -1046,10 +1039,6 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
 
     mv.visitInsn(ARETURN);
 
-    if (debug(3)) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -1239,7 +1228,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     final int CHECKPOINTER_SLOT = 1;
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_CHECKPOINT_FN, Type.getMethodDescriptor(Type.getType(void.class), Type.getType(Checkpointer.class)),
                                       null, null);
-
+    mv.visitCode();
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
     Utils.loadConst(mv, INSTANCE.getType().ordinal());
     mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeCint", "(I)V", false);
@@ -1282,10 +1271,6 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
 
     mv.visitInsn(RETURN);
 
-    if (debug(3)) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -1298,7 +1283,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     BiConsumer<String, Class> invoke = (method,type) -> mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(Restorer.class), method,
                                                                            Type.getMethodDescriptor(Type.getType(void.class), Type.getType(type)),
                                                                            false);
-
+    mv.visitCode();
     mv.visitVarInsn(ALOAD, RESTORER_SLOT);
     mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Restorer", "skipType", "()V", false);
     mv.visitVarInsn(ALOAD, RESTORER_SLOT);
@@ -1343,10 +1328,6 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
 
     mv.visitInsn(RETURN);
 
-    if (debug(3)) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -1413,10 +1394,6 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       error.accept("Detected async function invocation during instance auto-creation (which is not allowed)");
     }
 
-    if (debug(3)) {
-      mv.visitEnd();
-      cv.visitEnd();
-    }
     mv.visitMaxs(0, 0);
     mv.visitEnd();
   }
@@ -1472,5 +1449,6 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       text.add(textifier.getText());
       return textifier;
     }
+
   }
 }

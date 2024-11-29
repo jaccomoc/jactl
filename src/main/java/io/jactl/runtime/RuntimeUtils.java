@@ -2108,6 +2108,7 @@ public class RuntimeUtils {
     return convertIteratorToList(c.localObjects[1], c);
   }
 
+  public static final String CONVERT_ITERATOR_TO_LIST = "convertIteratorToList";
   public static List convertIteratorToList(Object iterable, Continuation c) {
     JactlIterator iter = createIterator(iterable);
 

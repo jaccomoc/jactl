@@ -199,9 +199,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     }
     resolveClass(classDecl, throwError);
-    if (errors.size() > 0 && throwError) {
-      throw new CompileError(errors);
-    }
     return errors;
   }
 

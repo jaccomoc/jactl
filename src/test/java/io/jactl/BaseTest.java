@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BaseTest {
   protected int                debugLevel;
+  protected boolean            checkClasses = true;
   protected String             packageName;
   protected Map<String,Object> globals;
   protected boolean            useAsyncDecorator;
@@ -128,6 +129,7 @@ public class BaseTest {
     }
     catch (CompileError e) {
       e.getErrors().forEach(Throwable::printStackTrace);
+      fail(e);
     }
     catch (Exception e) {
       e.printStackTrace();
@@ -282,6 +284,7 @@ public class BaseTest {
                                             .debug(debugLevel)
                                             .checkpoint(testCheckpoint)
                                             .restore(testCheckpoint)
+                                            .checkClasses(checkClasses)
                                             .build();
     return jactlContext;
   }
@@ -450,6 +453,7 @@ public class BaseTest {
                                               .replMode(true)
                                               .classAccessToGlobals(classAccessToGlobals)
                                               .debug(debugLevel)
+                                              .checkClasses(checkClasses)
                                               .build();
 
       Map<String, Object> bindings = createGlobals();
@@ -476,10 +480,11 @@ public class BaseTest {
     testCounter++;
     try {
       JactlContext jactlContext = JactlContext.create()
-                                                 .evaluateConstExprs(evalConsts)
-                                                 .replMode(replMode)
-                                                 .debug(debugLevel)
-                                                 .build();
+                                              .evaluateConstExprs(evalConsts)
+                                              .replMode(replMode)
+                                              .debug(debugLevel)
+                                              .checkClasses(checkClasses)
+                                              .build();
       Map<String, Object> bindings = createGlobals();
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, null, bindings));
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
@@ -507,10 +512,11 @@ public class BaseTest {
 
   protected JactlScript compile(String code) {
     JactlContext jactlContext = JactlContext.create()
-                                               .evaluateConstExprs(true)
-                                               .replMode(true)
-                                               .debug(0)
-                                               .build();
+                                            .evaluateConstExprs(true)
+                                            .replMode(true)
+                                            .debug(0)
+                                            .checkClasses(checkClasses)
+                                            .build();
     Map<String, Object> globals = new HashMap<>();
     return Compiler.compileScript(code, jactlContext, globals);
   }

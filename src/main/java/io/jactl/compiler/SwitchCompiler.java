@@ -1,6 +1,7 @@
 package io.jactl.compiler;
 
 import io.jactl.*;
+import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.RuntimeUtils;
 import org.objectweb.asm.Label;
 
@@ -169,7 +170,7 @@ public class SwitchCompiler {
           mc.loadConst(true);
         }
       }
-      else if (!patternType.is(ANY) && !subjectType.is(patternType) && !(subjectType.isNumeric() && patternType.isNumeric())) {
+      else if (!pattern.isStar() && !patternType.is(ANY) && !subjectType.is(patternType) && !(subjectType.isNumeric() && patternType.isNumeric())) {
         loadValue.accept(ANY);
         mc.isInstanceOf(patternType);
         if (!(pattern instanceof Expr.TypeExpr)) {
@@ -267,6 +268,7 @@ public class SwitchCompiler {
     if (size > 0) {
       boolean seenStar = false;
       Map<JactlType,Integer> subElemSlots;
+      JactlType arrayElemType = parentType.getArrayElemType();
       if (patternType.is(INSTANCE)) {
         subElemSlots = ((List<Pair<Expr, Expr>>) exprs).stream()
                                                        .map(pair -> patternType.getClassDescriptor().getField(pair.first.constValue.toString()))
@@ -275,8 +277,12 @@ public class SwitchCompiler {
       }
       else {
         subElemSlots = new HashMap<>();
-        JactlType type = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
+        JactlType type = parentType.is(ARRAY) ? arrayElemType : ANY;
         subElemSlots.put(type, mc.stack.allocateSlot(type));
+        int subListSlot = mc.stack.allocateSlot(LIST);    // for bound '*' wildcards
+        mc.loadConst(null);
+        mc.storeLocal(subListSlot);
+        subElemSlots.put(LIST, subListSlot);
       }
       int subElemSlot;
       for (int i = 0; i < size; i++) {
@@ -290,24 +296,55 @@ public class SwitchCompiler {
             }
             if (subExpr.isStar()) {
               seenStar = true;
-              continue;
+              if (subExpr instanceof Expr.VarDecl) {
+                // Need to bind variable to subList(1) or subList(0,-1) depending
+                // on whether we are first or last element in pattern list so create
+                // sublist and store in slot
+                loadValue.accept(null);        // parent
+                if (parentType.is(ANY,ARRAY)) {
+                  // Convert to list if not already
+                  mc.loadConst(false);
+                  mc.loadLocation(subExpr.location);
+                  mc.invokeMethod(RuntimeUtils.class, "asList", Object.class, boolean.class, String.class, int.class);
+                }
+                if (i == 0) {
+                  mc.loadLocation(subExpr.location);
+                  mc.loadConst(0);
+                  mc.loadConst(-1);
+                }
+                else {
+                  mc.loadLocation(subExpr.location);
+                  mc.loadConst(1);
+                  mc.loadConst(Integer.MAX_VALUE);
+                }
+                mc.invokeMethod(BuiltinFunctions.class, "listSubList", List.class, String.class, int.class, int.class, int.class);
+                subElemSlot = subElemSlots.get(LIST);
+                mc.storeLocal(subElemSlot);
+                elemType = parentType;
+              }
+              else {
+                // Nothing to do for '*' on its own
+                continue;
+              }
             }
-            // Get element and store in a local
-            loadValue.accept(null);
-            // Convert index to negative offset from end if needed
-            int idx = seenStar ? i - size : i;
-            mc.loadConst(idx);
-            if (idx < 0) {
-              loadValue.accept(null);
-              mc.emitLength(subjectLocation);
-              mc.expect(2);
-              mc.mv.visitInsn(IADD);
-              mc.popType();
+            else {
+              // Get element and store in a local
+              loadValue.accept(null);  // get parent
+              // Convert index to negative offset from end if needed
+              int idx = seenStar ? i - size : i;
+              mc.loadConst(idx);
+              if (idx < 0) {
+                loadValue.accept(null);
+                mc.emitLength(subjectLocation);
+                mc.expect(2);
+                mc.mv.visitInsn(IADD);
+                mc.popType();
+              }
+              mc.unsafeLoadElem(parentType, subjectLocation);
+              elemType = parentType.is(ARRAY) ? arrayElemType : ANY;
+              subElemSlot = subElemSlots.get(elemType);
+              mc.storeLocal(subElemSlot);
             }
-            mc.unsafeLoadElem(parentType, subjectLocation);
-            elemType = parentType.is(ARRAY) ? parentType.getArrayElemType() : ANY;
-            subElemSlot = subElemSlots.get(elemType);
-            mc.storeLocal(subElemSlot);
             break;
           }
           case MAP: {

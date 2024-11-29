@@ -2815,7 +2815,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# listPattern ::= LEFT_SQUARE ( switchPattern ( COMMA switchPattern ) * ) ? RIGHT_SQUARE
+   *# listPattern ::= LEFT_SQUARE ( switchPattern ( COMMA switchPattern ) * IDENTIFIER? ) ? RIGHT_SQUARE
    * </pre>
    */
   private Expr.ListLiteral listPattern(TokenType startToken, TokenType endToken, boolean starAllowed) {
@@ -2826,8 +2826,25 @@ public class Parser {
         expect(COMMA);
       }
       skipNewLines();
-      expr.exprs.add(starAllowed && peek().is(STAR) ? new Expr.Identifier(expect(STAR))
-                                                    : switchPattern());
+      Expr elemExpr;
+      if (starAllowed && matchAnyIgnoreEOL(STAR)) {
+        if (matchAnyIgnoreEOL(IDENTIFIER)) {
+          boolean isFirst = expr.exprs.size() == 0;
+          Token   identifier = previous();
+          // Use token of '*' in place of '=' to flag this as a list wildcard
+          elemExpr = new Expr.VarDecl(identifier, new Token(STAR,identifier), null);
+          elemExpr.type = JactlType.LIST;
+          elemExpr.isResultUsed = false;
+        }
+        else {
+          // Wrap the '*' as an identifier for the moment
+          elemExpr = new Expr.Identifier(previous());
+        }
+      }
+      else {
+        elemExpr = switchPattern();
+      }
+      expr.exprs.add(elemExpr);
     }
     return expr;
   }

@@ -215,8 +215,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (classCompiler.debug(2)) {
-      mv.visitEnd();
-      classCompiler.cv.visitEnd();
+//      mv.visitEnd();
+//      classCompiler.cv.visitEnd();
     }
     mv.visitMaxs(0, 0);
   }
@@ -1907,7 +1907,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
                            () -> {
                              loadNullContinuation();
-                             invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                             invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
                            });
         }
       }
@@ -2066,7 +2066,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
                          () -> {
                            loadNullContinuation();
-                           invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                           invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
                          });
       }
       return null;
@@ -2329,7 +2329,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   () -> {
                                     expect(1);
                                     loadNullContinuation();
-                                    invokeMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+                                    invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
                                     popType();
                                     pushType(ANY);   // Don't know if call occurs so we still have to assume ANY
                                   }),
@@ -4149,8 +4149,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(ATHROW);
 
     mv.visitLabel(continuation);       // :continuation
-    // Reload local aliases for any globals used
-    refreshAliases();
     // Convert result to return type of function we invoked.
     loadLocal(continuationVar);
     invokeMethod(Continuation.class, "getResult");
@@ -4162,9 +4160,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     popType();
 
-    // Refresh out local aliases for globals since call may have reset some values unbeknownst to us
     refreshAliases();
-
     mv.visitLabel(after);              // :after
   }
 
@@ -5212,7 +5208,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
   ///////////////////////////////////
 
-  private void loadLocation(SourceLocation location) {
+  void loadLocation(SourceLocation location) {
     _loadLocation(location);
     pushType(STRING);
     pushType(INT);

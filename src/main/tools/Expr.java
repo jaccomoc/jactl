@@ -121,8 +121,9 @@ class Expr extends JactlUserDataHolder {
   }
 
   public boolean isStar() {
-    return this instanceof Expr.Identifier && ((Expr.Identifier) this).identifier.is(STAR) ||
-           this instanceof Expr.Literal && ((Expr.Literal) this).value.is(STAR);
+    return this instanceof Expr.Identifier && ((Expr.Identifier)this).identifier.is(STAR) ||
+           this instanceof Expr.Literal && ((Expr.Literal)this).value.is(STAR) ||
+           this instanceof Expr.VarDecl && ((VarDecl)this).equals.is(STAR);
   }
 
   public boolean isTypePattern() {

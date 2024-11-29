@@ -45,7 +45,7 @@ public class SwitchResolver {
     expr.cases.forEach(c -> c.patterns.forEach(pat -> isCompatible(resolver, subjectType, pat.first)));
     resolver.resolve(expr.defaultCase);
 
-    // Check that there if there is a pattern covering all cases that there are no subsequent patterns and no default
+    // Check that if there is a pattern covering all cases that there are no subsequent patterns and no default
     Set<JactlType> coveredTypes = new HashSet<>();
     expr.cases.forEach(c -> c.patterns.stream().map(pair -> pair.first).forEach(p -> {
       JactlType type = coveringType(p);
@@ -89,14 +89,18 @@ public class SwitchResolver {
   }
 
   public static boolean isCompatible(Resolver resolver, JactlType subjectType, Expr pat) {
-    if (!doIsCompatible(resolver, subjectType, pat)) {
+    return isCompatible(resolver, null, subjectType, pat);
+  }
+
+  public static boolean isCompatible(Resolver resolver, JactlType parentType, JactlType subjectType, Expr pat) {
+    if (!doIsCompatible(resolver, parentType, subjectType, pat)) {
       resolver.error("Type " + subjectType + " can never match type " + pat.patternType() + " with value " + pat.constValue, pat.location);
       return false;
     }
     return true;
   }
 
-  public static boolean doIsCompatible(Resolver resolver, JactlType subjectType, Expr pat) {
+  public static boolean doIsCompatible(Resolver resolver, JactlType parentType, JactlType subjectType, Expr pat) {
     JactlType patType = pat.patternType();
     if (subjectType.is(ANY) || patType.is(ANY)) {
       return true;
@@ -105,6 +109,9 @@ public class SwitchResolver {
       return subjectType.is(STRING);
     }
     if (pat.isTypePattern()) {
+      if (pat.isStar() && parentType != null && parentType.is(ARRAY,JactlType.LIST,ANY)) {
+        return true;
+      }
       if ((!subjectType.is(INSTANCE) || !patType.is(INSTANCE)) && !subjectType.equals(patType)) {
         return false;
       }
@@ -127,7 +134,7 @@ public class SwitchResolver {
     }
     if (subjectType.is(ARRAY)) {
       if (!(pat instanceof Expr.ListLiteral)) { return false; }
-      return ((Expr.ListLiteral) pat).exprs.stream().allMatch(subPat -> isCompatible(resolver, subjectType.getArrayElemType(), subPat));
+      return ((Expr.ListLiteral) pat).exprs.stream().allMatch(subPat -> isCompatible(resolver, subjectType, subjectType.getArrayElemType(), subPat));
     }
     return subjectType.isConvertibleTo(patType, true);
   }
@@ -307,7 +314,7 @@ public class SwitchResolver {
     Expr.Identifier identifier = (Expr.Identifier) className.get(className.size() - 1);
     String          fieldName  = identifier.identifier.getStringValue();
     className = className.subList(0,className.size() - 1);
-    // We must have a proper class name or we will throw an resolver.error now
+    // We must have a proper class name or we will throw a resolver.error now
     ClassDescriptor descriptor = resolver.lookupClass(className, false);
     JactlType fieldType = descriptor.getStaticField(fieldName);
     if (fieldType == null) {
