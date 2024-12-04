@@ -64,7 +64,7 @@ Jactl is open sourced [here](https://github.com/jaccomoc/jactl) under the
   </div>
 </div>
 
-<div class="row" >
+<div class="row" markdown="1">
 ### **IntelliJ Plugin**
 Jactl has a plugin for IntelliJ that supports completions, find definition/usages, auto-indenting, running scripts,
 debugging scripts, and more.
