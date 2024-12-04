@@ -47,6 +47,7 @@ dependencies {
 tasks.withType(JavaCompile) { options.deprecation = true }
 
 java {
+
     withJavadocJar()
     withSourcesJar()
     sourceCompatibility = "1.8"

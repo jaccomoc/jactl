@@ -92,6 +92,11 @@ Jactl scripts compile to bytecode to take advantage of the performance capabilit
 ### Supports Java 8+
 Compatible with Java 8 and later versions.
 
+### Comes with an IntelliJ Plugin
+There is an IntelliJ plugin that supports syntax colouring, auto-indenting, completions, find definition/usages,
+running scripts, debugging scripts, and more.
+See [IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin) for more details.
+
 ### Never blocks
 Jactl never blocks the execution thread on which a script is running.
 This is to support execution in reactive or event loop based applications.

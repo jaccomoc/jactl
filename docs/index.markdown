@@ -64,6 +64,14 @@ Jactl is open sourced [here](https://github.com/jaccomoc/jactl) under the
   </div>
 </div>
 
+<div class="row" >
+### **IntelliJ Plugin**
+Jactl has a plugin for IntelliJ that supports completions, find definition/usages, auto-indenting, running scripts,
+debugging scripts, and more.
+It can be found within IntelliJ under Settings -> Plugins -> Marketplace.
+See [IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin) for more details.
+</div>
+
 <br/>
 Jactl is intended to be integrated into Java applications where it provides a secure, locked-down, way for
 customers/users to be able to customise the application behaviour.
