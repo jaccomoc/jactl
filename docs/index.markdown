@@ -58,19 +58,19 @@ As well as being integrated into Java applications, Jactl can run as commandline
 for interactively trying out Jactl code.
   </div>
   <div class="column" markdown="1">
-### **Open Source**
-Jactl is open sourced [here](https://github.com/jaccomoc/jactl) under the
-[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-  </div>
-</div>
-
-<div class="row">
-  <div class="column" markdown="1">
 ### **IntelliJ Plugin**
 Jactl has a plugin for IntelliJ that supports completions, find definition/usages, auto-indenting, running scripts,
 debugging scripts, and more.
 It can be found within IntelliJ under Settings -> Plugins -> Marketplace.
 See [IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin) for more details.
+  </div>
+</div>
+
+<div class="row">
+  <div class="column" markdown="1">
+### **Open Source**
+Jactl is open sourced [here](https://github.com/jaccomoc/jactl) under the
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
   </div>
 </div>
 
