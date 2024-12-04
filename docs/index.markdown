@@ -71,8 +71,8 @@ Jactl has a plugin for IntelliJ that supports completions, find definition/usage
 debugging scripts, and more.
 It can be found within IntelliJ under Settings -> Plugins -> Marketplace.
 See [IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin) for more details.
-  <div>
-<div>
+  </div>
+</div>
 
 <br/>
 Jactl is intended to be integrated into Java applications where it provides a secure, locked-down, way for
