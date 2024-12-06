@@ -325,8 +325,8 @@ Simple quicksort:
 ```groovy
 def qsort(x) {
   switch(x) {
-    []      -> x
-    [p, *t] -> qsort(t.filter{it <= p}) + p + qsort(t.filter{it > p}) 
+    [], [_] -> x
+    [h, *t] -> qsort(t.filter{it < h}) + p + qsort(t.filter{it >= h}) 
   }
 }
 ```

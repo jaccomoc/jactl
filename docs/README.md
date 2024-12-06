@@ -79,7 +79,7 @@ A simple quicksort:
 def qsort(x) {
   switch (x) {
     [],[_] -> x
-    [p,*t] -> qsort(t.filter{it <= p}) + p + qsort(t.filter{it > p})
+    [h,*t] -> qsort(t.filter{it < h}) + p + qsort(t.filter{it >= h})
   }
 }
 ```

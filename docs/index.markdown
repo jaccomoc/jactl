@@ -103,6 +103,16 @@ println "fib(20) = ${fib(20)}"
 
 ## More Advanced Example
 
+A simple quicksort:
+```groovy
+def qsort(x) {
+  switch (x) {
+    [],[_] -> x
+    [h,*t] -> qsort(t.filter{it < h}) + p + qsort(t.filter{it >= h})
+  }
+}
+```
+
 Here is a more advanced example which streams the input as lines, searches for markdown headings and generates
 a table of contents:
 ```groovy
