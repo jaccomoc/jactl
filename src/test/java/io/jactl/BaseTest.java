@@ -103,6 +103,14 @@ public class BaseTest {
   }
 
   protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
+    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint));
+  }
+
+  protected Object run(String scriptCode) {
+    return doRun(Utils.listOf(), scriptCode, null, null, true, false, false, false);
+  }
+
+  protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint) {
     RuntimeUtils.clearScriptCache();
     testCounter++;
     try {
@@ -116,14 +124,12 @@ public class BaseTest {
       JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
 
       if (input == null && output == null) {
-        Object result = compiled.runSync(bindings);
-        checkEqual(expected, result);
+        return compiled.runSync(bindings);
       }
       else {
-        Object result = compiled.runSync(bindings,
-                                         input == null ? null : new BufferedReader(new StringReader(input)),
-                                         output == null ? null: new PrintStream(output));
-        checkEqual(expected, result);
+        return compiled.runSync(bindings,
+                                input == null ? null : new BufferedReader(new StringReader(input)),
+                                output == null ? null: new PrintStream(output));
       }
 
     }
@@ -135,6 +141,7 @@ public class BaseTest {
       e.printStackTrace();
       fail(e);
     }
+    return null;
   }
 
   protected void doTestCheckpoint(String scriptCode, Object expected) {
@@ -490,7 +497,7 @@ public class BaseTest {
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
       fail("Expected JactlError");
     }
-    catch (JactlError e) {
+    catch (Throwable e) {
       if (!e.getMessage().toLowerCase().contains(expectedError.toLowerCase())) {
         if (e instanceof CompileError) {
           CompileError ce = (CompileError) e;

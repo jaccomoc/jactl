@@ -214,13 +214,13 @@ public class Checkpointer {
     writeObject(Type.getInternalName(clss));
   }
 
-  void writeMap(Map<String,Object> map) {
+  void writeMap(Map<Object,Object> map) {
     int size = map.size();
     ensureCapacity(1 + 5);
     buf[idx++] = (byte)MAP.getType().ordinal();
     _writeCint(size);
-    for (Iterator<Map.Entry<String, Object>> iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
-      Map.Entry<String, Object> entry = iterator.next();
+    for (Iterator<Map.Entry<Object, Object>> iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
+      Map.Entry<Object, Object> entry = iterator.next();
       writeObject(entry.getKey());
       writeObject(entry.getValue());
     }

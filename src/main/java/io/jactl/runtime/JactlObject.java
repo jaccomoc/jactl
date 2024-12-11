@@ -23,11 +23,11 @@ import java.util.Map;
  * All JactlObjects implement this. It provides runtime access to fields and methods.
  */
 public interface JactlObject extends Checkpointable {
-  public Map<String,Object> _$j$getFieldsAndMethods();
-  public Map<String,Object> _$j$getStaticFieldsAndMethods();
+  Map<String,Object> _$j$getFieldsAndMethods();
+  Map<String,Object> _$j$getStaticFieldsAndMethods();
 
-  public Object      _$j$init$$w(Continuation c, String source, int offset, Object[] args);
-  public void        _$j$writeJson(JsonEncoder buffer);
+  Object      _$j$init$$w(Continuation c, String source, int offset, Object[] args);
+  void        _$j$writeJson(JsonEncoder buffer);
 
   /**
    * Used internally for decoding JSON.
@@ -35,5 +35,7 @@ public interface JactlObject extends Checkpointable {
    * @param decoder  the decoder to use
    * @return flags for missing fields
    */
-  public long[]      _$j$readJson(JsonDecoder decoder);
+  long[]      _$j$readJson(JsonDecoder decoder);
+
+  int hashCode();
 }

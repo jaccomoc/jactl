@@ -1166,7 +1166,7 @@ public class RuntimeUtils {
             if (indent > 0) {
               sb.append('\n').append(prefix).append(Utils.repeat(" ", indent));
             }
-            sb.append(keyAsString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + Utils.repeat(" ", indent), indent));
+            sb.append(keyToString(entry.getKey())).append(':').append(toQuotedString(value, previousObjects, prefix + Utils.repeat(" ", indent), indent));
           }
           catch (IllegalAccessException e) {
             throw new IllegalStateException("Internal error: problem accessing field '" + entry.getKey() + "': " + e, e);
@@ -1226,11 +1226,15 @@ public class RuntimeUtils {
     return doToString(obj, previousObjects, prefix, indent);
   }
 
-  private static String keyAsString(Object obj) {
+  private static String keyToString(Object obj) {
     if (obj == null) {
       return "null";
     }
-    String str = obj.toString();   // Should already be a string but just in case...
+    if (!(obj instanceof String)) {
+      String keyAsString = toString(obj);
+      return '(' + keyAsString + ')';
+    }
+    String str = obj.toString();
     // If string is a valid identifier then no need to quote
     if (str.isEmpty()) {
       return "''";
@@ -1552,17 +1556,16 @@ public class RuntimeUtils {
     if (field == null) {
       throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
-    String fieldName = field.toString();
     Map    map       = (Map) parent;
-    Object value     = map.get(fieldName);
+    Object value     = map.get(field);
     if (value == null) {
       value = isMap ? new LinkedHashMap<>() : new ArrayList<>();
-      map.put(fieldName, value);
+      map.put(field, value);
     }
-    if (value == null) {
+    if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
-      value = Functions.lookupWrapper(parent, fieldName);
+      value = Functions.lookupWrapper(parent, (String)field);
     }
 
     return value;
@@ -1584,19 +1587,24 @@ public class RuntimeUtils {
       throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
     Map map = (Map) parent;
-    String fieldName = field.toString();
-    Object value = map.get(fieldName);
-    if (value == null) {
+    Object value = map.get(field);
+    if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
-      value = Functions.lookupWrapper(parent, fieldName);
+      value = Functions.lookupWrapper(parent, (String)field);
     }
 
     return value;
   }
 
   public static final String LOAD_ARRAY_FIELD = "loadArrayField";
-  public static Object loadArrayField(Object parent, int idx, String source, int offset) {
+  public static Object loadArrayField(Object parent, Object idxObj, String source, int offset) {
+    int idx = castToInt(idxObj, true, source, offset);
+    return loadArrayFieldInt(parent, idx, source, offset);
+  }
+
+  public static final String LOAD_ARRAY_FIELD_INT = "loadArrayFieldInt";
+  public static Object loadArrayFieldInt(Object parent, int idx, String source, int offset) {
     try {
       if (parent instanceof String) {
         String str = (String)parent;
@@ -1917,8 +1925,7 @@ public class RuntimeUtils {
     if (field == null) {
       throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
-    String fieldName = field.toString();
-    parent.put(fieldName, value);
+    parent.put(field, value);
     return value;
   }
 
@@ -2907,9 +2914,6 @@ public class RuntimeUtils {
     }
     if (length != 2) {
       throw new RuntimeError("Expected list with [key,value] but got list of " + length + (length == 1 ? " entry" : " entries"), source, offset);
-    }
-    if (!(key instanceof String)) {
-      throw new RuntimeError("Expected String type for key of Map but got " + className(key), source, offset);
     }
     map.put(key, value);
   }

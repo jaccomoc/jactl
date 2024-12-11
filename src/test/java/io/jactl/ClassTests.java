@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.runtime.JactlObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -1035,7 +1036,7 @@ public class ClassTests extends BaseTest {
     test("class X { int i }; def x = new X(2); x == [i:2] as X", true);
     testError("class X { int i }; def x = new X(2); x == [2] as X", "cannot coerce from list to instance");
     test("class X { int i }; X x = new X(2); x == [i:2] as X", true);
-    test("class X { X x }; X x = new X(null); x.x = x; Map m = x as Map; m.x == m", true);
+    testError("class X { X x }; X x = new X(null); x.x = x; Map m = x as Map; m.x == m", "Self-referential data-structure");
     test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,3); x1 == x2", false);
     test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,3); x1 != x2", true);
     test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,2); x1 != x2", false);
@@ -1108,7 +1109,7 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 0; long j = 2 }; def x = new X(); x as Map", Utils.mapOf("i",0,"j",2L));
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); (x as Map).toString()", "[i:0, j:2, x:null]");
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; x.toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
-    test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
+    testError("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "Self-referential data-structure");
     testError("class X { int i = 0; long j = 2 }; new X() as List", "cannot coerce");
     testError("class X { int i = 0; long j = 2 }; def x = new X(); x as List", "cannot coerce");
   }
@@ -1174,7 +1175,7 @@ public class ClassTests extends BaseTest {
     test("class X {}; def x = new X(); x.toString()", "[:]");
     test("class X {X x; long i}; new X(null,3).toString()", "[x:null, i:3]");
     test("class X {X x; int i}; def x = new X(null,3); x.x = x; x.toString()", "[x:<CIRCULAR_REF>, i:3]");
-    test("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "[x:<CIRCULAR_REF>, i:3]");
+    testError("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "Self-referential data-structure");
     test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = a as X; x.toString()", "[y:[x:[y:null]]]");
     test("class X { def toString() { 'xxx' } }; new X().toString()", "xxx");
     test("class X { def toString() { 'xxx' } }; def x = [new X()]; x.toString()", "[xxx]");
@@ -1831,5 +1832,17 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("class X { static int f() { GVAR + GMAP.y } }"), "X.f()", 124);
     test(Utils.listOf("class X { static int f() { sleep(1,GVAR) + sleep(1,sleep(1,GMAP).y) } }"), "X.f()", 124);
     test(Utils.listOf("class X { static def f() { def m = [:]; GVAR ?= m.a.b() } }"), "X.f()", null);
+  }
+
+  @Test public void classObjAsMapKey() {
+    skipCheckpointTests = true;
+    // Fails because restore restores shell of object which is stored in map before object is filled in so hashCode is wrong at time of restore put
+    test("class X {int i=1}; def x = new X(); Map m = [:]; m.put(x,'abc'); m.get(x)", "abc");
+    test("class X {int i=1}; def x = new X(); X x2 = new X(); Map m = [:]; m.put(x,'abc'); m.get(x2)", "abc");
+    test("class X {int i=1}; def x = new X(); X x2 = new X(); Map m = [:]; m.put(x,'abc'); m[x2]", "abc");
+    test("class X {int i=1}; def x = new X(); X x2 = new X(i:2); Map m = [:]; m.put(x,'abc'); m.get(x2)", null);
+    test("class X {int i=1}; def x = new X(); X x2 = new X(i:2); Map m = [:]; m.put(x,'abc'); m[x2]", null);
+    test("class X {int i=1; long j=2; double k=3; Decimal d=4.0; String s='abc' }; X x = new X(); X y = new X(d:5); Map m = [:]; m.(x) = 3; m[y] == null && m[x] == 3", true);
+    test("class X {int[] i=[1]; long[] j=[2]; double[] k=[3]; Decimal[] d=[4.0]; String[] s=['abc']; X[] x = []; List l = []; Map m = [:] }; X x = new X(); X y = new X(d:[5],x:[x]); Map m = [:]; m.(x) = 3; m[y] = 4; m[y] == 4 && m[x] == 3", true);
   }
 }

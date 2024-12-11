@@ -349,11 +349,12 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[].groupBy{ it }", Utils.mapOf());
     test("['a','b','a','c','b'].groupBy{ it }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
     test("['a','b','a','c','b'].map{ sleep(0,it) }.groupBy{ sleep(0,it) }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
-    testError("[1,2,3].groupBy{ it }", "closure must return a string value");
     test("[1,2,3].groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
     test("([1,2,3] as int[]).groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
     test("'some text to use to count characters'.filter{ it != ' '}.groupBy{ it }.map{ k,v -> [k,v.size()] } as Map as String", "[s:3, o:4, m:1, e:4, t:6, x:1, u:2, c:3, n:1, h:1, a:2, r:2]");
     test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it.a as String }.toString()", "['1':[[a:1, b:2], [a:1, c:2]], '2':[[a:2, b:3]]]");
+    test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it }.toString()", "[([a:1, b:2]):[[a:1, b:2]], ([a:2, b:3]):[[a:2, b:3]], ([a:1, c:2]):[[a:1, c:2]]]");
+    test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it.a }.toString()", "[(1):[[a:1, b:2], [a:1, c:2]], (2):[[a:2, b:3]]]");
   }
 
   @Test public void listTranspose() {
@@ -946,7 +947,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1,2,3,4].map{ [it,it*it] }.map{ a,b -> [a,b] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
     test("[1,2,3,4].map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
     test("[1,2,3,4].map{ [it.toString()*it,it*it] }.collectEntries()", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    testError("[1,2,3,4].map{ [it,it*it] }.collectEntries()", "expected string type for key");
+    test("[1,2,3,4].map{ [it,it*it] }.collectEntries()", Utils.mapOf(1,1,2,4,3,9,4,16));
     test("def x = []; x.collectEntries()", Utils.mapOf());
     test("def x = []; x.collectEntries{}", Utils.mapOf());
     test("def x = [:]; x.collectEntries()", Utils.mapOf());
@@ -963,7 +964,6 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3,4]; x.collectEntries{ [it.toString()*it,it*it] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
     test("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
     test("def x = [1,2,3,4]; x.map{ [it.toString()*it,it*it] }.collectEntries()", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    testError("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries()", "expected string type for key");
     test("def x = [1,2,3,4]; x.collectEntries{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
     test("def x = [1,2,3,4]; x.collectEntries(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
     test("def x = [1,2,3,4]; def f = x.collectEntries; f(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));

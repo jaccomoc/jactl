@@ -1633,9 +1633,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> {},
                () -> {
                  swap();
-                 convertToInt(expr.right.location);
+                 box();
                  loadLocation(expr.operator);
-                 invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, int.class, String.class, int.class);
+                 invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, Object.class, String.class, int.class);
                },
                () -> {
                  swap();
@@ -1759,8 +1759,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       dupVal();
       Expr key = entry.first;
       compile(key);
-      throwIfNull("Map key must not be null", key.location);
-      convertTo(STRING, key, true, key.location);
+      if (couldBeNull(key)) {
+        throwIfNull("Map key must not be null", key.location);
+      }
       compile(entry.second);
       box();
       invokeMethod(Map.class, "put", Object.class, Object.class);
@@ -4796,6 +4797,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_FIELD_OR_DEFAULT, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, boolean.class, String.class, Integer.TYPE);
     }
     else {
+      if (accessOperator.is(DOT,QUESTION_DOT) && !peek().is(STRING)) {
+        // If we have x.a.1 then convert 1 to string since it is being used as a field name
+        convertToStringOrNull();
+      }
       if (peek2().is(MAP)) {
         loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
         loadConst(!insideTryCatchNullError());
@@ -4818,6 +4823,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadMethodOrField(Token accessOperator) {
     expect(2);
     box();                        // Field name/index passed as Object
+    if (accessOperator.is(DOT,QUESTION_DOT) && !peek().is(STRING)) {
+      // If we have x.a.1 then convert 1 to string since it is being used as a field name
+      convertToStringOrNull();
+    }
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
     loadConst(!insideTryCatchNullError());
@@ -5060,7 +5069,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     }
     else if (parentType.is(ANY)) {
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, int.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD_INT, Object.class, int.class, String.class, int.class);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + parentType);

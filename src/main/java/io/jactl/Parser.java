@@ -2304,6 +2304,8 @@ public class Parser {
         expect(RIGHT_PAREN);
         return expr;
       }
+      case LEFT_SQUARE:
+        return mapOrListLiteral();
     }
 
     if (peek().isKeyword()) {

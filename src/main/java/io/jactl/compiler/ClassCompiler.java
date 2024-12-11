@@ -614,6 +614,188 @@ public class ClassCompiler {
     compileCheckpointFunction();
     compileRestoreFunction();
     compileInitNoAsync();
+    compileEqualsFunction();
+    compileHashCodeFunction();
+  }
+
+  private void compileEqualsFunction() {
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, "equals", "(Ljava/lang/Object;)Z", null, null);
+    mv.visitCode();
+
+    Label blockStart = new Label();
+    Label blockEnd   = new Label();
+    Label catchLabel = new Label();
+    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, "java/lang/StackOverflowError");
+    mv.visitLabel(blockStart);
+
+    mv.visitVarInsn(ALOAD, 0);
+    mv.visitVarInsn(ALOAD, 1);
+    Label notEqual = new Label();
+    mv.visitJumpInsn(IF_ACMPNE, notEqual);
+    mv.visitInsn(ICONST_1);
+    mv.visitInsn(IRETURN);
+    mv.visitLabel(notEqual);
+    mv.visitVarInsn(ALOAD, 1);
+    mv.visitTypeInsn(INSTANCEOF, classDescriptor.getInternalName());
+    Label isInstanceof = new Label();
+    mv.visitJumpInsn(IFNE, isInstanceof);
+    mv.visitInsn(ICONST_0);
+    mv.visitInsn(IRETURN);
+    mv.visitLabel(isInstanceof);
+    mv.visitVarInsn(ALOAD, 0);
+    mv.visitVarInsn(ALOAD, 1);
+    ClassDescriptor baseClass = classDescriptor.getBaseClass();
+    if (baseClass != null) {
+      mv.visitMethodInsn(INVOKESPECIAL, baseClass.getInternalName(), "equals", "(Ljava/lang/Object;)Z", false);
+      Label superIsEqual = new Label();
+      mv.visitJumpInsn(IFNE, superIsEqual);
+      mv.visitInsn(ICONST_0);
+      mv.visitInsn(IRETURN);
+      mv.visitLabel(superIsEqual);
+    }
+    mv.visitVarInsn(ALOAD, 1);
+    mv.visitTypeInsn(CHECKCAST, classDescriptor.getInternalName());
+    mv.visitVarInsn(ASTORE, 2);
+
+    Label fieldNotEquals = new Label();
+    for (Map.Entry<String,JactlType> field: classDescriptor.getFields()) {
+      JactlType type = field.getValue();
+      mv.visitVarInsn(ALOAD, 0);
+      mv.visitFieldInsn(GETFIELD, classDescriptor.getInternalName(), field.getKey(), type.descriptor());
+      mv.visitVarInsn(ALOAD, 2);
+      mv.visitFieldInsn(GETFIELD, classDescriptor.getInternalName(), field.getKey(), type.descriptor());
+      if (type.is(ARRAY)) {
+        mv.visitMethodInsn(INVOKESTATIC, "java/util/Objects", "deepEquals", "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
+        mv.visitJumpInsn(IFNE, fieldNotEquals);
+      }
+      else if (!type.isPrimitive()) {
+        mv.visitMethodInsn(INVOKESTATIC, "java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
+        mv.visitJumpInsn(IFNE, fieldNotEquals);
+      }
+      else {
+        switch (type.getType()) {
+          case BOOLEAN:
+          case BYTE:
+          case INT:
+            mv.visitJumpInsn(IF_ICMPNE, fieldNotEquals);
+            break;
+          case LONG:
+            mv.visitInsn(LCMP);
+            mv.visitJumpInsn(IFNE, fieldNotEquals);
+            break;
+          case DOUBLE:
+            mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "compare", "(DD)I", false);
+            mv.visitJumpInsn(IFNE, fieldNotEquals);
+            break;
+          default:
+            throw new IllegalStateException("Internal error: unexpected type " + type);
+        }
+      }
+    }
+    mv.visitInsn(ICONST_1);
+    mv.visitInsn(IRETURN);
+    mv.visitLabel(fieldNotEquals);
+    mv.visitInsn(ICONST_0);
+    mv.visitInsn(IRETURN);
+
+    mv.visitLabel(blockEnd);
+    mv.visitLabel(catchLabel);
+
+    mv.visitVarInsn(ASTORE, 2);
+    mv.visitTypeInsn(NEW, "java/lang/RuntimeException");
+    mv.visitInsn(DUP);
+    mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
+    mv.visitInsn(DUP);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+    mv.visitLdcInsn("Self-referential data-structure detected in ");
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    mv.visitVarInsn(ALOAD, 0);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "getClass", "()Ljava/lang/Class;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getName", "()Ljava/lang/String;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    mv.visitLdcInsn(".hashCode()");
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+    mv.visitVarInsn(ALOAD, 2);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", false);
+    mv.visitInsn(ATHROW);
+
+    mv.visitMaxs(0, 0);
+    mv.visitEnd();
+  }
+
+  private void compileHashCodeFunction() {
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, "hashCode", Type.getMethodDescriptor(Type.getType(int.class)),
+                                      null, null);
+    mv.visitCode();
+
+    Label blockStart = new Label();
+    Label blockEnd   = new Label();
+    Label catchLabel = new Label();
+    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, "java/lang/StackOverflowError");
+    mv.visitLabel(blockStart);
+    ClassDescriptor baseClass = classDescriptor.getBaseClass();
+    Utils.loadConst(mv, (baseClass == null ? 0 : 1) + classDescriptor.getFields().size());
+    mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+    int i = 0;
+    if (baseClass != null) {
+      mv.visitInsn(DUP);
+      Utils.loadConst(mv, i++);
+      mv.visitVarInsn(ALOAD, 0);
+      mv.visitMethodInsn(INVOKESPECIAL, baseClass.getInternalName(), "hashCode", "()I", false);
+      mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+      mv.visitInsn(AASTORE);
+    }
+    for (Map.Entry<String,JactlType> field: classDescriptor.getFields()) {
+      mv.visitInsn(DUP);
+      Utils.loadConst(mv, i++);
+      mv.visitVarInsn(ALOAD, 0);
+      JactlType type = field.getValue();
+      mv.visitFieldInsn(GETFIELD, classDescriptor.getInternalName(), field.getKey(), type.descriptor());
+      if (type.is(ARRAY)) {
+        String typeDescriptor = type.getArrayElemType().isPrimitive() ? type.descriptor(): "[Ljava/lang/Object;";
+        mv.visitMethodInsn(INVOKESTATIC, "java/util/Arrays", "hashCode", "(" + typeDescriptor + ")I", false);
+        Utils.box(mv, JactlType.INT);
+      }
+      else {
+        Utils.box(mv, type);
+      }
+      mv.visitInsn(AASTORE);
+    }
+    mv.visitMethodInsn(INVOKESTATIC, "java/util/Objects", "hash", "([Ljava/lang/Object;)I", false);
+    mv.visitInsn(IRETURN);
+
+    mv.visitLabel(blockEnd);
+    mv.visitLabel(catchLabel);
+
+    mv.visitVarInsn(ASTORE, 1);
+    mv.visitTypeInsn(NEW, "java/lang/RuntimeException");
+    mv.visitInsn(DUP);
+    mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
+    mv.visitInsn(DUP);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+    mv.visitLdcInsn("Self-referential data-structure detected in ");
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    mv.visitVarInsn(ALOAD, 0);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Object", "getClass", "()Ljava/lang/Class;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getName", "()Ljava/lang/String;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    mv.visitLdcInsn(".hashCode()");
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+    mv.visitVarInsn(ALOAD, 1);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", false);
+    mv.visitInsn(ATHROW);
+
+    mv.visitTypeInsn(NEW, "java/lang/RuntimeException");
+    mv.visitInsn(DUP);
+    mv.visitLdcInsn("Self-referential object detected in hashCode()");
+    mv.visitVarInsn(ALOAD, 2);
+    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", false);
+    mv.visitInsn(ATHROW);
+
+    mv.visitMaxs(0, 0);
+    mv.visitEnd();
   }
 
   private void compileToJsonFunction() {

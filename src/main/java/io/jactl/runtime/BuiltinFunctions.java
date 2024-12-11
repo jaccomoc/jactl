@@ -82,6 +82,25 @@ public class BuiltinFunctions {
            .impl(BuiltinFunctions.class, "listRemove")
            .register();
 
+      Jactl.method(MAP)
+           .name("get")
+           .param("key")
+           .impl(BuiltinFunctions.class, "mapGet")
+           .register();
+
+      Jactl.method(MAP)
+           .name("put")
+           .param("key")
+           .param("value")
+           .impl(BuiltinFunctions.class, "mapPut")
+           .register();
+
+      Jactl.method(MAP)
+           .name("putAll")
+           .param("values")
+           .impl(BuiltinFunctions.class, "mapPutAll")
+           .register();
+
       Jactl.method(LIST)
            .name("add")
            .param("element")
@@ -921,6 +940,29 @@ public class BuiltinFunctions {
     }
     list.add(index, elem);
     return list;
+  }
+
+  // = get
+
+  public static Object mapGetData;
+  public static Object mapGet(Map map, Object field) {
+    return map.get(field);
+  }
+
+  // = put
+
+  public static Object mapPutData;
+  public static Map mapPut(Map map, Object key, Object value) {
+    map.put(key, value);
+    return map;
+  }
+
+  // = putAll
+
+  public static Object mapPutAllData;
+  public static Map mapPutAll(Map map, Map values) {
+    map.putAll(values);
+    return map;
   }
 
   // = size

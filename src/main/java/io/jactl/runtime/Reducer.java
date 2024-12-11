@@ -198,10 +198,7 @@ public class Reducer implements Checkpointable {
               value = minMax(nextValue, value);
             }
             else if (type == Type.GROUP_BY) {
-              if (!(nextValue[0] instanceof String)) {
-                throw new RuntimeError("groupBy() closure must return a String value (not '" + RuntimeUtils.className(nextValue[0]) + "')", source, offset);
-              }
-              String key    = (String) nextValue[0];
+              Object key    = nextValue[0];
               Map    map    = (Map)value;
               List   values = (List)map.get(key);
               if (values == null) {

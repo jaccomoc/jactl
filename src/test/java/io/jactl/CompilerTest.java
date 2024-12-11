@@ -3885,6 +3885,7 @@ class CompilerTest extends BaseTest {
     test("String x = '' + [:]", "[:]");
     test("String x = '' + [a:[1,2,3]]", "[a:[1, 2, 3]]");
     test("String x = '' + [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
+    test("['1':2].1", 2);
     test("['1':['2':3]].1.2", 3);
     test("['1':['2':3]].(1).2", 3);
     testError("['1':[null:['2':3]].(1).(null).2", "unexpected end-of-file");
@@ -3927,6 +3928,22 @@ class CompilerTest extends BaseTest {
     test("[('a' if true):2 if true, b:1]", Utils.mapOf("a", 2,"b", 1));
     test("[('a' unless false):2 unless false, b:1]", Utils.mapOf("a", 2,"b", 1));
     testError("[('a' if false):2 if true, b:1]", "map key must not be null");
+  }
+
+  @Test public void nonStringMapKeys() {
+    skipCheckpointTests = true;      // until we fix Map restoring
+    test("Map m; def x = [1,2,3]; m[x] = 3; m[x]", 3);
+    test("def x = [1,2,3]; Map m = [(x):3]; m.get(x)", 3);
+    test("def x = [1,2,3]; Map m = [(x):3]; m[x]", 3);
+    test("def x = [1,2,3]; Map m = [[1,2,3]:3]; m[x]", 3);
+    test("def x = [1,2,3]; Map m = [([1,2,3]):3]; m[x]", 3);
+    test("def x = [1,2,3]; def m = [:]; m.put([1,2,3],3); m[x]", 3);
+    test("def x = [a:1,b:2,c:3]; def m = [:]; m.put([a:1,b:2,c:3],3); m[x]", 3);
+    test("def x = [a:1,b:2,c:3]; def m = [[a:1,b:2,c:3]:3]; m[x]", 3);
+    test("def x = [[[1,2],'a'],[[3,4],'b']] as Map; x[[1,2]]", "a");
+    test("def x = [[1,'a'],[2,'b'],['1','c']] as Map; x[1] + x[2] + x['1']", "abc");
+    test("def x; x.(1).(2) = true; x[1][2]", true);
+    test("def x; x.(1) = true; x[1L]", null);  // unfortunately HashMap uses equals where 1 and 1L are not equal
   }
 
   @Test public void listMapVariables() {

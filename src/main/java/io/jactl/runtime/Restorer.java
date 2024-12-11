@@ -203,6 +203,23 @@ public class Restorer {
   }
 
   public Object readObject() {
+    return readObject(false);
+  }
+
+  /**
+   * Read object will return the actual object (for primitives) or the shell
+   * of the object (created but no fields filled in) for non-primitives.
+   * This allows us to deal with circular references. We add the object to a
+   * list of objects that need to be fully restored at the end.
+   * If the restore flag is set we will read *and* restore the object. This
+   * is used for Maps where we need the full object for the key so that we
+   * can determine the hashCode when adding an object to the map. Note that
+   * we don't support circular references for map key objects since hashCode
+   * will get a stack overflow in these situations anyway.
+   * @param restore  whether to restore the object or not
+   * @return
+   */
+  private Object readObject(boolean restore) {
     int ordinal = buf[idx++];
     if (ordinal == NULL_TYPE) {
       return null;
@@ -231,27 +248,31 @@ public class Restorer {
       // Get offset to object
       idx = _readInt(objTableOffset + objId * 4);
       int objOffset = idx;
-      Function<Object,Object> add = obj -> { toBeProcessed.add(Pair.create(objOffset, obj)); return obj; };
+      // Only add object to list of objects to be processed (restored) if not restoring now
+      Function<Object,Object> add = obj -> { if (!restore) { toBeProcessed.add(Pair.create(objOffset, obj)); }; return obj; };
       ordinal = buf[idx++];
       Object result;
 
       // For non-primitives we create but don't populate the object and return it and add it to
       // list of objects that need to be restored later. This allows us to cater for circular
       // references.
+      boolean shouldRestore = restore;
       switch (JactlType.TypeEnum.values()[ordinal]) {
-        case STRING:         result = readString();                                    break;
-        case STRING_BUFFER:  result = readStringBuffer();                             break;
-        case MAP:            result = add.apply(new LinkedHashMap<>());                break;
-        case LIST:           result = add.apply(new ArrayList<>());                    break;
-        case INSTANCE:       result = add.apply(createInstance());                     break;
-        case FUNCTION:       result = add.apply(JactlMethodHandle.create(readCint())); break;
-        case ARRAY:          result = add.apply(createArray());                        break;
-        case HEAPLOCAL:      result = add.apply(new HeapLocal());                      break;
-        case ITERATOR:       result = add.apply(JactlIterator.create(readCint()));     break;
-        case CONTINUATION:   result = add.apply(new Continuation());                   break;
-        case MATCHER:        result = add.apply(new RegexMatcher());                   break;
-        case BUILTIN:        result = add.apply(createBuiltinInstance());              break;
-        case CLASS:          result = add.apply(createClass());                        break;
+        // Don't restore since these object types are more like primitives and are restored when we read them
+        case STRING:         result = readString();            shouldRestore = false;   break;
+        case STRING_BUFFER:  result = readStringBuffer();      shouldRestore = false;   break;
+
+        case MAP:            result = add.apply(new LinkedHashMap<>());                 break;
+        case LIST:           result = add.apply(new ArrayList<>());                     break;
+        case INSTANCE:       result = add.apply(createInstance());                      break;
+        case FUNCTION:       result = add.apply(JactlMethodHandle.create(readCint()));  break;
+        case ARRAY:          result = add.apply(createArray());                         break;
+        case HEAPLOCAL:      result = add.apply(new HeapLocal());                       break;
+        case ITERATOR:       result = add.apply(JactlIterator.create(readCint()));      break;
+        case CONTINUATION:   result = add.apply(new Continuation());                    break;
+        case MATCHER:        result = add.apply(new RegexMatcher());                    break;
+        case BUILTIN:        result = add.apply(createBuiltinInstance());               break;
+        case CLASS:          result = add.apply(createClass());                         break;
         case NUMBER:
         case ANY:
         case UNKNOWN:
@@ -259,6 +280,9 @@ public class Restorer {
           throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
       }
       restoredObjects[objId] = result;
+      if (shouldRestore) {
+        restoreObject(objOffset, result);
+      }
       return result;
     }
     finally {
@@ -293,7 +317,7 @@ public class Restorer {
   void restoreMap(Map map) {
     int size = readCint();
     for (int i = 0; i < size; i++) {
-      map.put((String)readObject(), readObject());
+      map.put(readObject(true), readObject());
     }
   }
 
