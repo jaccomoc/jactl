@@ -6884,6 +6884,8 @@ class CompilerTest extends BaseTest {
     test("int i = 1; while (true if i < 10) { i++ }; i", 10);
     test("int i = 1; while() { break if i > 4; i++ }; i", 5);
     testError("LABEL: int i = 1", "labels can only be applied to for, while, and do/until");
+    test("LOOP: while() {\n  while () {\n    break LOOP\n  }\n}", null);
+    testError("int i = 1; while() { break i }; i", "could not find enclosing loop");
   }
 
   @Test public void doUntilLoops() {

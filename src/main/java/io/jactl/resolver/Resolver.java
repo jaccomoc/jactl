@@ -2242,7 +2242,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return whileLoops.peek();
     }
     for (Stmt.While whileStmt: whileLoops) {
-      if (whileStmt.label.getStringValue().equals(label.getStringValue())) {
+      Token whileLabel = whileStmt.label;
+      if (whileLabel != null && whileLabel.getStringValue().equals(label.getStringValue())) {
         return whileStmt;
       }
     }
