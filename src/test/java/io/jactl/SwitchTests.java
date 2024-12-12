@@ -86,6 +86,9 @@ public class SwitchTests extends BaseTest {
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2; default -> 0 }", 2);
     test("def it = [1,2,3] as int[]; switch\n{\n [\n1,\n2,\n3\n]\n ->\n 2\ndefault\n ->\n 0\n }", 2);
     testError("int x = 2\nswitch (x) {\n  1,2 -> x\n  'abc' -> x\n}", "can never match type string");
+    test("def x = [1,2,3]\nswitch (x) {\n  [a,b,c] -> a if a < 3\n}", 1);
+    test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2 if it.size() > 2; default -> 0 }", 2);
+    test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2 unless it.size() < 2; default -> 0 }", 2);
   }
 
   @Test public void switchLiterals() {

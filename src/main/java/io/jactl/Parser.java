@@ -2605,7 +2605,7 @@ public class Parser {
           patterns = switchPatterns();
         }
         expect(ARROW);
-        Expr expr = expression();
+        Expr expr = ifUnlessExpr(false);
         if (expr instanceof Expr.Closure) {
           expr = convertClosureToBlockExpr(expr);
         }
