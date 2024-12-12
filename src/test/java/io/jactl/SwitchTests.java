@@ -590,6 +590,9 @@ public class SwitchTests extends BaseTest {
     test("def x = [[[3,7]],[[4,9]]]; switch (x) { [[_],[[3,7]]] -> 3; [[[3,7]],_] -> 4; _ -> null }", 4);
     test("def x = [[[3,7]],[[4,9]]]; switch (x) { [[_],[[3,7]]] -> 3; [_,[a]] -> a; _ -> null } == [4,9]", true);
     test("def x = [[[3,7]],[[4,9]]]; switch (x) { [[_],[[3,7]]] -> 3; [_,[List a]] -> a; _ -> null } == [4,9]", true);
+    test("switch (3) {\n  int if it == 3 -> '3'\n  int -> 'something else'\n}", "3");
+    test("def x = [1,2,3]; switch (x) { _ if it.size() == 2 -> 2; _ if it.size() == 3 -> 3 }", 3);
+    testError("def x = [1,2,3]; switch (x) { _ -> 2; _ if it.size() == 3 -> 3 }", "unreachable switch case");
   }
 
   @Test public void switchArrays() {

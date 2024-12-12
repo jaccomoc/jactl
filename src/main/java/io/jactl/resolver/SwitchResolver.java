@@ -47,12 +47,14 @@ public class SwitchResolver {
 
     // Check that if there is a pattern covering all cases that there are no subsequent patterns and no default
     Set<JactlType> coveredTypes = new HashSet<>();
-    expr.cases.forEach(c -> c.patterns.stream().map(pair -> pair.first).forEach(p -> {
-      JactlType type = coveringType(p);
-      if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(p.type) || (type != null && ct.isAssignableFrom(type)))) {
-        resolver.error("Unreachable switch case (covered by a previous case)", p.location);
+    expr.cases.forEach(c -> c.patterns.stream().forEach(pair -> {
+      Expr pattern = pair.first;
+      Expr ifCond  = pair.second;
+      JactlType type = coveringType(pattern);
+      if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type)))) {
+        resolver.error("Unreachable switch case (covered by a previous case)", pattern.location);
       }
-      if (type != null) {
+      if (type != null && ifCond == null) {
         coveredTypes.add(type);
       }
     }));
