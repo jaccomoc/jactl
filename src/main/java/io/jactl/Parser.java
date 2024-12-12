@@ -1978,6 +1978,15 @@ public class Parser {
     if (current.is(PLUS,MINUS)) {
       return getPlusMinusNumber();
     }
+    if (current.is(EXPR_STRING_START)) {
+      if (peek().is(EXPR_STRING_END)) {
+        current = new Token(STRING_CONST, current).setValue(current.getValue());
+        advance();
+      }
+      else {
+        error("Embedded expressions not supported in switch pattern", advance());
+      }
+    }
     return new Expr.Literal(current);
   }
 
@@ -1987,6 +1996,7 @@ public class Parser {
       case BYTE_CONST:    case INTEGER_CONST: case TRUE:
       case DECIMAL_CONST: case DOUBLE_CONST:  case FALSE:
       case STRING_CONST:  case LONG_CONST:    case NULL:
+      case EXPR_STRING_START:
         return true;
       default:
         return false;
