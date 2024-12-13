@@ -1482,7 +1482,17 @@ public class Parser {
           Expr rhs;
           if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
             // '[' and '?[' can be followed by any expression and then a ']'
+            // Allow a comma separated list as syntatic sugar for a chain of [][][]...
             rhs = ifUnlessExpr(true);
+            while (true) {
+              if (!peekIgnoreEolIs(COMMA)) {
+                break;
+              }
+              expectOrNull(true, COMMA);
+              expr = new Expr.Binary(expr, operator, rhs);
+              operator = new Token(LEFT_SQUARE,previous());  // pretend comma was '['
+              rhs = ifUnlessExpr(true);
+            }
           }
           else {
             if (operator.is(DOT, QUESTION_DOT)) {
@@ -2156,6 +2166,7 @@ public class Parser {
     if (isMapLiteral()) {
       return mapLiteral();
     }
+    expect(LEFT_SQUARE);
     return listLiteral();
   }
 
@@ -2165,7 +2176,7 @@ public class Parser {
    * </pre>
    */
   private Expr.ListLiteral listLiteral() {
-    Token  start = expect(LEFT_SQUARE);
+    Token  start = previous();
     Marker mark  = tokeniser.mark();
     Expr.ListLiteral expr = new Expr.ListLiteral(start);
     try {

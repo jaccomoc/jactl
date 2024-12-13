@@ -2331,7 +2331,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Remember at what nesting level this variable is declared. This allows us to work
     // out when looking up vars whether this belongs to the current function or not.
     decl.nestingLevel = getFunctions().size();
-    vars.put(name.getStringValue(), decl);
+    if (name != null) {
+      vars.put(name.getStringValue(), decl);
+    }
   }
 
   private boolean isAtTopLevel() {

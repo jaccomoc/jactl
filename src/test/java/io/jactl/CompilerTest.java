@@ -4242,6 +4242,7 @@ class CompilerTest extends BaseTest {
     test("int[][] a = new int[10][4]; a[0][0] = 3; a[0][0]", 3);
     test("int[][] a = new int[10][4]; a[-1][-1] = 3; a[-1][-1]", 3);
     test("int[][] a = new int[10][4]; int i = 0; a[i][i] = 3; a[i][i]", 3);
+    test("int[][] a = new int[10][4]; int i = 0; a[i,i] = 3; a[i][i]", 3);
     test("int[][] a = new int[10][4]; int i = -1; a[i][i] = 3; a[i][i]", 3);
     test("int[][] a = new int[10][4]; long i = 0; a[i][i] = 3; a[i][i]", 3);
     test("int[][] a = new int[10][4]; long i = -1; a[i][i] = 3; a[i][i]", 3);
@@ -4257,6 +4258,7 @@ class CompilerTest extends BaseTest {
     test("def x = 3.2D; int[][] a = new int[10][4]; a[0][0] = x; a[0][0]", 3);
     test("def x = 3.2D; int[][] a = new int[10][4]; a[-1][-1] = x; a[-1][-1]", 3);
     test("def x = 3.2D; int[][] a = new int[10][4]; int i = 0; a[i][i] = x; a[i][i]", 3);
+    test("def x = 3.2D; int[][] a = new int[10][4]; int i = 0; a[i,i] = x; a[i][i]", 3);
     test("def x = 3.2D; int[][] a = new int[10][4]; int i = -1; a[i][i] = x; a[i][i]", 3);
     test("def x = 3.2D; int[][] a = new int[10][4]; long i = 0; a[i][i] = x; a[i][i]", 3);
     test("def x = 3.2D; int[][] a = new int[10][4]; long i = -1; a[i][i] = x; a[i][i]", 3);
@@ -4444,6 +4446,7 @@ class CompilerTest extends BaseTest {
     test("def a = new byte[10][4]; long i = -1; a[i][i] = 3; a[i][i]", (byte)3);
     test("def a = new byte[10][4]; double i = 0; a[i][i] = 3; a[i][i]", (byte)3);
     test("def a = new byte[10][4]; double i = -1; a[i][i] = 3; a[i][i]", (byte)3);
+    test("def a = new byte[10][4]; double i = -1; double j = -1; a[i, j] = 3; a[i, j]", (byte)3);
     test("def a = new byte[10][4]; Decimal i = 0; a[i][i] = 3; a[i][i]", (byte)3);
     test("def a = new byte[10][4]; Decimal i = -1; a[i][i] = 3; a[i][i]", (byte)3);
     test("def a = new byte[10][4]; def i = 0; a[i][i] = 3; a[i][i]", (byte)3);
@@ -4454,6 +4457,7 @@ class CompilerTest extends BaseTest {
     test("def x = 3.2D; def a = new byte[10][4]; a[-1][-1] = x; a[-1][-1]", (byte)3);
     test("def x = 3.2D; def a = new byte[10][4]; int i = 0; a[i][i] = x; a[i][i]", (byte)3);
     test("def x = 3.2D; def a = new byte[10][4]; int i = -1; a[i][i] = x; a[i][i]", (byte)3);
+    test("def x = 3.2D; def a = new byte[10][4]; int i = -1; a[i,i] = x; a[i,i]", (byte)3);
     test("def x = 3.2D; def a = new byte[10][4]; long i = 0; a[i][i] = x; a[i][i]", (byte)3);
     test("def x = 3.2D; def a = new byte[10][4]; long i = -1; a[i][i] = x; a[i][i]", (byte)3);
     test("def x = 3.2D; def a = new byte[10][4]; double i = 0; a[i][i] = x; a[i][i]", (byte)3);
@@ -5174,12 +5178,26 @@ class CompilerTest extends BaseTest {
   @Test public void otherArrayTypes() {
     test("List[] x = [[1,2],['a','b','c']]; x instanceof List[] && x[1] instanceof List && x[1] == ['a','b','c']", true);
     test("List[][] x = [[[1,2],['a','b','c']]]; x instanceof List[][] && x[0][1] instanceof List && x[0][1] == ['a','b','c']", true);
+    test("List[][] x = [[[1,2],['a','b','c']]]; x instanceof List[][] && x[0][1] instanceof List && x[0][1][2] == 'c'", true);
+    test("List[][] x = [[[1,2],['a','b','c']]]; x instanceof List[][] && x[0,1] instanceof List && x[0,1,2] == 'c'", true);
     test("def x = [[1,2],['a','b','c']] as List[]; x instanceof List[] && x[1] instanceof List && x[1] == ['a','b','c']", true);
     test("def x = [[[1,2],['a','b','c']]] as List[][]; x instanceof List[][] && x[0][1] instanceof List && x[0][1] == ['a','b','c']", true);
     test("Map[][] x = [[[a:1,b:2],[x:'a',y:'b',z:'c']]]; x instanceof Map[][] && x[0][1] instanceof Map && x[0][1] == [x:'a',y:'b',z:'c']", true);
     test("def x = [[[a:1,b:2],[x:'a',y:'b',z:'c']]] as Map[][]; x instanceof Map[][] && x[0][1] instanceof Map && x[0][1] == [x:'a',y:'b',z:'c']", true);
     test("([[1],[-2],[3]] as List[]).toString()", "[[1], [-2], [3]]");
     test("([[[1]],[[-2]],[[3]]] as List[][]).toString()", "[[[1]], [[-2]], [[3]]]");
+  }
+
+  @Test public void multiDimensionIndexingWithCommas() {
+    test("def x = [a:[b:[c:3]]]; x['a']['b']['c']", 3);
+    test("def x = [a:[b:[c:3]]]; x['a','b','c']", 3);
+    test("def x = [a:[b:[c:3]]]; x?['a','b','c']", 3);
+    test("def x = [a:[b:[:]]]; x?['a','b','c']", null);
+    testError("def x = [a:[:]]; x?['a','b','c']", "null parent");
+    test("def x = [[[1,2],[3,4]],[[1],[2]],[[3,4,5],[6,7,8]]] as int[][][]; x[2][1][1]", 7);
+    test("def x = [[[1,2],[3,4]],[[1],[2]],[[3,4,5],[6,7,8]]] as int[][][]; x[2,1 unless false,1 if true]", 7);
+    test("int[][][] x = [[[1,2],[3,4]],[[1],[2]],[[3,4,5],[6,7,8]]]; x[2,1,1]", 7);
+    test("def x = [[[1,2],[3,4]],[[1],[2]],[[3,4,5],[6,7,8]]]; x[2,1,1]", 7);
   }
 
   @Test public void arraysAsValues() {
