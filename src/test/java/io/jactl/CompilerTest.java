@@ -6815,6 +6815,8 @@ class CompilerTest extends BaseTest {
     test("([97,98,99] as byte[]) as String", "abc");
     test("byte[] x = [97,98,99]; x as String", "abc");
     test("def x = [97,98,99] as byte[]; x as String", "abc");
+
+    test("def x = 1 as long\n[x,x].sum()\n", 2L);
   }
 
   @Test public void inOperator() {

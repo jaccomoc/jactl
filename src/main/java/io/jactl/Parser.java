@@ -556,7 +556,7 @@ public class Parser {
         unexpected("Unexpected '[' after " + typeToken.getChars(), throwIfError);
       }
       if (type != OPTIONAL && !ignoreArrays) {
-        while (matchAnyIgnoreEOL(LEFT_SQUARE)) {
+        while (matchAny(LEFT_SQUARE)) {
           type = arrayOf(type);
           expectOrSkip(true, Utils.listOf(RIGHT_SQUARE), Utils.listOf(EOL,COMMA,RIGHT_PAREN,RIGHT_BRACE,RIGHT_SQUARE));
         }
@@ -2612,7 +2612,7 @@ public class Parser {
     Token                 leftBrace   = expect(LEFT_BRACE);
     AtomicReference<Expr> defaultCase = new AtomicReference<>();
     List<Expr.SwitchCase> cases       = new ArrayList<>();
-    while (!matchAnyIgnoreEOL(RIGHT_BRACE)) {
+    while (!peekIgnoreEolIs(EOF,RIGHT_BRACE)) {
       // Wrap each case in an ExprStmt to help with indenting in Intellij plugin
       marked(true, () -> {
         Token                  nextToken = peek();
@@ -2625,12 +2625,17 @@ public class Parser {
         else {
           patterns = switchPatterns();
         }
-        expect(ARROW);
-        Expr expr = ifUnlessExpr(false);
-        if (expr instanceof Expr.Closure) {
-          expr = convertClosureToBlockExpr(expr);
+        Expr expr;
+        if (expectOrNull(true, ARROW) != null) {
+          expr = ifUnlessExpr(false);
+          if (expr instanceof Expr.Closure) {
+            expr = convertClosureToBlockExpr(expr);
+          }
+          expr.isResultUsed = true;
         }
-        expr.isResultUsed = true;
+        else {
+          expr = new Expr.Noop(previous());
+        }
         if (patterns == null) {
           defaultCase.set(expr);
         }
@@ -2651,7 +2656,8 @@ public class Parser {
          .filter(expr -> expr.isConst)
          .collect(Collectors.toMap(expr -> expr.constValue,
                                    expr -> expr,
-                                   (expr1, expr2) -> error("Literal match occurs multiple times in switch: " + expr2.constValue, expr2.location)));
+                                   (expr1, expr2) -> error("Literal match occurs multiple times in switch: " + expr2.constValue, expr2.location, false)));
+    expectOrNull(true, RIGHT_BRACE);
     return new Expr.Switch(matchToken, subject, cases, defaultCase.get());
   }
 

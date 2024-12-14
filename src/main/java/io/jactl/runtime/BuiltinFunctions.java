@@ -233,6 +233,7 @@ public class BuiltinFunctions {
 
       Jactl.method(ITERATOR)
            .name("mapWithIndex")
+           .alias("mapi")
            .asyncInstance(true)
            .asyncParam("mapper", null)
            .impl(BuiltinFunctions.class, "iteratorMapWithIndex")
@@ -240,6 +241,7 @@ public class BuiltinFunctions {
 
       Jactl.method(ITERATOR)
            .name("flatMap")
+           .alias("fmap")
            .asyncInstance(true)
            .asyncParam("mapper", null)
            .impl(BuiltinFunctions.class, "iteratorFlatMap")

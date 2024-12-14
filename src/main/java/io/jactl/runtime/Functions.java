@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.Expr;
 import io.jactl.JactlType;
+import io.jactl.Pair;
 import io.jactl.Utils;
 
 import java.lang.invoke.MethodHandle;
@@ -145,14 +146,14 @@ public class Functions {
     return match.orElse(NO_SUCH_METHOD);
   }
 
-  public static List<FunctionDescriptor> getAllMethods(JactlType objType) {
+  public static List<Pair<String,FunctionDescriptor>> getAllMethods(JactlType objType) {
     if (objType.is(UNKNOWN)) {
       return Utils.listOf();
     }
     return methods.keySet()
                   .stream()
-                  .map(name -> findMatching(objType, name))
-                  .filter(m -> m != NO_SUCH_METHOD)
+                  .map(name -> Pair.create(name,findMatching(objType, name)))
+                  .filter(p -> p.second != NO_SUCH_METHOD)
                   .collect(Collectors.toList());
   }
 }

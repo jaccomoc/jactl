@@ -35,8 +35,8 @@ public class SwitchResolver {
     // Create a statement wrapper for each case in the match so we can resolve them
     block.stmts.stmts.addAll(expr.cases.stream().map(c -> {
       // Create a block in case we have regex/destructured capture vars
-      c.block = new Stmt.Block(null, null);
       Token location = c.patterns.get(0).first.location;
+      c.block = new Stmt.Block(location, null);
       c.block.stmts = new Stmt.Stmts(location);
       c.block.stmts.stmts.add(new Stmt.ExprStmt(location, c));
       return c.block;
