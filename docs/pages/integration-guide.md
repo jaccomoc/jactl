@@ -187,6 +187,29 @@ All these exception classes are subclasses of the top level `io.jactl.JactlError
 > **Note**<br/>
 > All of these classes are unchecked exceptions so be sure to catch them at the appropriate place in your code.
 
+### Default Execution Environment and Shutdown
+
+By default, if you have not provided an implementation of the `JactlEnv` interface
+(see [Jactl Execution Environment](#jactl-execution-environment) below) you will be using the
+built-in `io.jactl.DefaultEnv`.
+
+This class creates static thread pools for the non-blocking event loop threads, the blocking
+threads, and a thread for timers.
+
+Since these thread-pools are daemon threads, if you want to cleanly exit without invoking
+`System.exit()`, you will need stop these thread-pools using the static `io.jactl.DefaultEnv.shutdown()`
+method:
+
+```java
+class MyTest {
+  public static void main(String[] args) {
+    Object result = Jactl.eval("3 + 5");
+    System.out.println("Result is " + result);
+    io.jactl.DefaultEnv.shutdown();
+  }
+}
+```
+
 ## JactlContext
 
 Although most of the examples shown so far haven't used a JactlContext, in general, you will need to create an object

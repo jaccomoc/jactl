@@ -160,7 +160,7 @@ blank lines (or 33K including comments and blank lines).
 
 ### How many test cases are there?
 
-There are currently over 11K individual test cases.
+There are currently over 11,000 individual test cases.
 Each test case is a Jactl script that is compiled, run, and then verified against the expected
 result (or the expected error).
 
@@ -212,6 +212,18 @@ def encoded = 'AQIDBA=='
 def decoded = x.base64Decode()    // will be array of bytes: [1, 2, 3, 4]
 ```
 See the [Integration Guide](integration-guide.md) for more information.
+
+### Why doesn't my Java program exit after evaluating a Jactl script?
+
+If you have a simple Java program where you evaluate a Jactl script using the default execution
+environment, there will be some daemon threads that have been started in the background and
+if you don't stop these threads, the JVM will not normally exit (unless `System.exit()` is called).
+
+Note that these threads are shared and only started up once.
+
+You can use the static method `io.jactl.DefaultEnv.shutdown()` to stop these threads.
+
+See [Integration Guide](integration-guide.md) for more information.
 
 ### Is there an IntelliJ plugin for Jactl?
 

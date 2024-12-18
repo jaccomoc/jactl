@@ -65,4 +65,10 @@ public class DefaultEnv implements JactlEnv {
   public Object getThreadContext() {
     return null;
   }
+
+  public static void shutdown() {
+    eventLoop.shutdown();
+    blockingExecutor.shutdown();
+    timerService.shutdown();
+  }
 }
