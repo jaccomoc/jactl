@@ -216,10 +216,10 @@ See the [Integration Guide](integration-guide.md) for more information.
 ### Is there an IntelliJ plugin for Jactl?
 
 Yes, there is an IntelliJ plugin.
-It is in the process of being released into the Intellij marketplace for plugins and should be available from within
-IntelliJ shortly.
+Within IntelliJ, you can search for `jactl` within `Settings...| Plugins | Marketplace` to download and install
+the plugin.
 
-The source code for the plugin can be found here: [Jactl IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin)
+The source code and documentation for the plugin can be found here: [Jactl IntelliJ Plugin](https://github.com/jaccomoc/jactl-intellij-plugin)
 
 ### How can I improve the runtime speed of my Jactl script?
 
@@ -363,14 +363,42 @@ switch (x) {
 }
 ```
 
-### Why do Maps only support Strings for keys?
+### Do Maps support keys that are not String values?
 
-In Jactl, the built-in Map type currently only supports key values that are Strings.
-This seemed like a reasonable limitation for a scripting language to start with.
-In the future, there might be an enhancement where Maps could support other key types.
+Earlier versions of Jactl limited Map keys to String values.
+As of version 2.1.0, Maps can now be keyed on arbitrary types.
+
+Note that Jactl will automatically create `hashCode()` and `equals()` methods for any user-defined
+classes and that these use "value" semantics for their comparisons.
+This means that the values of the fields of the object will be used to determine equality.
+Any two objects with the same field contents will be considered identical.
+
+### What about Map keys that are numbers?
+
+If you use a number as a key for a Map you need to be careful about what the actual underlying
+type is.
+This is because Maps are implemented using the standard Java `java.util.LinkedHashMap` class
+which uses `hashCode()` and `equals()` when determining whether a key exists in a Map.
+If you use an `int` value for a key and then try to look it up using a `long` value the `equals()`
+call will determine that they are not equal and the key won't be found.
+
+For example:
+```groovy
+Map m = [:]
+m[1] = 'abc'
+m[1L] == null
+```
+In this example, `m[1L]` will return `null` because `1` and `1L` are not equal from a Java point
+of view.
+
+This also applies to numbers embedded in other objects such as lists:
+```groovy
+Map m = [:]
+m[[1,2,3]] = 'abc'
+m[[1L,2,3]] == null
+```
 
 ### Why is there no Set type in Jactl?
-
 
 Jactl does not currently have a built-in Set type, but equivalent behaviour can be obtained using
 Maps:
