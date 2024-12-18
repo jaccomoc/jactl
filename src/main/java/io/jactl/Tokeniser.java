@@ -628,7 +628,7 @@ public class Tokeniser {
     // Search for first char that is not a valid identifier char
     int     i          = 1;
     int     digitCount = 0;
-    boolean isDigits   = startChar == '$' && isDigit(charAt(1), 10);
+    boolean isDigits   = startChar == '$' && remaining > 1 && isDigit(charAt(1), 10);
     for (; i < remaining && (isDigits ? isDigit(charAt(i), 10) : isIdentifierPart(charAt(i))); i++) {
       digitCount += isDigit(charAt(i), 10) ? 1 : 0;
     }
