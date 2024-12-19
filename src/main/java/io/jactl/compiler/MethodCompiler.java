@@ -3483,8 +3483,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (peek().is(ANY)) {
       expect(1);
+      loadConst(true);    // captureStackTrace
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "castToNumber", Object.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_NUMBER, Object.class, boolean.class, String.class, int.class);
       return null;
     }
     error("Cannot convert " + peek() + " to Number", (Token)location);

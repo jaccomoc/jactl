@@ -1798,6 +1798,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("-4.0D.pow(0.5)", "illegal request");
     testError("-4L.pow(0.5)", "illegal request");
     test("6.map{ it as long }.map{ (it+1).pow(4) }.reduce(1){ p,it -> p * it }", 268738560000L);
+    test("def x = 2\n12 / 2.pow(x)", 3);
   }
 
   @Test public void asyncCollectionClosures() {
