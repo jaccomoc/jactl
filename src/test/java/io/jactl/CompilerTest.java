@@ -5574,6 +5574,17 @@ class CompilerTest extends BaseTest {
     testError("String x; x.a += 'abc'", "invalid object type");
     testError("String x; x['a'] += 'abc'", "invalid object type");
     testError("String x; x[0] += 'abc'", "cannot assign to element of string");
+
+    test("def x; def y; def z; z = 99; z ?= x + y; z", 99);
+    test("def x; def y; def z; z = 99; z ?= x & y; z", 99);
+    test("def x; def y; def z; z = 99; z ?= x | y; z", 99);
+    test("def x; def y; def z; z = 99; z ?= x ^ y; z", 99);
+    test("def x; def y; def z; z = 99; z ?= ~x; z", 99);
+    test("def x; int z; z = 99; z ?= x + 3; z", 99);
+    test("def x; int z; z = 99; z ?= x & 3; z", 99);
+    test("def x; int z; z = 99; z ?= x | 3; z", 99);
+    test("def x; int z; z = 99; z ?= x ^ 3; z", 99);
+    test("def x; int z; z = 99; z ?= ~x; z", 99);
   }
 
   @Test public void nullValues() {

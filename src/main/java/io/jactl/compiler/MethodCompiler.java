@@ -1522,8 +1522,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();  // Box rhs so we can invoke our method
       loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
       loadConst(expr.originalOperator != null && expr.originalOperator.getChars().endsWith("="));
+      loadConst(!insideTryCatchNullError());
       loadLocation(expr.operator);
-      invokeMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, boolean.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, boolean.class, boolean.class, String.class, int.class);
       return null;
     }
 
@@ -3552,8 +3553,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitInsn(LXOR);
         break;
       case ANY:
+        loadConst(!insideTryCatchNullError());
         loadLocation(location);
-        invokeMethod(RuntimeUtils.class, "arithmeticNot", Object.class, String.class, int.class);
+        invokeMethod(RuntimeUtils.class, RuntimeUtils.ARITHMETIC_NOT, Object.class, boolean.class, String.class, int.class);
         break;
       default: throw new IllegalStateException("Internal error: Unexpected type " + peek().getType() + " for '~'");
     }

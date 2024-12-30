@@ -324,7 +324,7 @@ public class RuntimeUtils {
       }
       if (operator == STAR) {
         if (right instanceof Number) {
-          return Utils.repeat(leftString, ((Number) right).intValue());
+          return repeat(leftString, ((Number) right).intValue(), source, offset);
         }
         throw new RuntimeError("Right-hand side of string repeat operator must be numeric but found " + className(right), source, offset);
       }
@@ -645,6 +645,15 @@ public class RuntimeUtils {
     throw new RuntimeError("Non-numeric operand for " + (isLeft ? "left" : "right") + "-hand side of '" + operator + "': was " + className(obj), source, offset);
   }
 
+  enum OperandType { LEFT, RIGHT, UNARY }
+  private static void throwBitOperandError(Object obj, OperandType opType, String operator, boolean captureStackTrace, String source, int offset) {
+    String operand = opType == OperandType.UNARY ? "" : (opType == OperandType.LEFT ? "left" : "right") + "-hand side of '";
+    if (obj == null) {
+      throw new NullError("Null operand for " + operand + operator + "'", source, offset, captureStackTrace);
+    }
+    throw new RuntimeError("Operand for " + operand + operator + "' must be int, byte, or long: was " + className(obj), source, offset);
+  }
+
   public static final String BOOLEAN_OP = "booleanOp";
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
     if (operator == TRIPLE_EQUAL) {
@@ -834,11 +843,12 @@ public class RuntimeUtils {
    * @param right         the rhs
    * @param operator      the operator (without '=': e.g. &lt;&lt;= is just &lt;&lt;)
    * @param isAssignment  whether original operator ended in '=' (e.g. was &lt;&lt;=). only used for list &lt;&lt;= elem
+   * @param captureStackStrace true if we capture stack trace for NullError (not in a try/catch NullError)
    * @param source        source code
    * @param offset        offset where operator is
    * @return the result of the operation
    */
-  public static Object bitOperation(Object left, Object right, String operator, boolean isAssignment, String source, int offset) {
+  public static Object bitOperation(Object left, Object right, String operator, boolean isAssignment, boolean captureStackStrace, String source, int offset) {
     if (left instanceof List && operator == DOUBLE_LESS_THAN) {
       return listAddSingle((List)left, right, isAssignment);
     }
@@ -850,11 +860,11 @@ public class RuntimeUtils {
       leftIsLong = true;
     }
     else if (!(left instanceof Integer || left instanceof Byte)) {
-      throw new RuntimeError("Left-hand side of '" + operator + "' must be int, byte, or long (not " + className(left) + ")", source, offset);
+      throwBitOperandError(left, OperandType.LEFT, operator, captureStackStrace, source, offset);
     }
 
     if (!(right instanceof Long) && !(right instanceof Integer || right instanceof Byte)) {
-      throw new RuntimeError("Right-hand side of '" + operator + "' must be int, byte, or long (not " + className(right) + ")", source, offset);
+      throwBitOperandError(right, OperandType.RIGHT, operator, captureStackStrace, source, offset);
     }
 
     long rhs = ((Number) right).longValue();
@@ -905,8 +915,10 @@ public class RuntimeUtils {
     return (byte)result;
   }
 
-  public static Object arithmeticNot(Object obj, String source, int offset) {
+  public static final String ARITHMETIC_NOT = "arithmeticNot";
+  public static Object arithmeticNot(Object obj, boolean captureStackTrace, String source, int offset) {
     if (!(obj instanceof Long) && !(obj instanceof Integer || obj instanceof Byte)) {
+      throwBitOperandError(obj, OperandType.UNARY, "~", captureStackTrace, source, offset);
       throw new RuntimeError("Operand for '~' must be int, byte, or long (not " + className(obj) + ")", source, offset);
     }
 
@@ -3043,5 +3055,12 @@ public class RuntimeUtils {
   public static final String ERROR_WITH_MSG = "errorWithMsg";
   public static RuntimeError errorWithMsg(String msg, String prefix, String source, int offset) {
     return new RuntimeError(prefix + (msg == null ? "" : ": " + msg), source, offset);
+  }
+
+  private static String repeat(String str, int repeat, String source, int offset) {
+    if (repeat < 0) {
+      throw new RuntimeError("String repeat count cannot be negative (was " + repeat + ")", source, offset);
+    }
+    return Utils.repeat(str, repeat);
   }
 }
