@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import io.jactl.runtime.JactlMethodHandle.FunctionWrapperHandle;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
@@ -46,13 +47,13 @@ public class FunctionDescriptor {
   public boolean          isVarArgs    = false;     // Varargs if last param is Object[]
 
   // Used by built-in functions:
-  public boolean          needsLocation;
-  public String            wrapperMethod;
-  public JactlMethodHandle wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
-  public String            wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
-  public boolean          isGlobalFunction = false;  // For builtins indicates whether global function or method
-  public boolean          isBuiltin;
-  public Boolean          isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
+  public boolean               needsLocation;
+  public String                wrapperMethod;
+  public FunctionWrapperHandle wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
+  public String                wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
+  public boolean               isGlobalFunction = false;  // For builtins indicates whether global function or method
+  public boolean               isBuiltin;
+  public Boolean               isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
 
   // Async if any of these args are async. If none listed then always async. Counting starts at 0 for the instance
   // itself (e.g. ITERATOR) and then 1 is the first arg and so on.
@@ -64,17 +65,6 @@ public class FunctionDescriptor {
     this.paramCount = paramCount;
     this.mandatoryArgCount = mandatoryArgCount;
     this.needsLocation = needsLocation;
-  }
-
-  public FunctionDescriptor(JactlType type, JactlType firstArgType, String name, JactlType returnType, List<JactlType> paramTypes, boolean varargs,
-                            int mandatoryArgCount, String implementingClass, String implementingMethod, boolean needsLocation, JactlMethodHandle wrapperHandle) {
-    this(name, returnType, varargs ? -1 : paramTypes.size(), mandatoryArgCount, needsLocation);
-    this.type = type;
-    this.firstArgtype = firstArgType;
-    this.paramTypes = paramTypes;
-    this.implementingClassName = implementingClass;
-    this.implementingMethod = implementingMethod;
-    this.wrapperHandle = wrapperHandle;
   }
 
   public FunctionDescriptor() {}

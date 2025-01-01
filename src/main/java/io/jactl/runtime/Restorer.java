@@ -58,11 +58,15 @@ public class Restorer {
     return this;
   }
 
+  public JactlContext getContext() {
+    return context;
+  }
+
   public static Object restore(JactlContext context, byte[] buf) {
     Restorer restorer = get(context, buf);
     // We checkpoint a two element list (globals, continuation) so restore the globals and return the continuation
     List restored = (List)restorer.restore();
-    RuntimeState.setState((Map<String, Object>)restored.get(0), null, null);
+    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), null, null);
     return restored.get(1);
   }
 

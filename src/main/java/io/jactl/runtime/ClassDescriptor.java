@@ -124,9 +124,6 @@ public class ClassDescriptor extends JactlUserDataHolder {
     if (func == null && hasBaseClass()) {
       func = baseClass.getClassDescriptor().getMethod(name);
     }
-    if (func == null) {
-      func = Functions.lookupMethod(getInstanceType(), name);
-    }
     return func;
   }
 

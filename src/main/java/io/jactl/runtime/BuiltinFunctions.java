@@ -33,12 +33,9 @@ import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 
 public class BuiltinFunctions {
 
-  private static final Map<String,FunctionDescriptor> globalFunctions = new HashMap<>();
   private static       boolean                        initialised     = false;
   private static final Map<Class,Integer> classId     = new HashMap<>();
   private static final List<Class>        fnClasses   = new ArrayList<>();
-
-  private static final Map<String,Expr.VarDecl> globalFunDecls = new HashMap<>();
 
   static {
     allocateId(MatchCounter.class);
@@ -548,65 +545,14 @@ public class BuiltinFunctions {
     }
   }
 
-  public static FunctionDescriptor lookupGlobalFunction(String name) {
-    return globalFunctions.get(name);
-  }
-
-  public static JactlMethodHandle lookupMethodHandle(String name) {
-    FunctionDescriptor descriptor = globalFunctions.get(name);
-    if (descriptor == null) {
-      throw new IllegalStateException("Internal error: attempt to get MethodHandle to unknown built-in function " + name);
-    }
-    return descriptor.wrapperHandle;
-  }
-
-  static Expr.VarDecl getGlobalFunDecl(String name) {
-    return globalFunDecls.get(name);
-  }
-
-  static Set<String> getGlobalFunctionNames() {
-    return globalFunctions.keySet();
-  }
-
   ///////////////////////////////////////////////////
 
-  public static void registerFunction(JactlFunction function) {
-    function.init();
-    if (function.wrapperHandleField == null) {
-      throw new IllegalStateException("Missing value for wrapperHandleField for " + function.name);
-    }
-    if (function.isMethod()) {
-      function.aliases.forEach(alias -> Functions.registerMethod(alias, function));
-    }
-    else {
-      // Aliases also includes primary name
-      function.aliases.forEach(alias -> globalFunctions.put(alias, function));
-      Expr.VarDecl varDecl = Utils.funcDescriptorToVarDecl(function);
-      function.aliases.forEach(alias -> globalFunDecls.put(alias, varDecl));
-    }
-
-    allocateId(function.implementingClass);
-  }
-
-  private static void allocateId(Class clss) {
+  static void allocateId(Class clss) {
     Integer id = classId.get(clss);
     if (id == null) {
       id = fnClasses.size();
       classId.put(clss, id);
       fnClasses.add(clss);
-    }
-  }
-
-  public static void deregisterFunction(JactlType type, String name) {
-    Functions.deregisterMethod(type, name);
-  }
-
-  public static void deregisterFunction(String name) {
-    FunctionDescriptor fn = globalFunctions.remove(name);
-    if (fn instanceof JactlFunction) {
-      // Aliases also includes primary name
-      ((JactlFunction)fn).aliases.forEach(globalFunDecls::remove);
-      ((JactlFunction)fn).cleanUp();
     }
   }
 
@@ -735,9 +681,6 @@ public class BuiltinFunctions {
       }
     }
     catch (IOException ignored) {}
-    if (result == null) {
-      RuntimeState.resetState();
-    }
     return result;
   }
 

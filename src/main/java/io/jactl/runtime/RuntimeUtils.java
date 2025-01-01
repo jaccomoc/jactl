@@ -79,20 +79,6 @@ public class RuntimeUtils {
   public static final String DOUBLE_GREATER_THAN = ">>";
   public static final String TRIPLE_GREATER_THAN = ">>>";
 
-  private static final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
-    new LinkedHashMap(16, 0.75f, true) {
-      @Override
-      protected boolean removeEldestEntry(Map.Entry eldest) {
-        return size() > scriptCacheSize;
-      }
-    });
-
-  public static int scriptCacheSize = 100;  // Total number of compiled scripts we keep for use by eval() function
-
-  public static void clearScriptCache() {
-    evalScriptCache.clear();
-  }
-
   // Special marker value to indicate that we should use whatever type of default makes sense
   // in the context of the operation being performed. Note that we use an integer value of 0
   // as a special marker since that way when we need the before value of an inc/dec it will
@@ -1301,7 +1287,7 @@ public class RuntimeUtils {
     }
     else {
       // Fields of a map cannot override built-in methods so look up method first
-      value = onlyField ? null : Functions.lookupWrapper(parent, field);
+      value = onlyField ? null : RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, field);
       if (value == null && parent instanceof Map) {
         value = ((Map) parent).get(field);
       }
@@ -1374,7 +1360,7 @@ public class RuntimeUtils {
     // Check for accessing method by name
     String fieldString = castToString(field);
     if (isDot && fieldString != null) {
-      JactlMethodHandle method = Functions.lookupWrapper(parent, fieldString);
+      JactlMethodHandle method = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, fieldString);
       if (method != null) {
         return method;
       }
@@ -1577,7 +1563,7 @@ public class RuntimeUtils {
     if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
-      value = Functions.lookupWrapper(parent, (String)field);
+      value = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, (String)field);
     }
 
     return value;
@@ -1603,7 +1589,7 @@ public class RuntimeUtils {
     if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
-      value = Functions.lookupWrapper(parent, (String)field);
+      value = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, (String)field);
     }
 
     return value;
@@ -1778,7 +1764,7 @@ public class RuntimeUtils {
       // search for matching static field or method
       fieldOrMethod = parent._$j$getStaticFieldsAndMethods().get(fieldName);
       if (fieldOrMethod == null) {
-        fieldOrMethod = Functions.lookupWrapper(parent, fieldName);
+        fieldOrMethod = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, fieldName);
       }
     }
     if (fieldOrMethod == null) {
@@ -2965,7 +2951,7 @@ public class RuntimeUtils {
     }
     try {
       bindings = bindings == null ? new LinkedHashMap() : bindings;
-      Function<Map<String, Object>, Object> script = compileScript(code, bindings, ((JactlContext.DynamicClassLoader)classLoader).getJactlContext());
+      Function<Map<String, Object>, Object> script = compileScript(code, bindings, RuntimeState.getState().getContext());
       Object                                result = script.apply(bindings);
       return result;
     }
@@ -2985,19 +2971,7 @@ public class RuntimeUtils {
   }
 
   private static Function<Map<String,Object>,Object> compileScript(String code, Map bindings, JactlContext context) {
-    Function<Map<String, Object>, Object> script = evalScriptCache.get(code);
-    if (script == null) {
-      // For eval we want to be able to cache the scripts but the problem is that if the bindings
-      // are typed (e.g. x is an Integer) but then when script is rerun a global has had its type
-      // changed (e.g. x is now a Long) the script will fail because the types don't match. So
-      // we erase all types and make everything ANY. This is obviously less efficient but for eval()
-      // efficiency should not be a big issue.
-      HashMap erasedBindings = new HashMap();
-      bindings.keySet().forEach(k -> erasedBindings.put(k, null));
-      script = Compiler.compileScriptInternal(code, context, Utils.DEFAULT_JACTL_PKG, erasedBindings);
-      evalScriptCache.put(code, script);
-    }
-    return script;
+    return context.getEvalScript(code, bindings);
   }
 
   public static boolean die(String msg, String source, int offset) {
@@ -3062,5 +3036,10 @@ public class RuntimeUtils {
       throw new RuntimeError("String repeat count cannot be negative (was " + repeat + ")", source, offset);
     }
     return Utils.repeat(str, repeat);
+  }
+
+  public static final String LOOKUP_METHOD_HANDLE = "lookupMethodHandle";
+  public static JactlMethodHandle lookupMethodHandle(String name) {
+    return RuntimeState.getState().getContext().getFunctions().lookupMethodHandle(name);
   }
 }

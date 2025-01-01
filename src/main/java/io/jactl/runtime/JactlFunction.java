@@ -17,8 +17,10 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.runtime.JactlMethodHandle.FunctionWrapperHandle;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -90,6 +92,8 @@ public class JactlFunction extends FunctionDescriptor {
   boolean     isAsyncInstance;                 // Actually async if instance is async (e.g. async ITERATOR)
   int         additionalArgs  = 0;             // needsLocation and methods need more args than just passed in
 
+  JactlContext context;
+
   private static final Object MANDATORY = new Object();
 
   /**
@@ -105,12 +109,26 @@ public class JactlFunction extends FunctionDescriptor {
    */
   public JactlFunction() {}
 
+
+  public JactlFunction(JactlContext context) {
+    this.context = context;
+  }
+
+  public JactlFunction(JactlContext context, JactlType methodClass) {
+    this.context = context;
+    this.type    = methodClass;
+  }
+
   /**
    * Register the function.
    * <p>Must be last method called on function.</p>
    */
   public void register() {
-    BuiltinFunctions.registerFunction(this);
+    if (context != null) {
+      context.getFunctions().registerFunction(this);
+      return;
+    }
+    Functions.INSTANCE.registerFunction(this);
   }
 
   /**
@@ -279,6 +297,18 @@ public class JactlFunction extends FunctionDescriptor {
                                          " from function registration");
     }
 
+    this.paramTypes       = getParamTypes();
+    this.paramClassesArr  = paramTypes.stream().map(t -> t.classFromType()).toArray(Class[]::new);
+    this.firstArgtype     = firstParamType();
+    this.returnType       = getReturnType();
+    this.paramNamesArr    = paramNames.toArray(new String[paramNames.size()]);
+    this.mandatoryParams  = getMandatoryParams();
+    this.wrapperMethod    = null;
+    this.isBuiltin        = true;
+    this.isStatic         = true;   // Builtins are Java static methods even if they might be Jactl methods
+    this.isAsync          = isAsync();
+    this.isGlobalFunction = !isMethod();
+
     try {
       MethodHandle handle =
         isMethod() ? MethodHandles.lookup().findVirtual(JactlFunction.class, "wrapper",
@@ -296,7 +326,7 @@ public class JactlFunction extends FunctionDescriptor {
                                                                                        Object[].class));
 
       handle = handle.bindTo(this);
-      wrapperHandle = JactlMethodHandle.createFuncHandle(handle, type, name);
+      wrapperHandle = JactlMethodHandle.createFuncHandle(handle, type, name, this);
 
       // Store handle in static field we have been given
       Field field = implementingClass.getDeclaredField(wrapperHandleField);
@@ -305,9 +335,15 @@ public class JactlFunction extends FunctionDescriptor {
                                            implementingClass.getName() + " must be static");
 
       }
-      if (field.get(null) != null) {
-        throw new IllegalArgumentException("Field " + wrapperHandleField + " in class " +
-                                           implementingClass.getName() + " already has a value");
+      Object fieldValue = field.get(null);
+      if (fieldValue != null) {
+        if (!(fieldValue instanceof FunctionWrapperHandle)) {
+          throw new IllegalArgumentException("Field " + wrapperHandleField + " of " + implementingClassName + " already has a value");
+        }
+        JactlFunction function = ((FunctionWrapperHandle) fieldValue).getFunction();
+        if (!isEquivalent(function)) {
+          throw new IllegalArgumentException("Function shares same implementing class and field name with existing function but is not equivalent: new=" + this + ", existing=" + function);
+        }
       }
       field.set(null, wrapperHandle);
     }
@@ -317,28 +353,6 @@ public class JactlFunction extends FunctionDescriptor {
     }
     catch (NoSuchMethodException e) {
       throw new IllegalArgumentException("Error accessing wrapper() in JactlFunction: " + e.getMessage(), e);
-    }
-
-    this.paramTypes       = getParamTypes();
-    this.paramClassesArr  = paramTypes.stream().map(t -> t.classFromType()).toArray(Class[]::new);
-    this.firstArgtype     = firstParamType();
-    this.returnType       = getReturnType();
-    this.paramNamesArr    = paramNames.toArray(new String[paramNames.size()]);
-    this.mandatoryParams  = getMandatoryParams();
-    this.wrapperMethod    = null;
-    this.isBuiltin        = true;
-    this.isStatic         = true;   // Builtins are Java static methods even if they might be Jactl methods
-    this.isAsync          = isAsync();
-    this.isGlobalFunction = !isMethod();
-  }
-
-  public void cleanUp() {
-    try {
-      Field field = implementingClass.getDeclaredField(wrapperHandleField);
-      field.set(null, null);
-    }
-    catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new RuntimeException(e);
     }
   }
 
@@ -525,4 +539,30 @@ public class JactlFunction extends FunctionDescriptor {
     }
   }
 
+  @Override
+  public String toString() {
+    return (isMethod() ? firstParamType() + "." : "") + name + "(" + paramNamesAndValues() + "):" + getReturnType();
+  }
+
+  private String paramNamesAndValues() {
+    String result = "";
+    for (int i = 0; i < paramCount; i++) {
+      if (i > 0) { result += ","; }
+      result += paramTypes.get(i) + " " + paramNames.get(i);
+      if (i < defaultVals.length) {
+        result += "=" + defaultVals[i];
+      }
+    }
+    return result;
+  }
+
+  private boolean isEquivalent(JactlFunction function) {
+    return this.paramNames.equals(function.paramNames) &&
+           this.paramTypes.equals(function.paramTypes) &&
+           Arrays.equals(this.defaultVals, function.defaultVals) &&
+           this.returnType.equals(function.returnType) &&
+           this.implementingMethod.equals(function.implementingMethod) &&
+           this.isMethod() == function.isMethod() &&
+           (!this.isMethod() || this.firstParamType().equals(function.firstParamType()));
+  }
 }

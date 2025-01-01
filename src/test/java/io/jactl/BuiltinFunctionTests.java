@@ -17,7 +17,7 @@
 
 package io.jactl;
 
-import io.jactl.runtime.BuiltinFunctions;
+import io.jactl.compiler.Compiler;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.Functions;
 import io.jactl.runtime.RuntimeError;
@@ -47,7 +47,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("testFunction()", 3);
     test("testFunction2()", 3);
 
-    BuiltinFunctions.deregisterFunction("testFunction");
+    Functions.INSTANCE.deregisterFunction("testFunction");
 
     testError("testFunction()", "unknown");
     testError("testFunction2()", "unknown");
@@ -2301,6 +2301,110 @@ public class BuiltinFunctionTests extends BaseTest {
       Jactl.function().name("testFunc").param("arg", 10).impl(BuiltinFunctionTests.class, "testFunc").register();
       test("testFunc(3)", 9);
       test("testFunc()", 100);
+    }
+    finally {
+      Jactl.deregister("testFunc");
+      testFuncData = null;
+    }
+  }
+
+  @Test public void contextWithSeparateFunctions() {
+    try {
+      JactlContext contextBefore = JactlContext.create()
+                                               .hasOwnFunctions(true)
+                                               .build();
+      try {
+        JactlScript compiled = Compiler.compileScript("testFunc(3)", contextBefore, packageName, globals);
+      }
+      catch (CompileError e) {
+        assertTrue(e.getMessage().contains("unknown variable 'testFunc'"));
+      }
+      JactlScript compiled = Compiler.compileScript("sleep(1,99)", contextBefore, packageName, globals);
+      assertEquals(99,compiled.runSync(globals));
+
+      Jactl.function().name("testFunc").param("arg", 10).impl(BuiltinFunctionTests.class, "testFunc").register();
+      test("testFunc(3)", 9);
+      test("testFunc()", 100);
+      JactlContext contextAfter = JactlContext.create()
+                                              .hasOwnFunctions(true)
+                                              .build();
+      compiled = Compiler.compileScript("testFunc(3)", contextAfter, packageName, globals);
+      assertEquals(9, compiled.runSync(globals));
+      compiled = Compiler.compileScript("sleep(1,99)", contextBefore, packageName, globals);
+      assertEquals(99,compiled.runSync(globals));
+
+      try {
+        contextBefore.function().name("testFunc2").param("arg", 9).impl(BuiltinFunctionTests.class, "testFunc").register();
+        fail("Expected IllegalArgumentException");
+      }
+      catch (IllegalArgumentException e) {
+        assertTrue(e.getMessage().contains("not equivalent"));
+      }
+
+      contextAfter.function().name("testFunc2").param("arg", 10).impl(BuiltinFunctionTests.class, "testFunc").register();
+      compiled = Compiler.compileScript("testFunc2()", contextAfter, packageName, globals);
+      assertEquals(100, compiled.runSync(globals));
+
+      contextBefore.function().name("testFunc2").param("arg", 10).impl(BuiltinFunctionTests.class, "testFunc").register();
+      compiled = Compiler.compileScript("testFunc2()", contextBefore, packageName, globals);
+      assertEquals(100, compiled.runSync(globals));
+      contextBefore.deregister("testFunc2");
+      try {
+        Compiler.compileScript("testFunc2()", contextBefore, packageName, globals);
+        fail("Expected CompileError");
+      }
+      catch (CompileError e) {
+        assertTrue(e.getMessage().contains("unknown variable 'testFunc2'"));
+      }
+    }
+    finally {
+      Jactl.deregister("testFunc");
+      testFuncData = null;
+    }
+  }
+
+  @Test public void contextWithSeparateMethods() {
+    try {
+      JactlContext contextBefore = JactlContext.create()
+                                               .hasOwnFunctions(true)
+                                               .build();
+      try {
+        JactlScript compiled = Compiler.compileScript("3.testMethod()", contextBefore, packageName, globals);
+      }
+      catch (CompileError e) {
+        assertTrue(e.getMessage().contains("No such method testMethod"));
+      }
+
+      Jactl.method(INT).name("testMethod").param("arg", 10).impl(BuiltinFunctionTests.class, "testMethod").register();
+      test("3.testMethod(3)", 9);
+      test("3.testMethod()", 30);
+
+      JactlContext contextAfter = JactlContext.create()
+                                              .hasOwnFunctions(true)
+                                              .build();
+      JactlScript compiled = Compiler.compileScript("3.testMethod(3)", contextAfter, packageName, globals);
+      assertEquals(9, compiled.runSync(globals));
+      compiled = Compiler.compileScript("3.testMethod()", contextAfter, packageName, globals);
+      assertEquals(30,compiled.runSync(globals));
+
+      try {
+        contextBefore.method(INT).name("testMethod").param("arg", 9).impl(BuiltinFunctionTests.class, "testMethod").register();
+        fail("Expected IllegalArgumentException");
+      }
+      catch (IllegalArgumentException e) {
+        assertTrue(e.getMessage().contains("not equivalent"));
+      }
+      contextBefore.method(INT).name("testMethod2").param("arg", 10).impl(BuiltinFunctionTests.class, "testMethod").register();
+      compiled = Compiler.compileScript("4.testMethod2()", contextBefore, packageName, globals);
+      assertEquals(40, compiled.runSync(globals));
+      contextBefore.deregister(JactlType.INT, "testMethod2");
+      try {
+        Compiler.compileScript("4.testMethod2()", contextBefore, packageName, globals);
+        fail("Expected CompileError");
+      }
+      catch (CompileError e) {
+        assertTrue(e.getMessage().contains("No such method testMethod2"));
+      }
     }
     finally {
       Jactl.deregister("testFunc");

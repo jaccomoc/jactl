@@ -356,7 +356,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classDecl.fieldVars.values().forEach(varDecl -> {
         if (varDecl.isField) {
           String fieldName = varDecl.name.getStringValue();
-          if (Functions.lookupMethod(ANY, fieldName) != null) {
+          if (jactlContext.getFunctions().lookupMethod(ANY, fieldName) != null) {
             error("Field name '" + fieldName + "' clashes with built-in method of same name", varDecl.name);
           }
           if (varDecl.isConstVar) {
@@ -2377,7 +2377,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
       }
     }
-    return Functions.lookupMethod(type, methodName);
+    return jactlContext.getFunctions().lookupMethod(type, methodName);
   }
 
   private ClassDescriptor lookupClass(List<Expr> classNameParts) {
@@ -2593,7 +2593,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (varDecl == null) { varDecl = lookupClassMember(name);                  }
     if (varDecl == null) { varDecl = lookupClass(name, location);              }
     if (varDecl == null) { varDecl = importedConstants.get(name);                      }
-    if (varDecl == null) { varDecl = Functions.getGlobalFunDecl(name); }
+    if (varDecl == null) { varDecl = jactlContext.getFunctions().getGlobalFunDecl(name); }
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
     // if value does not already exist.

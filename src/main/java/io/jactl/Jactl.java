@@ -240,7 +240,7 @@ public class Jactl {
    * @param name   the name of the method
    */
   public static void deregister(JactlType type, String name) {
-    BuiltinFunctions.deregisterFunction(type, name);
+    Functions.INSTANCE.deregisterFunction(type, name);
   }
 
   /**
@@ -248,7 +248,7 @@ public class Jactl {
    * @param name  the name of the global function
    */
   public static void deregister(String name) {
-    BuiltinFunctions.deregisterFunction(name);
+    Functions.INSTANCE.deregisterFunction(name);
   }
 
   ////////////////////////////////////////////

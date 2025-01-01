@@ -17,6 +17,8 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlContext;
+
 import java.io.BufferedReader;
 import java.io.PrintStream;
 import java.util.Map;
@@ -27,6 +29,7 @@ import java.util.Map;
  * checkpoint and restore them.
  */
 public class RuntimeState {
+  private JactlContext        context;
   private Map<String, Object> globals;
   private PrintStream         output;
   private BufferedReader      input;
@@ -59,8 +62,9 @@ public class RuntimeState {
     threadLocalState.set(null);
   }
 
-  public static void setState(Map<String, Object> globals, BufferedReader input, PrintStream output) {
+  public static void setState(JactlContext context, Map<String, Object> globals, BufferedReader input, PrintStream output) {
     RuntimeState state = getState();
+    state.context = context;
     state.input = input;
     state.output = output;
     state.globals = globals;
@@ -77,4 +81,6 @@ public class RuntimeState {
   public Map<String, Object> getGlobals() {
     return globals;
   }
+
+  public JactlContext getContext() { return context; }
 }

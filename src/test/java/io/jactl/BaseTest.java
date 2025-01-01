@@ -20,6 +20,7 @@ package io.jactl;
 import io.jactl.compiler.Compiler;
 import io.jactl.resolver.Resolver;
 import io.jactl.runtime.BuiltinFunctions;
+import io.jactl.runtime.Functions;
 import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.RuntimeUtils;
 import org.junit.jupiter.api.AfterAll;
@@ -75,7 +76,7 @@ public class BaseTest {
 
   @AfterEach
   public void cleanUp() {
-    BuiltinFunctions.deregisterFunction("_checkpoint");
+    Functions.INSTANCE.deregisterFunction("_checkpoint");
   }
 
   protected void doTest(String code, Object expected) {
@@ -111,7 +112,6 @@ public class BaseTest {
   }
 
   protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint) {
-    RuntimeUtils.clearScriptCache();
     testCounter++;
     try {
       JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint);

@@ -1185,6 +1185,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           else {
             // We need to find the method handle for the given method
             FunctionDescriptor method = clss.getMethod(name);
+            if (method == null) {
+              // Look for builtin method
+              method = classCompiler.context.getFunctions().lookupMethod(clss.getInstanceType(), name);
+            }
             check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
             // We want the handle to the wrapper method.
             loadWrapperHandle(method, expr);
@@ -1787,7 +1791,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (isBuiltinFunction) {
       // If we have the name of a built-in function then lookup its method handle
       loadConst(name);
-      invokeMethod(BuiltinFunctions.class, "lookupMethodHandle", String.class);
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_METHOD_HANDLE, String.class);
     }
     else
     if (name.charAt(0) == '$' && Utils.isDigits(name.substring(1))) {

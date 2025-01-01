@@ -320,6 +320,21 @@ By default, classes are not allowed to access globals and access will result in 
 If for your application it makes sense for classes to have access to globals then you can invoke this method
 with `true`.
 
+### hasOwnFunctions(boolean value)
+
+This controls whether the `JactlContext` object will have its own set of functions/methods registered with it.
+By default, all `JactlContext` share the same functions/methods registered using `Jactl.function() ... .register()`
+or `Jactl.method(type) ... .register()` (see section below on [Adding New Functions/Methods](#adding-new-functionsmethods)).
+
+If you would like to have different sets of functions/methods for different sets of scripts you can create different
+`JactlContext` objects and register different sets of functions/methods with each object.
+
+Note that whatever functions/methods have been registered at the time that the `JactlContext` is created will be
+available to scripts compiled with that `JactlContext` so it makes sense to register all functions/methods that you
+would like to be available to all scripts before creating any `JactlContext` objects.
+
+See [Adding New Functions/Methods](#adding-new-functionsmethods) for more details.
+
 ### Chaining Method Calls
 
 The methods for building a `JactlContext` can be chained in any order (apart from `create()` which must be first
@@ -331,11 +346,12 @@ JactlContext context = JactlContext.create()
                                    .environment(new io.jactl.DefaultEnv())
                                    .minScale(10)
                                    .classAccessToGlobals(false)
+                                   .hasOwnFunctions(false)
                                    .debug(0)
                                    .build();
 
 // This is equivalent to:
-JactlContext context = JactlContext.create().build()
+JactlContext context = JactlContext.create().build();
 ```
 
 ## Compiling Classes
@@ -996,9 +1012,9 @@ This allows you to configure the class name in your `.jactlrc` file and have the
 in the REPL and in commandline scripts.
 
 For example:
-```groovy
+```java
 class MyFunctions {
-  public static registerFunctions(JactlEnv env) {
+  public static void registerFunctions(JactlEnv env) {
     Jactl.method(JactlType.ANY)
          .name("toJson")
          .impl(JsonFunctions.class, "toJson")
@@ -1058,7 +1074,7 @@ class MyFunctions {
 
 ### Async Instance
 
-For methods that act on `JacsalType.ITERATOR` objects, we allow the object to be one of the following types:
+For methods that act on `JactlType.ITERATOR` objects, we allow the object to be one of the following types:
 * List
 * Map
 * String &mdash; iterates of the characters of the string
@@ -1105,7 +1121,7 @@ do more processing when they are resumed.
 A naive implementation of `measure()` might look like this:
 ```groovy
 class MyFunctions {
-  public static void registerFunctions(JacsalEnv env) {
+  public static void registerFunctions(JactlEnv env) {
     Jactl.function()
          .name("measure")
          .param("closure")
@@ -1239,7 +1255,7 @@ We also need to add a `Continuation` parameter to our function since it is now p
 Putting this all together, our class now looks like this:
 ```java
 class MyFunctions {
-  public static void registerFunctions(JacsalEnv env) {
+  public static void registerFunctions(JactlEnv env) {
     Jactl.function()
          .name("measure")
          .asyncParam("closure")
@@ -1291,7 +1307,7 @@ In order for the resume method to invoke the original method, it will need to be
 Now our code looks like this:
 ```java
 class MyFunctions {
-  public static void registerFunctions(JacsalEnv env) {
+  public static void registerFunctions(JactlEnv env) {
     Jactl.function()
          .name("measure")
          .param("count", 1)
@@ -1362,9 +1378,88 @@ Function@727860268
 284375954
 ```
 
+### Registering Functions/Methods for Specific `JactlContext` Objects
+
+In all examples so far, the custom functions/methods that have created have been registered globally using `Jactl.function()`
+and `Jactl.method(type)` and are therefore available to all scripts within the application.
+
+If different sets of scripts should have access to different sets of functions/methods, then instead of using `Jactl.function()`
+and `Jactl.method(type)` to register the function/method, you can create your `JactlContext` object and use the `function()`
+and `method(type)` methods on it to register functions and methods that will only be visible to scripts compiled with
+that `JactlContext`.
+
+For example:
+```java
+class MyModule {
+  
+  private static JactlContext context; 
+  
+  public static void registerFunctions(JactlContext context) {
+    context.method(JactlType.ANY)
+           .name("toJson")
+           .impl(JsonFunctions.class, "toJson")
+           .register();
+
+    context.method(JactlType.STRING)
+           .name("fromJson")
+           .impl(JsonFunctions.class, "fromJson")
+           .register();
+    
+    context.function()
+           .name("getState")
+           .param("sessionId")
+           .impl(MyModule.class, "getState")
+           .register();
+  }
+  
+  public static Object getStateData;
+  public static Map getState(long sessionId) { ... }
+  
+  public void init(JactlEnv env) {
+    context = JactlContext.create()
+                          .environment(env)
+                          .hasOwnFunctions(true)
+                          .build();
+    
+    registerFunctions(context);
+  }
+  
+  ...
+}
+```
+
+The way in which the function/method is registered is identical, except that we use the `JactlContext` object rather
+than the `Jactl` class (as shown in the example).
+
+Note that the `JactlContext` will also have access to all functions/methods that have already been registered using
+`Jactl.function()` or `Jactl.method()` at the point at which the `JactlContext` is created.
+If other functions/methods are later registered using `Jactl.function()` or `Jactl.method()` after the `JactlContext`
+was created, these additional functions/methods will not be available to scripts compiled with that `JactlContext`.
+
+### Deregistering Functions
+
+It is possible to deregister a function/method so that it is no longer available to any new scripts that are compiled.
+This might be useful in unit tests, for example.
+
+To deregister a global function just pass the function name to `Jactl.deregister()`:
+```java
+Jactl.deregister("myFunction");
+```
+
+To deregister a function from a `JactlContext`:
+```java
+jactlContext.deregister("myFunction");
+```
+
+To deregister a method:
+```java
+Jactl.deregister(JactlType.STRING, "lines");
+jactlContext.deregister(JactlType.LIST, "myListMethod");
+```
+
 ## Example Application
 
-In the `jacsal-vertx` project, an example application is provided that listens for JSON based web requests and
+In the `Jactl-vertx` project, an example application is provided that listens for JSON based web requests and
 runs a Jactl script based on the URI present in the request.
 
 See [Example Application](https://github.com/jaccomoc/jactl-vertx#example-application) for more details.

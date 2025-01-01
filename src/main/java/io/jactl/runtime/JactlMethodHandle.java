@@ -78,8 +78,8 @@ public abstract class JactlMethodHandle implements Checkpointable {
     return new IteratorHandle(handle, type, handleName);
   }
 
-  public static JactlMethodHandle createFuncHandle(MethodHandle handle, JactlType type, String name) {
-    return new FunctionWrapperHandle(handle, type, name);
+  public static FunctionWrapperHandle createFuncHandle(MethodHandle handle, JactlType type, String name, JactlFunction function) {
+    return new FunctionWrapperHandle(handle, type, name, function);
   }
 
   /////////////////////////////////////////////////////////////
@@ -180,14 +180,19 @@ public abstract class JactlMethodHandle implements Checkpointable {
     }
   }
 
-  private static class FunctionWrapperHandle extends JactlMethodHandle {
+  public static class FunctionWrapperHandle extends JactlMethodHandle {
     private JactlType type;    // Can be null for global functions
     private String    name;
+    private JactlFunction function;
     FunctionWrapperHandle(){}
-    public FunctionWrapperHandle(MethodHandle handle, JactlType type, String name) {
+    public FunctionWrapperHandle(MethodHandle handle, JactlType type, String name, JactlFunction function) {
       this.handle = handle;
       this.type   = type;
       this.name   = name;
+      this.function = function;
+    }
+    public JactlFunction getFunction() {
+      return function;
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
@@ -202,11 +207,11 @@ public abstract class JactlMethodHandle implements Checkpointable {
       restorer.expectCint(VERSION, "Bad version");
       type = restorer.readType();
       name = (String)restorer.readObject();
-      FunctionDescriptor func = type == null ? BuiltinFunctions.lookupGlobalFunction(name) : Functions.lookupMethod(type, name);
-      if (func == null) {
+      function = (JactlFunction)(type == null ? restorer.getContext().getFunctions().lookupGlobalFunction(name) : restorer.getContext().getFunctions().lookupMethod(type, name));
+      if (function == null) {
         throw new IllegalStateException("Could not find function " + name + " for type " + type);
       }
-      handle = func.wrapperHandle.handle;
+      handle = function.wrapperHandle.handle;
     }
   }
 

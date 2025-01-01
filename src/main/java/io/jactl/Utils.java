@@ -980,7 +980,14 @@ public class Utils {
   }
 
   public static Method findStaticMethod(Class clss, String methodName) {
-    return findMethod(clss, methodName, true);
+    if (clss == null) {
+      throw new IllegalArgumentException("Implementation class not specified");
+    }
+    Method method = findMethod(clss, methodName, true);
+    if (method == null) {
+      throw new IllegalArgumentException("Could not find method " + methodName + " in " + clss.getName());
+    }
+    return method;
   }
 
   public static Method findMethod(Class clss, String methodName, boolean isStatic) {

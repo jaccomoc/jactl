@@ -129,7 +129,7 @@ public class JactlScript {
    * @param completion  code to be run once script finishes
    */
   public void run(Map<String,Object> globals, BufferedReader input, PrintStream output, Consumer<Object> completion) {
-    RuntimeState.setState(globals, input, output);
+    RuntimeState.setState(jactlContext, globals, input, output);
     script.accept(globals, completion);
   }
 
