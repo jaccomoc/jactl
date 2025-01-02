@@ -246,7 +246,7 @@ To force the JVM to use hotspot compilation even on large methods add the `-XX:-
 command line flag to the `java` command.
 For example:
 ```bash
-java -XX:-DontCompileHugeMethods -jar jactl-2.1.0-jar
+java -XX:-DontCompileHugeMethods -jar jactl-2.2.0-jar
 ```
 
 ### Does Jactl provide any thread synchronisation mechanisms?
