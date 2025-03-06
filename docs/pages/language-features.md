@@ -98,7 +98,7 @@ simple string'''
 
 def interpolated = """
 This is not 
-a ${$simple}"""
+a $simple"""
 ```
 
 Triple quotes are useful when you want to embed quotes and don't want to have to escape them:
@@ -309,7 +309,7 @@ Jactl provides `switch` expressions that can match on literal values but can als
 match on the structure of the data and bind variables to different parts of the structure:
 ```groovy
 switch (x) {
-  /X=(\d+),Y=(\d+)/n ->  $1 + $2     // regex match with capture vars
+  /X=(\d+),Y=(\d+)/n -> $1 + $2      // regex match with capture vars
   [1,*]              -> 'matched'    // list whose first element is 1
   [_,_]              -> 'matched'    // list with 2 elements
   [int,String,_]     -> 'matched'    // 3 element list. 1st is an int, 2nd is a String
