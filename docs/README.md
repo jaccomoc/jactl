@@ -63,7 +63,7 @@ stream(nextLine).filter{ /^# /r }
 Another example showing Jactl's pattern matching with destructuring:
 ```groovy
 switch (x) {
-  /X=(\d+),Y=(\d+)/n ->  $1 + $2   // regex match with capture vars
+  /X=(\d+),Y=(\d+)/n -> $1 + $2    // regex match with capture vars
   [1,*]              -> 'matched'  // list whose first element is 1
   [_,_]              -> 'matched'  // list with 2 elements
   [int,String,_]     -> 'matched'  // 3 element list. 1st is an int, 2nd is a String
