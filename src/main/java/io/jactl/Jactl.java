@@ -304,7 +304,7 @@ public class Jactl {
       }
       else {
         script = new String(Files.readAllBytes(Paths.get(file)));
-        scriptClassName = file.replaceAll("^.*" + File.separatorChar, "")
+        scriptClassName = file.replaceAll("^.*" + (File.separatorChar == '\\' ? "\\\\" : File.separator), "")
                               .replaceAll("\\.[^\\.]*$", "");
       }
     }
