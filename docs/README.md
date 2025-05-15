@@ -177,8 +177,50 @@ features.
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
 [https://repo1.maven.org/maven2/io/jactl/jactl/2.2.0/jactl-2.2.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.2.0/jactl-2.2.0.jar)
 
-To download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
+Then, to run scripts:
+```shell
+java -jar jactl-2.2.0.jar -e '10.map{ it + 1 }.sum()'
+java -jar jactl-2.2.0.jar myscript.jactl
+```
+
+Or, you can use [JBang](https://www.jbang.dev/), if you have it installed, to run scripts.
+JBang will take care of finding and downloading the JAR for you.
+For example:
+```shell
+jbang run io.jactl:jactl:2.2.0 -e '10.map{ it + 1 }.sum()'
+jbang run io.jactl:jactl:2.2.0 myscript.jactl
+```
+
+You can also download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
 [jactl-repl](https://github.com/jaccomoc/jactl-repl) project.
+
+Again, with JBang, running the REPL is simple to do:
+```shell
+$ jbang run io.jactl:jactl-repl:2.2.0
+[jbang] Resolving dependencies...
+[jbang]    io.jactl:jactl-repl:2.2.0
+[jbang] Dependencies resolved
+> 10.map{ it + 1 }.sum()
+55
+> :h
+
+Available commands:
+  :h       Help - print this text
+  :?       Alias for :h
+  :x       Exit
+  :q       Quit - alias for :x
+  :c       Clear current buffer
+  :r file  Read and execute contents of file
+  :l       Load - alias for :r
+  :s       Show variables and their values (concise form)
+  :S       Show variables and their values in pretty printed form
+  :p       Purge variables
+  :e arg   Enable/disable stack traces for errors (true - enable, false - disable)
+  :d level Enable/disable debug output for errors (0 - off, 1 - on, 2 - more detail)
+  :H [n]   Show recent history (last n entries - defaults to 50)
+  :! n     Recall history entry with given number
+>  
+```
 
 ## Building
 
