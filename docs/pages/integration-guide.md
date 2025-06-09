@@ -424,7 +424,7 @@ JactlScript script  = Jactl.compileScript("def x = new Multiplier(13); x.mult(17
 The only reason for passing an explicit Jactl package when compiling a script is so to allow the script to access
 classes in the same package without having to explicitly qualify them with a package name or to import them.
 
-> **Note**<br>
+> **Note**<br/>
 > Like classes, scripts can specify a package themselves using the `package` directive and the rules about how package
 > names apply are the same as for classes (see table above).
 
@@ -599,7 +599,7 @@ A naive, incomplete, implementation of `saveCheckpoint()` (one that doesn't scal
   }
 ```
 
-> **Note**<br>
+> **Note**<br/>
 > Once a checkpoint has been saved it is safe to delete the previous checkpoint for that script instance.
 > Alternatively, you can wait for the final `deleteCheckpoint()` call to know when to clean up the old
 > checkpoints.
@@ -948,7 +948,7 @@ response.
 Instead, we use the `Continuation.suspendNonBlocking()` and pass it a handler that will initiate the request and 
 register its own handler with Vert.x to be invoked when the response is received.
 
-> **Warning**<br>
+> **Warning**<br/>
 > It is important that the initiation of the async request be done inside the handler passed to 
 > `Continuation.suspendNonBlocking()` and not before, in order to guard against race conditions where the 
 > response might be received before we have finished suspending our execution.
@@ -989,11 +989,11 @@ public class VertxFunctions {
 }
 ```
 
-> **Note**<br>
+> **Note**<br/>
 > Some details (such as better error handling) have been left out for brevity.
 > To see the full implementation see the [`VertxFunctions` example class](https://github.com/jaccomoc/jactl-vertx/blob/main/src/test/java/io/jactl/vertx/example/VertxFunctions.java).
 
-> **Note**<br>
+> **Note**<br/>
 > Any errors should be returned as `RuntimeError` objects to the `resumer` handler as a result as shown.
 
 Both of the `Continuation.suspendBlocking()` and `Coninuation.suspendNonBlocking()` calls work by throwing a 
@@ -1107,7 +1107,7 @@ Jactl.method(ITERATOR)
 This tells the compiler that the `filter()` call is only asynchronous if the object it acts on is asynchronous or
 the argument passed to it (the predicate closure) is asynchronous.
 
-> **Note**<br>
+> **Note**<br/>
 > As shown, `asyncParam()` calls are also allowed to specify a default value where appropriate.
 
 ### Handling Resumption

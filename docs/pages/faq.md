@@ -426,14 +426,6 @@ if (set[k]) {
 set.remove(k)      // Remove element of set
 ```
 
-The only limitation is that Maps currently only support keys of type String, so using a Map as a subsitute for
-a Set only works if the values in the set are all String values:
-```groovy
-def set = [:]
-def p = [1,2]
-set[p.toString()] = true     // Need to convert to a string first before putting in the set
-```
-
 Adding Sets as a built-in type in Jactl is a possible future enhancement.
 
 ### What is the difference between the % and %% operators?
