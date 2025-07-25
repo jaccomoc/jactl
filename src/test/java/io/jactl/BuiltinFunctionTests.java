@@ -2224,7 +2224,7 @@ public class BuiltinFunctionTests extends BaseTest {
         resumer.accept(result);
       }
     };
-    JactlContext context = getJactlContext();
+    JactlContext context = getJactlContext(false);
     JactlScript script = Jactl.compileScript("_checkpoint(123)", Utils.mapOf(), context);
     assertEquals(123, script.runSync(Utils.mapOf()));
     assertEquals(1, checkpoints.size());
@@ -2234,6 +2234,11 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   private void checkpointTest(String source, Object commitExpected, Object recoverExpected) throws InterruptedException, ExecutionException {
+    _checkpointTest(source, commitExpected, recoverExpected, false);
+    _checkpointTest(source, commitExpected, recoverExpected, true);
+  }
+
+  private void _checkpointTest(String source, Object commitExpected, Object recoverExpected, boolean loopDetection) throws InterruptedException, ExecutionException {
     Map<UUID,List<Pair<Integer,byte[]>>> checkpoints = new HashMap<>();
     jactlEnv = new DefaultEnv() {
       @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
@@ -2249,7 +2254,7 @@ public class BuiltinFunctionTests extends BaseTest {
         }
       }
     };
-    JactlContext context = getJactlContext();
+    JactlContext context = getJactlContext(loopDetection);
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
     assertEquals(commitExpected, script.runSync(Utils.mapOf()));
     assertEquals(1, checkpoints.size());

@@ -104,17 +104,17 @@ public class BaseTest {
   }
 
   protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
-    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint));
+    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint, false));
+    if (output != null) {
+      output.reset();
+    }
+    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint, true));
   }
 
-  protected Object run(String scriptCode) {
-    return doRun(Utils.listOf(), scriptCode, null, null, true, false, false, false);
-  }
-
-  protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint) {
+  protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, boolean loopDetection) {
     testCounter++;
     try {
-      JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint);
+      JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint, loopDetection);
 
       Map<String, Object> bindings = createGlobals();
 
@@ -149,6 +149,11 @@ public class BaseTest {
   }
 
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected) {
+    doTestCheckpoint(classCode, scriptCode, expected, false);
+    doTestCheckpoint(classCode, scriptCode, expected, true);
+  }
+
+  protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected, boolean loopDetection) {
     testCounter++;
     try {
       int[] errors = {0};
@@ -188,8 +193,8 @@ public class BaseTest {
         }
       };
 
-      JactlContext jactlContext1 = getJactlContext(true, false, false);
-      JactlContext jactlContext2 = getJactlContext(true, false, false);
+      JactlContext jactlContext1 = getJactlContext(true, false, false, loopDetection);
+      JactlContext jactlContext2 = getJactlContext(true, false, false, loopDetection);
 
       Map<String, Object> bindings = createGlobals();
 
@@ -278,11 +283,11 @@ public class BaseTest {
     }
   }
 
-  protected JactlContext getJactlContext() {
-    return getJactlContext(true, false, false);
+  protected JactlContext getJactlContext(boolean loopDetection) {
+    return getJactlContext(true, false, false, loopDetection);
   }
 
-  protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint) {
+  protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint, boolean loopDetection) {
     JactlContext jactlContext = JactlContext.create()
                                             .environment(jactlEnv)
                                             .classAccessToGlobals(classAccessToGlobals)
@@ -292,6 +297,8 @@ public class BaseTest {
                                             .checkpoint(testCheckpoint)
                                             .restore(testCheckpoint)
                                             .checkClasses(checkClasses)
+                                            .maxLoopIterations(loopDetection ? 1_000_000_000L : -1)
+                                            .maxExecutionTime(loopDetection ? 1_000_000 : -1)
                                             .build();
     return jactlContext;
   }

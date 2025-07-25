@@ -18,12 +18,14 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
-import io.jactl.runtime.RuntimeState;
+import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.TimeoutError;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
 
@@ -7877,32 +7879,6 @@ class CompilerTest extends BaseTest {
     testError("int for(x){x}", "expecting identifier");
   }
 
-  @Test public void globals() {
-    JactlContext jactlContext = JactlContext.create()
-                                            .evaluateConstExprs(true)
-                                            .replMode(true)
-                                            .debug(debugLevel)
-                                            .build();
-
-    Jactl.compileClass("class Z { int i }", jactlContext);
-    Object z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
-
-    Map<String,Object> globals = createGlobals();
-    globals.put("z", z);
-    BiConsumer<String,Object> runtest = (code,expected) -> {
-      Object result = Compiler.eval(code, jactlContext, globals);
-      assertEquals(expected, result);
-    };
-
-    runtest.accept("def x = (byte)1", (byte)1);
-    runtest.accept("def x = 1", 1);
-    runtest.accept("x", 1);
-    runtest.accept("def f(x){x*x}; f(2)", 4);
-    runtest.accept("f(3)", 9);
-    runtest.accept("z instanceof Z", true);
-    runtest.accept("z.i", 2);
-  }
-
   @Test public void endOfLine() {
     test("1 + \n2", 3);
     test("def x =\n1 + \n2", 3);
@@ -7973,6 +7949,10 @@ class CompilerTest extends BaseTest {
     test("sleep(0); x if true; sleep(0,x)", 123);
     test("def f() { def m = [:]; x ?= m.a.b() }; f()", null);
     test("def m = [:]; x ?= m.a.b()", null);
+  }
+
+  private interface InputOutputTest {
+    void accept(String code, String input, Object expectedResult, String expectedOutput);
   }
 
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
@@ -8101,7 +8081,110 @@ class CompilerTest extends BaseTest {
     });
   }
 
-  private interface InputOutputTest {
-    void accept(String code, String input, Object expectedResult, String expectedOutput);
+  @Test public void globalsTest() {
+    JactlContext jactlContext = JactlContext.create()
+                                            .evaluateConstExprs(true)
+                                            .replMode(true)
+                                            .debug(debugLevel)
+                                            .build();
+
+    Jactl.compileClass("class Z { int i }", jactlContext);
+    Object z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
+
+    Map<String,Object> globals = createGlobals();
+    globals.put("z", z);
+    BiConsumer<String,Object> runtest = (code,expected) -> {
+      Object result = Compiler.eval(code, jactlContext, globals);
+      assertEquals(expected, result);
+    };
+
+    runtest.accept("def x = (byte)1", (byte)1);
+    runtest.accept("def x = 1", 1);
+    runtest.accept("x", 1);
+    runtest.accept("def f(x){x*x}; f(2)", 4);
+    runtest.accept("f(3)", 9);
+    runtest.accept("z instanceof Z", true);
+    runtest.accept("z.i", 2);
+  }
+
+  @Test public void inifiniteLoopDetection() {
+//    JactlContext jactlContext = JactlContext.create().build();
+//
+//    for (int i = 0; i < 3; i++) {
+//      long start = System.nanoTime();
+//      long x     = (long) Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; x", new HashMap(), jactlContext);
+//      assertEquals(100100100L, x);
+//      System.out.println("Duration = " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) + "ms");
+//    }
+
+    JactlContext jactlContext2 = JactlContext.create()
+                                             .maxLoopIterations(100_100_100L)
+                                             .build();
+
+//    for (int i = 0; i < 3; i++) {
+//      long start = System.nanoTime();
+//      long x     = (long) Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; x", new HashMap(), jactlContext2);
+//      assertEquals(100100100L, x);
+//      System.out.println("With loop limit: Duration = " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) + "ms");
+//    }
+
+    try {
+      Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x", new HashMap(), jactlContext2);
+      fail("Should have thrown");
+    }
+    catch (TimeoutError e) {
+      assertTrue(e.getMessage().contains("line 1, column 142"));
+    }
+    assertThrows(TimeoutError.class, () -> Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x", new HashMap(), jactlContext2));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("def f() { for (i=0; i < 100000; i++) {} }; def g() { for (i=0;i<100000;i++) { f() } }; for (i = 0; i < 100000; i++) { f() }", new HashMap(), jactlContext2));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) {}", new HashMap(), jactlContext2));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("do {} until (false)", new HashMap(), jactlContext2));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) {} }", new HashMap(), jactlContext2));
+
+    JactlContext jactlContext3 = JactlContext.create()
+                                             .maxLoopIterations(1000L)
+                                             .build();
+    assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) { sleep(0,0); } }", new HashMap(), jactlContext3));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(0, x++); } } }())", new HashMap(), jactlContext3));
+  }
+
+  @Test public void longRunningScriptTimeout() {
+    JactlContext jactlContext = JactlContext.create()
+                                            .maxExecutionTime(100)
+                                            .build();
+
+    assertThrows(TimeoutError.class, () -> Jactl.eval("long x; def f() { for (i=0; i < 100000; i++) { x++ } }; def g() { for (i=0;i<10000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("def f() { for (i=0; i < 100000; i++) {} }; def g() { for (i=0;i<100000;i++) { f() } }; for (i = 0; i < 100000; i++) { f() }", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) {}", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("do {} until (false)", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) {} }", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) { sleep(0,0); } }", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(0, x++); } } }())", new HashMap(), jactlContext));
+  }
+
+  @Test public void loopAndTimeoutDetection() {
+    JactlContext jactlContext = JactlContext.create()
+                                            .maxExecutionTime(100)
+                                            .maxLoopIterations(1000)
+                                            .build();
+
+    BiConsumer<String,String> test = (script,err) -> {
+      try {
+        Jactl.eval(script, new HashMap(), jactlContext);
+        fail("Expected TimeoutError");
+      }
+      catch (TimeoutError e) {
+        assertTrue(e.getMessage().contains(err));
+      }
+    };
+
+    test.accept("long x; def f() { for (i=0; i < 100000; i++) { x++ } }; def g() { for (i=0;i<10000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x",
+                "Loop iterations");
+    test.accept("def f() { for (i=0; i < 100000; i++) {} }; def g() { for (i=0;i<100000;i++) { f() } }; for (i = 0; i < 100000; i++) { f() }",
+                "Loop iterations");
+    test.accept("while (true) {}", "Loop iterations");
+    test.accept("do {} until (false)", "Loop iterations");
+    test.accept("while (true) { for (i = 0; i < 100; i++) { sleep(2,0); } }", "exceeded max time");
+    test.accept("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(2, x++); } } }())", "exceeded max time");
   }
 }

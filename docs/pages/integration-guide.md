@@ -335,6 +335,29 @@ would like to be available to all scripts before creating any `JactlContext` obj
 
 See [Adding New Functions/Methods](#adding-new-functionsmethods) for more details.
 
+### maxLoopIterations(long limit)
+
+The intent of this option is to provide a way to prevent scripts with accidental infinite loops running forever.
+Each time a for/while/do-until loop iterates a global counter is incremented and if this counter reaches the configured
+limit a `TimeoutError` exception is thrown.
+
+It is up to the application developer to decide what a reasonable limit would be based on the types of scripts that
+are expected to be run.
+
+By default, the loop limit check is disabled since it introduces overhead.
+
+### maxExecutionTime(int limitMs)
+
+This option configures a maximum execution time (in milliseconds) for script invocations.
+If set, during invocation the script will check periodically whether the total wall-clock time since the script
+execution commenced has been exceeded and if so it will throw a `TimeoutError` exception.
+
+The checking occurs after every async function (for example `sleep()`) and every 100th time any loop iteration is
+performed so it does not guarantee that a script will time out immediately that the configured threshold is reached,
+but it does mean prevent a script from running indefinitely.
+
+By default, this option is disabled in order not to incur additional overhead.
+
 ### Chaining Method Calls
 
 The methods for building a `JactlContext` can be chained in any order (apart from `create()` which must be first

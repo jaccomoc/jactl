@@ -418,12 +418,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitWhile(Stmt.While stmt) {
+    Runnable checkLoopLimit = () -> {
+      if (classCompiler.context.maxLoopLimit >= 0 || classCompiler.context.maxExecutionTimeMs >= 0) {
+        loadConst(stmt.getLocation().getSource());
+        loadConst(stmt.getLocation().getOffset());
+        invokeMethod(RuntimeState.class, RuntimeState.UPDATE_ITERATION_COUNT, String.class, int.class);
+      }
+    };
+
     stmt.stackDepth = stack.stackDepth();
     stmt.endLoopLabel = new Label();
     if (stmt.isDoUntil) {
       stmt.continueLabel = new Label();
       Label loop = new Label();
       mv.visitLabel(loop);
+      checkLoopLimit.run();
       compile(stmt.body);
 
       mv.visitLabel(stmt.continueLabel);
@@ -448,6 +457,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitJumpInsn(IFEQ, stmt.endLoopLabel);
       popType();
 
+      checkLoopLimit.run();
       compile(stmt.body);
       if (stmt.updates != null) {
         mv.visitLabel(stmt.continueLabel);
@@ -4170,6 +4180,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     refreshAliases();
     mv.visitLabel(after);              // :after
+
+    // If we have a max execution time configure then as well as checking every n iterations of loops
+    // we also check after an async function returns (since they are likely to have taken some wall-clock
+    // time to finish)
+    if (classCompiler.context.maxExecutionTimeMs >= 0) {
+      loadConst(location.getSource());
+      loadConst(location.getOffset());
+      invokeMethod(RuntimeState.class, RuntimeState.CHECK_TIMEOUT, String.class, int.class);
+    }
   }
 
   private void insertDebug(String info) {
