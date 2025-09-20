@@ -13,8 +13,8 @@ env:
   GIT_SSH_COMMAND: ssh -vvv
 
 jobs:
-  checkout:
-    name: Checkout Project
+  build:
+    name: Build Docusaurus
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,30 +23,24 @@ jobs:
           ref: main
       - name: Debug Output
         run: |
-          echo "Files: $(ls docs)"
-          pwd
-
-  build:
-    name: Build Docusaurus
-    needs: checkout
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs
-    steps:
+          echo "Files: $(ls)"
+          echo "Dir: $(pwd)"
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-
       - name: Install dependencies
-        run: npm ci
+        run: |
+          cd docs
+          npm ci
       - name: Build website
-        run: npm run build
+        run: |
+          cd docs
+          npm run build
 
       - name: Upload Build Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: build
+          path: docs/build
 
   deploy:
     name: Deploy to GitHub Pages
