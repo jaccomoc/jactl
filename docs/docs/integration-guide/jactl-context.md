@@ -114,7 +114,7 @@ with `true`.
 
 This controls whether the `JactlContext` object will have its own set of functions/methods registered with it.
 By default, all `JactlContext` share the same functions/methods registered using `Jactl.function() ... .register()`
-or `Jactl.method(type) ... .register()` (see section below on [Adding New Functions/Methods](adding-new-functionsmethods)).
+or `Jactl.method(type) ... .register()` (see section below on [Adding New Functions/Methods](adding-new-functions)).
 
 If you would like to have different sets of functions/methods for different sets of scripts you can create different
 `JactlContext` objects and register different sets of functions/methods with each object.

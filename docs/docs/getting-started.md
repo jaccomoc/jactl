@@ -204,7 +204,7 @@ To push to your local Maven repository you can use `publishToMavenLocal`:
 For more information see the various guides under in the [documentation](../docs/introduction) section
 of the [Jactl](https://jactl.io) website including:
 * [Language Features](language-features) for a brief overview of the various features of the Jactl language
-* [Language Guide](language-guide) for a complete description of the language
+* [Language Guide](language-guide/introduction) for a complete description of the language
 * [Integration Guide](integration-guide/introduction) for more information about how to integrate Jactl into a Java application
 * [Command-line Scripts](command-line-scripts) for more information about how to run scripts on the command line
 * [FAQ](faq) for some commonly asked questions and the answers 

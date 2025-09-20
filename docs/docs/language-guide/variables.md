@@ -22,7 +22,7 @@ Variable names must be a valid _identifier_. Identifiers start with a letter or 
 by a combination of letters, digits and underscores. The only special case is that a single underscore `_` is not a
 valid identifier.
 
-Variable names cannot clash with any built-in language [keywords](/language-guide/#keywords):
+Variable names cannot clash with any built-in language [keywords](keywords):
 ```groovy
 int for = 3
 Unexpected token 'for': Expecting identifier @ line 1, column 5
