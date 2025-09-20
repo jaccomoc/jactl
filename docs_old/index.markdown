@@ -26,7 +26,7 @@ Supports Java 8 (and later).
 <div class="row">
   <div class="column" markdown="1">
 ### **Never Blocks**
-Built-in continuation mechanism allows scripts to suspend execution while waiting for asynchronous reponses and
+Built-in continuation mechanism allows scripts to suspend execution while waiting for asynchronous responses and
 then resume from where they left off.
 Execution thread is never blocked while waiting for a long-running response.
   </div>

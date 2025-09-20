@@ -1,0 +1,11 @@
+def numbers = [1,2,3,4]
+def person  = [name:'Fred Flinstone', salary: 12 * 5000.00]
+
+println "Name: ${person.name}, salary: ${person.salary}"
+
+// Print square of each number
+numbers.map{ x -> x * x }
+       .each{ x -> println x }
+
+// Implicit it parameter
+println "Sum: ${ numbers.map{ it * it }.sum() }

@@ -1,0 +1,7 @@
+String name = 'Fred Flinstone'
+def monthlySalary = 5000.00
+println "Name: $name, salary: ${monthlySalary * 12}"
+
+println '''This is
+a multi-line
+string'''

@@ -1,0 +1,82 @@
+<!--
+  - Copyright © 2022,2023,2024  James Crawford
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -
+  -->
+
+<svg viewBox="0 0 400 250" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" fill="transparent"/>
+
+
+
+  <!-- Binary code background -->
+  <g fill="#64748b" opacity="0.4" font-family="monospace" font-size="12">
+    <text x="50" y="60">101010</text>
+    <text x="320" y="80">110011</text>
+    <text x="30" y="120">001101</text>
+    <text x="340" y="140">111000</text>
+    <text x="60" y="180">010110</text>
+    <text x="300" y="200">101101</text>
+    <text x="40" y="240">110010</text>
+    <text x="320" y="260">001011</text>
+  </g>
+
+  <!-- Animated binary streams -->
+  <g fill="#10b981" opacity="0.6" font-family="monospace" font-size="10">
+    <text x="150" y="50">1010110010</text>
+    <text x="150" y="280">0110011010</text>
+    <text x="80" y="150" transform="rotate(-90 80 150)">11001010</text>
+    <text x="320" y="150" transform="rotate(90 320 150)">01011001</text>
+
+    <!-- Pulsing binary near padlock -->
+    <text x="120" y="130">01</text>
+    <text x="280" y="170">10</text>
+    <text x="140" y="200">11</text>
+    <text x="260" y="120">00</text>
+  </g>
+
+  <!-- Central padlock -->
+  <g transform="translate(200, 150) scale(1.8)">
+    <!-- Padlock body -->
+    <rect x="-25" y="-15" width="50" height="35" rx="8" fill="#334155" stroke="#64748b" stroke-width="2"/>
+
+    <!-- Padlock shackle -->
+    <path d="M -15 -15 Q -15 -35 0 -35 Q 15 -35 15 -15"
+          fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Keyhole -->
+    <circle cx="0" cy="-5" r="4" fill="white"/>
+    <rect x="-1" y="-1" width="2" height="8" fill="white"/>
+
+    <!-- Glow effect -->
+    <circle cx="0" cy="0" r="40" fill="url(#padlockGlow)" opacity="0.6">
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+
+
+
+
+  <!-- Gradients -->
+  <defs>
+    <radialGradient id="padlockGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:0.8"/>
+      <stop offset="100%" style="stop-color:#10b981;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+
+
+</svg>

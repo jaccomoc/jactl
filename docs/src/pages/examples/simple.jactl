@@ -1,0 +1,3 @@
+def fib(x) { x <= 2 ? 1 : fib(x - 1) + fib(x - 2) }
+
+println "40th fibonacci number is ${fib(40)}"

@@ -309,6 +309,7 @@ Jactl provides `switch` expressions that can match on literal values but can als
 match on the structure of the data and bind variables to different parts of the structure:
 ```groovy
 switch (x) {
+  'abc'              -> 'matched'    // match against simple values
   /X=(\d+),Y=(\d+)/n -> $1 + $2      // regex match with capture vars
   [1,*]              -> 'matched'    // list whose first element is 1
   [_,_]              -> 'matched'    // list with 2 elements

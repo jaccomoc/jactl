@@ -1,0 +1,106 @@
+<!--
+  - Copyright © 2022,2023,2024  James Crawford
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -
+  -->
+
+<svg viewBox="0 0 400 350" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <defs>
+<!--    <radialGradient id="screenGlow" cx="50%" cy="50%" r="60%">-->
+<!--      <stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.3"/>-->
+<!--      <stop offset="80%" stop-color="#1e40af" stop-opacity="0.2"/>-->
+<!--      <stop offset="100%" stop-color="#808080" stop-opacity="0"/>-->
+<!--    </radialGradient>-->
+
+<!--    <linearGradient id="codeGlow" x1="0%" y1="0%" x2="100%" y2="100%">-->
+<!--      <stop offset="0%" stop-color="#10b981"/>-->
+<!--      <stop offset="50%" stop-color="#3b82f6"/>-->
+<!--      <stop offset="100%" stop-color="#8b5cf6"/>-->
+<!--    </linearGradient>-->
+
+<!--    <filter id="glow">-->
+<!--      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>-->
+<!--      <feMerge>-->
+<!--        <feMergeNode in="coloredBlur"/>-->
+<!--        <feMergeNode in="SourceGraphic"/>-->
+<!--      </feMerge>-->
+<!--    </filter>-->
+  </defs>
+
+<!--  <rect width="500" height="400" fill="url(#screenGlow)"/>-->
+
+  <rect transform="translate(50,0)" width="300" height="350" rx="10" ry="10" fill="#e4eeff"/>
+
+  <!-- Line numbers and instructions -->
+  <g transform="translate(100,-30)" font-family="monospace" font-size="12">
+    <!-- Line 1 -->
+    <text x="30" y="80" fill="#6c757d">15:</text>
+    <text x="60" y="80" fill="#0d6efd">aload_0</text>
+
+    <!-- Line 2 -->
+    <text x="30" y="100" fill="#6c757d">16:</text>
+    <text x="60" y="100" fill="#0d6efd">getfield</text>
+    <text x="120" y="100" fill="#dc3545">#2</text>
+
+    <!-- Line 3 -->
+    <text x="30" y="120" fill="#6c757d">19:</text>
+    <text x="60" y="120" fill="#0d6efd">iconst_1</text>
+
+    <!-- Line 4 -->
+    <text x="30" y="140" fill="#6c757d">20:</text>
+    <text x="60" y="140" fill="#0d6efd">iadd</text>
+
+    <!-- Line 5 -->
+    <text x="30" y="160" fill="#6c757d">21:</text>
+    <text x="60" y="160" fill="#0d6efd">istore_1</text>
+
+    <!-- Separator line with dots -->
+    <text x="30" y="190" fill="#6c757d">...</text>
+
+    <!-- Line 6 -->
+    <text x="30" y="220" fill="#6c757d">28:</text>
+    <text x="60" y="220" fill="#0d6efd">iload_1</text>
+
+    <!-- Line 7 -->
+    <text x="30" y="240" fill="#6c757d">29:</text>
+    <text x="60" y="240" fill="#0d6efd">bipush</text>
+    <text x="110" y="240" fill="#198754">10</text>
+
+    <!-- Line 8 -->
+    <text x="30" y="260" fill="#6c757d">31:</text>
+    <text x="60" y="260" fill="#0d6efd">if_icmpge</text>
+    <text x="140" y="260" fill="#dc3545">45</text>
+
+    <!-- Line 9 -->
+    <text x="30" y="280" fill="#6c757d">34:</text>
+    <text x="60" y="280" fill="#0d6efd">getstatic</text>
+    <text x="125" y="280" fill="#dc3545">#3</text>
+
+    <!-- Line 10 -->
+    <text x="30" y="300" fill="#6c757d">37:</text>
+    <text x="60" y="300" fill="#0d6efd">ldc</text>
+    <text x="90" y="300" fill="#dc3545">#4</text>
+
+    <!-- Line 11 -->
+    <text x="30" y="320" fill="#6c757d">39:</text>
+    <text x="60" y="320" fill="#0d6efd">invokevirtual</text>
+    <text x="155" y="320" fill="#dc3545">#5</text>
+
+    <!-- Another separator -->
+    <text x="30" y="350" fill="#6c757d">...</text>
+  </g>
+
+</svg>

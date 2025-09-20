@@ -1,0 +1,8 @@
+def text = 'Product: MacBook Pro, Price: 3299.00, Quantity: 14'
+
+// Extract data from text
+if (text =~ /Product: (.*), Price: (.*), Quantity: (\d*)$/n) {
+  def product = $1
+  def totalValue = $2 * $3
+  println "Product: $product, value: $totalValue"
+}

@@ -214,7 +214,7 @@ Now in your Jactl scripts you can invoke the function like this:
 def encoded = 'AQIDBA=='
 def decoded = x.base64Decode()    // will be array of bytes: [1, 2, 3, 4]
 ```
-See the [Integration Guide](integration-guide.md) for more information.
+See the [Integration Guide](integration-guide) for more information.
 
 ## Why doesn't my Java program exit after evaluating a Jactl script?
 
@@ -226,7 +226,7 @@ Note that these threads are shared and only started up once.
 
 You can use the static method `io.jactl.DefaultEnv.shutdown()` to stop these threads.
 
-See [Integration Guide](integration-guide.md) for more information.
+See [Integration Guide](integration-guide) for more information.
 
 ## Is there an IntelliJ plugin for Jactl?
 
@@ -266,7 +266,7 @@ Jactl supports constant data fields for classes using the `const` keyword, where
 are simple types (primitives and Strings).
 This allows the user to create names for constant values that can then be used multiple times.
 
-Non-final static fields that would support modification are not allowed by Jactl.
+Static fields that would support modification are not allowed by Jactl.
 The reason that they are not allowed is twofold:
 1. Jactl is intended to run in distributed applications where there are multiple instances running.
    Having a static data member in a class for sharing information across all class instances makes
@@ -517,7 +517,7 @@ that can be configured on the `JactlContext` that you pass to the Jactl compiler
 1. You can configure the `maxLoopIterations(int limit)` which will keep a global counter of all iterations around loops and throw an exception if this limit is reached.
 2. You can configure the `maxExecutionTime(int limitMs)` which will set a timeout for script executions to prevent them running indefinitely.
 
-See the [Integration Guide](integration-guide.md) for more information.
+See the [Integration Guide](integration-guide) for more information.
 
 ## I still didn't find the answer to my question
 

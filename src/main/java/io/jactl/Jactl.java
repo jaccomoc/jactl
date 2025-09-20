@@ -204,6 +204,26 @@ public class Jactl {
   }
 
   /**
+   * Compile a Jactl class.
+   * <p>This method allows explicitly setting the Jactl package which the class will live in.
+   * The pkgName can have one of the following values:</p>
+   * <dl>
+   *   <dt>null</dt><dd>Error if package not specified in class declaration.</dd>
+   *   <dt>""</dt><dd>If package name not declared use "" as package name.</dd>
+   *   <dt>anything else</dt><dd>If package name not declared use this as package name.
+   *   If package declared it must match the given value.</dd>
+   * </dl>
+   * @param source        the source code for the class declaration
+   * @param jactlContext  the JactlContext
+   * @param pkgName       the Jactl package to compile the script into
+   * @param globals       Map of global variables the class can access
+   * @throws CompileError if error during compile
+   */
+  public static void compileClass(String source, JactlContext jactlContext, String pkgName, Map<String, Object> globals) {
+    Compiler.compileClass(source, jactlContext, pkgName, globals);
+  }
+
+  /**
    * Create a JactlFunction for a global function to be registered.
    * @return the new JactlFunction object
    */

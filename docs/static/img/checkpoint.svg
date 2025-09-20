@@ -1,0 +1,81 @@
+<!--
+  - Copyright © 2022,2023,2024  James Crawford
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -
+  -->
+
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Stylized background -->
+  <defs>
+    <radialGradient id="ovalGradient" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" style="stop-color:#e3f2fd;stop-opacity:0.6" />
+      <stop offset="30%" style="stop-color:#bbdefb;stop-opacity:0.5" />
+      <stop offset="60%" style="stop-color:#90caf9;stop-opacity:0.5" />
+      <stop offset="100%" style="stop-color:#88ddff;stop-opacity:0.5" />
+    </radialGradient>
+  </defs>
+
+  <!-- Oval background -->
+  <ellipse transform="translate(0,40)" cx="400" cy="200" rx="380" ry="260" fill="#f0f8f8"/>
+
+  <!-- Execution flow -->
+  <path d="M 120 200 Q 200 120 280 200 Q 360 280 440 200 Q 520 120 550 180"
+        stroke="#4A90E2" stroke-width="4" fill="none"/>
+
+  <!-- Process boxes -->
+  <rect x="100" y="180" width="40" height="40" fill="#4A90E2" rx="5"/>
+  <rect x="260" y="180" width="40" height="40" fill="#4A90E2" rx="5"/>
+  <rect x="420" y="180" width="40" height="40" fill="#4A90E2" rx="5"/>
+
+  <!-- Checkpoint saves (downward arrows) -->
+  <path d="M 120 230 L 120 280 L 110 270 M 120 280 L 130 270" stroke="#E74C3C" stroke-width="3" fill="none"/>
+  <path d="M 280 230 L 280 280 L 270 270 M 280 280 L 290 270" stroke="#E74C3C" stroke-width="3" fill="none"/>
+  <path d="M 440 230 L 440 280 L 430 270 M 440 280 L 450 270" stroke="#E74C3C" stroke-width="3" fill="none"/>
+
+  <!-- Storage disk stacks (3 disks each) -->
+  <!-- First checkpoint stack -->
+  <ellipse cx="120" cy="315" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="120" cy="310" rx="20" ry="8" fill="#BDC3C7"/>
+  <ellipse cx="120" cy="305" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="120" cy="300" rx="20" ry="8" fill="#BDC3C7"/>
+  <ellipse cx="120" cy="295" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="120" cy="290" rx="20" ry="8" fill="#BDC3C7"/>
+
+  <!-- Second checkpoint stack -->
+  <ellipse cx="280" cy="315" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="280" cy="310" rx="20" ry="8" fill="#BDC3C7"/>
+  <ellipse cx="280" cy="305" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="280" cy="300" rx="20" ry="8" fill="#BDC3C7"/>
+  <ellipse cx="280" cy="295" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="280" cy="290" rx="20" ry="8" fill="#BDC3C7"/>
+
+  <!-- Third checkpoint stack -->
+  <ellipse cx="440" cy="315" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="440" cy="310" rx="20" ry="8" fill="#BDC3C7"/>
+  <ellipse cx="440" cy="305" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="440" cy="300" rx="20" ry="8" fill="#BDC3C7"/>
+  <ellipse cx="440" cy="295" rx="20" ry="8" fill="#95A5A6"/>
+  <ellipse cx="440" cy="290" rx="20" ry="8" fill="#BDC3C7"/>
+
+  <!-- Failure point (X) -->
+  <path d="M 530 160 L 570 200 M 570 160 L 530 200" stroke="#E74C3C" stroke-width="6"/>
+
+  <!-- Recovery arrow from last checkpoint -->
+  <path d="M 450 290 Q 490 230 530 180" stroke="#27AE60" stroke-width="4" fill="none" stroke-dasharray="5,5"/>
+  <path d="M 520 179 L 530 180 L 528 192" stroke="#27AE60" stroke-width="4" fill="none"/>
+
+  <!-- Continue execution after recovery -->
+  <path d="M 555 180 Q 610 120 690 200" stroke="#27AE60" stroke-width="4" fill="none"/>
+  <rect x="670" y="180" width="40" height="40" fill="#27AE60" rx="5"/>
+</svg>

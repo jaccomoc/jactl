@@ -1,0 +1,91 @@
+<!--
+  - Copyright © 2022,2023,2024  James Crawford
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -
+  -->
+
+<svg viewBox="0 0 400 450" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <defs>
+    <radialGradient id="screenGlow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.3"/>
+      <stop offset="70%" stop-color="#1e40af" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1"/>
+    </radialGradient>
+
+    <linearGradient id="codeGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+<!--  <rect width="800" height="600" fill="url(#screenGlow)"/>-->
+
+  <!-- Desk/workspace -->
+<!--  <ellipse cx="400" cy="550" rx="350" ry="40" fill="#2d3748" opacity="0.3"/>-->
+
+  <!-- Computer screen -->
+  <g id="computer">
+    <!-- Monitor -->
+    <rect x="50" y="150" width="300" height="200" rx="10" fill="#1a202c" stroke="#4a5568" stroke-width="3"/>
+    <rect x="60" y="160" width="280" height="180" rx="5" fill="#000000"/>
+
+    <!-- Screen content - Java code visualization -->
+    <g id="code-display" font-family="monospace">
+      <!-- Code lines as abstract flowing shapes -->
+      <rect x="70" y="175" width="120" height="3" fill="#10b981" opacity="0.8" rx="1">
+        <animate attributeName="width" values="120;140;120" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="70" y="185" width="200" height="3" fill="#3b82f6" opacity="0.7" rx="1"/>
+      <rect x="80" y="195" width="150" height="3" fill="#10b981" opacity="0.6" rx="1">
+        <animate attributeName="width" values="150;170;150" dur="3s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="70" y="205" width="80" height="3" fill="#f59e0b" opacity="0.8" rx="1"/>
+      <rect x="70" y="215" width="180" height="3" fill="#8b5cf6" opacity="0.7" rx="1"/>
+
+      <!-- Curly braces representation -->
+      <path d="M70,225 Q65,230 70,235 Q75,240 70,245" stroke="#10b981" stroke-width="2" fill="none" opacity="0.8"/>
+      <path d="M120,225 Q125,230 120,235 Q115,240 120,245" stroke="#10b981" stroke-width="2" fill="none" opacity="0.8"/>
+
+      <!-- More code lines -->
+      <rect x="80" y="255" width="160" height="3" fill="#ef4444" opacity="0.6" rx="1"/>
+      <rect x="80" y="265" width="100" height="3" fill="#3b82f6" opacity="0.8" rx="1">
+        <animate attributeName="width" values="100;120;100" dur="2.5s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="70" y="275" width="90" height="3" fill="#10b981" opacity="0.7" rx="1"/>
+
+      <!-- Closing brace -->
+      <path d="M70,290 Q65,295 70,300 Q75,305 70,310" stroke="#10b981" stroke-width="2" fill="none" opacity="0.8"/>
+
+      <!-- Cursor -->
+      <rect x="165" y="265" width="2" height="12" fill="#ffffff" opacity="0.9">
+        <animate attributeName="opacity" values="0.9;0.1;0.9" dur="1s" repeatCount="indefinite"/>
+      </rect>
+    </g>
+
+    <!-- Monitor base -->
+    <rect x="180" y="350" width="40" height="30" fill="#4a5568"/>
+    <ellipse cx="200" cy="380" rx="60" ry="10" fill="#2d3748"/>
+  </g>
+
+</svg>

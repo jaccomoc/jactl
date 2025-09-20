@@ -1,0 +1,20 @@
+class Person {
+  String name
+  int    age
+
+  String greeting() {
+    "My name is $name and I am $age years old"
+  }
+}
+
+class Student extends Person {
+  String university
+  String greeting() {
+    super.greeting() + " and I go to $university"
+  }
+}
+
+Person fred = new Student(name:'Fred Smith', age:19,
+                          university:'University of Sydney')
+
+println fred.greeting()

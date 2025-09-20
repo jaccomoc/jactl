@@ -1,0 +1,10 @@
+james:
+  name: James Crawford
+  title: Jactl Creator
+  url: https://www.linkedin.com/in/jaccomoc/
+  image_url: /img/james.jpg
+  page: true
+  socials:
+    x: JamesCrawfordj
+    linkedin: jaccomoc
+    github: jaccomoc
