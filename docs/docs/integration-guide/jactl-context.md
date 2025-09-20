@@ -123,7 +123,7 @@ Note that whatever functions/methods have been registered at the time that the `
 available to scripts compiled with that `JactlContext` so it makes sense to register all functions/methods that you
 would like to be available to all scripts before creating any `JactlContext` objects.
 
-See [Adding New Functions/Methods](adding-new-functionsmethods) for more details.
+See [Adding New Functions/Methods](adding-new-functions) for more details.
 
 ## Chaining Method Calls
 
