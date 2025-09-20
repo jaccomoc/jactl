@@ -7,6 +7,11 @@ on:
     # Review gh actions docs if you want to further define triggers, paths, etc
     # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
 
+env:
+  GIT_CURL_VERBOSE: True
+  GIT_TRACE: True
+  GIT_SSH_COMMAND: ssh -vvv
+
 jobs:
   checkout:
     name: Checkout Project
@@ -22,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./docs
+        working-directory: docs
     steps:
       - uses: actions/setup-node@v4
         with:
