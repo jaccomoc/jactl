@@ -8,23 +8,30 @@ on:
     # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
 
 jobs:
-  build:
-    name: Build Docusaurus
+  checkout:
+    name: Checkout Project
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+  build:
+    name: Build Docusaurus
+    needs: checkout
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./docs
+    steps:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: npm
 
       - name: Install dependencies
-        working-directory: ./docs
         run: npm ci
       - name: Build website
-        working-directory: ./docs
         run: npm run build
 
       - name: Upload Build Artifact
