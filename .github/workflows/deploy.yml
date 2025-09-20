@@ -23,7 +23,8 @@ jobs:
           ref: main
       - name: Debug Output
         run: |
-          echo "Files: $(ls)"
+          echo "Files: $(ls docs)"
+          pwd
 
   build:
     name: Build Docusaurus
