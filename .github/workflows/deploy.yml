@@ -21,6 +21,9 @@ jobs:
         with:
           fetch-depth: 0
           ref: main
+      - name: Debug Output
+        run: |
+          echo "Files: $(ls)"
 
   build:
     name: Build Docusaurus
