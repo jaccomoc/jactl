@@ -46,6 +46,15 @@
   background-repeat: round;
 }
 
+.hero__title {
+  color: #ffffff;
+}
+
+.hero__subtitle {
+  color: #ffffff;
+  text-shadow: 2px 2px 0px #143698;
+}
+
 .navbar {
   background-color: #143698;
 }

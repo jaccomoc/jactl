@@ -11,7 +11,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Jactl',
-  tagline: 'An open source embeddable scripting language for Java-based applications',
+  tagline: 'A secure, embeddable, open source scripting language for Java-based applications',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -103,10 +103,30 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'Documentation',
+                label: 'Introduction',
                 to: '/docs/introduction',
               },
-            ],
+              {
+                label: 'Getting Started',
+                to: '/docs/getting-started',
+              },
+              {
+                label: 'Language Features',
+                to: '/docs/language-features',
+              },
+              {
+                label: 'Language Guide',
+                to: '/docs/language-guide/introduction',
+              },
+              {
+                label: 'Integration Guide',
+                to: '/docs/integration-guide/introduction',
+              },
+              {
+                label: 'FAQ',
+                to: '/docs/faq',
+              },
+            ]
           },
           {
             title: 'Community',
