@@ -34,6 +34,7 @@ import StringExpressions from '!!raw-loader!./examples/string-expressions.jactl'
 import ListAndMaps from '!!raw-loader!./examples/lists-and-maps.jactl'
 import Classes from '!!raw-loader!./examples/classes.jactl'
 import Regexes from '!!raw-loader!./examples/regexes.jactl'
+import QuickSort from '!!raw-loader!./examples/qsort.jactl'
 
 function ExamplesSection() {
   return (
@@ -110,6 +111,20 @@ function ExamplesSection() {
           <div className="col">
             <br/>
             <CodeBlock language="groovy">{Regexes}</CodeBlock>
+          </div>
+        </div>
+        <div className="row">
+          <div className="col">
+            <h2>Switch Expressions with Destructuring</h2>
+            Switch statements/expressions allow matching on structure as well as matching on simple values and allow
+            variables to be bound to parts of the structure.
+            This makes the standard quick sort implementation very simple as we can bind a variable <i>head</i> to the
+            head of the list (the first element) and a variable <i>tail</i> to the rest of the list, and then
+            recurse as shown.
+          </div>
+          <div className="col">
+            <br/>
+            <CodeBlock language="groovy">{QuickSort}</CodeBlock>
           </div>
         </div>
       </div>

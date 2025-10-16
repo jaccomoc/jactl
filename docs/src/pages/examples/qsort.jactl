@@ -1,0 +1,8 @@
+def qsort(x) {
+  switch(x) {
+    [], [_]       -> x
+    [head, *tail] -> qsort(tail.filter{it < head}) +
+                     [head] +
+                     qsort(tail.filter{it >= head})
+  }
+}
