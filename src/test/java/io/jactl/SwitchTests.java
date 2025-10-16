@@ -161,8 +161,8 @@ public class SwitchTests extends BaseTest {
     test("switch ([1L,2,[3,4,5]]) { [long i, *, [_,*rest]] -> rest.sum() }", 9);
     test("switch ([1L,2,[3,4,5]]) { [long i, *, [*rest,_]] -> rest.sum() }", 7);
     test("switch ([[1L],[2],[3,4,5]] as long[][]) { [[long i], *, [_,*rest]] -> rest.sum() + i }", 10L);
-    test("def qsort(x) { switch (x) { [] -> x; [p, *rest] -> qsort(rest.filter{ it <= p }) + p + qsort(rest.filter{ it > p }) }}; qsort([10,8,9,4,5,1,7,2,6,3])", Utils.listOf(1,2,3,4,5,6,7,8,9,10));
-    test("def qsort(x) { switch (x) { [] -> x; [*rest, p] -> qsort(rest.filter{ it <= p }) + p + qsort(rest.filter{ it > p }) }}; qsort([10,8,9,4,5,1,7,2,6,3])", Utils.listOf(1,2,3,4,5,6,7,8,9,10));
+    test("def qsort(x) { switch (x) { [] -> x; [p, *rest] -> qsort(rest.filter{ it <= p }) + [p] + qsort(rest.filter{ it > p }) }}; qsort([10,8,9,4,5,1,7,2,6,3])", Utils.listOf(1,2,3,4,5,6,7,8,9,10));
+    test("def qsort(x) { switch (x) { [] -> x; [*rest, p] -> qsort(rest.filter{ it <= p }) + [p] + qsort(rest.filter{ it > p }) }}; qsort([10,8,9,4,5,1,7,2,6,3])", Utils.listOf(1,2,3,4,5,6,7,8,9,10));
     test("switch ([1,2,3,4,5]) { [_,*x,_,_] -> x.sum() }", 5);
   }
 
