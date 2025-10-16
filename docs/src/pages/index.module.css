@@ -41,3 +41,9 @@
   padding: 2rem 0;
   width: 100%;
 }
+
+[data-theme="dark"] {
+  .examples {
+    background: #1D5Ea6;
+  }
+}
