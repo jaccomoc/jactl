@@ -322,8 +322,8 @@ switch (x) {
 
 Simple quicksort:
 ```groovy
-def qsort(x) {
-  switch(x) {
+def qsort (x) {
+  switch (x) {
     [], [_] -> x
     [h, *t] -> qsort(t.filter{it < h}) + [h] + qsort(t.filter{it >= h}) 
   }
