@@ -13,7 +13,7 @@ int x = 1; println 'x = ' + x; println 'x is 2' if x == 2
 The Jactl compiler, when it encounters a newline, will try to see if the current expression or statement continues
 on the next line.
 Sometimes it can be ambiguous whether the newline terminates the current statement or not and in these
-situations, Jactl will treat the newline is a terminator. For example, consider this:
+situations, Jactl will treat the newline as a terminator. For example, consider this:
 ```groovy
 def x = [1,2,3]
 x
