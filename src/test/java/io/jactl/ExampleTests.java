@@ -20,9 +20,11 @@ package io.jactl;
 import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.Test;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,7 +49,7 @@ public class ExampleTests {
     assertEquals(7, result);
   }
 
-  @Test public void example3() {
+  @Test public void example3() throws ExecutionException, InterruptedException {
     HashMap<String, Object> globals = new HashMap<String,Object>();
     globals.put("x", null);
     globals.put("y", null);
@@ -57,6 +59,31 @@ public class ExampleTests {
     globalValues.put("x", 7);
     globalValues.put("y", 3);
     script.run(globalValues, result -> System.out.println("Result is " + result));
+
+    Future<Object> future = script.run(globalValues);
+    System.out.println("Result is " + future.get());
+    assertEquals(10, future.get());
+  }
+
+  @Test public void exampleWithInputOutput() throws ExecutionException, InterruptedException {
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    globals.put("x", null);
+    globals.put("y", null);
+    JactlScript script = Jactl.compileScript("def result = stream(nextLine).map{ it as int }.sum() + x + y; println 'Result is ' + result; return result", globals);
+
+    HashMap<String, Object> globalValues = new HashMap<String,Object>();
+    globalValues.put("x", 7);
+    globalValues.put("y", 3);
+    ByteArrayOutputStream out    = new ByteArrayOutputStream();
+    AtomicInteger         result = new AtomicInteger();
+    script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintStream(out), res -> result.set((int)res));
+    assertEquals(16, result.get());
+    assertEquals("Result is 16\n", out.toString());
+
+    out.reset();
+    Future<Object> future = script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintStream(out));
+    assertEquals(16, future.get());
+    assertEquals("Result is 16\n", out.toString());
   }
 
   @Test public void example4() {

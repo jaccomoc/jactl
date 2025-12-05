@@ -28,6 +28,7 @@ import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -117,7 +118,7 @@ public class JactlScript {
    *   <li>BigDecimal</li>
    *   <li>String</li>
    *   <li>List</li>
-   *   <li>Map (where keys are Strings)</li>
+   *   <li>Map</li>
    *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
    *   <li>null - Object with value null</li>
    * </ul>
@@ -131,6 +132,39 @@ public class JactlScript {
   public void run(Map<String,Object> globals, BufferedReader input, PrintStream output, Consumer<Object> completion) {
     RuntimeState.setState(jactlContext, globals, input, output);
     script.accept(globals, completion);
+  }
+
+  /**
+   * <p>
+   * Runs the script with the provided global variables, input, and output, returning
+   * a future that completes with the script's result when it finishes executing.
+   * </p>
+   *
+   * <p>Supported types for the values in the globals Map are:</p>
+   * <ul>
+   *   <li>Boolean</li>
+   *   <li>Integer</li>
+   *   <li>Long</li>
+   *   <li>Double</li>
+   *   <li>BigDecimal</li>
+   *   <li>String</li>
+   *   <li>List</li>
+   *   <li>Map</li>
+   *   <li>Arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
+   *   <li>null - Object with value null</li>
+   * </ul>
+   * <p>Also supported are object instances of Jactl classes that have been returned
+   * from a previous script invocation.</p>
+   *
+    * @param globals     a Map of global variables and their values
+    * @param input       BufferedReader with input for the script (if it uses nextLine()) (can be null)
+    * @param output      PrintStream where print/println output will go (can be null)
+   *  @return a {@link Future} that will be completed with the script's result
+   */
+  public Future<Object> run(Map<String,Object> globals, BufferedReader input, PrintStream output) {
+    CompletableFuture<Object> future = new CompletableFuture<>();
+    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
+    return future;
   }
 
   /**
@@ -148,7 +182,7 @@ public class JactlScript {
    *   <li>BigDecimal</li>
    *   <li>String</li>
    *   <li>List</li>
-   *   <li>Map (where keys are Strings)</li>
+   *   <li>Map</li>
    *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
    *   <li>null - Object with value null</li>
    * </ul>
@@ -159,6 +193,37 @@ public class JactlScript {
    */
   public void run(Map<String,Object> globals, Consumer<Object> completion) {
     run(globals, null, null, completion);
+  }
+
+  /**
+   * <p>
+   * Runs the script with the provided global variables and return a future
+   * that will return the script's result when it finishes executing.
+   * </p>
+   *
+   * <p>Supported types for the values in the globals Map are:</p>
+   * <ul>
+   *   <li>Boolean</li>
+   *   <li>Integer</li>
+   *   <li>Long</li>
+   *   <li>Double</li>
+   *   <li>BigDecimal</li>
+   *   <li>String</li>
+   *   <li>List</li>
+   *   <li>Map</li>
+   *   <li>Arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
+   *   <li>null - Object with value null</li>
+   * </ul>
+   * <p>Also supported are object instances of Jactl classes that have been returned
+   * from a previous script invocation.</p>
+   *
+   * @param globals     a Map of global variables and their values
+   *  @return a {@link Future} that will be completed with the script's result
+   */
+  public Future<Object> run(Map<String,Object> globals) {
+    CompletableFuture<Object> future = new CompletableFuture<>();
+    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, future::complete));
+    return future;
   }
 
   /**
@@ -176,7 +241,7 @@ public class JactlScript {
    *   <li>BigDecimal</li>
    *   <li>String</li>
    *   <li>List</li>
-   *   <li>Map (where keys are Strings)</li>
+   *   <li>Map</li>
    *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
    *   <li>null - Object with value null</li>
    * </ul>
@@ -204,7 +269,7 @@ public class JactlScript {
    *   <li>BigDecimal</li>
    *   <li>String</li>
    *   <li>List</li>
-   *   <li>Map (where keys are Strings)</li>
+   *   <li>Map</li>
    *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
    *   <li>null - Object with value null</li>
    * </ul>

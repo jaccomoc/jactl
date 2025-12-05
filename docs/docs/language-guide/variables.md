@@ -27,7 +27,7 @@ Variable names cannot clash with any built-in language [keywords](keywords):
 int for = 3
 Unexpected token 'for': Expecting identifier @ line 1, column 5
 int for = 3
-        ^
+    ^
 ```
 
 :::note

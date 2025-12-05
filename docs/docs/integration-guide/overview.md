@@ -140,10 +140,36 @@ globalValues.put("y", 3);
 script.run(globalValues, result -> System.out.println("Result is " + result));
 ```
 
+Alternatively, you can use the version of `run()` that returns a `Future`:
+```java
+Future<Object> future = script.run(globalValues);
+System.out.println("Result is " + future.get());
+```
+
 ## Input/Output
 
-Both `run()` and `runSync()` have overloaded verisons that also accept a `BufferedReader` and `PrintStream`
+Both `run()` and `runSync()` have overloaded versions that also accept a `BufferedReader` and `PrintStream`
 for the input/output of the script.
+
+For example:
+```java
+HashMap<String, Object> globals = new HashMap<String,Object>();
+globals.put("x", null);
+globals.put("y", null);
+JactlScript script = Jactl.compileScript("def result = stream(nextLine).map{ it as int }.sum() + x + y\n" +
+                                         "println 'Result is ' + result\n" +
+                                         "return result",
+                                         globals);
+
+HashMap<String, Object> globalValues = new HashMap<String,Object>();
+globalValues.put("x", 7);
+globalValues.put("y", 3);
+
+ByteArrayOutputStream out    = new ByteArrayOutputStream();
+Future<Object> future = script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintStream(out));
+assertEquals(16, future.get());
+assertEquals("Result is 16\n", out.toString());
+```
 
 ## Errors
 
