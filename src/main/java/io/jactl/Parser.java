@@ -671,8 +671,7 @@ public class Parser {
           return null;
         }
       }
-      Stmt.VarDecl varDecl = peekIgnoreEolIs(COMMA,endToken) ? null
-                                                             : marked(false, this::singleVarWithOptionalType);
+      Stmt.VarDecl varDecl = marked(false, this::singleVarWithOptionalType);
       if (varDecl != null) {
         varDecl.declExpr.isParam = true;
         parameters.add(varDecl);

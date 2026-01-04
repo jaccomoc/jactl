@@ -18,14 +18,12 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
-import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.TimeoutError;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
 
@@ -7109,7 +7107,16 @@ class CompilerTest extends BaseTest {
     test("def f(byte x) { x }; f(1L)", (byte)1);
     test("def f(byte x, byte y) { x+y }; f(1L if true, 2 unless false)", (byte)3);
   }
-
+  
+  @Test public void badFunctionDecl() {
+    testError("def f(a,) {}", "expected valid type or parameter name");
+    testError("def f(int a,) {}", "expected valid type or parameter name");
+    testError("def f(int,) {}", "expecting identifier");
+    testError("def f(,b) {}", "expected valid type or parameter name");
+    testError("def f(,int b) {}", "expected valid type or parameter name");
+    testError("def f(,) {}", "expected valid type or parameter name");
+  }
+  
   @Test public void functionsAsValues() {
     test("def f(x) { x + x }; def g = f; g(2)", 4);
     test("def f(x) { x + x }; def g = f; g('abc')", "abcabc");
