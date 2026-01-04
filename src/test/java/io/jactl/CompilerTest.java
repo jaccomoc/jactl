@@ -3970,7 +3970,7 @@ class CompilerTest extends BaseTest {
     testError("var map = [:]; map = 1", "cannot convert");
     testError("var list = []; list = 1", "cannot convert");
 
-    test("def m = [a:1]", Utils.mapOf("a",1));
+    test("def m = [a:1]", Utils.mapOf("a", 1));
     test("def m = [1]", Utils.listOf(1));
     test("def m = [a:1]; m.a", 1);
     test("def m = [a:1]; m.b", null);
@@ -3981,7 +3981,7 @@ class CompilerTest extends BaseTest {
     test("def m = [a:[b:2]]; m.a.x?.y", null);
     testError("def m = [a:[b:2]]; m.a.x?.y.z", "null value");
 
-    test("def x = [1,2,3]", Utils.listOf(1,2,3));
+    test("def x = [1,2,3]", Utils.listOf(1, 2, 3));
     test("def x = []", Utils.listOf());
     test("def x = []; x[0]", null);
     test("def x = [1,2,3][4]; x", null);
@@ -4045,11 +4045,24 @@ class CompilerTest extends BaseTest {
     test("Map x = [a:1]; x['a'] = 2; x.a", 2);
     test("Map x = [a:1]; def f = 'a'; x[f]", 1);
     test("Map x = [a:1]; def f = 'a'; x[f] = 2; x.a", 2);
-    test("[a:1,b:2].map{ it[-1] }", Utils.listOf(1,2));
-    test("[a:1,b:2].map{ it[-2] }", Utils.listOf("a","b"));
+    test("[a:1,b:2].map{ it[-1] }", Utils.listOf(1, 2));
+    test("[a:1,b:2].map{ it[-2] }", Utils.listOf("a", "b"));
     testError("[a:1,b:2].map{ it[-3] }", "out of range");
     test("[for:1].for", 1);
     test("[true:1].true", 1);
+  }
+  
+  @Test public void mapWithNonStringKeys() {
+    test("def m1 = [([1,2,3]):1]; def m2 = [([1,2,3]):1]; m1 == m2", true);
+    test("def m1 = [[1,2,3]:1]; def m2 = [[1,2,3]:1]; m1 == m2", true);
+    test("def m1 = [([1,2,3]):1]; m1[[1,2,3]] == 1", true);
+    test("def m1 = [[1,2,3]:1]; m1.get([1,2,3]) == 1", true);
+    test("def m1 = [([a:1,b:2,c:3]):1]; def m2 = [([a:1,b:2,c:3]):1]; m1 == m2", true);
+    test("def m1 = [[a:1,b:2,c:3]:1]; def m2 = [([a:1,b:2,c:3]):1]; m1 == m2", true);
+    test("def m1 = [([a:1,b:2,[1,2]:3]):1]; def m2 = [([a:1,b:2,[1,2]:3]):1]; m1 == m2", true);
+    test("def m1 = [[a:1,b:2,[1,2]:3]:1]; def m2 = [[a:1,b:2,[1,2]:3]:1]; m1 == m2", true);
+    test("def m1 = [([a:1,b:2,[1,2]:3]):1]; m1[[a:1,b:2,[1,2]:3]] == 1", true);
+    test("def m1 = [([a:1,b:2,[1,2]:3]):1]; m1.toString()", "[([a:1, b:2, ([1, 2]):3]):1]");
   }
 
   @Test public void arrayIndexOutOfBounds() {

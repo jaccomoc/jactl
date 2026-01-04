@@ -708,7 +708,7 @@ public class RuntimeUtils {
       Map<String,Object> left = (Map<String,Object>)leftObj;
       Map<String,Object> right = (Map<String,Object>)rightObj;
       if (left.size() != right.size()) { return operator == BANG_EQUAL; }
-      for (String key: left.keySet()) {
+      for (Object key: left.keySet()) {
         if (!right.containsKey(key)) {
           return operator == BANG_EQUAL;
         }
@@ -2427,7 +2427,7 @@ public class RuntimeUtils {
       Map<String,Object> m1 = (Map)o1;
       Map<String,Object> m2 = (Map)o2;
       if (m1.size() != m2.size()) { return false; }
-      for (String key: m1.keySet()) {
+      for (Object key: m1.keySet()) {
         if (!switchEquals(m1.get(key), m2.get(key))) {
           return false;
         }
