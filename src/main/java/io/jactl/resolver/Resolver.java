@@ -52,7 +52,7 @@ import static io.jactl.Utils.JACTL_PREFIX;
  *   <li>tracks variables and their type</li>
  *   <li>resolves references to symbols (variables, methods, etc)</li>
  *   <li>tracks what local variables exist in each code block</li>
- *   <li>promotes local variables to closed over variabels when used in nested functions/closures</li>
+ *   <li>promotes local variables to closed over variables when used in nested functions/closures</li>
  *   <li>evaluates any simple expressions made up of only constants (literals)</li>
  *   <li>matches the break/continue statements to their enclosing while/for loop</li>
  *   <li>sets type of return statement to match return type of function that return belongs to</li>
@@ -68,7 +68,7 @@ import static io.jactl.Utils.JACTL_PREFIX;
  * local (and have a JVM slot allocated) and which should be turned into heap variables
  * because they are referred to by a nested function/closure (i.e. they are "closed over").</p>
  *
- * <p>A heap local variable is stored in a HeapLocal  object which is just a wrapper around the
+ * <p>A heap local variable is stored in a HeapLocal object which is just a wrapper around the
  * actual value. By using this extra level of indirection we make sure that if the value
  * of the variable changes, all functions using that variable will see the changed value.</p>
  *
@@ -76,15 +76,15 @@ import static io.jactl.Utils.JACTL_PREFIX;
  * need access to these variables from their parents. Note that sometimes a nested function
  * will access a variable that is not in its immediate parent but from a level higher up so
  * even if the parent has no need of the heap variable it needs it in order to be able to
- * pass it to a nested function that it invokes at some point. In this way nested functions
+ * pass it to a nested function that it invokes at some point. In this way, nested functions
  * (and functions nested within them) can effect which heap vars need to get passed into the
  * current function from its parent.</p>
  *
- * <p>If we consider a single heap local variable. It can be used in multiple nested functions
+ * <p>Consider a single heap local variable. It can be used in multiple nested functions
  * and its location in the list of implicit parameters for each function can be different.
  * Normally we use the Expr.VarDecl object to track which local variable slot it resides in
- * but with HeapLocal  objects we need to track the slot used in each function so we need a per
- * function object to track the slot for a given HeapLocal . We create a new VarDecl that points
+ * but with HeapLocal objects we need to track the slot used in each function so we need a per
+ * function object to track the slot for a given HeapLocal. We create a new VarDecl that points
  * to the original VarDecl for every such nested function.</p>
  *
  * <h2>Wrapper Functions</h2>
@@ -2529,7 +2529,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (descriptor == null && classToken != null) {
       if (checkForExistence) { return null; }
-      error("Unknown class '" + className.replaceAll("\\$", ".") + "' in package " + classPkg, classToken);
+      error("Unknown class '" + className.replace('$', '.') + "' in package " + classPkg, classToken);
     }
     return descriptor;
   }

@@ -148,7 +148,7 @@ public class JactlContext {
   }
 
   private Class<?> _defineClass(ClassDescriptor descriptor, byte[] bytes) {
-    String className = descriptor.getInternalName().replaceAll("/", ".");
+    String className = descriptor.getInternalName().replace('/', '.');
     if (classLoader.getClass(className) != null) {
       // Redefining existing class so create a new ClassLoader. This allows already defined classes that
       // want to refer to the old version of the class to continue working.
@@ -280,7 +280,7 @@ public class JactlContext {
       if (executionEnv == null) {
         executionEnv = new DefaultEnv();
       }
-      internalJavaPackage = javaPackage.replaceAll("\\.", "/");
+      internalJavaPackage = javaPackage.replace('.', '/');
       return JactlContext.this;
     }
 
@@ -398,8 +398,8 @@ public class JactlContext {
 
   public ClassDescriptor getClassDescriptor(String packageName, String className) {
     String pname = packageName == null || packageName.equals("") ? "" : packageName + '.';
-    String name  = internalJavaPackage + '.' + pname + className.replaceAll("\\.", "$");
-    name = name.replaceAll("\\.", "/");
+    String name  = internalJavaPackage + '.' + pname + className.replace('.', '$');
+    name = name.replace('.', '/');
     return getClassDescriptor(name);
   }
 

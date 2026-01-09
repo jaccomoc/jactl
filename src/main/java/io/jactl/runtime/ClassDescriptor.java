@@ -99,7 +99,7 @@ public class ClassDescriptor extends JactlUserDataHolder {
     this.prettyName = (pkg.equals("")?"":(pkg + ".")) + prettyName;
     this.packagedName = (pkg.equals("")?"":(pkg + ".")) + namePath;
     this.javaPackagedName = (javaPackage.equals("") ? "" : javaPackage + ".") + packagedName;
-    this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replaceAll("\\.", "/");
+    this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replace('.', '/');
     this.allFieldsAreDefaults = allFieldsAreDefaults;
   }
 

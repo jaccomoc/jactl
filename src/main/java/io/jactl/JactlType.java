@@ -854,7 +854,7 @@ public class JactlType extends JactlUserDataHolder {
         case CONTINUATION:  return Continuation.class;
         case NUMBER:        return Number.class;
         case CLASS:         return Class.class;
-        case ARRAY:         return Class.forName(descriptor().replaceAll("/","."));
+        case ARRAY:         return Class.forName(descriptor().replace('/','.'));
         default: throw new IllegalStateException("Internal error: unexpected type " + type);
       }
     }

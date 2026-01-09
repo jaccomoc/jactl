@@ -97,7 +97,7 @@ public class ClassCompiler {
     }
     String superName = internalBaseName == null ? Type.getInternalName(Object.class) : internalBaseName;
 
-    // Supporting Java 8 at the moment so passing V1_8. Change to later version once we no longe support Java 8.
+    // Supporting Java 8 at the moment so passing V1_8. Change to later version once we no longer support Java 8.
     cv.visit(V1_8, ACC_PUBLIC, internalName, null,
              superName, new String[] {Type.getInternalName(JactlObject.class) });
     cv.visitSource(sourceName, null);
