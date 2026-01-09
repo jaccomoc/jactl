@@ -75,7 +75,7 @@ import java.util.stream.IntStream;
  *   <dt>asyncInstance(boolean value)</dt>
  *   <dd>For methods, if this is true then if the object instance is async, the method is async.</dd>
  * </dl>
- * @see <a href="https://github.com/jaccomoc/jactl/blob/master/docs/pages/integration-guide.md">Integration Guide</a>
+ * @see <a href="https://jactl.io/docs/integration-guide/introduction">Integration Guide</a>
  */
 public class JactlFunction extends FunctionDescriptor {
   List<String>      aliases           = new ArrayList<>();
