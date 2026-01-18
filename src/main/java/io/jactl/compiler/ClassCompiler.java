@@ -20,11 +20,8 @@ package io.jactl.compiler;
 import io.jactl.*;
 import io.jactl.runtime.*;
 import org.objectweb.asm.*;
-import org.objectweb.asm.util.CheckClassAdapter;
 import org.objectweb.asm.util.Textifier;
-import org.objectweb.asm.util.TraceClassVisitor;
 
-import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -38,7 +35,6 @@ import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.LONG;
 import static io.jactl.Utils.JACTL_PREFIX;
 import static java.util.stream.Collectors.groupingBy;
-import static org.objectweb.asm.ClassWriter.*;
 import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
@@ -51,8 +47,8 @@ public class ClassCompiler {
   final Stmt.ClassDecl classDecl;
   final String         sourceName;      // Name of source file
   protected String          internalBaseName;
-  protected ClassVisitor    cv;
-  protected ClassWriter     cw;
+  protected ClassVisitor     cv;
+  protected JactlClassWriter cw;
   protected MethodVisitor   constructor;
   protected MethodVisitor   classInit;   // MethodVisitor for static class initialiser
   protected ClassDescriptor classDescriptor;
@@ -76,21 +72,8 @@ public class ClassCompiler {
     internalName         = classDescriptor.getInternalName();
     this.source          = source;
     this.sourceName      = sourceName;
-    cv = cw = new JactlClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES, context);
-    if (context.checkClasses()) {
-      cv = new CheckClassAdapter(cw);
-    }
-    if (debug()) {
-      printer = new JactlTextifier();
-      cv = new TraceClassVisitor(cv, printer, new PrintWriter(System.out) {
-        { super.print(": "); }
-        @Override
-        public void print(String s) {
-          super.print(s.replaceAll("\n", "\n: "));
-        }
-      });
-    }
-
+    cw = new JactlClassWriter(context);
+    cv = cw.getClassVisitor();
     internalBaseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : null;
     if (classDecl.isScriptClass()) {
       internalBaseName = Type.getInternalName(JactlScriptObject.class);
@@ -98,8 +81,7 @@ public class ClassCompiler {
     String superName = internalBaseName == null ? Type.getInternalName(Object.class) : internalBaseName;
 
     // Supporting Java 8 at the moment so passing V1_8. Change to later version once we no longer support Java 8.
-    cv.visit(V1_8, ACC_PUBLIC, internalName, null,
-             superName, new String[] {Type.getInternalName(JactlObject.class) });
+    cv.visit(V1_8, ACC_PUBLIC, internalName, null, superName, new String[] {Type.getInternalName(JactlObject.class) });
     cv.visitSource(sourceName, null);
 
     classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
@@ -278,8 +260,8 @@ public class ClassCompiler {
       classInit.visitVarInsn(ALOAD, 0);
       classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
       classInit.visitLdcInsn(continuationMethod);
-      Utils.loadConst(classInit, Object.class);    // return type
-      Utils.loadConst(classInit, Continuation.class);
+      Utils.loadConst(classInit, Object.class, context);    // return type
+      Utils.loadConst(classInit, Continuation.class, context);
       classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
 
       if (!decl.isStatic()) {
@@ -315,7 +297,7 @@ public class ClassCompiler {
       String staticHandleName = Utils.staticHandleName(methodName);
       classInit.visitLdcInsn(methodName);
       // Wrapper methods return Object since caller won't know what type they would normally return
-      Utils.loadConst(classInit, ANY);
+      Utils.loadConst(classInit, ANY, context);
 
       // Get all parameter types
       List<Class> paramTypes = new ArrayList<>();
@@ -330,16 +312,16 @@ public class ClassCompiler {
                                           .collect(Collectors.toList()));
 
       // Load first parameter type and then load the rest in an array
-      Utils.loadConst(classInit, paramTypes.remove(0));
+      Utils.loadConst(classInit, paramTypes.remove(0), context);
 
       // We need an array for the rest of the type args
-      Utils.loadConst(classInit, paramTypes.size());
+      Utils.loadConst(classInit, paramTypes.size(), context);
       classInit.visitTypeInsn(ANEWARRAY, "java/lang/Class");
       int i;
       for (i = 0; i < paramTypes.size(); i++) {
         classInit.visitInsn(DUP);
-        Utils.loadConst(classInit, i);
-        Utils.loadConst(classInit, paramTypes.get(i));
+        Utils.loadConst(classInit, i, context);
+        Utils.loadConst(classInit, paramTypes.get(i), context);
         classInit.visitInsn(AASTORE);
       }
       classInit.visitMethodInsn(INVOKESTATIC, "java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;", false);
@@ -368,7 +350,7 @@ public class ClassCompiler {
         String mapName = funDecl.isStatic() ? Utils.JACTL_STATIC_FIELDS_METHODS_MAP : Utils.JACTL_FIELDS_METHODS_MAP;
         classInit.visitFieldInsn(GETSTATIC, internalName, mapName, MAP.descriptor());
         classInit.visitInsn(SWAP);
-        Utils.loadConst(classInit, funDecl.nameToken.getStringValue());
+        Utils.loadConst(classInit, funDecl.nameToken.getStringValue(), context);
         classInit.visitInsn(SWAP);
         classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
       }
@@ -456,13 +438,13 @@ public class ClassCompiler {
     // Generate code for loading saved parameter values back onto stack
     int numHeapLocals = funDecl.heapLocals.size();
     for (int i = 0; i < numHeapLocals; i++, slot++) {
-      Utils.loadStoredValue(mv, continuationSlot, slot, HEAPLOCAL);
+      Utils.loadStoredValue(mv, continuationSlot, slot, HEAPLOCAL, context);
     }
 
     mv.visitVarInsn(ALOAD, continuationSlot);   // Continuation
     if (funDecl.functionDescriptor.needsLocation) {
-      Utils.loadStoredValue(mv, continuationSlot, slot++, STRING);
-      Utils.loadStoredValue(mv, continuationSlot, slot++, INT);
+      Utils.loadStoredValue(mv, continuationSlot, slot++, STRING, context);
+      Utils.loadStoredValue(mv, continuationSlot, slot++, INT, context);
     }
 
     // Load parameter values from our long[] or Object[] in the Continuation.
@@ -471,12 +453,12 @@ public class ClassCompiler {
     for (int i = 0; i < funDecl.parameters.size(); i++, slot++) {
       // If we are a scriptMain and slot is for our globals (globalsVar() will return -1 if not scriptMain)
       if (slot == funDecl.globalsVar()) {
-        Utils.loadConst(mv, null);       // no need to restore globals since we previously stored it in a field
+        Utils.loadConst(mv, null, context);       // no need to restore globals since we previously stored it in a field
         continue;
       }
       final Expr.VarDecl declExpr = funDecl.parameters.get(i).declExpr;
       JactlType          type     = declExpr.isPassedAsHeapLocal ? HEAPLOCAL : declExpr.type;
-      Utils.loadStoredValue(mv, continuationSlot, slot, type);
+      Utils.loadStoredValue(mv, continuationSlot, slot, type, context);
       if (type.is(LONG, DOUBLE)) {
         slot++;
       }
@@ -502,11 +484,11 @@ public class ClassCompiler {
       if (varDecl.isConstVar) {
         // Store the field value (since it is a constant) in the static map of field/methods
         classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor());
-        Utils.loadConst(classInit,name);
+        Utils.loadConst(classInit, name, context);
 
         // TODO: Need to something about List/Map values here (and wrap them in Collections.immutableList() etc)
         // ... or not support them...
-        Utils.loadConst(classInit, varDecl.initialiser.constValue);
+        Utils.loadConst(classInit, varDecl.initialiser.constValue, context);
         if (varDecl.type.is(ANY)) {
           Utils.box(classInit, varDecl.initialiser.type);
         }
@@ -519,7 +501,7 @@ public class ClassCompiler {
       else {
         // Add code to class initialiser to find a VarHandle and add to our static fieldsAndMethods map
         classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
-        Utils.loadConst(classInit, name);
+        Utils.loadConst(classInit, name, context);
 
         classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
         classInit.visitLdcInsn(name);
@@ -530,9 +512,6 @@ public class ClassCompiler {
     }
   }
 
-  boolean debug() {
-    return context.debugLevel > 0;
-  }
   boolean debug(int level) {
     return context.debugLevel >= level;
   }
@@ -542,71 +521,6 @@ public class ClassCompiler {
   }
 
   //////////////////////////////////////
-
-  private static class JactlClassWriter extends ClassWriter {
-
-    JactlContext context;
-
-    public JactlClassWriter(int flags, JactlContext context) {
-      super(flags);
-      this.context = context;
-    }
-
-    private static final String objectClass = Type.getInternalName(Object.class);
-
-    @Override
-    protected String getCommonSuperClass(String type1, String type2) {
-      if (type1.equals(type2)) {
-        return type1;
-      }
-      if (type1.equals(objectClass) || type2.equals(objectClass)) {
-        return objectClass;
-      }
-      String jactlObjectClass = Type.getInternalName(JactlObject.class);
-      if (type1.startsWith(context.internalJavaPackage) && type2.equals(jactlObjectClass)) {
-        return jactlObjectClass;
-      }
-      if (type2.startsWith(context.internalJavaPackage) && type1.equals(jactlObjectClass)) {
-        return jactlObjectClass;
-      }
-      try {
-        if (type1.startsWith(context.internalJavaPackage) && type2.startsWith(context.internalJavaPackage)) {
-          ClassDescriptor clss1 = context.getClassDescriptor(type1);
-          ClassDescriptor clss2 = context.getClassDescriptor(type2);
-          if (clss1 != null && clss2 != null) {
-            if (clss1.isAssignableFrom(clss2)) {
-              return type1;
-            }
-            if (clss2.isAssignableFrom(clss1)) {
-              return type2;
-            }
-            if (clss1.isInterface() || clss2.isInterface()) {
-              return jactlObjectClass;
-            }
-            else {
-              do {
-                clss1 = clss1.getBaseClass();
-              }
-              while (clss1 != null && !clss1.isAssignableFrom(clss2));
-
-              return clss1 == null ? jactlObjectClass : clss1.getInternalName();
-            }
-          }
-        }
-        else
-        if (type1.startsWith(context.internalJavaPackage) || type2.startsWith(context.internalJavaPackage)) {
-          // Common ancestor or Jactl class and non-Jactl class is Object, but I am not sure
-          // if returning Object is the right answer or whether this is just hiding an issue
-          // in the generated bytecode...
-          return Type.getInternalName(Object.class);
-        }
-        return super.getCommonSuperClass(type1, type2);
-      }
-      catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
 
   protected void compileJactlObjectFunctions() {
     compileToJsonFunction();
@@ -735,12 +649,12 @@ public class ClassCompiler {
     mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, "java/lang/StackOverflowError");
     mv.visitLabel(blockStart);
     ClassDescriptor baseClass = classDescriptor.getBaseClass();
-    Utils.loadConst(mv, (baseClass == null ? 0 : 1) + classDescriptor.getFields().size());
+    Utils.loadConst(mv, (baseClass == null ? 0 : 1) + classDescriptor.getFields().size(), context);
     mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
     int i = 0;
     if (baseClass != null) {
       mv.visitInsn(DUP);
-      Utils.loadConst(mv, i++);
+      Utils.loadConst(mv, i++, context);
       mv.visitVarInsn(ALOAD, 0);
       mv.visitMethodInsn(INVOKESPECIAL, baseClass.getInternalName(), "hashCode", "()I", false);
       mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
@@ -748,7 +662,7 @@ public class ClassCompiler {
     }
     for (Map.Entry<String,JactlType> field: classDescriptor.getFields()) {
       mv.visitInsn(DUP);
-      Utils.loadConst(mv, i++);
+      Utils.loadConst(mv, i++, context);
       mv.visitVarInsn(ALOAD, 0);
       JactlType type = field.getValue();
       mv.visitFieldInsn(GETFIELD, classDescriptor.getInternalName(), field.getKey(), type.descriptor());
@@ -811,7 +725,7 @@ public class ClassCompiler {
 
     mv.visitCode();
     mv.visitVarInsn(ALOAD, BUFF_SLOT);
-    Utils.loadConst(mv, '{');
+    Utils.loadConst(mv, '{', context);
     invoke.accept("writeByte", char.class);
     boolean notFirstOutput = false;
     boolean first = true;
@@ -824,7 +738,7 @@ public class ClassCompiler {
         if (first) {
           // If we are first, and we are not a primitive then we need to initialise flag to know whether we have
           // output any field yet or not
-          Utils.loadConst(mv, 0);         // 0 - first, non-zero for anything else
+          Utils.loadConst(mv, 0, context);         // 0 - first, non-zero for anything else
           mv.visitVarInsn(ISTORE, FIRST_SLOT);
           usingFirstSlot = true;
         }
@@ -832,7 +746,7 @@ public class ClassCompiler {
 
       if (notFirstOutput) {
         mv.visitVarInsn(ALOAD, BUFF_SLOT);
-        Utils.loadConst(mv, ',');
+        Utils.loadConst(mv, ',', context);
         invoke.accept("writeByte", char.class);
       }
       else
@@ -842,7 +756,7 @@ public class ClassCompiler {
           mv.visitVarInsn(ILOAD, FIRST_SLOT);
           mv.visitJumpInsn(IFEQ, isFirst);
           mv.visitVarInsn(ALOAD, BUFF_SLOT);
-          Utils.loadConst(mv, ',');
+          Utils.loadConst(mv, ',', context);
           invoke.accept("writeByte", char.class);
           mv.visitLabel(isFirst);
         }
@@ -854,11 +768,11 @@ public class ClassCompiler {
       }
 
       mv.visitVarInsn(ALOAD, BUFF_SLOT);
-      Utils.loadConst(mv, field);
+      Utils.loadConst(mv, field, context);
       invoke.accept("writeString", String.class);
 
       mv.visitVarInsn(ALOAD, BUFF_SLOT);
-      Utils.loadConst(mv, ':');
+      Utils.loadConst(mv, ':', context);
       invoke.accept("writeByte", char.class);
       mv.visitVarInsn(ALOAD, BUFF_SLOT);
       mv.visitVarInsn(ALOAD, THIS_SLOT);
@@ -867,7 +781,7 @@ public class ClassCompiler {
       first = false;
     }
     mv.visitVarInsn(ALOAD, BUFF_SLOT);
-    Utils.loadConst(mv, '}');
+    Utils.loadConst(mv, '}', context);
     invoke.accept("writeByte", char.class);
     mv.visitInsn(RETURN);
 
@@ -921,11 +835,11 @@ NEXT:   mv.visitLabel(NEXT);
         mv.visitVarInsn(ALOAD, ARR_SLOT);
         mv.visitJumpInsn(IFNULL, NULL_VAL);
         mv.visitVarInsn(ALOAD, BUFF_SLOT);
-        Utils.loadConst(mv, '[');     // JsonEncoder is currently on stack
+        Utils.loadConst(mv, '[', context);     // JsonEncoder is currently on stack
         invoke.accept("writeByte", char.class);
         Label LOOP     = new Label();
         Label END_LOOP = new Label();
-        Utils.loadConst(mv,0);
+        Utils.loadConst(mv, 0, context);
         mv.visitVarInsn(ISTORE, ARR_IDX_SLOT);
 LOOP:   mv.visitLabel(LOOP);
         mv.visitVarInsn(ALOAD, ARR_SLOT);
@@ -936,24 +850,24 @@ LOOP:   mv.visitLabel(LOOP);
         Label FIRST = new Label();
         mv.visitJumpInsn(IFEQ, FIRST);
         mv.visitVarInsn(ALOAD, BUFF_SLOT);
-        Utils.loadConst(mv, ',');
+        Utils.loadConst(mv, ',', context);
         invoke.accept("writeByte", char.class);
 FIRST:  mv.visitLabel(FIRST);
         mv.visitVarInsn(ALOAD, BUFF_SLOT);
         mv.visitVarInsn(ALOAD, ARR_SLOT);
         mv.visitVarInsn(ILOAD, ARR_IDX_SLOT);
-        Utils.loadArrayElement(mv, type.getArrayElemType());
+        Utils.loadArrayElement(mv, type.getArrayElemType(), context);
         writeField(mv, type.getArrayElemType(), invoke, arraySlots + 2);
         mv.visitIincInsn(ARR_IDX_SLOT, 1);
         mv.visitJumpInsn(GOTO, LOOP);
 END_LOOP: mv.visitLabel(END_LOOP);
         mv.visitVarInsn(ALOAD, BUFF_SLOT);
-        Utils.loadConst(mv, ']');
+        Utils.loadConst(mv, ']', context);
         invoke.accept("writeByte", char.class);
         mv.visitJumpInsn(GOTO, NEXT);
 NULL_VAL: mv.visitLabel(NULL_VAL);
         mv.visitVarInsn(ALOAD, BUFF_SLOT);
-        Utils.loadConst(mv, "null");
+        Utils.loadConst(mv, "null", context);
         invoke.accept("writeBareString", String.class);
 NEXT:   mv.visitLabel(NEXT);
         break;
@@ -978,7 +892,7 @@ NEXT:   mv.visitLabel(NEXT);
                                       null, null);
     mv.visitCode();
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    Utils.loadConst(mv, '{');
+    Utils.loadConst(mv, '{', context);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expectOrNull", Type.getMethodDescriptor(Type.getType(boolean.class), Type.getType(char.class)), false);
     Label BRACE = new Label();
     mv.visitJumpInsn(IFNE, BRACE);
@@ -1016,7 +930,7 @@ LOOP: mv.visitLabel(LOOP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
     mv.visitInsn(DUP);
-    Utils.loadConst(mv, '}');
+    Utils.loadConst(mv, '}', context);
     mv.visitJumpInsn(IF_ICMPNE, NOT_END);
     mv.visitInsn(POP);
     mv.visitJumpInsn(GOTO, END_LOOP);
@@ -1025,9 +939,9 @@ NOT_END: mv.visitLabel(NOT_END);
     mv.visitVarInsn(ILOAD, FIRST_SLOT);
     mv.visitJumpInsn(IFEQ, FIRST);
     mv.visitInsn(DUP);
-    Utils.loadConst(mv, ',');
+    Utils.loadConst(mv, ',', context);
     mv.visitJumpInsn(IF_ICMPEQ, COMMA);
-    Utils.loadConst(mv, "Expecting ',' or '}' but got ");
+    Utils.loadConst(mv, "Expecting ',' or '}' but got ", context);
 
 ERROR: mv.visitLabel(ERROR);
     // Expect on stack:  ...char,errMsg
@@ -1046,9 +960,9 @@ COMMA: mv.visitLabel(COMMA);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
 FIRST: mv.visitLabel(FIRST);
     mv.visitInsn(DUP);
-    Utils.loadConst(mv, '"');
+    Utils.loadConst(mv, '"', context);
     mv.visitJumpInsn(IF_ICMPEQ, QUOTE);
-    Utils.loadConst(mv, "Expecting '\"' but got ");
+    Utils.loadConst(mv, "Expecting '\"' but got ", context);
     mv.visitJumpInsn(GOTO, ERROR);
 QUOTE: mv.visitLabel(QUOTE);
     mv.visitInsn(POP);
@@ -1076,7 +990,7 @@ NEXT:     mv.visitLabel(NEXT);
         // (TODO: optimise if necessary to eliminate linear search to improve compile time performance)
         int fidx = fieldNames.indexOf(fieldName);
         mv.visitInsn(DUP);
-        Utils.loadConst(mv, fieldName);
+        Utils.loadConst(mv, fieldName, context);
         mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z", false);
         mv.visitJumpInsn(IFEQ, NEXT);    // No match even though hashcode matched
         mv.visitInsn(POP);
@@ -1084,22 +998,22 @@ NEXT:     mv.visitLabel(NEXT);
         // per field (we overflow to multiple 64 bit longs if necessary)
         int shift = fidx % 64;                      // which bit to test/set
         int flag  = DUP_FLAGS + (fidx / 64) * 2;    // which of our longs to use
-        Utils.loadConst(mv, 1L << shift);
+        Utils.loadConst(mv, 1L << shift, context);
         mv.visitVarInsn(LLOAD, flag);
         mv.visitInsn(LAND);
         mv.visitInsn(LCONST_0);
         mv.visitInsn(LCMP);
         Label NO_DUP = new Label();
         mv.visitJumpInsn(IFEQ, NO_DUP);
-        Utils.loadConst(mv, fieldName);
+        Utils.loadConst(mv, fieldName, context);
         mv.visitJumpInsn(GOTO, DUP_FOUND);
 NO_DUP: mv.visitLabel(NO_DUP);
-        Utils.loadConst(mv, 1L << shift);
+        Utils.loadConst(mv, 1L << shift, context);
         mv.visitVarInsn(LLOAD, flag);
         mv.visitInsn(LOR);
         mv.visitVarInsn(LSTORE, flag);          // set flag to remember we have seen this field
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
-        Utils.loadConst(mv, ':');
+        Utils.loadConst(mv, ':', context);
         mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expect", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(char.class)), false);
         mv.visitVarInsn(ALOAD, THIS_SLOT);
         JactlType type = getField(fieldName);
@@ -1109,7 +1023,7 @@ NO_DUP: mv.visitLabel(NO_DUP);
       }
     }
 DEFAULT_LABEL: mv.visitLabel(DEFAULT_LABEL);
-    Utils.loadConst(mv, " field in JSON data does not exist in " + className);
+    Utils.loadConst(mv, " field in JSON data does not exist in " + className, context);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitInsn(SWAP);
@@ -1119,10 +1033,10 @@ DEFAULT_LABEL: mv.visitLabel(DEFAULT_LABEL);
     mv.visitInsn(ATHROW);
 
 DUP_FOUND: mv.visitLabel(DUP_FOUND);
-    Utils.loadConst(mv, "Field '");
+    Utils.loadConst(mv, "Field '", context);
     mv.visitInsn(SWAP);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
-    Utils.loadConst(mv, "' for class " + className + " appears multiple times in JSON data");
+    Utils.loadConst(mv, "' for class " + className + " appears multiple times in JSON data", context);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitInsn(SWAP);
@@ -1159,11 +1073,11 @@ END_LOOP: mv.visitLabel(END_LOOP);
         if (mandatoryFlags[i] == 0) {
           continue;
         }
-        Utils.loadConst(mv, i);
+        Utils.loadConst(mv, i, context);
         mv.visitVarInsn(LLOAD, DUP_FLAGS + i * 2);
-        Utils.loadConst(mv, mandatoryFlags[i]);
+        Utils.loadConst(mv, mandatoryFlags[i], context);
         mv.visitInsn(LAND);
-        Utils.loadConst(mv, mandatoryFlags[i]);
+        Utils.loadConst(mv, mandatoryFlags[i], context);
         mv.visitInsn(LXOR);
         mv.visitInsn(DUP2);
         mv.visitInsn(LCONST_0);
@@ -1196,19 +1110,19 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
       //       We could be smarter and only use bits for optional fields but that would
       //       require generating code to iterate through the field flags to then set
       //       these other flags. Easier just to return the field flags we have.
-      Utils.loadConst(mv, optionalFlags.length);
+      Utils.loadConst(mv, optionalFlags.length, context);
       mv.visitIntInsn(NEWARRAY, T_LONG);
       for (int flag = 0; flag < optionalFlags.length; flag++) {
         mv.visitInsn(DUP);
-        Utils.loadConst(mv, flag);
+        Utils.loadConst(mv, flag, context);
         if (optionalFlags[flag] == 0) {
-          Utils.loadConst(mv, 0L);
+          Utils.loadConst(mv, 0L, context);
         }
         else {
           mv.visitVarInsn(LLOAD, DUP_FLAGS + flag*2);
-          Utils.loadConst(mv, optionalFlags[flag]);
+          Utils.loadConst(mv, optionalFlags[flag], context);
           mv.visitInsn(LAND);
-          Utils.loadConst(mv, optionalFlags[flag]);
+          Utils.loadConst(mv, optionalFlags[flag], context);
           mv.visitInsn(LXOR);
         }
         mv.visitInsn(LASTORE);
@@ -1279,7 +1193,7 @@ NULL_CHILD: mv.visitLabel(NULL_CHILD);
         break;
       case FUNCTION:
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
-        Utils.loadConst(mv, "Field " + fieldName + " of type function/closure cannot be instantiated from json");
+        Utils.loadConst(mv, "Field " + fieldName + " of type function/closure cannot be instantiated from json", context);
         mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
                            Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class)), false);
         mv.visitInsn(ACONST_NULL);
@@ -1299,7 +1213,7 @@ NULL_CHILD: mv.visitLabel(NULL_CHILD);
     Label END_LOOP    = new Label();
 
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    Utils.loadConst(mv, '[');
+    Utils.loadConst(mv, '[', context);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expectOrNull", Type.getMethodDescriptor(Type.getType(boolean.class), Type.getType(char.class)), false);
     mv.visitJumpInsn(IFNE, BRACKET);
     // Was null so return null value
@@ -1307,10 +1221,10 @@ NULL_CHILD: mv.visitLabel(NULL_CHILD);
     mv.visitJumpInsn(GOTO, FINISH_LIST);
 
 BRACKET: mv.visitLabel(BRACKET);
-    Utils.loadConst(mv, INITIAL_ARR_SIZE);
+    Utils.loadConst(mv, INITIAL_ARR_SIZE, context);
     Utils.newArray(mv, type, 1);
     mv.visitVarInsn(ASTORE, ARR_SLOT);
-    Utils.loadConst(mv, 0);
+    Utils.loadConst(mv, 0, context);
     mv.visitVarInsn(ISTORE, ARR_IDX);
 
     Label LOOP        = new Label();
@@ -1321,7 +1235,7 @@ LOOP: mv.visitLabel(LOOP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "skipWhitespace", Type.getMethodDescriptor(Type.getType(char.class)), false);
     mv.visitInsn(DUP);
-    Utils.loadConst(mv, ']');
+    Utils.loadConst(mv, ']', context);
     mv.visitJumpInsn(IF_ICMPNE, NOT_END);
     mv.visitInsn(POP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
@@ -1333,9 +1247,9 @@ NOT_END: mv.visitLabel(NOT_END);
     mv.visitVarInsn(ILOAD, ARR_IDX);
     mv.visitJumpInsn(IFEQ, FIRST_FIELD);
     mv.visitInsn(DUP);
-    Utils.loadConst(mv, ',');
+    Utils.loadConst(mv, ',', context);
     mv.visitJumpInsn(IF_ICMPEQ, READ_FIELD);
-    Utils.loadConst(mv, "Expecting ',' or ']' but got ");
+    Utils.loadConst(mv, "Expecting ',' or ']' but got ", context);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitInsn(DUP_X2);
     mv.visitInsn(POP);
@@ -1361,7 +1275,7 @@ FIRST_FIELD: mv.visitLabel(FIRST_FIELD);
 
     // Grow array by doubling in size
     mv.visitVarInsn(ILOAD, ARR_IDX);
-    Utils.loadConst(mv,2);
+    Utils.loadConst(mv, 2, context);
     mv.visitInsn(IMUL);
 
     Runnable copyArray = () -> {
@@ -1371,9 +1285,9 @@ FIRST_FIELD: mv.visitLabel(FIRST_FIELD);
       mv.visitInsn(SWAP);
       mv.visitInsn(DUP);
       mv.visitVarInsn(ASTORE, ARR_SLOT);
-      Utils.loadConst(mv, 0);
+      Utils.loadConst(mv, 0, context);
       mv.visitInsn(SWAP);
-      Utils.loadConst(mv, 0);
+      Utils.loadConst(mv, 0, context);
       mv.visitVarInsn(ILOAD, ARR_IDX);
       mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V", false);
     };
@@ -1412,14 +1326,14 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
                                       null, null);
     mv.visitCode();
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
-    Utils.loadConst(mv, INSTANCE.getType().ordinal());
-    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeCint", "(I)V", false);
+    Utils.loadConst(mv, INSTANCE.getType().ordinal(), context);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", Checkpointer.WRITE_CINT, "(I)V", false);
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
-    Utils.loadConst(mv, internalName);
+    Utils.loadConst(mv, internalName, context);
     mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeObject", "(Ljava/lang/Object;)V", false);
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
-    Utils.loadConst(mv, VERSION);
-    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeCint", "(I)V", false);
+    Utils.loadConst(mv, VERSION, context);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", Checkpointer.WRITE_CINT, "(I)V", false);
 
     if (classDecl.isScriptClass()) {
       // Save globals field
@@ -1443,8 +1357,8 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       switch (f.declExpr.type.getType()) {
         case BOOLEAN: writer.accept("writeBoolean", "Z");                      break;
         case BYTE:    writer.accept("writeByte", "B");                         break;
-        case INT:     writer.accept("writeCint", "I");                         break;
-        case LONG:    writer.accept("writeClong", "J");                        break;
+        case INT:     writer.accept(Checkpointer.WRITE_CINT, "I");                break;
+        case LONG:    writer.accept(Checkpointer.WRITE_CLONG, "J");            break;
         case DOUBLE:  writer.accept("writeDouble", "D");                       break;
         case DECIMAL: writer.accept("writeDecimal", "Ljava/math/BigDecimal;"); break;
         default:      writer.accept("writeObject", "Ljava/lang/Object;");      break;
@@ -1469,9 +1383,9 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     mv.visitVarInsn(ALOAD, RESTORER_SLOT);
     mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Restorer", "skipType", "()V", false);
     mv.visitVarInsn(ALOAD, RESTORER_SLOT);
-    Utils.loadConst(mv, VERSION);
-    Utils.loadConst(mv, "Bad version");
-    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Restorer", "expectCint", "(ILjava/lang/String;)V", false);
+    Utils.loadConst(mv, VERSION, context);
+    Utils.loadConst(mv, "Bad version", context);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Restorer", Restorer.EXPECT_CINT, "(ILjava/lang/String;)V", false);
 
     BiConsumer<String,String> reader = (name, type) -> mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Restorer", name, "()" + type, false);
 
@@ -1496,8 +1410,8 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       switch (f.declExpr.type.getType()) {
         case BOOLEAN: reader.accept("readBoolean", "Z");                      break;
         case BYTE:    reader.accept("readByte", "B");                         break;
-        case INT:     reader.accept("readCint", "I");                         break;
-        case LONG:    reader.accept("readClong", "J");                        break;
+        case INT:     reader.accept(Restorer.READ_CINT, "I");                         break;
+        case LONG:    reader.accept(Restorer.READ_CLONG, "J");                        break;
         case DOUBLE:  reader.accept("readDouble", "D");                       break;
         case DECIMAL: reader.accept("readDecimal", "Ljava/math/BigDecimal;"); break;
         default:
@@ -1534,7 +1448,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     Consumer<String> error = msg -> {
       mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
       mv.visitInsn(DUP);
-      Utils.loadConst(mv, msg);
+      Utils.loadConst(mv, msg, context);
       mv.visitVarInsn(ALOAD, SOURCE_SLOT);
       mv.visitVarInsn(ILOAD, OFFSET_SLOT);
       mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
@@ -1613,24 +1527,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       return;
     }
     // Must be a simple value
-    Utils.loadConst(classInit, obj);
-    Utils.box(classInit, JactlType.typeOf(obj));
-  }
-
-  /**
-   * Textifier that truncates long strings when outputing LDC instructions
-   */
-  private static class JactlTextifier extends Textifier {
-    JactlTextifier() { super(ASM8); }
-    @Override public void visitLdcInsn(Object v) {
-      super.visitLdcInsn(v instanceof String && ((String) v).length() > 80 ? ((String) v).substring(0, 80) + " ..." : v);
-    }
-    @Override public Textifier visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-      super.visitMethod(access, name, descriptor, signature, exceptions);
-      Textifier textifier = new JactlTextifier();
-      text.add(textifier.getText());
-      return textifier;
-    }
-
+    Utils.loadConst(classInit, obj, context);
+    Utils.box(classInit, context.typeOf(obj));
   }
 }

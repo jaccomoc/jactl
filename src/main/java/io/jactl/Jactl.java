@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
+import io.jactl.compiler.JactlClassLoader;
 import io.jactl.runtime.*;
 
 import java.io.*;
@@ -255,6 +256,25 @@ public class Jactl {
   }
 
   /**
+   * Forward declare a Jactl class that can referred to when registering other Jactl classes.
+   * This solves the problem of registering Jactl classes when circular dependencies exist.
+   * @param jactlClass the name of the Jactl class that will be later registered (x.y.ClassName)
+   * @param javaClass  the Java class name that will be used as the implementation of this Jactl class (a.b.ClassName)
+   */
+  public static void declareClass(String jactlClass, String javaClass) {
+    RegisteredClasses.INSTANCE.declareClass(jactlClass, javaClass);
+  }
+  
+  /**
+   * Define a new class that can be accessed by Jactl scripts that will be registered with the runtime.
+   * @param jactlClass fully qualified jactl class name including package (e.g. x.y.ABC)
+   * @return the JactlClass object
+   */
+  public static JactlClass createClass(String jactlClass) {
+    return new JactlClass(jactlClass);
+  }
+  
+  /**
    * Deregister a method
    * @param type   the type which owns the method
    * @param name   the name of the method
@@ -412,7 +432,7 @@ public class Jactl {
       Object result = null;
       BuiltinFunctions.registerBuiltinFunctions();
       if (argMap.containsKey('C')) {
-        Class           clazz     = Class.forName(scriptClassName);
+        Class           clazz     = JactlClassLoader.forName(scriptClassName);
         AtomicReference resultRef = new AtomicReference();
         Function<Map<String,Object>,Object> invoker = JactlScript.createInvoker(clazz, context);
         JactlScript     jactlScript = JactlScript.createScript(invoker, context);

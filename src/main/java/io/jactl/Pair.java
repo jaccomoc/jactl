@@ -27,4 +27,19 @@ public class Pair<X,Y> {
   public static <X,Y> Pair<X,Y> create(X first, Y second) {
     return new Pair(first, second);
   }
+
+  @Override
+  public int hashCode() {
+    return first.hashCode() ^ second.hashCode();
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return obj instanceof Pair && first.equals(((Pair)obj).first) && second.equals(((Pair)obj).second);
+  }
+
+  @Override
+  public String toString() {
+    return "Pair<" + first + ", " + second + ">";
+  }
 }

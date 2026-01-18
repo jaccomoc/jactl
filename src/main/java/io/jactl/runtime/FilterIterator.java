@@ -38,11 +38,11 @@ class FilterIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.FILTER.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.FILTER.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
     checkpointer.writeObject(next);
     checkpointer._writeBoolean(hasNext);
@@ -50,11 +50,11 @@ class FilterIterator extends JactlIterator {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.FILTER.ordinal(), "Expected FILTER");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.FILTER.ordinal(), "Expected FILTER");
+    restorer.expectCInt(VERSION, "Bad version");
     iter     = (JactlIterator)restorer.readObject();
     source   = (String)restorer.readObject();
-    offset   = restorer.readCint();
+    offset   = restorer.readCInt();
     closure  = (JactlMethodHandle)restorer.readObject();
     next     = restorer.readObject();
     hasNext  = restorer.readBoolean();

@@ -139,7 +139,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     this.globals      = globals == null ? Utils.mapOf() : globals;
     this.globals.keySet().forEach(name -> {
       if (!jactlContext.globalVars.containsKey(name)) {
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
+        Expr.VarDecl varDecl = createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed());
         if (varDecl.type.is(INSTANCE)) {
           ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
           if (classDescriptor == null) {
@@ -150,6 +150,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         jactlContext.globalVars.put(name, varDecl);
       }
     });
+    imports.putAll(jactlContext.getRegisteredClasses().getAutoImportedClasses());
   }
 
   public synchronized void resolveClass(Stmt.ClassDecl classDecl) {
@@ -242,6 +243,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return localClassDecls.get(name);
   }
 
+  public List<CompileError> getErrors() {
+    return errors;
+  }
+  
   //////////////////////////////////////////////
 
   Void resolve(Stmt stmt) {
@@ -503,7 +508,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void validateSignatures(Expr.FunDecl funDecl, ClassDescriptor baseClass, FunctionDescriptor baseMethod) {
-    if (baseMethod.isStatic || funDecl.isStatic()) {
+    if (baseMethod.isStaticImplementation || funDecl.isStatic()) {
       // Not overriding if one of the methods is static so no further check required
       return;
     }
@@ -591,7 +596,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Consumer<String> defineConst = name -> {
         Token              constName = field.location.newIdent(name);
         FunctionDescriptor funcDesc  = classDesc.getMethod(name);
-        if (funcDesc != null && !funcDesc.isStatic) {
+        if (funcDesc != null && !funcDesc.isStaticImplementation) {
           error("Cannot use import static for non-static method", field.location);
         }
         Expr.VarDecl varDecl = null;
@@ -648,7 +653,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // Import all static fields and methods
         classDesc.getAllStaticFields().keySet().forEach(name -> defineConst.accept(name));
         classDesc.getAllMethods()
-                 .filter(entry -> entry.getValue().isStatic)
+                 .filter(entry -> entry.getValue().isStaticImplementation)
                  .forEach(entry -> defineConst.accept(entry.getKey()));
       }
       else {
@@ -660,8 +665,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (type != null && type.getClassDescriptor() != null) {
         ClassDescriptor classDesc = type.getClassDescriptor();
         String name = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
-        if (imports.put(name, classDesc) != null) {
-          error("Class of name '" + name + "' already imported", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+        ClassDescriptor old = imports.put(name, classDesc);
+        if (old != null) {
+          boolean autoImported = jactlContext.getRegisteredClasses().getAutoImportedClasses().containsKey(name);
+          error("Class of name '" + name + "' already " + (autoImported ? "auto-" : "") + "imported (" + old.getPackagedName() + ")", stmt.as != null ? stmt.as : stmt.className.get(0).location);
         }
       }
     }
@@ -1079,7 +1086,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                 error("Found method where field expected", field.location);
                 return Pair.create(TYPE_FOR_BAD_REF, false);
               }
-              if (parent.type.is(CLASS) && !descriptor.isStatic) {
+              if (parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
                 error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
               }
               type = FUNCTION;
@@ -1324,7 +1331,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     declare(expr);
 
     resolve(expr.initialiser);
-    checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
+    // Don't bother checking for type compatibility if we already have an error since we may
+    // not have a valid type to check against
+    if (errors.isEmpty()) {
+      checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
+    }
 
     // Track last type assigned so we can supply better completions in Intellij plugin
     expr.lastAssignedType = expr.initialiser == null ? null : expr.initialiser.type;
@@ -1379,7 +1390,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (!expr.isWrapper && expr.wrapper == null) {
       // Check if we are nested in a static context
       if (inStaticContext()) {
-        expr.functionDescriptor.isStatic = true;
+        expr.functionDescriptor.isStaticImplementation = true;
       }
 
       // Create a name if we are a closure
@@ -1786,7 +1797,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
       FunctionDescriptor descriptor = lookupMethod(expr.parent.type, expr.methodName);
       if (descriptor != null) {
-        if (expr.parent.type.is(CLASS) && !descriptor.isStatic) {
+        if (expr.parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
           error("No static method '" + expr.methodName + "' exists for " + expr.parent.type, expr.location);
         }
         expr.methodDescriptor = descriptor;
@@ -1840,7 +1851,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     try {
       expr.args.forEach(this::resolve);
       Method method = expr.clss.getDeclaredMethod(expr.methodName, expr.paramTypes.toArray(new Class[expr.paramTypes.size()]));
-      return expr.type = JactlType.typeFromClass(method.getReturnType());
+      return expr.type = jactlContext.typeFromClass(method.getReturnType());
     }
     catch (NoSuchMethodException e) {
       error("Could not find method " + expr.methodName + " in class " + expr.clss.getName(), expr.token);
@@ -2251,6 +2262,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  void throwError(String msg, SourceLocation location) {
+    error(msg, location);
+    throw new CompileError(errors);
+  }
+  
   void error(String msg, SourceLocation location) {
     if (!(location instanceof Location)) {
       if (jactlContext.isIdePlugin()) {
@@ -2375,6 +2391,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (funDesc != null) {
           return funDesc;
         }
+      }
+      else {
+        // Probably an earlier error with unknown class so return null to indicate no such method
+        return null;
       }
     }
     return jactlContext.getFunctions().lookupMethod(type, methodName);
@@ -2730,7 +2750,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (isScriptScope() || jactlContext.classAccessToGlobals) {
       // Support globals that are automatically created when asking for them
       if (global == null && globals.containsKey(name)) {
-        global = createGlobalVarDecl(name, typeOf(globals.get(name)).boxed());
+        global = createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed());
         jactlContext.globalVars.put(name, global);
       }
       return global;

@@ -33,11 +33,11 @@ public class UniqueIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.UNIQUE.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.UNIQUE.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(current);
     checkpointer._writeBoolean(reachedEnd);
     checkpointer._writeBoolean(hasValue);
@@ -46,11 +46,11 @@ public class UniqueIterator extends JactlIterator {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.UNIQUE.ordinal(), "Expected UNIQUE");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.UNIQUE.ordinal(), "Expected UNIQUE");
+    restorer.expectCInt(VERSION, "Bad version");
     iter       = (JactlIterator)restorer.readObject();
     source     = (String)restorer.readObject();
-    offset     = restorer.readCint();
+    offset     = restorer.readCInt();
     current    = restorer.readObject();
     reachedEnd = restorer.readBoolean();
     hasValue   = restorer.readBoolean();

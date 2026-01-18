@@ -47,14 +47,59 @@ public class ClassDescriptor extends JactlUserDataHolder {
   boolean                         isScriptClass   = false;       // Whether class for a script
   Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();  // Map of name to Pair<type,value>
 
+  /**
+   * @param name                  the Jactl class name without package prefix or outerclass prefix 
+   * @param isInterface           always false for the moment
+   * @param javaPackage           the Java package that forms the base package for all Jactl classes (from the JavaContext, defaults to "jactl.pkg")
+   * @param pkgName               the Jactl package name the class lives in (e.g. "app.lib.utils")
+   * @param baseClass             the JactlType for the baseClass or null if there is no baseClass
+   * @param interfaces            a list of interfaces that the class implements (at the moment always null)
+   * @param allFieldsAreDefaults  whether all fields have defaults - used to decide if mandatory constructor required 
+   */
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
     this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces, allFieldsAreDefaults);
   }
 
+  /**
+   * This constructor is for when we are aliasing an existing Java class to be a built-in Jactl class.
+   * @param name                  the Jactl class name without package prefix or outerclass prefix 
+   * @param isInterface           always false for the moment
+   * @param javaPackage           the Java package that forms the base package for all Jactl classes (from the JavaContext, defaults to "jactl.pkg")
+   * @param pkgName               the Jactl package name the class lives in (e.g. "app.lib.utils")
+   * @param baseClass             the JactlType for the baseClass or null if there is no baseClass
+   * @param interfaces            a list of interfaces that the class implements (at the moment always null)
+   * @param allFieldsAreDefaults  whether all fields have defaults - used to decide if mandatory constructor required 
+   * @param javaClass             the Java class that acts as our Jactl class (in '.' form)
+   */
+  public ClassDescriptor(String name, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults, String javaClass) {
+    this(name, name, isInterface, javaPackage, pkgName, baseClass, interfaces, allFieldsAreDefaults);
+    this.javaPackagedName = javaClass;
+    this.internalName     = this.javaPackagedName.replace('.', '/');
+  }
+
+  /**
+   * @param name                  the Jactl class name without package prefix or outerclass prefix 
+   * @param isInterface           always false for the moment
+   * @param javaPackage           the Java package that forms the base package for all Jactl classes (from the JavaContext, defaults to "jactl.pkg")
+   * @param outerClass            the immediate outer class that this class is defined within
+   * @param baseClass             the JactlType for the baseClass or null if there is no baseClass
+   * @param interfaces            a list of interfaces that the class implements (at the moment always null)
+   * @param allFieldsAreDefaults  whether all fields have defaults - used to decide if mandatory constructor required 
+   */
   public ClassDescriptor(String name, boolean isInterface, String javaPackage, ClassDescriptor outerClass, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
     this(name, outerClass.getNamePath() + '$' + name, isInterface, javaPackage, outerClass.getPackageName(), baseClass, interfaces, allFieldsAreDefaults);
   }
 
+  /**
+   * @param name                  the Jactl class name without package prefix or outerclass prefix 
+   * @param namePath              if an inner class then this will be OuterClass$InnerClassName otherwise same as name
+   * @param isInterface           always false for the moment
+   * @param javaPackage           the Java package that forms the base package for all Jactl classes (from the JavaContext, defaults to "jactl.pkg")
+   * @param pkgName               the Jactl package name the class lives in (e.g. "app.lib.utils")
+   * @param baseClass             the JactlType for the baseClass or null if there is no baseClass
+   * @param interfaces            a list of interfaces that the class implements (at the moment always null)
+   * @param allFieldsAreDefaults  whether all fields have defaults - used to decide if mandatory constructor required 
+   */
   ClassDescriptor(String name, String namePath, boolean isInterface, String javaPackage, String pkgName, JactlType baseClass, List<ClassDescriptor> interfaces, boolean allFieldsAreDefaults) {
     this.className    = name;
     this.namePath     = namePath;
@@ -96,10 +141,10 @@ public class ClassDescriptor extends JactlUserDataHolder {
     else {
       this.prettyName = prettyName.replace('$','.');
     }
-    this.prettyName = (pkg.equals("")?"":(pkg + ".")) + prettyName;
-    this.packagedName = (pkg.equals("")?"":(pkg + ".")) + namePath;
-    this.javaPackagedName = (javaPackage.equals("") ? "" : javaPackage + ".") + packagedName;
-    this.internalName = ((javaPackage.equals("")?"":(javaPackage + "/")) + packagedName).replace('.', '/');
+    this.prettyName           = Utils.pkgPathOf(pkg, prettyName);
+    this.packagedName         = Utils.pkgPathOf(pkg, namePath);
+    this.javaPackagedName     = Utils.pkgPathOf(javaPackage, packagedName);
+    this.internalName         = Utils.pkgPathOf(javaPackage, packagedName).replace('.', '/');
     this.allFieldsAreDefaults = allFieldsAreDefaults;
   }
 

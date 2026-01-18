@@ -62,15 +62,15 @@ public class Reducer implements Checkpointable {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeTypeEnum(JactlType.TypeEnum.BUILTIN);
-    checkpointer.writeCint(BuiltinFunctions.getClassId(Reducer.class));
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(BuiltinFunctions.getClassId(Reducer.class));
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(value);
-    checkpointer.writeCint(type.ordinal());
+    checkpointer.writeCInt(type.ordinal());
     checkpointer.writeObject(closure);
-    checkpointer.writeCint(counter);
+    checkpointer.writeCInt(counter);
     checkpointer.writeObject(elem);
     checkpointer.writeObject(joinStr);
   }
@@ -78,15 +78,15 @@ public class Reducer implements Checkpointable {
   @Override
   public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.BUILTIN);
-    restorer.expectCint(BuiltinFunctions.getClassId(Reducer.class), "Bad class id");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(BuiltinFunctions.getClassId(Reducer.class), "Bad class id");
+    restorer.expectCInt(VERSION, "Bad version");
     iter    = (JactlIterator)restorer.readObject();
     source  = (String)restorer.readObject();
-    offset  = restorer.readCint();
+    offset  = restorer.readCInt();
     value   = restorer.readObject();
-    type    = Type.values()[restorer.readCint()];
+    type    = Type.values()[restorer.readCInt()];
     closure = (JactlMethodHandle)restorer.readObject();
-    counter = restorer.readCint();
+    counter = restorer.readCInt();
     elem    = restorer.readObject();
     joinStr = (String)restorer.readObject();
   }

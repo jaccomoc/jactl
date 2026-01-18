@@ -124,6 +124,7 @@ public class JactlFunction extends FunctionDescriptor {
    * <p>Must be last method called on function.</p>
    */
   public void register() {
+    init();
     if (context != null) {
       context.getFunctions().registerFunction(this);
       return;
@@ -207,7 +208,7 @@ public class JactlFunction extends FunctionDescriptor {
     }
     return this;
   }
-
+  
   /**
    * The implementing class and method for the function/method.
    * Data field defaults to methodName + "Data" (i.e. method name with Data appended to it).
@@ -228,16 +229,22 @@ public class JactlFunction extends FunctionDescriptor {
    * @return the current JactlFunction for method chaining
    */
   public JactlFunction impl(Class clss, String methodName, String fieldName) {
-    this.implementingClass     = clss;
-    this.implementingClassName = Type.getInternalName(clss);
-    this.implementingMethod    = methodName;
-    this.wrapperHandleField    = fieldName;
+    this.implementingClass      = clss;
+    this.implementingClassName  = Type.getInternalName(clss);
+    this.implementingMethod     = methodName;
+    this.wrapperHandleField     = fieldName;
+    
+    // For user supplied fields, we require field to be of type Object to hide implementation details
+    // even though we know we are going to store a MethodHandle (type FUNCTION) in it.
+    this.wrapperHandleFieldType = JactlType.ANY;
     return this;
   }
 
   /**
    * Name of public static method in impl class that can generate inline code
-   * for functions that support inlining.
+   * for functions that support inlining. This function takes a MethodVisitor
+   * and will be invoked at compile time to generate the required byte code
+   * whenever required.
    * @param methodName  name of the public static method
    * @return the current JactlFunction for method chaining
    */
@@ -245,8 +252,24 @@ public class JactlFunction extends FunctionDescriptor {
     this.inlineMethodName = methodName;
     return this;
   }
+  
+  JactlFunction isStatic(boolean isStatic) {
+    this.isStaticMethod = isStatic;
+    return this;
+  }
 
   ////////////////////////////////////////////////////////
+
+
+  @Override
+  public Class getImplentingClass() {
+    return implementingClass;
+  }
+
+  @Override
+  public List<String> getAliases() {
+    return aliases;
+  }
 
   private Set<String> getMandatoryParams() {
     return IntStream.range(0, defaultVals.length)
@@ -262,8 +285,8 @@ public class JactlFunction extends FunctionDescriptor {
     this.method               = Utils.findStaticMethod(implementingClass, implementingMethod);
     this.inlineMethod         = inlineMethodName == null ? null : Utils.findStaticMethod(implementingClass, inlineMethodName);
     Class<?>[] parameterTypes = method.getParameterTypes();
-    this.methodHandle         = RuntimeUtils.lookupMethod(implementingClass, implementingMethod, method.getReturnType(), parameterTypes);
     this.argCount             = method.getParameterCount();
+    this.methodHandle         = RuntimeUtils.lookupMethod(implementingClass, name, method);
     this.isVarArgs            = parameterTypes.length > 0 && parameterTypes[parameterTypes.length - 1].equals(Object[].class);
     this.isAsync = isMethod() ? parameterTypes.length > 1 && parameterTypes[1].equals(Continuation.class)
                               : parameterTypes.length > 0 && parameterTypes[0].equals(Continuation.class);
@@ -283,7 +306,8 @@ public class JactlFunction extends FunctionDescriptor {
     additionalArgs = (isMethod() ? 1 : 0) + (isAsync() ? 1 : 0);
     int firstArg = additionalArgs;
 
-    // Check if method needs location passed to it
+    // Check if method needs location passed to it by checking if there is a source code and line number
+    // argument. We check for a String arg and int arg at appropriate arg location.
     this.paramCount = paramNames.size();
     if (paramCount + additionalArgs + 2 == argCount &&
         parameterTypes[firstArg].equals(String.class) && parameterTypes[firstArg+1].equals(int.class)) {
@@ -305,7 +329,7 @@ public class JactlFunction extends FunctionDescriptor {
     this.mandatoryParams  = getMandatoryParams();
     this.wrapperMethod    = null;
     this.isBuiltin        = true;
-    this.isStatic         = true;   // Builtins are Java static methods even if they might be Jactl methods
+    this.isStaticImplementation = true;   // Builtins are Java static methods even if they might be Jactl methods
     this.isAsync          = isAsync();
     this.isGlobalFunction = !isMethod();
 
@@ -340,7 +364,7 @@ public class JactlFunction extends FunctionDescriptor {
         if (!(fieldValue instanceof FunctionWrapperHandle)) {
           throw new IllegalArgumentException("Field " + wrapperHandleField + " of " + implementingClassName + " already has a value");
         }
-        JactlFunction function = ((FunctionWrapperHandle) fieldValue).getFunction();
+        FunctionDescriptor function = ((FunctionWrapperHandle) fieldValue).getFunction();
         if (!isEquivalent(function)) {
           throw new IllegalArgumentException("Function shares same implementing class and field name with existing function but is not equivalent: new=" + this + ", existing=" + function);
         }
@@ -363,33 +387,22 @@ public class JactlFunction extends FunctionDescriptor {
   }
 
   public JactlType getReturnType() {
-    return JactlType.typeFromClass(method.getReturnType());
+    return JactlContext.typeFromClass(method.getReturnType(), context);
   }
 
   public List<JactlType> getParamTypes() {
     int reservedParams = (isMethod() ? 1 : 0) + (isAsync() ? 1 : 0) + (needsLocation ? 2 : 0);
     return Arrays.stream(method.getParameterTypes())
                  .skip(reservedParams)
-                 .map(JactlType::typeFromClass)
+                 .map(t -> JactlContext.typeFromClass(t, context))
                  .collect(Collectors.toList());
   }
 
   public JactlType firstParamType() {
     if (isMethod()) {
-      return JactlType.typeFromClass(method.getParameterTypes()[0]);
+      return JactlContext.typeFromClass(method.getParameterTypes()[0], context);
     }
     return null;
-  }
-
-  public boolean isMethod() {
-    return type != null;
-  }
-
-  public JactlType declaredMethodClass() {
-    if (!isMethod()) {
-      return null;
-    }
-    return JactlType.typeFromClass(method.getParameterTypes()[0]);
   }
 
   public Object wrapper(Continuation c, String source, int offset, Object[] args) {
@@ -541,7 +554,7 @@ public class JactlFunction extends FunctionDescriptor {
 
   @Override
   public String toString() {
-    return (isMethod() ? firstParamType() + "." : "") + name + "(" + paramNamesAndValues() + "):" + getReturnType();
+    return (isMethod() ? firstParamType() + "." : "") + name + "(" + paramNamesAndValues() + "):" + returnType;
   }
 
   private String paramNamesAndValues() {
@@ -556,13 +569,17 @@ public class JactlFunction extends FunctionDescriptor {
     return result;
   }
 
-  private boolean isEquivalent(JactlFunction function) {
-    return this.paramNames.equals(function.paramNames) &&
-           this.paramTypes.equals(function.paramTypes) &&
-           Arrays.equals(this.defaultVals, function.defaultVals) &&
-           this.returnType.equals(function.returnType) &&
-           this.implementingMethod.equals(function.implementingMethod) &&
-           this.isMethod() == function.isMethod() &&
-           (!this.isMethod() || this.firstParamType().equals(function.firstParamType()));
+  protected boolean isEquivalent(FunctionDescriptor other) {
+    if (other instanceof JactlFunction) {
+      JactlFunction function = (JactlFunction) other;
+      return this.paramNames.equals(function.paramNames) &&
+             this.paramTypes.equals(function.paramTypes) &&
+             Arrays.equals(this.defaultVals, function.defaultVals) &&
+             this.returnType.equals(function.returnType) &&
+             this.implementingMethod.equals(function.implementingMethod) &&
+             this.isMethod() == function.isMethod() &&
+             (!this.isMethod() || this.firstParamType().equals(function.firstParamType()));
+    }
+    return false;
   }
 }

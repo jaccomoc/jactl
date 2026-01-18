@@ -33,20 +33,20 @@ public class NegativeLimitIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.NEGATIVE_LIMIT.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.NEGATIVE_LIMIT.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
-    checkpointer.writeCint(count);
+    checkpointer.writeCInt(count);
     checkpointer.writeObject(buffer);
     checkpointer._writeBoolean(reachedEnd);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.NEGATIVE_LIMIT.ordinal(), "Expected NEGATIVE_LIMIT");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.NEGATIVE_LIMIT.ordinal(), "Expected NEGATIVE_LIMIT");
+    restorer.expectCInt(VERSION, "Bad version");
     iter       = (JactlIterator)restorer.readObject();
-    count      = restorer.readCint();
+    count      = restorer.readCInt();
     buffer     = new CircularBuffer<>();
     buffer     = (CircularBuffer<Object>)restorer.readObject();
     reachedEnd = restorer.readBoolean();

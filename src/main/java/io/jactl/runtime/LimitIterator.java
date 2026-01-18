@@ -33,22 +33,22 @@ public class LimitIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.LIMIT.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.LIMIT.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer._writeBoolean(reachedEnd);
-    checkpointer.writeCint(limit);
-    checkpointer.writeCint(count);
+    checkpointer.writeCInt(limit);
+    checkpointer.writeCInt(count);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.LIMIT.ordinal(), "Expected LIMIT");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.LIMIT.ordinal(), "Expected LIMIT");
+    restorer.expectCInt(VERSION, "Bad version");
     iter       = (JactlIterator)restorer.readObject();
     reachedEnd = restorer.readBoolean();
-    limit      = restorer.readCint();
-    count      = restorer.readCint();
+    limit      = restorer.readCInt();
+    count      = restorer.readCInt();
   }
 
   LimitIterator() {}

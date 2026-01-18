@@ -542,6 +542,7 @@ public class BuiltinFunctions {
            .register();
 
       BuiltinArrayFunctions.registerFunctions();
+      //DateTimeClasses.register();
     }
   }
 

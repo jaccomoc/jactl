@@ -78,7 +78,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
     return new IteratorHandle(handle, type, handleName);
   }
 
-  public static FunctionWrapperHandle createFuncHandle(MethodHandle handle, JactlType type, String name, JactlFunction function) {
+  public static FunctionWrapperHandle createFuncHandle(MethodHandle handle, JactlType type, String name, FunctionDescriptor function) {
     return new FunctionWrapperHandle(handle, type, name, function);
   }
 
@@ -108,8 +108,8 @@ public abstract class JactlMethodHandle implements Checkpointable {
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
-      checkpointer.writeCint(HandleType.HANDLE.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(HandleType.HANDLE.ordinal());
+      checkpointer.writeCInt(VERSION);
 
       // For JactlObject handles we write the class name but for built-in function classes
       // we write an id that has been registered with BuiltinFunctions.
@@ -119,22 +119,22 @@ public abstract class JactlMethodHandle implements Checkpointable {
       }
       else {
         checkpointer._writeBoolean(false);
-        checkpointer.writeCint(BuiltinFunctions.getClassId(handleClass));
-        checkpointer.writeCint(handleClass.getName().hashCode());
+        checkpointer.writeCInt(BuiltinFunctions.getClassId(handleClass));
+        checkpointer.writeCInt(handleClass.getName().hashCode());
       }
       checkpointer.writeObject(handleName);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.FUNCTION);
-      restorer.expectCint(HandleType.HANDLE.ordinal(), "Expected HANDLE");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(HandleType.HANDLE.ordinal(), "Expected HANDLE");
+      restorer.expectCInt(VERSION, "Bad version");
       boolean isJactlClass = restorer.readBoolean();
       if (isJactlClass) {
         handleClass = restorer.getJactlClass((String)restorer.readObject());
       }
       else {
-        handleClass = BuiltinFunctions.getClass(restorer.readCint());
-        restorer.expectCint(handleClass.getName().hashCode(), "Class name hash does not match for " + handleClass.getName());
+        handleClass = BuiltinFunctions.getClass(restorer.readCInt());
+        restorer.expectCInt(handleClass.getName().hashCode(), "Class name hash does not match for " + handleClass.getName());
       }
       handleName = (String)restorer.readObject();
       try {
@@ -158,16 +158,16 @@ public abstract class JactlMethodHandle implements Checkpointable {
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
-      checkpointer.writeCint(HandleType.ITERATOR_HANDLE.ordinal());
-      checkpointer.writeCint(VERSION);
-      checkpointer.writeCint(type.ordinal());
+      checkpointer.writeCInt(HandleType.ITERATOR_HANDLE.ordinal());
+      checkpointer.writeCInt(VERSION);
+      checkpointer.writeCInt(type.ordinal());
       checkpointer.writeObject(handleName);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.FUNCTION);
-      restorer.expectCint(HandleType.ITERATOR_HANDLE.ordinal(), "Expected HANDLE");
-      restorer.expectCint(VERSION, "Bad version");
-      type       = JactlIterator.IteratorType.values()[restorer.readCint()];
+      restorer.expectCInt(HandleType.ITERATOR_HANDLE.ordinal(), "Expected HANDLE");
+      restorer.expectCInt(VERSION, "Bad version");
+      type       = JactlIterator.IteratorType.values()[restorer.readCInt()];
       handleName = (String)restorer.readObject();
       Class handleClass = JactlIterator.classFromType(type);
       try {
@@ -183,31 +183,34 @@ public abstract class JactlMethodHandle implements Checkpointable {
   public static class FunctionWrapperHandle extends JactlMethodHandle {
     private JactlType type;    // Can be null for global functions
     private String    name;
-    private JactlFunction function;
+    private FunctionDescriptor function;
     FunctionWrapperHandle(){}
-    public FunctionWrapperHandle(MethodHandle handle, JactlType type, String name, JactlFunction function) {
+    public FunctionWrapperHandle(MethodHandle handle, JactlType type, String name, FunctionDescriptor function) {
       this.handle = handle;
       this.type   = type;
       this.name   = name;
       this.function = function;
     }
-    public JactlFunction getFunction() {
+    public FunctionDescriptor getFunction() {
       return function;
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
-      checkpointer.writeCint(HandleType.BUILTIN_FUNCTION.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(HandleType.BUILTIN_FUNCTION.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeType(type);
       checkpointer.writeObject(name);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.FUNCTION);
-      restorer.expectCint(HandleType.BUILTIN_FUNCTION.ordinal(), "Expected BUILTIN_FUNCTION");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(HandleType.BUILTIN_FUNCTION.ordinal(), "Expected BUILTIN_FUNCTION");
+      restorer.expectCInt(VERSION, "Bad version");
       type = restorer.readType();
       name = (String)restorer.readObject();
-      function = (JactlFunction)(type == null ? restorer.getContext().getFunctions().lookupGlobalFunction(name) : restorer.getContext().getFunctions().lookupMethod(type, name));
+      function = type == null ? restorer.getContext().getFunctions().lookupGlobalFunction(name) : restorer.getContext().getFunctions().lookupMethod(type, name);
+      if (function == null) {
+        function = type.getClassDescriptor().getMethod(name);
+      }
       if (function == null) {
         throw new IllegalStateException("Could not find function " + name + " for type " + type);
       }
@@ -226,15 +229,15 @@ public abstract class JactlMethodHandle implements Checkpointable {
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
-      checkpointer.writeCint(HandleType.BOUND.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(HandleType.BOUND.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(wrappedHandle);
       checkpointer.writeObject(boundObj);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.FUNCTION);
-      restorer.expectCint(HandleType.BOUND.ordinal(), "Expected BOUND");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(HandleType.BOUND.ordinal(), "Expected BOUND");
+      restorer.expectCInt(VERSION, "Bad version");
       wrappedHandle = (JactlMethodHandle)restorer.readObject();
       boundObj      = restorer.readObject();
     }

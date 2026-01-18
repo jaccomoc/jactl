@@ -50,6 +50,13 @@ public class ClassTests extends BaseTest {
     test("class X { int i = sleep(0,1); String s }; new X('abc').i", 1);
     test("class X { int i }; new X(2).i", 2);
   }
+  
+  @Test public void unknownClass() {
+    testError("X xyz = null", "unknown class 'X'");
+    testError("X xyz = X.now()", "unknown class 'X'");
+    testError("X xyz = null; xyz.now()", "unknown class 'X'");
+    testError("def xyz = X.now()", "unknown variable 'X'");
+  }
 
   @Test public void simpleClass() {
     test("class X {}", null);
@@ -1558,6 +1565,7 @@ public class ClassTests extends BaseTest {
                  "class Y extends X{def f(){2 + super.f()}}",
                  "class X {def f(){3}}"),
          "def x = new Y(); ((X)x).f() + ((Y)x).f() + x.f()", "cannot be cast");
+    //debugLevel = 1;
     test(Utils.listOf("class X { def f() { 'old X' } }",
                  "class Y extends X {}",
                  "class X { def f() { 'new X' } }"),

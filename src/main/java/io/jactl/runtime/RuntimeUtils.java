@@ -18,7 +18,6 @@
 package io.jactl.runtime;
 
 import io.jactl.*;
-import io.jactl.compiler.Compiler;
 
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandles;
@@ -1291,6 +1290,16 @@ public class RuntimeUtils {
       if (value == null && parent instanceof Map) {
         value = ((Map) parent).get(field);
       }
+      if (value == null) {
+        // Check for method on registered class
+        ClassDescriptor descriptor = RuntimeState.getState().getContext().getRegisteredClasses().getClassDescriptor(parent.getClass());
+        if (descriptor != null) {
+          FunctionDescriptor funDesc = descriptor.getMethod(field);
+          if (funDesc != null) {
+            value = funDesc.wrapperHandle;
+          }
+        }
+      }
     }
 
     if (value == null) {
@@ -1546,8 +1555,22 @@ public class RuntimeUtils {
       }
     }
     else {
-      throw new RuntimeError("No static field/method '" + fieldName + "' for class " + parent, source, offset);
+      // Check for static method of a registered class (note: static const fields not yet supported for registered classes)
+      // TODO: const static fields
+      return getFunctionWrapperHandle(clss, fieldName, source, offset);
     }
+  }
+
+  private static JactlMethodHandle.FunctionWrapperHandle getFunctionWrapperHandle(Class<?> clss, String fieldName, String source, int offset) {
+    ClassDescriptor descriptor = RuntimeState.getState().getContext().getRegisteredClasses().getClassDescriptor(clss);
+    if (descriptor == null) {
+      throw new RuntimeError("Class " + className(clss.getName()) + " not a supported Jactl type", source, offset);
+    }
+    FunctionDescriptor funDesc = descriptor.getMethod(fieldName);
+    if (funDesc == null) {
+      throw new RuntimeError("No static method '" + fieldName + "' for class " + className(clss.getName()), source, offset);
+    }
+    return funDesc.wrapperHandle;
   }
 
   private static Object loadOrCreateMapField(Object parent, Object field, boolean captureStackTrace, String source, int offset, boolean isMap) {
@@ -2003,6 +2026,7 @@ public class RuntimeUtils {
 
 
   private enum FieldType {
+    ANY,
     BOOLEAN,
     BYTE,
     INT,
@@ -2025,7 +2049,8 @@ public class RuntimeUtils {
     String.class, FieldType.STRING,
     Map.class, FieldType.MAP,
     List.class, FieldType.LIST,
-    JactlMethodHandle.class, FieldType.FUNCTION
+    JactlMethodHandle.class, FieldType.FUNCTION,
+    JactlObject.class, FieldType.ANY
   );
 
   public static Object castTo(Class clss, Object value, boolean captureStackTrace, String source, int offset) {
@@ -2050,6 +2075,7 @@ public class RuntimeUtils {
         case MAP:      return castToMap(value, source, offset);
         case LIST:     return castToList(value, source, offset);
         case FUNCTION: return castToFunction(value, captureStackTrace, source, offset);
+        case ANY:      return value;
       }
     }
     throw new RuntimeError("Cannot convert from " + className(value) + " to type " + clss.getName(), source, offset);
@@ -2309,7 +2335,7 @@ public class RuntimeUtils {
     if (obj instanceof String && componentType == byte.class) {
       return ((String)obj).getBytes(StandardCharsets.UTF_8);
     }
-    throw new RuntimeError("Cannot cast from " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+    throw new RuntimeError("Cannot cast from " + className(obj) + " to " + RuntimeState.getState().getContext().typeFromClass(clss), source, offset);
   }
 
   private static Object castToType(Object obj, Class clss, boolean isCast, boolean captureStackTrace, String source, int offset) {
@@ -2331,13 +2357,13 @@ public class RuntimeUtils {
           return num instanceof Double ? BigDecimal.valueOf((double)num)
                                        : BigDecimal.valueOf(num.longValue());
         }
-        throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+        throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + RuntimeState.getState().getContext().typeFromClass(clss), source, offset);
       }
-      throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+      throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + RuntimeState.getState().getContext().typeFromClass(clss), source, offset);
     }
     if (!isCast && clss == String.class)       { return toStringOrNull(obj); }
     if (clss.isAssignableFrom(obj.getClass())) { return obj; }
-    throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + JactlType.typeFromClass(clss), source, offset);
+    throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + RuntimeState.getState().getContext().typeFromClass(clss), source, offset);
   }
 
   public static final String CAN_CAST_TO_TYPE = "canCastToType";
@@ -2455,8 +2481,8 @@ public class RuntimeUtils {
   public static boolean isPatternCompatible(Object obj, Class clss) {
     if (clss.isArray())  { return isArrayType(obj, clss); }
     if (obj == null)     { return clss.equals(Object.class); }
-    JactlType clssType = JactlType.typeFromClass(clss).unboxed();
-    JactlType objType  = JactlType.typeOf(obj).unboxed();
+    JactlType clssType = RuntimeState.getState().getContext().typeFromClass(clss).unboxed();
+    JactlType objType  = RuntimeState.getState().getContext().typeOf(obj).unboxed();
     if (clssType.isNumeric() && objType.isNumeric()) {
       return objType.is(clssType) || objType.is(JactlType.BYTE) && clssType.is(JactlType.INT);
     }
@@ -2553,6 +2579,11 @@ public class RuntimeUtils {
         throw new IllegalStateException("Internal error: error accessing " + Utils.JACTL_PRETTY_NAME_FIELD, e);
       }
     }
+    JactlContext context = RuntimeState.getState().getContext();
+    ClassDescriptor desc = context.getRegisteredClasses().getClassDescriptor(obj.getClass());
+    if (desc != null) {
+      return desc.getClassName();
+    }
     return obj.getClass().getName();
   }
 
@@ -2630,6 +2661,15 @@ public class RuntimeUtils {
     }
     catch (NoSuchMethodException | IllegalAccessException e) {
       throw new IllegalStateException("Error finding method " + method, e);
+    }
+  }
+  
+  public static JactlMethodHandle lookupMethod(Class clss, String jactlMethodName, Method method) {
+    try {
+      return JactlMethodHandle.create(MethodHandles.lookup().unreflect(method), clss,  jactlMethodName + "Handle");
+    }
+    catch (IllegalAccessException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -2940,8 +2980,9 @@ public class RuntimeUtils {
     return true;
   }
 
-  public static long debugBreakPoint(long data, String info) {
-    System.out.println("DEBUG: " + info + ": " + Long.toHexString(data));
+  public static String DEBUG_BREAK_POINT = "debugBreakPoint";
+  public static Object debugBreakPoint(Object data, String info) {
+    System.out.println("DEBUG: " + info + ": " + data);
     return data;
   }
 

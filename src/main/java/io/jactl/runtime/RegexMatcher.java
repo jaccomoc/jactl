@@ -79,7 +79,7 @@ public class RegexMatcher implements Checkpointable {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(JactlType.MATCHER);
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(VERSION);
     globalMatcher.checkpoint(checkpointer);
     nonGlobalMatcher.checkpoint(checkpointer);
     checkpointer.writeBoolean(lastWasGlobal);
@@ -88,7 +88,7 @@ public class RegexMatcher implements Checkpointable {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.MATCHER);
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(VERSION, "Bad version");
     globalMatcher.restore(restorer);
     nonGlobalMatcher.restore(restorer);
     lastWasGlobal = restorer.readBoolean();
@@ -220,8 +220,8 @@ public class RegexMatcher implements Checkpointable {
       checkpointer.writeObject(str);
       checkpointer.writeObject(originalStr);
       checkpointer._writeBoolean(matched);
-      checkpointer.writeCint(lastStart);
-      checkpointer.writeCint(lastPos);
+      checkpointer.writeCInt(lastStart);
+      checkpointer.writeCInt(lastPos);
       checkpointer.writeObject(regex);
       checkpointer.writeObject(modifiers);
       checkpointer.writeBoolean(matcher != null);
@@ -231,8 +231,8 @@ public class RegexMatcher implements Checkpointable {
       str         = (String) restorer.readObject();
       originalStr = (String) restorer.readObject();
       matched     = restorer.readBoolean();
-      lastStart   = restorer.readCint();
-      lastPos     = restorer.readCint();
+      lastStart   = restorer.readCInt();
+      lastPos     = restorer.readCInt();
       regex       = (String) restorer.readObject();
       modifiers   = (String) restorer.readObject();
       boolean haveMatcher = restorer.readBoolean();

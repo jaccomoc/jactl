@@ -18,16 +18,20 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
+import io.jactl.compiler.JactlClassLoader;
 import io.jactl.runtime.*;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import static io.jactl.JactlType.*;
 
 public class JactlContext {
 
@@ -85,6 +89,7 @@ public class JactlContext {
   private File                 buildDir;
 
   private Functions            functions;
+  private RegisteredClasses    registeredClasses;
 
   DynamicClassLoader           classLoader = new DynamicClassLoader();
 
@@ -127,10 +132,7 @@ public class JactlContext {
    * @return the class or null if not found
    */
   public Class getClass(String internalName) {
-    if (internalName.startsWith(internalJavaPackage)) {
-      return classLoader.findClassByInternalName(internalName);
-    }
-    return null;
+    return classLoader.findClassByInternalName(internalName);
   }
 
   public ClassDescriptor getExistingClassDescriptor(String internalName) {
@@ -196,7 +198,7 @@ public class JactlContext {
      * @param value  true if this JactlContext has functions of its own that shouldn't be shared with other JactlContexts (defaults to false)
      * @return this JactlContextBuilder
      */
-    public JactlContextBuilder hasOwnFunctions(boolean value)    { functions = value ? new Functions(Functions.INSTANCE) : null; return this; }
+    public JactlContextBuilder hasOwnFunctions(boolean value)    { functions = value ? new Functions(Functions.INSTANCE, JactlContext.this) : null; return this; }
 
     /**
      * Set the minimum scale to use for Decimal numbers
@@ -320,6 +322,10 @@ public class JactlContext {
   public Functions getFunctions() {
     return functions == null ? Functions.INSTANCE : functions;
   }
+  
+  public RegisteredClasses getRegisteredClasses() {
+    return registeredClasses == null ? RegisteredClasses.INSTANCE : registeredClasses;
+  }
 
   public JactlFunction function() {
     if (functions == null) {
@@ -357,9 +363,9 @@ public class JactlContext {
     Function<Map<String, Object>, Object> script = evalScriptCache.get(code);
     if (script == null) {
       // For eval we want to be able to cache the scripts but the problem is that if the bindings
-      // are typed (e.g. x is an Integer) but then when script is rerun a global has had its type
+      // are typed (e.g. x is an Integer) and when script is rerun a global has had its type
       // changed (e.g. x is now a Long) the script will fail because the types don't match. So
-      // we erase all types and make everything ANY. This is obviously less efficient but for eval()
+      // we erase all types and make everything ANY. This is obviously less efficient, but for eval()
       // efficiency should not be a big issue.
       HashMap erasedBindings = new HashMap();
       bindings.keySet().forEach(k -> erasedBindings.put(k, null));
@@ -377,7 +383,7 @@ public class JactlContext {
 
   // Testing
   public boolean testCheckpointing() { return checkpoint; }
-  public boolean restore()    { return restore; }
+  public boolean testRestoring()     { return restore; }
 
   public boolean checkClasses()  { return checkClasses; }
 
@@ -393,18 +399,25 @@ public class JactlContext {
   }
 
   public boolean packageExists(String name) {
-    return packageChecker.exists(name);
+    return packageChecker.exists(name) || getRegisteredClasses().packageExists(name);
   }
 
   public ClassDescriptor getClassDescriptor(String packageName, String className) {
-    String pname = packageName == null || packageName.equals("") ? "" : packageName + '.';
-    String name  = internalJavaPackage + '.' + pname + className.replace('.', '$');
+    String name  = Utils.pkgPathOf(internalJavaPackage, packageName, className.replace('.', '$'));
     name = name.replace('.', '/');
     return getClassDescriptor(name);
   }
 
   public ClassDescriptor getClassDescriptor(String internalName) {
-    return classLookup.lookup(internalName);
+    ClassDescriptor desc = classLookup.lookup(internalName);
+    if (desc == null) {
+      internalName = internalName.startsWith(internalJavaPackage) ? internalName.substring(internalJavaPackage.length() + 1) : internalName;
+      desc = getRegisteredClasses().getClassDescriptor(internalName.replace('/','.'));
+    }
+    if (desc == null) {
+      desc = getRegisteredClasses().getClassDescriptorByInternalJavaName(internalName);
+    }
+    return desc;
   }
 
   public Object getThreadContext() { return executionEnv.getThreadContext(); }
@@ -457,6 +470,82 @@ public class JactlContext {
 
   //////////////////////////////////
 
+  public JactlType typeOf(Object obj) {
+    return typeOf(obj, this);
+  }
+  
+  public static JactlType typeOf(Object obj, JactlContext context) {
+    if (obj instanceof Boolean)           return BOOLEAN;
+    if (obj instanceof Byte)              return BYTE;
+    if (obj instanceof Integer)           return INT;
+    if (obj instanceof Long)              return LONG;
+    if (obj instanceof Double)            return DOUBLE;
+    if (obj instanceof BigDecimal)        return DECIMAL;
+    if (obj instanceof String)            return STRING;
+    if (obj instanceof Map)               return MAP;
+    if (obj instanceof List)              return LIST;
+    if (obj instanceof JactlMethodHandle) return FUNCTION;
+    if (obj instanceof HeapLocal)         return HEAPLOCAL;
+    if (obj instanceof long[])            return LONG_ARR;
+    if (obj instanceof String[])          return STRING_ARR;
+    if (obj instanceof Object[])          return OBJECT_ARR;
+    if (obj instanceof byte[])            return JactlType.arrayOf(BYTE);
+    if (obj instanceof int[])             return JactlType.arrayOf(INT);
+    if (obj instanceof boolean[])         return JactlType.arrayOf(BOOLEAN);
+    if (obj instanceof double[])          return JactlType.arrayOf(DOUBLE);
+    if (obj instanceof JactlIterator)     return ITERATOR;
+    if (obj == null)                      return ANY;
+    if (obj.getClass().isArray()) {
+      return typeFromClass(obj.getClass(), context);
+    }
+    return typeFromClass(obj.getClass(), context);
+  }
+
+  public JactlType typeFromClass(Class<?> clss) {
+    return typeFromClass(clss, getRegisteredClasses());
+  }
+
+  public static JactlType typeFromClass(Class<?> clss, JactlContext context) {
+    return typeFromClass(clss, context == null ? RegisteredClasses.INSTANCE : context.getRegisteredClasses());
+  }
+  
+  public static JactlType typeFromClass(Class<?> clss, RegisteredClasses classes) {
+    if (clss == boolean.class)             { return BOOLEAN;       }
+    if (clss == Boolean.class)             { return BOXED_BOOLEAN; }
+    if (clss == byte.class)                { return BYTE;          }
+    if (clss == Byte.class)                { return BOXED_BYTE;    }
+    if (clss == int.class)                 { return INT;           }
+    if (clss == Integer.class)             { return BOXED_INT;     }
+    if (clss == long.class)                { return LONG;          }
+    if (clss == Long.class)                { return BOXED_LONG;    }
+    if (clss == double.class)              { return DOUBLE;        }
+    if (clss == Double.class)              { return BOXED_DOUBLE;  }
+    if (clss == BigDecimal.class)          { return DECIMAL;       }
+    if (clss == String.class)              { return STRING;        }
+    if (Map.class.isAssignableFrom(clss))  { return MAP;           }
+    if (List.class.isAssignableFrom(clss)) { return LIST;          }
+    if (clss == JactlMethodHandle.class)   { return FUNCTION;      }
+    if (clss == HeapLocal.class)           { return HEAPLOCAL;     }
+    if (clss == JactlIterator.class)       { return ITERATOR;      }
+    if (clss == Number.class)              { return NUMBER;        }
+    if (clss == RegexMatcher.class)        { return MATCHER;       }
+    if (clss == Continuation.class)        { return CONTINUATION;  }
+    if (clss == Object.class)              { return ANY;           }
+    if (clss == Class.class)               { return CLASS;         }
+    if (clss == JactlObject.class || JactlObject.class.isAssignableFrom(clss))  {
+      return createInstanceType(clss);
+    }
+    ClassDescriptor desc = classes.getClassDescriptor(clss);
+    if (desc != null) {
+      return createInstanceType(desc);
+    }
+    if (clss.isArray()) {
+      return JactlType.arrayOf(typeFromClass(clss.getComponentType(), classes));
+    }
+    return ANY;
+  }
+
+
   public void asyncWork(Consumer<Object> completion, Continuation c, JactlScriptObject instance) {
     // Need to execute async task on some sort of blocking work scheduler and then reschedule
     // continuation back onto the event loop or non-blocking scheduler (might even need to be
@@ -468,11 +557,11 @@ public class JactlContext {
 
       // Test mode
       if (testCheckpointing() && !(asyncTask instanceof CheckpointTask)) {
-        byte[] buf = Checkpointer.checkpoint(asyncTaskCont, RuntimeState.getState(), asyncTask.getSource(), asyncTask.getOffset());
+        byte[] buf = Checkpointer.checkpoint(asyncTaskCont, RuntimeState.getState(), this, asyncTask.getSource(), asyncTask.getOffset());
         //System.out.println("DEBUG: checkpoint = \n" + Utils.dumpHex(checkpointer.getBuffer(), checkpointer.getLength()) + "\n");
         checkpointCount.getAndIncrement();
         checkpointSize.addAndGet(buf.length);
-        if (restore()) {
+        if (testRestoring()) {
           Continuation cont1 = (Continuation)Restorer.restore(this, buf);
           asyncTask.execute(this, instance, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1, instance, asyncTask.getRuntimeState()));
         }
@@ -534,7 +623,7 @@ public class JactlContext {
     private DynamicClassLoader   previous               = null;
 
     DynamicClassLoader() {
-      super(Thread.currentThread().getContextClassLoader());
+      super(JactlClassLoader.getInstance());
     }
 
     DynamicClassLoader(DynamicClassLoader prev) {
@@ -555,20 +644,24 @@ public class JactlContext {
       if (clss != null) {
         return clss;
       }
-      try {
-        clss = Thread.currentThread().getContextClassLoader().loadClass(name);
-        if (clss != null) {
-          return clss;
-        }
-      }
-      catch (ClassNotFoundException e) {}
-      return this.getClass().getClassLoader().loadClass(name);
+      return super.findClass(name);
+//      try {
+//        clss = Thread.currentThread().getContextClassLoader().loadClass(name);
+//        if (clss != null) {
+//          return clss;
+//        }
+//      }
+//      catch (ClassNotFoundException e) {}
+//      return this.getClass().getClassLoader().loadClass(name);
     }
 
-    Class findClassByInternalName(String internalName) {
-      Class clss = classesByInternalName.get(internalName);
+    Class<?> findClassByInternalName(String internalName) {
+      Class<?> clss = classesByInternalName.get(internalName);
       if (clss == null && previous != null) {
         clss = previous.findClassByInternalName(internalName);
+      }
+      if (clss == null) {
+        clss = getRegisteredClasses().findClassByInternalJavaName(internalName);
       }
       return clss;
     }

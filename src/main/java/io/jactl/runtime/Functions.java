@@ -17,13 +17,8 @@
 
 package io.jactl.runtime;
 
-import io.jactl.Expr;
-import io.jactl.JactlType;
-import io.jactl.Pair;
-import io.jactl.Utils;
+import io.jactl.*;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -49,14 +44,17 @@ public class Functions {
   private final Map<String,FunctionDescriptor>       globalFunctions = new HashMap<>();
   private final Map<String,Expr.VarDecl>             globalFunDecls  = new HashMap<>();
 
+  private JactlContext jactlContext = null;
+  
   static {
     // Make sure builtin functions are registered if not already done
     BuiltinFunctions.registerBuiltinFunctions();
   }
 
-  public Functions() {}
+  private Functions() {}
 
-  public Functions(Functions other) {
+  public Functions(Functions other, JactlContext jactlContext) {
+    this.jactlContext = jactlContext;
     classes.putAll(other.classes);
     methods.putAll(other.methods);
     globalFunctions.putAll(other.globalFunctions);
@@ -129,15 +127,18 @@ public class Functions {
     Class       parentClass     = parent instanceof JactlIterator ? JactlIterator.class : parent.getClass();
     ClassLookup classLookup     = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
     FunctionDescriptor function = classLookup.methods.computeIfAbsent(methodName, name -> {
-      JactlType parentType = JactlType.typeOf(parent);
+      JactlType parentType = JactlContext.typeOf(parent, jactlContext);
       return findMatching(parentType, name);
     });
 
     if (function == NO_SUCH_METHOD) {
       return null;
     }
-
-    return function.wrapperHandle.bindTo(parent);
+    
+    if (function.firstArgtype != null) {
+      return function.wrapperHandle.bindTo(parent);
+    }
+    return function.wrapperHandle;
   }
 
   private FunctionDescriptor findMatching(JactlType objType, String methodName) {
@@ -149,7 +150,7 @@ public class Functions {
 
     // Look for exact match and then generic match.
     // List/Map/Object[]/String can match on Iterable.
-    Optional<FunctionDescriptor> match = functions.stream().filter(f -> f.type.is(type)).findFirst();
+    Optional<FunctionDescriptor> match = functions.stream().filter(f -> f.type.equals(type)).findFirst();
     if (!match.isPresent() && type.is(ARRAY) && type.isCastableTo(OBJECT_ARR)) {
       match = functions.stream().filter(f -> f.type.is(OBJECT_ARR)).findFirst();
     }
@@ -197,24 +198,16 @@ public class Functions {
     return globalFunctions.keySet();
   }
 
-  public void registerFunction(JactlFunction function) {
-    if (function.implementingClass == null) { throw new IllegalArgumentException("No implementation class specified via impl() method"); }
-    if (function.wrapperHandleField == null) { throw new IllegalArgumentException("No wrapper handle field specified via impl() method"); }
-
-    function.init();
-    if (function.wrapperHandleField == null) {
-      throw new IllegalStateException("Missing value for wrapperHandleField for " + function.name);
-    }
+  public void registerFunction(FunctionDescriptor function) {
     if (function.isMethod()) {
-      function.aliases.forEach(alias -> registerMethod(alias, function));
+      function.getAliases().forEach(alias -> registerMethod(alias, function));
     }
     else {
-      // Aliases also includes primary name
-      function.aliases.forEach(alias -> globalFunctions.put(alias, function));
+      // aliases also includes primary name
+      function.getAliases().forEach(alias -> globalFunctions.put(alias, function));
       Expr.VarDecl varDecl = Utils.funcDescriptorToVarDecl(function);
-      function.aliases.forEach(alias -> globalFunDecls.put(alias, varDecl));
+      function.getAliases().forEach(alias -> globalFunDecls.put(alias, varDecl));
     }
-
-    BuiltinFunctions.allocateId(function.implementingClass);
+    BuiltinFunctions.allocateId(function.getImplentingClass());
   }
 }

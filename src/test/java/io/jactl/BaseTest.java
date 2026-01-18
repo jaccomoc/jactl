@@ -505,6 +505,10 @@ public class BaseTest {
       fail("Expected JactlError");
     }
     catch (Throwable e) {
+      if (e.getMessage() == null) {
+        e.printStackTrace();
+        fail("Error: " + e);
+      }
       if (!e.getMessage().toLowerCase().contains(expectedError.toLowerCase())) {
         if (e instanceof CompileError) {
           CompileError ce = (CompileError) e;

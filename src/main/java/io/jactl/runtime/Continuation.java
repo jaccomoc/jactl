@@ -220,12 +220,12 @@ public class Continuation extends RuntimeException implements Checkpointable {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(CONTINUATION);
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(parent);
     checkpointer.writeObject(child);
     //    checkpointer.writeObject(runtimeState);
     checkpointer.writeObject(methodHandle);
-    checkpointer.writeCint(methodLocation);
+    checkpointer.writeCInt(methodLocation);
     checkpointer.writeObject(localPrimitives);
     checkpointer.writeObject(localObjects);
     checkpointer.writeObject(result);
@@ -234,12 +234,12 @@ public class Continuation extends RuntimeException implements Checkpointable {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.CONTINUATION);
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(VERSION, "Bad version");
     parent          = (Continuation)restorer.readObject();
     child           = (Continuation)restorer.readObject();
     //    runtimeState  = (RuntimeState) restorer.readObject();
     methodHandle    = (JactlMethodHandle)restorer.readObject();
-    methodLocation  = restorer.readCint();
+    methodLocation  = restorer.readCInt();
     localPrimitives = (long[])restorer.readObject();
     localObjects    = (Object[])restorer.readObject();
     result          = restorer.readObject();

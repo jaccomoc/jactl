@@ -2791,7 +2791,7 @@ public class Parser {
         Expr.Literal literal = literal();
         literal.isConst = true;
         literal.constValue = castTo(literal.value.getValue(), castType, literal.location);
-        literal.value = new Token(typeOf(literal.constValue).constTokenType(literal.constValue), literal.location).setValue(literal.constValue);
+        literal.value = new Token(JactlContext.typeOf(literal.constValue, context).constTokenType(literal.constValue), literal.location).setValue(literal.constValue);
         expr = literal;
       }
       else {

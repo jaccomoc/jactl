@@ -651,6 +651,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void asyncIfTypeIsAsync(Expr expr) {
     if (!expr.type.is(INSTANCE)) { return; }
     ClassDescriptor classDescriptor = expr.type.getClassDescriptor();
+    if (classDescriptor.getInitMethod() == null) {
+      return;
+    }
     ClassDescriptor existingClass   = context.getClassDescriptor(classDescriptor.getInternalName());
     if (existingClass != null) {
       if (existingClass.getInitMethod().isAsync) {

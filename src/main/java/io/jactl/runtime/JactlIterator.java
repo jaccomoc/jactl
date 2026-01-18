@@ -114,17 +114,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Object  next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.OBJECT_ARR.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.OBJECT_ARR.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.OBJECT_ARR.ordinal(), "Expected OBJECT_ARR");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.OBJECT_ARR.ordinal(), "Expected OBJECT_ARR");
+      restorer.expectCInt(VERSION, "Bad version");
       arr = (Object[])restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -141,17 +141,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public T       next()    { return list.get(idx++);   }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.LIST.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.LIST.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(list);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.LIST.ordinal(), "Expected LIST");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.LIST.ordinal(), "Expected LIST");
+      restorer.expectCInt(VERSION, "Bad version");
       list = (List<T>)restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -179,17 +179,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.MAP.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.MAP.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(map);
-      checkpointer.writeCint(count);
+      checkpointer.writeCInt(count);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.MAP.ordinal(), "Expected MAP");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.MAP.ordinal(), "Expected MAP");
+      restorer.expectCInt(VERSION, "Bad version");
       map = (Map)restorer.readObject();
-      count = restorer.readCint();
+      count = restorer.readCInt();
       // Can't initialise iterator until map has been fully populated
     }
     void initIter() {
@@ -216,17 +216,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Byte next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.INT_ARR.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.INT_ARR.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.INT_ARR.ordinal(), "Expected INT_ARR");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.INT_ARR.ordinal(), "Expected INT_ARR");
+      restorer.expectCInt(VERSION, "Bad version");
       arr = (byte[])restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -243,17 +243,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Integer next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.INT_ARR.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.INT_ARR.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.INT_ARR.ordinal(), "Expected INT_ARR");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.INT_ARR.ordinal(), "Expected INT_ARR");
+      restorer.expectCInt(VERSION, "Bad version");
       arr = (int[])restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -270,17 +270,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Long    next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.LONG_ARR.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.LONG_ARR.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.LONG_ARR.ordinal(), "Expected LONG_ARR");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.LONG_ARR.ordinal(), "Expected LONG_ARR");
+      restorer.expectCInt(VERSION, "Bad version");
       arr = (long[])restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -297,17 +297,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Double  next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.DOUBLE_ARR.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.DOUBLE_ARR.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.DOUBLE_ARR.ordinal(), "Expected DOUBLE_ARR");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.DOUBLE_ARR.ordinal(), "Expected DOUBLE_ARR");
+      restorer.expectCInt(VERSION, "Bad version");
       arr = (double[])restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -324,17 +324,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Boolean next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.BOOLEAN_ARR.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.BOOLEAN_ARR.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.BOOLEAN_ARR.ordinal(), "Expected BOOLEAN_ARR");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.BOOLEAN_ARR.ordinal(), "Expected BOOLEAN_ARR");
+      restorer.expectCInt(VERSION, "Bad version");
       arr = (boolean[])restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -351,17 +351,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Integer next()    { return idx++;     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.NUMBER.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.NUMBER.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeClong(num);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.NUMBER.ordinal(), "Expected NUMBER");
-      restorer.expectCint(VERSION, "Bad version");
-      num   = restorer.readClong();
-      idx = restorer.readCint();
+      restorer.expectCInt(IteratorType.NUMBER.ordinal(), "Expected NUMBER");
+      restorer.expectCInt(VERSION, "Bad version");
+      num   = restorer.readCLong();
+      idx = restorer.readCInt();
     }
   }
 
@@ -378,17 +378,17 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public String next()     { return Character.toString(str.charAt(idx++)); }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.STRING.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.STRING.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(str);
-      checkpointer.writeCint(idx);
+      checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.STRING.ordinal(), "Expected STRING");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.STRING.ordinal(), "Expected STRING");
+      restorer.expectCInt(VERSION, "Bad version");
       str = (String)restorer.readObject();
-      idx = restorer.readCint();
+      idx = restorer.readCInt();
     }
   }
 
@@ -446,28 +446,28 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCint(IteratorType.STRING_SPLIT.ordinal());
-      checkpointer.writeCint(VERSION);
+      checkpointer.writeCInt(IteratorType.STRING_SPLIT.ordinal());
+      checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(str);
       checkpointer.writeObject(regex);
       checkpointer.writeObject(modifiers);
       checkpointer.writeObject(source);
-      checkpointer.writeCint(offset);
-      checkpointer.writeCint(index);
+      checkpointer.writeCInt(offset);
+      checkpointer.writeCInt(index);
       checkpointer._writeBoolean(last);
       checkpointer._writeBoolean(hasNext);
       checkpointer._writeBoolean(findNext);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCint(IteratorType.STRING_SPLIT.ordinal(), "Expected STRING_SPLIT");
-      restorer.expectCint(VERSION, "Bad version");
+      restorer.expectCInt(IteratorType.STRING_SPLIT.ordinal(), "Expected STRING_SPLIT");
+      restorer.expectCInt(VERSION, "Bad version");
       str       = (String)restorer.readObject();
       regex     = (String)restorer.readObject();
       modifiers = (String)restorer.readObject();
       source    = (String)restorer.readObject();
-      offset    = restorer.readCint();
-      index     = restorer.readCint();
+      offset    = restorer.readCInt();
+      index     = restorer.readCInt();
       last      = restorer.readBoolean();
       hasNext   = restorer.readBoolean();
       findNext  = restorer.readBoolean();

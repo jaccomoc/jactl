@@ -108,12 +108,12 @@ public class CircularBuffer<T> implements Checkpointable {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeTypeEnum(BUILTIN);
-    checkpointer.writeCint(BuiltinFunctions.getClassId(CircularBuffer.class));
-    checkpointer.writeCint(VERSION);
-    checkpointer.writeCint(buffer.length);
+    checkpointer.writeCInt(BuiltinFunctions.getClassId(CircularBuffer.class));
+    checkpointer.writeCInt(VERSION);
+    checkpointer.writeCInt(buffer.length);
     checkpointer._writeBoolean(canGrow);
     int size = size();
-    checkpointer.writeCint(size);
+    checkpointer.writeCInt(size);
     for (int i = head; i != tail; i = (i + 1) % buffer.length) {
       checkpointer.writeObject(buffer[i]);
     }
@@ -121,12 +121,12 @@ public class CircularBuffer<T> implements Checkpointable {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(BUILTIN);
-    restorer.expectCint(BuiltinFunctions.getClassId(CircularBuffer.class), "Bad class id");
-    restorer.expectCint(VERSION, "Bad version");
-    bufferSize   = restorer.readCint();
+    restorer.expectCInt(BuiltinFunctions.getClassId(CircularBuffer.class), "Bad class id");
+    restorer.expectCInt(VERSION, "Bad version");
+    bufferSize   = restorer.readCInt();
     canGrow      = restorer.readBoolean();
     buffer       = new Object[bufferSize];
-    int size     = restorer.readCint();
+    int size     = restorer.readCInt();
     for (int i = 0; i < size; i++) {
       buffer[i] = restorer.readObject();
     }

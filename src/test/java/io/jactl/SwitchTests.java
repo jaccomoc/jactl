@@ -1176,6 +1176,8 @@ public class SwitchTests extends BaseTest {
     test("class X { const int A=1, B=2, C=3 }; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
     test("package a.b.c; class X { const int A=1, B=2, C=3 }; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
     test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "package a.b.c; int x = 2; switch (x) { a.b.c.X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
+    testError(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "package a.b.c; import X as Y; int x = 2; switch (x) { a.b.c.Y.A -> 'a'; Y.B -> 'b'; Y.C -> 'c' }", "unknown class");
+    test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "package a.b.c; import X as Y; int x = 2; switch (x) { a.b.c.X.A -> 'a'; Y.B -> 'b'; Y.C -> 'c' }", "b");
     test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "import a.b.c.X; int x = 2; switch (x) { X.A -> 'a'; X.B -> 'b'; X.C -> 'c' }", "b");
     test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"), "import static a.b.c.X.*; int x = 2; switch (x) { A -> 'a'; B -> 'b'; C -> 'c' }", "b");
     test(Utils.listOf("package a.b.c; class X { const int A=1, B=2, C=3 }"),

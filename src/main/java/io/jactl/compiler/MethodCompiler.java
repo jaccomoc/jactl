@@ -1592,20 +1592,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If method is static then we don't need the instance
     // NOTE: built-in methods are always static since they are implemented via a static class method
     //       but they are treated as instance methods so we have to make sure it is static but not built-in
-    if (!method.isBuiltin && method.isStatic && expr.left.type.is(INSTANCE)) {
+    if (!method.isBuiltin && method.isStaticImplementation && expr.left.type.is(INSTANCE)) {
       popVal();
     }
     String handleName = method.isBuiltin ? method.wrapperHandleField : Utils.staticHandleName(Utils.wrapperName(method.name));
     if (method.isBuiltin) {
       // Field for builtins is of type Object
-      loadClassField(method.implementingClassName, handleName, ANY, true);
+      loadClassField(method.getWrapperHandleClassName(), handleName, ANY, true);
       checkCast(FUNCTION);
     }
     else {
-      loadClassField(method.implementingClassName, handleName, FUNCTION, true);
+      loadClassField(method.getWrapperHandleClassName(), handleName, FUNCTION, true);
     }
     // If not static then bind to instance
-    if (method.isBuiltin || !method.isStatic) {
+    if (!method.isStaticMethod && (method.isBuiltin || !method.isStaticImplementation)) {
       swap();
       invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
     }
@@ -1907,7 +1907,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Can only call directly if in same class or is static method. Otherwise, we need method handle that
       // was bound to its instance. Functions can be in different classes in repl mode where functions are
       // compiled into separate classes every compile step and then stored in global map.
-      isFunctionCall = functionDescriptor.isStatic || functionDescriptor.implementingClassName == null || functionDescriptor.implementingClassName.equals(classCompiler.internalName);
+      isFunctionCall = functionDescriptor.isStaticImplementation || functionDescriptor.implementingClassName == null || functionDescriptor.implementingClassName.equals(classCompiler.internalName);
     }
     if (isFunctionCall) {
       Expr.Identifier callee  = (Expr.Identifier)expr.callee;
@@ -1982,7 +1982,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
       boolean invokeSpecial = expr.parent.isSuper();
 
-      String methodClass = method.isStatic ? method.implementingClassName : expr.parent.type.getInternalName();
+      // For static functions (e.g. built-in functions) use implementing class but for methods use the type
+      // of the object we are invoking the method on (this could be a sub-class of the class that the method
+      // is actually declared on and will also work if base class has been redefined after instance class
+      // was compiled - if we used base class we would get error about "is not assignable" since new base class
+      // is not the same as the one that was originally used).
+      String methodClass = method.isStaticImplementation ? method.implementingClassName : expr.parent.type.getInternalName();
 
       // Need to decide whether to invoke the method or the wrapper. If we have exact number
       // of arguments we can invoke the method directly. If we don't have all the arguments
@@ -1997,14 +2002,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (couldBeNull(expr.parent)) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
-                           if (method.isBuiltin) {
+                           if (method.isBuiltin && method.firstArgtype != null) {
                              // If we are calling a "method" that is ANY but we have a primitive then we need to box it
                              if (method.firstArgtype.is(ANY, NUMBER)) {
                                box();
                              }
                            }
                            else
-                           if (method.isStatic && !expr.parent.type.is(CLASS)) {
+                           if (method.isStaticImplementation && !expr.parent.type.is(CLASS)) {
                              popVal();
                            }
 
@@ -2023,11 +2028,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          },
                          () -> {
                            if (methodClass.equals(method.implementingClassName)) {
-                             invokeMethod(method, methodParamTypes(method), invokeSpecial);
+                             invokeMethod(method, method.methodParamTypes(), invokeSpecial);
                            }
                            else {
-                             invokeMethod(method.isStatic, invokeSpecial, methodClass, method.implementingMethod,
-                                          expr.type, methodParamTypes(method));
+                             invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.implementingMethod,
+                                          expr.type, method.methodParamTypes(), getMethodDescriptor(expr.type, method.methodParamTypes()));
                            }
                          });
       }
@@ -2039,16 +2044,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (couldBeNull(expr.parent)) {
                              throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
                            }
-                           if (!method.isBuiltin && method.isStatic && !expr.parent.type.is(CLASS)) {
+                           if (!method.isBuiltin && method.isStaticImplementation && !expr.parent.type.is(CLASS)) {
                              popVal();
                            }
                            if (expr.parent.type.isPrimitive()) {
                              box();
                            }
                            if (method.isBuiltin) {
-                             loadClassField(method.implementingClassName, method.wrapperHandleField, ANY, true);
+                             loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, method.wrapperHandleFieldType, true);
                              checkCast(FUNCTION);
-                             if (!method.isGlobalFunction) {
+                             if (!method.isGlobalFunction && method.isInstanceMethod()) {
                                // Is "method" so bind to parent object
                                swap();
                                invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
@@ -2067,7 +2072,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              invokeMethodHandle();
                            }
                            else {
-                             invokeMethod(method.isStatic, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes);
+                             invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes, getMethodDescriptor(ANY, paramTypes));
                            }
                            // Convert Object returned by wrapper back into return type of the function
                            checkCast(method.returnType);
@@ -2373,6 +2378,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Label end = new Label();
     int temp = stack.saveInTemp();
+
+    FunctionDescriptor method = varType.getClassDescriptor().getMethod(Utils.JACTL_INIT);
     if (valueType.is(ANY)) {
       // If we don't know type at compile time then check for types at runtime
       _loadLocal(temp);
@@ -2381,39 +2388,46 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitInsn(DUP);
       mv.visitTypeInsn(INSTANCEOF, varType.getInternalName());
       mv.visitJumpInsn(IFNE, end);
-      mv.visitInsn(DUP);
-      mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Map.class));
-      _throwIfFalseWithClassName(" cannot be cast to " + varType, runtimeLocation);
-      mv.visitInsn(POP);
+      if (method == null) {
+        // Object cannot be constructed from a Map of fields
+        _throwWithClassName(" cannot be cast to " + varType, runtimeLocation);
+        pushType(ANY);          // so checkCast at the end will work
+      }
+      else {
+        mv.visitInsn(DUP);
+        mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Map.class));
+        _throwIfFalseWithClassName(" cannot be cast to " + varType, runtimeLocation);
+        mv.visitInsn(POP);
+      }
     }
-
-    // We have a Map so now we need to new the instance and invoke init method
-    FunctionDescriptor method = varType.getClassDescriptor().getMethod(Utils.JACTL_INIT);
-
-    invokeMaybeAsync(method.isAsync, ANY, 4 + (method.isAsync ? 1 : 0), compileTimeLocation,
-                     () -> {
-                       newInstance(varType);
-                       loadNullContinuation();   // wrapper functions always have continuation
-                       loadLocation(runtimeLocation);
-                       _loadConst(1);
-                       mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
-                       pushType(OBJECT_ARR);
-                       dupVal();
-                       loadConst(0);
-                       loadLocal(temp);
-                       mv.visitInsn(AASTORE);
-                       popType(3);  // arr + index + value
-                     },
-                     () -> {
-                       // Note: wrapper always has continuation since when invoking as a handle we have
-                       // no idea about whether it is async or not.
-                       List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
-                       invokeMethod(false, false, method.implementingClassName, method.wrapperMethod, ANY,
-                                    paramTypes);
-                     });
+    
+    if (method != null) {
+      // We have a Map so now we need to new the instance and invoke init method
+      invokeMaybeAsync(method.isAsync, ANY, 4 + (method.isAsync ? 1 : 0), compileTimeLocation,
+                       () -> {
+                         newInstance(varType);
+                         loadNullContinuation();   // wrapper functions always have continuation
+                         loadLocation(runtimeLocation);
+                         _loadConst(1);
+                         mv.visitTypeInsn(ANEWARRAY, "java/lang/Object");
+                         pushType(OBJECT_ARR);
+                         dupVal();
+                         loadConst(0);
+                         loadLocal(temp);
+                         mv.visitInsn(AASTORE);
+                         popType(3);  // arr + index + value
+                       },
+                       () -> {
+                         // Note: wrapper always has continuation since when invoking as a handle we have
+                         // no idea about whether it is async or not.
+                         List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
+                         invokeMethod(false, false, method.implementingClassName, method.wrapperMethod, ANY,
+                                      paramTypes, getMethodDescriptor(ANY, paramTypes));
+                       });
+    }
     mv.visitLabel(end);                          // :end
     // Convert Object returned by wrapper back into instance type
-    checkCast(method.returnType);
+    checkCast(varType);
     stack.freeSlot(temp);
   }
 
@@ -2826,22 +2840,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void emitReturn(JactlType returnType) {
     expect(1);
-    switch (returnType.getType()) {
-      case BOOLEAN:
-      case BYTE:
-      case INT:
-        mv.visitInsn(IRETURN);
-        break;
-      case LONG:
-        mv.visitInsn(LRETURN);
-        break;
-      case DOUBLE:
-        mv.visitInsn(DRETURN);
-        break;
-      default:
-        mv.visitInsn(ARETURN);
-        break;
-    }
+    Utils.emitReturn(mv, returnType);
   }
 
   public static String getMethodDescriptor(Expr.FunDecl funDecl) {
@@ -2849,7 +2848,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   public static String getMethodDescriptor(FunctionDescriptor func) {
-    return getMethodDescriptor(func.returnType, func.paramTypes);
+    return func.getMethodDescriptor();
   }
 
   private static String getMethodDescriptor(JactlType returnType, List<JactlType> paramTypes) {
@@ -2881,25 +2880,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return params.collect(Collectors.toList());
   }
 
-  private List<JactlType> methodParamTypes(FunctionDescriptor method) {
-    List<JactlType> types = new ArrayList<>();
-    if (method.isBuiltin) {
-      // We simulate methods with static functions so we need to add the object we
-      // are invoking method on as first arg
-      types.add(method.firstArgtype);
-    }
-    if (method.isAsync || method.isWrapper) { types.add(CONTINUATION); }
-    if (method.needsLocation)               { types.addAll(Utils.listOf(STRING, INT)); }
-    types.addAll(method.paramTypes);
-    return types;
-  }
-
   ///////////////////////////////////////////////
 
   // = Type stack
 
   private void pushType(Class clss) {
-    stack.push(clss);
+    stack.push(classCompiler.context.typeFromClass(clss));
   }
 
   void pushType(JactlType type) {
@@ -3095,7 +3081,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Load object onto JVM stack but don't alter type stack
    */
   JactlType _loadConst(Object obj) {
-    return Utils.loadConst(mv, obj);
+    return Utils.loadConst(mv, obj, classCompiler.context);
   }
 
   void loadDefaultValue(JactlType type) {
@@ -3194,6 +3180,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void castToInstance(JactlType type, Expr expr, Location location) {
+    expect(1);
     if (peek().is(INSTANCE) && peek().getInternalName().equals(type.getInternalName())) {
       return null;
     }
@@ -3902,6 +3889,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     stack.freeSlot(temp);
   }
 
+  /**
+   * Throw error preprend class name of stack arg to message.
+   * Expect value stack: ...,value
+   */
+  private void _throwWithClassName(String msg, SourceLocation location) {
+    mv.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/RuntimeUtils", "className", "(Ljava/lang/Object;)Ljava/lang/String;", false);
+    _loadConst(msg);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;", false);
+    int temp = stack.allocateSlot(STRING);
+    _storeLocal(temp);
+    mv.visitTypeInsn(NEW, "io/jactl/runtime/RuntimeError");
+    mv.visitInsn(DUP);
+    _loadLocal(temp);
+    _loadLocation(location);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+    mv.visitInsn(ATHROW);
+    stack.freeSlot(temp);
+  }
+
   private void throwError(String msg, SourceLocation location) {
     mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
     mv.visitInsn(DUP);
@@ -4129,7 +4135,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Add a runnable for this continuation that restores state. This will be invoked in switch statement that is
     // run when resuming (see MethodCompiler::compile()) before jumping back to place in code where we resume from.
     Runnable restoreState = () -> {
-      savedState.restoreLocals(continuationVar, globalsVar, longArr, objArr);
+      savedState.restoreLocals(continuationVar, globalsVar, longArr, objArr, classCompiler.context);
     };
     asyncStateRestorations.add(restoreState);
 
@@ -4140,7 +4146,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(blockEnd);     // :blockEnd
 
     mv.visitLabel(catchLabel);   // :catchLabel
-    savedState.saveLocals(continuationVar, globalsVar, longArr, objArr);
+    savedState.saveLocals(continuationVar, globalsVar, longArr, objArr, classCompiler.context);
     mv.visitTypeInsn(NEW, "io/jactl/runtime/Continuation");
 
     // Move copy of new Continuation to before current one and then swap to get order we want
@@ -4205,8 +4211,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void insertDebug(String info, Runnable data) {
     data.run();
     _loadConst(info);
-    mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(RuntimeUtils.class), "debugBreakPoint",
-                       Type.getMethodDescriptor(Type.getType(boolean.class),
+    mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(RuntimeUtils.class), RuntimeUtils.DEBUG_BREAK_POINT,
+                       Type.getMethodDescriptor(Type.getType(Object.class),
                                                 Type.getType(Object.class),
                                                 Type.getType(String.class)),
                        false);
@@ -4249,7 +4255,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     invokeMaybeAsync(func.isAsync, invokeWrapper ? ANY : func.returnType, 0, expr.location,
                      () -> {
-                       if (!func.isStatic) {
+                       if (!func.isStaticImplementation) {
                          // Load this
                          loadLocal(0);
                        }
@@ -4307,7 +4313,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
                        () -> {
-                         loadClassField(func.implementingClassName, func.wrapperHandleField, ANY, true);
+                         loadClassField(func.getWrapperHandleClassName(), func.wrapperHandleField, ANY, true);
                          checkCast(FUNCTION);
                          loadNullContinuation();         // Continuation
                          loadLocation(expr.location);
@@ -4410,14 +4416,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void invokeMethod(FunctionDescriptor functionDescriptor, boolean isInvokeSpecial) {
     // Note: param types based solely off functionDescriptor so no support for heap locals with this call
-    invokeMethod(functionDescriptor, methodParamTypes(functionDescriptor), isInvokeSpecial);
+    invokeMethod(functionDescriptor, functionDescriptor.methodParamTypes(), isInvokeSpecial);
   }
 
   private void invokeMethod(FunctionDescriptor functionDescriptor, List<JactlType> paramTypes, boolean isInvokeSpecial) {
     if (!isInvokeSpecial && !functionDescriptor.isWrapper && functionDescriptor.inlineMethod != null) {
       // Invoke method for generating code inline
       try {
-        int stackCount = paramTypes.size() + (functionDescriptor.isStatic ? 0 : 1);
+        int stackCount = paramTypes.size() + (functionDescriptor.isStaticImplementation ? 0 : 1);
         expect(stackCount);
         functionDescriptor.inlineMethod.invoke(null, this.mv);
         popType(stackCount);
@@ -4428,11 +4434,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     else {
-      invokeMethod(functionDescriptor.isStatic,
+      invokeMethod(functionDescriptor.isStaticImplementation,
                    isInvokeSpecial, functionDescriptor.implementingClassName == null ? classCompiler.internalName : functionDescriptor.implementingClassName,
                    functionDescriptor.implementingMethod,
                    functionDescriptor.returnType,
-                   paramTypes);
+                   paramTypes,
+                   functionDescriptor.getMethodDescriptor(functionDescriptor.returnType, paramTypes));
+//                   getMethodDescriptor(functionDescriptor.returnType, paramTypes));
       if (functionDescriptor.isWrapper) {
         // Convert Object returned by wrapper back into return type of the function
         checkCast(functionDescriptor.returnType.boxed());
@@ -4443,7 +4451,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void invokeMethod(boolean isStatic, boolean isInvokeSpecial, String internalClassName, String methodName, JactlType returnType, List<JactlType> paramTypes) {
+  private void invokeMethod(boolean isStatic, boolean isInvokeSpecial, String internalClassName, String methodName, JactlType returnType, List<JactlType> paramTypes, String methodDescriptor) {
     int stackCount = paramTypes.size() + (isStatic ? 0 : 1);
     expect(stackCount);
     mv.visitMethodInsn(isStatic ? INVOKESTATIC
@@ -4451,7 +4459,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                   : INVOKEVIRTUAL,
                        internalClassName,
                        methodName,
-                       getMethodDescriptor(returnType, paramTypes),
+                       methodDescriptor,
                        false);
     popType(stackCount);
     pushType(returnType);
@@ -4719,8 +4727,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadLocal(varDecl.slot);
   }
 
+  /**
+   * Make sure type on stack matches expected type.
+   * (If we know at compile time we have the right type then we don't need to do a CHECKCAST).
+   * @param type the type to check against
+   */
   void checkCast(JactlType type) {
     expect(1);
+    if (peek().equals(type)) {
+      return;
+    }
     Utils.checkCast(mv, type.boxed());
     popType();
     pushType(type.boxed());
@@ -5004,7 +5020,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         else {
           newInstance(type);
           loadLocation(location);
-          invokeMethod(false, false, type.getClassDescriptor().getInternalName(), Utils.JACTL_INIT_NOASYNC, type, Utils.listOf(STRING, INT));
+          invokeMethod(false, false, type.getClassDescriptor().getInternalName(), Utils.JACTL_INIT_NOASYNC, type, Utils.listOf(STRING, INT), getMethodDescriptor(type, Utils.listOf(STRING,INT)));
         }
       }
       return;
@@ -5103,7 +5119,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
   }
 
   private void loadArrayElem(JactlType parentType) {
-    Utils.loadArrayElement(mv, parentType.getArrayElemType());
+    Utils.loadArrayElement(mv, parentType.getArrayElemType(), classCompiler.context);
     pushType(parentType.getArrayElemType());
   }
 

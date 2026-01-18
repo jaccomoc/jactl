@@ -18,13 +18,15 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import io.jactl.Utils;
 import io.jactl.runtime.JactlMethodHandle.FunctionWrapperHandle;
+import org.objectweb.asm.Type;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+
+import static io.jactl.JactlType.CONTINUATION;
+import static io.jactl.compiler.MethodCompiler.getMethodDescriptor;
 
 public class FunctionDescriptor {
   public JactlType        type;            // Type method is for, or null for global functions
@@ -36,12 +38,12 @@ public class FunctionDescriptor {
   public List<JactlType>  paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
-  public String           implementingClassName;
+  public String           implementingClassName;    // internal form (a/b/c/Name)
   public String           implementingMethod;
-  public String           inlineMethodName;         // Name of method compiler can invoke to inline function (if supported)
-  public Method           inlineMethod;
-  public boolean          isStatic     = false;     // Whether implementation method itself is static or not (for builtins always true)
-  public boolean          isInitMethod = false;     // True if this is a user class instance initialiser
+  public String           inlineMethodName;         // Name of method that compiler can invoke to inline function (if supported)
+  public Method           inlineMethod;             // The inlining method (takes MethodVisitor as arg and generates byte code)
+  public boolean          isStaticImplementation = false;     // Whether implementation method itself is static or not (for builtins always true)
+  public boolean          isInitMethod           = false;     // True if this is a user class instance initialiser
   public boolean          isWrapper    = false;     // True if this is the wrapper func for a user function
   public boolean          isFinal      = false;     // True if user function is declared as final
   public boolean          isVarArgs    = false;     // Varargs if last param is Object[]
@@ -49,11 +51,16 @@ public class FunctionDescriptor {
   // Used by built-in functions:
   public boolean               needsLocation;
   public String                wrapperMethod;
-  public FunctionWrapperHandle wrapperHandle;             // Handle to wrapper: Object wrapper(Class, Continuation, String, int, Object[])
+  public FunctionWrapperHandle wrapperHandle;             // Handle to wrapper: Object wrapper(Object, Continuation, String, int, Object[])
+  public String                wrapperHandleClassName;    // Name of class that holds the wrapper handle field (internal form)
   public String                wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
+  public JactlType             wrapperHandleFieldType;    // Type of field: ANY (for user registered) or FUNCTION (if synthesised)
   public boolean               isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean               isBuiltin;
   public Boolean               isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
+  public boolean               isStaticMethod = false;    // True if method should be treated as a static method for 
+                                                          // given type (currently only used by JactlClass for static methods
+                                                          // that need a generated invoker)
 
   // Async if any of these args are async. If none listed then always async. Counting starts at 0 for the instance
   // itself (e.g. ITERATOR) and then 1 is the first arg and so on.
@@ -68,4 +75,70 @@ public class FunctionDescriptor {
   }
 
   public FunctionDescriptor() {}
+  
+  public String getWrapperHandleClassName() {
+    return wrapperHandleClassName == null ? implementingClassName : wrapperHandleClassName;
+  }
+  
+  protected boolean isEquivalent(FunctionDescriptor function) {
+    return this.paramNames.equals(function.paramNames) &&
+           this.paramTypes.equals(function.paramTypes) &&
+           this.returnType.equals(function.returnType) &&
+           this.implementingMethod.equals(function.implementingMethod) &&
+           this.isStaticImplementation == function.isStaticImplementation &&
+           this.firstArgtype == function.firstArgtype;
+  }
+
+  public List<JactlType> methodParamTypes() {
+    List<JactlType> types = new ArrayList<>();
+    if (isBuiltin && firstArgtype != null && isStaticImplementation) {
+      // We simulate methods with static functions so we need to add the object we
+      // are invoking method on as first arg
+      types.add(firstArgtype);
+    }
+    if (isAsync || isWrapper) { types.add(CONTINUATION); }
+    if (needsLocation)        { types.addAll(Utils.listOf(JactlType.STRING, JactlType.INT)); }
+    types.addAll(paramTypes);
+    return types;
+  }
+
+  public String getMethodDescriptor() {
+    return getMethodDescriptor(returnType, paramTypes);
+  }
+  
+  public String getMethodDescriptor(JactlType returnType, List<JactlType> paramTypes) {
+    // Method descriptor is return type followed by array of parameter types.
+    return Type.getMethodDescriptor(returnType.descriptorType(),
+                                    paramTypes.stream().map(JactlType::descriptorType).toArray(Type[]::new));
+  }
+  
+  public List<String> getAliases() {
+    return Collections.singletonList(name);
+  }
+  
+  public boolean isMethod() {
+    return type != null && !isStaticMethod;
+  }
+  
+  public boolean isInstanceMethod() {
+    return firstArgtype != null;
+  }
+  
+  public Class getImplentingClass() {
+    return null;
+  }
+
+//  public void invoke(MethodVisitor mv, boolean isInvokeSpecial, LocalTypes stack) {
+//    int stackCount = paramTypes.size() + (isStatic ? 0 : 1);
+//    stack.expect(stackCount);
+//    mv.visitMethodInsn(isStatic ? INVOKESTATIC
+//                                : isInvokeSpecial ? INVOKESPECIAL
+//                                                  : INVOKEVIRTUAL,
+//                       implementingClassName,
+//                       wrapperMethod,
+//                       getMethodDescriptor(this),
+//                       false);
+//    stack.pop(stackCount);
+//    stack.push(returnType);
+//  }
 }

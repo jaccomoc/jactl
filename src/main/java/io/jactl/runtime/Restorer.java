@@ -27,8 +27,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Function;
 
-import static io.jactl.JactlType.ARRAY;
-import static io.jactl.JactlType.INSTANCE;
+import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Checkpointer.NULL_TYPE;
 
 public class Restorer {
@@ -49,7 +48,7 @@ public class Restorer {
     this.idx = 0;
     this.context = context;
     this.buf = buf;
-    expectCint(Checkpointer.VERSION, "Bad checkpointer version");
+    expectCInt(Checkpointer.VERSION, "Bad checkpointer version");
     int numObjects = _readInt(idx);
     idx += 4;
     objTableOffset = _readInt(idx);
@@ -81,12 +80,12 @@ public class Restorer {
   }
 
   public JactlType.TypeEnum readTypeEnum() {
-    int typeOrd = readCint();
+    int typeOrd = readCInt();
     return JactlType.TypeEnum.values()[typeOrd];
   }
 
   public JactlType readType() {
-    int typeOrd = readCint();
+    int typeOrd = readCInt();
     if (typeOrd == JactlType.TypeEnum.NULL_TYPE.ordinal()) {
       return null;
     }
@@ -97,11 +96,14 @@ public class Restorer {
     else if (type.is(INSTANCE)) {
       return JactlType.createInstanceType(getJactlClass((String)readObject()));
     }
+    else if (type.is(CLASS)) {
+      return JactlType.createClass(getClassDescriptor((String)readObject()));
+    }
     return type;
   }
 
   public void skipType() {
-    int typeOrd = readCint();
+    int typeOrd = readCInt();
     if (typeOrd == JactlType.TypeEnum.NULL_TYPE.ordinal()) {
       return;
     }
@@ -111,7 +113,7 @@ public class Restorer {
     }
     else if (type == JactlType.TypeEnum.INSTANCE) {
       idx++;      // Skip ANY
-      readCint(); // Skip objId
+      readCInt(); // Skip objId
     }
   }
 
@@ -126,19 +128,20 @@ public class Restorer {
     }
   }
 
-  public void expectCint(int expected, String msg) {
+  public void expectCInt(int expected, String msg) {
     int errIdx = idx;
-    int value = readCint();
+    int value = readCInt();
     if (value != expected) {
       throw new IllegalStateException("At offset " + errIdx + ": " + msg + ": expected " + expected + " but got " + value);
     }
   }
+  public static String EXPECT_CINT = "expectCInt";
 
   public byte readByte() {
     return buf[idx++];
   }
 
-  public int readCint() {
+  public int readCInt() {
     int num = 0;
     int i = 0;
     do {
@@ -146,8 +149,9 @@ public class Restorer {
     } while ((buf[idx++] & 0x80) != 0);
     return num;
   }
+  public static String READ_CINT = "readCInt";
 
-  public long readClong() {
+  public long readCLong() {
     long num = 0;
     int i = 0;
     do {
@@ -155,6 +159,7 @@ public class Restorer {
     } while ((buf[idx++] & 0x80) != 0);
     return num;
   }
+  public static String READ_CLONG = "readCLong";
 
   public double readDouble() {
     return Double.longBitsToDouble(readLong());
@@ -198,10 +203,10 @@ public class Restorer {
   }
 
   private String readString() {
-    int length = readCint();
+    int length = readCInt();
     StringBuilder sb = new StringBuilder(length);
     for (int i = 0; i < length; i++) {
-      sb.append((char)readCint());
+      sb.append((char) readCInt());
     }
     return sb.toString();
   }
@@ -234,15 +239,15 @@ public class Restorer {
     switch (JactlType.TypeEnum.values()[ordinal]) {
       case BOOLEAN:      return buf[idx++] == 0 ? false : true;
       case BYTE:         return readByte();
-      case INT:          return readCint();
-      case LONG:         return readClong();
+      case INT:          return readCInt();
+      case LONG:         return readCLong();
       case DOUBLE:       return readDouble();
       case DECIMAL:      return readDecimalObj();
       default:           throw new IllegalStateException("Unexpected type " + ordinal);
       case ANY: // Fall through
     }
 
-    int objId = readCint();
+    int objId = readCInt();
     Object restoredObject = restoredObjects[objId];
     if (restoredObject != null) {
       return restoredObject;
@@ -269,10 +274,10 @@ public class Restorer {
         case MAP:            result = add.apply(new LinkedHashMap<>());                 break;
         case LIST:           result = add.apply(new ArrayList<>());                     break;
         case INSTANCE:       result = add.apply(createInstance());                      break;
-        case FUNCTION:       result = add.apply(JactlMethodHandle.create(readCint()));  break;
+        case FUNCTION:       result = add.apply(JactlMethodHandle.create(readCInt()));  break;
         case ARRAY:          result = add.apply(createArray());                         break;
         case HEAPLOCAL:      result = add.apply(new HeapLocal());                       break;
-        case ITERATOR:       result = add.apply(JactlIterator.create(readCint()));      break;
+        case ITERATOR:       result = add.apply(JactlIterator.create(readCInt()));      break;
         case CONTINUATION:   result = add.apply(new Continuation());                    break;
         case MATCHER:        result = add.apply(new RegexMatcher());                    break;
         case BUILTIN:        result = add.apply(createBuiltinInstance());               break;
@@ -305,10 +310,11 @@ public class Restorer {
       else {
         int ordinal = buf[idx++];
         switch (JactlType.TypeEnum.values()[ordinal]) {
-          case MAP:   restoreMap((Map)obj);     break;
-          case LIST:  restoreList((List)obj);   break;
-          case ARRAY: restoreArray(obj);        break;
-          case CLASS: break;
+          case MAP:      restoreMap((Map)obj);     break;
+          case LIST:     restoreList((List)obj);   break;
+          case ARRAY:    restoreArray(obj);        break;
+          case CLASS:    break;
+          case INSTANCE: break;     // Registered class so already restored
           default:    throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
         }
       }
@@ -319,21 +325,21 @@ public class Restorer {
   }
 
   void restoreMap(Map map) {
-    int size = readCint();
+    int size = readCInt();
     for (int i = 0; i < size; i++) {
       map.put(readObject(true), readObject());
     }
   }
 
   private void restoreList(List list) {
-    int size = readCint();
+    int size = readCInt();
     for (int i = 0; i < size; i++) {
       list.add(readObject());
     }
   }
 
   private void readBooleanArr(boolean[] arr) {
-    int size = readCint();
+    int size = readCInt();
     int b = 0;
     for (int i = 0; i < size; i++) {
       if ((i & 7) == 0) {
@@ -345,34 +351,34 @@ public class Restorer {
   }
 
   private void readByteArr(byte[] arr) {
-    int size = readCint();
+    int size = readCInt();
     System.arraycopy(buf, idx, arr, 0, size);
     idx += size;
   }
 
   private void readIntArr(int[] arr) {
-    int size = readCint();
+    int size = readCInt();
     for (int i = 0; i < size; i++) {
-      arr[i] = readCint();
+      arr[i] = readCInt();
     }
   }
 
   private void readLongArr(long[] arr) {
-    int size = readCint();
+    int size = readCInt();
     for (int i = 0; i < size; i++) {
-      arr[i] = readClong();
+      arr[i] = readCLong();
     }
   }
 
   private void readDoubleArr(double[] arr) {
-    int size = readCint();
+    int size = readCInt();
     for (int i = 0; i < size; i++) {
       arr[i] = readDouble();
     }
   }
 
   private void readObjectArr(Object[] arr) {
-    int size = readCint();
+    int size = readCInt();
     for (int i = 0; i < size; i++) {
       arr[i] = readObject();
     }
@@ -382,7 +388,7 @@ public class Restorer {
     int numDimensions = buf[idx++];
     int[]     dimensions = new int[numDimensions];
     JactlType type       = readType();
-    int       size       = readCint();
+    int       size       = readCInt();
     dimensions[0] = size;
     switch (type.getType()) {
       case BOOLEAN:    return Array.newInstance(boolean.class, dimensions);
@@ -413,7 +419,7 @@ public class Restorer {
       }
     }
     else {
-      int size = readCint();
+      int size = readCInt();
       for (int i = 0; i < size; i++) {
         Array.set(arr, i, readObject());
       }
@@ -421,7 +427,7 @@ public class Restorer {
   }
 
   public Object createBuiltinInstance() {
-    Class clss = BuiltinFunctions.getClass(readCint());
+    Class clss = BuiltinFunctions.getClass(readCInt());
     return newInstance(clss);
   }
 
@@ -430,13 +436,17 @@ public class Restorer {
     return getJactlClass(internalClassName);
   }
 
-  public JactlObject createInstance() {
+  private Object createInstance() {
     String internalClassName = (String)readObject();
     Class  clss              = getJactlClass(internalClassName);
     if (JactlObject.class.isAssignableFrom(clss)) {
-      return (JactlObject)newInstance(clss);
+      return newInstance(clss);
     }
-    throw new IllegalStateException("Checkpointed object of class " + internalClassName + " is not a JactlObject");
+    Function<Restorer,Object> restoreFn = context.getRegisteredClasses().getRestorer(clss);
+    if (restoreFn == null) {
+      throw new IllegalStateException("Cannot restore: could not locate a registered restore function for " + internalClassName);
+    }
+    return restoreFn.apply(this);
   }
 
   private Object newInstance(Class clss) {
@@ -454,5 +464,9 @@ public class Restorer {
       throw new IllegalStateException("Unknown class: " + internalName);
     }
     return clss;
+  }
+  
+  public ClassDescriptor getClassDescriptor(String internalName) {
+    return context.getClassDescriptor(internalName);
   }
 }

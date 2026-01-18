@@ -41,25 +41,25 @@ public class MatchCounter implements Checkpointable {
   @Override
   public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeTypeEnum(BUILTIN);
-    checkpointer.writeCint(BuiltinFunctions.getClassId(MatchCounter.class));
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(BuiltinFunctions.getClassId(MatchCounter.class));
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(predicate);
-    checkpointer.writeCint(matchType.ordinal());
+    checkpointer.writeCInt(matchType.ordinal());
   }
 
   @Override
   public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(BUILTIN);
-    restorer.expectCint(BuiltinFunctions.getClassId(MatchCounter.class), "Bad class id");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(BuiltinFunctions.getClassId(MatchCounter.class), "Bad class id");
+    restorer.expectCInt(VERSION, "Bad version");
     iter = (JactlIterator)restorer.readObject();
     source = (String)restorer.readObject();
-    offset = restorer.readCint();
+    offset = restorer.readCInt();
     predicate = (JactlMethodHandle)restorer.readObject();
-    matchType = MatchType.values()[restorer.readCint()];
+    matchType = MatchType.values()[restorer.readCInt()];
   }
 
   public MatchCounter() {}

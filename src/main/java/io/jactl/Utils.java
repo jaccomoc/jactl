@@ -260,7 +260,7 @@ public class Utils {
     return value.toString();
   }
 
-  public static JactlType loadConst(MethodVisitor mv, Object obj) {
+  public static JactlType loadConst(MethodVisitor mv, Object obj, JactlContext jactlContext) {
     if (obj == null) {
       mv.visitInsn(ACONST_NULL);
       return ANY;
@@ -352,9 +352,9 @@ public class Utils {
     else
     if (obj instanceof Class) {
       Class   clss      = (Class) obj;
-      boolean isPrimive = clss.isPrimitive();
-      if (isPrimive) {
-        String internalName = JactlType.typeFromClass(clss).boxed().getInternalName();
+      boolean isPrimitive = clss.isPrimitive();
+      if (isPrimitive) {
+        String internalName = jactlContext.typeFromClass(clss).boxed().getInternalName();
         mv.visitFieldInsn(GETSTATIC, internalName, "TYPE", "Ljava/lang/Class;");
       }
       else {
@@ -419,10 +419,10 @@ public class Utils {
     }
   }
 
-  public static void loadArrayElement(MethodVisitor mv, JactlType type) {
+  public static void loadArrayElement(MethodVisitor mv, JactlType type, JactlContext jactlContext) {
     switch (type.getType()) {
       case BOOLEAN:  mv.visitInsn(BALOAD); break;
-      case BYTE:     mv.visitInsn(BALOAD); loadConst(mv, 255); mv.visitInsn(IAND); break;
+      case BYTE:     mv.visitInsn(BALOAD); loadConst(mv, 255, jactlContext); mv.visitInsn(IAND); break;
       case INT:      mv.visitInsn(IALOAD); break;
       case LONG:     mv.visitInsn(LALOAD); break;
       case DOUBLE:   mv.visitInsn(DALOAD); break;
@@ -455,10 +455,10 @@ public class Utils {
     }
   }
 
-  public static void loadStoredValue(MethodVisitor mv, int continuationSlot, int idx, JactlType type) {
+  public static void loadStoredValue(MethodVisitor mv, int continuationSlot, int idx, JactlType type, JactlContext jactlContext) {
     loadContinuationArray(mv, continuationSlot, type);
     //loadArray.run();            // Get long array or object array onto stack
-    Utils.loadConst(mv, idx);
+    Utils.loadConst(mv, idx, jactlContext);
     mv.visitInsn(type.isPrimitive() ? LALOAD : AALOAD);
     if (!type.isPrimitive()) {
       if (!type.is(ANY)) {
@@ -468,7 +468,7 @@ public class Utils {
     else {
       if (type.is(BYTE)) {
         mv.visitInsn(L2I);
-        Utils.loadConst(mv, 255);
+        Utils.loadConst(mv, 255, jactlContext);
         mv.visitInsn(IAND);
       } else if (type.is(BOOLEAN, INT)) {
         mv.visitInsn(L2I);
@@ -509,7 +509,7 @@ public class Utils {
                                                            params.size(),
                                                            mandatoryArgCount,
                                                            false);
-    descriptor.isStatic = isStatic;
+    descriptor.isStaticImplementation = isStatic;
     descriptor.mandatoryParams = params.stream()
                                        .filter(p -> p.declExpr.initialiser == null)
                                        .map(p -> p.declExpr.name.getStringValue())
@@ -592,7 +592,10 @@ public class Utils {
   }
 
   public static String plural(String word, int count) {
-    return count == 1 ? word : (word + "s");
+    if (count == 1) {
+      return word;
+    }
+    return word.endsWith("y") ? word.substring(0, word.length() - 1) + "ies" : word + "s";
   }
 
   public static Expr createNewInstance(Token newToken, JactlType className, Token leftParen, List<Expr> args) {
@@ -961,7 +964,7 @@ public class Utils {
   }
 
   private static Expr.FunDecl createWrapperFunDecl(Token token, FunctionDescriptor func) {
-    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(token, func.implementingMethod, func.isStatic);
+    Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(token, func.implementingMethod, func.isStaticImplementation);
     FunctionDescriptor wrapper = wrapperFunDecl.functionDescriptor;
     wrapper.implementingClassName = func.implementingClassName;
     wrapper.implementingMethod    = wrapperName(func.implementingMethod);
@@ -1006,5 +1009,46 @@ public class Utils {
     }
     return methods.get(0);
   }
+  
+  public static String pkgPathOf(String... parts) {
+    return Arrays.asList(parts)
+                 .stream()
+                 .filter(Objects::nonNull)
+                 .filter(p -> !p.isEmpty())
+                 .collect(Collectors.joining("."));
+  }
 
+  public static void loadSlot(MethodVisitor mv, int slot, JactlType type) {
+    if (type.isPrimitive()) {
+      switch (type.getType()) {
+        case BOOLEAN:   mv.visitVarInsn(ILOAD, slot); break;
+        case BYTE:      mv.visitVarInsn(ILOAD, slot); break;
+        case INT:       mv.visitVarInsn(ILOAD, slot); break;
+        case LONG:      mv.visitVarInsn(LLOAD, slot); break;
+        case DOUBLE:    mv.visitVarInsn(DLOAD, slot); break;
+      }
+    }
+    else {
+      mv.visitVarInsn(ALOAD, slot);
+    }
+  }
+  
+  public static void emitReturn(MethodVisitor mv, JactlType type) {
+    switch (type.getType()) {
+      case BOOLEAN:
+      case BYTE:
+      case INT:
+        mv.visitInsn(IRETURN);
+        break;
+      case LONG:
+        mv.visitInsn(LRETURN);
+        break;
+      case DOUBLE:
+        mv.visitInsn(DRETURN);
+        break;
+      default:
+        mv.visitInsn(ARETURN);
+        break;
+    }
+  }
 }

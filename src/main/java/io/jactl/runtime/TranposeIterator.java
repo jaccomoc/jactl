@@ -46,10 +46,10 @@ public class TranposeIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.FLATMAP.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.FLATMAP.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(inputIters);
     checkpointer.writeObject(current);
     checkpointer.writeBoolean(nonEmptySeen);
@@ -57,10 +57,10 @@ public class TranposeIterator extends JactlIterator {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.FLATMAP.ordinal(), "Expected FLATMAP");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.FLATMAP.ordinal(), "Expected FLATMAP");
+    restorer.expectCInt(VERSION, "Bad version");
     source   = (String)restorer.readObject();
-    offset   = restorer.readCint();
+    offset   = restorer.readCInt();
     inputIters = (List<JactlIterator>) restorer.readObject();
     current  = (List)restorer.readObject();
     nonEmptySeen = restorer.readBoolean();

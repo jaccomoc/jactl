@@ -35,20 +35,20 @@ public class SkipIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.SKIP.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.SKIP.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
-    checkpointer.writeCint(count);
+    checkpointer.writeCInt(count);
     checkpointer.writeObject(buffer);
     checkpointer._writeBoolean(reachedEnd);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.SKIP.ordinal(), "Expected SKIP");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.SKIP.ordinal(), "Expected SKIP");
+    restorer.expectCInt(VERSION, "Bad version");
     iter       = (JactlIterator)restorer.readObject();
-    count      = restorer.readCint();
+    count      = restorer.readCInt();
     buffer     = new CircularBuffer<>();
     buffer     = (CircularBuffer<Object>)restorer.readObject();
     reachedEnd = restorer.readBoolean();

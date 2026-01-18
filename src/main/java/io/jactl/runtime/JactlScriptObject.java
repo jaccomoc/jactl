@@ -42,11 +42,11 @@ public class JactlScriptObject implements Checkpointable {
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeLong(_$j$instanceId.getMostSignificantBits());
     checkpointer.writeLong(_$j$instanceId.getLeastSignificantBits());
-    checkpointer.writeCint(_$j$checkpointId);
+    checkpointer.writeCInt(_$j$checkpointId);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
     _$j$instanceId = new UUID(restorer.readLong(), restorer.readLong());
-    _$j$checkpointId = restorer.readCint();
+    _$j$checkpointId = restorer.readCInt();
   }
 }

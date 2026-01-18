@@ -17,6 +17,7 @@
 
 package io.jactl.compiler;
 
+import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Utils;
 import org.objectweb.asm.MethodVisitor;
@@ -83,10 +84,6 @@ public class LocalTypes {
     JactlType result = stack.peek().type;
     stack.push(top);
     return result;
-  }
-
-  public void push(Class clss) {
-    push(JactlType.typeFromClass(clss));
   }
 
   public void push(JactlType type) {
@@ -318,7 +315,7 @@ public class LocalTypes {
    * @param count  how many entries to ensure are on the stack
    */
   public void expect(int count) {
-    check(stack.size() >= count, "stack size is " + stack.size() + " but expecting at least " + count + " entries");
+    check(stack.size() >= count, "stack size is " + stack.size() + " but expecting at least " + count + Utils.plural(" entry", count));
 
     Iterator<StackEntry> iter             = stack.iterator();
     boolean              seenEntryOnStack = false;
@@ -406,7 +403,7 @@ public class LocalTypes {
          .forEachRemaining(StackEntry::convertToStack);
   }
 
-  public void saveLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
+  public void saveLocals(int continuationVar, int globalsVar, int longArr, int objArr, JactlContext jactlContext) {
     Function<Integer,Boolean>    ignoreEntry = i -> i == continuationVar || i == globalsVar || i == longArr || i == objArr;
     int  startSlot = isStatic ? 0 : 1;
     List<LocalEntry> entries = IntStream.range(startSlot, locals.size())
@@ -431,7 +428,7 @@ public class LocalTypes {
       return;   // nothing to do
     }
 
-    Utils.loadConst(mv, locals.size());
+    Utils.loadConst(mv, locals.size(), jactlContext);
     if (savePrimitives && saveObjects) {
       mv.visitInsn(DUP);
     }
@@ -449,7 +446,7 @@ public class LocalTypes {
       JactlType  type  = entry == null ? null : entry.type;
       if (entry != null && !ignoreEntry.apply(i) && !entry.isGlobalVar) {
         _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
-        Utils.loadConst(mv, i);
+        Utils.loadConst(mv, i, jactlContext);
         _loadLocal(i);
         if (type.isPrimitive()) {
           if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
@@ -466,7 +463,7 @@ public class LocalTypes {
     }
   }
 
-  public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr) {
+  public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr, JactlContext context) {
     int  startSlot = isStatic ? 0 : 1;
     for (int i = startSlot; i < locals.size(); i++) {
       LocalEntry entry = locals.get(i);
@@ -474,7 +471,7 @@ public class LocalTypes {
         continue;
       }
       JactlType type = entry.type;
-      Utils.loadStoredValue(mv, continuationVar, i, type);
+      Utils.loadStoredValue(mv, continuationVar, i, type, context);
       _storeLocal(type, i);
       i += slotsNeeded(type) - 1;
     }
@@ -578,18 +575,7 @@ public class LocalTypes {
   }
 
   private void _loadLocal(int slot, JactlType type) {
-    if (type.isPrimitive()) {
-      switch (type.getType()) {
-        case BOOLEAN:   mv.visitVarInsn(ILOAD, slot); break;
-        case BYTE:      mv.visitVarInsn(ILOAD, slot); break;
-        case INT:       mv.visitVarInsn(ILOAD, slot); break;
-        case LONG:      mv.visitVarInsn(LLOAD, slot); break;
-        case DOUBLE:    mv.visitVarInsn(DLOAD, slot); break;
-      }
-    }
-    else {
-      mv.visitVarInsn(ALOAD, slot);
-    }
+    Utils.loadSlot(mv, slot, type);
   }
 
   public void storeLocal(int slot) {

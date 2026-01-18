@@ -42,12 +42,12 @@ public class GroupedIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(GROUPED.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(GROUPED.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
-    checkpointer.writeCint(size);
+    checkpointer.writeCInt(offset);
+    checkpointer.writeCInt(size);
     checkpointer.writeBoolean(sliding);
     checkpointer._writeBoolean(haveNext);
     checkpointer._writeBoolean(finished);
@@ -56,12 +56,12 @@ public class GroupedIterator extends JactlIterator {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(GROUPED.ordinal(), "Expected GROUPED");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(GROUPED.ordinal(), "Expected GROUPED");
+    restorer.expectCInt(VERSION, "Bad version");
     iter     = (JactlIterator)restorer.readObject();
     source   = (String)restorer.readObject();
-    offset   = restorer.readCint();
-    size     = restorer.readCint();
+    offset   = restorer.readCInt();
+    size     = restorer.readCInt();
     sliding  = restorer.readBoolean();
     haveNext = restorer.readBoolean();
     finished = restorer.readBoolean();

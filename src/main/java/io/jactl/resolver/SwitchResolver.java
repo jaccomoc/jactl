@@ -5,6 +5,7 @@ import io.jactl.runtime.ClassDescriptor;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,27 +43,31 @@ public class SwitchResolver {
       return c.block;
     }).collect(Collectors.toList()));
     resolver.resolve(block);
-    expr.cases.forEach(c -> c.patterns.forEach(pat -> isCompatible(resolver, subjectType, pat.first)));
     resolver.resolve(expr.defaultCase);
 
-    // Check that if there is a pattern covering all cases that there are no subsequent patterns and no default
-    Set<JactlType> coveredTypes = new HashSet<>();
-    expr.cases.forEach(c -> c.patterns.stream().forEach(pair -> {
-      Expr pattern = pair.first;
-      Expr ifCond  = pair.second;
-      JactlType type = coveringType(pattern);
-      if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type)))) {
-        resolver.error("Unreachable switch case (covered by a previous case)", pattern.location);
+    // If we have no errors then do some more checks
+    if (resolver.getErrors().isEmpty()) {
+      expr.cases.forEach(c -> c.patterns.forEach(pat -> isCompatible(resolver, subjectType, pat.first)));
+      
+      // Check that if there is a pattern covering all cases that there are no subsequent patterns and no default
+      Set<JactlType> coveredTypes = new HashSet<>();
+      expr.cases.forEach(c -> c.patterns.stream().forEach(pair -> {
+        Expr      pattern = pair.first;
+        Expr      ifCond  = pair.second;
+        JactlType type    = coveringType(pattern);
+        if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type)))) {
+          resolver.error("Unreachable switch case (covered by a previous case)", pattern.location);
+        }
+        if (type != null && ifCond == null) {
+          coveredTypes.add(type);
+        }
+      }));
+      if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
+        resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
       }
-      if (type != null && ifCond == null) {
-        coveredTypes.add(type);
-      }
-    }));
-    if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
-      resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+      validateNotCovered(resolver, expr.cases.stream().flatMap(c -> c.patterns.stream().filter(pair -> pair.second == null).map(pair -> pair.first)).collect(Collectors.toList()));
     }
-    validateNotCovered(resolver, expr.cases.stream().flatMap(c -> c.patterns.stream().filter(pair -> pair.second == null).map(pair -> pair.first)).collect(Collectors.toList()));
-
+    
     if (expr.defaultCase == null) {
       expr.defaultCase = new Expr.Literal(new Token(NULL, expr.location));
       resolver.resolve(expr.defaultCase);
@@ -318,14 +323,23 @@ public class SwitchResolver {
     className = className.subList(0,className.size() - 1);
     // We must have a proper class name or we will throw a resolver.error now
     ClassDescriptor descriptor = resolver.lookupClass(className, false);
-    JactlType fieldType = descriptor.getStaticField(fieldName);
-    if (fieldType == null) {
-      resolver.error("No class static field '" + fieldName + "' for class " + descriptor.getClassName(), identifier.location);
+    JactlType fieldType = null;
+    if (descriptor == null) {
+      resolver.error("No such class static field '" + fieldName, identifier.location);
     }
-    Expr.Literal literal = (Expr.Literal)resolver.literalDefaultValue(pattern.location, fieldType);
-    literal.value.setValue(descriptor.getStaticFieldValue(fieldName));
-    resolver.resolve(literal);
-    return literal;
+    else {
+      fieldType = descriptor.getStaticField(fieldName);
+      if (fieldType == null) {
+        resolver.error("No class static field '" + fieldName + "' for class " + descriptor.getClassName(), identifier.location);
+      }
+      else {
+        Expr.Literal literal = (Expr.Literal)resolver.literalDefaultValue(pattern.location, fieldType);
+        literal.value.setValue(descriptor.getStaticFieldValue(fieldName));
+        resolver.resolve(literal);
+        return literal;
+      }
+    }
+    return pattern;
   }
 
   private static List<Pair<Expr,Expr>> validateSwitchPatterns(Resolver resolver, List<Pair<Expr,Expr>> exprs) {

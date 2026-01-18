@@ -35,10 +35,10 @@ public class StreamIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.STREAM.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.STREAM.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
     checkpointer.writeObject(nextValue);
     checkpointer._writeBoolean(haveValue);
@@ -46,10 +46,10 @@ public class StreamIterator extends JactlIterator {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.STREAM.ordinal(), "Expected STREAM");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.STREAM.ordinal(), "Expected STREAM");
+    restorer.expectCInt(VERSION, "Bad version");
     source    = (String)restorer.readObject();
-    offset    = restorer.readCint();
+    offset    = restorer.readCInt();
     closure   = (JactlMethodHandle)restorer.readObject();
     nextValue = restorer.readObject();
     haveValue = restorer.readBoolean();

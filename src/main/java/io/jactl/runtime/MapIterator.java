@@ -41,26 +41,26 @@ class MapIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.MAPPER.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.MAPPER.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
     checkpointer._writeBoolean(withIndex);
-    checkpointer.writeCint(index);
+    checkpointer.writeCInt(index);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.MAPPER.ordinal(), "Expected MAPPER");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.MAPPER.ordinal(), "Expected MAPPER");
+    restorer.expectCInt(VERSION, "Bad version");
     iter      = (JactlIterator)restorer.readObject();
     source    = (String)restorer.readObject();
-    offset    = restorer.readCint();
+    offset    = restorer.readCInt();
     closure   = (JactlMethodHandle)restorer.readObject();
     withIndex = restorer.readBoolean();
-    index     = restorer.readCint();
+    index     = restorer.readCInt();
   }
 
   MapIterator() {}

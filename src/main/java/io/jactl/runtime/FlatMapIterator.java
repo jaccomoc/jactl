@@ -40,23 +40,23 @@ public class FlatMapIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCint(IteratorType.FLATMAP.ordinal());
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(IteratorType.FLATMAP.ordinal());
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
     checkpointer.writeObject(subIter);
     checkpointer.writeObject(source);
-    checkpointer.writeCint(offset);
+    checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCint(IteratorType.FLATMAP.ordinal(), "Expected FLATMAP");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(IteratorType.FLATMAP.ordinal(), "Expected FLATMAP");
+    restorer.expectCInt(VERSION, "Bad version");
     iter     = (JactlIterator)restorer.readObject();
     subIter  = (JactlIterator)restorer.readObject();
     source   = (String)restorer.readObject();
-    offset   = restorer.readCint();
+    offset   = restorer.readCInt();
     closure  = (JactlMethodHandle)restorer.readObject();
   }
 

@@ -17,11 +17,13 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.TypeEnum.STRING_BUFFER;
@@ -56,17 +58,19 @@ public class Checkpointer {
   private Object[]                          objects;
   private IdentityHashMap<Object,Integer>   objectIds;
   private int[]                             offsets;
+  private JactlContext                      context;
 
-  private static Checkpointer get(String source, int offset) {
-    return checkpointerThreadLocal.get().init(source, offset);
+  private static Checkpointer get(String source, int offset, JactlContext context) {
+    return checkpointerThreadLocal.get().init(source, offset, context);
     //return new Checkpointer().init(source, offset);
   }
 
   private Checkpointer() {}
 
-  private Checkpointer init(String source, int offset) {
+  private Checkpointer init(String source, int offset, JactlContext context) {
     this.source  = source;
     this.offset  = offset;
+    this.context = context;
     this.idx     = 0;
     this.objId   = 0;
     if (this.objects == null) {
@@ -81,7 +85,7 @@ public class Checkpointer {
     if (this.buf == null) {
       this.buf = new byte[MAX_CACHE_SIZE];
     }
-    this._writeCint(VERSION);
+    this._writeCInt(VERSION);
     this._writeInt(0);         // number of objects encoded (i.e. size of object table)
     this._writeInt(0);         // offset to object table which we fill in at the end
     return this;
@@ -109,11 +113,11 @@ public class Checkpointer {
     return idx;
   }
 
-  public static byte[] checkpoint(Object obj, RuntimeState state, String source, int offset) {
+  public static byte[] checkpoint(Object obj, RuntimeState state, JactlContext context, String source, int offset) {
     // Add globals to checkpoint
     obj = Arrays.asList(state.getGlobals(), obj);
 
-    Checkpointer checkpointer = Checkpointer.get(source, offset);
+    Checkpointer checkpointer = Checkpointer.get(source, offset, context);
     checkpointer._checkpoint(obj);
     byte[] buf = new byte[checkpointer.getLength()];
     System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
@@ -154,7 +158,13 @@ public class Checkpointer {
     else if (obj instanceof StringBuffer)   { writeStringBuffer((StringBuffer)obj); }
     else if (obj instanceof Class)          { writeClass((Class)obj);   }
     else {
-      throw new RuntimeError("Cannot checkpoint object of type " + RuntimeUtils.className(obj), source, offset);
+      BiConsumer<Checkpointer,Object> checkpointFn = context.getRegisteredClasses().getCheckpointer(obj.getClass());
+      if (checkpointFn == null) {
+        throw new RuntimeError("Cannot checkpoint: could not locate a registered checkpoint function for " + RuntimeUtils.className(obj), source, offset);
+      }
+      writeTypeEnum(INSTANCE.getType());
+      writeObject(Type.getInternalName(obj.getClass()));
+      checkpointFn.accept(this, obj);
     }
   }
 
@@ -190,11 +200,17 @@ public class Checkpointer {
     else if (value instanceof Boolean)      { writeBooleanObj((boolean)value);                }
     else {
       writeType(ANY);
-      writeCint(getId(value));
+      writeCInt(getIdAndQueueForWriting(value));
     }
   }
 
-  private Integer getId(Object value) {
+  /**
+   * Get object id for the object and if not aleady encoded or queued for encoding, add to the
+   * objects that will be encoded.
+   * @param value the object
+   * @return the unique object id for the object
+   */
+  private Integer getIdAndQueueForWriting(Object value) {
     Integer id = objectIds.get(value);
     if (id == null) {
       id = objId++;
@@ -210,7 +226,7 @@ public class Checkpointer {
   }
 
   void writeClass(Class clss) {
-    writeType(CLASS);
+    writeTypeEnum(CLASS.getType());
     writeObject(Type.getInternalName(clss));
   }
 
@@ -218,7 +234,7 @@ public class Checkpointer {
     int size = map.size();
     ensureCapacity(1 + 5);
     buf[idx++] = (byte)MAP.getType().ordinal();
-    _writeCint(size);
+    _writeCInt(size);
     for (Iterator<Map.Entry<Object, Object>> iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
       Map.Entry<Object, Object> entry = iterator.next();
       writeObject(entry.getKey());
@@ -228,7 +244,7 @@ public class Checkpointer {
 
   private void writeList(List list) {
     writeType(LIST);
-    writeCint(list.size());
+    writeCInt(list.size());
     for (int i = 0; i < list.size(); i++) {
       writeObject(list.get(i));
     }
@@ -248,7 +264,7 @@ public class Checkpointer {
     buf[idx++] = (byte)ARRAY.getType().ordinal();
     buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)BOOLEAN.getType().ordinal();
-    _writeCint(arr.length);
+    _writeCInt(arr.length);
     for (int i = 0, mask = 1, bits = 0; i < arr.length; i++) {
       bits |= (arr[i] ? mask : 0);
       mask <<= 1;
@@ -265,7 +281,7 @@ public class Checkpointer {
     buf[idx++] = (byte)ARRAY.getType().ordinal();
     buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)BYTE.getType().ordinal();
-    _writeCint(arr.length);
+    _writeCInt(arr.length);
     System.arraycopy(arr, 0, buf, idx, arr.length);
     idx += arr.length;
   }
@@ -275,9 +291,9 @@ public class Checkpointer {
     buf[idx++] = (byte)ARRAY.getType().ordinal();
     buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)INT.getType().ordinal();
-    _writeCint(arr.length);
+    _writeCInt(arr.length);
     for (int i = 0; i < arr.length; i++) {
-      _writeCint(arr[i]);
+      _writeCInt(arr[i]);
     }
   }
 
@@ -286,10 +302,10 @@ public class Checkpointer {
     buf[idx++] = (byte)ARRAY.getType().ordinal();
     buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)LONG.getType().ordinal();
-    _writeCint(arr.length);
+    _writeCInt(arr.length);
     for (int i = 0; i < arr.length; i++) {
       long v = arr[i];
-      _writeLongc(v);
+      _writeCLong(v);
     }
   }
 
@@ -298,7 +314,7 @@ public class Checkpointer {
     buf[idx++] = (byte)ARRAY.getType().ordinal();
     buf[idx++] = 1;   // number of dimensions
     buf[idx++] = (byte)DOUBLE.getType().ordinal();
-    _writeCint(arr.length);
+    _writeCInt(arr.length);
     for (int i = 0; i < arr.length; i++) {
       _writeLong(Double.doubleToRawLongBits(arr[i]));
     }
@@ -313,8 +329,8 @@ public class Checkpointer {
     ensureCapacity(2);
     buf[idx++] = (byte)ARRAY.getType().ordinal();
     buf[idx++] = (byte)dimensions;
-    writeType(JactlType.typeFromClass(componentType));
-    writeCint(arr.length);
+    writeType(context.typeFromClass(componentType));
+    writeCInt(arr.length);
     for (int i = 0; i < arr.length; i++) {
       writeObject(arr[i]);
     }
@@ -329,13 +345,13 @@ public class Checkpointer {
   public void writeIntObj(int i) {
     ensureCapacity(6);
     _writeType(INT);
-    _writeCint(i);
+    _writeCInt(i);
   }
 
   public void writeLongObj(long v) {
     ensureCapacity(6);
     _writeType(LONG);
-    _writeLongc(v);
+    _writeCLong(v);
   }
 
   public void writeLong(long v) {
@@ -376,9 +392,9 @@ public class Checkpointer {
       String str = v.toString();
       ensureCapacity(1 + 5 + str.length());
       buf[idx++] = (byte)TypeEnum.STRING.ordinal();
-      _writeCint(str.length());
+      _writeCInt(str.length());
       for (int i = 0; i < str.length(); i++) {
-        _writeCint(str.charAt(i));
+        _writeCInt(str.charAt(i));
       }
     }
   }
@@ -405,12 +421,21 @@ public class Checkpointer {
     buf[idx++] = (byte)(num & 0xff); num >>>= 8;
   }
 
-  public void writeCint(int num) {
-    ensureCapacity(5);
-    _writeCint(num);
+  /**
+   * Write a compact int.
+   * Uses top bit to indicate if there are following bytes and then
+   * uses bottom 7 bits to encode next 7 bits of int until int is
+   * fully encoded. If the int is small this will take less than the
+   * 4 bytes required for a full integer.
+   * @param num the integer to encode.
+   */
+  public void writeCInt(int num) {
+    ensureCapacity(5);  // worst case is we need 5 bytes
+    _writeCInt(num);
   }
+  public static String WRITE_CINT = "writeCInt";
 
-  private void _writeCint(int num) {
+  private void _writeCInt(int num) {
     // Assumes someone has already ensured capacity
     byte b = (byte)(num & 0x7f);
     if (b == num) {
@@ -425,7 +450,21 @@ public class Checkpointer {
     }
   }
 
-  private void _writeLongc(long num) {
+  /**
+   * Write a compact long.
+   * Uses top bit to indicate if there are following bytes and then
+   * uses bottom 7 bits to encode next 7 bits of long until long is
+   * fully encoded. If the long is small this will take less than the
+   * 8 bytes required for a full long.
+   * @param num the integer to encode.
+   */
+  public void writeCLong(long num) {
+    ensureCapacity(10);  // worst case is 10 bytes
+    _writeCLong(num);
+  }
+  public static String WRITE_CLONG = "writeCLong";
+  
+  private void _writeCLong(long num) {
     // Assumes someone has already ensured capacity
     do {
       int mask = num >= 128 || num < 0 ? 0x80 : 0;
@@ -442,18 +481,18 @@ public class Checkpointer {
   private void writeString(String str) {
     ensureCapacity(1 + 5 + str.length() * 2);
     buf[idx++] = ((byte)JactlType.TypeEnum.STRING.ordinal());
-    _writeCint(str.length());
+    _writeCInt(str.length());
     for (int i = 0; i < str.length(); i++) {
-      _writeCint(str.charAt(i));
+      _writeCInt(str.charAt(i));
     }
   }
 
   // Only for internal use. Should use writeObject() when checkpointing string fields.
   private void _writeString(String str) {
     ensureCapacity(5 + str.length() * 2);
-    _writeCint(str.length());
+    _writeCInt(str.length());
     for (int i = 0; i < str.length(); i++) {
-      _writeCint(str.charAt(i));
+      _writeCInt(str.charAt(i));
     }
   }
 
@@ -470,7 +509,7 @@ public class Checkpointer {
 
   public void writeClong(long num) {
     ensureCapacity(10);
-    _writeLongc(num);
+    _writeCLong(num);
   }
 
   public void writeByte(byte b) {
@@ -493,6 +532,9 @@ public class Checkpointer {
       writeType(type.getArrayElemType());
     }
     else if (enumType == JactlType.TypeEnum.INSTANCE) {
+      writeObject(type.getInternalName());
+    }
+    else if (enumType == JactlType.TypeEnum.CLASS) {
       writeObject(type.getInternalName());
     }
   }

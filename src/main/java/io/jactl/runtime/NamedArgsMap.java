@@ -37,16 +37,16 @@ public class NamedArgsMap extends LinkedHashMap implements Checkpointable {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeTypeEnum(JactlType.TypeEnum.BUILTIN);
-    checkpointer.writeCint(BuiltinFunctions.getClassId(this.getClass()));
-    checkpointer.writeCint(VERSION);
+    checkpointer.writeCInt(BuiltinFunctions.getClassId(this.getClass()));
+    checkpointer.writeCInt(VERSION);
     checkpointer.writeMap(this);
   }
 
   @Override
   public void _$j$restore(Restorer restorer) {
     restorer.skipType();
-    restorer.expectCint(BuiltinFunctions.getClassId(this.getClass()), "Bad class id - expecting NamedArgsMap");
-    restorer.expectCint(VERSION, "Bad version");
+    restorer.expectCInt(BuiltinFunctions.getClassId(this.getClass()), "Bad class id - expecting NamedArgsMap");
+    restorer.expectCInt(VERSION, "Bad version");
     restorer.skipType();
     restorer.restoreMap(this);
   }

@@ -25,9 +25,6 @@ package io.jactl;
 
 import java.util.*;
 
-import io.jactl.JactlType;
-import io.jactl.Stmt;
-import io.jactl.Utils;
 import io.jactl.runtime.ClassDescriptor;
 import io.jactl.runtime.SourceLocation;
 import org.objectweb.asm.Label;
@@ -483,7 +480,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public Token earliestForwardReference;
 
     public boolean isClosure()    { return nameToken == null; }
-    public boolean isStatic()     { return functionDescriptor.isStatic; }
+    public boolean isStatic()     { return functionDescriptor.isStaticImplementation; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
     public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync ? 2 : 1) : -1; }
     public FunDecl(Token startToken, Token nameToken, JactlType returnType, List<Stmt.VarDecl> parameters) {
