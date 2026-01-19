@@ -199,7 +199,7 @@ public class Functions {
   }
 
   public void registerFunction(FunctionDescriptor function) {
-    if (function.isMethod()) {
+    if (!function.isGlobalFunction()) {
       function.getAliases().forEach(alias -> registerMethod(alias, function));
     }
     else {

@@ -120,6 +120,10 @@ public class FunctionDescriptor {
     return type != null && !isStaticMethod;
   }
   
+  public boolean isGlobalFunction() {
+    return isGlobalFunction;
+  }
+  
   public boolean isInstanceMethod() {
     return firstArgtype != null;
   }

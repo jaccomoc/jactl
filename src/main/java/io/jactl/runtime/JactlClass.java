@@ -199,7 +199,7 @@ public class JactlClass {
       FunctionDescriptor funcDesc = m;
       // If method can throw then we use the wrapper method in the helper class to invoke instead
       if (m.canThrow) {
-        JactlFunction m2 = Jactl.method(classType)
+        JactlFunction m2 = Jactl.method(classType.createInstanceType())
                                 .name(m.name);
         m.paramNames.forEach(m2::param);
         m2.impl(helperClass, m.name, wrapperHandleField)

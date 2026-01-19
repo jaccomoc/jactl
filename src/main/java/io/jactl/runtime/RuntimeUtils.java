@@ -1290,16 +1290,6 @@ public class RuntimeUtils {
       if (value == null && parent instanceof Map) {
         value = ((Map) parent).get(field);
       }
-      if (value == null) {
-        // Check for method on registered class
-        ClassDescriptor descriptor = RuntimeState.getState().getContext().getRegisteredClasses().getClassDescriptor(parent.getClass());
-        if (descriptor != null) {
-          FunctionDescriptor funDesc = descriptor.getMethod(field);
-          if (funDesc != null) {
-            value = funDesc.wrapperHandle;
-          }
-        }
-      }
     }
 
     if (value == null) {

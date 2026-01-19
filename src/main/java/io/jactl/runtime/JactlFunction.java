@@ -331,7 +331,7 @@ public class JactlFunction extends FunctionDescriptor {
     this.isBuiltin        = true;
     this.isStaticImplementation = true;   // Builtins are Java static methods even if they might be Jactl methods
     this.isAsync          = isAsync();
-    this.isGlobalFunction = !isMethod();
+    this.isGlobalFunction = type == null;
 
     try {
       MethodHandle handle =
