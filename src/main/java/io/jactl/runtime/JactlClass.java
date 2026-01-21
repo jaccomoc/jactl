@@ -41,6 +41,7 @@ public class JactlClass {
   private String       jactlPackage;                       // name of Jactl package for class
   private Class        javaClass;
   private boolean      autoImport;                         // whether scripts automatically import this class by default
+  private int          debugLevel = 0;
   private JactlContext jactlContext = null;
   private BiConsumer<Checkpointer,Object> checkpoint = null;
   private Function<Restorer,Object>       restore = null;
@@ -182,6 +183,17 @@ public class JactlClass {
   }
 
   /**
+   * If level is more than 0 then we dump the compiled helper class and run the class checker
+   * over it.
+   * @param debugLevel the debug level
+   * @return the JactlClass instance
+   */
+  public JactlClass debugLevel(int debugLevel) {
+    this.debugLevel = debugLevel;
+    return this;
+  }
+
+  /**
    * Register the class with the Jactl ecosystem.
    * @return the JactlClass instance
    */
@@ -199,7 +211,7 @@ public class JactlClass {
       FunctionDescriptor funcDesc = m;
       // If method can throw then we use the wrapper method in the helper class to invoke instead
       if (m.canThrow) {
-        JactlFunction m2 = Jactl.method(classType.createInstanceType())
+        JactlFunction m2 = Jactl.method(classType)
                                 .name(m.name);
         m.paramNames.forEach(m2::param);
         m2.impl(helperClass, m.name, wrapperHandleField)
@@ -227,7 +239,7 @@ public class JactlClass {
     if (restore != null) {
       getRegisteredClasses().registerRestorer(javaClass, restore);
     }
-    return null;
+    return classType;
   }
 
   //////////////////////////////////////////////////////////////////////
@@ -264,7 +276,7 @@ public class JactlClass {
   }
 
   private Class compileWrapperHandlesClass(String helperClassName) {
-    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'));
+    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'), debugLevel);
     ClassVisitor     cv = cw.getClassVisitor();
 
     // Supporting Java 8 at the moment so passing V1_8. Change to later version once we no longer support Java 8.
@@ -325,8 +337,8 @@ public class JactlClass {
     }
     slot += 2;                                          // skip source/offset args
     // Other arguments
-    for (; slot < paramTypes.size(); slot++) {
-      Utils.loadSlot(methodVisitor, slot, JactlContext.typeFromClass(paramTypes.get(slot), getRegisteredClasses()));
+    for (int p = slot; p < paramTypes.size(); p++) {
+      slot += Utils.loadSlot(methodVisitor, slot, JactlContext.typeFromClass(paramTypes.get(p), getRegisteredClasses()));
     }
     if (isStatic) {
       methodVisitor.visitMethodInsn(INVOKESTATIC, Type.getInternalName(method.getDeclaringClass()), method.getName(), Type.getMethodDescriptor(method), false);
@@ -365,10 +377,8 @@ public class JactlClass {
     Class clss = JactlClassLoader.forName(className);
     final Set<String> excludedMethods = new HashSet<>(Arrays.asList("compareTo", "readObject", "writeObject", "hashCode", "equals", "readExternal", "writeExternal"));
 
-    System.out.print("    Jactl.createClass()\n" +
-                     "         .jactlName(\"name.of.package.NameOfClass\")\n" +
-                     "         .javaClass(\"" + className + "\")\n" +
-                     "         .javaBasePackage(\"jactl.pkg\")\n" +
+    System.out.print("    Jactl.createClass(\"name.of.package.NameOfClass\")\n" +
+                     "         .javaClass(" + className + ".class)\n" +
                      "         .autoImport(true)\n" +
                      "         .mapType(ABC.class, XYZ.class)\n");
 

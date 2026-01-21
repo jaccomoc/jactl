@@ -56,8 +56,9 @@ public class JactlClassWriter extends ClassWriter {
   }
   
   private void init(int debugLevel) {
-    if (context != null && context.checkClasses()) {
-      cv = new CheckClassAdapter(this);
+    cv = this;
+    if (debugLevel > 0 || context != null && context.checkClasses()) {
+      cv = new CheckClassAdapter(cv);
     }
     if (debugLevel > 0) {
       Printer printer = new JactlTextifier();

@@ -2392,11 +2392,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           return funDesc;
         }
       }
-      else {
-        // Probably an earlier error with unknown class so return null to indicate no such method
-        return null;
-      }
     }
+    // Check for methods that have been registered for this type
     return jactlContext.getFunctions().lookupMethod(type, methodName);
   }
 

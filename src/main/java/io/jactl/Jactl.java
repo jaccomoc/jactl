@@ -259,10 +259,10 @@ public class Jactl {
    * Forward declare a Jactl class that can referred to when registering other Jactl classes.
    * This solves the problem of registering Jactl classes when circular dependencies exist.
    * @param jactlClass the name of the Jactl class that will be later registered (x.y.ClassName)
-   * @param javaClass  the Java class name that will be used as the implementation of this Jactl class (a.b.ClassName)
+   * @param javaClass  the Java class that will be used as the implementation of this Jactl class
    */
-  public static void declareClass(String jactlClass, String javaClass) {
-    RegisteredClasses.INSTANCE.declareClass(jactlClass, javaClass);
+  public static void declareClass(String jactlClass, Class javaClass) {
+    RegisteredClasses.INSTANCE.declareClass(jactlClass, javaClass.getName());
   }
   
   /**

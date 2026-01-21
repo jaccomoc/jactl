@@ -1018,18 +1018,28 @@ public class Utils {
                  .collect(Collectors.joining("."));
   }
 
-  public static void loadSlot(MethodVisitor mv, int slot, JactlType type) {
+  /**
+   * Load value of given type from given locals slot onto top of stack.
+   * @param mv    the MethodVisitor
+   * @param slot  the slot to load from
+   * @param type  the type of the data in the slot
+   * @return the number of slots that this data type uses
+   */
+  public static int loadSlot(MethodVisitor mv, int slot, JactlType type) {
     if (type.isPrimitive()) {
       switch (type.getType()) {
-        case BOOLEAN:   mv.visitVarInsn(ILOAD, slot); break;
-        case BYTE:      mv.visitVarInsn(ILOAD, slot); break;
-        case INT:       mv.visitVarInsn(ILOAD, slot); break;
-        case LONG:      mv.visitVarInsn(LLOAD, slot); break;
-        case DOUBLE:    mv.visitVarInsn(DLOAD, slot); break;
+        case BOOLEAN:   mv.visitVarInsn(ILOAD, slot); return 1;
+        case BYTE:      mv.visitVarInsn(ILOAD, slot); return 1;
+        case INT:       mv.visitVarInsn(ILOAD, slot); return 1;
+        case LONG:      mv.visitVarInsn(LLOAD, slot); return 2;
+        case DOUBLE:    mv.visitVarInsn(DLOAD, slot); return 2;
+        default:
+          throw new IllegalStateException("Unexpected type: " + type);
       }
     }
     else {
       mv.visitVarInsn(ALOAD, slot);
+      return 1;
     }
   }
   

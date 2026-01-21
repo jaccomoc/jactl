@@ -33,6 +33,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.jactl.JactlType.CLASS;
+
 /**
  * Class that captures information about a built-in function or method and registers it with the Jactl runtime.
  * Example usage for a global function:
@@ -101,7 +103,7 @@ public class JactlFunction extends FunctionDescriptor {
    * @param methodClass  the JactlType that the method is for
    */
   public JactlFunction(JactlType methodClass) {
-    this.type = methodClass;
+    this.type = methodClass.is(CLASS) ? methodClass.createInstanceType() : methodClass;
   }
 
   /**
