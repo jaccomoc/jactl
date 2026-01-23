@@ -627,6 +627,7 @@ public class JactlContext {
     }
 
     DynamicClassLoader(DynamicClassLoader prev) {
+      super(JactlClassLoader.getInstance());
       this.previous = prev;
     }
 

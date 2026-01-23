@@ -47,6 +47,9 @@ import static org.objectweb.asm.Opcodes.NEW;
 
 public class Utils {
 
+  // Support Java 8 and later
+  public static final int    JAVA_VERSION        = V1_8;
+  
   public static final String JACTL_PKG           = "jactl.pkg";   // Java base package for Jactl classes
   public static final String DEFAULT_JACTL_PKG   = "";
   public static final String JACTL_PREFIX        = "_$j$";

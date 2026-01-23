@@ -91,7 +91,6 @@ public class RegisteredClassMethod extends FunctionDescriptor {
   RegisteredClassMethod wrapperHandle(String wrapperHandleClass, String wrapperHandleField) {
     this.wrapperHandleClassName = wrapperHandleClass.replace('.','/');
     this.wrapperHandleField     = wrapperHandleField;
-    this.wrapperHandleFieldType = JactlType.FUNCTION;
     return this;
   }
   

@@ -279,15 +279,14 @@ public class JactlClass {
     JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'), debugLevel);
     ClassVisitor     cv = cw.getClassVisitor();
 
-    // Supporting Java 8 at the moment so passing V1_8. Change to later version once we no longer support Java 8.
     String internalHelperClassName = helperClassName.replace('.', '/');
-    cv.visit(V1_8, ACC_PUBLIC, internalHelperClassName, null, Type.getInternalName(Object.class), new String[0]);
+    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalHelperClassName, null, Type.getInternalName(Object.class), new String[0]);
     cv.visitSource(helperClassName + ".java", null);
 
     // Add MethodHandle fields
     methods.forEach(m -> {
-      //FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(m.name), Type.getDescriptor(JactlMethodHandle.class), null, null);
-      FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(m.name), Type.getDescriptor(Object.class), null, null);
+      FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(m.name), Type.getDescriptor(JactlMethodHandle.class), null, null);
+      //FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(m.name), Type.getDescriptor(Object.class), null, null);
       handleVar.visitEnd();
       if (m.canThrow) {
         // Synthesise a method that will capture any runtime exceptions and wrap them in a RuntimeError with

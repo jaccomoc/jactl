@@ -20,7 +20,11 @@ package io.jactl.runtime;
 import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.compiler.JactlClassLoader;
+import io.jactl.compiler.JactlClassWriter;
 import io.jactl.runtime.JactlMethodHandle.FunctionWrapperHandle;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -30,10 +34,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.CLASS;
+import static org.objectweb.asm.Opcodes.*;
 
 /**
  * Class that captures information about a built-in function or method and registers it with the Jactl runtime.
@@ -57,18 +63,8 @@ import static io.jactl.JactlType.CLASS;
  *        .register();
  * </pre>
  * <p>The register() call must be the last call in the chain of calls.</p>
- * <p>NOTE: the impl() method needs the name of a public static Object field in the same
- * class that is used to cache some information. By default "Data" is appended to the
- * method name to get the name of the field. So by default this:</p>
- * <pre>
- *        .impl(BuiltinFunctions.class, "stringSubstring")
- * </pre>
- * is the same as:
- * <pre>
- *        .impl(BuiltinFunctions.class, "stringSubstring", "stringSubstringData")
- * </pre>
- * <p>You can supply a different third argument to impl() if you wish to use a different
- * field name.</p>
+ * <p>The impl() call specifies the name of a public static method and the
+ * class which provides the actual implementation of this method.</p>
  * <p>Other method calls that are supported:</p>
  * <dl>
  *   <dt>alias(String name)</dt><dd>Allow function/method to be invoked via another name.</dd>
@@ -103,7 +99,7 @@ public class JactlFunction extends FunctionDescriptor {
    * @param methodClass  the JactlType that the method is for
    */
   public JactlFunction(JactlType methodClass) {
-    this.type = methodClass.is(CLASS) ? methodClass.createInstanceType() : methodClass;
+    this.type = methodClass;
   }
 
   /**
@@ -213,32 +209,26 @@ public class JactlFunction extends FunctionDescriptor {
   
   /**
    * The implementing class and method for the function/method.
-   * Data field defaults to methodName + "Data" (i.e. method name with Data appended to it).
    * @param clss        the class
    * @param methodName  the name of the method
    * @return the current JactlFunction for method chaining
    */
   public JactlFunction impl(Class clss, String methodName) {
-    return impl(clss, methodName, methodName + "Data");
+    return impl(clss, methodName, null);
   }
 
   /**
    * The implementing class and method for the function/method.
    * @param clss        the class
    * @param methodName  the name of the method
-   * @param fieldName   name of a public static class field of type Object where Jactl can cache some runtime data.
-   *                    Field must not have been initialised to anything (other than null).
+   * @param fieldName   ignored
    * @return the current JactlFunction for method chaining
+   * @deprecated 
    */
   public JactlFunction impl(Class clss, String methodName, String fieldName) {
     this.implementingClass      = clss;
     this.implementingClassName  = Type.getInternalName(clss);
     this.implementingMethod     = methodName;
-    this.wrapperHandleField     = fieldName;
-    
-    // For user supplied fields, we require field to be of type Object to hide implementation details
-    // even though we know we are going to store a MethodHandle (type FUNCTION) in it.
-    this.wrapperHandleFieldType = JactlType.ANY;
     return this;
   }
 
@@ -284,6 +274,9 @@ public class JactlFunction extends FunctionDescriptor {
     if (name == null) {
       throw new IllegalArgumentException("Missing name for function");
     }
+    if (this.type != null && !isStaticMethod && this.type.is(CLASS)) {
+      this.type = this.type.createInstanceType();
+    } 
     this.method               = Utils.findStaticMethod(implementingClass, implementingMethod);
     this.inlineMethod         = inlineMethodName == null ? null : Utils.findStaticMethod(implementingClass, inlineMethodName);
     Class<?>[] parameterTypes = method.getParameterTypes();
@@ -354,23 +347,13 @@ public class JactlFunction extends FunctionDescriptor {
       handle = handle.bindTo(this);
       wrapperHandle = JactlMethodHandle.createFuncHandle(handle, type, name, this);
 
+      // Create a synthetic class to hold the wrapper handle field
+      Class<?> wrapperClass = createWrapperClass();
+      
       // Store handle in static field we have been given
-      Field field = implementingClass.getDeclaredField(wrapperHandleField);
-      if (!Modifier.isStatic(field.getModifiers())) {
-        throw new IllegalArgumentException("Field " + wrapperHandleField + " in class " +
-                                           implementingClass.getName() + " must be static");
-
-      }
-      Object fieldValue = field.get(null);
-      if (fieldValue != null) {
-        if (!(fieldValue instanceof FunctionWrapperHandle)) {
-          throw new IllegalArgumentException("Field " + wrapperHandleField + " of " + implementingClassName + " already has a value");
-        }
-        FunctionDescriptor function = ((FunctionWrapperHandle) fieldValue).getFunction();
-        if (!isEquivalent(function)) {
-          throw new IllegalArgumentException("Function shares same implementing class and field name with existing function but is not equivalent: new=" + this + ", existing=" + function);
-        }
-      }
+      wrapperHandleClassName = Type.getInternalName(wrapperClass);
+      wrapperHandleField     = Utils.staticHandleName(name);
+      Field field = wrapperClass.getDeclaredField(wrapperHandleField);
       field.set(null, wrapperHandle);
     }
     catch (NoSuchFieldException | IllegalAccessException e) {
@@ -583,5 +566,26 @@ public class JactlFunction extends FunctionDescriptor {
              (!this.isMethod() || this.firstParamType().equals(function.firstParamType()));
     }
     return false;
+  }
+  
+  private static AtomicInteger classCounter = new AtomicInteger(0);
+  
+  private Class<?> createWrapperClass() {
+    String           packageName = context == null ? Utils.JACTL_PKG : context.javaPackage;
+    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'));
+    ClassVisitor     cv = cw.getClassVisitor();
+
+    String helperClassName    = Utils.JACTL_PREFIX + "Helper" + classCounter.getAndIncrement() + '$' + name;
+    String helperPkgClassName = Utils.pkgPathOf(packageName, helperClassName);
+    String internalName       = helperPkgClassName.replace('.', '/');
+    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, Type.getInternalName(Object.class), new String[0]);
+    cv.visitSource(helperClassName + ".java", null);
+
+    // Add MethodHandle fields
+    FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(name), Type.getDescriptor(JactlMethodHandle.class), null, null);
+    handleVar.visitEnd();
+    cv.visitEnd();
+    byte[] bytes = cw.toByteArray();
+    return JactlClassLoader.defineClass(helperPkgClassName, bytes);
   }
 }

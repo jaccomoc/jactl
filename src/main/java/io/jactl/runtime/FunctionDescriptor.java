@@ -54,7 +54,6 @@ public class FunctionDescriptor {
   public FunctionWrapperHandle wrapperHandle;             // Handle to wrapper: Object wrapper(Object, Continuation, String, int, Object[])
   public String                wrapperHandleClassName;    // Name of class that holds the wrapper handle field (internal form)
   public String                wrapperHandleField;        // Name of a static field in implementingClass that we can store MethodHandle in
-  public JactlType             wrapperHandleFieldType;    // Type of field: ANY (for user registered) or FUNCTION (if synthesised)
   public boolean               isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean               isBuiltin;
   public Boolean               isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false

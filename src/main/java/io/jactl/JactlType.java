@@ -769,7 +769,10 @@ public class JactlType extends JactlUserDataHolder {
         if (internalName != null) {
           return internalName;
         }
-        return getClassDescriptor().getInternalName();
+        if (getClassDescriptor() != null) {
+          return getClassDescriptor().getInternalName();
+        }
+        return null;
       default:
         throw new IllegalStateException("Unexpected value: " + this);
     }

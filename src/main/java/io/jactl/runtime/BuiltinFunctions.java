@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Reducer.Type.JOIN;
@@ -579,13 +578,11 @@ public class BuiltinFunctions {
 
   // = checkpoint
 
-  public static Object _checkpointData;
   public static Object _checkpoint(Continuation c, String source, int offset, Object data) {
     Continuation.checkpoint(source, offset, data);
     return data;
   }
 
-  public static Object checkpointData;
   public static Object checkpoint(Continuation c, String source, int offset, JactlMethodHandle commitClosure, JactlMethodHandle recoveryClosure) {
     int location = c == null ? 0 : c.methodLocation;
     try {
@@ -622,20 +619,17 @@ public class BuiltinFunctions {
 
   // = uuid
 
-  public static Object uuidData;
   public static String uuid() {
     return RuntimeUtils.randomUUID().toString();
   }
 
   // = random
 
-  public static Object randomData;
   public static long random(long bound) {
     return ThreadLocalRandom.current().nextLong(bound);
   }
 
   // = sleep
-  public static Object sleepData;
   public static Object sleep(Continuation c, String source, int offset, long timeMs, Object data) {
     if (timeMs >= 0) {
       Continuation.suspendNonBlocking(source, offset, data, (context, dataObj, resumer) -> {
@@ -646,15 +640,12 @@ public class BuiltinFunctions {
   }
 
   // = timestamp
-  public static Object timestampData;
   public static long timestamp() { return System.currentTimeMillis(); }
 
   // = nanoTime
-  public static Object nanoTimeData;
   public static long nanoTime() { return System.nanoTime(); }
 
   // = sprintf
-  public static Object sprintfData;
   public static String sprintf(String source, int offset, String format, Object... args) {
     try {
       return String.format(format, args);
@@ -665,7 +656,6 @@ public class BuiltinFunctions {
   }
 
   // = nextLine()
-  public static Object nextLineData;
   public static String nextLine(Continuation c, String source, int offset) {
     BufferedReader input = RuntimeState.getState().getInput();
     if (input == null) {
@@ -695,7 +685,6 @@ public class BuiltinFunctions {
   }
 
   // = stream
-  public static Object streamData;
   public static JactlIterator stream(Continuation c, String source, int offset, JactlMethodHandle closure) {
     return new StreamIterator(source, offset, closure);
   }
@@ -705,25 +694,17 @@ public class BuiltinFunctions {
   /////////////////////////////////////
 
   // = abs
-  public static Object byteAbsData;
   public static byte byteAbs(byte n)                { return n; }   // All byte values treated as 0-255
-  public static Object intAbsData;
   public static int intAbs(int n)                   { return n < 0 ? -n : n; }
-  public static Object longAbsData;
   public static long longAbs(long n)                { return n < 0 ? -n : n; }
-  public static Object doubleAbsData;
   public static double doubleAbs(double n)          { return n < 0 ? -n : n; }
-  public static Object decimalAbsData;
   public static BigDecimal decimalAbs(BigDecimal n) { return n.abs(); }
 
   // = asChar
-  public static Object intAsCharData;
   public static String intAsChar(int c) { return String.valueOf((char)c); }
-  public static Object byteAsCharData;
   public static String byteAsChar(byte c) { return String.valueOf((char)c); }
 
   // = toBase
-  public static Object longToBaseData;
   public static String longToBase(long num, String source, int offset, int base) {
     if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
       throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
@@ -731,7 +712,6 @@ public class BuiltinFunctions {
     return Long.toUnsignedString(num, base).toUpperCase();
   }
 
-  public static Object intToBaseData;
   public static String intToBase(int num, String source, int offset, int base) {
     if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
       throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
@@ -739,7 +719,6 @@ public class BuiltinFunctions {
     return Integer.toUnsignedString(num, base).toUpperCase();
   }
 
-  public static Object byteToBaseData;
   public static String byteToBase(byte num, String source, int offset, int base) {
     if (base < Character.MIN_RADIX || base > Character.MAX_RADIX) {
       throw new RuntimeError("Base must be between " + Character.MIN_RADIX + " and " + Character.MAX_RADIX, source, offset);
@@ -748,7 +727,6 @@ public class BuiltinFunctions {
   }
 
   // = sqrt
-  public static Object numberSqrtData;
   public static Object numberSqrt(Number num, String source, int offset) {
     if (num instanceof Byte) {
       num = ((int)(byte)num) & 0xff;
@@ -777,19 +755,13 @@ public class BuiltinFunctions {
   }
 
   // = sqr
-  public static Object byteSqrData;
   public static int byteSqr(byte num, String source, int offset) { int n = num < 0 ? num + 256 : num; return n * n; }
-  public static Object intSqrData;
   public static int intSqr(int num, String source, int offset) { return num * num; }
-  public static Object longSqrData;
   public static long longSqr(long num, String source, int offset) { return num * num; }
-  public static Object doubleSqrData;
   public static double doubleSqr(double num, String source, int offset) { return num * num; }
-  public static Object decimalSqrData;
   public static BigDecimal decimalSqr(BigDecimal num, String source, int offset) { return num.pow(2); }
 
   // = pow
-  public static Object numberPowData;
   public static Object numberPow(Number num, String source, int offset, Number power) {
     if (num instanceof Byte) { num = ((int)(byte)num) & 0xff; }
     if (power instanceof Byte) { power = ((int)(byte)power) & 0xff; }
@@ -830,12 +802,10 @@ public class BuiltinFunctions {
 
   // = toString
 
-  public static Object objectToStringData;
   public static String objectToString(Object obj, int indent) { return RuntimeUtils.toString(obj, indent); }
 
   // = className
 
-  public static Object objectClassNameData;
   public static String objectClassName(Object obj) { return RuntimeUtils.className(obj); }
   public static void objectClassNameInline(MethodVisitor mv) {
     mv.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/RuntimeUtils", "className", "(Ljava/lang/Object;)Ljava/lang/String;", false);
@@ -843,12 +813,10 @@ public class BuiltinFunctions {
 
   // = remove
 
-  public static Object mapRemoveData;
   public static Object mapRemove(Map map, String field) {
     return map.remove(field);
   }
 
-  public static Object listRemoveData;
   public static Object listRemove(List list, String source, int offset, int index) {
     if (index < 0) {
       index += list.size();
@@ -864,7 +832,6 @@ public class BuiltinFunctions {
 
   // = add
 
-  public static Object listAddData;
   public static List listAdd(List list, Object elem) {
     list.add(elem);
     return list;
@@ -872,7 +839,6 @@ public class BuiltinFunctions {
 
   // = addAt
 
-  public static Object listAddAtData;
   public static List listAddAt(List list, String source, int offset, int index, Object elem) {
     if (index < 0) {
       index += list.size();
@@ -890,14 +856,12 @@ public class BuiltinFunctions {
 
   // = get
 
-  public static Object mapGetData;
   public static Object mapGet(Map map, Object field) {
     return map.get(field);
   }
 
   // = put
 
-  public static Object mapPutData;
   public static Map mapPut(Map map, Object key, Object value) {
     map.put(key, value);
     return map;
@@ -905,7 +869,6 @@ public class BuiltinFunctions {
 
   // = putAll
 
-  public static Object mapPutAllData;
   public static Map mapPutAll(Map map, Map values) {
     map.putAll(values);
     return map;
@@ -913,15 +876,12 @@ public class BuiltinFunctions {
 
   // = size
 
-  public static Object mapSizeData;
   public static int mapSize(Map map) { return map.size(); }
 
-  public static Object listSizeData;
   public static int listSize(List list) {
     return list.size();
   }
 
-  public static Object iteratorSizeData;
   public static int iteratorSize(Object iterable, Continuation c) {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
@@ -940,7 +900,6 @@ public class BuiltinFunctions {
   ////////////////////////////////
 
   // = sublist
-  public static Object listSubListData;
   public static List listSubList(List list, String source, int offset, int start, int end) {
     try {
       if (end == Integer.MAX_VALUE) {
@@ -959,7 +918,6 @@ public class BuiltinFunctions {
     }
   }
 
-  public static Object iteratorSubListData;
   public static List iteratorSubList(Object iterable, Continuation c, String source, int offset, int start, int end) {
     source = c == null ? source : (String)c.localObjects[1];
     offset = c == null ? offset : (int)c.localPrimitives[0];
@@ -984,7 +942,6 @@ public class BuiltinFunctions {
 
   // = filter
 
-  public static Object iteratorFilterData;
   public static JactlIterator iteratorFilter(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new FilterIterator(iter, source, offset, closure);
@@ -994,7 +951,6 @@ public class BuiltinFunctions {
 
   // = reverse
 
-  public static Object iteratorReverseData;
   public static List iteratorReverse(Object iterable, Continuation c) {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
@@ -1019,7 +975,6 @@ public class BuiltinFunctions {
 
   // = unique
 
-  public static Object iteratorUniqueData;
   public static JactlIterator iteratorUnique(Object iterable, Continuation c, String source, int offset) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new UniqueIterator(iter, source, offset);
@@ -1029,7 +984,6 @@ public class BuiltinFunctions {
 
   // = skip
 
-  public static Object iteratorSkipData;
   public static JactlIterator iteratorSkip(Object iterable, Continuation c, String source, int offset, int count) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (count >= 0) {
@@ -1049,7 +1003,6 @@ public class BuiltinFunctions {
 
   // = limit
 
-  public static Object iteratorLimitData;
   public static JactlIterator iteratorLimit(Object iterable, Continuation c, String source, int offset, int limit) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (limit >= 0) {
@@ -1062,7 +1015,6 @@ public class BuiltinFunctions {
 
   // = grouped
 
-  public static Object iteratorGroupedData;
   public static JactlIterator iteratorGrouped(Object iterable, Continuation c, String source, int offset, int size) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (size == 0) {
@@ -1078,7 +1030,6 @@ public class BuiltinFunctions {
 
   // = windowSliding
 
-  public static Object iteratorWindowSlidingData;
   public static JactlIterator iteratorWindowSliding(Object iterable, Continuation c, String source, int offset, int size) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     if (size == 0) {
@@ -1094,7 +1045,6 @@ public class BuiltinFunctions {
 
   // = map
 
-  public static Object iteratorMapData;
   public static JactlIterator iteratorMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure);
@@ -1104,7 +1054,6 @@ public class BuiltinFunctions {
 
   // = mapWithIndex
 
-  public static Object iteratorMapWithIndexData;
   public static JactlIterator iteratorMapWithIndex(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new MapIterator(iter, source, offset, closure, true);
@@ -1114,7 +1063,6 @@ public class BuiltinFunctions {
 
   // = flatMap
 
-  public static Object iteratorFlatMapData;
   public static JactlIterator iteratorFlatMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
     return new FlatMapIterator(iter, source, offset, closure);
@@ -1124,7 +1072,6 @@ public class BuiltinFunctions {
 
   // = each
 
-  public static Object iteratorEachData;
   public static Object iteratorEach(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return doIteratorEach(RuntimeUtils.createIterator(iterable), source, offset, closure, null);
   }
@@ -1193,7 +1140,6 @@ public class BuiltinFunctions {
 
   // = collect
 
-  public static Object iteratorCollectData;
   public static Object iteratorCollect(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return doIteratorCollect(RuntimeUtils.createIterator(iterable), new ArrayList(), false, source, offset, closure, null);
   }
@@ -1276,7 +1222,6 @@ public class BuiltinFunctions {
 
   // = reduce
 
-  public static Object iteratorReduceData;
   public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, JactlMethodHandle closure) {
     return new Reducer(Reducer.Type.REDUCE, RuntimeUtils.createIterator(iterable), source, offset, initialValue, closure).reduce(null);
   }
@@ -1285,7 +1230,6 @@ public class BuiltinFunctions {
 
   // = join
 
-  public static Object iteratorJoinData;
   public static String iteratorJoin(Object iterable, Continuation c, String source, int offset, String joinStr) {
     return (String)new Reducer(JOIN, RuntimeUtils.createIterator(iterable), source, offset, joinStr, null).reduce(null);
   }
@@ -1294,21 +1238,18 @@ public class BuiltinFunctions {
 
   // = allMatches
 
-  public static Object iteratorAllMatchData;
   public static boolean iteratorAllMatch(Object iterable, Continuation c, String source, int offset, JactlMethodHandle predicate) {
     return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.ALL).matching(c);
   }
 
   // = anyMatches
 
-  public static Object iteratorAnyMatchData;
   public static boolean iteratorAnyMatch(Object iterable, Continuation c, String source, int offset, JactlMethodHandle predicate) {
     return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.ANY).matching(c);
   }
 
   // = noneMatches
 
-  public static Object iteratorNoneMatchData;
   public static boolean iteratorNoneMatch(Object iterable, Continuation c, String source, int offset, JactlMethodHandle predicate) {
     return new MatchCounter(RuntimeUtils.createIterator(iterable), source, offset, predicate, MatchCounter.MatchType.NONE).matching(c);
   }
@@ -1317,7 +1258,6 @@ public class BuiltinFunctions {
 
   // = avg
 
-  public static Object listAvgData;
   public static Object listAvg(List list, String source, int offset) {
     int size = list.size();
     if (size == 0) {
@@ -1329,14 +1269,12 @@ public class BuiltinFunctions {
     return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(size), Utils.DEFAULT_MIN_SCALE, source, offset);
   }
 
-  public static Object iteratorAvgData;
   public static Object iteratorAvg(Object iterable, Continuation c, String source, int offset) {
     return new Reducer(Reducer.Type.AVG, RuntimeUtils.createIterator(iterable), source, offset, BigDecimal.ZERO, null).reduce(null);
   }
 
   // = sum
 
-  public static Object listSumData;
   public static Object listSum(List list, String source, int offset) {
     Object sum = 0;
     int size = list.size();
@@ -1346,14 +1284,12 @@ public class BuiltinFunctions {
     return sum;
   }
 
-  public static Object iteratorSumData;
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
     return new Reducer(Reducer.Type.SUM, RuntimeUtils.createIterator(iterable), source, offset, 0, null).reduce(null);
   }
 
   // = min/max
 
-  public static Object listMinData;
   public static Object listMin(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
     if (closure != null) {
       return iteratorMin(list, c, source, offset, closure);
@@ -1369,7 +1305,6 @@ public class BuiltinFunctions {
     return min;
   }
 
-  public static Object listMaxData;
   public static Object listMax(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
     if (closure != null) {
       return iteratorMax(list, c, source, offset, closure);
@@ -1385,33 +1320,28 @@ public class BuiltinFunctions {
     return max;
   }
 
-  public static Object iteratorMinData;
   public static Object iteratorMin(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return new Reducer(Reducer.Type.MIN, RuntimeUtils.createIterator(iterable), source, offset, null, closure).reduce(null);
   }
 
-  public static Object iteratorMaxData;
   public static Object iteratorMax(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return new Reducer(Reducer.Type.MAX, RuntimeUtils.createIterator(iterable), source, offset, null, closure).reduce(null);
   }
 
   // = groupBy
 
-  public static Object iteratorGroupByData;
   public static Map iteratorGroupBy(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return (Map)new Reducer(Reducer.Type.GROUP_BY, RuntimeUtils.createIterator(iterable), source, offset, new LinkedHashMap<>(), closure).reduce(null);
   }
 
   // = transpose
 
-  public static Object listTransposeData;
   public static JactlIterator listTranspose(List inputs, Continuation c, String source, int offset) {
     return new TranposeIterator(inputs, source, offset);
   }
 
   // = transpose
 
-  public static Object iteratorTransposeData;
   public static List iteratorTranspose(Object iterable, Continuation c, String source, int offset) {
     return (List)new Reducer(Reducer.Type.TRANSPOSE, RuntimeUtils.createIterator(iterable), source, offset, new ArrayList(), null).reduce(null);
   }
@@ -1420,7 +1350,6 @@ public class BuiltinFunctions {
 
   // = collectEntries
 
-  public static Object iteratorCollectEntriesData;
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     return doIteratorCollect(RuntimeUtils.createIterator(iterable), new HashMap(), true, source, offset, closure, null);
   }
@@ -1436,7 +1365,6 @@ public class BuiltinFunctions {
     return iteratorSort(c.localObjects[0], c, (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2]);
   }
 
-  public static Object iteratorSortData;
   public static List iteratorSort(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     List result = null;
     int location = c == null ? 0 : c.methodLocation;
@@ -1598,17 +1526,14 @@ public class BuiltinFunctions {
   //// String methods
 
   // = lines
-  public static Object stringLinesData;
   public static JactlIterator stringLines(String str) {
     return JactlIterator.of(RuntimeUtils.lines(str));
   }
 
   // = length
-  public static Object stringLengthData;
   public static int stringLength(String str) { return str.length();  }
 
   // = toLowerCase
-  public static Object stringToLowerCaseData;
   public static String stringToLowerCase(String str, int length) {
     if (length < 0) {
       // Allow offset from end of string
@@ -1624,7 +1549,6 @@ public class BuiltinFunctions {
   }
 
   // = toUpperCase
-  public static Object stringToUpperCaseData;
   public static String stringToUpperCase(String str, int length) {
     if (length < 0) {
       // Allow offset from end of string
@@ -1640,7 +1564,6 @@ public class BuiltinFunctions {
   }
 
   // = substring
-  public static Object stringSubstringData;
   public static String stringSubstring(String str, String source, int offset, int start, int end) {
     try {
       if (start < 0) {
@@ -1660,7 +1583,6 @@ public class BuiltinFunctions {
   }
 
   // = asNum
-  public static Object stringAsNumData;
   public static long stringAsNum(String str, String source, int offset, int base) {
     if (base < Character.MIN_RADIX) { throw new RuntimeError("Base was " + base + " but must be at least " + Character.MIN_RADIX, source, offset); }
     if (base > Character.MAX_RADIX) { throw new RuntimeError("Base was " + base + " but must be no more than " + Character.MAX_RADIX, source, offset); }
@@ -1674,7 +1596,6 @@ public class BuiltinFunctions {
   }
 
   // = split
-  public static Object stringSplitData;
   public static JactlIterator stringSplit(String str, String source, int offset, String regex, String modifiers) {
     if (regex == null)   { return JactlIterator.of(str); }
     if (regex.isEmpty()) { return JactlIterator.stringIterator(str); }

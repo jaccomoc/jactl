@@ -1596,14 +1596,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       popVal();
     }
     String handleName = method.isBuiltin ? method.wrapperHandleField : Utils.staticHandleName(Utils.wrapperName(method.name));
-    if (method.isBuiltin) {
-      // Field for builtins is of type Object
-      loadClassField(method.getWrapperHandleClassName(), handleName, ANY, true);
-      checkCast(FUNCTION);
-    }
-    else {
-      loadClassField(method.getWrapperHandleClassName(), handleName, FUNCTION, true);
-    }
+    loadClassField(method.getWrapperHandleClassName(), handleName, FUNCTION, true);
     // If not static then bind to instance
     if (!method.isStaticMethod && (method.isBuiltin || !method.isStaticImplementation)) {
       swap();
@@ -2051,8 +2044,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              box();
                            }
                            if (method.isBuiltin) {
-                             loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, method.wrapperHandleFieldType, true);
-                             checkCast(FUNCTION);
+                             loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, FUNCTION, true);
                              if (!method.isGlobalFunction && method.isInstanceMethod()) {
                                // Is "method" so bind to parent object
                                swap();
@@ -4313,8 +4305,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
                        () -> {
-                         loadClassField(func.getWrapperHandleClassName(), func.wrapperHandleField, ANY, true);
-                         checkCast(FUNCTION);
+                         loadClassField(func.getWrapperHandleClassName(), func.wrapperHandleField, FUNCTION, true);
                          loadNullContinuation();         // Continuation
                          loadLocation(expr.location);
                          loadArgsAsObjectArr(expr.args);
