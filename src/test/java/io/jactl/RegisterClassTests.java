@@ -245,5 +245,4 @@ public class RegisterClassTests extends BaseTest {
   public static int testLocalDateMethod(MyLocalDate4 localDate) {
     return 3;
   }
-  public static Object testLocalDateMethodData;
 }

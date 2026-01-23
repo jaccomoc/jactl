@@ -87,27 +87,12 @@ public class BuiltinArrayFunctions {
     mv.visitInsn(ARRAYLENGTH);
   }
 
-  public static Object booleanArrSizeData;
   public static int booleanArrSize(boolean[] arr) { return arr.length; }
-
-  public static Object byteArrSizeData;
   public static int byteArrSize(byte[] arr) { return arr.length; }
-
-  public static Object intArrSizeData;
   public static int intArrSize(int[] arr) { return arr.length; }
-
-  public static Object longArrSizeData;
   public static int longArrSize(long[] arr) { return arr.length; }
-
-  public static Object doubleArrSizeData;
   public static int doubleArrSize(double[] arr) { return arr.length; }
-
-  public static Object decimalArrSizeData;
   public static int decimalArrSize(BigDecimal[] arr) { return arr.length; }
-
-  public static Object stringArrSizeData;
   public static int stringArrSize(String[] arr) { return arr.length; }
-
-  public static Object objectArrSizeData;
   public static int objectArrSize(Object[] arr) { return arr.length; }
 }

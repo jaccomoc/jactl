@@ -142,12 +142,9 @@ public class ExampleTests {
       Jactl.deregister(JactlType.STRING, "base64Decode");
     }
 
-    public static Object base64EncodeData;
     public static String base64Encode(byte[] data) {
       return new String(Base64.getEncoder().encode(data));
     }
-
-    public static Object base64DecodeData;
     public static byte[] base64Decode(String data) {
       return Base64.getDecoder().decode(data);
     }

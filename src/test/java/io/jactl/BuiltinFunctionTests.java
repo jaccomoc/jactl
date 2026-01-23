@@ -2309,7 +2309,6 @@ public class BuiltinFunctionTests extends BaseTest {
     }
     finally {
       Jactl.deregister("testFunc");
-      testFuncData = null;
     }
   }
 
@@ -2359,7 +2358,6 @@ public class BuiltinFunctionTests extends BaseTest {
     }
     finally {
       Jactl.deregister("testFunc");
-      testFuncData = null;
     }
   }
 
@@ -2401,7 +2399,6 @@ public class BuiltinFunctionTests extends BaseTest {
     }
     finally {
       Jactl.deregister("testFunc");
-      testFuncData = null;
     }
   }
 
@@ -2413,7 +2410,6 @@ public class BuiltinFunctionTests extends BaseTest {
     }
     finally {
       Jactl.deregister("testFunc");
-      testFuncData = null;
     }
   }
 
@@ -2497,37 +2493,30 @@ public class BuiltinFunctionTests extends BaseTest {
       Jactl.deregister("varArgsFuncAsync");
       Jactl.deregister("varArgsMethod");
       Jactl.deregister("varArgsMethodAsync");
-      testFuncData = null;
     }
   }
 
   public static int testFunc(Continuation c, int val) {
     return val * val;
   }
-  public static Object testFuncData;
 
   public static int testMethod(int obj, Continuation c, int val) {
     return obj * val;
   }
-  public static Object testMethodData;
 
   public static String varArgsFunc(String s, int i, Object... vargs) {
     return s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
   }
-  public static Object varArgsFuncData;
 
   public static String varArgsFuncAsync(Continuation c, String source, int offset, String s, int i, Object... vargs) {
     return s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
   }
-  public static Object varArgsFuncAsyncData;
 
   public static String varArgsMethod(Object obj, String s, int i, Object... vargs) {
     return obj.toString() + s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
   }
-  public static Object varArgsMethodData;
 
   public static String varArgsMethodAsync(Object obj, Continuation c, String source, int offset, String s, int i, Object... vargs) {
     return obj.toString() + s + i + Arrays.stream(vargs).map(Object::toString).collect(Collectors.joining(":"));
   }
-  public static Object varArgsMethodAsyncData;
 }
