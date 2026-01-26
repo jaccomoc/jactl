@@ -48,7 +48,13 @@ public class RegisteredClasses {
   }
 
   public ClassDescriptor getClassDescriptor(Class<?> javaClass) {
-    return registeredClassesByJavaName.get(javaClass.getName());
+    for (; javaClass != null; javaClass = javaClass.getSuperclass()) {
+      ClassDescriptor descriptor = registeredClassesByJavaName.get(javaClass.getName());
+      if (descriptor != null) {
+        return descriptor;
+      }
+    }
+    return null;
   }
 
   public ClassDescriptor getClassDescriptorByInternalJavaName(String internalJavaName) {
@@ -95,8 +101,23 @@ public class RegisteredClasses {
     }
   }
   
+  public Class<?> getRegisteredClass(Class<?> javaClass) {
+    for (Class<?> clss = javaClass; clss != null; clss = clss.getSuperclass()) {
+      if (registeredClassesByJavaName.containsKey(clss.getName())) {
+        return clss;
+      }
+    }
+    throw new IllegalStateException("Cannot find class " + javaClass.getName() + " as a registered Jactl type");
+  }
+  
   public BiConsumer<Checkpointer,Object> getCheckpointer(Class<?> javaClass) {
-    return checkpointers.get(javaClass);
+    for (; javaClass != null; javaClass = javaClass.getSuperclass()) {
+      BiConsumer<Checkpointer, Object> checkPointer = checkpointers.get(javaClass);
+      if (checkPointer != null) {
+        return checkPointer;
+      }
+    }
+    return null;
   }
   
   void registerCheckpointer(Class<?> javaClass, BiConsumer<Checkpointer,Object> checkpointer) {

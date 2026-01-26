@@ -2570,6 +2570,9 @@ public class RuntimeUtils {
       }
     }
     JactlContext context = RuntimeState.getState().getContext();
+    if (context == null) {
+      return obj.getClass().getName();
+    }
     ClassDescriptor desc = context.getRegisteredClasses().getClassDescriptor(obj.getClass());
     if (desc != null) {
       return desc.getClassName();

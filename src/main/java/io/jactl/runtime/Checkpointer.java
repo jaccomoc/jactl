@@ -158,12 +158,13 @@ public class Checkpointer {
     else if (obj instanceof StringBuffer)   { writeStringBuffer((StringBuffer)obj); }
     else if (obj instanceof Class)          { writeClass((Class)obj);   }
     else {
-      BiConsumer<Checkpointer,Object> checkpointFn = context.getRegisteredClasses().getCheckpointer(obj.getClass());
+      Class<?>                        objClass     = obj.getClass();
+      BiConsumer<Checkpointer,Object> checkpointFn = context.getRegisteredClasses().getCheckpointer(objClass);
       if (checkpointFn == null) {
         throw new RuntimeError("Cannot checkpoint: could not locate a registered checkpoint function for " + RuntimeUtils.className(obj), source, offset);
       }
       writeTypeEnum(INSTANCE.getType());
-      writeObject(Type.getInternalName(obj.getClass()));
+      writeObject(Type.getInternalName(context.getRegisteredClasses().getRegisteredClass(objClass)));
       checkpointFn.accept(this, obj);
     }
   }
