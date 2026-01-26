@@ -29,12 +29,12 @@ public class RegisteredClasses {
   // static
   public static final RegisteredClasses INSTANCE = new RegisteredClasses(); 
   
-  private Map<String,Class<?>>                  classByInternalJavaName      = new HashMap<>();  // name in '/' form
-  private Map<String,ClassDescriptor>           registeredClassesByJavaName  = new HashMap<>();  // name in '.' form
-  private Map<String,ClassDescriptor>           registeredClassesByInternalJavaName  = new HashMap<>();  // name in '/' form
-  private Map<String,ClassDescriptor>           registeredClassesByJactlName = new HashMap<>();  // name in '.' form
-  private Set<String>                           registeredJactlPackages      = new HashSet<>();  // name in '.' form
-  private Map<String,ClassDescriptor>           autoImportedClasses          = new HashMap<>();  // Jactl class name (no pkg)
+  private Map<String,Class<?>>        classByInternalJavaName             = new HashMap<>();  // name in '/' form
+  private Map<String,ClassDescriptor> registeredClassesByJavaName         = new HashMap<>();  // name in '.' form
+  private Map<String,ClassDescriptor> registeredClassesByInternalJavaName = new HashMap<>();  // name in '/' form
+  private Map<String,ClassDescriptor> registeredClassesByJactlName        = new HashMap<>();  // name in '.' form
+  private Set<String>                 registeredJactlPackages             = new HashSet<>();  // name in '.' form
+  private Map<String,ClassDescriptor> autoImportedClasses                 = new HashMap<>();  // Jactl class name (no pkg)
   
   private Map<Class<?>, BiConsumer<Checkpointer,Object>> checkpointers = new HashMap<>();
   private Map<Class<?>, Function<Restorer,Object>>       restorers     = new HashMap<>();

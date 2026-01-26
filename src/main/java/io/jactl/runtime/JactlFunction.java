@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.CLASS;
+import static io.jactl.JactlType.INSTANCE;
 import static org.objectweb.asm.Opcodes.*;
 
 /**
@@ -123,6 +124,9 @@ public class JactlFunction extends FunctionDescriptor {
    */
   public void register() {
     init();
+    if (type != null && type.is(CLASS,INSTANCE)) {
+      type.getClassDescriptor().addMethod(name, this);
+    }
     if (context != null) {
       context.getFunctions().registerFunction(this);
       return;

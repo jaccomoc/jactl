@@ -1170,12 +1170,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       compile(expr.left);
-      if (expr.left.type.is(INSTANCE, CLASS)) {
+      JactlType leftType = expr.left.type;
+      if (leftType.is(INSTANCE, CLASS)) {
         if (expr.right instanceof Expr.Literal) {
           // We know the type so get the field/method directly.
           // Note: we know that Resolver has already checked for valid field/method name.
           String          name = literalString(expr.right);
-          ClassDescriptor clss = expr.left.type.getClassDescriptor();
+          ClassDescriptor clss = leftType.getClassDescriptor();
 
           // Check for inner class
           ClassDescriptor innerClass = clss.getInnerClass(name);
@@ -1197,9 +1198,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             FunctionDescriptor method = clss.getMethod(name);
             if (method == null) {
               // Look for builtin method
-              method = classCompiler.context.getFunctions().lookupMethod(clss.getInstanceType(), name);
+              method = classCompiler.context.getFunctions().lookupMethod(leftType.is(CLASS) ? leftType : clss.getInstanceType(), name);
             }
-            check(method != null, "could not find method or field called " + name + " for " + expr.left.type);
+            check(method != null, "could not find method or field called " + name + " for " + leftType);
             // We want the handle to the wrapper method.
             loadWrapperHandle(method, expr);
           }
@@ -1207,9 +1208,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
 
         // Can't determine method/field at compile time so fall through to runtime lookup
-        if (expr.left.type.is(CLASS)) {
+        if (leftType.is(CLASS)) {
           // Need to tell runtime what class it is so load class onto stack
-          loadConst(expr.left.type);
+          loadConst(leftType);
         }
       }
 
