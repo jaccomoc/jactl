@@ -1893,14 +1893,19 @@ public class RuntimeUtils {
         throw new RuntimeError("Negative index (" + originalIndex + ") out of range (list size is " + parent.size() + ")", source, offset);
       }
     }
-    if (index >= parent.size()) {
-      // Grow list to required size
-      for (int i = parent.size(); i < index + 1; i++) {
-        parent.add(null);
+    try {
+      if (index >= parent.size()) {
+        // Grow list to required size
+        for (int i = parent.size(); i < index + 1; i++) {
+          parent.add(null);
+        }
       }
+      parent.set(index, value);
+      return value;
     }
-    parent.set(index, value);
-    return value;
+    catch (UnsupportedOperationException e) {
+      throw new RuntimeError("Attempt to modify an unmodifiable list", source, offset);
+    }
   }
 
   private static Object storeInstanceField(Object parent, Object field, Object value, boolean captureStackTrace, String source, int offset) {

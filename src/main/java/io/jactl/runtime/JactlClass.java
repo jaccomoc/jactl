@@ -38,6 +38,7 @@ import static org.objectweb.asm.Opcodes.*;
 public class JactlClass {
 
   private String       jactlClassName;
+  private String       baseClassName;
   private String       jactlPackage;                       // name of Jactl package for class
   private Class        javaClass;
   private boolean      autoImport;                         // whether scripts automatically import this class by default
@@ -74,6 +75,16 @@ public class JactlClass {
     return this;
   }
 
+  /**
+   * Specify the name of Jactl class that is base class for this class (if one exists).
+   * @param jactlClass  the name of the Jactl class that this class extends
+   * @return the JactlClass instance
+   */
+  public JactlClass baseClass(String jactlClass) {
+    this.baseClassName = jactlClass;
+    return this;
+  }
+  
   /**
    * Whether class should be automatically imported when compiling Jactl classes/scripts
    * @param flag  true if class is auto-imported
@@ -196,12 +207,20 @@ public class JactlClass {
   /**
    * Register the class with the Jactl ecosystem.
    * @return the JactlClass instance
+   * @throws IllegalStateException if a problem occurs during the registration of the class
    */
   public JactlType register()  {
     // We need to build a ClassDescriptor and register it. We do this by using reflection to find all the
     // methods and add them to the ClassDescriptor.
     String          jactlClass      = Utils.pkgPathOf(jactlPackage, jactlClassName);
     ClassDescriptor classDescriptor = getRegisteredClasses().getOrCreateClassDescriptor(jactlClass, javaClass.getName());
+    if (baseClassName != null) {
+      ClassDescriptor baseClassDescriptor = getRegisteredClasses().getClassDescriptor(baseClassName);
+      if (baseClassDescriptor == null) {
+        throw new IllegalStateException("Unknown Jactl class " + baseClassName + " for base class");
+      }
+      classDescriptor.baseClass = baseClassDescriptor.getClassType();
+    }
     getRegisteredClasses().registerClassByJavaName(Type.getInternalName(javaClass), javaClass);
     JactlType       classType       = JactlType.createClass(classDescriptor);
     String          helperClassName = Utils.pkgPathOf(Utils.JACTL_PKG, jactlPackage, Utils.JACTL_PREFIX + jactlClassName + "Helper");
@@ -214,7 +233,7 @@ public class JactlClass {
         JactlFunction m2 = Jactl.method(classType)
                                 .name(m.name);
         m.paramNames.forEach(m2::param);
-        m2.impl(helperClass, m.name, wrapperHandleField)
+        m2._impl(helperClass, m.name, wrapperHandleField)
           .isStatic(Modifier.isStatic(m.method.getModifiers()));
         m2.init();
         funcDesc = m2;

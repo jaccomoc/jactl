@@ -230,6 +230,10 @@ public class JactlFunction extends FunctionDescriptor {
    * @deprecated 
    */
   public JactlFunction impl(Class clss, String methodName, String fieldName) {
+    return _impl(clss, methodName, fieldName);
+  }
+  
+  JactlFunction _impl(Class clss, String methodName, String fieldName) {
     this.implementingClass      = clss;
     this.implementingClassName  = Type.getInternalName(clss);
     this.implementingMethod     = methodName;
