@@ -541,7 +541,7 @@ public class BuiltinFunctions {
            .register();
 
       BuiltinArrayFunctions.registerFunctions();
-      //DateTimeClasses.register();
+      DateTimeClasses.register();
     }
   }
 
@@ -827,13 +827,23 @@ public class BuiltinFunctions {
     if (index >= list.size()) {
       throw new RuntimeError("Index out of bounds:  (" + index + " is too large)", source, offset);
     }
-    return list.remove(index);
+    try {
+      return list.remove(index);
+    }
+    catch (UnsupportedOperationException e) {
+      throw new RuntimeError("Attempt to modify an unmodifiable list", source, offset);
+    }
   }
 
   // = add
 
-  public static List listAdd(List list, Object elem) {
-    list.add(elem);
+  public static List listAdd(List list, String source, int offset, Object elem) {
+    try {
+      list.add(elem);
+    }
+    catch (UnsupportedOperationException e) {
+      throw new RuntimeError("Attempt to modify an unmodifiable list", source, offset);
+    }
     return list;
   }
 
@@ -850,7 +860,12 @@ public class BuiltinFunctions {
     if (index > list.size()) {
       throw new RuntimeError("Index out of bounds: (" + index + " is too large)", source, offset);
     }
-    list.add(index, elem);
+    try {
+      list.add(index, elem);
+    }
+    catch (UnsupportedOperationException e) {
+      throw new RuntimeError("Attempt to modify an unmodifiable list", source, offset);
+    }
     return list;
   }
 

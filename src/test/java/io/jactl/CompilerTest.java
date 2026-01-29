@@ -6047,68 +6047,69 @@ class CompilerTest extends BaseTest {
   }
 
   BiConsumer<String,String> comparisonTests = (smaller, bigger) -> {
+    testCounter++;
     String init = "byte b2 = (byte)2; int i3=3; long l5=5L; double d7=7.0D; Decimal dec13=13.0; String sabc = 'abc';" +
                   "def db2 = (byte)2; def di3=3; def dl5=5L; def dd7=7.0D; def ddec13=13.0; def dsabc = 'abc';";
-    BiConsumer<String,Object> _test = (code,expected) -> test(init + code, expected);
+    BiConsumer<String,Object> runtest = (code,expected) -> _test(init + code, expected);
 
-    _test.accept("null == " + bigger, false);
-    _test.accept(bigger + " == null", false);
-    _test.accept("null == " + smaller, false);
-    _test.accept(smaller + " == null", false);
-    _test.accept(smaller + " == " + bigger, false);
-    _test.accept(smaller + " == " + smaller, true);
-    _test.accept(bigger + " == " + smaller, false);
-    _test.accept(bigger + " == " + bigger, true);
+    runtest.accept("null == " + bigger, false);
+    runtest.accept(bigger + " == null", false);
+    runtest.accept("null == " + smaller, false);
+    runtest.accept(smaller + " == null", false);
+    runtest.accept(smaller + " == " + bigger, false);
+    runtest.accept(smaller + " == " + smaller, true);
+    runtest.accept(bigger + " == " + smaller, false);
+    runtest.accept(bigger + " == " + bigger, true);
 
-    _test.accept("null != " + bigger, true);
-    _test.accept(bigger + " != null", true);
-    _test.accept("null != " + smaller, true);
-    _test.accept(smaller + " != null", true);
-    _test.accept(smaller + " != " + bigger, true);
-    _test.accept(smaller + " != " + smaller, false);
-    _test.accept(bigger + " != " + smaller, true);
-    _test.accept(bigger + " != " + bigger, false);
+    runtest.accept("null != " + bigger, true);
+    runtest.accept(bigger + " != null", true);
+    runtest.accept("null != " + smaller, true);
+    runtest.accept(smaller + " != null", true);
+    runtest.accept(smaller + " != " + bigger, true);
+    runtest.accept(smaller + " != " + smaller, false);
+    runtest.accept(bigger + " != " + smaller, true);
+    runtest.accept(bigger + " != " + bigger, false);
 
-    _test.accept("null < " + bigger, true);
-    _test.accept(bigger + " < null", false);
-    _test.accept("null < " + smaller, true);
-    _test.accept(smaller + " < null", false);
-    _test.accept(smaller + " < " + bigger, true);
-    _test.accept(smaller + " < " + smaller, false);
-    _test.accept(bigger + " < " + smaller, false);
-    _test.accept(bigger + " < " + bigger, false);
+    runtest.accept("null < " + bigger, true);
+    runtest.accept(bigger + " < null", false);
+    runtest.accept("null < " + smaller, true);
+    runtest.accept(smaller + " < null", false);
+    runtest.accept(smaller + " < " + bigger, true);
+    runtest.accept(smaller + " < " + smaller, false);
+    runtest.accept(bigger + " < " + smaller, false);
+    runtest.accept(bigger + " < " + bigger, false);
 
-    _test.accept("null <= " + bigger, true);
-    _test.accept(bigger + " <= null", false);
-    _test.accept("null <= " + smaller, true);
-    _test.accept(smaller + " <= null", false);
-    _test.accept(smaller + " <= " + bigger, true);
-    _test.accept(smaller + " <= " + smaller, true);
-    _test.accept(bigger + " <= " + smaller, false);
-    _test.accept(bigger + " <= " + bigger, true);
+    runtest.accept("null <= " + bigger, true);
+    runtest.accept(bigger + " <= null", false);
+    runtest.accept("null <= " + smaller, true);
+    runtest.accept(smaller + " <= null", false);
+    runtest.accept(smaller + " <= " + bigger, true);
+    runtest.accept(smaller + " <= " + smaller, true);
+    runtest.accept(bigger + " <= " + smaller, false);
+    runtest.accept(bigger + " <= " + bigger, true);
 
-    _test.accept("null > " + bigger, false);
-    _test.accept(bigger + " > null", true);
-    _test.accept("null > " + smaller, false);
-    _test.accept(smaller + " > null", true);
-    _test.accept(smaller + " > " + bigger, false);
-    _test.accept(smaller + " > " + smaller, false);
-    _test.accept(bigger + " > " + smaller, true);
-    _test.accept(bigger + " > " + bigger, false);
+    runtest.accept("null > " + bigger, false);
+    runtest.accept(bigger + " > null", true);
+    runtest.accept("null > " + smaller, false);
+    runtest.accept(smaller + " > null", true);
+    runtest.accept(smaller + " > " + bigger, false);
+    runtest.accept(smaller + " > " + smaller, false);
+    runtest.accept(bigger + " > " + smaller, true);
+    runtest.accept(bigger + " > " + bigger, false);
 
-    _test.accept("null >= " + bigger, false);
-    _test.accept(bigger + " >= null", true);
-    _test.accept("null >= " + smaller, false);
-    _test.accept(smaller + " >= null", true);
-    _test.accept(smaller + " >= " + bigger, false);
-    _test.accept(smaller + " >= " + smaller, true);
-    _test.accept(bigger + " >= " + smaller, true);
-    _test.accept(bigger + " >= " + bigger, true);
+    runtest.accept("null >= " + bigger, false);
+    runtest.accept(bigger + " >= null", true);
+    runtest.accept("null >= " + smaller, false);
+    runtest.accept(smaller + " >= null", true);
+    runtest.accept(smaller + " >= " + bigger, false);
+    runtest.accept(smaller + " >= " + smaller, true);
+    runtest.accept(bigger + " >= " + smaller, true);
+    runtest.accept(bigger + " >= " + bigger, true);
 
-    _test.accept(bigger + "<=>" + smaller, 1);
-    _test.accept(smaller + "<=>" + bigger, -1);
-    _test.accept(smaller + "<=>" + smaller, 0);
-    _test.accept(bigger + "<=>" + bigger, 0);
+    runtest.accept(bigger + "<=>" + smaller, 1);
+    runtest.accept(smaller + "<=>" + bigger, -1);
+    runtest.accept(smaller + "<=>" + smaller, 0);
+    runtest.accept(bigger + "<=>" + bigger, 0);
   };
 
   @Test public void constComparisons() {
@@ -7976,6 +7977,7 @@ class CompilerTest extends BaseTest {
   }
 
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
+    testCounter++;
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     doTest(Utils.listOf(), code, input, output, true, true, false, false, expectedResult);
     assertEquals(expectedOutput, output.toString());
@@ -8114,6 +8116,7 @@ class CompilerTest extends BaseTest {
     Map<String,Object> globals = createGlobals();
     globals.put("z", z);
     BiConsumer<String,Object> runtest = (code,expected) -> {
+      testCounter++;
       Object result = Compiler.eval(code, jactlContext, globals);
       assertEquals(expected, result);
     };
@@ -8189,6 +8192,7 @@ class CompilerTest extends BaseTest {
                                             .build();
 
     BiConsumer<String,String> test = (script,err) -> {
+      testCounter++;
       try {
         Jactl.eval(script, new HashMap(), jactlContext);
         fail("Expected TimeoutError");

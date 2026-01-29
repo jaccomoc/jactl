@@ -54,6 +54,7 @@ public class BaseTest {
   protected JactlEnv           jactlEnv;
 
   protected static int testCounter = 0;
+  protected static int testVariationCounter = 0;
 
   @BeforeEach
   public void setUp() {
@@ -112,7 +113,7 @@ public class BaseTest {
   }
 
   protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, boolean loopDetection) {
-    testCounter++;
+    testVariationCounter++;
     try {
       JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint, loopDetection);
 
@@ -154,7 +155,7 @@ public class BaseTest {
   }
 
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected, boolean loopDetection) {
-    testCounter++;
+    testVariationCounter++;
     try {
       int[] errors = {0};
       byte[][] savedCheckpoint = { null };
@@ -393,6 +394,11 @@ public class BaseTest {
   }
 
   protected void test(String code, Object expected) {
+    testCounter++;
+    _test(code, expected);
+  }
+  
+  protected void _test(String code, Object expected) {
     doTest(code, true, false, false, expected);
     if (!alwaysEvalConsts) {
       doTest(code, false, false, false, expected);
@@ -415,6 +421,7 @@ public class BaseTest {
   }
 
   protected void test(List<String> classCode, String scriptCode, Object expected) {
+    testCounter++;
     doTest(classCode, scriptCode, true, false, false, expected);
     if (!alwaysEvalConsts) {
       doTest(classCode, scriptCode, false, false, false, expected);
@@ -441,6 +448,7 @@ public class BaseTest {
   }
 
   protected void testError(List<String> classCode, String scriptCode, String expectedError) {
+    testCounter++;
     doTestError(classCode, scriptCode, true, false, expectedError);
     if (!alwaysEvalConsts) {
       doTestError(classCode, scriptCode, false, false, expectedError);
@@ -491,7 +499,7 @@ public class BaseTest {
   }
 
   protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
-    testCounter++;
+    testVariationCounter++;
     try {
       JactlContext jactlContext = JactlContext.create()
                                               .evaluateConstExprs(evalConsts)
@@ -546,12 +554,15 @@ public class BaseTest {
   @BeforeAll
   public static void initCounter() {
     testCounter = 0;
+    testVariationCounter = 0;
   }
 
   @AfterAll
   public static void displayCounter() {
     System.out.println("Total tests: " + testCounter);
+    System.out.println("Total test variations: " + testVariationCounter);
     testCounter = 0;
+    testVariationCounter = 0;
   }
 
 
