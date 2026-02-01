@@ -373,7 +373,7 @@ public class JactlClass {
     methodVisitor.visitLabel(label3);
     methodVisitor.visitTypeInsn(NEW, "io/jactl/runtime/RuntimeError");
     methodVisitor.visitInsn(DUP);
-    methodVisitor.visitLdcInsn("Unexpected error invoking method");
+    methodVisitor.visitLdcInsn("");
     methodVisitor.visitVarInsn(ALOAD, isStatic ? 0 : 1);    // source
     methodVisitor.visitVarInsn(ILOAD, isStatic ? 1 : 2);    // offset
     methodVisitor.visitVarInsn(ALOAD, exceptionSlot);
@@ -386,16 +386,17 @@ public class JactlClass {
   //////////////////////////////
 
   public static void main(String[] args) throws ClassNotFoundException {
-    if (args.length != 1) {
-      System.err.println("Usage: java -cp jactl.jar io.jactl.runtime.JactlClass <class-name>");
+    if (args.length != 2) {
+      System.err.println("Usage: java -cp jactl.jar io.jactl.runtime.JactlClass <jactl-class-name> <java-class-name>");
       System.exit(1);
     }
 
-    String className = args[0];
+    String jactlClassName = args[0];
+    String className = args[1];
     Class clss = JactlClassLoader.forName(className);
-    final Set<String> excludedMethods = new HashSet<>(Arrays.asList("compareTo", "readObject", "writeObject", "hashCode", "equals", "readExternal", "writeExternal"));
+    final Set<String> excludedMethods = new HashSet<>(Arrays.asList("compareTo", "readObject", "writeObject", "hashCode", "equals", "readExternal", "writeExternal", "toString"));
 
-    System.out.print("    Jactl.createClass(\"name.of.package.NameOfClass\")\n" +
+    System.out.print("    Jactl.createClass(\"" + jactlClassName + "\")\n" +
                      "         .javaClass(" + className + ".class)\n" +
                      "         .autoImport(true)\n" +
                      "         .mapType(ABC.class, XYZ.class)\n");

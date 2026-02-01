@@ -22,8 +22,15 @@ import org.junit.jupiter.api.Test;
 
 import java.time.*;
 
-import static org.junit.jupiter.api.Assertions.fail;
-
+/**
+ * Tests for LocalDate class.
+ * <p>
+ * NOTE: we are not testing the functionality since each method call directly
+ * invokes an already existing Java method which already have their own exhaustive
+ * tests. We are only testing that exposing of the methods we are intending to expose
+ * have atually been exposed and can be invoked in a Jactl script.
+ * </p>
+ */
 public class LocalDateTests extends BaseTest {
 
   @Test public void instanceOfTest() {
@@ -363,6 +370,8 @@ public class LocalDateTests extends BaseTest {
     test("LocalDate d = LocalDate.parseWithFormat(text:'2026/01/20',format:'yyyy/MM/dd'); d.isEqual(LocalDate.parse(text:'2026-01-20'))", true);
     test("LocalDate.parseWithFormat('2026/01/20','yyyy/MM/dd').isEqual(LocalDate.parse('2026-01-20'))", true);
     test("LocalDate.parseWithFormat('2026/01/20 12:11:10','yyyy/MM/dd HH:mm:ss').isEqual(LocalDate.parse('2026-01-20'))", true);
+    test("LocalDate.parseWithFormat(text:'2026/01/20 12:11:10',format:'yyyy/MM/dd HH:mm:ss').isEqual(LocalDate.parse('2026-01-20'))", true);
+    test("def f = LocalDate.parseWithFormat; f(text:'2026/01/20 12:11:10',format:'yyyy/MM/dd HH:mm:ss').isEqual(LocalDate.parse('2026-01-20'))", true);
     test("def f = LocalDate.parseWithFormat; f('2026/01/20 12:11:10','yyyy/MM/dd HH:mm:ss').isEqual(LocalDate.parse('2026-01-20'))", true);
     testError("def f = LocalDate.parseWithFormat; f('2026/01/20 12:11:10','ijklmyyyy/MM/dd HH:mm:ss').isEqual(LocalDate.parse('2026-01-20'))", "unknown pattern letter");
   }
@@ -370,9 +379,9 @@ public class LocalDateTests extends BaseTest {
   @Test public void format() {
     test("LocalDate d = LocalDate.parse('2026-01-21'); d.toString() == d.format('yyyy-MM-dd')", true);
     test("LocalDate d = LocalDate.parse('2026-01-21'); d.toString() == d.format('yyyy-MM-dd')", true);
-    test("LocalDate d = LocalDate.parse('2026-01-21'); d.toString() == d.format(pattern:'yyyy-MM-dd')", true);
+    test("LocalDate d = LocalDate.parse('2026-01-21'); d.toString() == d.format(format:'yyyy-MM-dd')", true);
     test("LocalDate d = LocalDate.parse('2026-01-21'); def f = d.format; d.toString() == f('yyyy-MM-dd')", true);
-    test("LocalDate d = LocalDate.parse('2026-01-21'); def f = d.format; d.toString() == f(pattern:'yyyy-MM-dd')", true);
+    test("LocalDate d = LocalDate.parse('2026-01-21'); def f = d.format; d.toString() == f(format:'yyyy-MM-dd')", true);
     testError("LocalDate d = LocalDate.parse('2026-01-21'); d.toString() == d.format('yxyziuy-MM-dd')", "unknown pattern letter");
   }
   
