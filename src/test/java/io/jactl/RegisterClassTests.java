@@ -27,8 +27,6 @@ import java.time.temporal.Temporal;
 import java.time.temporal.TemporalField;
 import java.time.temporal.TemporalUnit;
 
-import static org.junit.jupiter.api.Assertions.fail;
-
 public class RegisterClassTests extends BaseTest {
 
   public static class MyLocalDate1 implements ChronoLocalDate {
@@ -70,7 +68,7 @@ public class RegisterClassTests extends BaseTest {
          })
          .restore(restorer -> MyLocalDate1.of(restorer.readCInt(), restorer.readCInt(), restorer.readCInt()))
          .register();
-
+    
     test("test.jactl.time.LocalDate1.now().lengthOfYear() in [365, 366]", true);
     test("def now = LocalDate1.now(); now.lengthOfYear() > 360", true);
     test("LocalDate1 now = LocalDate1.now(); now.lengthOfYear() > 360", true);
@@ -91,6 +89,8 @@ public class RegisterClassTests extends BaseTest {
     test("def now = LocalDate1.now().plusDays(1); now.isAfter(LocalDate1.now())", true);
 
     testError("def date = LocalDate1.parse('2026-0115'); date.getYear()", "could not be parsed");
+
+    test("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", true);
   }
 
   public static class MyLocalDate2 implements ChronoLocalDate {

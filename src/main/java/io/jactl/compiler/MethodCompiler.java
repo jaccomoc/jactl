@@ -1591,9 +1591,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void loadWrapperHandle(FunctionDescriptor method, Expr.Binary expr) {
     // If method is static then we don't need the instance
-    // NOTE: built-in methods are always static since they are implemented via a static class method
-    //       but they are treated as instance methods so we have to make sure it is static but not built-in
-    if (!method.isBuiltin && method.isStaticImplementation && expr.left.type.is(INSTANCE)) {
+    if (method.isStaticMethod && expr.left.type.is(INSTANCE)) {
       popVal();
     }
     String handleName = method.isBuiltin ? method.wrapperHandleField : Utils.staticHandleName(Utils.wrapperName(method.name));

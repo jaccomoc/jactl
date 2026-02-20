@@ -841,7 +841,7 @@ public class JactlType extends JactlUserDataHolder {
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }
 
-  private String getPackagedName() {
+  public String getPackagedName() {
     if (getClassDescriptor() == null) {
       if (clss != null && JactlObject.class.isAssignableFrom(clss)) {
         try {

@@ -2370,7 +2370,7 @@ public class BuiltinFunctionTests extends BaseTest {
         JactlScript compiled = Compiler.compileScript("3.testMethod()", contextBefore, packageName, globals);
       }
       catch (CompileError e) {
-        assertTrue(e.getMessage().contains("No such method testMethod"));
+        assertTrue(e.getMessage().contains("No such method 'testMethod'"));
       }
 
       Jactl.method(INT).name("testMethod").param("arg", 10).impl(BuiltinFunctionTests.class, "testMethod").register();
@@ -2394,7 +2394,7 @@ public class BuiltinFunctionTests extends BaseTest {
         fail("Expected CompileError");
       }
       catch (CompileError e) {
-        assertTrue(e.getMessage().contains("No such method testMethod2"));
+        assertTrue(e.getMessage().contains("No such method 'testMethod2'"));
       }
     }
     finally {

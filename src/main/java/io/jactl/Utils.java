@@ -513,6 +513,7 @@ public class Utils {
                                                            mandatoryArgCount,
                                                            false);
     descriptor.isStaticImplementation = isStatic;
+    descriptor.isStaticMethod = isStatic;
     descriptor.mandatoryParams = params.stream()
                                        .filter(p -> p.declExpr.initialiser == null)
                                        .map(p -> p.declExpr.name.getStringValue())

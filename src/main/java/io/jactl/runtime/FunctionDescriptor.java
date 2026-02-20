@@ -47,6 +47,7 @@ public class FunctionDescriptor {
   public boolean          isWrapper    = false;     // True if this is the wrapper func for a user function
   public boolean          isFinal      = false;     // True if user function is declared as final
   public boolean          isVarArgs    = false;     // Varargs if last param is Object[]
+  public boolean          isStaticMethod = false;   // True if method should be treated as a static method for given type
 
   // Used by built-in functions:
   public boolean               needsLocation;
@@ -57,9 +58,6 @@ public class FunctionDescriptor {
   public boolean               isGlobalFunction = false;  // For builtins indicates whether global function or method
   public boolean               isBuiltin;
   public Boolean               isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
-  public boolean               isStaticMethod = false;    // True if method should be treated as a static method for 
-                                                          // given type (currently only used by JactlClass for static methods
-                                                          // that need a generated invoker)
 
   // Async if any of these args are async. If none listed then always async. Counting starts at 0 for the instance
   // itself (e.g. ITERATOR) and then 1 is the first arg and so on.
