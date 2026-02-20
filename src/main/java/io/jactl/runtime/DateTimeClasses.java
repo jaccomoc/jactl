@@ -24,9 +24,7 @@ import java.time.*;
 import java.time.chrono.ChronoLocalDate;
 import java.time.chrono.ChronoLocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.Temporal;
-import java.time.temporal.TemporalAmount;
+import java.time.temporal.*;
 import java.util.*;
 
 public class DateTimeClasses {
@@ -82,7 +80,7 @@ public class DateTimeClasses {
                                      //.method("now", "now", "arg1", Clock.class)
                                      .method("nowInZone", "now", "zoneId", ZoneId.class)
                                      .methodCanThrow("ofNanoOfDay", "ofNanoOfDay", "nanoOfDay", long.class)
-                                     .methodCanThrow("ofSecondOfDay", "ofSecondOfDay", "secondOfDay", long.class)
+                                     .methodCanThrow("ofSecondOfDay", "ofSecondOfDay", "second", long.class)
                                      .methodCanThrow("parse", "parse", "text", CharSequence.class)
                                      //.method("parseWithFormat", "parse", "arg1", CharSequence.class, "arg2", DateTimeFormatter.class)
                                      .methodCanThrow("plus", "plus", "amount", TemporalAmount.class)
@@ -109,10 +107,10 @@ public class DateTimeClasses {
                                      })
                                      .restore(restorer -> LocalTime.ofNanoOfDay(restorer.readLong()))
                                      .register();
-      
+
       Jactl.method(localTimeType).name("format").param("format").impl(DateTimeClasses.class, "localTimeFormat").register();
       Jactl.method(localTimeType).name("of").isStatic(true)
-           .param("hour").param("minute").param("second",0).param("nano",0)
+           .param("hour").param("minute").param("second", 0).param("nano", 0)
            .impl(DateTimeClasses.class, "localTimeOf").register();
       Jactl.method(localTimeType).name("parseWithFormat").isStatic(true).param("text").param("format")
            .impl(DateTimeClasses.class, "localTimeParseWithFormat").register();
@@ -131,7 +129,7 @@ public class DateTimeClasses {
                                      .autoImport(true)
                                      .mapType(ChronoLocalDate.class, LocalDate.class)
                                      .method("atStartOfDay", "atStartOfDay")
-                                     .method("atStartOfDayInZone", "atStartOfDay", "zone", ZoneId.class)
+                                     .method("atStartOfDayInZone", "atStartOfDay", "zoneId", ZoneId.class)
                                      .method("atTime", "atTime", "time", LocalTime.class)
                                      .method("getDayOfMonth", "getDayOfMonth")
                                      .method("getDayOfYear", "getDayOfYear")
@@ -194,95 +192,108 @@ public class DateTimeClasses {
            .impl(DateTimeClasses.class, "localDateFormat").register();
 
       // LocalDateTime
-      Jactl.createClass("jactl.time.LocalDateTime")
-           .javaClass(LocalDateTime.class)
-           .baseClass("jactl.time.Temporal")
-           .autoImport(true)
-           .mapType(ChronoLocalDateTime.class, LocalDateTime.class)
-           .method("atZone", "atZone", "zone", ZoneId.class)
-           .method("getDayOfMonth", "getDayOfMonth")
-           .method("getDayOfWeek", "getDayOfWeek")
-           .method("getDayOfYear", "getDayOfYear")
-           .method("getHour", "getHour")
-           .method("getMinute", "getMinute")
-           .method("getMonth", "getMonth")
-           .method("getMonthValue", "getMonthValue")
-           .method("getNano", "getNano")
-           .method("getSecond", "getSecond")
-           .method("getYear", "getYear")
-           .method("isAfter", "isAfter", "arg1", ChronoLocalDateTime.class)
-           .method("isBefore", "isBefore", "arg1", ChronoLocalDateTime.class)
-           .method("isEqual", "isEqual", "arg1", ChronoLocalDateTime.class)
-           .methodCanThrow("minus", "minus", "arg1", TemporalAmount.class)
-           .methodCanThrow("minusDays", "minusDays", "arg1", long.class)
-           .methodCanThrow("minusHours", "minusHours", "arg1", long.class)
-           .methodCanThrow("minusMinutes", "minusMinutes", "arg1", long.class)
-           .methodCanThrow("minusMonths", "minusMonths", "arg1", long.class)
-           .methodCanThrow("minusNanos", "minusNanos", "arg1", long.class)
-           .methodCanThrow("minusSeconds", "minusSeconds", "arg1", long.class)
-           .methodCanThrow("minusWeeks", "minusWeeks", "arg1", long.class)
-           .methodCanThrow("minusYears", "minusYears", "arg1", long.class)
-           .method("now", "now")
-           .method("nowInZone", "now", "zone", ZoneId.class)
-           .methodCanThrow("ofYmdhmsn", "of", "arg1", int.class, "arg2", int.class, "arg3", int.class, "arg4", int.class, "arg5", int.class, "arg6", int.class, "arg7", int.class)
-           .methodCanThrow("of", "of", "arg1", int.class, "arg2", int.class, "arg3", int.class, "arg4", int.class, "arg5", int.class, "arg6", int.class)
-           .methodCanThrow("ofYmdhm", "of", "arg1", int.class, "arg2", int.class, "arg3", int.class, "arg4", int.class, "arg5", int.class)
-           .methodCanThrow("ofDateTime", "of", "arg1", LocalDate.class, "arg2", LocalTime.class)
-           .methodCanThrow("ofEpochSecond", "ofEpochSecond", "arg1", long.class, "arg2", int.class, "arg3", ZoneOffset.class)
-           .methodCanThrow("ofInstant", "ofInstant", "arg1", Instant.class, "arg2", ZoneId.class)
-           .methodCanThrow("parse", "parse", "text", CharSequence.class)
-           .methodCanThrow("plus", "plus", "arg1", TemporalAmount.class)
-           .methodCanThrow("plusDays", "plusDays", "arg1", long.class)
-           .methodCanThrow("plusHours", "plusHours", "arg1", long.class)
-           .methodCanThrow("plusMinutes", "plusMinutes", "arg1", long.class)
-           .methodCanThrow("plusMonths", "plusMonths", "arg1", long.class)
-           .methodCanThrow("plusNanos", "plusNanos", "arg1", long.class)
-           .methodCanThrow("plusSeconds", "plusSeconds", "arg1", long.class)
-           .methodCanThrow("plusWeeks", "plusWeeks", "arg1", long.class)
-           .methodCanThrow("plusYears", "plusYears", "arg1", long.class)
-           .method("toLocalDate", "toLocalDate")
-           .method("toLocalTime", "toLocalTime")
-           .method("toString", "toString")
-           .methodCanThrow("withDayOfMonth", "withDayOfMonth", "arg1", int.class)
-           .methodCanThrow("withDayOfYear", "withDayOfYear", "arg1", int.class)
-           .methodCanThrow("withHour", "withHour", "arg1", int.class)
-           .methodCanThrow("withMinute", "withMinute", "arg1", int.class)
-           .methodCanThrow("withMonth", "withMonth", "arg1", int.class)
-           .methodCanThrow("withNano", "withNano", "arg1", int.class)
-           .methodCanThrow("withSecond", "withSecond", "arg1", int.class)
-           .methodCanThrow("withYear", "withYear", "arg1", int.class)
-           //           .method("adjustInto", "adjustInto", "arg1", Temporal.class)
-           //           .method("atOffset", "atOffset", "arg1", ZoneOffset.class)
-           //           .method("from", "from", "arg1", TemporalAccessor.class)
-           //           .method("get", "get", "arg1", TemporalField.class)
-           //           .method("getLong", "getLong", "arg1", TemporalField.class)
-           //           .method("isSupported", "isSupported", "arg1", TemporalUnit.class)
-           //           .method("isSupported", "isSupported", "arg1", TemporalField.class)
-           //           .method("minus", "minus", "arg1", long.class, "arg2", TemporalUnit.class)
-           //           .method("now", "now", "arg1", Clock.class)
-           //           .method("of", "of", "arg1", int.class, "arg2", Month.class, "arg3", int.class, "arg4", int.class, "arg5", int.class, "arg6", int.class, "arg7", int.class)
-           //           .method("of", "of", "arg1", int.class, "arg2", Month.class, "arg3", int.class, "arg4", int.class, "arg5", int.class, "arg6", int.class)
-           //           .method("of", "of", "arg1", int.class, "arg2", Month.class, "arg3", int.class, "arg4", int.class, "arg5", int.class)
-           //           .method("plus", "plus", "arg1", long.class, "arg2", TemporalUnit.class)
-           //           .method("query", "query", "arg1", TemporalQuery.class)
-           //           .method("range", "range", "arg1", TemporalField.class)
-           //           .method("truncatedTo", "truncatedTo", "arg1", TemporalUnit.class)
-           //           .method("until", "until", "arg1", Temporal.class, "arg2", TemporalUnit.class)
-           //           .method("with", "with", "arg1", TemporalField.class, "arg2", long.class)
-           //           .method("with", "with", "arg1", TemporalAdjuster.class)
-           .checkpoint((checkpointer,obj) -> {
-             LocalDateTime t = (LocalDateTime)obj;
-             checkpointer.writeCInt(t.getYear());
-             checkpointer.writeCInt(t.getMonthValue());
-             checkpointer.writeCInt(t.getDayOfMonth());
-             checkpointer.writeCInt(t.getHour());
-             checkpointer.writeCInt(t.getMinute());
-             checkpointer.writeCInt(t.getSecond());
-             checkpointer.writeCInt(t.getNano());
-           })
-           .restore(r -> LocalDateTime.of(r.readCInt(), r.readCInt(), r.readCInt(), 
-                                          r.readCInt(), r.readCInt(), r.readCInt(), r.readCInt()))
-           .register();
+      JactlType localDateTimeType =
+        Jactl.createClass("jactl.time.LocalDateTime")
+             .javaClass(LocalDateTime.class)
+             .baseClass("jactl.time.Temporal")
+             .autoImport(true)
+             .mapType(ChronoLocalDateTime.class, LocalDateTime.class)
+             .method("atZone", "atZone", "zoneId", ZoneId.class)
+             .method("getDayOfMonth", "getDayOfMonth")
+             .method("getDayOfYear", "getDayOfYear")
+             .method("getHour", "getHour")
+             .method("getMinute", "getMinute")
+             .method("getMonthValue", "getMonthValue")
+             .method("getNano", "getNano")
+             .method("getSecond", "getSecond")
+             .method("getYear", "getYear")
+             .method("isAfter", "isAfter", "other", ChronoLocalDateTime.class)
+             .method("isBefore", "isBefore", "other", ChronoLocalDateTime.class)
+             .method("isEqual", "isEqual", "other", ChronoLocalDateTime.class)
+             .methodCanThrow("minus", "minus", "amount", TemporalAmount.class)
+             .methodCanThrow("minusHours", "minusHours", "hours", long.class)
+             .methodCanThrow("minusMinutes", "minusMinutes", "minutes", long.class)
+             .methodCanThrow("minusNanos", "minusNanos", "nanos", long.class)
+             .methodCanThrow("minusSeconds", "minusSeconds", "seconds", long.class)
+             .methodCanThrow("minusDays", "minusDays", "days", long.class)
+             .methodCanThrow("minusMonths", "minusMonths", "months", long.class)
+             .methodCanThrow("minusWeeks", "minusWeeks", "weeks", long.class)
+             .methodCanThrow("minusYears", "minusYears", "years", long.class)
+             .method("now", "now")
+             .method("nowInZone", "now", "zone", ZoneId.class)
+             .methodCanThrow("ofDateTime", "of", "date", LocalDate.class, "time", LocalTime.class)
+             .methodCanThrow("ofInstant", "ofInstant", "instant", Instant.class, "zoneId", ZoneId.class)
+             .methodCanThrow("parse", "parse", "text", CharSequence.class)
+             .methodCanThrow("plus", "plus", "amount", TemporalAmount.class)
+             .methodCanThrow("plusDays", "plusDays", "days", long.class)
+             .methodCanThrow("plusHours", "plusHours", "hours", long.class)
+             .methodCanThrow("plusMinutes", "plusMinutes", "minutes", long.class)
+             .methodCanThrow("plusMonths", "plusMonths", "months", long.class)
+             .methodCanThrow("plusNanos", "plusNanos", "nanos", long.class)
+             .methodCanThrow("plusSeconds", "plusSeconds", "seconds", long.class)
+             .methodCanThrow("plusWeeks", "plusWeeks", "weeks", long.class)
+             .methodCanThrow("plusYears", "plusYears", "years", long.class)
+             .method("toLocalDate", "toLocalDate")
+             .method("toLocalTime", "toLocalTime")
+             .methodCanThrow("withDayOfMonth", "withDayOfMonth", "day", int.class)
+             .methodCanThrow("withDayOfYear", "withDayOfYear", "day", int.class)
+             .methodCanThrow("withHour", "withHour", "hour", int.class)
+             .methodCanThrow("withMinute", "withMinute", "minute", int.class)
+             .methodCanThrow("withMonth", "withMonth", "month", int.class)
+             .methodCanThrow("withNano", "withNano", "nano", int.class)
+             .methodCanThrow("withSecond", "withSecond", "second", int.class)
+             .methodCanThrow("withYear", "withYear", "year", int.class)
+             //           .method("adjustInto", "adjustInto", "arg1", Temporal.class)
+             //           .method("atOffset", "atOffset", "arg1", ZoneOffset.class)
+             //           .method("from", "from", "arg1", TemporalAccessor.class)
+             //           .method("get", "get", "arg1", TemporalField.class)
+             //           .method("getLong", "getLong", "arg1", TemporalField.class)
+             //           .method("isSupported", "isSupported", "arg1", TemporalUnit.class)
+             //           .method("isSupported", "isSupported", "arg1", TemporalField.class)
+             //           .method("minus", "minus", "arg1", long.class, "arg2", TemporalUnit.class)
+             //           .method("now", "now", "arg1", Clock.class)
+             //           .method("of", "of", "arg1", int.class, "arg2", Month.class, "arg3", int.class, "arg4", int.class, "arg5", int.class, "arg6", int.class, "arg7", int.class)
+             //           .method("of", "of", "arg1", int.class, "arg2", Month.class, "arg3", int.class, "arg4", int.class, "arg5", int.class, "arg6", int.class)
+             //           .method("of", "of", "arg1", int.class, "arg2", Month.class, "arg3", int.class, "arg4", int.class, "arg5", int.class)
+             //           .method("plus", "plus", "arg1", long.class, "arg2", TemporalUnit.class)
+             //           .method("query", "query", "arg1", TemporalQuery.class)
+             //           .method("range", "range", "arg1", TemporalField.class)
+             //           .method("truncatedTo", "truncatedTo", "arg1", TemporalUnit.class)
+             //           .method("until", "until", "arg1", Temporal.class, "arg2", TemporalUnit.class)
+             //           .method("with", "with", "arg1", TemporalField.class, "arg2", long.class)
+             //           .method("with", "with", "arg1", TemporalAdjuster.class)
+             .checkpoint((checkpointer, obj) -> {
+               LocalDateTime t = (LocalDateTime) obj;
+               checkpointer.writeCInt(t.getYear());
+               checkpointer.writeCInt(t.getMonthValue());
+               checkpointer.writeCInt(t.getDayOfMonth());
+               checkpointer.writeCInt(t.getHour());
+               checkpointer.writeCInt(t.getMinute());
+               checkpointer.writeCInt(t.getSecond());
+               checkpointer.writeCInt(t.getNano());
+             })
+             .restore(r -> LocalDateTime.of(r.readCInt(), r.readCInt(), r.readCInt(),
+                                            r.readCInt(), r.readCInt(), r.readCInt(), r.readCInt()))
+             .register();
+      Jactl.method(localDateTimeType).name("getDayOfWeek").impl(DateTimeClasses.class, "localDateTimeGetDayOfWeek").register();
+      Jactl.method(localDateTimeType).name("getMonth").impl(DateTimeClasses.class, "localDateTimeGetMonth").register();
+      Jactl.method(localDateTimeType).name("of").isStatic(true)
+           .param("year").param("month").param("day")
+           .param("hour").param("minute").param("second", 0).param("nano", 0)
+           .impl(DateTimeClasses.class, "localDateTimeOf").register();
+      Jactl.method(localDateTimeType).name("ofEpochSecond").isStatic(true)
+           .param("second").param("nano", 0)
+           .impl(DateTimeClasses.class, "localDateTimeOfEpochSecond").register();
+      Jactl.method(localDateTimeType).name("format").param("format")
+           .impl(DateTimeClasses.class, "localDateTimeFormat").register();
+      Jactl.method(localDateTimeType).name("parseWithFormat").isStatic(true).param("text").param("format")
+           .impl(DateTimeClasses.class, "localDateTimeParseWithFormat").register();
+      Jactl.method(localDateTimeType).name("truncatedToMicros").impl(DateTimeClasses.class, "localDateTimeTruncatedToMicros").register();
+      Jactl.method(localDateTimeType).name("truncatedToMillis").impl(DateTimeClasses.class, "localDateTimeTruncatedToMillis").register();
+      Jactl.method(localDateTimeType).name("truncatedToSeconds").impl(DateTimeClasses.class, "localDateTimeTruncatedToSeconds").register();
+      Jactl.method(localDateTimeType).name("truncatedToMinutes").impl(DateTimeClasses.class, "localDateTimeTruncatedToMinutes").register();
+      Jactl.method(localDateTimeType).name("truncatedToHours").impl(DateTimeClasses.class, "localDateTimeTruncatedToHours").register();
+      Jactl.method(localDateTimeType).name("truncatedToDays").impl(DateTimeClasses.class, "localDateTimeTruncatedToDays").register();
 
       // ZoneId
       JactlType zoneIdType = Jactl.createClass("jactl.time.ZoneId")
@@ -410,7 +421,172 @@ public class DateTimeClasses {
                })
                .restore(restorer -> Duration.ofSeconds(restorer.readLong(), restorer.readLong()))
                .register();
-      Jactl.method(durationType).name("between").isStatic(true).param("start").param("end").impl(DateTimeClasses.class,"durationBetween").register();
+      Jactl.method(durationType).name("between").isStatic(true).param("start").param("end").impl(DateTimeClasses.class, "durationBetween").register();
+
+      // Instant
+
+      JactlType instantType =
+        Jactl.createClass("jactl.time.Instant")
+             .javaClass(java.time.Instant.class)
+             .baseClass("jactl.time.Temporal")
+             .autoImport(true)
+             //.method("adjustInto", "adjustInto", "arg1", Temporal.class)
+             //.method("atOffset", "atOffset", "arg1", ZoneOffset.class)
+             .method("atZone", "atZone", "zoneId", ZoneId.class)
+             //.method("from", "from", "arg1", TemporalAccessor.class)
+             //.method("get", "get", "arg1", TemporalField.class)
+             .method("getEpochSecond", "getEpochSecond")
+             //.method("getLong", "getLong", "arg1", TemporalField.class)
+             .method("getNano", "getNano")
+             .method("isAfter", "isAfter", "other", Instant.class)
+             .method("isBefore", "isBefore", "other", Instant.class)
+             //.method("isSupported", "isSupported", "arg1", TemporalField.class)
+             //.method("isSupported", "isSupported", "arg1", TemporalUnit.class)
+             .methodCanThrow("minus", "minus", "amount", TemporalAmount.class)
+             //.method("minus", "minus", "arg1", long.class, "arg2", TemporalUnit.class)
+             .methodCanThrow("minusMillis", "minusMillis", "millis", long.class)
+             .methodCanThrow("minusNanos", "minusNanos", "nanos", long.class)
+             .methodCanThrow("minusSeconds", "minusSeconds", "seconds", long.class)
+             .method("now", "now")
+             //.method("now", "now", "arg1", Clock.class)
+             .methodCanThrow("ofEpochMilli", "ofEpochMilli", "milli", long.class)
+             //.method("ofEpochSecond", "ofEpochSecond", "arg1", long.class)
+             //.method("ofEpochSecond", "ofEpochSecond", "arg1", long.class, "arg2", long.class)
+             .methodCanThrow("parse", "parse", "text", CharSequence.class)
+             .methodCanThrow("plus", "plus", "amount", TemporalAmount.class)
+             //.method("plus", "plus", "arg1", long.class, "arg2", TemporalUnit.class)
+             .methodCanThrow("plusMillis", "plusMillis", "millis", long.class)
+             .methodCanThrow("plusNanos", "plusNanos", "nanos", long.class)
+             .methodCanThrow("plusSeconds", "plusSeconds", "seconds", long.class)
+             //.method("query", "query", "arg1", TemporalQuery.class)
+             //.method("range", "range", "arg1", TemporalField.class)
+             .method("toEpochMilli", "toEpochMilli")
+             //.method("truncatedTo", "truncatedTo", "arg1", TemporalUnit.class)
+             //.method("until", "until", "arg1", Temporal.class, "arg2", TemporalUnit.class)
+             //.method("with", "with", "arg1", TemporalField.class, "arg2", long.class)
+             //.method("with", "with", "arg1", TemporalAdjuster.class)
+             .checkpoint((checkpointer, obj) -> {
+               Instant instant = (Instant) obj;
+               checkpointer.writeLong(instant.getEpochSecond());
+               checkpointer.writeCInt(instant.getNano());
+             })
+             .restore(restorer -> Instant.ofEpochSecond(restorer.readLong(), restorer.readCInt()))
+             .register();
+      Jactl.method(instantType).name("ofEpochSecond").isStatic(true)
+           .param("second").param("nano", 0)
+           .impl(DateTimeClasses.class, "instantOfEpochSecond").register();
+      Jactl.method(instantType).name("withNano").param("nano").impl(DateTimeClasses.class, "instantWithNano").register();
+      Jactl.method(instantType).name("withMilli").param("milli").impl(DateTimeClasses.class, "instantWithMilli").register();
+      Jactl.method(instantType).name("withMicro").param("micro").impl(DateTimeClasses.class, "instantWithMicro").register();
+      Jactl.method(instantType).name("truncatedToMicros").impl(DateTimeClasses.class, "instantTruncatedToMicros").register();
+      Jactl.method(instantType).name("truncatedToMillis").impl(DateTimeClasses.class, "instantTruncatedToMillis").register();
+      Jactl.method(instantType).name("truncatedToSeconds").impl(DateTimeClasses.class, "instantTruncatedToSeconds").register();
+      Jactl.method(instantType).name("truncatedToMinutes").impl(DateTimeClasses.class, "instantTruncatedToMinutes").register();
+      Jactl.method(instantType).name("truncatedToHours").impl(DateTimeClasses.class, "instantTruncatedToHours").register();
+      Jactl.method(instantType).name("truncatedToDays").impl(DateTimeClasses.class, "instantTruncatedToDays").register();
+
+      JactlType zonedDateTimeType =
+        Jactl.createClass("jactl.time.ZonedDateTime")
+             .javaClass(java.time.ZonedDateTime.class)
+             .baseClass("jactl.time.Temporal")
+             .autoImport(true)
+             //.method("from", "from", "arg1", TemporalAccessor.class)
+             //.method("get", "get", "arg1", TemporalField.class)
+             .method("getDayOfMonth", "getDayOfMonth")
+             .method("getDayOfYear", "getDayOfYear")
+             .method("getHour", "getHour")
+             //.method("getLong", "getLong", "arg1", TemporalField.class)
+             .method("getMinute", "getMinute")
+             .method("getMonthValue", "getMonthValue")
+             .method("getNano", "getNano")
+             //.method("getOffset", "getOffset")
+             .method("getSecond", "getSecond")
+             .method("getYear", "getYear")
+             .method("getZone", "getZone")
+             //.method("isSupported", "isSupported", "arg1", TemporalField.class)
+             //.method("isSupported", "isSupported", "arg1", TemporalUnit.class)
+             .methodCanThrow("minus", "minus", "amount", TemporalAmount.class)
+             //.method("minus", "minus", "arg1", long.class, "arg2", TemporalUnit.class)
+             .methodCanThrow("minusDays", "minusDays", "days", long.class)
+             .methodCanThrow("minusHours", "minusHours", "hours", long.class)
+             .methodCanThrow("minusMinutes", "minusMinutes", "minutes", long.class)
+             .methodCanThrow("minusMonths", "minusMonths", "months", long.class)
+             .methodCanThrow("minusNanos", "minusNanos", "nanos", long.class)
+             .methodCanThrow("minusSeconds", "minusSeconds", "seconds", long.class)
+             .methodCanThrow("minusWeeks", "minusWeeks", "weeks", long.class)
+             .methodCanThrow("minusYears", "minusYears", "years", long.class)
+             //.method("now", "now", "arg1", Clock.class)
+             .method("nowInZone", "now", "arg1", ZoneId.class)
+             .method("now", "now")
+             .methodCanThrow("of", "of", "year", int.class, "month", int.class, "day", int.class, "hour", int.class, "minute", int.class, "second", int.class, "nano", int.class, "zoneId", ZoneId.class)
+             .method("ofDateAndTime", "of", "date", LocalDate.class, "time", LocalTime.class, "zoneId", ZoneId.class)
+             .method("ofDateTime", "of", "dateTime", LocalDateTime.class, "zoneId", ZoneId.class)
+             .method("ofInstant", "ofInstant", "instant", Instant.class, "zoneId", ZoneId.class)
+             //.method("ofInstant", "ofInstant", "arg1", LocalDateTime.class, "arg2", ZoneOffset.class, "arg3", ZoneId.class)
+             //.method("ofLocal", "ofLocal", "arg1", LocalDateTime.class, "arg2", ZoneId.class, "arg3", ZoneOffset.class)
+             //.method("ofStrict", "ofStrict", "arg1", LocalDateTime.class, "arg2", ZoneOffset.class, "arg3", ZoneId.class)
+             .methodCanThrow("parse", "parse", "text", CharSequence.class)
+             //.method("plus", "plus", "arg1", long.class, "arg2", TemporalUnit.class)
+             .method("plus", "plus", "amount", TemporalAmount.class)
+             .method("plusDays", "plusDays", "days", long.class)
+             .method("plusHours", "plusHours", "hours", long.class)
+             .method("plusMinutes", "plusMinutes", "minutes", long.class)
+             .method("plusMonths", "plusMonths", "months", long.class)
+             .method("plusNanos", "plusNanos", "nanos", long.class)
+             .method("plusSeconds", "plusSeconds", "seconds", long.class)
+             .method("plusWeeks", "plusWeeks", "weeks", long.class)
+             .method("plusYears", "plusYears", "years", long.class)
+             //.method("query", "query", "arg1", TemporalQuery.class)
+             //.method("range", "range", "arg1", TemporalField.class)
+             .method("toLocalDate", "toLocalDate")
+             .method("toLocalDateTime", "toLocalDateTime")
+             .method("toLocalTime", "toLocalTime")
+             //.method("toOffsetDateTime", "toOffsetDateTime")
+             //.method("until", "until", "arg1", Temporal.class, "arg2", TemporalUnit.class)
+             //.method("with", "with", "arg1", TemporalAdjuster.class)
+             //.method("with", "with", "arg1", TemporalField.class, "arg2", long.class)
+             .methodCanThrow("withDayOfMonth", "withDayOfMonth", "day", int.class)
+             .methodCanThrow("withDayOfYear", "withDayOfYear", "day", int.class)
+             .methodCanThrow("withHour", "withHour", "hour", int.class)
+             .methodCanThrow("withMinute", "withMinute", "minute", int.class)
+             .methodCanThrow("withMonth", "withMonth", "month", int.class)
+             .methodCanThrow("withNano", "withNano", "nano", int.class)
+             .methodCanThrow("withSecond", "withSecond", "second", int.class)
+             .methodCanThrow("withYear", "withYear", "year", int.class)
+             .method("withEarlierOffsetAtOverlap", "withEarlierOffsetAtOverlap")
+             .method("withLaterOffsetAtOverlap", "withLaterOffsetAtOverlap")
+             .method("withFixedOffsetZone", "withFixedOffsetZone")
+             .method("withZoneSameInstant", "withZoneSameInstant", "zoneId", ZoneId.class)
+             .method("withZoneSameLocal", "withZoneSameLocal", "zoneId", ZoneId.class)
+             .checkpoint((checkpointer, obj) -> {
+               ZonedDateTime t = (ZonedDateTime) obj;
+               checkpointer.writeCInt(t.getYear());
+               checkpointer.writeCInt(t.getMonthValue());
+               checkpointer.writeCInt(t.getDayOfMonth());
+               checkpointer.writeCInt(t.getHour());
+               checkpointer.writeCInt(t.getMinute());
+               checkpointer.writeCInt(t.getSecond());
+               checkpointer.writeCInt(t.getNano());
+               checkpointer.writeCInt(t.getOffset().getTotalSeconds());
+               checkpointer.writeObject(t.getZone().getId());
+             })
+             .restore(r -> ZonedDateTime.ofStrict(LocalDateTime.of(r.readCInt(), r.readCInt(), r.readCInt(),
+                                                                   r.readCInt(), r.readCInt(), r.readCInt(), r.readCInt()),
+                                                 ZoneOffset.ofTotalSeconds(r.readCInt()),
+                                                 ZoneId.of((String)r.readObject())))
+             .register();
+      Jactl.method(zonedDateTimeType).name("format").param("format")
+           .impl(DateTimeClasses.class, "zonedDateTimeFormat").register();
+      Jactl.method(zonedDateTimeType).name("parseWithFormat").isStatic(true).param("text").param("format")
+           .impl(DateTimeClasses.class, "zonedDateTimeParseWithFormat").register();
+      Jactl.method(zonedDateTimeType).name("getDayOfWeek").impl(DateTimeClasses.class, "zonedDateTimeGetDayOfWeek").register();
+      Jactl.method(zonedDateTimeType).name("getMonth").impl(DateTimeClasses.class, "zonedDateTimeGetMonth").register();
+      Jactl.method(zonedDateTimeType).name("truncatedToMicros").impl(DateTimeClasses.class, "zonedDateTimeTruncatedToMicros").register();
+      Jactl.method(zonedDateTimeType).name("truncatedToMillis").impl(DateTimeClasses.class, "zonedDateTimeTruncatedToMillis").register();
+      Jactl.method(zonedDateTimeType).name("truncatedToSeconds").impl(DateTimeClasses.class, "zonedDateTimeTruncatedToSeconds").register();
+      Jactl.method(zonedDateTimeType).name("truncatedToMinutes").impl(DateTimeClasses.class, "zonedDateTimeTruncatedToMinutes").register();
+      Jactl.method(zonedDateTimeType).name("truncatedToHours").impl(DateTimeClasses.class, "zonedDateTimeTruncatedToHours").register();
+      Jactl.method(zonedDateTimeType).name("truncatedToDays").impl(DateTimeClasses.class, "zonedDateTimeTruncatedToDays").register();
     }
     catch (NoSuchMethodException e) {
       throw new RuntimeException(e);
@@ -520,7 +696,7 @@ public class DateTimeClasses {
     try {
       return date.format(dateTimeFormatters.get().computeIfAbsent(format, DateTimeFormatter::ofPattern));
     }
-    catch (IllegalArgumentException e) {
+    catch (IllegalArgumentException|DateTimeException e) {
       throw new RuntimeError(e.getMessage(), source, offset, e);
     }
   }
@@ -540,11 +716,179 @@ public class DateTimeClasses {
     try {
       return dateTimeFormatters.get().computeIfAbsent(format, DateTimeFormatter::ofPattern).parse(text, LocalDate::from);
     }
-    catch (IllegalArgumentException e) {
+    catch (IllegalArgumentException|DateTimeException e) {
       throw new RuntimeError(e.getMessage(), source, offset, e);
     }
   }
 
+  ///////////////////////////////////
+
+  // LocalDateTime
+
+  public static String localDateTimeGetDayOfWeek(LocalDateTime dateTime) {
+    return dateTime.getDayOfWeek().toString();
+  }
+
+  public static String localDateTimeGetMonth(LocalDateTime dateTime) {
+    return dateTime.getMonth().toString();
+  }
+
+  public static LocalDateTime localDateTimeOf(String source, int offset, int year, int month, int day, int hour, int minute, int second, int nano) {
+    try {
+      return LocalDateTime.of(year, month, day, hour, minute, second, nano);
+    }
+    catch (DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+  
+  public static LocalDateTime localDateTimeOfEpochSecond(String source, int offset, long second, int nano) {
+    try {
+      return LocalDateTime.ofEpochSecond(second, nano, ZoneOffset.UTC);
+    }
+    catch (DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+
+  /**
+   * Implementation for LocalDateTime.format(String format).
+   * Format dateTime with format based on DateTimeFormatter.
+   * We use a per-thread cache of DateTimeFormatters to avoid having to create them every time if there are specific
+   * formats used frequently.
+   * @param dateTime the LocalDateTime object being formatted
+   * @param source   the source code of script calling this function
+   * @param offset   the offset in the source code where function is invoked from
+   * @param format   the datetime format
+   * @return the formatted dateTime as a String
+   */
+  public static String localDateTimeFormat(LocalDateTime dateTime, String source, int offset, String format) {
+    try {
+      return dateTime.format(dateTimeFormatters.get().computeIfAbsent(format, DateTimeFormatter::ofPattern));
+    }
+    catch (IllegalArgumentException|DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+
+  /**
+   * Implementation for LocalDateTime.parseWithFormat(String format).
+   * Parse date with given format based on DateTimeFormatter.
+   * We use a per-thread cache of DateTimeFormatters to avoid having to create them every time if there are specific
+   * formats used frequently.
+   * @param source  the source code of script calling this function
+   * @param offset  the offset in the source code where function is invoked from
+   * @param text    the text to be parsed
+   * @param format  the datetime format
+   * @return the parsed LocalDateTime
+   */
+  public static LocalDateTime localDateTimeParseWithFormat(String source, int offset, String text, String format) {
+    try {
+      return dateTimeFormatters.get().computeIfAbsent(format, DateTimeFormatter::ofPattern).parse(text, LocalDateTime::from);
+    }
+    catch (IllegalArgumentException|DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+
+  public static LocalDateTime localDateTimeTruncatedToMicros(LocalDateTime time) { return time.truncatedTo(ChronoUnit.MICROS); }
+  public static LocalDateTime localDateTimeTruncatedToMillis(LocalDateTime time) { return time.truncatedTo(ChronoUnit.MILLIS); }
+  public static LocalDateTime localDateTimeTruncatedToSeconds(LocalDateTime time) { return time.truncatedTo(ChronoUnit.SECONDS); }
+  public static LocalDateTime localDateTimeTruncatedToMinutes(LocalDateTime time) { return time.truncatedTo(ChronoUnit.MINUTES); }
+  public static LocalDateTime localDateTimeTruncatedToHours(LocalDateTime time) { return time.truncatedTo(ChronoUnit.HOURS); }
+  public static LocalDateTime localDateTimeTruncatedToDays(LocalDateTime time) { return time.truncatedTo(ChronoUnit.DAYS); }
+
+  //////////////////////////////////
+  
+  // Instant
+  
+  public static Instant instantOfEpochSecond(String source, int offset, long second, int nano) {
+    try {
+      return Instant.ofEpochSecond(second, nano);
+    }
+    catch (DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+  
+  public static Instant instantWithNano(Instant instant, String source, int offset, int nano) { return instantWithTemporal(instant, source, offset, ChronoField.NANO_OF_SECOND, nano); }
+  public static Instant instantWithMicro(Instant instant, String source, int offset, int micro) { return instantWithTemporal(instant, source, offset, ChronoField.MICRO_OF_SECOND, micro); }
+  public static Instant instantWithMilli(Instant instant, String source, int offset, int milli) { return instantWithTemporal(instant, source, offset, ChronoField.MILLI_OF_SECOND, milli); }
+  
+  private static Instant instantWithTemporal(Instant instant, String source, int offset, TemporalField temporalUnit, long amount) {
+    try {
+      return instant.with(temporalUnit, amount);
+    }
+    catch (RuntimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+
+  public static Instant instantTruncatedToMicros(Instant instant) { return instant.truncatedTo(ChronoUnit.MICROS); }
+  public static Instant instantTruncatedToMillis(Instant instant) { return instant.truncatedTo(ChronoUnit.MILLIS); }
+  public static Instant instantTruncatedToSeconds(Instant instant) { return instant.truncatedTo(ChronoUnit.SECONDS); }
+  public static Instant instantTruncatedToMinutes(Instant instant) { return instant.truncatedTo(ChronoUnit.MINUTES); }
+  public static Instant instantTruncatedToHours(Instant instant) { return instant.truncatedTo(ChronoUnit.HOURS); }
+  public static Instant instantTruncatedToDays(Instant instant) { return instant.truncatedTo(ChronoUnit.DAYS); }
+
+  //////////////////////////////////
+  
+  // ZonedDateTime
+
+  /**
+   * Implementation for ZonedDateTime.format(String format).
+   * Format dateTime with format based on DateTimeFormatter.
+   * We use a per-thread cache of DateTimeFormatters to avoid having to create them every time if there are specific
+   * formats used frequently.
+   * @param dateTime the ZonedDateTime object being formatted
+   * @param source   the source code of script calling this function
+   * @param offset   the offset in the source code where function is invoked from
+   * @param format   the datetime format
+   * @return the formatted dateTime as a String
+   */
+  public static String zonedDateTimeFormat(ZonedDateTime dateTime, String source, int offset, String format) {
+    try {
+      return dateTime.format(dateTimeFormatters.get().computeIfAbsent(format, DateTimeFormatter::ofPattern));
+    }
+    catch (IllegalArgumentException|DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+
+  /**
+   * Implementation for ZonedDateTime.parseWithFormat(String format).
+   * Parse date with given format based on DateTimeFormatter.
+   * We use a per-thread cache of DateTimeFormatters to avoid having to create them every time if there are specific
+   * formats used frequently.
+   * @param source  the source code of script calling this function
+   * @param offset  the offset in the source code where function is invoked from
+   * @param text    the text to be parsed
+   * @param format  the datetime format
+   * @return the parsed ZonedDateTime
+   */
+  public static ZonedDateTime zonedDateTimeParseWithFormat(String source, int offset, String text, String format) {
+    try {
+      return dateTimeFormatters.get().computeIfAbsent(format, DateTimeFormatter::ofPattern).parse(text, ZonedDateTime::from);
+    }
+    catch (IllegalArgumentException|DateTimeException e) {
+      throw new RuntimeError(e.getMessage(), source, offset, e);
+    }
+  }
+
+  public static String zonedDateTimeGetDayOfWeek(ZonedDateTime dateTime) {
+    return dateTime.getDayOfWeek().toString();
+  }
+
+  public static String zonedDateTimeGetMonth(ZonedDateTime dateTime) {
+    return dateTime.getMonth().toString();
+  }
+
+  public static ZonedDateTime zonedDateTimeTruncatedToMicros(ZonedDateTime zonedDateTime) { return zonedDateTime.truncatedTo(ChronoUnit.MICROS); }
+  public static ZonedDateTime zonedDateTimeTruncatedToMillis(ZonedDateTime zonedDateTime) { return zonedDateTime.truncatedTo(ChronoUnit.MILLIS); }
+  public static ZonedDateTime zonedDateTimeTruncatedToSeconds(ZonedDateTime zonedDateTime) { return zonedDateTime.truncatedTo(ChronoUnit.SECONDS); }
+  public static ZonedDateTime zonedDateTimeTruncatedToMinutes(ZonedDateTime zonedDateTime) { return zonedDateTime.truncatedTo(ChronoUnit.MINUTES); }
+  public static ZonedDateTime zonedDateTimeTruncatedToHours(ZonedDateTime zonedDateTime) { return zonedDateTime.truncatedTo(ChronoUnit.HOURS); }
+  public static ZonedDateTime zonedDateTimeTruncatedToDays(ZonedDateTime zonedDateTime) { return zonedDateTime.truncatedTo(ChronoUnit.DAYS); }
 
   //////////////////////////////////
   

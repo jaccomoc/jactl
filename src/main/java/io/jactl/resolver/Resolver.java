@@ -1825,7 +1825,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (!expr.parent.type.is(MAP)) {
         // If we are not a Map then we know at compile time that method does not exist. (If we are a Map then at
         // runtime someone could create a field in the Map with this name so we have to wait until runtime.)
-        error("No such method " + expr.methodName + " for object of type " + expr.parent.type, expr.methodNameLocation);
+        error("No such method '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
       }
     }
 

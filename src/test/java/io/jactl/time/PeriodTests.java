@@ -28,7 +28,7 @@ import java.time.Period;
  * NOTE: we are not testing the functionality since each method call directly
  * invokes an already existing Java method which already have their own exhaustive
  * tests. We are only testing that exposing of the methods we are intending to expose
- * have atually been exposed and can be invoked in a Jactl script.
+ * have actually been exposed and can be invoked in a Jactl script.
  * </p>
  */
 public class PeriodTests extends BaseTest {
@@ -283,5 +283,10 @@ public class PeriodTests extends BaseTest {
     test("Period.of(1,2,3).withYears(years:4)", Period.of(4,2,3));
     test("def f = Period.of(1,2,3).withYears; f(4)", Period.of(4,2,3));
     test("def f = Period.of(1,2,3).withYears; f(years:4)", Period.of(4,2,3));
+  }
+
+  @Test public void toStringTest() {
+    test("Period.of(1,2,3).toString()", "P1Y2M3D");
+    test("def f = Period.of(1,2,3).toString; f()", "P1Y2M3D");
   }
 }

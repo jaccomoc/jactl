@@ -33,7 +33,7 @@ import java.time.temporal.ChronoUnit;
  * NOTE: we are not testing the functionality since each method call directly
  * invokes an already existing Java method which already have their own exhaustive
  * tests. We are only testing that exposing of the methods we are intending to expose
- * have atually been exposed and can be invoked in a Jactl script.
+ * have actually been exposed and can be invoked in a Jactl script.
  * </p>
  */
 public class LocalTimeTests extends BaseTest {
@@ -124,6 +124,7 @@ public class LocalTimeTests extends BaseTest {
 
   @Test public void isAfter() {
     test("LocalTime d = LocalTime.parse('12:13:14'); LocalTime.parse('12:13:14.1').isAfter(d)", true);
+    test("LocalTime d = LocalTime.parse('12:13:14'); LocalTime.parse('12:13:14.1').isAfter(other:d)", true);
     test("LocalTime d = LocalTime.parse('12:13:14'); LocalTime.parse('12:13:14').isAfter(d)", false);
     test("def d = LocalTime.parse('12:13:14'); LocalTime.of(12,13,15).isAfter(d)", true);
     test("def d = LocalTime.parse('12:13:14'); def f = LocalTime.parse('12:13:14.1').isAfter; f(d)", true);
@@ -132,6 +133,7 @@ public class LocalTimeTests extends BaseTest {
 
   @Test public void isBefore() {
     test("LocalTime d = LocalTime.parse('12:13:14'); LocalTime.parse('12:13:14.1').isBefore(d)", false);
+    test("LocalTime d = LocalTime.parse('12:13:14'); LocalTime.parse('12:13:14.1').isBefore(other:d)", false);
     test("LocalTime d = LocalTime.parse('12:13:14'); LocalTime.parse('12:13:14').isBefore(d)", false);
     test("def d = LocalTime.parse('12:13:14'); LocalTime.of(12,13,15).isBefore(d)", false);
     test("def d = LocalTime.parse('12:13:14'); def f = LocalTime.parse('12:13:14.1').isBefore; f(d)", false);
@@ -227,9 +229,9 @@ public class LocalTimeTests extends BaseTest {
   @Test public void ofSecondOfDay() {
     test("LocalTime.ofSecondOfDay(0) == LocalTime.parse('00:00:00.0')", true);
     test("LocalTime.ofSecondOfDay(1) == LocalTime.parse('00:00:01')", true);
-    test("LocalTime.ofSecondOfDay(secondOfDay:3600+1) == LocalTime.parse('01:00:01.0')", true);
+    test("LocalTime.ofSecondOfDay(second:3600+1) == LocalTime.parse('01:00:01.0')", true);
     test("def f = LocalTime.ofSecondOfDay; f(10) == LocalTime.parse('00:00:10')", true);
-    test("def f = LocalTime.ofSecondOfDay; f(secondOfDay:10) == LocalTime.parse('00:00:10')", true);
+    test("def f = LocalTime.ofSecondOfDay; f(second:10) == LocalTime.parse('00:00:10')", true);
     test("LocalTime.ofSecondOfDay(0) == LocalTime.parse('00:00:00')", true);
     testError("LocalTime.ofSecondOfDay(-1) == LocalTime.parse('00:00:00')", "invalid value");
     testError("LocalTime.ofSecondOfDay(-1000000000000L)", "invalid value");
@@ -396,4 +398,10 @@ public class LocalTimeTests extends BaseTest {
     test("def f = LocalTime.parse('12:13:14').until; f(end:LocalTime.parse('12:13:13')) == Duration.ofSeconds(-1)", true);
     test("def t = LocalTime.parse('12:13:14'); def f = t.until; f(end:LocalTime.parse('12:13:13')) == Duration.ofSeconds(-1)", true);
   }
+
+  @Test public void toStringTest() {
+    test("LocalTime.parse('12:13:14').toString()", "12:13:14");
+    test("def f = LocalTime.parse('12:13:14').toString; f()", "12:13:14");
+  }
+
 }

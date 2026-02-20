@@ -28,7 +28,7 @@ import java.time.*;
  * NOTE: we are not testing the functionality since each method call directly
  * invokes an already existing Java method which already have their own exhaustive
  * tests. We are only testing that exposing of the methods we are intending to expose
- * have atually been exposed and can be invoked in a Jactl script.
+ * have actually been exposed and can be invoked in a Jactl script.
  * </p>
  */
 public class LocalDateTests extends BaseTest {
@@ -60,19 +60,20 @@ public class LocalDateTests extends BaseTest {
   }
   
   @Test public void atStartOfDay() {
-    test("LocalDate.now().atStartOfDay()", LocalDate.now().atStartOfDay());
-    test("def f = LocalDate.now().atStartOfDay; f()", LocalDate.now().atStartOfDay());
-    test("def d = LocalDate.now(); def f = d.atStartOfDay; f()", LocalDate.now().atStartOfDay());
+    test("LocalDate.parse('2026-02-20').atStartOfDay()", LocalDate.parse("2026-02-20").atStartOfDay());
+    test("def f = LocalDate.parse('2026-02-20').atStartOfDay; f()", LocalDate.parse("2026-02-20").atStartOfDay());
   }
 
   @Test public void atStartOfDayInZone() {
-    // TODO:
-    test("LocalDate.now().atStartOfDayInZone(ZoneId.of('Australia/Sydney'))", LocalDate.now().atStartOfDay(ZoneId.of("Australia/Sydney")));
+    test("LocalDate.parse('2026-02-20').atStartOfDayInZone(ZoneId.of('Australia/Sydney'))", LocalDate.parse("2026-02-20").atStartOfDay(ZoneId.of("Australia/Sydney")));
+    test("def f = LocalDate.parse('2026-02-20').atStartOfDayInZone; f(ZoneId.of('Australia/Sydney'))", LocalDate.parse("2026-02-20").atStartOfDay(ZoneId.of("Australia/Sydney")));
+    test("LocalDate.parse('2026-02-20').atStartOfDayInZone(zoneId:ZoneId.of('Australia/Sydney'))", LocalDate.parse("2026-02-20").atStartOfDay(ZoneId.of("Australia/Sydney")));
   }
   
   @Test public void atTime() {
-    // TODO:
-    test("LocalDate d = LocalDate.now().atTime(LocalTime.now())", LocalDate.now().atTime(LocalTime.now()));
+    test("LocalTime t = LocalTime.now(); LocalDateTime d = LocalDate.now().atTime(t); t == LocalTime.of(d.getHour(),d.getMinute(),d.getSecond(),d.getNano())", true);
+    test("LocalTime t = LocalTime.now(); LocalDateTime d = LocalDate.now().atTime(time:t); t == LocalTime.of(d.getHour(),d.getMinute(),d.getSecond(),d.getNano())", true);
+    test("LocalTime t = LocalTime.now(); def f = LocalDate.now().atTime; LocalDateTime d = f(t); t == LocalTime.of(d.getHour(),d.getMinute(),d.getSecond(),d.getNano())", true);
   }
   
   @Test public void getDayOfMonth() {
@@ -436,4 +437,10 @@ public class LocalDateTests extends BaseTest {
     test("def d = LocalDate.parse('2026-01-22'); def f = d.withYear; f(1969)", LocalDate.parse("1969-01-22"));
     test("def d = LocalDate.parse('2026-01-22'); def f = d.withYear; f(year:1969)", LocalDate.parse("1969-01-22"));
   }
+
+  @Test public void toStringTest() {
+    test("LocalDate.parse('2026-01-22').toString()", "2026-01-22");
+    test("def f = LocalDate.parse('2026-01-22').toString; f()", "2026-01-22");
+  }
+
 }

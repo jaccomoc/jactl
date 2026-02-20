@@ -29,7 +29,7 @@ import java.time.ZoneId;
  * NOTE: we are not testing the functionality since each method call directly
  * invokes an already existing Java method which already have their own exhaustive
  * tests. We are only testing that exposing of the methods we are intending to expose
- * have atually been exposed and can be invoked in a Jactl script.
+ * have actually been exposed and can be invoked in a Jactl script.
  * </p>
  */
 public class ZoneIdTests extends BaseTest {
@@ -87,5 +87,10 @@ public class ZoneIdTests extends BaseTest {
     testError("ZoneId.getAvailableZoneIds().remove(2)", "attempt to modify an unmodifiable list");
     testError("def x = ZoneId.getAvailableZoneIds(); x.remove(2)", "attempt to modify an unmodifiable list");
     testError("def x = ZoneId.getAvailableZoneIds(); def f = x.remove; f(2)", "attempt to modify an unmodifiable list");
+  }
+  
+  @Test public void toStringTest() {
+    test("ZoneId.of('Australia/Sydney').toString()", "Australia/Sydney");
+    test("def f = ZoneId.of('Australia/Sydney').toString; f()", "Australia/Sydney");
   }
 }

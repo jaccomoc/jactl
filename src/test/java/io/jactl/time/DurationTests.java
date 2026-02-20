@@ -28,7 +28,7 @@ import java.time.Duration;
  * NOTE: we are not testing the functionality since each method call directly
  * invokes an already existing Java method which already have their own exhaustive
  * tests. We are only testing that exposing of the methods we are intending to expose
- * have atually been exposed and can be invoked in a Jactl script.
+ * have actually been exposed and can be invoked in a Jactl script.
  * </p>
  */
 public class DurationTests extends BaseTest {
@@ -378,4 +378,9 @@ public class DurationTests extends BaseTest {
     test("def d = Duration.ofSecondsAndNanos(1,2); def f = d.withSeconds; f(3)", Duration.ofSeconds(3,2));
   }
 
+  @Test public void toStringTest() {
+    test("Duration.ofSeconds(1).toString()", "PT1S");
+    test("Duration.ofSecondsAndNanos(1,2).toString()", "PT1.000000002S");
+    test("def f = Duration.ofSecondsAndNanos(1,2).toString; f()", "PT1.000000002S");
+  }
 }
