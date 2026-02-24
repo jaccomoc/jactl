@@ -179,7 +179,7 @@ public class JactlContext {
 
   public interface PackageChecker { boolean exists(String name); }
 
-  // Helper that maps internal name (io.jactl.pkg.a.b.c.A$B$C) to class descriptor
+  // Helper that maps internal name (jactl.pkg.a.b.c.A$B$C) to class descriptor
   public interface ClassLookup    { ClassDescriptor lookup(String internalName); }
   public interface ClassAdder     { Class<?>        addClass(ClassDescriptor descriptor, byte[] bytes); }
 
@@ -199,6 +199,13 @@ public class JactlContext {
      * @return this JactlContextBuilder
      */
     public JactlContextBuilder hasOwnFunctions(boolean value)    { functions = value ? new Functions(Functions.INSTANCE, JactlContext.this) : null; return this; }
+
+    /**
+     * Whether the JactlContext has its own registered classes for built-ins (true) or whether it shares registered classes with other JactlContexts (false)
+     * @param value  true if this JactlContext has registered classes of its own that shouldn't be shared with other JactlContexts (defaults to false)
+     * @return this JactlContextBuilder
+     */
+    public JactlContextBuilder hasOwnBuiltins(boolean value)    { registeredClasses = value ? new RegisteredClasses(RegisteredClasses.INSTANCE) : null; return this; }
 
     /**
      * Set the minimum scale to use for Decimal numbers
@@ -326,7 +333,7 @@ public class JactlContext {
   public RegisteredClasses getRegisteredClasses() {
     return registeredClasses == null ? RegisteredClasses.INSTANCE : registeredClasses;
   }
-
+  
   public JactlFunction function() {
     if (functions == null) {
       throw new IllegalStateException("JactlContext was not built to have separate functions (hasOwnFunctions() needs to be invoked during build phase of JactlContext)");
@@ -341,6 +348,21 @@ public class JactlContext {
     return new JactlFunction(this, methodClass);
   }
 
+  /**
+   * Create a new built-in type that will only be visible t classes and scripts compiled with this
+   * JactlConext and that will have the given name within any scripts/classes.
+   * Note that the JactlClass object must have {@link JactlClass#register()} invoked on it (after other
+   * calls to specify its implementation and methods) for it to be actually registered with this JactlContext.
+   * @param jactlClassName the full name of the Jactl class (e.g. jactl.time.Instant)
+   * @return the JactlClass object
+   */
+  public JactlClass createClass(String jactlClassName) {
+    if (registeredClasses != null) {
+      return new JactlClass(jactlClassName, this);
+    }
+    throw new IllegalStateException("JactlContext has not been configured to have its own built-ins (see hasOwnBuiltins() call)");
+  }
+  
   public void deregister(String name) {
     if (functions == null) {
       throw new IllegalStateException("JactlContext was not built to have separate functions (hasOwnFunctions() needs to be invoked during build phase of JactlContext)");

@@ -39,34 +39,62 @@ public class RegisteredClasses {
   private Map<Class<?>, BiConsumer<Checkpointer,Object>> checkpointers = new HashMap<>();
   private Map<Class<?>, Function<Restorer,Object>>       restorers     = new HashMap<>();
 
+  private RegisteredClasses parent = null;
+  
+  RegisteredClasses() {}
+  
+  public RegisteredClasses(RegisteredClasses other) {
+    this.parent = other.parent;
+  }
+  
   public Map<String, ClassDescriptor> getAutoImportedClasses() {
-    return autoImportedClasses;
+    Map<String, ClassDescriptor> classes = new HashMap<>();
+    if (parent != null) {
+      classes.putAll(parent.getAutoImportedClasses());
+    }
+    classes.putAll(autoImportedClasses);
+    return classes;
   }
 
   public ClassDescriptor getClassDescriptor(String jactlName) {
-    return registeredClassesByJactlName.get(jactlName);
+    ClassDescriptor classDescriptor = registeredClassesByJactlName.get(jactlName);
+    if (classDescriptor == null && parent != null) {
+      classDescriptor = parent.getClassDescriptor(jactlName);
+    }
+    return classDescriptor;
   }
 
   public ClassDescriptor getClassDescriptor(Class<?> javaClass) {
-    for (; javaClass != null; javaClass = javaClass.getSuperclass()) {
-      ClassDescriptor descriptor = registeredClassesByJavaName.get(javaClass.getName());
+    for (Class<?> clss = javaClass; clss != null; clss = clss.getSuperclass()) {
+      ClassDescriptor descriptor = registeredClassesByJavaName.get(clss.getName());
       if (descriptor != null) {
         return descriptor;
       }
+    }
+    if (parent != null) {
+      return parent.getClassDescriptor(javaClass);
     }
     return null;
   }
 
   public ClassDescriptor getClassDescriptorByInternalJavaName(String internalJavaName) {
-    return registeredClassesByInternalJavaName.get(internalJavaName);
+    ClassDescriptor classDescriptor = registeredClassesByInternalJavaName.get(internalJavaName);
+    if (classDescriptor == null && parent != null) {
+      classDescriptor = parent.getClassDescriptorByInternalJavaName(internalJavaName);
+    }
+    return classDescriptor;
   }
 
   public Class<?> findClassByInternalJavaName(String internalName) {
-    return classByInternalJavaName.get(internalName);
+    Class<?> clss = classByInternalJavaName.get(internalName);
+    if (clss == null && parent != null) {
+      clss = parent.findClassByInternalJavaName(internalName);
+    }
+    return clss;
   }
   
   public boolean packageExists(String name) {
-    return registeredJactlPackages.contains(name);
+    return registeredJactlPackages.contains(name) || parent != null && parent.packageExists(name);
   }
   
   public void registerClassByJavaName(String internalName, Class<?> clss) {
@@ -107,15 +135,21 @@ public class RegisteredClasses {
         return clss;
       }
     }
+    if (parent != null) {
+      return parent.getRegisteredClass(javaClass);
+    }
     throw new IllegalStateException("Cannot find class " + javaClass.getName() + " as a registered Jactl type");
   }
   
   public BiConsumer<Checkpointer,Object> getCheckpointer(Class<?> javaClass) {
-    for (; javaClass != null; javaClass = javaClass.getSuperclass()) {
-      BiConsumer<Checkpointer, Object> checkPointer = checkpointers.get(javaClass);
+    for (Class<?> clss = javaClass; clss != null; clss = clss.getSuperclass()) {
+      BiConsumer<Checkpointer, Object> checkPointer = checkpointers.get(clss);
       if (checkPointer != null) {
         return checkPointer;
       }
+    }
+    if (parent != null) {
+      return parent.getCheckpointer(javaClass);
     }
     return null;
   }
@@ -125,7 +159,11 @@ public class RegisteredClasses {
   }
   
   public Function<Restorer, Object> getRestorer(Class<?> javaClass) {
-    return restorers.get(javaClass);
+    Function<Restorer,Object> restorer = restorers.get(javaClass);
+    if (restorer == null && parent != null) {
+      restorer = parent.getRestorer(javaClass);
+    }
+    return restorer;
   }
   
   void registerRestorer(Class<?> javaClass, Function<Restorer, Object> restorer) {

@@ -64,6 +64,11 @@ public class JactlClass {
     jactlClassName = jactlClass.replaceAll("^.*\\.", "");
     jactlPackage   = jactlClass.replaceAll("\\.[^.]*$", "");
   }
+  
+  public JactlClass(String jactlClassName, JactlContext context) {
+    this(jactlClassName);
+    this.jactlContext = context;
+  }
 
   /**
    * Specify the Java class that provides the implementation for this Jactl class.
