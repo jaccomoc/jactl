@@ -29,10 +29,11 @@ import java.util.*;
 
 public class DateTimeClasses {
   private static boolean initialised = false;
-  private static boolean autoImport  = Boolean.parseBoolean(System.getProperty("io.jactl.dateTimeClasses.autoImport", "true"));
+  private static boolean dateTimeEnabled = Boolean.parseBoolean(System.getProperty("io.jactl.dateTimeClasses.enabled", "true"));
+  private static boolean autoImport = Boolean.parseBoolean(System.getProperty("io.jactl.dateTimeClasses.autoImport", "true"));
   
   public static void register() {
-    if (initialised) return;
+    if (initialised || !dateTimeEnabled) return;
     initialised = true;
 
     try {
@@ -42,19 +43,19 @@ public class DateTimeClasses {
 
       Jactl.createClass("jactl.time.TemporalAmount")
            .javaClass(java.time.temporal.TemporalAmount.class)
-           .autoImport(true)
+           .autoImport(autoImport)
            .register();
 
       Jactl.createClass("jactl.time.Temporal")
            .javaClass(java.time.temporal.Temporal.class)
-           .autoImport(true)
+           .autoImport(autoImport)
            .register();
 
       // LocalTime
       JactlType localTimeType = Jactl.createClass("jactl.time.LocalTime")
                                      .javaClass(java.time.LocalTime.class)
                                      .baseClass("jactl.time.Temporal")
-                                     .autoImport(true)
+                                     .autoImport(autoImport)
                                      //.method("adjustInto", "adjustInto", "arg1", Temporal.class)
                                      .method("atDate", "atDate", "date", LocalDate.class)
                                      //.method("atOffset", "atOffset", "arg1", ZoneOffset.class)
@@ -126,7 +127,7 @@ public class DateTimeClasses {
                                      .javaClass(LocalDate.class)
                                      .baseClass("jactl.time.Temporal")
                                      .debugLevel(0)
-                                     .autoImport(true)
+                                     .autoImport(autoImport)
                                      .mapType(ChronoLocalDate.class, LocalDate.class)
                                      .method("atStartOfDay", "atStartOfDay")
                                      .method("atStartOfDayInZone", "atStartOfDay", "zoneId", ZoneId.class)
@@ -196,7 +197,7 @@ public class DateTimeClasses {
         Jactl.createClass("jactl.time.LocalDateTime")
              .javaClass(LocalDateTime.class)
              .baseClass("jactl.time.Temporal")
-             .autoImport(true)
+             .autoImport(autoImport)
              .mapType(ChronoLocalDateTime.class, LocalDateTime.class)
              .method("atZone", "atZone", "zoneId", ZoneId.class)
              .method("getDayOfMonth", "getDayOfMonth")
@@ -298,7 +299,7 @@ public class DateTimeClasses {
       // ZoneId
       JactlType zoneIdType = Jactl.createClass("jactl.time.ZoneId")
                                   .javaClass(java.time.ZoneId.class)
-                                  .autoImport(true)
+                                  .autoImport(autoImport)
                                   //.method("from", "from", "arg1", TemporalAccessor.class)
                                   //.method("getDisplayName", "getDisplayName", "arg1", TextStyle.class, "arg2", Locale.class)
                                   .method("getId", "getId")
@@ -318,7 +319,7 @@ public class DateTimeClasses {
       Jactl.createClass("jactl.time.Period")
            .baseClass("jactl.time.TemporalAmount")
            .javaClass(java.time.Period.class)
-           .autoImport(true)
+           .autoImport(autoImport)
            //.mapType(TemporalAmount.class, Period.class)
            //.method("addTo", "addTo", "arg1", Temporal.class)
            .method("between", "between", "start", LocalDate.class, "end", LocalDate.class)
@@ -367,7 +368,7 @@ public class DateTimeClasses {
         = Jactl.createClass("jactl.time.Duration")
                .javaClass(Duration.class)
                .baseClass("jactl.time.TemporalAmount")
-               .autoImport(true)
+               .autoImport(autoImport)
                //.mapType(TemporalAmount.class, Duration.class)
                .methodCanThrow("abs", "abs")
                //.method("addTo", "addTo", "arg1", Temporal.class)
@@ -429,7 +430,7 @@ public class DateTimeClasses {
         Jactl.createClass("jactl.time.Instant")
              .javaClass(java.time.Instant.class)
              .baseClass("jactl.time.Temporal")
-             .autoImport(true)
+             .autoImport(autoImport)
              //.method("adjustInto", "adjustInto", "arg1", Temporal.class)
              //.method("atOffset", "atOffset", "arg1", ZoneOffset.class)
              .method("atZone", "atZone", "zoneId", ZoneId.class)
@@ -489,7 +490,7 @@ public class DateTimeClasses {
         Jactl.createClass("jactl.time.ZonedDateTime")
              .javaClass(java.time.ZonedDateTime.class)
              .baseClass("jactl.time.Temporal")
-             .autoImport(true)
+             .autoImport(autoImport)
              //.method("from", "from", "arg1", TemporalAccessor.class)
              //.method("get", "get", "arg1", TemporalField.class)
              .method("getDayOfMonth", "getDayOfMonth")
