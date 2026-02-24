@@ -219,8 +219,8 @@ public class RegisterClassTests extends BaseTest {
     @Override public long getLong(TemporalField field) { return 0; }
   }
 
-  @Test public void contextsWithSeparateBuiltins() throws NoSuchMethodException {
-    JactlContext context = JactlContext.create().hasOwnBuiltins(true).build();
+  @Test public void contextsWithSeparateBuiltIns() throws NoSuchMethodException {
+    JactlContext context = JactlContext.create().hasOwnBuiltIns(true).build();
     context.createClass("test.jactl.time.TestClass__LocalDate4")
            .javaClass(MyLocalDate4.class)
            .autoImport(true)

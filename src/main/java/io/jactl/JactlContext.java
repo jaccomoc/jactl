@@ -205,7 +205,7 @@ public class JactlContext {
      * @param value  true if this JactlContext has registered classes of its own that shouldn't be shared with other JactlContexts (defaults to false)
      * @return this JactlContextBuilder
      */
-    public JactlContextBuilder hasOwnBuiltins(boolean value)    { registeredClasses = value ? new RegisteredClasses(RegisteredClasses.INSTANCE) : null; return this; }
+    public JactlContextBuilder hasOwnBuiltIns(boolean value)    { registeredClasses = value ? new RegisteredClasses(RegisteredClasses.INSTANCE) : null; return this; }
 
     /**
      * Set the minimum scale to use for Decimal numbers
@@ -360,7 +360,7 @@ public class JactlContext {
     if (registeredClasses != null) {
       return new JactlClass(jactlClassName, this);
     }
-    throw new IllegalStateException("JactlContext has not been configured to have its own built-ins (see hasOwnBuiltins() call)");
+    throw new IllegalStateException("JactlContext has not been configured to have its own built-ins (see hasOwnBuiltIns() call)");
   }
   
   public void deregister(String name) {

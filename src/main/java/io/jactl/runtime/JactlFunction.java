@@ -332,7 +332,7 @@ public class JactlFunction extends FunctionDescriptor {
     this.mandatoryParams  = getMandatoryParams();
     this.wrapperMethod    = null;
     this.isBuiltin        = true;
-    this.isStaticImplementation = true;   // Builtins are Java static methods even if they might be Jactl methods
+    this.isStaticImplementation = true;   // BuiltIns are Java static methods even if they might be Jactl methods
     this.isAsync          = isAsync();
     this.isGlobalFunction = type == null;
 
