@@ -38,6 +38,9 @@ Jactl supports the following object types as values for the global variables:
 * List
 * Map
 
+Jactl also supports these java.time classes:
+* Instant, LocalTime, LocalDate, LocalDateTime, ZonedDateTime, ZoneId, Duration, Period
+
 For Maps, the keys must be Strings and for both Lists and Maps, the values in the List or Map should be one of the
 types listed above.
 

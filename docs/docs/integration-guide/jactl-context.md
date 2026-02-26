@@ -7,8 +7,14 @@ of type `io.jactl.JactlContext` when evaluating or compiling scripts.
 The `JactlContext` allows you to set some options (including the execution environment - see below) and provides
 a way to compile sets of related Jactl scripts and Jactl classes.
 Jactl classes can only be referenced from scripts and other classes that have been compiled using the same `JactlContext`.
-For example, this provides a level of separation if you want to be able to run a multi-tenant application where
-each tenant has their own set of scripts and classes.
+
+Each `JactlContext` represents a secure sandbox that prevents scrips and classes within that sandbox from being
+able to access anything that has not been defined with that `JactlContext` object. 
+This provides a level of separation if you want to be able to run a multi-tenant application where
+each tenant has their own set of scripts and classes, for example.
+
+An application can also decide to expose different sets of functions/methods and different
+sets of additional built-in types to each `JactlContext`.
 
 To create a `JactlContext` object you call the class static method `create()` followed by a number of fluent-style
 methods for setting various options and then finally invoke `build()` to return the instance.
@@ -39,15 +45,15 @@ They have a Jactl package which could be `''` if unspecified or something like `
 exists at the top of the script.
 
 In order not to clash with Java packages, the Jactl package hierarchy is placed inside a default Java package of
-`io.jactl.pkg`.
-Therefore, scripts without a Jactl package will end up in the package `io.jactl.pkg` and with a package declaration
-like `x.y.z` the package will be `io.jactl.pkg.x.y.z`.
+`jactl.pkg`.
+Therefore, scripts without a Jactl package will end up in the package `jactl.pkg` and with a package declaration
+like `x.y.z` the package will be `jactl.pkg.x.y.z`.
 
 If you would like to change what Java package the Jactl scripts and classes should reside under you can use the
 `javaPackage()` method when building your `JactlContext`:
 ```java
 JactlContext context = JactlContext.create()
-                                   .javaPackage("io.jactl.pkg.abc")
+                                   .javaPackage("jactl.pkg.abc")
                                    .build();
 ```
 
@@ -113,7 +119,7 @@ with `true`.
 ## hasOwnFunctions(boolean value)
 
 This controls whether the `JactlContext` object will have its own set of functions/methods registered with it.
-By default, all `JactlContext` share the same functions/methods registered using `Jactl.function() ... .register()`
+By default, all `JactlContext` objects share the same functions/methods registered using `Jactl.function() ... .register()`
 or `Jactl.method(type) ... .register()` (see section below on [Adding New Functions/Methods](adding-new-functions)).
 
 If you would like to have different sets of functions/methods for different sets of scripts you can create different
@@ -125,6 +131,21 @@ would like to be available to all scripts before creating any `JactlContext` obj
 
 See [Adding New Functions/Methods](adding-new-functions) for more details.
 
+## hasOwnBuiltIns(boolean value)
+
+This controls whether the `JactlContext` object will have its own set of built-in types registered with it.
+By default, all `JactlContext` objects share the same set of built-ins registered using `Jactl.createClass() ... .register()`
+(see section below on [Adding New Built-In Types](adding-new-builtins)).
+
+If you would like to have different sets of built-in types for different sets of scripts you can create different
+`JactlContext` objects and register different classes for the built-in types with each object.
+
+Note that the classes that have already been registered at the time that the `JactlContext` is created will be
+available to scripts compiled with that `JactlContext` so you should register all classes that you
+would like all scripts to have access to before creating any `JactlContext` objects.
+
+See [Adding New Built-In TYpes](adding-new-builtins) for more details.
+
 ## Chaining Method Calls
 
 The methods for building a `JactlContext` can be chained in any order (apart from `create()` which must be first
@@ -132,11 +153,12 @@ and `build()` which must come last).
 So to explicitly build a `JactlContext` with all the default values:
 ```java
 JactlContext context = JactlContext.create()
-                                   .javaPackage("io.jactl.pkg")
+                                   .javaPackage("jactl.pkg")
                                    .environment(new io.jactl.DefaultEnv())
                                    .minScale(10)
                                    .classAccessToGlobals(false)
                                    .hasOwnFunctions(false)
+                                   .hasOwnBuiltIns(false)
                                    .debug(0)
                                    .build();
 

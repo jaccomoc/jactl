@@ -126,14 +126,19 @@ specification (see Expr.java and Stmt.java).
 
 ## How big is the compiler?
 
-The Jactl source code currently is about 25K lines of code after stripping out comments and
-blank lines (or 33K including comments and blank lines).
+The Jactl source code currently is about 30K lines of code after stripping out comments and
+blank lines (or 40K lines including comments and blank lines).
 
 ## How many test cases are there?
 
-There are currently over 11,000 individual test cases.
+There are currently roughly 15,000 individual test cases.
 Each test case is a Jactl script that is compiled, run, and then verified against the expected
 result (or the expected error).
+
+## Was any of Jactl written by AI?
+
+No, AI was not used in the development of Jactl, nor was it used to produce any of the documentation.
+The only use of AI was to help in producing the drawings on the home page of the Jactl website.
 
 ## What other libraries does Jactl depend on?
 
@@ -166,7 +171,6 @@ encoded strings:
 ```java
 public class Base64Functions {
   public static byte[] base64Decode(String data) { return Base64.getDecoder().decode(data); }
-  public static Object base64DecodeData;
 }
 ```
 Then, to register this as a Jactl method on String objects just invoke this in your application

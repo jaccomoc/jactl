@@ -17,10 +17,15 @@
 
 package io.jactl;
 
+import io.jactl.runtime.Continuation;
+import io.jactl.runtime.JactlMethodHandle;
 import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.RuntimeUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -28,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Examples used in documentation
@@ -123,6 +129,68 @@ public class ExampleTests {
     script  = Jactl.compileScript("package a.b.c; def x = new Multiplier(13); x.mult(17)", globals, context);
     script.run(globals, result -> System.out.println("Result: " + result));
   }
+  
+  @Test public void asyncExample() {
+    try {
+      Jactl.function()
+           .name("measure")
+           .asyncParam("closure")     // only async when closure passed in is async
+           .impl(ExampleTests.class, "measure")
+           .register();
+
+      JactlScript script   = Jactl.compileScript("measure{ sleep(1000) }", new HashMap<>());
+      long        duration = (long)script.runSync(new HashMap<>());
+      assertTrue(duration >= Duration.ofMillis(1000).toNanos() && duration <= Duration.ofMillis(1100).toNanos());
+    }
+    finally {
+      Jactl.deregister("measure");
+    }
+  }
+
+  public static long measure(Continuation c, String source, int offset, JactlMethodHandle closure) {
+    long start = System.nanoTime();
+    try {
+      RuntimeUtils.invoke(closure, source, offset);
+      return System.nanoTime() - start;
+    }
+    catch(Continuation cont) {
+      throw new Continuation(cont, measureResumeHandle,
+                             0,
+                             new long[]{ start },
+                             new Object[0]);
+    }
+  }
+
+  public static Object measureResume(Continuation c) {
+    long start = c.localPrimitives[0];
+    return System.nanoTime() - start;
+  }
+
+  private static JactlMethodHandle measureResumeHandle = RuntimeUtils.lookupMethod(ExampleTests.class,
+                                                                                   "measureResume",
+                                                                                   Object.class,
+                                                                                   Continuation.class);
+
+//  public static JactlMethodHandle measure$cHandle = RuntimeUtils.lookupMethod(ExampleTests.class, "measure$c", Object.class, Continuation.class);
+//  public static Object measure$c(Continuation c) {
+//    return measure(c, (String)c.localObjects[0], (int)c.localPrimitives[0], null);
+//  }
+//
+//  public static long measure(Continuation c, String source, int offset, JactlMethodHandle closure) {
+//    Instant start = c == null ? Instant.now() : (Instant)c.localObjects[1];
+//    if (c == null) {
+//      try {
+//        closure.invoke(c, source, offset, new Object[0]);
+//      }
+//      catch (Continuation cont) {
+//        throw new Continuation(cont, measure$cHandle, 0, new long[]{offset}, new Object[]{source, start});
+//      }
+//      catch (Throwable t) {
+//        throw new RuntimeError(t.getMessage(), source, offset, t);
+//      }
+//    }
+//    return Duration.between(start, Instant.now()).toMillis();
+//  }
 
   public static class Base64Functions {
     public static void registerFunctions() {
@@ -187,5 +255,29 @@ public class ExampleTests {
         env.scheduleEvent(threadContext, () -> resumer.accept(finalRetVal));
       });
     }
+  }
+
+  public static class Point {
+    double x, y;
+    public static Point of(double x, double y) {
+      Point p = new Point();
+      p.x = x;
+      p.y = y;
+      return p;
+    }
+    public double distanceTo(Point other) {
+      return Math.sqrt((x - other.x) * (x - other.x) + (y - other.y) * (y - other.y));
+    }
+  }
+  
+  @Test public void testPoint() throws NoSuchMethodException {
+    JactlType pointType = Jactl.createClass("jactl.draw.Point")
+                               .javaClass(Point.class)
+                               .autoImport(true)
+                               .method("of", "of", "x", double.class, "y", double.class)
+                               .method("distanceTo", "distanceTo", "other", Point.class)
+                               .register();
+    
+    assertEquals(2.8284271247461903D, Jactl.eval("Point p = Point.of(1,2); p.distanceTo(Point.of(3,4))"));
   }
 }

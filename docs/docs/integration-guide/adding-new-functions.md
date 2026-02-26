@@ -9,19 +9,17 @@ can use.
 For example, assume we want to provide a method on byte arrays for encoding into base64 and a method on Strings for
 decoding from base64:
 ```groovy
-> def x = [ 1, 2, 3, 4] as byte[]
-> x.base64Encode()
-AQIDBA==
-> 'AQIDBA=='.base64Decode()
-[1, 2, 3, 4]
+def x = [ 1, 2, 3, 4] as byte[]
+def encoded = x.base64Encode()      // result: AQIDBA==
+'AQIDBA=='.base64Decode()           // result: [1, 2, 3, 4]
 ```
 
 In addition, to show how we can add new global functions, we will use the example function `sendReceiveJson()` that
 is provided by the [`jactl-vertx`](https://github.com/jaccomoc/jactl-vertx) project.
 It is an example function for sending/receiving JSON messages over HTTP:
 ```groovy
-> sendReceiveJson(url:'http://localhost:52178/wordCount', request:[text:'here are some more words to be counted'])
-[response:8, statusCode:200]
+sendReceiveJson(url:'http://localhost:52178/wordCount', request:[text:'here are some more words to be counted'])
+// result: [response:8, statusCode:200]
 ```
 
 To make Jactl aware of new methods and global functions we use `Jactl.method()` (for methods) and `Jactl.function()`
@@ -41,7 +39,7 @@ The `Jactl.method()` method takes an argument, being the type of object on which
 For `base64Decode()` the method exists only on String objects, so we use `JactlType.STRING` to specify the Jactl
 type for Strings.
 
-The types that can be used here are:
+The existing built-in types that can be used here are:
 
 | Type               | Description                                        | Java Type to Use |
 |:-------------------|:---------------------------------------------------|:-----------------|
@@ -89,29 +87,10 @@ This is the name that Jactl scripts will use to refer to the method or function.
 
 The other mandatory method is `impl()` which tells Jactl the class and the name of the static method to invoke
 for the implementation of the method/function.
-In addition, if a third argument is passed to `impl()` it is the name of a public static field of type Object
-in the implementing class that the Jactl runtime can use to cache some data needed for the function/method.
-If no third argument is present it will default the name to the static method name appended with `Data` (e.g `base64DecodeData`).
-
-So this:
-```java
-Jactl.method(JactlType.STRING)
-     .name("base64Decode")
-     .impl(Base64Functions.class, "base64Decode")
-     .register();
-```
-
-is the same as this:
-```java
-Jactl.method(JactlType.STRING)
-     .name("base64Decode")
-     .impl(Base64Functions.class, "base64Decode", "base64DecodeData")
-     .register();
-```
 
 :::note
-Each function/method being registered needs to provide its own public static field of type Object.
-These fields cannot be shared between functions.
+Previously, a public static `Object` field had to be provided for each method/function being registered.
+This is now not needed but existing code will still function unchanged.
 :::
 
 If there are no parameters to the function/method then this is all that is needed before invoking the
@@ -127,12 +106,10 @@ Since there are no parameters for these methods, the implementing class can be a
     public static String base64Encode(byte[] data) {
       return new String(Base64.getEncoder().encode(data));
     }
-    public static Object base64EncodeData;
 
     public static byte[] base64Decode(String data) {
       return Base64.getDecoder().decode(data);
     }
-    public static Object base64DecodeData;
   }
 ```
 
@@ -143,7 +120,7 @@ global function takes two parameters: the URL to send to, and the request object
 When registering a method or function, if there are parameters, then they need to be declared using the `.param()`
 method.
 This allows Jactl to support named parameter passing.
-For example, we declared the `url` and `request` parameters for the `sendReceiveJson()` function like this:
+For example, we declare the `url` and `request` parameters for the `sendReceiveJson()` function like this:
 ```java
 Jactl.function()
      .name("sendReceiveJson")
@@ -187,7 +164,7 @@ Jactl.method(STRING)
      .register();
 ```
 
-The `param("base", 10)` means that if no parameter is supplied it will be automatically filled in with `10`.
+The call `param("base", 10)` means that if no parameter is supplied it will be automatically filled in with `10`.
 
 ## Exception Handling
 
@@ -200,7 +177,7 @@ There are two constructors of `RuntimeError` that can be used:
 ```
 
 The `source` and `offset` parameters refer to the source code and offset into the source code where the error occurs.
-In order to know where your method/function is being invoked in the source code, you just declare a `String` and `int`
+In order to know where your method/function is being invoked in the source code, you should declare a `String` and `int`
 parameter in your static implementation method and Jactl will take care of populating these parameters with the values
 from where in the code the method/function was invoked.
 Don't declare these using `.param()` since they are not explicit parameters that the script writer passes in.
@@ -226,7 +203,7 @@ public class ExampleFunctions {
          .impl(ExampleFunctions.class, "exampleFunctionImpl")
          .register();
     
-    Jactl.method(JactlType.ANY)
+    Jactl.method(JactlType.STRING)
          .name("exampleMethod")
          .param("firstArg", -1)
          .impl(ExampleFunctions.class, "exampleMethodImpl")
@@ -242,7 +219,8 @@ public class ExampleFunctions {
     }
   }
   
-  public static int exampleMethodImpl(Object obj, String source, int offset, int firstArg) {
+  // Note that the target of the method is always the first parameter
+  public static int exampleMethodImpl(String str, String source, int offset, int firstArg) {
     try {
       ...
     }
@@ -262,10 +240,10 @@ before returning the response to the caller.
 The problem is that we don't want our `sendReceiveJson()` function to actually block and wait for the response.
 The response may take a long time, or we might time out waiting, and we don't want to block the event-loop thread
 for that entire time.
-We want the function to suspend execution of the current script until the result is returned, freeing up the event-loop
-thread to process other events.
+We would like to be able to the function to suspend execution of the current script until the result is returned,
+freeing up the event-loop thread to process other events.
 
-Any function that is going to suspend the current execution needs to accept a `Continuation` object as its first
+Any function that is going to suspend the current execution needs to accept a `io.jactl.runtime.Continuation` object as its first
 argument to allow the function to be able to be resumed/continued once the asynchronous operation has finished.
 The idea is that the function can check the `Continuation` object to see if it is being resumed (continued) after a
 suspension and can also obtain the result of the long-running asynchronous operation from the `Continuation` object
@@ -286,7 +264,7 @@ parameter that represents the object on which the method is being invoked:
     ...
   }
 
-  public static String someAsyncMethod(String obj, Continuation c, String param1, Object param2, int param3) {
+  public static String someAsyncMethod(String str, Continuation c, String param1, Object param2, int param3) {
     ...
   }
 ```
@@ -300,12 +278,13 @@ place so the example above would more likely look like this:
     ...
   }
 
-  public static String someAsyncMethod(String obj, Continuation c, String source, int offset, String param1, Object param2, int param3) {
+  public static String someAsyncMethod(String str, Continuation c, String source, int offset, String param1, Object param2, int param3) {
     ...
   }
 ```
 
-In order to actually suspend the execution state, there are two static methods provided by the `Continuation` class:
+In order to actually suspend the execution state, there are two static methods provided by the `Continuation` class
+that can be invoked from within the implementation of the function/method:
 1. `Continuation.suspendBlocking()`, and
 2. `Continuation.suspendNonBlocking()`.
 
@@ -452,7 +431,6 @@ class MyFunctions {
   public static long measure(Continuation c, String source, int offset, JactlMethodHandle closure) {
     ...
   }
-  public static Object measureData;
 }
 ```
 
@@ -656,13 +634,12 @@ class MyFunctions {
       return System.nanoTime() - start;
     }
     catch(Continuation cont) {
-     throw new Continuation(cont, measureResumeHandle,
-                             0,
-                             new long[]{ start },
-                             new Object[0]);
+       throw new Continuation(cont, measureResumeHandle,
+                              0,
+                              new long[]{ start },
+                              new Object[0]);
     }
   }
-  public static Object measureData;
 
   public static Object measureResume(Continuation c) {
     long start = c.localPrimitives[0];
@@ -679,8 +656,8 @@ class MyFunctions {
 Now we can measure how many nanoseconds it takes (wall clock time) for a closure to finish even if it does asynchronous
 operations:
 ```groovy
-> measure{ sleep(1000) }
-1001947542
+measure{ sleep(1000) }
+// result: 1001947542
 ```
 
 To illustrate a slightly more complicated scenario, imagine that we actually want to run the code we are measuring

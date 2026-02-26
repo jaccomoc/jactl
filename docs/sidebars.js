@@ -56,6 +56,7 @@ module.exports = {
             'integration-guide/jactl-execution-environment',
             'integration-guide/checkpoints',
             'integration-guide/adding-new-functions',
+            'integration-guide/adding-new-builtins',
             'integration-guide/example-application',
           ]
         },
