@@ -111,7 +111,7 @@ public class CircularBuffer<T> implements Checkpointable {
     checkpointer.writeCInt(BuiltinFunctions.getClassId(CircularBuffer.class));
     checkpointer.writeCInt(VERSION);
     checkpointer.writeCInt(buffer.length);
-    checkpointer._writeBoolean(canGrow);
+    checkpointer.writeBoolean(canGrow);
     int size = size();
     checkpointer.writeCInt(size);
     for (int i = head; i != tail; i = (i + 1) % buffer.length) {

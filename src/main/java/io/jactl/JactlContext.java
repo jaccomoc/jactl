@@ -349,7 +349,7 @@ public class JactlContext {
   }
 
   /**
-   * Create a new built-in type that will only be visible t classes and scripts compiled with this
+   * Create a new built-in type that will only be visible to classes and scripts compiled with this
    * JactlConext and that will have the given name within any scripts/classes.
    * Note that the JactlClass object must have {@link JactlClass#register()} invoked on it (after other
    * calls to specify its implementation and methods) for it to be actually registered with this JactlContext.
@@ -359,6 +359,19 @@ public class JactlContext {
   public JactlClass createClass(String jactlClassName) {
     if (registeredClasses != null) {
       return new JactlClass(jactlClassName, this);
+    }
+    throw new IllegalStateException("JactlContext has not been configured to have its own built-ins (see hasOwnBuiltIns() call)");
+  }
+
+  /**
+   * Forward declare a Jactl class that can referred to when registering other Jactl classes.
+   * This solves the problem of registering Jactl classes when circular dependencies exist.
+   * @param jactlClass the name of the Jactl class that will be later registered (x.y.ClassName)
+   * @param javaClass  the Java class that will be used as the implementation of this Jactl class
+   */
+  public void declareClass(String jactlClass, Class javaClass) {
+    if (registeredClasses != null) {
+      registeredClasses.declareClass(jactlClass, javaClass.getName());
     }
     throw new IllegalStateException("JactlContext has not been configured to have its own built-ins (see hasOwnBuiltIns() call)");
   }

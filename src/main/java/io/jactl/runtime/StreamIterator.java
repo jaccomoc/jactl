@@ -41,7 +41,7 @@ public class StreamIterator extends JactlIterator {
     checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
     checkpointer.writeObject(nextValue);
-    checkpointer._writeBoolean(haveValue);
+    checkpointer.writeBoolean(haveValue);
   }
 
   @Override public void _$j$restore(Restorer restorer) {

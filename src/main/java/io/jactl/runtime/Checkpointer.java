@@ -185,6 +185,10 @@ public class Checkpointer {
     buf = b;
   }
 
+  /**
+   * Write object to buffer
+   * @param value the object to write
+   */
   public void writeObject(Object value) {
     if (value == null) {
       // Use ordinal of -1 to signify null
@@ -337,54 +341,66 @@ public class Checkpointer {
     }
   }
 
-  public void writeByteObj(byte b) {
+  private void writeByteObj(byte b) {
     ensureCapacity(2);
     _writeType(BYTE);
     writeByte(b);
   }
 
-  public void writeIntObj(int i) {
+  private void writeIntObj(int i) {
     ensureCapacity(6);
     _writeType(INT);
     _writeCInt(i);
   }
 
-  public void writeLongObj(long v) {
+  private void writeLongObj(long v) {
     ensureCapacity(6);
     _writeType(LONG);
     _writeCLong(v);
   }
 
+  /**
+   * Write long to buffer
+   * @param v the long value
+   */
   public void writeLong(long v) {
     ensureCapacity(8);
     _writeLong(v);
   }
 
-  public void _writeBoolean(boolean b) {
+  /**
+   * Write boolean to buffer
+   * @param b the boolean
+   */
+  public void writeBoolean(boolean b) {
     writeByte(b ? (byte)1 : 0);
   }
 
-  public void writeBoolean(boolean b) {
-    writeByte(b ? (byte)1 : (byte)0);
-  }
-
-  public void writeBooleanObj(boolean b) {
+  private void writeBooleanObj(boolean b) {
     ensureCapacity(2);
     _writeType(BOOLEAN);
     buf[idx++] = b ? (byte)1 : (byte)0;
   }
 
+  /**
+   * Write double to buffer
+   * @param d the double
+   */
   public void writeDouble(double d) {
     ensureCapacity(8);
     _writeLong(Double.doubleToRawLongBits(d));
   }
 
-  public void writeDoubleObj(double d) {
+  private void writeDoubleObj(double d) {
     ensureCapacity(9);
     _writeType(DOUBLE);
     _writeLong(Double.doubleToRawLongBits(d));
   }
 
+  /**
+   * Write BigDecimal to buffer. Value can be null.
+   * @param v the BigDecimal
+   */
   public void writeDecimal(BigDecimal v) {
     if (v == null) {
       writeTypeEnum(TypeEnum.NULL_TYPE);
@@ -400,7 +416,7 @@ public class Checkpointer {
     }
   }
 
-  public void writeDecimalObj(BigDecimal v) {
+  private void writeDecimalObj(BigDecimal v) {
     if (v == null) {
       writeTypeEnum(TypeEnum.NULL_TYPE);
     }
@@ -410,6 +426,10 @@ public class Checkpointer {
     }
   }
 
+  /**
+   * Write int to buffer
+   * @param num the int
+   */
   public void writeInt(int num) {
     ensureCapacity(4);
     _writeInt(num);
@@ -508,11 +528,10 @@ public class Checkpointer {
     buf[idx++] = (byte)(v & 0xff); v >>>= 8;
   }
 
-  public void writeClong(long num) {
-    ensureCapacity(10);
-    _writeCLong(num);
-  }
-
+  /**
+   * Write byte to buffer
+   * @param b the byte
+   */
   public void writeByte(byte b) {
     ensureCapacity(1);
     buf[idx++] = b;

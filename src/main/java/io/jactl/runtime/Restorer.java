@@ -117,6 +117,10 @@ public class Restorer {
     }
   }
 
+  /**
+   * Read boolean from buffer
+   * @return the boolean value
+   */
   public boolean readBoolean() {
     return buf[idx++] != 0;
   }
@@ -137,10 +141,21 @@ public class Restorer {
   }
   public static String EXPECT_CINT = "expectCInt";
 
+  /**
+   * Read byte from buffer
+   * @return the byte
+   */
   public byte readByte() {
     return buf[idx++];
   }
 
+  /**
+   * Read a compress integer from buffer.
+   * We use a more compact representation for integers that are usually low values.
+   * For large values this is more expensive but if you know that the values will
+   * generally be in the low range then this can save bytes for each integer encoded.
+   * @return the integer
+   */
   public int readCInt() {
     int num = 0;
     int i = 0;
@@ -151,6 +166,10 @@ public class Restorer {
   }
   public static String READ_CINT = "readCInt";
 
+  /**
+   * Read a compressed long from buffer
+   * @return the long
+   */
   public long readCLong() {
     long num = 0;
     int i = 0;
@@ -161,10 +180,18 @@ public class Restorer {
   }
   public static String READ_CLONG = "readCLong";
 
+  /**
+   * Read a double from buffer
+   * @return the double
+   */
   public double readDouble() {
     return Double.longBitsToDouble(readLong());
   }
 
+  /**
+   * Read a BigDecimal value from buffer with null support
+   * @return the BigDecimal
+   */
   public BigDecimal readDecimal() {
     if (readTypeEnum() == JactlType.TypeEnum.NULL_TYPE) {
       return null;
@@ -173,6 +200,10 @@ public class Restorer {
     return new BigDecimal(val);
   }
 
+  /**
+   * Read a BigDecimal value from the buffer where we know null cannot have been encoded
+   * @return the BigDecimal
+   */
   public BigDecimal readDecimalObj() {
     String val = readString();
     return new BigDecimal(val);
@@ -186,6 +217,10 @@ public class Restorer {
     return num;
   }
 
+  /**
+   * Read long value from buffer
+   * @return the long
+   */
   public long readLong() {
     long num = buf[idx++] & 0xff;
     num += (buf[idx++] & 0xff) << 8;
@@ -201,7 +236,7 @@ public class Restorer {
   private StringBuffer readStringBuffer() {
     return new StringBuffer(readString());
   }
-
+  
   private String readString() {
     int length = readCInt();
     StringBuilder sb = new StringBuilder(length);
@@ -211,6 +246,10 @@ public class Restorer {
     return sb.toString();
   }
 
+  /**
+   * Read an object from the buffer
+   * @return the object
+   */
   public Object readObject() {
     return readObject(false);
   }
@@ -384,7 +423,7 @@ public class Restorer {
     }
   }
 
-  public Object createArray() {
+  private Object createArray() {
     int numDimensions = buf[idx++];
     int[]     dimensions = new int[numDimensions];
     JactlType type       = readType();
@@ -426,12 +465,12 @@ public class Restorer {
     }
   }
 
-  public Object createBuiltinInstance() {
+  private Object createBuiltinInstance() {
     Class clss = BuiltinFunctions.getClass(readCInt());
     return newInstance(clss);
   }
 
-  public Class createClass() {
+  private Class createClass() {
     String internalClassName = (String)readObject();
     return getJactlClass(internalClassName);
   }

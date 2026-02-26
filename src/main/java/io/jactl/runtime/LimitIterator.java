@@ -36,7 +36,7 @@ public class LimitIterator extends JactlIterator {
     checkpointer.writeCInt(IteratorType.LIMIT.ordinal());
     checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(iter);
-    checkpointer._writeBoolean(reachedEnd);
+    checkpointer.writeBoolean(reachedEnd);
     checkpointer.writeCInt(limit);
     checkpointer.writeCInt(count);
   }

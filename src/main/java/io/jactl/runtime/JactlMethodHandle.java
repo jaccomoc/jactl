@@ -114,11 +114,11 @@ public abstract class JactlMethodHandle implements Checkpointable {
       // For JactlObject handles we write the class name but for built-in function classes
       // we write an id that has been registered with BuiltinFunctions.
       if (JactlObject.class.isAssignableFrom(handleClass)) {
-        checkpointer._writeBoolean(true);
+        checkpointer.writeBoolean(true);
         checkpointer.writeObject(Type.getInternalName(handleClass));
       }
       else {
-        checkpointer._writeBoolean(false);
+        checkpointer.writeBoolean(false);
         checkpointer.writeCInt(BuiltinFunctions.getClassId(handleClass));
         checkpointer.writeCInt(handleClass.getName().hashCode());
       }

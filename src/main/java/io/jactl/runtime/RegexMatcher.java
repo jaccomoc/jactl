@@ -83,7 +83,7 @@ public class RegexMatcher implements Checkpointable {
     globalMatcher.checkpoint(checkpointer);
     nonGlobalMatcher.checkpoint(checkpointer);
     checkpointer.writeBoolean(lastWasGlobal);
-    checkpointer._writeBoolean(captureAsNums);
+    checkpointer.writeBoolean(captureAsNums);
   }
 
   @Override public void _$j$restore(Restorer restorer) {
@@ -219,7 +219,7 @@ public class RegexMatcher implements Checkpointable {
     public void checkpoint(Checkpointer checkpointer) {
       checkpointer.writeObject(str);
       checkpointer.writeObject(originalStr);
-      checkpointer._writeBoolean(matched);
+      checkpointer.writeBoolean(matched);
       checkpointer.writeCInt(lastStart);
       checkpointer.writeCInt(lastPos);
       checkpointer.writeObject(regex);

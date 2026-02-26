@@ -40,7 +40,7 @@ public class SkipIterator extends JactlIterator {
     checkpointer.writeObject(iter);
     checkpointer.writeCInt(count);
     checkpointer.writeObject(buffer);
-    checkpointer._writeBoolean(reachedEnd);
+    checkpointer.writeBoolean(reachedEnd);
   }
 
   @Override public void _$j$restore(Restorer restorer) {

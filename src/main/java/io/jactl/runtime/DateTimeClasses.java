@@ -126,7 +126,6 @@ public class DateTimeClasses {
       JactlType localDateType = Jactl.createClass("jactl.time.LocalDate")
                                      .javaClass(LocalDate.class)
                                      .baseClass("jactl.time.Temporal")
-                                     .debugLevel(0)
                                      .autoImport(autoImport)
                                      .mapType(ChronoLocalDate.class, LocalDate.class)
                                      .method("atStartOfDay", "atStartOfDay")

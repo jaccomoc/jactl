@@ -47,7 +47,7 @@ class MapIterator extends JactlIterator {
     checkpointer.writeObject(source);
     checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
-    checkpointer._writeBoolean(withIndex);
+    checkpointer.writeBoolean(withIndex);
     checkpointer.writeCInt(index);
   }
 

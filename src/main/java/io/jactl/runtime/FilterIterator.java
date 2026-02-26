@@ -45,7 +45,7 @@ class FilterIterator extends JactlIterator {
     checkpointer.writeCInt(offset);
     checkpointer.writeObject(closure);
     checkpointer.writeObject(next);
-    checkpointer._writeBoolean(hasNext);
+    checkpointer.writeBoolean(hasNext);
   }
 
   @Override public void _$j$restore(Restorer restorer) {

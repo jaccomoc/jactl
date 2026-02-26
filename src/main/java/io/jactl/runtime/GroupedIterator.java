@@ -49,8 +49,8 @@ public class GroupedIterator extends JactlIterator {
     checkpointer.writeCInt(offset);
     checkpointer.writeCInt(size);
     checkpointer.writeBoolean(sliding);
-    checkpointer._writeBoolean(haveNext);
-    checkpointer._writeBoolean(finished);
+    checkpointer.writeBoolean(haveNext);
+    checkpointer.writeBoolean(finished);
     checkpointer.writeObject(group);
   }
 

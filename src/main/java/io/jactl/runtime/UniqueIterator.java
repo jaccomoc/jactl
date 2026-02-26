@@ -39,9 +39,9 @@ public class UniqueIterator extends JactlIterator {
     checkpointer.writeObject(source);
     checkpointer.writeCInt(offset);
     checkpointer.writeObject(current);
-    checkpointer._writeBoolean(reachedEnd);
-    checkpointer._writeBoolean(hasValue);
-    checkpointer._writeBoolean(first);
+    checkpointer.writeBoolean(reachedEnd);
+    checkpointer.writeBoolean(hasValue);
+    checkpointer.writeBoolean(first);
   }
 
   @Override public void _$j$restore(Restorer restorer) {

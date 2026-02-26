@@ -353,7 +353,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       checkpointer.writeType(ITERATOR);
       checkpointer.writeCInt(IteratorType.NUMBER.ordinal());
       checkpointer.writeCInt(VERSION);
-      checkpointer.writeClong(num);
+      checkpointer.writeCLong(num);
       checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
@@ -454,9 +454,9 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       checkpointer.writeObject(source);
       checkpointer.writeCInt(offset);
       checkpointer.writeCInt(index);
-      checkpointer._writeBoolean(last);
-      checkpointer._writeBoolean(hasNext);
-      checkpointer._writeBoolean(findNext);
+      checkpointer.writeBoolean(last);
+      checkpointer.writeBoolean(hasNext);
+      checkpointer.writeBoolean(findNext);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
