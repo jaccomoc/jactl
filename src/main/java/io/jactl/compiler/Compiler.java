@@ -19,6 +19,7 @@ package io.jactl.compiler;
 
 import io.jactl.*;
 import io.jactl.resolver.Resolver;
+import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.ClassDescriptor;
 
 import java.io.BufferedReader;
@@ -31,6 +32,11 @@ import java.util.function.Function;
  * for compiling and running scripts.
  */
 public class Compiler {
+  
+  static {
+    BuiltinFunctions.registerBuiltinFunctions();
+  }
+  
   public static Object eval(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
     JactlScript compiled = compileScript(source, jactlContext, packageName, bindings);
     return compiled.runSync(bindings);

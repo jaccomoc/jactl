@@ -94,6 +94,9 @@ public class RegisterClassTests extends BaseTest {
     testError("def date = LocalDate1.parse('2026-0115'); date.getYear()", "could not be parsed");
 
     test("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", true);
+    
+    JactlContext context = JactlContext.create().replMode(true).build();
+    assertTrue((boolean)Jactl.eval("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", new HashMap<>(), context));
   }
 
   public static class MyLocalDate2 implements ChronoLocalDate {
