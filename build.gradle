@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 James Crawford
+ * Copyright 2026 James Crawford
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,6 @@ dependencies {
 tasks.withType(JavaCompile) { options.deprecation = true }
 
 java {
-
     withJavadocJar()
     withSourcesJar()
     sourceCompatibility = "1.8"
@@ -105,7 +104,8 @@ publishing {
             }
         }
     }
-//    repositories {
+    repositories {
+//        // Repository for publishing to Sonatype OSSRH
 //        maven {
 //            url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
 //            credentials(PasswordCredentials) {
@@ -113,9 +113,21 @@ publishing {
 //                password = ossrhPassword
 //            }
 //        }
-//    }
+        // Local repository for bundling release files
+        maven {
+            name = 'releaseBundle'
+            url = layout.buildDirectory.dir("release-bundle")
+        }
+    }
 }
 
 //signing {
 //    sign publishing.publications.mavenJava
 //}
+
+// Task to bundle all release artifacts (jars, pom, signatures, checksums)
+tasks.register('bundleReleaseFiles') {
+    group = "Distribution"
+    description = "Assembles all release artifacts into build/release-bundle"
+    dependsOn "publishMavenJavaPublicationToReleaseBundleRepository"
+}
