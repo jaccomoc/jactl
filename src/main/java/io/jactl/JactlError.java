@@ -44,7 +44,7 @@ public class JactlError extends RuntimeException {
       else {
         causeMsg += " (" + cause.getClass().getSimpleName() + ")";
       }
-      error += ": " + causeMsg;
+      error += (error.isEmpty() ? "" : ": ") + causeMsg;
     }
     this.errorMessage = error;
     this.location = location;

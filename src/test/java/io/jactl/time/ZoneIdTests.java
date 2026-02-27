@@ -64,6 +64,7 @@ public class ZoneIdTests extends BaseTest {
     test("def z = ZoneId.of('UTC+10:00'); def f = z.normalized; f() == ZoneId.of('+10:00')", true);
     test("ZoneId z = ZoneId.of('UTC+10:00'); z.normalized() == ZoneId.of('+10:00'); z == ZoneId.of('UTC+10:00')", true);
     test("ZoneId z = ZoneId.of('Australia/Sydney'); z.getId() == z.normalized().getId()", true);
+    test("ZoneId.of('XXX') == null", true);
     try {
       // Make sure there is a valid ZoneId.systemDefault() first so tests don't fail just because system
       // on which they are running does not have a valid timezone set
@@ -73,7 +74,7 @@ public class ZoneIdTests extends BaseTest {
       test("def f = ZoneId.systemDefault; f().getId() in ZoneId.getAvailableZoneIds()", true);
     }
     catch (DateTimeException e) {
-      // For some reason there is no valid systemDefault zone configured
+      // If, for some reason there is no valid systemDefault zone configured
     }
   }
 

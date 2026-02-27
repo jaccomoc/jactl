@@ -93,7 +93,7 @@ public class JactlFunction extends FunctionDescriptor {
 
   JactlContext context;
 
-  private static final Object MANDATORY = new Object();
+  public static final Object MANDATORY = new Object();
 
   /**
    * Constructor for methods
