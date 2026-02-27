@@ -61,6 +61,7 @@ public class LocalDateTests extends BaseTest {
   
   @Test public void atStartOfDay() {
     test("LocalDate.parse('2026-02-20').atStartOfDay()", LocalDate.parse("2026-02-20").atStartOfDay());
+    test("LocalDate.parse('2026-02-20').atStartOfDay()", LocalDateTime.parse("2026-02-20T00:00:00"));
     test("def f = LocalDate.parse('2026-02-20').atStartOfDay; f()", LocalDate.parse("2026-02-20").atStartOfDay());
   }
 

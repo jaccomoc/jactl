@@ -40,6 +40,7 @@ module.exports = {
             'language-guide/collection-methods',
             'language-guide/global-functions',
             'language-guide/builtin-methods',
+            'language-guide/builtin-datetime-methods',
           ]
         },
         'command-line-scripts',

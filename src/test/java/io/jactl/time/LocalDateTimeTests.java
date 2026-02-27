@@ -351,13 +351,13 @@ public class LocalDateTimeTests extends BaseTest {
     testError("LocalDateTime t = LocalDateTime.of(2026,22,18,12,11)", "invalid value");
   }
   
-  @Test public void ofDateTime() {
-    test("LocalDateTime t = LocalDateTime.ofDateTime(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789))", LocalDateTime.of(LocalDate.of(2026,02,18), LocalTime.of(12, 11, 13, 123456789)));
-    test("def f = LocalDateTime.ofDateTime; f(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789)));
-    test("def f = LocalDateTime.ofDateTime; f(date:LocalDate.of(2026,02,18),time:LocalTime.of(12,11,13,123456789))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789)));
-    test("LocalDateTime t = LocalDateTime.ofDateTime(LocalDate.of(2026,02,18),LocalTime.of(12,11,13))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13)));
-    test("LocalDateTime t = LocalDateTime.ofDateTime(date:LocalDate.of(2026,02,18),time:LocalTime.of(12,11,13))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13)));
-    testError("LocalDateTime t = LocalDateTime.ofDateTime(LocalDate.of(2026,02,18))", "missing mandatory argument");
+  @Test public void ofDateAndTime() {
+    test("LocalDateTime t = LocalDateTime.ofDateAndTime(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789))", LocalDateTime.of(LocalDate.of(2026,02,18), LocalTime.of(12, 11, 13, 123456789)));
+    test("def f = LocalDateTime.ofDateAndTime; f(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789)));
+    test("def f = LocalDateTime.ofDateAndTime; f(date:LocalDate.of(2026,02,18),time:LocalTime.of(12,11,13,123456789))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13,123456789)));
+    test("LocalDateTime t = LocalDateTime.ofDateAndTime(LocalDate.of(2026,02,18),LocalTime.of(12,11,13))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13)));
+    test("LocalDateTime t = LocalDateTime.ofDateAndTime(date:LocalDate.of(2026,02,18),time:LocalTime.of(12,11,13))", LocalDateTime.of(LocalDate.of(2026,02,18),LocalTime.of(12,11,13)));
+    testError("LocalDateTime t = LocalDateTime.ofDateAndTime(LocalDate.of(2026,02,18))", "missing mandatory argument");
   }
   
   @Test public void ofEpochSecond() {

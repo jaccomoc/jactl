@@ -622,3 +622,302 @@ missing, rather than a Map:
 def x = [:]
 x.a['b'] = 1      // error: Non-numeric value for index during List access
 ```
+
+## Date/Time Types
+
+For doing date/time operations, Jactl supports most of the same classes as Java does in its `java.time.*` package.
+
+These are the Jactl types that are supported:
+- jactl.time.LocalTime
+- jactl.time.LocalDate
+- jactl.time.LocalDateTime
+- jactl.time.ZonedDateTime
+- jactl.time.Instant
+- jactl.time.Period
+- jactl.time.Duration
+- jactl.time.ZoneId
+
+Each type is an exposed version of the corresponding Java type.
+For example, `jactl.time.LocalTime` objects are instances of `java.time.LocalTime`.
+
+This means that most of the existing Java documentation about how to use these types applies also in Jactl.
+Some Java types have not been exposed in Jactl and some methods have been omitted for simplification purposes.
+The full set of methods available in Jactl is documented in [Built-In Date/Time Methods](builtin-datetime-methods).
+
+Where Java methods would return an `enum` value (for example `LocalDateTime.getDayOfWeek()`), Jactl returns the
+`String` value instead.
+So calls to classes supporting `getDayOfWeek()` return values such as `'MONDAY', 'TUESDAY', ...` and calls to
+`getMonth()` return values such as `'JANUARY', 'FEBRUARY', ...`.
+
+### Automatic Importing of Date/Time Types
+
+By default, all of these types are automatically imported into Jactl scripts and classes and do not need to be
+fully qualified when using them.
+There is a system property `io.jactl.dateTimeClasses.autoImport` that defaults to `true` that automatically imports
+these types into scripts and classes.
+Given that these types were introduced in Jactl 2.4.0, users may wish to not have these automatically available in
+Jactl code and can set this system property to `false` to prevent them being automatically imported.
+
+Another system property `io.jactl.dateTimeClasses.enabled` (that also defaults to `true`) can be set to `false` to
+completely exclude these classes from Jactl code (even when using fully qualified class names).
+
+### LocalTime
+
+This type represents a time without a time-zone.
+It has the hours, minute, second, and nanosecond.
+
+Like all the date/time classes, `LocalTime` is an immutable type so methods such as `plusHours()`, `withMinute()`,
+`truncatedToMillis()`, etc, do not mutate the instance but return a new instance.
+
+```groovy
+// Constructing LocalTime instances
+LocalTime t1 = LocalTime.now()
+LocalTime t2 = LocalTime.parse('10:11:12.123456789')
+LocalTime t3 = LocalTime.parse('10:11:12')
+LocalTime t4 = LocalTime.of(10, 11, 12, 123456789)
+LocalTime t5 = LocalTime.of(10, 11, 12)
+LocalTime t6 = LocalTime.parseWithFormat('10/11/12:123456', 'HH/mm/ss:SSSSSS')
+LocalTime t7 = LocalTime.nowInZone(ZoneId.of('UTC'))
+
+// Some methods
+t6.atDate(LocalDate.parse('2026-02-26'))   // 2026-02-26T10:11:12.123456
+t2.format('HH-mm-ss-SSSSSS')               // 10-11-12-123456
+t2.getHour()                               // 10
+t6.isAfter(t5)                             // true
+t6.minus(Duration.ofSeconds(2))            // 10:11:10.123456
+t6.plusHours(2)                            // 12:11:12.123456
+t6.withMinute(13)                          // 10:13:12.123456
+t6.truncatedToMillis()                     // 10:11:12.123
+t6.toSecondOfDay()                         // 36672
+t6.until(LocalTime.parse('11:11:12.123456')) == Duration.ofHours(1)   // true
+```
+
+### LocalDate
+
+This immutable type represents a date without a time-zone.
+It has a year, month, and day.
+
+```groovy
+// Constructing LocalDate instances
+LocalDate d1 = LocalDate.parse('2026-02-26')
+LocalDate d2 = LocalDate.of(2026,2,26)
+LocalDate d3 = LocalDate.ofEpochDay(10)        // 1970-01-11
+LocalDate d4 = LocalDate.ofYearDay(2026,32)    // 2026-02-01
+LocalDate d5 = LocalDate.now()
+LocalDate d6 = LocalDate.nowInZone(ZoneId.of('UTC'))
+LocalDate d7 = LocalDate.parseWithFormat('2026/02/26', 'yyyy/MM/dd')
+
+// Some methods
+LocalDateTime t1  = d1.atStartOfDay()                       // 2026-02-26T00:00:00
+ZonedDateTime zdt = d1.atStartOfDayInZone(ZoneId.of('Australia/Sydney'))  // 2026-02-26T00:00+11:00[Australia/Sydney]
+LocalDateTime t2  = d1.atTime(LocalTime.parse('10:11:12'))  // 2026-02-26T10:11:12
+d1.format('yyyy MMM dd')                                    // 2026 Feb 26
+d1.getDayOfWeek()                                           // 'THURSDAY'
+d1.getMonth()                                               // 'FEBRUARY'
+d1.isBefore(d4)                                             // false
+d1.isLeapYear()                                             // false
+d1.lengthOfMonth()                                          // 28
+d1.lengthOfYear()                                           // 365
+d1.minus(Period.ofDays(27))                                 // 2026-01-30
+d1.plusDays(5).plusMonths(3)                                // 2026-06-03
+d4.until(d1) == Period.ofDays(25)                           // true
+d1.withDayOfMonth(3)                                        // 2026-02-03
+```
+
+### LocalDateTime
+
+This immutable type represents a date and time without a time-zone.
+
+It has a year, month, day, hour, minute, second, and nanosecond.
+
+```groovy
+// Constructing LocalDateTime instances
+LocalDateTime dt1 = LocalDateTime.parse('2026-02-26T10:11:12')
+LocalDateTime dt2 = LocalDateTime.parse('2026-02-26T10:11:12.123456789')
+LocalDateTime dt3 = LocalDateTime.parseWithFormat('2026/02/26 10:11:12.123', 'yyyy/MM/dd HH:mm:ss.SSS')
+LocalDateTime dt4 = LocalDateTime.now()
+LocalDateTime dt5 = LocalDateTime.nowInZone(ZoneId.of('UTC'))
+LocalDateTime dt6 = LocalDateTime.of(2026,2,26,10,11,12,123456)     // 2026-02-26T10:11:12.123456
+LocalDateTime dt7 = LocalDateTime.of(2026,2,26,10,11,12)            // 2026-02-26T10:11:12
+LocalDateTime dt8 = LocalDateTime.of(2026,2,26,10,11)               // 2026-02-26T10:11
+LocalDate d = LocalDate.of(2026,2,26)
+LocalTime t = LocalTime.of(10,11,12,123456789)
+LocalDateTime dt9 = LocalDateTime.ofDateAndTime(d, t)               // 2026-02-26T10:11:12.123456789
+LocalDateTime dt10 = LocalDateTime.ofInstant(Instant.now())
+LocalDateTime dt11 = LocalDateTime.ofEpochSecond(1, 123456789)      // 1970-01-01T00:00:01.123456789
+LocalDateTime dt12 = LocalDateTime.ofEpochSecond(1)                 // 1970-01-01T00:00:01
+
+// Some methods
+dt2.atZone(ZoneId.of('Australia/Sydney'))     // 2026-02-26T10:11:12.123456789+11:00[Australia/Sydney]
+dt2.format('yyyy-MMM-dd HH:mm:ss.SSS')        // 2026-Feb-26 10:11:12.123
+dt2.getDayOfYear()                            // 57
+dt2.getDayOfMonth()                           // 26
+dt2.getDayOfWeek()                            // 'THURSDAY'
+dt2.getMonthValue()                           // 2
+dt2.getMonth()                                // 'FEBRUARY'
+dt2.isAfter(dt1)                              // true
+dt2.isBefore(dt1)                             // false
+dt2.minusMinutes(12)                          // 2026-02-26T09:59:12.123456789
+dt2.minusWeeks(2)                             // 2026-02-12T10:11:12.123456789
+dt2.plus(Duration.ofSeconds(48))              // 2026-02-26T10:12:00.123456789
+dt2.plus(Period.ofWeeks(5))                   // 2026-04-02T10:11:12.123456789
+dt2.toLocalDate()                             // 2026-02-26
+dt2.toLocalTime()                             // 10:11:12.123456789
+dt2.truncatedToMicros()                       // 2026-02-26T10:11:12.123456
+dt2.truncatedToDays()                         // 2026-02-26T00:00
+dt2.withYear(1969)                            // 1969-02-26T10:11:12.123456789
+dt2.withNano(999)                             // 2026-02-26T10:11:12.000000999
+```
+
+### ZonedDateTime
+
+ZonedDateTime is an immutable type that represents a date and time within a time-zone.
+It has a year, month, day, hour, minute, second, nanosecond, and a zone id.
+
+```groovy
+// Constructing ZonedDateTime instances
+ZonedDateTime zdt1 = ZonedDateTime.parse('2026-02-26T10:11:12Z')
+ZonedDateTime zdt2 = ZonedDateTime.parse('2026-02-26T10:11:12+00:00')
+ZonedDateTime zdt3 = ZonedDateTime.parse('2026-02-26T10:11:12.123456789+00:00[UTC]')
+ZonedDateTime zdt4 = ZonedDateTime.parseWithFormat('2026-02-26 10/12/13+00:00UTC','yyyy-MM-dd HH/mm/ssxxxVV')
+ZonedDateTime zdt5 = ZonedDateTime.now()
+ZonedDateTime zdt6 = ZonedDateTime.nowInZone(ZoneId.of('UTC'))
+ZonedDateTime zdt7 = ZonedDateTime.of(2026,2,26,10,11,12,123456,ZoneId.of('UTC'))
+LocalDate d = LocalDate.of(2026,2,26)
+LocalTime t = LocalTime.of(10,11,12,123456789)
+ZonedDateTime zdt8 = ZonedDateTime.ofDateAndTime(d,t,ZoneId.of('UTC'))    // 2026-02-26T10:11:12.123456789Z[UTC]
+LocalDateTime ldt = LocalDateTime.parse('2026-02-26T10:11:12.123456789')
+ZonedDateTime zdt9 = ZonedDateTime.ofDateTime(ldt, ZoneId.of('UTC'))      // 2026-02-26T10:11:12.123456789Z[UTC]
+ZonedDateTime zdt10 = ZonedDateTime.ofInstant(Instant.now())
+
+// Some methods
+zdt3.format("yyyy-MMM-dd HH:mm:ss.SSSxxx'['VV']'")  // 2026-Feb-26 10:11:12.123+00:00[UTC]
+zdt3.getDayOfYear()                            // 57
+zdt3.getDayOfMonth()                           // 26
+zdt3.getDayOfWeek()                            // 'THURSDAY'
+zdt3.getMonthValue()                           // 2
+zdt3.getMonth()                                // 'FEBRUARY'
+zdt3.getZone()                                 // UTC
+zdt3.minusMinutes(12)                          // 2026-02-26T09:59:12.123456789Z[UTC]
+zdt3.minusWeeks(2)                             // 2026-02-12T10:11:12.123456789Z[UTC]
+zdt3.plus(Duration.ofSeconds(48))              // 2026-02-26T10:12:00.123456789Z[UTC]
+zdt3.plus(Period.ofWeeks(5))                   // 2026-04-02T10:11:12.123456789Z[UTC]
+zdt3.toLocalDate()                             // 2026-02-26
+zdt3.toLocalTime()                             // 10:11:12.123456789
+zdt3.toLocalDateTime()                         // 2026-02-26T10:11:12.123456789
+zdt3.truncatedToMicros()                       // 2026-02-26T10:11:12.123456Z[UTC]
+zdt3.truncatedToDays()                         // 2026-02-26T00:00Z[UTC]
+zdt3.withYear(1969)                            // 1969-02-26T10:11:12.123456789Z[UTC]
+zdt3.withNano(999)                             // 2026-02-26T10:11:12.000000999Z[UTC]
+```
+
+### Instant
+
+This is an immutable type that represents a point in time.
+It can be used for timestamps, for example.
+An `Instant` object holds the value for an epoch second (seconds since 1970-01-01T00:00:00Z) and a nanosecond within that second.
+
+```groovy
+// Constructing Instant instances
+Instant i1 = Instant.now()
+Instant i2 = Instant.parse('2026-02-26T10:11:12.123456789Z')
+Instant i3 = Instant.ofEpochSecond(1)              // 1970-01-01T00:00:01Z
+Instant i4 = Instant.ofEpochMilli(1772100672123L)  // 2026-02-26T10:11:12.123Z
+
+// Some methods
+i2.getEpochSecond()                                // 1772100672
+i2.getNano()                                       // 123456789
+i2.isAfter(i4)                                     // true
+i2.isBefore(i3)                                    // false
+i2.minus(Duration.ofMillis(123))                   // 2026-02-26T10:11:12.000456789Z
+i2.minusSeconds(12)                                // 2026-02-26T10:11:00.123456789Z
+i2.plus(Duration.ofSeconds(48))                    // 2026-02-26T10:12:00.123456789Z
+i2.plusNanos(987654321)                            // 2026-02-26T10:11:13.111111110Z
+i2.toEpochMilli()                                  // 1772100672123
+i2.withMicro(123)                                  // 2026-02-26T10:11:12.000123Z
+i2.truncatedToDays()                               // 2026-02-26T00:00:00Z
+i2.truncatedToHours()                              // 2026-02-26T10:00:00Z
+i2.truncatedToMillis()                             // 2026-02-26T10:11:12.123Z
+```
+
+### Period
+
+A `Period` represents an amount of time between two dates in terms of years, months, and days.
+It can be used in `plus` or `minus` on date based types to construct new dates.
+
+```groovy
+// Constructing Period instances
+Period p1 = Period.of(1,2,3)
+Period p2 = Period.ofDays(3)
+Period p3 = Period.ofMonths(2)
+Period p4 = Period.ofWeeks(4)
+Period p5 = Period.ofYears(1)
+Period p6 = Period.parse('P1Y2M3D')
+Period p7 = Period.between(LocalDate.parse('2026-02-26'), LocalDate.parse('2027-04-29'))
+
+// Some methods
+p6.getDays()                       // 3
+p6.getMonths()                     // 2
+p6.getYears()                      // 1
+p6.isNegative()                    // false
+p6.isZero()                        // false
+p6.minus(Period.of(1,2,0))         // P3D
+p6.minusDays(4)                    // P1Y2M-1D
+p6.multipliedBy(2)                 // P2Y4M6D
+p6.negated()                       // P-1Y-2M-3D
+Period.of(1,24,4).normalized()     // P3Y4D
+p6.plus(p6)                        // P2Y4M6D
+p6.plusMonths(4)                   // P1Y6M3D
+p6.toTotalMonths()                 // 14
+p6.withDays(5)                     // P1Y2M5D
+```
+
+### Duration
+
+A `Duration` represents the duration between two points in time and is measured in terms of seconds and nanoseconds.
+
+```groovy
+// Constructing Duration instances
+Duration d1 = Duration.parse('P1D')
+Duration d2 = Duration.parse('PT1H2.345S')
+Duration d3 = Duration.ofNanos(-123)
+Duration d4 = Duration.ofMinutes(3)
+Duration d5 = Duration.ofSecondsAndNanos(2,123456789)
+Duration d6 = Duration.between(LocalDateTime.parse('2026-02-26T10:11:12'), LocalDateTime.parse('2026-03-26T10:11:12'))
+
+// Some methods
+d3.abs()                          // PT0.000000123S
+d1.dividedBy(2)                   // PT12H
+d3.getNano()                      // 999999877
+d3.getSeconds()                   // -1
+d3.isNegative()                   // true
+d3.isZero()                       // false
+d3.minus(Duration.ofHours(1))     // PT-1H-0.000000123S
+d3.minusMillis(456)               // PT-0.456000123S
+d3.multipliedBy(3)                // PT-0.000000369S
+d3.negated()                      // PT0.000000123S
+d3.plus(Duration.ofMinutes(1))    // PT59.999999877S
+d3.plusHours(1)                   // PT59M59.999999877S
+d3.toHours()                      // 0
+d3.toMillis()                     // -1
+d3.withSeconds(2)                 // PT2.999999877S
+```
+
+### ZonedId
+
+`ZoneId` is used to represent a time-zone such as `Australia/Sydney`.
+
+```groovy
+// Constructing ZoneId instances
+ZoneId zid1 = ZoneId.of('Australia/Sydney')
+ZoneId zid2 = ZoneId.systemDefault()
+
+// Some methods
+ZoneId.getAvailableZoneIds()          // ['Asia/Aden', 'America/Cuiaba', 'Etc/GMT+9', ...
+ZoneId.isValid('XXX/YYY')             // false
+ZoneId.isValid('Antarctica/Mawson')   // true
+ZoneId.of('XXX')                      // null
+```
+
+Note, that in Jactl, if you invoke `ZoneId.of()` with an invalid or unknown zone id, it will return `null`.
+This differs from Java, where it will throw an exception.

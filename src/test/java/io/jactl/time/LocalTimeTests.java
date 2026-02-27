@@ -351,7 +351,7 @@ public class LocalTimeTests extends BaseTest {
   }
 
   @Test public void parseWithFormat() {
-    test("LocalTime.parseWithFormat('12/13/14','HH/mm/ss')", LocalTime.parse("12/13/14", DateTimeFormatter.ofPattern("HH/mm/ss")));
+    test("LocalTime.parseWithFormat('12/13/14:123456','HH/mm/ss:SSSSSS')", LocalTime.parse("12/13/14:123456", DateTimeFormatter.ofPattern("HH/mm/ss:SSSSSS")));
     test("def f = LocalTime.parseWithFormat; f('12/13/14','HH/mm/ss')", LocalTime.parse("12/13/14", DateTimeFormatter.ofPattern("HH/mm/ss")));
     test("LocalTime.parseWithFormat(text:'12/13/14',format:'HH/mm/ss')", LocalTime.parse("12/13/14", DateTimeFormatter.ofPattern("HH/mm/ss")));
     test("def f = LocalTime.parseWithFormat; f(text:'12/13/14',format:'HH/mm/ss')", LocalTime.parse("12/13/14", DateTimeFormatter.ofPattern("HH/mm/ss")));

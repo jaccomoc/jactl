@@ -229,7 +229,7 @@ public class DateTimeClasses {
              .methodCanThrow("minusYears", "minusYears", "years", long.class)
              .method("now", "now")
              .method("nowInZone", "now", "zone", ZoneId.class)
-             .methodCanThrow("ofDateTime", "of", "date", LocalDate.class, "time", LocalTime.class)
+             .methodCanThrow("ofDateAndTime", "of", "date", LocalDate.class, "time", LocalTime.class)
              .methodCanThrow("ofInstant", "ofInstant", "instant", Instant.class, "zoneId", ZoneId.class)
              .methodCanThrow("parse", "parse", "text", CharSequence.class)
              .methodCanThrow("plus", "plus", "amount", TemporalAmount.class)
