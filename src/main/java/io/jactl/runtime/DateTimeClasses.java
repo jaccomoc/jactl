@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.Jactl;
 import io.jactl.JactlType;
+import io.jactl.Pair;
 
 import java.time.*;
 import java.time.chrono.ChronoLocalDate;
@@ -26,6 +27,9 @@ import java.time.chrono.ChronoLocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.*;
 import java.util.*;
+import java.util.stream.Stream;
+
+import static io.jactl.runtime.JactlFunction.MANDATORY;
 
 public class DateTimeClasses {
   private static boolean initialised = false;
@@ -40,6 +44,10 @@ public class DateTimeClasses {
       Jactl.declareClass("jactl.time.ZoneId", ZoneId.class);
       Jactl.declareClass("jactl.time.Instant", Instant.class);
       Jactl.declareClass("jactl.time.Duration", Duration.class);
+      Jactl.declareClass("jactl.time.Period", Period.class);
+      Jactl.declareClass("jactl.time.LocalDateTime", LocalDateTime.class);
+      Jactl.declareClass("jactl.time.ZonedDateTime", ZonedDateTime.class);
+      Jactl.declareClass("jactl.time.LocalDate", LocalDate.class);
 
       Jactl.createClass("jactl.time.TemporalAmount")
            .javaClass(java.time.temporal.TemporalAmount.class)
@@ -305,12 +313,12 @@ public class DateTimeClasses {
                                   //.method("getRules", "getRules")
                                   .method("normalized", "normalized")
                                   //.method("of", "of", "arg1", String.class, "arg2", Map.class)
-                                  .methodCanThrow("of", "of", "zoneId", String.class)
                                   //.method("ofOffset", "ofOffset", "arg1", String.class, "arg2", ZoneOffset.class)
                                   .methodCanThrow("systemDefault", "systemDefault")
                                   .checkpoint((checkpointer, obj) -> checkpointer.writeObject(((ZoneId) obj).getId()))
                                   .restore(restorer -> ZoneId.of((String) restorer.readObject()))
                                   .register();
+      Jactl.method(zoneIdType).name("of").isStatic(true).param("zone").impl(DateTimeClasses.class, "zoneIdOf").register();
       Jactl.method(zoneIdType).name("isValid").isStatic(true).param("zone").impl(DateTimeClasses.class, "zoneIdIsValid").register();
       Jactl.method(zoneIdType).name("getAvailableZoneIds").isStatic(true).impl(DateTimeClasses.class, "zoneIdGetAvailableZoneIds").register();
 
@@ -912,6 +920,21 @@ public class DateTimeClasses {
   public static List<String> zoneIdGetAvailableZoneIds() {
     return availableZoneIds; 
   }
+
+  /**
+   * Provide our own ZoneId.of() method that catches the exception that is thrown when
+   * the zone does not exist and returns null instead.
+   * @param zone the name of the zone
+   * @return the ZoneId or null if it does not exist
+   */
+  public static ZoneId zoneIdOf(String zone) {
+    try {
+      return ZoneId.of(zone);
+    }
+    catch (DateTimeException e) {
+      return null;
+    }
+  }
   
   //////////////////////////////////////
   
@@ -930,5 +953,83 @@ public class DateTimeClasses {
     catch (DateTimeException|ArithmeticException e) {
       throw new RuntimeError("Error getting duration: " + e.getMessage(), source, offset, e);
     }
+  }
+  
+  public static void main(String[] args) {
+    BuiltinFunctions.registerBuiltinFunctions();
+    Stream.of("jactl.time.LocalTime",
+              "jactl.time.LocalDate",
+              "jactl.time.LocalDateTime",
+              "jactl.time.ZonedDateTime",
+              "jactl.time.Instant",
+              "jactl.time.Period",
+              "jactl.time.Duration",
+              "jactl.time.ZoneId")
+          .map(RegisteredClasses.INSTANCE::getClassDescriptor)
+          .forEach(desc -> System.out.println(formatClassMethods(desc)));
+
+    Stream.of(JactlType.STRING, JactlType.LIST, JactlType.MAP, JactlType.NUMBER)
+          .forEach(type -> {
+            System.out.println("## " + type + " Methods");
+            System.out.println("```groovy");
+            Functions.INSTANCE.getAllMethods(type)
+                              .stream()
+                              .sorted(Comparator.comparing(pair -> pair.second.name))
+                              .flatMap(pair -> pair.second.getAliases().stream().map(alias -> Pair.create(alias, pair.second)))
+                              .forEach(pair -> System.out.println(formatFn(pair.first, pair.second)));
+            System.out.println("```\n");
+          });
+  }
+
+  private static String formatClassMethods(ClassDescriptor desc) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("## ")
+      .append(desc.className)
+      .append(" Methods")
+      .append("\n```groovy\n");
+    desc.getAllMethods()
+        .sorted(Comparator.comparing(a -> a.getValue().name))
+        .forEach(entry -> sb.append(formatFn(entry.getKey(), entry.getValue())).append('\n'));
+    sb.append("```\n");
+    return sb.toString();
+  }
+  
+  private static String formatFn(String name, FunctionDescriptor fn) {
+    JactlFunction jactlFn = fn instanceof JactlFunction ? (JactlFunction)fn : null;
+    StringBuilder sb = new StringBuilder();
+    sb.append(fn.isStaticMethod ? "static " : "")
+      .append(typeName(fn.returnType))
+      .append(" ")
+      .append(name)
+      .append("(");
+    for (int i = 0; i < fn.paramCount; i++) {
+      if (i > 0) {
+        sb.append(", ");
+      }
+      sb.append(typeName(fn.paramTypes.get(i)))
+        .append(" ")
+        .append(fn.paramNames.get(i));
+      if (jactlFn != null) {
+        Object defVal = jactlFn.defaultVals[i];
+        if (defVal != MANDATORY) {
+          sb.append("=");
+          if (defVal instanceof String) {
+            sb.append("'").append(defVal).append("'");
+          }
+          else {
+            sb.append(defVal);
+          }
+        }
+      }
+    }
+    sb.append(")");
+    return sb.toString();
+  }
+  
+  private static String typeName(JactlType type) {
+    if(type.is(JactlType.INSTANCE, JactlType.CLASS)) {
+      return type.getClassDescriptor().getPackagedName().replaceAll("jactl.time.","");
+    }
+    return type.toString();
   }
 }
