@@ -13,26 +13,26 @@ You can use Jactl in three different ways:
 ## Command Line Scripts
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/2.3.0/jactl-2.3.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.3.0/jactl-2.3.0.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/2.4.0/jactl-2.4.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.4.0/jactl-2.4.0.jar)
 
 Then, to run a script you can use `-e` to specify the script on the command line:
 ```shell
-java -jar jactl-2.3.0.jar -e '10.map{ it + 1 }.sum()'
+java -jar jactl-2.4.0.jar -e '10.map{ it + 1 }.sum()'
 ```
 Or, you can provide the name of a file that contains the script:
 ```shell
-java -jar jactl-2.3.0.jar myscript.jactl
+java -jar jactl-2.4.0.jar myscript.jactl
 ```
 
 You can also use [JBang](https://www.jbang.dev/), if you have it installed, to run scripts.
 JBang will take care of finding and downloading the JAR for you.
 For example:
 ```shell
-jbang run io.jactl:jactl:2.3.0 -e '10.map{ it + 1 }.sum()'
+jbang run io.jactl:jactl:2.4.0 -e '10.map{ it + 1 }.sum()'
 ```
 
 ```shell
-jbang run io.jactl:jactl:2.3.0 myscript.jactl
+jbang run io.jactl:jactl:2.4.0 myscript.jactl
 ```
 
 ## REPL
@@ -42,19 +42,19 @@ You can also download the Jactl REPL, which gives you an interactive shell for t
 
 You can either download the JAR or use JBang.
 
-To get the JAR, download it from [https://repo1.maven.org/maven2/io/jactl/jactl-repl/2.3.0/jactl-repl-2.3.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl-repl/2.3.0/jactl-repl-2.3.0.jar)
+To get the JAR, download it from [https://repo1.maven.org/maven2/io/jactl/jactl-repl/2.4.0/jactl-repl-2.4.0.jar](https://repo1.maven.org/maven2/io/jactl/jactl-repl/2.4.0/jactl-repl-2.4.0.jar)
 and then run it directly:
 ```shell
-$ java -jar jactl-repl-2.3.0.jar
+$ java -jar jactl-repl-2.4.0.jar
 > 10.map{ it + 1 }.sum()
 55
 ```
 
 With JBang, you can run it directly and it will download it for you if you don't already have it:
 ```shell
-$ jbang run io.jactl:jactl-repl:2.3.0
+$ jbang run io.jactl:jactl-repl:2.4.0
 [jbang] Resolving dependencies...
-[jbang]    io.jactl:jactl-repl:2.3.0
+[jbang]    io.jactl:jactl-repl:2.4.0
 [jbang] Dependencies resolved
 > 10.map{ it + 1 }.sum()
 55
@@ -88,7 +88,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 <TabItem value="Gradle" label="Gradle" default>
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '2.3.0'
+implementation group: 'io.jactl', name: 'jactl', version: '2.4.0'
 ```
 </TabItem>
 <TabItem value="Maven" label="Maven">
@@ -97,7 +97,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>2.3.0</version>
+ <version>2.4.0</version>
 </dependency>
 ```
 </TabItem>
