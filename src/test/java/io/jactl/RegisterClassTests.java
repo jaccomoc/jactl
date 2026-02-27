@@ -51,7 +51,7 @@ public class RegisterClassTests extends BaseTest {
     @Override public long getLong(TemporalField field) { return 0; }
   }
   
-  @Test public void autoImport() throws NoSuchMethodException {
+  @Test public void basicTestWithAutoImported() throws NoSuchMethodException {
     Jactl.createClass("test.jactl.time.LocalDate1")
          .javaClass(MyLocalDate1.class)
          .autoImport(true)
@@ -71,6 +71,7 @@ public class RegisterClassTests extends BaseTest {
          })
          .restore(restorer -> MyLocalDate1.of(restorer.readCInt(), restorer.readCInt(), restorer.readCInt()))
          .register();
+    
     
     test("test.jactl.time.LocalDate1.now().lengthOfYear() in [365, 366]", true);
     test("def now = LocalDate1.now(); now.lengthOfYear() > 360", true);
@@ -94,6 +95,13 @@ public class RegisterClassTests extends BaseTest {
     testError("def date = LocalDate1.parse('2026-0115'); date.getYear()", "could not be parsed");
 
     test("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", true);
+    
+    test("LocalDate1.now().className()", "LocalDate1");
+    testError("LocalDate1.now().toJson()", "not supported");
+    testError("[a:1] as LocalDate1", "cannot convert");
+    testError("def m = [a:1]; m as LocalDate1", "cannot be cast");
+    testError("LocalDate1.now() as Map", "cannot coerce");
+    testError("def d = LocalDate1.now(); d as Map", "cannot coerce");
     
     JactlContext context = JactlContext.create().replMode(true).build();
     assertTrue((boolean)Jactl.eval("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", new HashMap<>(), context));

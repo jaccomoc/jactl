@@ -82,6 +82,10 @@ public class JsonEncoder {
   }
 
   public void writeObj(Object obj) {
+    writeObj(obj, null, 0);
+  }
+  
+  public void writeObj(Object obj, String source, int offset) {
     if (obj == null) {
       writeString("null", false);
       return;
@@ -113,7 +117,7 @@ public class JsonEncoder {
         if (i > 0) {
           writeByte(',');
         }
-        writeObj(list.get(i));
+        writeObj(list.get(i), source, offset);
       }
       writeByte(']');
       return;
@@ -133,7 +137,7 @@ public class JsonEncoder {
         Object                    value = entry.getValue();
         writeString(entry.getKey(), true);
         writeByte(':');
-        writeObj(value);
+        writeObj(value, source, offset);
       }
       writeByte('}');
       return;
@@ -142,6 +146,7 @@ public class JsonEncoder {
       ((JactlObject)obj)._$j$writeJson(this);
       return;
     }
+    throw new RuntimeError("toJson() not supported for type " + RuntimeUtils.className(obj), source == null ? "UNKNOWN" : source, offset);
   }
 
   private static byte[] hex = new byte[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};

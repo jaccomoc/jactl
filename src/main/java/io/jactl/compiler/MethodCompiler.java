@@ -2416,6 +2416,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                       paramTypes, getMethodDescriptor(ANY, paramTypes));
                        });
     }
+    else if (!valueType.is(ANY)) {
+      error("Cannot convert from type " + valueType + " to " + varType, compileTimeLocation);
+    }
     mv.visitLabel(end);                          // :end
     // Convert Object returned by wrapper back into instance type
     checkCast(varType);
