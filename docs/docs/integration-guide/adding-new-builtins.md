@@ -15,12 +15,8 @@ package app.jactl;
 
 public class Point {
   public double x, y;
-  public static Point of(double x, double y) {
-    Point p = new Point();
-    p.x = x;
-    p.y = y;
-    return p;
-  }
+  Point(double x, double y)                  { this.x = x; this.y = y; }
+  public static Point of(double x, double y) { return new Point(x,y); }
   public double distanceTo(Point other) {
     return Math.sqrt((x - other.x) * (x - other.x) + (y - other.y) * (y - other.y));
   }
