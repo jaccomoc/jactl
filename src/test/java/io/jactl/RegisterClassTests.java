@@ -106,7 +106,8 @@ public class RegisterClassTests extends BaseTest {
     JactlContext context = JactlContext.create().replMode(true).build();
     assertTrue((boolean)Jactl.eval("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", new HashMap<>(), context));
     
-    testError("class X extends LocalDate1 { int i }; X x = new X()", "built-in type that cannot be extended");
+    testError("class X extends LocalDate1 { int i }", "built-in type and cannot be extended");
+    testError("class X extends LocalDate1 { int i }; X x = new X()", "built-in type and cannot be extended");
   }
 
   public static class MyLocalDate2 implements ChronoLocalDate {
