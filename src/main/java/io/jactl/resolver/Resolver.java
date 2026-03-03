@@ -1814,7 +1814,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         JactlType       fieldType       = classDescriptor.getField(expr.methodName);
         if (fieldType == null || !fieldType.is(FUNCTION,ANY)) {
           if (expr.methodName.equals(Utils.JACTL_INIT)) {
-            error("Class " + expr.parent.type.getPackagedName() + " cannot be instantiated with 'new'", expr.methodNameLocation);
+            error("Class " + expr.parent.type.getPackagedName() + " is a built-in type and cannot be extended", expr.parent.location);
           }
           else {
             error("No such method/field '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
