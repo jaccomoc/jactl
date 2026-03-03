@@ -290,6 +290,7 @@ public class JactlContext {
         executionEnv = new DefaultEnv();
       }
       internalJavaPackage = javaPackage.replace('.', '/');
+      JactlClassLoader.registerJactlPkg(javaPackage);
       return JactlContext.this;
     }
 

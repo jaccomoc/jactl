@@ -17,15 +17,19 @@
 
 package io.jactl.compiler;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import io.jactl.Utils;
+import io.jactl.runtime.RuntimeError;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.*;
 
 public class JactlClassLoader extends ClassLoader {
 
   private static JactlClassLoader theLoader = new JactlClassLoader();
   
-  private Map<String,Class> classes = Collections.synchronizedMap(new HashMap<>());
+  private Map<String,Class> classes  = Collections.synchronizedMap(new HashMap<>());
+  private Set<String>       packages = Collections.synchronizedSet(new HashSet() {{ add(Utils.JACTL_PKG); }});
   
   JactlClassLoader() {
     super(JactlClassLoader.class.getClassLoader());
@@ -68,4 +72,34 @@ public class JactlClassLoader extends ClassLoader {
   public static Class<?> forName(String name, boolean initialise) throws ClassNotFoundException {
     return Class.forName(name, initialise, theLoader);
   }
+
+  public static void registerJactlPkg(String pkg) {
+    theLoader.packages.add(pkg);
+  }
+  
+  @Override
+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+    // Check if this is a class within a Jactl package we can load it ourselves and
+    // be the class loader for the class. This is important if it then needs to load
+    // further classes (such as newly added built-in types) that we have defined.
+    // Otherwise, if we let the parent class loader load the class, the class loader
+    // for the class won't be able to find these additional classes when needed.
+    if (packages.stream().anyMatch(name::startsWith)) {
+      try (InputStream is = this.getClass().getResourceAsStream("/" + name.replace('.', '/') + ".class")) {
+        if (is != null) {
+          byte[]   bytes = Utils.readAllBytes(is);
+          Class<?> clss  = defineClass(name, bytes);
+          if (resolve) {
+            resolveClass(clss);
+          }
+          return clss;
+        }
+      }
+      catch (IOException e) {
+        throw new ClassNotFoundException("Error reading class file resource when loading class " + name, e);
+      }
+    }
+    return super.loadClass(name, resolve);
+  }
+
 }

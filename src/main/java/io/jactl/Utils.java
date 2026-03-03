@@ -22,6 +22,8 @@ import io.jactl.runtime.RuntimeUtils;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -51,7 +53,7 @@ public class Utils {
   public static final int    JAVA_VERSION        = V1_8;
   
   public static final String JACTL_PKG           = "jactl.pkg";   // Java base package for Jactl classes
-  public static final String DEFAULT_JACTL_PKG   = "";
+  public static final String DEFAULT_JACTL_PKG   = "";            // The default Jactl (not Java) pacakge for scripts
   public static final String JACTL_PREFIX        = "_$j$";
   public static final String JACTL_SCRIPT_MAIN   = JACTL_PREFIX + "main";
   public static final String JACTL_INIT          = JACTL_PREFIX + "init";
@@ -1064,5 +1066,23 @@ public class Utils {
         mv.visitInsn(ARETURN);
         break;
     }
+  }
+  
+  public static byte[] readAllBytes(InputStream is) throws IOException {
+    byte[] result = null;
+    while (is.available() > 0) {
+      byte[] buf = new byte[is.available()];
+      is.read(buf);
+      if (result == null) {
+        result = buf;
+      }
+      else {
+        byte[] newBuf = new byte[result.length + buf.length];
+        System.arraycopy(result, 0, newBuf, 0, result.length);
+        System.arraycopy(buf, 0, newBuf, result.length, buf.length);
+        result = newBuf;
+      }
+    }
+    return result;
   }
 }
