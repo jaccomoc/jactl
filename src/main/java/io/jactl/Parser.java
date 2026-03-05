@@ -2561,6 +2561,9 @@ public class Parser {
    */
   private Expr.Print printExpr() {
     Token printToken = expect(PRINT,PRINTLN);
+    if (context.disablePrint) {
+      error("Use of " + printToken.getChars() + " has been disabled", printToken, false);
+    }
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, printToken).setValue(""))
                                     : parseExpression();
     return new Expr.Print(printToken, expr, printToken.is(PRINTLN));
@@ -2573,6 +2576,9 @@ public class Parser {
    */
   private Expr.Die dieExpr() {
     Token dieToken = expect(DIE);
+    if (context.disableDie) {
+      error("Use of " + dieToken.getChars() + " has been disabled", dieToken, false);
+    }
     Expr expr = isEndOfExpression() ? new Expr.Literal(new Token(STRING_CONST, dieToken).setValue(""))
                                     : parseExpression();
     return new Expr.Die(dieToken, expr);
@@ -2585,6 +2591,9 @@ public class Parser {
    */
   private Expr.Eval evalExpr() {
     Token evalToken = expect(EVAL);
+    if (context.disableEval) {
+      error("Use of " + evalToken.getChars() + " has been disabled", evalToken, false);
+    }
     expect(LEFT_PAREN);
     Expr script = parseExpression();
     Expr globals = null;

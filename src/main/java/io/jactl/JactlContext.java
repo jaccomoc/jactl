@@ -39,6 +39,9 @@ public class JactlContext {
 
   public boolean printSize            = false;
   public boolean evaluateConstExprs   = true;
+  public boolean disableEval          = false;   // Whether to disable use of eval
+  public boolean disablePrint         = false;   // Whether to disable use of print/println
+  public boolean disableDie           = false;   // Whether to disable use of die
   public boolean printLoop            = false;   // Whether to wrap script in "while (it=nextLine()) { <script> ; println it }"
   public boolean nonPrintLoop         = false;   // Whether to wrap script in "while (it=nextLine()) { <script> }"
   public boolean autoCreateAsync      = false;   // Whether to allow async functions in initialisers during auto-creation
@@ -272,6 +275,27 @@ public class JactlContext {
      */
     public JactlContextBuilder maxExecutionTime(int limitMs)     { maxExecutionTimeMs = limitMs; return this; }
 
+    /**
+     * Diable the use of eval() in scripts
+     * @param value true if eval should be disabled
+     * @return the JactlContextBuilder
+     */
+    public JactlContextBuilder disableEval(boolean value)        { disableEval = value;   return this; }
+
+    /**
+     * Diable the use of print/println in scripts
+     * @param value true if print should be disabled
+     * @return the JactlContextBuilder
+     */
+    public JactlContextBuilder disablePrint(boolean value)      { disablePrint = value;   return this; }
+    
+    /**
+     * Diable the use of die in scripts
+     * @param value true if die should be disabled
+     * @return the JactlContextBuilder
+     */
+    public JactlContextBuilder disableDie(boolean value)        { disableDie = value;   return this; }
+    
     /**
      * Build the JactlContext. This should be invoked last after chaining all the other calls used to configure
      * the JactlContext.

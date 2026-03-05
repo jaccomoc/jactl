@@ -8211,4 +8211,55 @@ class CompilerTest extends BaseTest {
     test.accept("while (true) { for (i = 0; i < 100; i++) { sleep(2,0); } }", "exceeded max time");
     test.accept("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(2, x++); } } }())", "exceeded max time");
   }
+  
+  @Test public void disablePrint() {
+    JactlContext context = JactlContext.create()
+                                       .disablePrint(true)
+                                       .build();
+    
+    try {
+      Jactl.eval("for (i=0;i<10;i++) {\n" +
+                 "  println i\n", new HashMap(), context);
+      fail("Expected compile error");
+    }
+    catch (CompileError e) {
+      assertTrue(e.getMessage().toLowerCase().contains("println has been disabled"));
+    }
+    Object result = Jactl.eval("def m = [x:1]; eval('print x',m); m", new HashMap(), context);
+    String error  = (String)((Map) result).get("$error");
+    assertTrue(error.contains("print has been disabled"));
+  }
+
+  @Test public void disableDie() {
+    JactlContext context = JactlContext.create()
+                                       .disableDie(true)
+                                       .build();
+    
+    try {
+      Jactl.eval("for (i=0;i<10;i++) {\n" +
+                 "  die 'error:' + \n", new HashMap(), context);
+      fail("Expected compile error");
+    }
+    catch (CompileError e) {
+      assertTrue(e.getMessage().toLowerCase().contains("die has been disabled"));
+    }
+    Object result = Jactl.eval("def m = [x:1]; eval('die x',m); m", new HashMap(), context);
+    String error  = (String)((Map) result).get("$error");
+    assertTrue(error.contains("die has been disabled"));
+  }
+
+  @Test public void disableEval() {
+    JactlContext context = JactlContext.create()
+                                       .disableEval(true)
+                                       .build();
+    
+    try {
+      Jactl.eval("for (i=0;i<10;i++) {\n" +
+                 "  eval('println i', [i:i])\n", new HashMap(), context);
+      fail("Expected compile error");
+    }
+    catch (CompileError e) {
+      assertTrue(e.getMessage().toLowerCase().contains("eval has been disabled"));
+    }
+  }
 }
