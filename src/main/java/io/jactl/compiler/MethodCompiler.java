@@ -1103,7 +1103,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     //= String concatenation
     if (expr.operator.is(PLUS) && expr.type.is(STRING)) {
       compile(expr.left);
-      convertToString();
+//      if (couldBeNull(expr.left)) {
+//        throwIfNull("Left hand side of String concatenation is null", expr.left.location);
+//      }
+//      convertToString();
       compile(expr.right);
       convertToString();
       invokeMethod(String.class, "concat", String.class);

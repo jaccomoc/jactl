@@ -8115,6 +8115,7 @@ class CompilerTest extends BaseTest {
 
     Map<String,Object> globals = createGlobals();
     globals.put("z", z);
+    globals.put("xxx", "xxx");
     BiConsumer<String,Object> runtest = (code,expected) -> {
       testCounter++;
       Object result = Compiler.eval(code, jactlContext, globals);
@@ -8128,6 +8129,30 @@ class CompilerTest extends BaseTest {
     runtest.accept("f(3)", 9);
     runtest.accept("z instanceof Z", true);
     runtest.accept("z.i", 2);
+    runtest.accept("xxx + xxx", "xxxxxx");
+    globals.put("xxx", null);
+    try {
+      runtest.accept("xxx + xxx", "not used");
+      fail("Expected error");
+    }
+    catch (JactlError e) {
+      assertTrue(e.getMessage().contains("Left hand side of String concatenation is null"));
+    }
+    try {
+      runtest.accept("xxx.size()", "not used");
+      fail("Expected error");
+    }
+    catch (JactlError e) {
+      assertTrue(e.getMessage().contains("null object"));
+    }
+    try {
+      globals.put("x", null);
+      runtest.accept("x + x", "not used");
+      fail("Expected error");
+    }
+    catch (JactlError e) {
+      assertTrue(e.getMessage().contains("Null operand"));
+    }
   }
 
   @Test public void inifiniteLoopDetection() {
