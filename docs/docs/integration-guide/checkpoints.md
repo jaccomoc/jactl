@@ -1,5 +1,6 @@
 ---
 title: Checkpoints
+description: "Implementing checkpoint persistence and recovery for Jactl scripts."
 ---
 
 Jactl provides a `checkpoint()` function that allows scripts to checkpoint their current state with aim of then being

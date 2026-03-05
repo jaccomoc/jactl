@@ -1,5 +1,6 @@
 ---
 title: Checkpointing
+description: "How Jactl checkpoints script execution state for persistence and recovery."
 ---
 
 Jactl provides a `checkpoint()` function that allows scripts to save their current state.

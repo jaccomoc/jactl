@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 8"
 date:       2023-04-15 16:02:57 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 8 (Treetop Tree House) using the Jactl programming language."
 ---
 
 # Day 8 - Treetop Tree House

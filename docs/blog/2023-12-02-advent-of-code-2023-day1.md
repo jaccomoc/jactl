@@ -4,6 +4,8 @@ date:       2023-12-02T13:53:36+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 1 (Trebuchet?!) using the Jactl programming language."
 ---
 
 Another year has come around quickly and so another chance to have some fun solving the Advent Of Code puzzles for 2023.

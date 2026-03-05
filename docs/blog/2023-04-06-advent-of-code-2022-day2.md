@@ -2,6 +2,8 @@
 title:  "Advent Of Code 2022 - Day 2"
 date:   2023-04-06 10:15:00 +1000
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 2 (Rock Paper Scissors) using the Jactl programming language."
 ---
 
 # Day 2 - Rock Paper Scissors

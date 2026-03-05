@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 23"
 date:       2023-05-08 16:33:16 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 23 (Unstable Diffusion) using the Jactl programming language."
 ---
 
 # Day 23: Unstable Diffusion

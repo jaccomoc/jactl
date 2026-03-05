@@ -1,5 +1,6 @@
 ---
 title: Comments
+description: "Single-line and multi-line comment syntax in Jactl."
 ---
 
 Comments in Jactl are the same as for Java and Groovy and are denoted using either line comment form, where `//` is

@@ -1,5 +1,6 @@
 ---
 title: Introduction
+description: "Jactl is a secure, embeddable scripting language for the JVM with Java/Groovy syntax, continuation-based async execution, and checkpointing support."
 ---
 
 Jactl is a powerful scripting language for the JVM platform whose syntax is a combination of bits

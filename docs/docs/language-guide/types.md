@@ -1,5 +1,6 @@
 ---
 title: Types
+description: "Jactl type system including primitive types, objects, lists, maps, and optional static typing."
 ---
 
 ## Standard Types

@@ -1,5 +1,6 @@
 ---
 title: Keywords
+description: "Complete list of reserved keywords in the Jactl language."
 ---
 
 The following table lists the reserved keywords used by Jactl:

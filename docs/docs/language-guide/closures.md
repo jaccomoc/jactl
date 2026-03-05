@@ -1,5 +1,6 @@
 ---
 title: Closures
+description: "Closures in Jactl as first-class values with implicit parameters."
 ---
 
 Closures are anonymous functions that can be defined inline.

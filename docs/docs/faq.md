@@ -1,5 +1,6 @@
 ---
 title: FAQ
+description: "Frequently asked questions about Jactl, including why it exists."
 ---
 
 ## Why do we need yet another JVM language?

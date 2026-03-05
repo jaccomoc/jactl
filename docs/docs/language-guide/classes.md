@@ -1,5 +1,6 @@
 ---
 title: Classes
+description: "Defining classes in Jactl with fields, methods, and base classes."
 ---
 
 Jactl supports user-defined classes.

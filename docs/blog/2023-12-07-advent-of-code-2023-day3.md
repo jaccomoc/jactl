@@ -4,6 +4,8 @@ date:       2023-12-07T11:28:09+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 3 (Gear Ratios) using the Jactl programming language."
 ---
 
 After an easyish day 2, the difficulty level bumped up a bit again for day 3.

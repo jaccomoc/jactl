@@ -1,5 +1,6 @@
 ---
 title: Adding New Functions and Methods
+description: "How to add custom functions and methods to extend Jactl for your application's needs."
 ---
 
 Since the idea of integrating Jactl into an application is to provide a way to customise behaviour, it is likely that
@@ -510,7 +511,7 @@ be passed in.
 Once we have configured our `.jactlrc` file (see [here](../command-line-scripts#jactlrc-file) for details)
 we can include our new function when running the Jactl REPL:
 ```groovy
-$ java -jar jactl-repl-2.4.0.jar
+$ java -jar jactl-repl-2.4.1.jar
 > long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 Function@1846982837
 > measure{ fib(40) }

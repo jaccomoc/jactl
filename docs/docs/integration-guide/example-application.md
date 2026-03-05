@@ -1,5 +1,6 @@
 ---
 title: Example Application
+description: "A complete example application demonstrating how to embed and run Jactl scripts in a Java application."
 ---
 
 In the `Jactl-vertx` project, an example application is provided that listens for JSON based web requests and

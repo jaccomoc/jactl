@@ -1,5 +1,6 @@
 ---
 title: Adding New Built-In Types
+description: "How to register new built-in types with the Jactl runtime to expose Java classes to scripts."
 ---
 
 Jactl provides a way to add new built-in types that can then be used by the Jactl scripts/classes.

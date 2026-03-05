@@ -1,5 +1,6 @@
 ---
 title: Command-line Scripts
+description: "Run Jactl scripts from the command line as a replacement for awk, sed, or Perl."
 ---
 
 Jactl scripts can be run from the shell command line and can be used in situations where you might normally

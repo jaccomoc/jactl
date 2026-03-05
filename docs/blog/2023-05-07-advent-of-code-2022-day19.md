@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 19"
 date:       2023-05-07 12:36:58 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 19 (Not Enough Minerals) using the Jactl programming language."
 ---
 
 # Day 19: Not Enough Minerals

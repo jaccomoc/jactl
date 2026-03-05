@@ -4,6 +4,8 @@ date:       2023-12-08T10:45:15+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 7 (Camel Cards) using the Jactl programming language."
 ---
 
 Today did not require too much cleverness but there were a couple of traps to watch out for.

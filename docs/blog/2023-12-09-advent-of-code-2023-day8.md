@@ -4,6 +4,8 @@ date:       2023-12-09T11:28:29+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 8 (Haunted Wasteland) using the Jactl programming language."
 ---
 
 Another fun day. As usual part 2 could not be brute forced so needed some lateral thinking.

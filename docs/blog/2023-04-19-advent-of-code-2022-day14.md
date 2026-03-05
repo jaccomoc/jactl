@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 14"
 date:       2023-04-19 12:06:43 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 14 (Regolith Reservoir) using the Jactl programming language."
 ---
 
 # Day 14 - Regolith Reservoir

@@ -1,5 +1,6 @@
 ---
 title: Built-in Methods
+description: "Built-in methods for strings, numbers, and other core Jactl types."
 ---
 
 Jactl provides a number of built-in methods for the standard types.

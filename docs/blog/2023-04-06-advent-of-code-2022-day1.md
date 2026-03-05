@@ -2,6 +2,8 @@
 title:  "Advent Of Code 2022 - Day 1"
 date:   2023-04-06 09:45:00 +1000
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 1 (Calorie Counting) using the Jactl programming language."
 ---
 
 In order to have some fun and exercise Jactl on some coding problems I have decided to solve the programming

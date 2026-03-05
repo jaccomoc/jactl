@@ -1,5 +1,6 @@
 ---
 title: Expression and Operators
+description: "Jactl expressions and operators including arithmetic, comparison, logical, regex, and ternary operators."
 ---
 
 ## Operator Precedence

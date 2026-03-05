@@ -1,5 +1,6 @@
 ---
 title: Switch Expressions
+description: "Jactl switch expressions with pattern matching, destructuring, regex matching, and binding variables."
 ---
 
 The `switch` expression in its simplest form works like a `switch` expression in Java (first introduced in Java 17)

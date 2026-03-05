@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 25"
 date:       2023-05-09 09:48:49 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 25 (Full of Hot Air) using the Jactl programming language."
 ---
 
 # Day 25: Full of Hot Air

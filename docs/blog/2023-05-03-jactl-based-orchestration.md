@@ -3,6 +3,8 @@ title:      "Joey: Jactl Orchestration Engine"
 date:       2023-05-03 17:06:31 +1000
 categories: blog
 authors: [james]
+tags: [jvm]
+description: "Joey is a Jactl-based orchestration engine for coordinating distributed workflows with checkpoint and recovery support."
 ---
 
 I am often asked what the point is in having yet another language for the JVM.

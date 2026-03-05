@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 3"
 date:       2023-04-13 16:03:13 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 3 (Rucksack Reorganisation) using the Jactl programming language."
 ---
 
 # Day 3 - Rucksack Reorganisation

@@ -4,6 +4,8 @@ date:       2023-12-02T17:48:26+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 2 (Cube Conundrum) using the Jactl programming language."
 ---
 
 Day 2 - Easier than day 1. Mostly a parsing exercise.

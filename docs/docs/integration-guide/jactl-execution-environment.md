@@ -1,5 +1,6 @@
 ---
 title: Jactl Execution Environment
+description: "Creating a Jactl execution environment."
 ---
 
 In order for Jactl to support event-loop based applications with non-blocking execution of scripts, it needs

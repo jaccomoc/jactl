@@ -135,8 +135,8 @@ export default function Home() {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title={`${siteConfig.title}`}
-      description="An embeddable scripting language for Java applications">
+      title="Secure Embeddable Scripting Language for Java"
+      description="Jactl is a secure, open source scripting language for the JVM that compiles to bytecode, supports async execution via continuations, and provides execution state checkpointing for Java applications.">
       <HomepageHeader/>
       <main>
         <section className={styles.features}>

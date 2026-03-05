@@ -4,6 +4,8 @@ date:       2023-12-08T10:45:15+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 5 (If You Give A Seed A Fertilizer) using the Jactl programming language."
 ---
 
 Part 2 of day 5 was a bit of a challenge to get right.

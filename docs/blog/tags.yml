@@ -1,0 +1,12 @@
+release:
+  label: Release
+  description: Jactl release announcements
+advent-of-code:
+  label: Advent of Code
+  description: Solving Advent of Code puzzles with Jactl
+jvm:
+  label: JVM
+  description: JVM scripting language topics
+tutorial:
+  label: Tutorial
+  description: Jactl tutorials and guides

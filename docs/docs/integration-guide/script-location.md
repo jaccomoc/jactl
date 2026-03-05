@@ -1,5 +1,6 @@
 ---
 title: Location of Scripts and Classes
+description: "Configuring source file locations and package structure for Jactl scripts and classes."
 ---
 
 In the examples shown we have always used constant strings as the source code for our Jactl scripts and classes

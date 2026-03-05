@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 22"
 date:       2023-05-08 14:58:35 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 22 (Monkey Map) using the Jactl programming language."
 ---
 
 # Day 22: Monkey Map

@@ -1,5 +1,6 @@
 ---
 title: Built-in Global Functions
+description: "Built-in global functions available in Jactl scripts including print, printf, sprintf, and stream."
 ---
 
 Jactl provides a number of built-in global functions.

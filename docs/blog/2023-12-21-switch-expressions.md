@@ -4,6 +4,8 @@ date:       2023-12-21T11:24:50+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [tutorial]
+description: "How to use Jactl switch expressions for pattern matching with destructuring, regex matching, and binding variables."
 ---
 
 The forthcoming [Jactl](https://github.com/jaccomoc/jactl) release (2.0.0) introduces switch expressions which

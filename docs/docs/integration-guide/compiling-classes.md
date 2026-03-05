@@ -1,5 +1,6 @@
 ---
 title: Compiling Classes
+description: "Compiling Jactl classes and making them available for use by Jactl scripts in your application."
 ---
 
 As well as compiling Jactl scripts, you may also need to compile Jactl classes.

@@ -1,5 +1,6 @@
 ---
 title: Variables
+description: "Variable declarations in Jactl with optional typing, including def, var, and typed declarations."
 ---
 
 A variable in Jactl is a symbol that is used to refer to a value. Variables are declared by specifying a type followed

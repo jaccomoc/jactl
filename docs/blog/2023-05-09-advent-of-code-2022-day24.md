@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 24"
 date:       2023-05-09 08:34:33 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 24 (Blizzard Basin) using the Jactl programming language."
 ---
 
 # Day 24: Blizzard Basin

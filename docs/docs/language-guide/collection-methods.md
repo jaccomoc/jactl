@@ -1,5 +1,6 @@
 ---
 title: Collection Methods
+description: "Built-in methods for lists and maps in Jactl including map, filter, sort, reduce, and flatMap."
 ---
 
 Jactl provides a rich set of methods for working with collections.

@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 9"
 date:       2023-04-16 10:22:35 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 9 (Rope Bridge) using the Jactl programming language."
 ---
 
 # Day 9 - Rope Bridge

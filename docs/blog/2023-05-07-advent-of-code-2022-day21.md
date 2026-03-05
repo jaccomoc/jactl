@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 21"
 date:       2023-05-07 15:54:15 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 21 (Monkey Math) using the Jactl programming language."
 ---
 
 # Day 21: Monkey Math

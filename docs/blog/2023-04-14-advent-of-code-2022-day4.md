@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 4"
 date:       2023-04-14 07:36:04 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 4 (Camp Cleanup) using the Jactl programming language."
 ---
 
 # Day 4 - Camp Cleanup

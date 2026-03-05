@@ -1,5 +1,6 @@
 ---
 title: Language Guide Introduction
+description: "Introduction to the Jactl language guide covering syntax basics for developers familiar with Java and Groovy."
 ---
 
 # Introduction

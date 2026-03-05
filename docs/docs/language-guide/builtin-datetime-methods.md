@@ -1,5 +1,6 @@
 ---
 title: Built-In Date/Time Methods
+description: "Built-in date and time classes and methods in Jactl for LocalDate, LocalTime, Instant, and more."
 ---
 
 ## LocalTime Methods

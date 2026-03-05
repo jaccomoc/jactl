@@ -3,6 +3,7 @@ title:  "Welcome to Jactl"
 description: "Introduction to Jactl"
 date:   2023-04-05 16:59:11 +1000
 authors: [james]
+tags: [jvm]
 ---
 
 Jactl is a new programming language for JVM based applications.

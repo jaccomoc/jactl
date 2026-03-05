@@ -4,6 +4,8 @@ date:       2023-11-10 15:11:44 +1100
 categories: blog
 authors: [james]
 image:      /assets/logo-picture.jpg
+tags: [jvm]
+description: "Proof of concept demonstrating 20,000 payments per second with Jactl checkpoint replication for high availability."
 ---
 
 [Jactl](https://jactl.io) 1.3.0 introduces the ability to checkpoint the current execution state of a script and have it restored and

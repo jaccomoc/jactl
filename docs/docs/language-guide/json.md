@@ -1,5 +1,6 @@
 ---
 title: JSON Support
+description: "Built-in JSON encoding and decoding support in Jactl."
 ---
 
 Jactl has built-in support for JSON.

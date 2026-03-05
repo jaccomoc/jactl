@@ -1,5 +1,6 @@
 ---
 title: Regular Expressions
+description: "Regular expression support in Jactl with match operators, capture variables, and substitution syntax."
 ---
 
 ## Regex Matching

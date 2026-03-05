@@ -1,5 +1,6 @@
 ---
 title: Statement Termination
+description: "How Jactl handles statement termination with optional semicolons and automatic newline detection."
 ---
 
 Jactl syntax borrows heavily from Java, Groovy, and Perl and so while Java and Perl both require a semicolon to terminate

@@ -1,5 +1,6 @@
 ---
 title: Statements
+description: "Jactl statement types including if/else, for, while, do/while, and return statements."
 ---
 
 ## If/Else Statements

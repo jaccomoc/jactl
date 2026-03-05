@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 5"
 date:       2023-04-14 15:30:20 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 5 (Supply Stacks) using the Jactl programming language."
 ---
 
 # Day 5 - Supply Stacks

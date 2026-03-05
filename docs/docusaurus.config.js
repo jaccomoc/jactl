@@ -78,7 +78,7 @@ const config = {
       navbar: {
         style: 'dark',
         logo: {
-          alt: 'Jactl',
+          alt: 'Jactl - A Secure Scripting Language for Java',
           src: 'img/logo2.png',
         },
         items: [
@@ -151,7 +151,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} James Crawford`,
+        copyright: `Copyright © 2023-${new Date().getFullYear()} James Crawford`,
       },
       docs: {
         sidebar: {

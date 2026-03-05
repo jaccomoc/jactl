@@ -1,5 +1,6 @@
 ---
 title: JactlContext Object
+description: "Configuring the JactlContext object for controlling script compilation and execution."
 ---
 
 Although most of the examples shown so far haven't used a JactlContext, in general, you will need to create an object

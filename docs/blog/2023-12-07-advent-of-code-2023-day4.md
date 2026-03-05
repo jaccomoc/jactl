@@ -4,6 +4,8 @@ date:       2023-12-07T15:12:22+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 4 (Scratchcards) using the Jactl programming language."
 ---
 
 A fairly straightforward day after giving the brain cells a workout yesterday.

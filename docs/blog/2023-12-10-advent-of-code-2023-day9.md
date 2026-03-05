@@ -4,6 +4,8 @@ date:       2023-12-10T09:11:29+11:00
 categories: blog
 image:      /assets/logo-picture.jpg
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2023 Day 9 (Mirage Maintenance) using the Jactl programming language."
 ---
 
 An easy day where we had to calculate the next number for each of a given set of number series.

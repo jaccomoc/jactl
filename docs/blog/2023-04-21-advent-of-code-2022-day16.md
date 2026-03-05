@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 16"
 date:       2023-04-21 16:48:57 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 16 (Proboscidea Volcanium) using the Jactl programming language."
 ---
 
 # Day 16: Proboscidea Volcanium

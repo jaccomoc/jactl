@@ -1,5 +1,6 @@
 ---
 title: Truthiness
+description: "How Jactl evaluates truthiness for different types in boolean contexts."
 ---
 
 In Jactl we often want to know whether an expression is `true` or not. The _truthiness_ of an expression

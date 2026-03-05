@@ -1,5 +1,6 @@
 ---
 title: Functions
+description: "Defining functions in Jactl with optional types, default parameter values, and named parameters."
 ---
 
 Functions are defined using the `def` keyword followed by the function name, a list of parameters in parentheses, and

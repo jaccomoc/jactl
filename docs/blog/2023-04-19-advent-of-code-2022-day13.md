@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 13"
 date:       2023-04-19 09:44:49 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 13 (Distress Signal) using the Jactl programming language."
 ---
 
 # Day 13 - Distress Signal

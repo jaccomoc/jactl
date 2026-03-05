@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 6"
 date:       2023-04-15 10:30:20 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 6 (Tuning Trouble) using the Jactl programming language."
 ---
 
 # Day 6 - Tuning Trouble

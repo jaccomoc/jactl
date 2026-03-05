@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 11"
 date:       2023-04-18 08:32:27 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 11 (Monkey in the Middle) using the Jactl programming language."
 ---
 
 # Day 11 - Monkey in the Middle

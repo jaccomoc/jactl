@@ -1,5 +1,6 @@
 ---
 title: "Language Features"
+description: "Overview of Jactl language features including optional typing, closures, pattern matching, regex support, and functional programming."
 ---
 
 # Language Features

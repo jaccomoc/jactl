@@ -3,6 +3,8 @@ title:      "Advent Of Code 2022 - Day 20"
 date:       2023-05-07 15:18:32 +1000
 categories: blog
 authors: [james]
+tags: [advent-of-code]
+description: "Solving Advent of Code 2022 Day 20 (Grove Positioning System) using the Jactl programming language."
 ---
 
 # Day 20: Grove Positioning System
