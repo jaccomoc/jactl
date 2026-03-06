@@ -19,8 +19,7 @@ package io.jactl;
 
 import io.jactl.runtime.*;
 
-import java.io.BufferedReader;
-import java.io.PrintStream;
+import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -125,11 +124,15 @@ public class JactlScript {
    * <p>Also supported are object instances of Jactl classes that have been returned
    * from a previous script invocation.</p>
    * @param globals     a Map of global variables and their values
-   * @param input       BufferedReader with input for the script (if it uses nextLine()) (can be null)
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
    * @param completion  code to be run once script finishes
    */
-  public void run(Map<String,Object> globals, BufferedReader input, PrintStream output, Consumer<Object> completion) {
+  public void run(Map<String,Object> globals, Reader input, PrintStream output, Consumer<Object> completion) {
+    run(globals, input, output == null ? null : new PrintWriter(output), completion);
+  }
+  
+  public void run(Map<String,Object> globals, Reader input, Writer output, Consumer<Object> completion) {
     RuntimeState.setState(jactlContext, globals, input, output);
     script.accept(globals, completion);
   }
@@ -157,11 +160,11 @@ public class JactlScript {
    * from a previous script invocation.</p>
    *
     * @param globals     a Map of global variables and their values
-    * @param input       BufferedReader with input for the script (if it uses nextLine()) (can be null)
+    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
     * @param output      PrintStream where print/println output will go (can be null)
    *  @return a {@link Future} that will be completed with the script's result
    */
-  public Future<Object> run(Map<String,Object> globals, BufferedReader input, PrintStream output) {
+  public Future<Object> run(Map<String,Object> globals, Reader input, PrintStream output) {
     CompletableFuture<Object> future = new CompletableFuture<>();
     jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
     return future;
@@ -192,7 +195,7 @@ public class JactlScript {
    * @param completion  code to be run once script finishes
    */
   public void run(Map<String,Object> globals, Consumer<Object> completion) {
-    run(globals, null, null, completion);
+    run(globals, null, (Writer)null, completion);
   }
 
   /**
@@ -251,7 +254,7 @@ public class JactlScript {
    * @return the result returned from the script
    */
   public Object runSync(Map<String,Object> globals) {
-    return runSync(globals, null, null);
+    return runSync(globals, null, (Writer)null);
   }
 
   /**
@@ -276,11 +279,15 @@ public class JactlScript {
    * <p>Also supported are object instances of Jactl classes that have been returned
    * from a previous script invocation.</p>
    * @param globals     a Map of global variables and their values
-   * @param input       BufferedReader with input for the script (if it uses nextLine()) (can be null)
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
    * @return the result returned from the script
    */
-  public Object runSync(Map<String,Object> globals, BufferedReader input, PrintStream output) {
+  public Object runSync(Map<String,Object> globals, Reader input, PrintStream output) {
+    return runSync(globals, input, output == null ? null : new PrintWriter(output));
+  }
+  
+  public Object runSync(Map<String,Object> globals, Reader input, Writer output) {
     CompletableFuture<Object> future = new CompletableFuture<Object>();
     jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
     try {

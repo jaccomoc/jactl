@@ -19,8 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlContext;
 
-import java.io.BufferedReader;
-import java.io.PrintStream;
+import java.io.*;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -42,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 public class RuntimeState {
   private JactlContext        context;
   private Map<String, Object> globals;
-  private PrintStream         output;
+  private Writer              writer;
   private BufferedReader      input;
   private long                loopIterationCount;
   private long                endTime;
@@ -69,23 +68,23 @@ public class RuntimeState {
     threadLocalState.set(null);
   }
 
-  public static void setState(JactlContext context, Map<String, Object> globals, BufferedReader input, PrintStream output) {
+  public static void setState(JactlContext context, Map<String, Object> globals, Reader input, Writer writer) {
     RuntimeState state = getState();
     state.context = context;
-    state.input = input;
-    state.output = output;
+    state.input = input == null ? null : new BufferedReader(input);
+    state.writer = writer;
     state.globals = globals;
     if (context.maxExecutionTimeMs >= 0) {
       state.endTime = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(context.maxExecutionTimeMs);
     }
   }
-
+  
   public BufferedReader getInput() {
     return input;
   }
 
-  public PrintStream getOutput() {
-    return output;
+  public Writer getWriter() {
+    return writer;
   }
 
   public Map<String, Object> getGlobals() {

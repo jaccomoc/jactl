@@ -24,6 +24,8 @@ import org.objectweb.asm.Type;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -51,6 +53,9 @@ public class Utils {
 
   // Support Java 8 and later
   public static final int    JAVA_VERSION        = V1_8;
+
+  public static final String JACTL_VERSION          = "2.4.1";    // Jactl version
+  public static final String JACTL_LANGUAGE_VERSION = "2.4";      // Version of language. 2.4 due to date/time classes in 2.4.0
   
   public static final String JACTL_PKG           = "jactl.pkg";   // Java base package for Jactl classes
   public static final String DEFAULT_JACTL_PKG   = "";            // The default Jactl (not Java) pacakge for scripts
@@ -1066,6 +1071,16 @@ public class Utils {
         mv.visitInsn(ARETURN);
         break;
     }
+  }
+  
+  public static String readAllChars(Reader reader) throws IOException {
+    char[] charBuffer = new char[256];
+    int len;
+    StringBuilder sb = new StringBuilder();
+    while ((len = reader.read(charBuffer)) != -1) {
+      sb.append(charBuffer, 0, len);
+    }
+    return sb.toString();
   }
   
   public static byte[] readAllBytes(InputStream is) throws IOException {

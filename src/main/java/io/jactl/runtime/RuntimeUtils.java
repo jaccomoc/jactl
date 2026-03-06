@@ -19,7 +19,9 @@ package io.jactl.runtime;
 
 import io.jactl.*;
 
+import java.io.IOException;
 import java.io.PrintStream;
+import java.io.Writer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
@@ -2517,26 +2519,39 @@ public class RuntimeUtils {
     return false;
   }
 
-  public static boolean print(String obj) {
-    return doPrint(obj, false);
+  public static String PRINT = "print";
+  public static boolean print(String source, int offset, String obj) {
+    return doPrint(source, offset, obj, false);
   }
 
-  public static boolean println(String obj) {
-    return doPrint(obj, true);
+  public static String PRINTLN = "println";
+  public static boolean println(String source, int offset, String obj) {
+    return doPrint(source, offset, obj, true);
   }
 
-  private static boolean doPrint(String obj, boolean newLine) {
+  private static boolean doPrint(String source, int offset, String obj, boolean newLine) {
     if (obj == null) { obj = "null"; }
     RuntimeState state = RuntimeState.getState();
-    PrintStream  out   = state.getOutput();
+    Writer       out   = state.getWriter();
     if (out == null) {
-      out = System.out;
-    }
-    if (newLine) {
-      out.println(obj);
+      if (newLine) {
+        System.out.println(obj);
+      }
+      else {
+        System.out.print(obj);
+      }
     }
     else {
-      out.print(obj);
+      try {
+        out.write(obj.toCharArray(), 0, obj.length());
+        if (newLine) {
+          out.write('\n');
+        }
+        out.flush();
+      }
+      catch (IOException e) {
+        throw new RuntimeError("Error writing to output: " + e.getMessage(), source, offset, e);
+      }
     }
     return true;
   }
@@ -2984,6 +2999,7 @@ public class RuntimeUtils {
     return data;
   }
 
+  public static String EVAL_SCRIPT = "evalScript";
   public static Object evalScript(Continuation c, String code, Map bindings, ClassLoader classLoader) {
     if (c != null) {
       return c.getResult();

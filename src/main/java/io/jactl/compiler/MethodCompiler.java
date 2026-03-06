@@ -2189,9 +2189,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitPrint(Expr.Print expr) {
+    loadLocation(expr.location);
     compile(expr.expr);
     convertToString();
-    invokeMethod(RuntimeUtils.class, expr.newLine ? "println" : "print", String.class);
+    invokeMethod(RuntimeUtils.class, expr.newLine ? RuntimeUtils.PRINTLN : RuntimeUtils.PRINT, String.class, int.class, String.class);
     return null;
   }
 
@@ -2222,7 +2223,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        invokeMethod(Object.class, "getClass");
                        invokeMethod(Class.class, "getClassLoader");
                      },
-                     () -> invokeMethod(RuntimeUtils.class, "evalScript", Continuation.class, String.class, Map.class, ClassLoader.class));
+                     () -> invokeMethod(RuntimeUtils.class, RuntimeUtils.EVAL_SCRIPT, Continuation.class, String.class, Map.class, ClassLoader.class));
     return null;
   }
 

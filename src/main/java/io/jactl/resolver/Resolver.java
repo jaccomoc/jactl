@@ -2745,9 +2745,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private Expr.VarDecl lookupGlobals(String name, Token location) {
-    // Access to globals not allowed in classes. Only allowed in scripts.
-    // Even if class is nested within script we don't allow access since it requires
-    // access to "this" for the script itself which we don't have.
+    // Access to globals not allowed in classes unless flag set in jactlContext.
     Expr.VarDecl global = jactlContext.globalVars.get(name);
     if (isScriptScope() || jactlContext.classAccessToGlobals) {
       // Support globals that are automatically created when asking for them

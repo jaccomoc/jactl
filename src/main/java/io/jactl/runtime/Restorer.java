@@ -21,6 +21,7 @@ import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Pair;
 
+import java.io.PrintWriter;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
@@ -65,7 +66,7 @@ public class Restorer {
     Restorer restorer = get(context, buf);
     // We checkpoint a two element list (globals, continuation) so restore the globals and return the continuation
     List restored = (List)restorer.restore();
-    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), null, null);
+    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), null, (PrintWriter)null);
     return restored.get(1);
   }
 
