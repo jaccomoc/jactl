@@ -8106,6 +8106,7 @@ class CompilerTest extends BaseTest {
   @Test public void globalsTest() {
     JactlContext jactlContext = JactlContext.create()
                                             .evaluateConstExprs(true)
+                                            .classAccessToGlobals(true)
                                             .replMode(true)
                                             .debug(debugLevel)
                                             .build();
@@ -8122,6 +8123,7 @@ class CompilerTest extends BaseTest {
       assertEquals(expected, result);
     };
 
+    runtest.accept("def i = 1; (xxx + i).size()", 4);
     runtest.accept("def x = (byte)1", (byte)1);
     runtest.accept("def x = 1", 1);
     runtest.accept("x", 1);

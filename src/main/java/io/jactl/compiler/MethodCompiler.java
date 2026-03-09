@@ -1065,7 +1065,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       String methodName = methodNames.get(expr.operator.getType());
       check(methodName != null, "unsupported operator type " + expr.operator.getChars());
       invokeMethod(RuntimeUtils.class, methodName, Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
-      //convertTo(expr.type, true, expr.operator);  // Convert to expected type
+      convertTo(expr.type, expr,true, expr.operator);  // Convert to expected type
       return null;
     }
 

@@ -1829,6 +1829,7 @@ public class ClassTests extends BaseTest {
     replModeEnabled      = false;
     classAccessToGlobals = true;
     globals = new HashMap<String,Object>() {{
+      put("x", "xxx");
       put("GVAR", 1);
       put("GMAP", new LinkedHashMap<String,Object>() {{
         put("x", "value");
@@ -1840,6 +1841,14 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("class X { static int f() { GVAR + GMAP.y } }"), "X.f()", 124);
     test(Utils.listOf("class X { static int f() { sleep(1,GVAR) + sleep(1,sleep(1,GMAP).y) } }"), "X.f()", 124);
     test(Utils.listOf("class X { static def f() { def m = [:]; GVAR ?= m.a.b() } }"), "X.f()", null);
+    test("class X {\n" +
+         "int p(i) { println x + i; (x+i).size() } }\n" +
+         "def x = new X()\n" +
+         "x.p('abcde')", 8);
+    test("class X { int f(String s) { (s + x).size() }\n" +
+         "int p(i) { println x + i; (x+i).size() } }\n" +
+         "def x = new X()\n" +
+         "x.f('abc') + x.p('abcde')", 14);
   }
 
   @Test public void classObjAsMapKey() {

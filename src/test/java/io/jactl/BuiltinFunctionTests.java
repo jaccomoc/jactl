@@ -411,6 +411,10 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("1.length()", "no such method");
     testError("[1,2,3].length()", "no such method");
     testError("def x = 1; x.length()", "no such method");
+    test("def i = 1; String x = 'xxx'; (x + i).size()", 4);
+    globals.put("X", "xxx");
+    test("def i = 1; X + i", "xxx1");
+    test("def i = 1; (X + i).size()", 4);
   }
 
   @Test public void stringToUpperLowerCase() {
