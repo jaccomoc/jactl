@@ -28,6 +28,9 @@ public class CheckpointTask extends AsyncTask {
 
   @Override
   public void execute(JactlContext context, JactlScriptObject instance, Object data, Consumer<Object> resumer) {
+    if (instance == null) {
+      throw new RuntimeError("Call to checkpoint() not permitted in current context", getSource(), getOffset());
+    }
     instance._$j$incrementCheckpointId();
     continuation.scriptInstance = instance;
     byte[] buf = Checkpointer.checkpoint(continuation, getRuntimeState(), context, source, offset);

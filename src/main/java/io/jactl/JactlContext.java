@@ -58,7 +58,8 @@ public class JactlContext {
       }
     });
 
-  public static int scriptCacheSize = 100;  // Total number of compiled scripts we keep for use by eval() function
+  // Total number of compiled scripts we keep for use by eval() function
+  public static int scriptCacheSize = Integer.getInteger("jactl.eval.cache-size", 100);
 
   // Testing
   boolean checkpoint = false;
@@ -665,7 +666,7 @@ public class JactlContext {
 
   private void cleanUp(JactlScriptObject instance) {
     RuntimeState.resetState();
-    if (instance._$j$isCheckpointed()) {
+    if (instance != null && instance._$j$isCheckpointed()) {
       instance._$j$incrementCheckpointId();
       deleteCheckpoint(instance._$j$getInstanceId(), instance._$j$checkpointId());
     }

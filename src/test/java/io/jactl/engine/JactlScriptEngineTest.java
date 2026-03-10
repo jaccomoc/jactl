@@ -17,6 +17,7 @@
 
 package io.jactl.engine;
 
+import io.jactl.runtime.NullError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,9 @@ import javax.script.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
+import java.io.StringReader;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,75 +35,76 @@ class JactlScriptEngineTest {
 
   ScriptEngineManager mgr;
   JactlScriptEngine engine;
+  ScriptContext ctx;
+  Bindings engineBindings;
+  Bindings globalBindings;
+  ByteArrayOutputStream baos;
   
   @BeforeEach void setUp() {
     mgr = new ScriptEngineManager();
     engine = (JactlScriptEngine) mgr.getEngineByExtension("jactl");
     assertTrue(engine != null);
+    ctx = new SimpleScriptContext();
+    baos = new ByteArrayOutputStream();
+    ctx.setWriter(new PrintWriter(baos));
+    ctx.setReader(new StringReader(""));
+    engineBindings = engine.createBindings();
+    ctx.setBindings(engineBindings, ScriptContext.ENGINE_SCOPE);
+    globalBindings = engine.createBindings();
+    ctx.setBindings(globalBindings, ScriptContext.GLOBAL_SCOPE);
+    engineBindings.put("x", 1);
+    engineBindings.put("y", "y");
+    globalBindings.put("y", 2);
+    globalBindings.put("z", 3);
   }
   
   @Test void eval() throws ScriptException {
     assertEquals(true, engine.eval("println 'test'; true"));
-    ScriptContext ctx = new SimpleScriptContext();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ctx.setWriter(new PrintWriter(baos));
     assertEquals(true, engine.eval("println 'test'; true", ctx));
     assertEquals("test\n", baos.toString());
   }
   
+  @Test void evalReader() throws ScriptException {
+    StringReader reader = new StringReader("println 'test'; true");
+    assertEquals(true, engine.eval(reader));
+    reader = new StringReader("println 'test'; true");
+    assertEquals(true, engine.eval(reader, ctx));
+    assertEquals("test\n", baos.toString());
+  }
+  
   @Test void evalWithBindings() throws ScriptException {
-    ScriptContext ctx = new SimpleScriptContext();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ctx.setWriter(new PrintWriter(baos));
-    Bindings bindings = engine.createBindings();
-    bindings.put("x", "xxx");
-    ctx.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+    engineBindings.put("x", "xxx");
     assertEquals(true, engine.eval("println x + x; true", ctx));
     assertEquals("xxxxxx\n", baos.toString());
   }
 
   @Test void evalWithBindingUpdate() throws ScriptException {
-    ScriptContext ctx = new SimpleScriptContext();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ctx.setWriter(new PrintWriter(baos));
-    Bindings bindings = engine.createBindings();
-    bindings.put("x", "xxx");
-    ctx.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+    engineBindings.put("x", "xxx");
     assertEquals("yyy", engine.eval("x = 'yyy'; println x + x; x", ctx));
     assertEquals("yyyyyy\n", baos.toString());
-    assertEquals("yyy", bindings.get("x"));
+    assertEquals("yyy", engineBindings.get("x"));
   }
 
   @Test void evalWithLocalAndGlobalBindingUpdate() throws ScriptException {
-    ScriptContext ctx = new SimpleScriptContext();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ctx.setWriter(new PrintWriter(baos));
-    Bindings engineBindings = engine.createBindings();
     engineBindings.put("x", "xxx");
     engineBindings.put("y", "yyy");
-    Bindings globalBindings = engine.createBindings();
     globalBindings.put("x", "XXX");
     globalBindings.put("a", "aaa");
-    ctx.setBindings(engineBindings, ScriptContext.ENGINE_SCOPE);
-    ctx.setBindings(globalBindings, ScriptContext.GLOBAL_SCOPE);
     assertEquals("yyybbb", engine.eval("x = 'yyy'; a='bbb'; println x + a; x + a", ctx));
-    assertEquals("yyybbb\n", baos.toString());
     assertEquals("yyy", engineBindings.get("x"));
+    assertEquals("yyybbb\n", baos.toString());
     assertEquals("bbb", globalBindings.get("a"));
+    engineBindings.put("x",123);
+    engineBindings.put("a", 456);
+    assertEquals(579, engine.eval("println x + a; x + a", ctx));
+    assertEquals("yyybbb\n579\n", baos.toString());
   }
 
   @Test void evalWithLocalAndGlobalBindings() throws ScriptException {
-    ScriptContext ctx = new SimpleScriptContext();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ctx.setWriter(new PrintWriter(baos));
-    Bindings engineBindings = engine.createBindings();
     engineBindings.put("x", "xxx");
     engineBindings.put("y", "yyy");
-    Bindings globalBindings = engine.createBindings();
     globalBindings.put("x", "XXX");
     globalBindings.put("a", "aaa");
-    ctx.setBindings(engineBindings, ScriptContext.ENGINE_SCOPE);
-    ctx.setBindings(globalBindings, ScriptContext.GLOBAL_SCOPE);
     assertEquals("xxxyyyaaa", engine.eval("println x + y + a; x + y + a", ctx));
     assertEquals("xxxyyyaaa\n", baos.toString());
   }
@@ -115,5 +120,205 @@ class JactlScriptEngineTest {
 
   @Test void getFactory() {
     assertTrue(engine.getFactory() instanceof JactlScriptEngineFactory);
+  }
+  
+  @Test void invokeMethod() throws ScriptException, NoSuchMethodException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String x) { x.size() }; int p(x) { println x; x.size() } }; new X()", ctx);
+    assertEquals(3, engine.invokeMethod(obj, "f", "abc"));
+    assertEquals(5, engine.invokeMethod(obj, "p", "abcde"));
+    assertEquals("abcde\n", baos.toString());
+  }
+
+  @Test void invokeField() throws ScriptException, NoSuchMethodException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String x) { x.size() }; int p(x) { println x; x.size() }; def fieldf = f; def fieldp = p }; new X()", ctx);
+    assertEquals(3, engine.invokeMethod(obj, "fieldf", "abc"));
+    assertEquals(5, engine.invokeMethod(obj, "fieldp", "abcde"));
+    assertEquals("abcde\n", baos.toString());
+  }
+
+  @Test void invokeMethodNonExistent() throws ScriptException, NoSuchMethodException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int fff(String x) { x.size() }; int p(x) { println x; x.size() } }; new X()", ctx);
+    assertThrows(NoSuchMethodException.class, () -> engine.invokeMethod(obj, "f", "abc"));
+  }
+
+  @Test void invokeMethodWithBinding() throws ScriptException, NoSuchMethodException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String s) { (x + s).size() }; int p(i) { println x + i; (x+i).size() } }; new X()", ctx);
+    assertEquals(7, engine.invokeMethod(obj, "f", "abcd"));
+    assertEquals(8, engine.invokeMethod(obj, "p", "abcde"));
+    assertEquals("xxxabcde\n", baos.toString());
+  }
+
+  @Test void invokeMethodBuiltIn() throws ScriptException {
+    Object obj = engine.eval("LocalDate.parse('2026-03-08')", ctx);
+    assertThrows(ScriptException.class, () -> engine.invokeMethod(obj, "atTime()",LocalDateTime.parse("2026-03-08T12:13:14"), engine.invokeMethod(obj, "atTime()", LocalTime.parse("12:13:14"))));
+  }
+
+  @Test void invokeMethodAsync() throws ScriptException, NoSuchMethodException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String x) { sleep(1,x.size()) }; int p(x) { sleep(1); println x; sleep(1); f(x) } }; new X()", ctx);
+    assertEquals(3, engine.invokeMethod(obj, "f", "abc"));
+    assertEquals(5, engine.invokeMethod(obj, "p", "abcde"));
+    assertEquals("abcde\n", baos.toString());
+  }
+  
+  @Test void invokeMethodError() {
+    Object obj = new Object();
+    assertThrows(ScriptException.class, () -> engine.invokeMethod(obj, "toString"));
+  }
+
+  @Test void invokeMethodError2() throws ScriptException {
+    assertEquals(1, engine.eval("1", ctx));
+    Object obj = new Object();
+    assertThrows(ScriptException.class, () -> engine.invokeMethod(obj, "toString"));
+  }
+  
+  @Test void invokeFunction() throws ScriptException {
+    engineBindings.put("x", 1);
+    engineBindings.put("y", "y");
+    globalBindings.put("y", 2);
+    assertEquals("y1", engine.eval("def f(a,b) { y + x + a + b }; int g(String s, int i) { s.size() + i + x + y.size() }; y + x", ctx));
+    assertEquals("y123", engine.invokeFunction("f", 2, 3));
+    assertEquals(10, engine.invokeFunction("g", "456", 5));
+  }
+
+  @Test void invokeFunctionNonExistent() throws ScriptException {
+    engineBindings.put("x", 1);
+    engineBindings.put("y", "y");
+    globalBindings.put("y", 2);
+    assertEquals("y1", engine.eval("def f(a,b) { y + x + a + b }; int g(String s, int i) { s.size() + i + x + y.size() }; y + x", ctx));
+    assertThrows(ScriptException.class, () -> engine.invokeFunction("fff", 2, 3));
+  }
+
+  @Test void invokeFunctionAsync() throws ScriptException {
+    engineBindings.put("x", 1);
+    engineBindings.put("y", "y");
+    globalBindings.put("y", 2);
+    assertEquals("y1", engine.eval("def f(a,b) { sleep(1,y) + sleep(1,x) + a + sleep(1,b) }; y + x", ctx));
+    assertEquals("y123", engine.invokeFunction("f", 2, 3));
+  }
+  
+  public interface MyInterface {
+    String f(Object a, int b);
+    int g();
+    Object z();
+  }
+  
+  @Test void getInterface() throws ScriptException {
+    engineBindings.put("x", 1);
+    engineBindings.put("y", "y");
+    globalBindings.put("y", 2);
+    assertEquals("y1", engine.eval("String f(a, int b) { sleep(1,y) + sleep(1,x) + a + sleep(1,b) }; int g() { sleep(1); 3 }; def z(){4}; def zzz() {7}; y + x", ctx));
+    assertEquals("y123", engine.invokeFunction("f", 2, 3));
+    MyInterface obj = engine.getInterface(MyInterface.class);
+    assertEquals("y123", obj.f(2, 3));
+    assertEquals(3, obj.g());
+    assertEquals(4, obj.z());
+  }
+  
+  @Test void getInterfaceError() throws ScriptException {
+    engineBindings.put("x", 1);
+    engineBindings.put("y", "y");
+    globalBindings.put("y", 2);
+    assertEquals("y1", engine.eval("String fff(a, int b) { sleep(1,y) + sleep(1,x) + a + sleep(1,b) }; int g() { sleep(1); 3 }; def z(){4}; def zzz() {7}; y + x", ctx));
+    MyInterface obj = engine.getInterface(MyInterface.class);
+    assertThrows(RuntimeException.class, () -> obj.f(2, 3));
+  }
+  
+  public interface MyInterface2 {
+    int f(String x);
+    int p(Object x);
+  }
+  
+  @Test void getInterfaceWithObj() throws ScriptException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String x) { sleep(1,x.size()) }; int p(x) { sleep(1); println x; sleep(1); f(x) } }; new X()", ctx);
+    MyInterface2 obj2 = engine.getInterface(obj, MyInterface2.class);
+    assertEquals(3, obj2.f("abc"));
+    assertEquals(5, obj2.p("abcde"));
+    assertEquals("abcde\n", baos.toString());
+  }
+
+  @Test void getInterfaceWithObjWithError() throws ScriptException {
+    engineBindings.put("x", "xxx");
+    engineBindings.put("y", "yyy");
+    globalBindings.put("x", "XXX");
+    globalBindings.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String x) { sleep(1,x.size()) }; int pp(x) { sleep(1); println x; sleep(1); f(x) } }; new X()", ctx);
+    MyInterface2 obj2 = engine.getInterface(obj, MyInterface2.class);
+    assertThrows(RuntimeException.class, () -> obj2.p("abcde"));
+  }
+  
+  @Test void compile() throws ScriptException {
+    CompiledScript script = engine.compile("x + z");
+    assertThrows(NullError.class, script::eval);
+    assertEquals(2, engine.eval("z - x", ctx));
+    assertEquals(4, script.eval());
+    assertEquals(4, script.eval(ctx));
+    engineBindings.put("x", 2);
+    assertEquals(5, script.eval(engineBindings));
+    engineBindings.put("x", "abc");
+    assertEquals("abc3", script.eval(engineBindings));
+    CompiledScript script2 = engine.compile("def f() { x + x + z }; println x; println nextLine(); f()");
+    assertEquals("abcabc3", script2.eval());
+    assertEquals("abc\nnull\n", baos.toString());
+    Bindings bindings = engine.createBindings();
+    bindings.put("x", "xyz");
+    assertEquals("xyzxyz3", script2.eval(bindings));
+    ScriptContext ctx2 = new SimpleScriptContext();
+    ctx2.setWriter(new PrintWriter(baos));
+    ctx2.setReader(new StringReader("123\n"));
+    ctx2.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+    Bindings bindings2 = engine.createBindings();
+    ctx2.setBindings(bindings, ScriptContext.GLOBAL_SCOPE);
+    assertEquals("xyzxyznull", script2.eval(ctx2));
+    assertEquals("abc\nnull\nxyz\nnull\nxyz\n123\n", baos.toString());
+  }
+
+  @Test void compileReader() throws ScriptException {
+    CompiledScript script = engine.compile(new StringReader("x + z"));
+    assertThrows(NullError.class, script::eval);
+    assertEquals(2, engine.eval("z - x", ctx));
+    assertEquals(4, script.eval());
+    assertEquals(4, script.eval(ctx));
+    engineBindings.put("x", 2);
+    assertEquals(5, script.eval(engineBindings));
+    engineBindings.put("x", "abc");
+    assertEquals("abc3", script.eval(engineBindings));
+    CompiledScript script2 = engine.compile(new StringReader("def f() { x + x + z }; println x; println nextLine(); f()"));
+    assertEquals("abcabc3", script2.eval());
+    assertEquals("abc\nnull\n", baos.toString());
+    Bindings bindings = engine.createBindings();
+    bindings.put("x", "xyz");
+    assertEquals("xyzxyz3", script2.eval(bindings));
+    ScriptContext ctx2 = new SimpleScriptContext();
+    ctx2.setWriter(new PrintWriter(baos));
+    ctx2.setReader(new StringReader("123\n"));
+    ctx2.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+    Bindings bindings2 = engine.createBindings();
+    ctx2.setBindings(bindings, ScriptContext.GLOBAL_SCOPE);
+    assertEquals("xyzxyznull", script2.eval(ctx2));
+    assertEquals("abc\nnull\nxyz\nnull\nxyz\n123\n", baos.toString());
   }
 }

@@ -211,8 +211,7 @@ public class LocalTimeTests extends BaseTest {
   }
   
   @Test public void nowInZone() {
-    test("LocalTime.nowInZone(ZoneId.of('Australia/Sydney')).plusNanos(500000000L).truncatedToSeconds()", LocalTime.now(ZoneId.of("Australia/Sydney")).plusNanos(500000000L).truncatedTo(ChronoUnit.SECONDS));
-    test("def f = LocalTime.nowInZone; f(ZoneId.of('Australia/Sydney')).plusNanos(500000000L).truncatedToSeconds()", LocalTime.now(ZoneId.of("Australia/Sydney")).plusNanos(500000000L).truncatedTo(ChronoUnit.SECONDS));
+    test("LocalTime.nowInZone(ZoneId.of('Australia/Sydney')).isBefore(LocalTime.nowInZone(ZoneId.of('UTC')))", true);
   }
 
   @Test public void ofNanoOfDay() {

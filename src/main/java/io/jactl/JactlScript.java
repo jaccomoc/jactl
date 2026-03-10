@@ -39,14 +39,16 @@ public class JactlScript {
 
   private BiConsumer<Map<String,Object>,Consumer<Object>> script;
   private JactlContext jactlContext;
+  private Class<?>     compiledClass;
 
-  public JactlScript(JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
-    this.jactlContext = jactlContext;
+  public JactlScript(Class<?> compiledClass, JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
+    this.compiledClass = compiledClass;
+    this.jactlContext  = jactlContext;
     this.script        = script;
   }
 
-  public static JactlScript createScript(Function<Map<String, Object>, Object> invoker, JactlContext context) {
-    return new JactlScript(context, (map,completion) -> {
+  public static JactlScript createScript(Class<?> compiledClass, Function<Map<String, Object>, Object> invoker, JactlContext context) {
+    return new JactlScript(compiledClass, context, (map,completion) -> {
       try {
         Object result = invoker.apply(map);
         completion.accept(result);
@@ -100,6 +102,10 @@ public class JactlScript {
     if (instance._$j$isCheckpointed()) {
       context.deleteCheckpoint(instance._$j$getInstanceId(), instance._$j$checkpointId());
     }
+  }
+  
+  public Class<?> getCompiledClass() {
+    return compiledClass;
   }
 
   /**

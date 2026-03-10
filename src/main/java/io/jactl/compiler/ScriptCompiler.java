@@ -24,7 +24,7 @@ import org.objectweb.asm.Type;
 import java.util.Map;
 import java.util.function.Function;
 
-import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
+import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 
 public class ScriptCompiler extends ClassCompiler {
 
@@ -38,23 +38,31 @@ public class ScriptCompiler extends ClassCompiler {
    * @return the script
    */
   JactlScript compileWithCompletion() {
-    Function<Map<String, Object>, Object> scriptMain = compile();
-    return JactlScript.createScript(scriptMain, context);
+    Class<?> compiledClass = compileToClass();
+    if (compiledClass == null) {
+      return null;
+    }
+    Function<Map<String, Object>, Object> scriptMain = JactlScript.createInvoker(compiledClass, context);
+    return JactlScript.createScript(compiledClass, scriptMain, context);
   }
 
   public Function<Map<String,Object>, Object> compile() {
-    FieldVisitor globalVars = cv.visitField(ACC_PRIVATE, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
+    Class<?> compiledClass = compileToClass();
+    if (compiledClass == null) {
+      return null;
+    }
+    return JactlScript.createInvoker(compiledClass, context);
+  }
+  
+  private Class<?> compileToClass() {
+    FieldVisitor globalVars = cv.visitField(ACC_PUBLIC, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
     globalVars.visitEnd();
 
     compileInnerClasses();
     compileScriptMain();
     compileJactlObjectFunctions();
     finishClassCompile();
-
-    if (compiledClass == null) {
-      return null;
-    }
-    return JactlScript.createInvoker(compiledClass, context);
+    return compiledClass;
   }
 
   private void compileScriptMain() {

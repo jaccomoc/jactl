@@ -435,7 +435,7 @@ public class Jactl {
         Class           clazz     = JactlClassLoader.forName(scriptClassName);
         AtomicReference resultRef = new AtomicReference();
         Function<Map<String,Object>,Object> invoker = JactlScript.createInvoker(clazz, context);
-        JactlScript     jactlScript = JactlScript.createScript(invoker, context);
+        JactlScript     jactlScript = JactlScript.createScript(clazz, invoker, context);
 
         result = jactlScript.runSync(globals, input, output);
       }
