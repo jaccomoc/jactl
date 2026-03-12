@@ -175,20 +175,20 @@ features.
 ## Download
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
-[https://repo1.maven.org/maven2/io/jactl/jactl/2.5.1/jactl-2.5.1.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.5.1/jactl-2.5.1.jar)
+[https://repo1.maven.org/maven2/io/jactl/jactl/2.5.2/jactl-2.5.2.jar](https://repo1.maven.org/maven2/io/jactl/jactl/2.5.2/jactl-2.5.2.jar)
 
 Then, to run scripts:
 ```shell
-java -jar jactl-2.5.1.jar -e '10.map{ it + 1 }.sum()'
-java -jar jactl-2.5.1.jar myscript.jactl
+java -jar jactl-2.5.2.jar -e '10.map{ it + 1 }.sum()'
+java -jar jactl-2.5.2.jar myscript.jactl
 ```
 
 Or, you can use [JBang](https://www.jbang.dev/), if you have it installed, to run scripts.
 JBang will take care of finding and downloading the JAR for you.
 For example:
 ```shell
-jbang run io.jactl:jactl:2.5.1 -e '10.map{ it + 1 }.sum()'
-jbang run io.jactl:jactl:2.5.1 myscript.jactl
+jbang run io.jactl:jactl:2.5.2 -e '10.map{ it + 1 }.sum()'
+jbang run io.jactl:jactl:2.5.2 myscript.jactl
 ```
 
 You can also download the Jactl REPL, which gives you an interactive shell for trying out Jactl code, see the
@@ -196,9 +196,9 @@ You can also download the Jactl REPL, which gives you an interactive shell for t
 
 Again, with JBang, running the REPL is simple to do:
 ```shell
-$ jbang run io.jactl:jactl-repl:2.5.1
+$ jbang run io.jactl:jactl-repl:2.5.2
 [jbang] Resolving dependencies...
-[jbang]    io.jactl:jactl-repl:2.5.1
+[jbang]    io.jactl:jactl-repl:2.5.2
 [jbang] Dependencies resolved
 > 10.map{ it + 1 }.sum()
 55
@@ -255,7 +255,7 @@ To use Jactl you will need to add a dependency on the Jactl library.
 
 In the `dependencies` section of your `build.gradle` file:
 ```groovy
-implementation group: 'io.jactl', name: 'jactl', version: '2.5.1'
+implementation group: 'io.jactl', name: 'jactl', version: '2.5.2'
 ```
 
 ### Maven
@@ -265,7 +265,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>2.5.1</version>
+ <version>2.5.2</version>
 </dependency>
 ```
 

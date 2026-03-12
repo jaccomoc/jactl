@@ -147,6 +147,30 @@ would like all scripts to have access to before creating any `JactlContext` obje
 
 See [Adding New Built-In TYpes](adding-new-builtins) for more details.
 
+## Disabling Some Types of Statements
+
+For various reasons, applications may want to allow scripts but prevent them from invoking
+certain statement types.
+The following flags control whether scripts are allow to use the `eval()`, `print`, `println`
+, and `die` statements.
+
+### disableEval(boolean value)
+
+Passing `true` to this will prevent the `eval()` statement being a legal statement.
+A compile-time error will be generated if `eval()` is invoked.
+This flag can be used by applications that want to prevent `eval()` usage in scripts.
+
+### disablePrint(boolean value)
+
+If an application wants to prevent scripts from being able to invoke `print` or `println`
+they can pass `true` to this method.
+If `print` or `println` are then invoked there will be a compile-time error.
+
+### disableDie(boolean value)
+
+The `disableDie()` method allows applications to disable the use of the `die` statement.
+A call to `die` will then cause a compile-time error if this flag has been set.
+
 ## Chaining Method Calls
 
 The methods for building a `JactlContext` can be chained in any order (apart from `create()` which must be first
@@ -160,6 +184,9 @@ JactlContext context = JactlContext.create()
                                    .classAccessToGlobals(false)
                                    .hasOwnFunctions(false)
                                    .hasOwnBuiltIns(false)
+                                   .disableEval(false)
+                                   .disablePrint(false)
+                                   .disableDie(false)
                                    .debug(0)
                                    .build();
 

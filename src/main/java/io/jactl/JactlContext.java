@@ -78,7 +78,7 @@ public class JactlContext {
   public final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
 
   // Whether to dump byte code during compilation
-  public int debugLevel = 0;
+  public int debugLevel = Integer.getInteger("jactl.debug.level", 0);
 
   public String javaPackage = Utils.JACTL_PKG;   // The Java package under which compiled classes will be generated
   public String internalJavaPackage;

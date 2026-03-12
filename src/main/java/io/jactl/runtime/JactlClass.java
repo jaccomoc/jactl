@@ -42,7 +42,7 @@ public class JactlClass {
   private String       jactlPackage;                       // name of Jactl package for class
   private Class        javaClass;
   private boolean      autoImport;                         // whether scripts automatically import this class by default
-  private int          debugLevel = 0;
+  private int          debugLevel = Integer.getInteger("jactl.debug.leval", 0);
   private JactlContext jactlContext = null;
   private BiConsumer<Checkpointer,Object> checkpoint = null;
   private Function<Restorer,Object>       restore = null;

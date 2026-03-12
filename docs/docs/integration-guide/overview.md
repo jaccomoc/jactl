@@ -211,3 +211,28 @@ class MyTest {
   }
 }
 ```
+
+## ScriptEngine API
+
+In addition to the integration mechanism described above, Jactl also supports the
+standard API for scripting: _JSR 223 Scripting for the Java Platform_.
+This API provides a standardised way to invoke scripting languages from a Java application.
+
+For example:
+```java
+import javax.script.*;
+
+class JSR223Test {
+  public static void main(String[] args) throws ScriptException {
+    ScriptEngineManager engineMgr = new ScriptEngineManager();
+    ScriptEngine        engine    = engineMgr.getEngineByName("jactl");
+
+    engine.put("x", 3);                         // engine binding scope
+    engineMgr.put("z", 5);                      // global binding scope
+    Object result = engine.eval("x + z");
+    System.out.println("Result is " + result);
+  }
+}
+```
+
+The `JactlScriptEngine` implements the optional `Invocable` and `Compilable` interfaces.

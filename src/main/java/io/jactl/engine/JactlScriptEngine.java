@@ -52,27 +52,46 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   public static int scriptCacheSize = Integer.getInteger("jactl.engine.cache-size", 100);
 
   JactlScriptEngine(JactlScriptEngineFactory factory) {
+    super();
     this.factory = factory;
     jactlContext = JactlContext.create()
-                               .debug(0)
+                               .debug(Integer.getInteger("jactl.debug.level", 0))
                                .classAccessToGlobals(true)
                                .build();
   }
-  
-  @Override public Object eval(String script, ScriptContext context) throws ScriptException {
-    this.context = context;
-    this.globals = extractGlobals(context);
+
+  @Override
+  public Object eval(String script) throws ScriptException {
+    return evalScript(script, globals, context.getReader(), context.getWriter());
+  }
+
+  @Override
+  public Object eval(Reader reader) throws ScriptException {
+    try {
+      return eval(Utils.readAllChars(reader));
+    }
+    catch (IOException e) {
+      throw new ScriptException("Error reading script: " + e);
+    }
+  }
+
+  @Override public Object eval(String script, ScriptContext scriptContext) throws ScriptException {
+    Map ctxGlobals = extractGlobals(scriptContext);
+    return evalScript(script, ctxGlobals, scriptContext.getReader(), scriptContext.getWriter());
+  }
+
+  private Object evalScript(String script, Map ctxGlobals, Reader reader, Writer writer) {
     JactlScript jactlScript = scriptCache.get(script);
     if (jactlScript == null) {
       // Erase types of bindings (make them all ANY) so that if script is rerun with
       // different types bound to the globals it will still run
       HashMap erasedBindings = new HashMap();
-      globals.keySet().forEach(k -> erasedBindings.put(k, null));
+      ctxGlobals.keySet().forEach(k -> erasedBindings.put(k, null));
       jactlScript = Jactl.compileScript(script, erasedBindings, jactlContext);
       scriptCache.put(script, jactlScript);
     }
     this.jactlScript = jactlScript;
-    return jactlScript.runSync(globals, context.getReader(), context.getWriter());
+    return jactlScript.runSync(ctxGlobals, reader, writer);
   }
 
   @Override public Object eval(Reader reader, ScriptContext context) throws ScriptException {
@@ -98,9 +117,6 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   public Object invokeMethod(Object thiz, String name, Object... args) throws ScriptException, NoSuchMethodException {
     Objects.requireNonNull(thiz);
     Objects.requireNonNull(name);
-    if (this.globals == null || this.context == null) {
-      throw new ScriptException("No ScriptContext found: JactlScriptEngine instance has not used eval() yet");
-    }
     if (thiz instanceof JactlObject) {
       JactlObject       jactlObject   = (JactlObject) thiz;
       Object            fieldOrHandle = jactlObject._$j$getFieldsAndMethods().get(name);
@@ -153,8 +169,8 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   @Override
   public Object invokeFunction(String name, Object... args) throws ScriptException {
     Objects.requireNonNull(name);
-    if (this.globals == null || this.context == null || this.jactlScript == null) {
-      throw new ScriptException("No ScriptContext found: JactlScriptEngine instance has not used eval() yet");
+    if (this.jactlScript == null) {
+      throw new ScriptException("No script found: JactlScriptEngine instance has not used eval() yet");
     }
     try {
       // Get the method handle to the wrapper of the function we want to invoke as it
@@ -233,9 +249,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     JactlScript jactlScript;
     public JactlCompiledScript(JactlScript jactlScript) { this.jactlScript = jactlScript; }
     @Override public Object eval(ScriptContext context) throws ScriptException {
-      JactlScriptEngine.this.context = context;
-      JactlScriptEngine.this.globals = extractGlobals(context);
-      return jactlScript.runSync(globals, context.getReader(), context.getWriter());
+      return jactlScript.runSync(extractGlobals(context), context.getReader(), context.getWriter());
     }
     @Override public Object eval() throws ScriptException {
       return eval(JactlScriptEngine.this.context);
@@ -247,22 +261,13 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   
   @Override
   public CompiledScript compile(String script) throws ScriptException {
-    // Use a globals map where all lookups return null so that any
-    // reference to a global is of type ANY. This means that any
-    // spelling mistakes in variable names will be treated as a
-    // reference to a global.
-    Map<String,Object> globalsMap = new AbstractMap<String, Object>() {
-      @Override public Set<Entry<String, Object>> entrySet() {
-        return Collections.emptySet();
-      }
-      @Override public Object get(Object key) {
-        return null;
-      }
-      @Override public boolean containsKey(Object key) {
-        return true;
-      }
-    };
-    jactlScript = Jactl.compileScript(script, globalsMap, jactlContext);
+    // Use erased types (i.e. ANY) to avoid strange errors if bindings type changes
+    // after compilation. This way compiled script won't get NullPointerException,
+    // for example, if type was Integer at compile-time but then changes to String
+    // when script is invoked.
+    HashMap erasedBindings = new HashMap();
+    globals.keySet().forEach(k -> erasedBindings.put(k, null));
+    jactlScript = Jactl.compileScript(script, erasedBindings, jactlContext);
     return new JactlCompiledScript(jactlScript);
   }
 
@@ -306,5 +311,11 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
       };
     }
     return globals;
+  }
+
+  @Override
+  public void setBindings(Bindings bindings, int scope) {
+    super.setBindings(bindings, scope);
+    globals = extractGlobals(context);
   }
 }
