@@ -424,20 +424,24 @@ public class Parser {
   }
 
   private Stmt _declaration(boolean inClassDecl) {
+    matchAny(EOL);
+    Token token = peek();
     // Look for multi var declaration: def (x, y) = [1,2]
     //                             or: def (int x, def y) = [1,2]
-    if (lookahead(() -> expect(DEF) != null, () -> expect(LEFT_PAREN) != null)) {
+    if (token.is(DEF) && lookahead(() -> expect(DEF) != null, () -> expect(LEFT_PAREN) != null)) {
       return multiVarDecl(inClassDecl);
     }
     // Look for function declaration: <type> <identifier> "(" ...
-    if (isFunDecl(inClassDecl)) {
+    boolean typeOrVar          = token.is(typesAndVar);
+    boolean isStaticFinalIdent = token.is(STATIC, FINAL, IDENTIFIER, CONST);
+    if ((typeOrVar || isStaticFinalIdent) && isFunDecl(inClassDecl)) {
       //return this.marked(true, () -> funDecl(inClassDecl), EOL, RIGHT_BRACE);
       return funDecl(inClassDecl);
     }
-    if (isVarDecl()) {
+    if ((typeOrVar || isStaticFinalIdent) && isVarDecl()) {
       return varDecl(inClassDecl);
     }
-    if (peek().is(CLASS)) {
+    if (token.is(CLASS)) {
       return classDecl();
     }
     if (matchAny(SEMICOLON)) {
@@ -447,7 +451,7 @@ public class Parser {
     if (inClassDecl) {
       unexpected("Expected field, method, or class declaration", false, IDENTIFIER, EOL);
     }
-    matchAny(EOL);
+//    matchAny(EOL);
     return _statement();
   }
 
@@ -541,7 +545,7 @@ public class Parser {
         type = JactlType.valueOf(typeToken.getType());
       }
       else {
-        if (lookahead(() -> className(true) != null)){
+        if (peekIgnoreEOL().is(IDENTIFIER) && lookahead(() -> className(true) != null)){
           type = createInstanceType(className(throwIfError));
         }
         else {
@@ -714,7 +718,7 @@ public class Parser {
       mark.drop();
       return ANY;
     }
-    if (type == null && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
+    if (type == null && peek().is(IDENTIFIER) && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
       type = createInstanceType(className(false));   // we have a class name
     }
     if (type == null) {
@@ -1761,11 +1765,11 @@ public class Parser {
   }
 
   private boolean isCast() {
-    return lookahead(() -> matchAny(LEFT_PAREN), () -> type(false, false, false, true) != null, () -> matchAny(RIGHT_PAREN));
+    return peek().is(LEFT_PAREN) && lookahead(() -> matchAny(LEFT_PAREN), () -> type(false, false, false, true) != null, () -> matchAny(RIGHT_PAREN));
   }
 
   private boolean isPlusMinusNumber() {
-    return lookahead(() -> matchAny(PLUS, MINUS) && matchAny(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
+    return peek().is(PLUS,MINUS) && lookahead(() -> matchAny(PLUS, MINUS) && matchAny(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
   }
 
   /**
@@ -2838,6 +2842,9 @@ public class Parser {
   private boolean isMapPattern(TokenType startToken, boolean starAllowed) {
     // Check for start of a Map literal. We need to lookahead to know the difference between
     // a Map literal using '{' and '}' and a statement block or a closure.
+    if (!peekIgnoreEOL().is(startToken)) {
+      return false;
+    }
     return lookahead(() -> {
       if (!matchAnyIgnoreEOL(startToken)) { return false; }
       // Allow '*' as first elem in list of key,value pair if doing pattern match in switch expression
@@ -3207,6 +3214,9 @@ public class Parser {
   private boolean isMapLiteral() {
     // Check for start of a Map literal. We need to lookahead to know the difference between
     // a Map literal using '{' and '}' and a statement block or a closure.
+    if (!peekIgnoreEOL().is(LEFT_SQUARE,LEFT_BRACE)) {
+      return false;
+    }
     return lookahead(() -> {
       if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
       TokenType close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
@@ -3472,6 +3482,9 @@ public class Parser {
    * @types  the sequence of types to match against
    */
   private boolean lookaheadNoEOL(TokenType... types) {
+    if (!peek().is(types[0])) {
+      return false;
+    }
     return lookahead(() -> {
       for (TokenType type: types) {
         if (!matchAnyNoEOL(type)) {

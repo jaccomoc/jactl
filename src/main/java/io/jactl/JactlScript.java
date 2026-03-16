@@ -28,27 +28,30 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * A compiled JactlScript.
  */
 public class JactlScript {
 
-  private BiConsumer<Map<String,Object>,Consumer<Object>> script;
-  private JactlContext jactlContext;
-  private Class<?>     compiledClass;
+  private BiConsumer<Map<String, Object>, Consumer<Object>> script;
+  private JactlContext                                      jactlContext;
+  private Class<?>                                          compiledClass;
 
   public JactlScript(Class<?> compiledClass, JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
     this.compiledClass = compiledClass;
-    this.jactlContext  = jactlContext;
-    this.script        = script;
+    this.jactlContext = jactlContext;
+    this.script = script;
   }
 
   public static JactlScript createScript(Class<?> compiledClass, Function<Map<String, Object>, Object> invoker, JactlContext context) {
-    return new JactlScript(compiledClass, context, (map,completion) -> {
+    return new JactlScript(compiledClass, context, (map, completion) -> {
       try {
         Object result = invoker.apply(map);
         completion.accept(result);
@@ -65,37 +68,62 @@ public class JactlScript {
     });
   }
 
-  public static Function<Map<String,Object>,Object> createInvoker(Class clazz, JactlContext context) {
-    try {
-      Method       method     = Utils.findMethod(clazz, Utils.JACTL_SCRIPT_MAIN, false);
-      MethodType   methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
-      MethodHandle mh         = MethodHandles.publicLookup().findVirtual(clazz, Utils.JACTL_SCRIPT_MAIN, methodType);
-      boolean      isAsync    = method.getParameterTypes().length != 1;
-      return map -> {
-        JactlScriptObject instance = null;
+  public static Function<Map<String, Object>, Object> createInvoker(Class clazz, JactlContext context) {
+    AtomicReference<MethodHandle> atomicMh = new AtomicReference<>();
+    AtomicBoolean                 isAsync  = new AtomicBoolean();
+    Supplier<MethodHandle> mhSupplier = () -> {
+      MethodHandle mh = atomicMh.get();
+      if (mh != null) {
+        return mh;
+      }
+      Method method = null;
+      try {
+        method = clazz.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Map.class);
+      }
+      catch (NoSuchMethodException e) {
+      }
+      if (method == null) {
         try {
-          instance        = (JactlScriptObject)clazz.getDeclaredConstructor().newInstance();
-          Object result   = isAsync ? mh.invoke(instance, (Continuation) null, map)
-                                    : mh.invoke(instance, map);
-          cleanUp(instance, context);
-          return result;
+          method = clazz.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class);
         }
-        catch (Continuation c) {
-          throw c;
-        }
-        catch (RuntimeError e) {
-          cleanUp(instance, context);
-          throw e;
-        }
-        catch (Throwable e) {
-          cleanUp(instance, context);
+        catch (NoSuchMethodException e) {
           throw new RuntimeException(e);
         }
-      };
-    }
-    catch (NoSuchMethodException | IllegalAccessException e) {
-      throw new IllegalStateException("Internal error: " + e, e);
-    }
+      }
+      //Method       method     = Utils.findMethod(clazz, Utils.JACTL_SCRIPT_MAIN, false);
+      MethodType methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
+      try {
+        mh = MethodHandles.publicLookup().findVirtual(clazz, Utils.JACTL_SCRIPT_MAIN, methodType);
+      }
+      catch (NoSuchMethodException | IllegalAccessException e) {
+        throw new IllegalStateException("Internal error: " + e, e);
+      }
+      isAsync.set(method.getParameterTypes().length != 1);
+      atomicMh.set(mh);
+      return mh;
+    };
+    return map -> {
+      JactlScriptObject instance = null;
+      try {
+        instance = (JactlScriptObject) clazz.getDeclaredConstructor().newInstance();
+        MethodHandle methodHandle = mhSupplier.get();
+        Object result = isAsync.get() ? methodHandle.invoke(instance, (Continuation) null, map)
+                                      : methodHandle.invoke(instance, map);
+        cleanUp(instance, context);
+        return result;
+      }
+      catch (Continuation c) {
+        throw c;
+      }
+      catch (RuntimeError e) {
+        cleanUp(instance, context);
+        throw e;
+      }
+      catch (Throwable e) {
+        cleanUp(instance, context);
+        throw new RuntimeException(e);
+      }
+    };
   }
 
   private static void cleanUp(JactlScriptObject instance, JactlContext context) {

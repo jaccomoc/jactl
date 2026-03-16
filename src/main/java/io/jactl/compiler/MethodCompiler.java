@@ -320,7 +320,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitLocalVariable("this", "L" + classCompiler.internalName + ";", null, globalsLabel, end, 0);
     }
 
-    check(stack.isEmpty(), "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack);
+    check(stack.isEmpty(), "non-empty stack at end of method ", methodFunDecl.functionDescriptor.implementingMethod, ". Type stack = ", stack);
   }
 
   private boolean globalAliases() {
@@ -1063,7 +1063,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(!insideTryCatchNullError());
       loadLocation(expr.operator);
       String methodName = methodNames.get(expr.operator.getType());
-      check(methodName != null, "unsupported operator type " + expr.operator.getChars());
+      check(methodName != null, "unsupported operator type ", expr.operator.getChars());
       invokeMethod(RuntimeUtils.class, methodName, Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
       convertTo(expr.type, expr,true, expr.operator);  // Convert to expected type
       return null;
@@ -1203,7 +1203,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
               // Look for builtin method
               method = classCompiler.context.getFunctions().lookupMethod(leftType.is(CLASS) ? leftType : clss.getInstanceType(), name);
             }
-            check(method != null, "could not find method or field called " + name + " for " + leftType);
+            check(method != null, "could not find method or field called ", name, " for ", leftType);
             // We want the handle to the wrapper method.
             loadWrapperHandle(method, expr);
           }
@@ -1447,7 +1447,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if ((expr.left.type.is(BOOLEAN) || expr.right.type.is(BOOLEAN)) && !expr.left.type.equals(expr.right.type)) {
         // If one type is boolean and the other isn't then we must be doing == or != or === or !== comparison
         // since Resolver would have already given compile error if other type of comparison
-        check(expr.operator.is(EQUAL_EQUAL, BANG_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL), "Unexpected operator " + expr.operator + " comparing boolean and non-boolean");
+        check(expr.operator.is(EQUAL_EQUAL, BANG_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL), "Unexpected operator ", expr.operator, " comparing boolean and non-boolean");
         // Since types are not compatible we already know that they are not equal so pop values and
         // load result
         compile(expr.left);
@@ -1481,7 +1481,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    expr.operator.is(GREATER_THAN) ? IFGT :
                    expr.operator.is(GREATER_THAN_EQUAL) ? IFGE :
                    -1;
-      check(opCode != -1, "Unexpected operator " + expr.operator);
+      check(opCode != -1, "Unexpected operator ", expr.operator);
       Label resultIsTrue = new Label();
       Label end          = new Label();
       mv.visitJumpInsn(opCode, resultIsTrue);
@@ -2471,7 +2471,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (isStatic) {
         fieldType = parentClass.getStaticField(fieldName);
       }
-      check(fieldType != null, "could not find field '" + fieldName + "' for " + JactlType.createClass(parentClass));
+      check(fieldType != null, "could not find field '", fieldName, "' for ", JactlType.createClass(parentClass));
       JactlType finalFieldType = fieldType;
       if (createIfMissing) {
         dupVal();    // Save parent in case field is null and we need to store a value
@@ -2665,7 +2665,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (fieldType == null) {
       fieldType = type.getClassDescriptor().getStaticField(fieldName);
     }
-    check(fieldType != null, "couldn't find field '" + fieldName + "' in class " + type);
+    check(fieldType != null, "couldn't find field '", fieldName, "' in class ", type);
     return fieldType;
   }
 
@@ -2717,15 +2717,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       stack = savedState;
       falseStmts.run();
       // Make sure that both branches leave stack the same
-      check(stack.stackTypesEqual(trueState), "Stack for true/false branches differ:\n true=" + trueState + "\n false=" + stack);
+      check(stack.stackTypesEqual(trueState), "Stack for true/false branches differ:\n true=", trueState, "\n false=", stack);
       // If there are differences about which stack elements are really on the stack and which ones are in locals
       // then make the false branch match the true branch
       if (!stack.stacksEqual(trueState)) {
         check(stack.stacksAreMostlyEqual(1, trueState) && (trueState.peek().isStack() || stack.peek().isStack()),
-              "Stack for true/false branches differ by more than one entry:\n true=" + trueState + "\n false=" + stack);
+              "Stack for true/false branches differ by more than one entry:\n true=", trueState, "\n false=", stack);
       }
       stack.makeSameAs(trueState, 1);
-      check(stack.localsEqual(trueState), "locals differ between true and false branches:\n true  = " + trueState + "\n false = " + stack);
+      check(stack.localsEqual(trueState), "locals differ between true and false branches:\n true  = ", trueState, "\n false = ", stack);
     }
     mv.visitLabel(end);                   // :end
   }
@@ -4044,7 +4044,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Validate that the two stacks are the same
     if (checkStacksMatch) {
-      check(stack.stacksEqual(postTryState), "Stack after try does not match stack after catch:\n  tryStack=" + postTryState + "\n  catchStack=" + stack);
+      check(stack.stacksEqual(postTryState), "Stack after try does not match stack after catch:\n  tryStack=", postTryState, "\n  catchStack=", stack);
       stack.makeSameAs(postTryState, 0);   // Make sure maxIndex is tracked properly
     }
     else {
@@ -5248,9 +5248,9 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
   // = Misc
 
-  private static void check(boolean condition, String msg) {
+  private static void check(boolean condition, Object... msg) {
     if (!condition) {
-      throw new IllegalStateException("Internal error: " + msg);
+      throw new IllegalStateException("Internal error: " + Arrays.asList(msg).stream().map(m -> m.toString()).collect(Collectors.joining(" ")));
     }
   }
 
