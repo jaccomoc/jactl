@@ -665,7 +665,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def f = ([1,2,3] as byte[]).sizexxx; f()", "invalid object type");
     test("def x = [1,2,3] as byte[]; def f = x.size; f()", 3);
     test("def x = [1,2,3] as byte[]; def f = x.\"${'size'}\"; f()", 3);
-    testError("def x = [1,2,3] as byte[]; def f = x.sizexxx; f()", "invalid parent");
+    testError("def x = [1,2,3] as byte[]; def f = x.sizexxx; f()", "field access not supported");
     test("([[1,2],[2],[3,4,5]] as byte[][]).size()", 3);
     test("def x = [[1,2],[2],[3,4,5]] as byte[][]; x.size()", 3);
     test("byte[][] x = [[1,2],[2],[3,4,5]] as byte[][]; x.size()", 3);
@@ -686,7 +686,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def f = ([1,2,3] as int[]).sizexxx; f()", "invalid object type");
     test("def x = [1,2,3] as int[]; def f = x.size; f()", 3);
     test("def x = [1,2,3] as int[]; def f = x.\"${'size'}\"; f()", 3);
-    testError("def x = [1,2,3] as int[]; def f = x.sizexxx; f()", "invalid parent");
+    testError("def x = [1,2,3] as int[]; def f = x.sizexxx; f()", "field access not supported");
     test("([[1,2],[2],[3,4,5]] as int[][]).size()", 3);
     test("def x = [[1,2],[2],[3,4,5]] as int[][]; x.size()", 3);
     test("int[][] x = [[1,2],[2],[3,4,5]] as int[][]; x.size()", 3);
@@ -707,7 +707,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def f = ([1,2,3] as long[]).sizexxx; f()", "invalid object type");
     test("def x = [1,2,3] as long[]; def f = x.size; f()", 3);
     test("def x = [1,2,3] as long[]; def f = x.\"${'size'}\"; f()", 3);
-    testError("def x = [1,2,3] as long[]; def f = x.sizexxx; f()", "invalid parent");
+    testError("def x = [1,2,3] as long[]; def f = x.sizexxx; f()", "field access not supported");
     test("([[1,2],[2],[3,4,5]] as long[][]).size()", 3);
     test("def x = [[1,2],[2],[3,4,5]] as long[][]; x.size()", 3);
     test("long[][] x = [[1,2],[2],[3,4,5]] as long[][]; x.size()", 3);
@@ -728,7 +728,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def f = ([1,2,3] as double[]).sizexxx; f()", "invalid object type");
     test("def x = [1,2,3] as double[]; def f = x.size; f()", 3);
     test("def x = [1,2,3] as double[]; def f = x.\"${'size'}\"; f()", 3);
-    testError("def x = [1,2,3] as double[]; def f = x.sizexxx; f()", "invalid parent");
+    testError("def x = [1,2,3] as double[]; def f = x.sizexxx; f()", "field access not supported");
     test("([[1,2],[2],[3,4,5]] as double[][]).size()", 3);
     test("def x = [[1,2],[2],[3,4,5]] as double[][]; x.size()", 3);
     test("double[][] x = [[1,2],[2],[3,4,5]] as double[][]; x.size()", 3);

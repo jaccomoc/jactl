@@ -835,18 +835,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadClassField(expr.parent.type.getInternalName(), fieldName, fieldType, isStatic);
     }
     else {
-      compile(expr.field);
-      box();
+      if (expr.parent.type.is(ARRAY,STRING) && expr.accessType.is(LEFT_SQUARE,QUESTION_SQUARE)) {
+        dupVal();
+        compile(expr.field);
+        box();
+        swap();
+        loadArrayField(expr.parent, expr.accessType, expr.field);
+      }
+      else {
+        compile(expr.field);
+        box();
 
-      // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
-      // and field again to get value and to store value so duplicate parent and field on
-      // stack to get:
-      // ... parent, field, parent, field
-      dupVal2();
+        // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
+        // and field again to get value and to store value so duplicate parent and field on
+        // stack to get:
+        // ... parent, field, parent, field
+        dupVal2();
 
-      // Load the field value onto stack (or suitable default value).
-      // Default value will be based on the type of the rhs of the += or -= etc.
-      loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
+        // Load the field value onto stack (or suitable default value).
+        // Default value will be based on the type of the rhs of the += or -= etc.
+        loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
+      }
     }
 
     // If we need the before value as the result then stash in a temp for later
@@ -863,14 +872,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     convertTo(expr.type, expr.expr, true, expr.location);
 
     // If we need the after result and we have an instance field then stash in a temp for later retrieval.
-    // For non-instsance fields the storeField() will return the after result so no need for a temp.
+    // For non-instance fields, the storeField() will return the after result so no need for a temp.
     boolean afterResultUsed = expr.isResultUsed && !expr.isPreIncOrDec;
     if (afterResultUsed && isField) {
       dupVal();
       temp = stack.allocateSlot(expr.type);
       storeLocal(temp);
     }
-
+    
     // Store result back into field
     if (isField) {
       // Parent ref still on stack from earlier
@@ -1251,32 +1260,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         else {
           if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
-            JactlType parentType = peek();
-            Label     FINISH     = new Label();
-            // Check for array type for efficient access
-            if (expr.operator.is(LEFT_SQUARE)) {
-              if (couldBeNull(expr.left)) {
-                throwIfNull("Cannot retrieve field from null parent", expr.operator);
-              }
-              // Get the index
-              compile(expr.right);
-              loadIndexField(expr, parentType);
-            }
-            else {
-              // QUESTION_SQUARE
-              if (couldBeNull(expr.left)) {
-                // If parent is null then value is null
-                dupVal();
-                compile(expr.right);   // must always compile index expression in case there are side-effects
-                emitIf(false, IfTest.IS_NULL, () -> swap(),
-                       () -> { popVal(); },
-                       () -> loadIndexField(expr, parentType));
-              }
-              else {
-                compile(expr.right);
-                loadIndexField(expr, parentType);
-              }
-            }
+            loadArrayField(expr.left, expr.operator, expr.right);
           }
           else {
             compile(expr.right);
@@ -1592,6 +1576,41 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  /**
+   * Load field from array
+   * <p>Expect on stack: ...parent</p>
+   * @param parent     the array
+   * @param accessType the access type ('[' or '?[')
+   * @param field      the field to load
+   */
+  private void loadArrayField(Expr parent, Token accessType, Expr field) {
+    JactlType parentType = peek();
+    // Check for array type for efficient access
+    if (accessType.is(LEFT_SQUARE)) {
+      if (couldBeNull(parent)) {
+        throwIfNull("Cannot retrieve field from null parent", accessType);
+      }
+      // Get the index
+      compile(field);
+      loadIndexField(parent, accessType, field, parentType);
+    }
+    else {
+      // QUESTION_SQUARE
+      if (couldBeNull(parent)) {
+        // If parent is null then value is null
+        dupVal();
+        compile(field);   // must always compile index expression in case there are side-effects
+        emitIf(false, IfTest.IS_NULL, () -> swap(),
+               () -> { popVal(); },
+               () -> loadIndexField(parent, accessType, field, parentType));
+      }
+      else {
+        compile(field);
+        loadIndexField(parent, accessType, parent, parentType);
+      }
+    }
+  }
+
   private void loadWrapperHandle(FunctionDescriptor method, Expr.Binary expr) {
     // If method is static then we don't need the instance
     if (method.isStaticMethod && expr.left.type.is(INSTANCE)) {
@@ -1623,9 +1642,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return expr.couldBeNull;
   }
 
-  private void loadIndexField(Expr.Binary expr, JactlType parentType) {
+  private void loadIndexField(Expr parent, Token operator, Expr index, JactlType parentType) {
     if (parentType.is(ARRAY, STRING)) {
-      loadArrElemOrStringChar(expr);
+      loadArrElemOrStringChar(parent, index);
     }
     else {
       if (parentType.is(ANY)) {
@@ -1644,17 +1663,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> {
                  swap();
                  box();
-                 loadLocation(expr.operator);
+                 loadLocation(operator);
                  invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, Object.class, String.class, int.class);
                },
                () -> {
                  swap();
-                 loadField(expr.operator, null, expr.right.location);
+                 loadField(operator, null, index.location);
                });
       }
       else {
         swap();
-        loadField(expr.operator, null, expr.right.location);
+        loadField(operator, null, index.location);
       }
     }
   }
@@ -5030,21 +5049,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   /**
    * Load array element or string char
    * <p>Expect on stack: ...,parent,index
-   * @param expr the binary expression for parent[index]
+   * @param parent the parent expr
+   * @param index  the index
    */
-  private void loadArrElemOrStringChar(Expr.Binary expr) {
-    JactlType parentType = expr.left.type;
-    convertToInt(expr.right.location);
+  private void loadArrElemOrStringChar(Expr parent, Expr index) {
+    JactlType parentType = parent.type;
+    convertToInt(index.location);
     expect(2);        // in case parent has been stored in a local due to async in index expression
 
     Label NOT_NEGATIVE = new Label();
     // Check for negative value (offset from length) unless we have a constant value that is already >= 0
-    if (!expr.right.isConst || !(expr.right.constValue instanceof Number) || ((Number) expr.right.constValue).intValue() < 0) {
+    if (!index.isConst || !(index.constValue instanceof Number) || ((Number) index.constValue).intValue() < 0) {
       _dupVal();
       mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
       mv.visitInsn(SWAP);
       mv.visitInsn(DUP_X1);
-      emitLength(parentType, expr.left.location);
+      emitLength(parentType, parent.location);
       mv.visitInsn(IADD);
     }
 NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
@@ -5055,7 +5075,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
              },
              () -> {
                invokeMethod(Throwable.class, "getMessage");
-               _throwErrorWithString("Index out of bounds: ", expr.right.location);
+               _throwErrorWithString("Index out of bounds: ", index.location);
              });
   }
 
@@ -5229,6 +5249,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
    */
   private void storeParentFieldValue(Token accessOperator) {
     expect(3);
+    box();
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadConst(!insideTryCatchNullError());
     loadLocation(accessOperator);

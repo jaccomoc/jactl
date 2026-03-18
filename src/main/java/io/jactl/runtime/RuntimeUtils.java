@@ -1368,7 +1368,7 @@ public class RuntimeUtils {
     }
 
     String parentString = null;
-    if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !(parent instanceof Object[])) {
+    if (!(parent instanceof List) && (parentString = castToString(parent)) == null && !parent.getClass().isArray()) {
       throw new RuntimeError("Invalid parent object type (" + className(parent) + "): expected Map/List" +
                              (isDot ? "" : " or String"), source, offset);
     }
@@ -1389,7 +1389,7 @@ public class RuntimeUtils {
       return loadStringChar(parentString, index, source, offset);
     }
 
-    return loadObjectArrElem((Object[]) parent, index, source, offset);
+    return loadArrayField(parent, index, source, offset);
   }
 
   /**

@@ -1600,12 +1600,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitFieldAssign(Expr.FieldAssign expr) {
     resolveClassAllowed(expr.parent);
+    resolve(expr.field);
     return resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
   }
 
   @Override public JactlType visitFieldOpAssign(Expr.FieldOpAssign expr) {
     resolveClassAllowed(expr.parent);
-
+    resolve(expr.field);
+    
     // For FieldOpAssign we will either have something like the following example:
     //  a.b.c.d += 5 ==> new FieldOpAssign(parent = new Binary('a.b.c'),
     //                                     accessOperator = '.',
@@ -1648,8 +1650,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         binaryParent.type = dottedAcess ? MAP : LIST;
       }
     }
-
-    resolve(field);
+    
     resolve(valueExpr);
 
     if (parent.type.is(INSTANCE, CLASS)) {
