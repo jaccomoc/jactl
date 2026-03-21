@@ -374,7 +374,7 @@ public class Restorer {
   private void restoreList(List list) {
     int size = readCInt();
     for (int i = 0; i < size; i++) {
-      list.add(readObject());
+      list.add(readObject(true));
     }
   }
 

@@ -38,7 +38,8 @@ public abstract class JactlMethodHandle implements Checkpointable {
     HANDLE,
     ITERATOR_HANDLE,
     BUILTIN_FUNCTION,
-    BOUND
+    BOUND,
+    HOST_METHOD
   }
 
   public int parameterCount() {
@@ -81,6 +82,10 @@ public abstract class JactlMethodHandle implements Checkpointable {
   public static FunctionWrapperHandle createFuncHandle(MethodHandle handle, JactlType type, String name, FunctionDescriptor function) {
     return new FunctionWrapperHandle(handle, type, name, function);
   }
+  
+  public static HostClassWrapperHandle createHostClassHandle(MethodHandle handle, boolean isStatic) {
+    return new HostClassWrapperHandle(handle, isStatic);
+  }
 
   /////////////////////////////////////////////////////////////
 
@@ -90,6 +95,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
       case ITERATOR_HANDLE:    return new IteratorHandle();
       case BUILTIN_FUNCTION:   return new FunctionWrapperHandle();
       case BOUND:              return new BoundHandle();
+      case HOST_METHOD:        throw new UnsupportedOperationException("Checkpointing not supported for host class methods");
     }
     return null;
   }
@@ -179,6 +185,25 @@ public abstract class JactlMethodHandle implements Checkpointable {
       }
     }
   }
+
+  // NOTE: These don't support checkpoint/restore because of the risk of somone being able to inject
+  // a malicious class/method name at restoration time that then gets invoked.
+  public static class HostClassWrapperHandle extends JactlMethodHandle {
+    boolean isStatic;
+    public HostClassWrapperHandle(MethodHandle handle, boolean isStatic) {
+      this.handle   = handle;
+      this.isStatic = isStatic;
+    }
+    @Override public JactlMethodHandle bindTo(Object obj) {
+      return isStatic ? this : super.bindTo(obj);
+    }
+    @Override public void _$j$checkpoint(Checkpointer checkpointer) {
+      throw new UnsupportedOperationException("Checkpointing not supported for host class method invocations");
+    }
+    @Override public void _$j$restore(Restorer restorer) {
+      throw new UnsupportedOperationException("Checkpointing not supported for host class method invocations");
+    }
+  }  
 
   public static class FunctionWrapperHandle extends JactlMethodHandle {
     private JactlType type;    // Can be null for global functions

@@ -1008,7 +1008,7 @@ public class Utils {
     if (clss == null) {
       return null;
     }
-    List<Method> methods = Arrays.stream(clss.getDeclaredMethods())
+    List<Method> methods = Arrays.stream(clss.getMethods())
                                  .filter(m -> m.getName().equals(methodName))
                                  .filter(m -> isStatic == Modifier.isStatic(m.getModifiers()))
                                  .collect(Collectors.toList());

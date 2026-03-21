@@ -20,6 +20,7 @@ package io.jactl.engine;
 import io.jactl.runtime.NullError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import javax.script.*;
 
@@ -29,6 +30,9 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -40,6 +44,27 @@ class JactlScriptEngineTest {
   Bindings engineBindings;
   Bindings globalBindings;
   ByteArrayOutputStream baos;
+
+  private void assertThrows(Executable executable, Class<? extends Throwable> exceptionClass) {
+    assertThrows(executable, exceptionClass, "");
+  }
+  
+  private void assertThrows(Executable executable, Class<? extends Throwable> exceptionClass, String message) {
+    try {
+      executable.execute();
+      fail("Should have thrown " + exceptionClass.getName() + " but nothing thrown");
+    }
+    catch (Throwable e) {
+      if (!exceptionClass.isInstance(e)) {
+        e.printStackTrace();
+        fail("Should have thrown " + exceptionClass.getName() + " but threw " + e.getClass().getName());
+      }
+      if (e.getMessage() == null && !message.isEmpty() ||
+          e.getMessage() != null && !e.getMessage().toLowerCase().contains(message.toLowerCase())) {
+        fail("Message '" + e.getMessage() + "' did not contain expected text of '" + message + "'");
+      }
+    }
+  }
   
   @BeforeEach void setUp() {
     mgr = new ScriptEngineManager();
@@ -80,12 +105,33 @@ class JactlScriptEngineTest {
     engineBindings.put("x", 2);
     assertEquals(4, engine.eval("println x + x; x + x", ctx));
     assertEquals("xxxxxx\n4\n", baos.toString());
+    ScriptContext ctx2 = new SimpleScriptContext();
+    ctx2.setBindings(engineBindings, ScriptContext.ENGINE_SCOPE);
+    ctx2.setBindings(globalBindings, ScriptContext.GLOBAL_SCOPE);
+    engineBindings.put("x", 33);
+    ctx2.setReader(new StringReader("123\n456\n"));
+    ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
+    ctx2.setWriter(new PrintWriter(baos2));
+    assertEquals(66, engine.eval("println x.toString() + x + nextLine() + nextLine(); x + x", ctx2));
+    assertEquals("3333123456\n", baos2.toString());
+    engineBindings.put("x", null);
+    assertEquals(true, engine.eval("x == null"));
+  }
+  
+  @Test void evalWithNoReader() throws ScriptException {
+    ScriptContext ctx2 = new SimpleScriptContext();
+    ctx2.setReader(null);
+    assertEquals(3, engine.eval("1 + 2", ctx2));
+    assertEquals(null, engine.eval("nextLine()", ctx2));
   }
 
   @Test void evalWithEngineBindings() throws ScriptException {
     engine.put("a1", "xxx");
     System.setOut(new PrintStream(baos));
     assertEquals("xxxxxx", engine.eval("a1 + a1"));
+    engine.put("m", new HashMap());
+    engine.eval("m.put('a', 'b')");
+    assertEquals("b", ((Map)engine.get("m")).get("a"));
   }
 
   @Test void evalWithGlobalBindings() throws ScriptException {
@@ -124,6 +170,14 @@ class JactlScriptEngineTest {
     assertEquals("xxxyyyaaa\n", baos.toString());
   }
 
+  @Test void evalWithSyntaxError() throws ScriptException {
+    assertThrows(() -> engine.eval("if if if"), ScriptException.class, "unexpected token 'if'");
+  }
+  
+  @Test void evalWithRuntimeError() throws ScriptException {
+    assertThrows(() -> engine.eval("def m; m.x"), ScriptException.class, "null value");
+  }
+  
   @Test void async() throws ScriptException {
     assertEquals(true, engine.eval("sleep(1); true"));
   }
@@ -163,7 +217,7 @@ class JactlScriptEngineTest {
     globalBindings.put("x", "XXX");
     globalBindings.put("a", "aaa");
     Object obj = engine.eval("class X { int fff(String x) { x.size() }; int p(x) { println x; x.size() } }; new X()", ctx);
-    assertThrows(NoSuchMethodException.class, () -> engine.invokeMethod(obj, "f", "abc"));
+    assertThrows(() -> engine.invokeMethod(obj, "f", "abc"), NoSuchMethodException.class);
   }
 
   @Test void invokeMethodWithBinding() throws ScriptException, NoSuchMethodException {
@@ -176,9 +230,27 @@ class JactlScriptEngineTest {
     assertEquals(8, engine.invokeMethod(obj, "p", "abcde"));
   }
 
+  @Test void invokeMethodWithNullObj() throws ScriptException {
+    engine.put("x", "xxx");
+    engine.put("y", "yyy");
+    mgr.put("x", "XXX");
+    mgr.put("a", "aaa");
+    engine.eval("class X { int f(String s) { (x + s).size() }; int p(i) { println x + i; (x+i).size() } }; new X()", ctx);
+    assertThrows(() -> engine.invokeMethod(null, "f", "abcd"), NullPointerException.class);
+  }
+
+  @Test void invokeMethodWithNullName() throws ScriptException {
+    engine.put("x", "xxx");
+    engine.put("y", "yyy");
+    mgr.put("x", "XXX");
+    mgr.put("a", "aaa");
+    Object obj = engine.eval("class X { int f(String s) { (x + s).size() }; int p(i) { println x + i; (x+i).size() } }; new X()", ctx);
+    assertThrows(() -> engine.invokeMethod(obj, null, "abcd"), NullPointerException.class);
+  }
+
   @Test void invokeMethodBuiltIn() throws ScriptException {
     Object obj = engine.eval("LocalDate.parse('2026-03-08')", ctx);
-    assertThrows(ScriptException.class, () -> engine.invokeMethod(obj, "atTime()",LocalDateTime.parse("2026-03-08T12:13:14"), engine.invokeMethod(obj, "atTime()", LocalTime.parse("12:13:14"))));
+    assertThrows(() -> engine.invokeMethod(obj, "atTime()",LocalDateTime.parse("2026-03-08T12:13:14"), engine.invokeMethod(obj, "atTime()", LocalTime.parse("12:13:14"))), ScriptException.class, "target object is not a JactlObject");
   }
 
   @Test void invokeMethodAsync() throws ScriptException, NoSuchMethodException {
@@ -193,13 +265,13 @@ class JactlScriptEngineTest {
   
   @Test void invokeMethodError() {
     Object obj = new Object();
-    assertThrows(ScriptException.class, () -> engine.invokeMethod(obj, "toString"));
+    assertThrows(() -> engine.invokeMethod(obj, "toString"), ScriptException.class, "target object is not a JactlObject");
   }
 
   @Test void invokeMethodError2() throws ScriptException {
     assertEquals(1, engine.eval("1", ctx));
     Object obj = new Object();
-    assertThrows(ScriptException.class, () -> engine.invokeMethod(obj, "toString"));
+    assertThrows(() -> engine.invokeMethod(obj, "toString"), ScriptException.class, "target object is not a JactlObject");
   }
   
   @Test void invokeFunction() throws ScriptException {
@@ -210,13 +282,17 @@ class JactlScriptEngineTest {
     assertEquals("y123", engine.invokeFunction("f", 2, 3));
     assertEquals(10, engine.invokeFunction("g", "456", 5));
   }
+  
+  @Test void invokeFunctionBeforeEval() {
+    assertThrows(() -> engine.invokeFunction("f", 2, 3), ScriptException.class, "instance has not used eval");
+  }
 
   @Test void invokeFunctionNonExistent() throws ScriptException {
     engineBindings.put("x", 1);
     engineBindings.put("y", "y");
     globalBindings.put("y", 2);
     assertEquals("y1", engine.eval("def f(a,b) { y + x + a + b }; int g(String s, int i) { s.size() + i + x + y.size() }; y + x", ctx));
-    assertThrows(ScriptException.class, () -> engine.invokeFunction("fff", 2, 3));
+    assertThrows(() -> engine.invokeFunction("fff", 2, 3), ScriptException.class, "unknown function 'fff'");
   }
 
   @Test void invokeFunctionAsync() throws ScriptException {
@@ -251,7 +327,7 @@ class JactlScriptEngineTest {
     globalBindings.put("y", 2);
     assertEquals("y1", engine.eval("String fff(a, int b) { sleep(1,y) + sleep(1,x) + a + sleep(1,b) }; int g() { sleep(1); 3 }; def z(){4}; def zzz() {7}; y + x", ctx));
     MyInterface obj = engine.getInterface(MyInterface.class);
-    assertThrows(RuntimeException.class, () -> obj.f(2, 3));
+    assertThrows(() -> obj.f(2, 3), RuntimeException.class, "unknown function 'f'");
   }
   
   public interface MyInterface2 {
@@ -277,7 +353,7 @@ class JactlScriptEngineTest {
     globalBindings.put("a", "aaa");
     Object obj = engine.eval("class X { int f(String x) { sleep(1,x.size()) }; int pp(x) { sleep(1); println x; sleep(1); f(x) } }; new X()", ctx);
     MyInterface2 obj2 = engine.getInterface(obj, MyInterface2.class);
-    assertThrows(RuntimeException.class, () -> obj2.p("abcde"));
+    assertThrows(() -> obj2.p("abcde"), RuntimeException.class, "no such method 'p'");
   }
   
   @Test void compileWithNullBindingValue() throws ScriptException {
@@ -287,7 +363,7 @@ class JactlScriptEngineTest {
     assertEquals(4, script.eval());
     assertEquals(2, engine.eval("z - x", ctx));
     mgr.getBindings().remove("z");
-    assertThrows(NullError.class, () -> script.eval());
+    assertThrows(() -> script.eval(), ScriptException.class, "null operand");
   }
   
   @Test void compileWithBindingTypeChange() throws ScriptException {
@@ -334,10 +410,72 @@ class JactlScriptEngineTest {
   }
 
   @Test void compileReader() throws ScriptException {
-    engine.put("x", 1);
-    mgr.put("z", 3);
+    engine.put("x", 2);
+    mgr.put("z", 7);
     CompiledScript script = engine.compile(new StringReader("x + z"));
     assertEquals(2, engine.eval("z - x", ctx));
+    assertEquals(9, script.eval());
+  }
+  
+  @Test void compileThenEval() throws ScriptException {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    CompiledScript script = engine.compile("x + z");
+    assertEquals(11, script.eval());
+    assertEquals(2, engine.eval("z - x", ctx));
+  }
+  
+  @Test void disablePrint() {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    engine.put("jactl.disablePrint", true);
+    assertThrows(() -> engine.compile("println x + z"), ScriptException.class, "println has been disabled");
+    assertThrows(() -> engine.eval("println z - x", ctx), ScriptException.class, "println has been disabled");
+  }
+  
+  @Test void evalStatement() throws ScriptException {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    CompiledScript script = engine.compile("eval('x + z', [x:x,z:z])");
+    assertEquals(11, script.eval());
+    assertEquals(2, engine.eval("eval('z - x', [x:x, z:z])", ctx));
+  }
+
+  @Test void disableEval() {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    engine.put("jactl.disableEval", true);
+    assertThrows(() -> engine.compile("eval('x + z')"), ScriptException.class, "eval has been disabled");
+    assertThrows(() -> engine.eval("eval('z - x')", ctx), ScriptException.class, "eval has been disabled");
+  }
+
+  @Test void dieStatement() throws ScriptException {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    CompiledScript script = engine.compile("die 'some error'");
+    assertThrows(() -> script.eval(), ScriptException.class, "some error");
+    assertThrows(() -> engine.eval("die 'some other error'", ctx), ScriptException.class, "some other error");
+  }
+
+  @Test void disableDie() throws ScriptException {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    engine.put("jactl.disableDie", true);
+    assertThrows(() -> engine.compile("die 'some error'"), ScriptException.class, "die has been disabled");
+    assertThrows(() -> engine.eval("die 'some other error'", ctx), ScriptException.class, "die has been disabled");
+  }
+
+  @Test void compileThenEvalWithRemovedBinding() throws ScriptException {
+    engine.put("x", 7);
+    mgr.put("z", 4);
+    CompiledScript script = engine.compile("x + z");
+    assertEquals(11, script.eval());
+    engine.getBindings(ScriptContext.ENGINE_SCOPE).remove("x");
+    assertThrows(script::eval, ScriptException.class, "null operand");
+  }
+  
+  @Test void compileWithSyntaxError() throws ScriptException {
+    assertThrows(() -> engine.compile("x +"), ScriptException.class, "unexpected end-of-file");
   }
   
   @Test void example() throws ScriptException {
@@ -348,5 +486,118 @@ class JactlScriptEngineTest {
     engineMgr.put("z", 5);                      // global binding scope
     Object result = engine.eval("x + z");
     System.out.println("Result is " + result);
+  }
+  
+  @Test void accessHostNotAllowed() throws ScriptException {
+    class NewType {
+      String prefix;
+      NewType(String prefix) { this.prefix = prefix; }
+      public String process(String x) { return prefix + ": " + x; }
+    }
+    engine.put("x", new NewType("prefix"));
+    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "access to host classes not allowed");
+  }
+
+  @Test void accessHostAllowedNonPublicClass() throws ScriptException {
+    class NewType {
+      String prefix;
+      NewType(String prefix) { this.prefix = prefix; }
+      public String process(String x) { return prefix + ": " + x; }
+    }
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "class is not public");
+  }
+
+  public class NewBaseType {
+    public String base() { return "xyz"; }
+  }
+  
+  public class NewType extends NewBaseType {
+    String prefix;
+    NewType(String prefix) { this.prefix = prefix; }
+    private String privateMethod(String x) { return "private: " + prefix + ": " + x; }
+    public String process(String x) { return prefix + ": " + x; }
+    public String overloadedMethod(String x) { return prefix + ": " + x; }
+    public String overloadedMethod(int x) { return prefix + ": " + x; }
+    public String overloadedMethod2(String x) { return prefix + ": " + x; }
+    public String overloadedMethod2(NewBaseType base) { return prefix + ": " + base.base(); }
+    public void voidMethod(Map x) { x.put("x","xyz"); }
+  }
+
+  @Test void accessHostClassLookupFails() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    engine.put("x", new NewType("prefix"));
+    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "is not an allowed class");
+  }
+
+  @Test void accessHostNonPublicMethod() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertThrows(() -> engine.eval("x.privateMethod('abc')"), ScriptException.class, "could not find public method");
+  }
+
+  @Test void accessToClassNotAllowed() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertEquals("prefix: abc", engine.eval("x.process('abc')"));
+    assertEquals("xyz", engine.eval("x.base()"));
+    assertEquals(NewType.class.getName(), engine.eval("x.className()"));
+    assertThrows(() -> engine.eval("x.getClass().forName('xyz')"), ScriptException.class, "java.lang.Class is not an allowed class");
+  }
+
+  @Test void allowHostAccess() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertEquals("prefix: abc", engine.eval("x.process('abc')"));
+    assertEquals("xyz", engine.eval("x.base()"));
+    assertEquals(NewType.class.getName(), engine.eval("x.className()"));
+    assertEquals(11, engine.eval("x.process('abc').size()"));
+  }
+
+  @Test void hostAccessBadArgType() {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertThrows(() -> engine.eval("x.process(123)"), ScriptException.class, "cannot convert object of type int to String");
+  }
+  
+  @Test void overloadedMethod() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertEquals("prefix: abc", engine.eval("x.overloadedMethod('abc')"));
+    assertEquals("prefix: 123", engine.eval("x.overloadedMethod(123)"));
+    assertEquals("prefix: abc", engine.eval("x.overloadedMethod('abc')"));
+  }
+
+  @Test void overloadedMethod2() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    assertEquals("prefix: abc", engine.eval("x.overloadedMethod2('abc')"));
+    assertEquals("prefix: xyz", engine.eval("x.overloadedMethod2(x)"));
+    assertEquals("prefix: xyz", engine.eval("x.overloadedMethod2(x)"));
+  }
+
+  @Test void voidMethod() throws ScriptException {
+    engine.put("jactl.allowHostAccess", true);
+    Predicate<String> classNameLookup = name -> name.contains("NewType");
+    engine.put("jactl.allowHostClassLookup", classNameLookup);
+    engine.put("x", new NewType("prefix"));
+    engine.put("m", new HashMap<>());
+    engine.eval("x.voidMethod(m)");
+    assertEquals("xyz", ((Map)engine.get("m")).get("x"));
   }
 }

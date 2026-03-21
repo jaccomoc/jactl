@@ -406,7 +406,7 @@ public class JactlClass {
                      "         .autoImport(true)\n" +
                      "         .mapType(ABC.class, XYZ.class)\n");
 
-    Arrays.stream(clss.getDeclaredMethods())
+    Arrays.stream(clss.getMethods())
           .filter(m -> Modifier.isPublic(m.getModifiers()))
           .filter(m -> !m.isBridge())
           .filter(m -> !excludedMethods.contains(m.getName()))

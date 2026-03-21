@@ -20,7 +20,6 @@ package io.jactl.runtime;
 import io.jactl.*;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.Writer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -1288,7 +1287,7 @@ public class RuntimeUtils {
     }
     else {
       // Fields of a map cannot override built-in methods so look up method first
-      value = onlyField ? null : RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, field);
+      value = onlyField ? null : lookupWrapper(parent, field, args, source, offset);
       if (value == null && parent instanceof Map) {
         value = ((Map) parent).get(field);
       }
@@ -1311,6 +1310,20 @@ public class RuntimeUtils {
     catch (Throwable e) {
       throw new RuntimeError("Error during method invocation", source, offset, e);
     }
+  }
+  
+  private static JactlMethodHandle lookupWrapper(Object parent, String field, Object[] args, String source, int offset) {
+    JactlContext context = RuntimeState.getState().getContext();
+    JactlMethodHandle handle = context.getFunctions().lookupWrapper(parent, field);
+    if (handle != null) {
+      return handle;
+    }
+    Class<?> parentClass = parent.getClass();
+    // If built-in type, and we haven't found method in standard lookup then we don't have a method for it
+    if (parentClass != Class.class && JactlContext.typeFromClass(parentClass, context.getRegisteredClasses(), null) != null) {
+      return null;
+    }
+    return context.lookupWrapperForHostClass(parent, field, args, source, offset);
   }
 
   /**
@@ -1361,7 +1374,7 @@ public class RuntimeUtils {
     // Check for accessing method by name
     String fieldString = castToString(field);
     if (isDot && fieldString != null) {
-      JactlMethodHandle method = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, fieldString);
+      JactlMethodHandle method = lookupWrapper(parent, fieldString, null, source, offset);
       if (method != null) {
         return method;
       }
@@ -1578,7 +1591,7 @@ public class RuntimeUtils {
     if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
-      value = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, (String)field);
+      value = lookupWrapper(parent, (String)field, null, source, offset);
     }
 
     return value;
@@ -1604,7 +1617,7 @@ public class RuntimeUtils {
     if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
-      value = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, (String)field);
+      value = lookupWrapper(parent, (String)field, null, source, offset);
     }
 
     return value;
@@ -1779,7 +1792,7 @@ public class RuntimeUtils {
       // search for matching static field or method
       fieldOrMethod = parent._$j$getStaticFieldsAndMethods().get(fieldName);
       if (fieldOrMethod == null) {
-        fieldOrMethod = RuntimeState.getState().getContext().getFunctions().lookupWrapper(parent, fieldName);
+        fieldOrMethod = lookupWrapper(parent, fieldName, null, source, offset);
       }
     }
     if (fieldOrMethod == null) {

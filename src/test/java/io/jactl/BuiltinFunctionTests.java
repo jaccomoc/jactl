@@ -353,8 +353,13 @@ public class BuiltinFunctionTests extends BaseTest {
     test("([1,2,3] as int[]).groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
     test("'some text to use to count characters'.filter{ it != ' '}.groupBy{ it }.map{ k,v -> [k,v.size()] } as Map as String", "[s:3, o:4, m:1, e:4, t:6, x:1, u:2, c:3, n:1, h:1, a:2, r:2]");
     test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it.a as String }.toString()", "['1':[[a:1, b:2], [a:1, c:2]], '2':[[a:2, b:3]]]");
-    test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it }.toString()", "[([a:1, b:2]):[[a:1, b:2]], ([a:2, b:3]):[[a:2, b:3]], ([a:1, c:2]):[[a:1, c:2]]]");
     test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it.a }.toString()", "[(1):[[a:1, b:2], [a:1, c:2]], (2):[[a:2, b:3]]]");
+    test("[1,2,3].groupBy{ it }.toString()", "[(1):[1], (2):[2], (3):[3]]");
+    test("[[1]].groupBy{ it }.toString()", "[([1]):[[1]]]");
+    test("[[1],[2]].groupBy{ it }.toString()", "[([1]):[[1]], ([2]):[[2]]]");
+    test("[[1],[2],[3]].groupBy{ it }.toString()", "[([1]):[[1]], ([2]):[[2]], ([3]):[[3]]]");
+    test("[[1,2],[2,3],[3,4]].groupBy{ it }.toString()", "[([1, 2]):[[1, 2]], ([2, 3]):[[2, 3]], ([3, 4]):[[3, 4]]]");
+    test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it }.toString()", "[([a:1, b:2]):[[a:1, b:2]], ([a:2, b:3]):[[a:2, b:3]], ([a:1, c:2]):[[a:1, c:2]]]");
   }
 
   @Test public void listTranspose() {

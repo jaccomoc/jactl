@@ -4129,12 +4129,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // object since the method handle will be bound to "this" and the Continuation is supplied
     // when resuming so the current value (usually null) is irrelevant.
     stack.convertStackToLocalsExcept(numArgsAlreadyOnStack);
-    LocalTypes savedState = stack.copy();
 
     // Compile the args to the function before starting the try/catch block since the async part is in the
     // invocation of the function. If the args compilation requires async behaviour then it will take care
     // of it when compiling the expression for the argument.
     compileArgs.run();
+    LocalTypes savedState = stack.copy();
 
     Label blockStart = new Label();
     Label blockEnd   = new Label();

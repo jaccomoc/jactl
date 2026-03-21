@@ -38,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -50,6 +51,9 @@ public class BaseTest {
   protected boolean            classAccessToGlobals;
   protected boolean            alwaysEvalConsts;
   protected boolean            replModeEnabled;
+  protected boolean            allowUndeclaredGlobals = false;
+  protected boolean            allowHostAccess      = false;
+  protected Predicate<String>  allowHostClassLookup = null;
   protected boolean            skipCheckpointTests;
   protected JactlEnv           jactlEnv;
 
@@ -298,6 +302,9 @@ public class BaseTest {
                                             .checkpoint(testCheckpoint)
                                             .restore(testCheckpoint)
                                             .checkClasses(checkClasses)
+                                            .allowUndeclaredGlobals(allowUndeclaredGlobals)
+                                            .allowHostAccess(allowHostAccess)
+                                            .allowHostClassLookup(allowHostClassLookup)
                                             .maxLoopIterations(loopDetection ? 1_000_000_000L : -1)
                                             .maxExecutionTime(loopDetection ? 1_000_000 : -1)
                                             .build();
@@ -501,12 +508,7 @@ public class BaseTest {
   protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
     testVariationCounter++;
     try {
-      JactlContext jactlContext = JactlContext.create()
-                                              .evaluateConstExprs(evalConsts)
-                                              .replMode(replMode)
-                                              .debug(debugLevel)
-                                              .checkClasses(checkClasses)
-                                              .build();
+      JactlContext jactlContext = getJactlContext(evalConsts, replMode, false,false); 
       Map<String, Object> bindings = createGlobals();
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, null, bindings));
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);

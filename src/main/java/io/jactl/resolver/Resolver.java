@@ -2749,10 +2749,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Access to globals not allowed in classes unless flag set in jactlContext.
     Expr.VarDecl global = jactlContext.globalVars.get(name);
     if (isScriptScope() || jactlContext.classAccessToGlobals) {
-      // Support globals that are automatically created when asking for them
-      if (global == null && globals.containsKey(name)) {
-        global = createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed());
-        jactlContext.globalVars.put(name, global);
+      if (global == null) {
+        Object globalVar = globals.get(name);
+        if (globalVar == null && jactlContext.allowUndeclaredGlobals) {
+          globalVar = new Object();       // Create value of type ANY for references to unknown globals
+        }
+        if (globalVar != null) {
+          global = createGlobalVarDecl(name, JactlContext.typeOf(globalVar, jactlContext).boxed());
+          jactlContext.globalVars.put(name, global);
+        }
       }
       return global;
     }

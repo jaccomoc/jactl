@@ -71,7 +71,9 @@ public class RuntimeState {
   public static void setState(JactlContext context, Map<String, Object> globals, Reader input, Writer writer) {
     RuntimeState state = getState();
     state.context = context;
-    state.input = input == null ? null : new BufferedReader(input);
+    state.input = input == null ? new BufferedReader(new StringReader(""))
+                                : input instanceof BufferedReader ? (BufferedReader)input 
+                                                                  : new BufferedReader(input);
     state.writer = writer;
     state.globals = globals;
     if (context.maxExecutionTimeMs >= 0) {

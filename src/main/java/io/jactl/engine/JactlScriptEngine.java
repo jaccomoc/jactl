@@ -27,6 +27,7 @@ import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Predicate;
 
 /**
  * ScriptEngine for Jactl to support JSR 223 scripting language API
@@ -39,6 +40,18 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   private JactlScriptEngineFactory factory;
   private Map<String, Object>      globals;
   private JactlScript              jactlScript;
+  private boolean                  untypedGlobals;
+
+  public static String JACTL_DEBUG_LEVEL              = "jactl.debug.level";
+  public static String JACTL_ALLOW_UNDECLARED_GLOBALS = "jactl.allowUndeclaredGlobals";
+  public static String JACTL_UNTYPED_GLOBALS          = "jactl.untypedGlobals";
+  public static String JACTL_ALLOW_HOST_ACCESS        = "jactl.allowHostAccess";
+  public static String JACTL_ALLOW_HOST_CLASS_LOOKUP  = "jactl.allowHostClassLookup";
+  public static String JACTL_DISABLE_PRINT            = "jactl.disablePrint";
+  public static String JACTL_DISABLE_EVAL             = "jactl.disableEval";
+  public static String JACTL_DISABLE_DIE              = "jactl.disableDie";
+  public static String JACTL_MAX_LOOP_ITERATIONS      = "jactl.maxLoopIterations";
+  public static String JACTL_MAX_EXECUTION_TIME       = "jactl.maxExecutionTime";
   
   private final Map<String, JactlScript> scriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
@@ -54,10 +67,6 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   JactlScriptEngine(JactlScriptEngineFactory factory) {
     super();
     this.factory = factory;
-    jactlContext = JactlContext.create()
-                               .debug(Integer.getInteger("jactl.debug.level", 0))
-                               .classAccessToGlobals(true)
-                               .build();
   }
 
   @Override
@@ -80,18 +89,21 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     return evalScript(script, ctxGlobals, scriptContext.getReader(), scriptContext.getWriter());
   }
 
-  private Object evalScript(String script, Map ctxGlobals, Reader reader, Writer writer) {
+  private Object evalScript(String script, Map ctxGlobals, Reader reader, Writer writer) throws ScriptException {
     JactlScript jactlScript = scriptCache.get(script);
     if (jactlScript == null) {
-      // Erase types of bindings (make them all ANY) so that if script is rerun with
-      // different types bound to the globals it will still run
-      HashMap erasedBindings = new HashMap();
-      ctxGlobals.keySet().forEach(k -> erasedBindings.put(k, null));
-      jactlScript = Jactl.compileScript(script, erasedBindings, jactlContext);
+      jactlScript = compileScript(script, ctxGlobals);
       scriptCache.put(script, jactlScript);
     }
     this.jactlScript = jactlScript;
-    return jactlScript.runSync(ctxGlobals, reader, writer);
+    try {
+      return jactlScript.runSync(ctxGlobals, reader, writer);
+    }
+    catch (JactlError e) {
+      ScriptException scriptException = new ScriptException("Script error: " + e.getMessage());
+      scriptException.initCause(e);
+      throw scriptException;
+    }
   }
 
   @Override public Object eval(Reader reader, ScriptContext context) throws ScriptException {
@@ -145,13 +157,13 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
         }
       }
       try {
-        RuntimeState.setState(jactlContext, globals, context.getReader(), context.getWriter());
+        RuntimeState.setState(getJactlContext(), globals, context.getReader(), context.getWriter());
         return handle.invoke( null, "unknown", -1, args);
       }
       catch (Continuation c) {
         // Method called an async function so now we need to wait for it to finish
         CompletableFuture<Object> future = new CompletableFuture<>();
-        jactlContext.asyncWork(future::complete, c, null);
+        getJactlContext().asyncWork(future::complete, c, null);
         try {
           return future.get();
         }
@@ -189,13 +201,13 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
       
       // Bind handle to the instance and invoke it 
       handle = handle.bindTo(instance);
-      RuntimeState.setState(jactlContext, globals, context.getReader(), context.getWriter());
+      RuntimeState.setState(getJactlContext(), globals, context.getReader(), context.getWriter());
       return handle.invoke(null, "unknown", 0, args == null ? new Object[0] : args);
     }
     catch (Continuation c) {
-      // Method called an async function so now we need to wait for it to finish
+      // Method called an async function, so now we need to wait for it to finish
       CompletableFuture<Object> future = new CompletableFuture<>();
-      jactlContext.asyncWork(future::complete, c, null);
+      getJactlContext().asyncWork(future::complete, c, null);
       try {
         return future.get();
       }
@@ -245,11 +257,80 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
                                       (proxyObj, method, args) -> invokeMethodAndCatch(thiz, method.getName(), args));
   }
 
+  private synchronized JactlContext getJactlContext() {
+    if (jactlContext == null) {
+      Object debugLevelStr = getProperty(JACTL_DEBUG_LEVEL);
+      if (debugLevelStr == null) {
+        debugLevelStr = System.getProperty(JACTL_DEBUG_LEVEL);
+      }
+      int debugLevel = 0;
+      try {
+        debugLevel = debugLevelStr == null ? 0 : Integer.parseInt(debugLevelStr.toString());
+      }
+      catch (NumberFormatException ignored) {}
+      
+      // Default to true to avoid issues
+      this.untypedGlobals = getBoolean(JACTL_UNTYPED_GLOBALS, true);
+      
+      // Value for this should be a Predicate<String> or a Boolean 
+      Object            allowHostClassLookupObj = getProperty(JACTL_ALLOW_HOST_CLASS_LOOKUP);
+      Predicate<String> allowHostClassLookup    = allowHostClassLookupObj instanceof Predicate ? (Predicate<String>) allowHostClassLookupObj 
+                                                                                               : allowHostClassLookupObj instanceof Boolean ? s -> (boolean)allowHostClassLookupObj : null;
+
+      jactlContext = JactlContext.create()
+                                 .debug(debugLevel)
+                                 .classAccessToGlobals(true)
+                                 .allowUndeclaredGlobals(getBoolean(JACTL_ALLOW_UNDECLARED_GLOBALS))
+                                 .allowHostAccess(getBoolean(JACTL_ALLOW_HOST_ACCESS))
+                                 .allowHostClassLookup(allowHostClassLookup)
+                                 .disablePrint(getBoolean(JACTL_DISABLE_PRINT))
+                                 .disableEval(getBoolean(JACTL_DISABLE_EVAL))
+                                 .disableDie(getBoolean(JACTL_DISABLE_DIE))
+                                 .maxLoopIterations(getInt(JACTL_MAX_LOOP_ITERATIONS, -1))
+                                 .maxExecutionTime(getInt(JACTL_MAX_EXECUTION_TIME, -1))
+                                 .build();
+    }
+    return jactlContext;
+  }
+  
+  private int getInt(String propertyName, int defaultValue) {
+    Object property = getProperty(propertyName);
+    if (property == null) {
+      return defaultValue; 
+    }
+    return Integer.parseInt(property.toString());
+  }
+  
+  private boolean getBoolean(String propertyName) {
+    return getBoolean(propertyName, false);
+  }
+  
+  private boolean getBoolean(String propertyName, boolean defaultValue) {
+    Object value = getProperty(propertyName);
+    return value instanceof Boolean ? (Boolean) value : defaultValue;
+  }
+  
+  private Object getProperty(String name) {
+    // Look up ENGINE_SCOPE first
+    Object value = this.get(name);
+    if (value != null) {
+      return value;
+    }
+    return this.getBindings(ScriptContext.GLOBAL_SCOPE).get(name);
+  }
+
   private class JactlCompiledScript extends CompiledScript {
     JactlScript jactlScript;
     public JactlCompiledScript(JactlScript jactlScript) { this.jactlScript = jactlScript; }
     @Override public Object eval(ScriptContext context) throws ScriptException {
-      return jactlScript.runSync(extractGlobals(context), context.getReader(), context.getWriter());
+      try {
+        return jactlScript.runSync(extractGlobals(context), context.getReader(), context.getWriter());
+      }
+      catch (JactlError e) {
+        ScriptException scriptException = new ScriptException("Script error: " + e.getMessage());
+        scriptException.initCause(e);
+        throw scriptException;
+      }
     }
     @Override public Object eval() throws ScriptException {
       return eval(JactlScriptEngine.this.context);
@@ -261,14 +342,29 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   
   @Override
   public CompiledScript compile(String script) throws ScriptException {
-    // Use erased types (i.e. ANY) to avoid strange errors if bindings type changes
-    // after compilation. This way compiled script won't get NullPointerException,
-    // for example, if type was Integer at compile-time but then changes to String
-    // when script is invoked.
-    HashMap erasedBindings = new HashMap();
-    globals.keySet().forEach(k -> erasedBindings.put(k, null));
-    jactlScript = Jactl.compileScript(script, erasedBindings, jactlContext);
+    jactlScript = compileScript(script, globals);
     return new JactlCompiledScript(jactlScript);
+  }
+
+  private JactlScript compileScript(String script, Map bindings) throws ScriptException {
+    JactlContext jactlContext = getJactlContext();
+    if (untypedGlobals) {
+      // Use erased types (i.e. ANY) to avoid strange errors if bindings type changes
+      // after compilation. This way compiled script won't get NullPointerException,
+      // for example, if type was Integer at compile-time but then changes to String
+      // when script is invoked.
+      Map newBindings = new HashMap();
+      bindings.keySet().forEach(k -> newBindings.put(k, null));
+      bindings = newBindings;
+    }
+    try {
+      return Jactl.compileScript(script, bindings, jactlContext);
+    }
+    catch (JactlError e) {
+      ScriptException scriptException = new ScriptException("Compilation error: " + e.getMessage());
+      scriptException.initCause(e);
+      throw scriptException;
+    }
   }
 
   @Override
