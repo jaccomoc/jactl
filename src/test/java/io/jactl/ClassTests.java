@@ -25,6 +25,10 @@ import java.util.LinkedHashMap;
 
 public class ClassTests extends BaseTest {
 
+  @Test public void staticFuncNamedArgs() {
+    test(Utils.listOf( "class X{ static int f(int x){x} }"), "X.f(x:3)", 3);
+  }
+
   @Test public void nameScoping() {
     replModeEnabled = false;
     test("class X{}; int X = 1; X", 1);
@@ -1389,6 +1393,22 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void baseClasses() {
+    test("class X { int fff(x,y=2) { 3 + x + y }; int ggg() { fff(4) } }; new X().ggg()", 9);
+    test("class X { int fff() { 3 } }; class Y extends X { int p() { this.fff() } }; new Y().p()", 3);
+    test("class X { int fff() { 3 } }; class Y extends X { int p() { super.fff() } }; new Y().p()", 3);
+    test("class X { int fff() { 3 } }; class Y extends X { int p() { fff() } }; new Y().p()", 3);
+    test("class X { static int fff() { 3 } }; class Y extends X { int p() { this.fff() } }; new Y().p()", 3);
+    test("class X { static int fff() { 3 } }; class Y extends X { int p() { super.fff() } }; new Y().p()", 3);
+    test("class X { static int fff() { 3 } }; class Y extends X { int p() { fff() } }; new Y().p()", 3);
+    test("class X { int fff(x,y=2) { x+y+3 } }; class Y extends X { int p() { this.fff(4) } }; new Y().p()", 9);
+    test("class X { int fff(x,y=2) { x+y+3 } }; class Y extends X { int p() { super.fff(4) } }; new Y().p()", 9);
+    test("class X { int fff(x,y=2) { x+y+3 } }; class Y extends X { int p() { fff(4) } }; new Y().p()", 9);
+    test("class X { static int fff(x,y=2) { x+y+3 } }; class Y extends X { int p() { this.fff(4) } }; new Y().p()", 9);
+    test("class X { static int fff(x,y=2) { x+y+3 } }; class Y extends X { int p() { super.fff(4) } }; new Y().p()", 9);
+    test("class X { static int fff(x,y=2) { x+y+3 } }; class Y extends X { int p() { fff(4) } }; new Y().p()", 9);
+    test("class X { int fff(x,y=2) { x+y+3 } }; class Y extends X { def p() { fff } }; def f = new Y().p(); f(4)", 9);
+    test(Utils.listOf(" class X { int i }", "class Y extends X { int g() { i } }"), "new Y(1).g()", 1);
+    test(Utils.listOf(" class X { int i; int fff(){i} }", "class Y extends X { int f(){0}; int g() { f() + i + fff() } }"), "new Y(1).fff() + new Y(2).g()", 5);
     test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new Y(1).x", 2);
     test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; new X(1).x", 1);
     test(" class X { int i; int x = f(); int f(){1} }; class Y extends X { int f(){2} }; X x = new Y(1); x.x", 2);

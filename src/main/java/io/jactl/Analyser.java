@@ -195,7 +195,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitCall(Expr.Call expr) {
-    analyse(expr.callee);
+    if (expr.methodCall != null) {
+      analyse(expr.methodCall);
+    }
+    else {
+      analyse(expr.callee);
+    }
     expr.args.forEach(this::analyse);
     Expr.FunDecl       funDecl  = getFunDecl(expr.callee);
     FunctionDescriptor function = getFunction(expr.callee);
@@ -823,6 +828,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void resolveHeapLocals(Expr.FunDecl caller, Expr.FunDecl callee) {
+    if (callee == null) { return; }
     // Find heapLocals that are not in the caller scope or in caller heapLocals
     // and add them to caller's heapLocals (and to its parent etc) until we get to
     // place where variable actually resides.

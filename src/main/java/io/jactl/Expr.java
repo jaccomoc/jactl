@@ -25,6 +25,9 @@ package io.jactl;
 
 import java.util.*;
 
+import io.jactl.JactlType;
+import io.jactl.Stmt;
+import io.jactl.Utils;
 import io.jactl.runtime.ClassDescriptor;
 import io.jactl.runtime.SourceLocation;
 import org.objectweb.asm.Label;
@@ -263,6 +266,9 @@ public abstract class Expr extends JactlUserDataHolder {
     // target of a chained method call (f().each()) and the result was an Iterator then
     // the result must be converted to a List.
     public boolean isMethodCallTarget;
+    
+    // Sometimes a function call is actually a method call to a method in a base class
+    public MethodCall methodCall;
     public Call(Token token, Expr callee, List<Expr> args) {
       this.token = token;
       this.callee = callee;

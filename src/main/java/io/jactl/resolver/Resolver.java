@@ -429,9 +429,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         superStmts.addAll(baseClass.getAllFieldsStream()
                                    .map(e -> fieldDecl(classDecl.name, e.getKey(), e.getValue()))
                                    .collect(Collectors.toList()));
-        superStmts.addAll(baseClass.getAllMethods()
-                                   .map(e -> methodDecl(classDecl.name, e.getKey(), e.getValue()))
-                                   .collect(Collectors.toList()));
       }
 
       // Now construct class block with:
@@ -498,13 +495,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return new Stmt.VarDecl(ident, varDecl);
   }
 
-  private Stmt.VarDecl methodDecl(Token token, String name, FunctionDescriptor function) {
-    Expr.FunDecl funDecl = new Expr.FunDecl(token, token.newIdent(name), function.returnType, null);
+  private Expr.VarDecl varDeclFunction(Token token, String name, FunctionDescriptor function) {
+    Token        methodName    = token.newIdent(name);
+    Expr.FunDecl funDecl       = new Expr.FunDecl(token, methodName, function.returnType, null);
     funDecl.functionDescriptor = function;
-    funDecl.isResultUsed = false;
-    funDecl.isResolved = true;
-    funDecl.type = FUNCTION;
-    return null;
+    funDecl.isResultUsed       = false;
+    funDecl.isResolved         = true;
+    funDecl.type               = FUNCTION;
+    funDecl.wrapper            = Utils.createWrapperFunDecl(token, function);
+    Expr.VarDecl declExpr      = new Expr.VarDecl(methodName, new Token(EQUAL, token), funDecl);
+    declExpr.type              = FUNCTION;
+    declExpr.funDecl           = funDecl;
+    declExpr.isField           = true;
+    return declExpr;
   }
 
   private void validateSignatures(Expr.FunDecl funDecl, ClassDescriptor baseClass, FunctionDescriptor baseMethod) {
@@ -1744,10 +1747,26 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitCall(Expr.Call expr) {
-    // Special case if we are invoking the function directly (not via a MethodHandle value)
     if (expr.callee instanceof Expr.Identifier) {
-      ((Expr.Identifier) expr.callee).couldBeFunctionCall = true;
+      // Special case if we are invoking the function directly (not via a MethodHandle value)
+      Expr.Identifier callee = (Expr.Identifier) expr.callee;
+      callee.couldBeFunctionCall = true;
+      
+      // Check for base call method invocation
+      JactlType baseClass  = currentClass().baseClass;
+      if (!currentClass().isScriptClass() && baseClass != null) {
+        String             methodName  = callee.identifier.getStringValue();
+        FunctionDescriptor descriptor  = lookupMethod(baseClass, methodName);
+        if (descriptor != null) {
+          Expr.Identifier thisIdent = new Expr.Identifier(expr.token.newIdent(Utils.THIS_VAR));
+          expr.methodCall = new Expr.MethodCall(expr.token, thisIdent, new Token(DOT,expr.token), methodName, expr.token, null, expr.args);
+          expr.methodCall.isMethodCallTarget = expr.isMethodCallTarget;
+          resolve(expr.methodCall);
+          return expr.type = descriptor.returnType;
+        }
+      }
     }
+    
     resolve(expr.callee);
     resolve(expr.args);
     if (expr.callee.type == null) {
@@ -2613,9 +2632,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // We haven't found symbol yet so check super classes, class names, constants (from import static),
     // and built-in functions
-    if (varDecl == null) { varDecl = lookupClassMember(name);                  }
-    if (varDecl == null) { varDecl = lookupClass(name, location);              }
-    if (varDecl == null) { varDecl = importedConstants.get(name);                      }
+    if (varDecl == null) { varDecl = lookupClassMember(name, location);                  }
+    if (varDecl == null) { varDecl = lookupClass(name, location);                        }
+    if (varDecl == null) { varDecl = importedConstants.get(name);                        }
     if (varDecl == null) { varDecl = jactlContext.getFunctions().getGlobalFunDecl(name); }
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
@@ -2771,7 +2790,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return classStack.size() == 1 && currentClass().scriptMain != null;
   }
 
-  private Expr.VarDecl lookupClassMember(String name) {
+  private Expr.VarDecl lookupClassMember(String name, Token location) {
     if (isScriptScope()) { return null; }
     Stmt.ClassDecl classDecl = currentClass();
     // Note: we have already checked for any of our current fields since our class block is at the bottom of the
@@ -2779,7 +2798,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     ClassDescriptor baseClass = classDecl.classDescriptor.getBaseClass();
     if (baseClass == null) { return null; }
 
-    return null;
+    FunctionDescriptor method = baseClass.getMethod(name);
+    if (method == null) { return null; }
+    return varDeclFunction(location, name, method);
   }
 
   private boolean inStaticContext() {

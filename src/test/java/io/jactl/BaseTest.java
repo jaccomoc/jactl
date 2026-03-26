@@ -104,6 +104,10 @@ public class BaseTest {
     doTest(classCode, scriptCode, evalConsts, replMode, testAsync, false, expected);
   }
 
+  protected void doTest(List<String> classCode, String scriptCode, Object expected) {
+    doTest(classCode, scriptCode, true, false, false, expected);
+  }
+  
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
     doTest(classCode, scriptCode, null, null, evalConsts, replMode, testAsync, testCheckpoint, expected);
   }

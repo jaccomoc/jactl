@@ -1906,6 +1906,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitCall(Expr.Call expr) {
+    // Check for method call via implicit this
+    if (expr.methodCall != null) {
+      compile(expr.methodCall);
+      return null;
+    }
+    
     // If we have an explicit function name and exact number of args then we can invoke directly without
     // needing to go through a method handle or via method wrapper that fills in missing args.
     // The only exception is if there are closed over variables (HeapLocals) that need to be passed to it
@@ -1916,15 +1922,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // the value of g (the method handle) and invoke g that way.
     boolean isFunctionCall = false;
     FunctionDescriptor functionDescriptor = null;
+    Expr.Identifier callee = null;
     if (expr.callee.isFunctionCall()) {
-      functionDescriptor = ((Expr.Identifier) expr.callee).getFuncDescriptor();
+      callee = (Expr.Identifier) expr.callee;
+      functionDescriptor = callee.getFuncDescriptor();
       // Can only call directly if in same class or is static method. Otherwise, we need method handle that
       // was bound to its instance. Functions can be in different classes in repl mode where functions are
       // compiled into separate classes every compile step and then stored in global map.
-      isFunctionCall = functionDescriptor.isStaticImplementation || functionDescriptor.implementingClassName == null || functionDescriptor.implementingClassName.equals(classCompiler.internalName);
+      isFunctionCall = functionDescriptor.isStaticImplementation
+                       || functionDescriptor.implementingClassName == null
+                       || functionDescriptor.implementingClassName.equals(classCompiler.internalName)
+                       || callee.varDecl.isField;
     }
     if (isFunctionCall) {
-      Expr.Identifier callee  = (Expr.Identifier)expr.callee;
       Expr.FunDecl    funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
       expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
@@ -1987,122 +1997,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
     // If we know what method to invoke
     if (expr.methodDescriptor != null) {
-      FunctionDescriptor method = expr.methodDescriptor;
-
-      if (expr.validateArgsAtCompileTime) {
-        expr.validateArgsAtCompileTime = validateArgs(expr.args, method, expr.leftParen, method.isInitMethod, method.returnType);
-      }
-
-      // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
-      boolean invokeSpecial = expr.parent.isSuper();
-
-      // For static functions (e.g. built-in functions) use implementing class but for methods use the type
-      // of the object we are invoking the method on (this could be a sub-class of the class that the method
-      // is actually declared on and will also work if base class has been redefined after instance class
-      // was compiled - if we used base class we would get error about "is not assignable" since new base class
-      // is not the same as the one that was originally used).
-      String methodClass = method.isStaticImplementation ? method.implementingClassName : expr.parent.type.getInternalName();
-
-      // Need to decide whether to invoke the method or the wrapper. If we have exact number
-      // of arguments we can invoke the method directly. If we don't have all the arguments
-      // (and method allows optional args) then invoke wrapper which will worry about filling
-      // missing values.
-      if (expr.args.size() == method.paramCount && !Utils.isNamedArgs(expr.args) && expr.validateArgsAtCompileTime) {
-        // We can invoke the method directly as we have exact number of args required
-        invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
-                         () -> {
-                           // Get the instance
-                           compile(expr.parent);
-                           if (couldBeNull(expr.parent)) {
-                             throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
-                           }
-                           if (method.isBuiltin && method.firstArgtype != null) {
-                             // If we are calling a "method" that is ANY but we have a primitive then we need to box it
-                             if (method.firstArgtype.is(ANY, NUMBER)) {
-                               box();
-                             }
-                           }
-                           else
-                           if (method.isStaticImplementation && !expr.parent.type.is(CLASS)) {
-                             popVal();
-                           }
-
-                           if (method.isAsync) {
-                             loadNullContinuation();
-                           }
-                           if (method.needsLocation) {
-                             loadLocation(expr.methodNameLocation);
-                           }
-                           // Get the args
-                           for (int i = 0; i < expr.args.size(); i++) {
-                             Expr arg = expr.args.get(i);
-                             compile(arg);
-                             convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
-                           }
-                         },
-                         () -> {
-                           if (methodClass.equals(method.implementingClassName)) {
-                             invokeMethod(method, method.methodParamTypes(), invokeSpecial);
-                           }
-                           else {
-                             invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.implementingMethod,
-                                          expr.type, method.methodParamTypes(), getMethodDescriptor(expr.type, method.methodParamTypes()));
-                           }
-                         });
-      }
-      else {
-        // Need to invoke the wrapper
-        invokeMaybeAsync(expr.isAsync, expr.methodDescriptor.returnType, 0, expr.location,
-                         () -> {
-                           compile(expr.parent);                    // Get the instance
-                           if (couldBeNull(expr.parent)) {
-                             throwIfNull("Cannot invoke method " + expr.methodName + "() on null object", expr.methodNameLocation);
-                           }
-                           if (!method.isBuiltin && method.isStaticImplementation && !expr.parent.type.is(CLASS)) {
-                             popVal();
-                           }
-                           if (expr.parent.type.isPrimitive()) {
-                             box();
-                           }
-                           if (method.isBuiltin) {
-                             loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, FUNCTION, true);
-                             if (!method.isGlobalFunction && method.isInstanceMethod()) {
-                               // Is "method" so bind to parent object
-                               swap();
-                               invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
-                             }
-                           }
-                           loadNullContinuation();
-                           loadLocation(expr.methodNameLocation);
-                           loadArgsAsObjectArr(expr.args);
-                         },
-                         () -> {
-                           List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
-                           if (method.isBuiltin && !method.isGlobalFunction) {
-                             paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
-                           }
-                           if (method.isBuiltin) {
-                             invokeMethodHandle();
-                           }
-                           else {
-                             invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes, getMethodDescriptor(ANY, paramTypes));
-                           }
-                           // Convert Object returned by wrapper back into return type of the function
-                           checkCast(method.returnType);
-                           if (method.returnType.isPrimitive()) {
-                             unbox();
-                           }
-                         });
-      }
-      if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
-        // If Iterator is not going to have another method invoked on it then we need to convert
-        // to List since Iterators are not standard Jactl types.
-        invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
-                         () -> {
-                           loadNullContinuation();
-                           invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
-                         });
-      }
+      invokeMethodDescriptor(expr.methodDescriptor, expr.parent, expr.args, expr.validateArgsAtCompileTime, expr.isMethodCallTarget, expr.isAsync, expr.leftParen, expr.methodNameLocation, expr.location);
       return null;
     }
 
@@ -2132,6 +2027,123 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertIteratorToList(true, expr.location);
     }
     return null;
+  }
+
+  private void invokeMethodDescriptor(FunctionDescriptor method, Expr parent, List<Expr> args, boolean validateArgsAtCompileTime, boolean isMethodCallTarget, boolean isAsync, Token argsLocation, SourceLocation methodNameLocation, Token location) {
+    if (validateArgsAtCompileTime) {
+      validateArgsAtCompileTime = validateArgs(args, method, argsLocation, method.isInitMethod, method.returnType);
+    }
+
+    // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
+    boolean invokeSpecial = parent.isSuper();
+
+    // For static functions (e.g. built-in functions) use implementing class but for methods use the type
+    // of the object we are invoking the method on (this could be a sub-class of the class that the method
+    // is actually declared on and will also work if base class has been redefined after instance class
+    // was compiled - if we used base class we would get error about "is not assignable" since new base class
+    // is not the same as the one that was originally used).
+    String methodClass = method.isStaticImplementation ? method.implementingClassName : parent.type.getInternalName();
+
+    // Need to decide whether to invoke the method or the wrapper. If we have exact number
+    // of arguments we can invoke the method directly. If we don't have all the arguments
+    // (and method allows optional args) then invoke wrapper which will worry about filling
+    // missing values.
+    if (args.size() == method.paramCount && !Utils.isNamedArgs(args) && validateArgsAtCompileTime) {
+      // We can invoke the method directly as we have exact number of args required
+      invokeMaybeAsync(isAsync, method.returnType, 0, location,
+                       () -> {
+                         // Get the instance
+                         compile(parent);
+                         if (couldBeNull(parent)) {
+                           throwIfNull("Cannot invoke method " + method.name + "() on null object", methodNameLocation);
+                         }
+                         if (method.isBuiltin && method.firstArgtype != null) {
+                           // If we are calling a "method" that is ANY but we have a primitive then we need to box it
+                           if (method.firstArgtype.is(ANY, NUMBER)) {
+                             box();
+                           }
+                         }
+                         else
+                         if (method.isStaticImplementation && !parent.type.is(CLASS)) {
+                           popVal();
+                         }
+
+                         if (method.isAsync) {
+                           loadNullContinuation();
+                         }
+                         if (method.needsLocation) {
+                           loadLocation(methodNameLocation);
+                         }
+                         // Get the args
+                         for (int i = 0; i < args.size(); i++) {
+                           Expr arg = args.get(i);
+                           compile(arg);
+                           convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
+                         }
+                       },
+                       () -> {
+                         if (methodClass.equals(method.implementingClassName)) {
+                           invokeMethod(method, method.methodParamTypes(), invokeSpecial);
+                         }
+                         else {
+                           invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.implementingMethod,
+                                        method.returnType, method.methodParamTypes(), getMethodDescriptor(method.returnType, method.methodParamTypes()));
+                         }
+                       });
+    }
+    else {
+      // Need to invoke the wrapper
+      invokeMaybeAsync(isAsync, method.returnType, 0, location,
+                       () -> {
+                         compile(parent);                    // Get the instance
+                         if (couldBeNull(parent)) {
+                           throwIfNull("Cannot invoke method " + method.name + "() on null object", methodNameLocation);
+                         }
+                         if (!method.isBuiltin && method.isStaticImplementation && !parent.type.is(CLASS)) {
+                           popVal();
+                         }
+                         if (parent.type.isPrimitive()) {
+                           box();
+                         }
+                         if (method.isBuiltin) {
+                           loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, FUNCTION, true);
+                           if (!method.isGlobalFunction && method.isInstanceMethod()) {
+                             // Is "method" so bind to parent object
+                             swap();
+                             invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
+                           }
+                         }
+                         loadNullContinuation();
+                         loadLocation(methodNameLocation);
+                         loadArgsAsObjectArr(args);
+                       },
+                       () -> {
+                         List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
+                         if (method.isBuiltin && !method.isGlobalFunction) {
+                           paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
+                         }
+                         if (method.isBuiltin) {
+                           invokeMethodHandle();
+                         }
+                         else {
+                           invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes, getMethodDescriptor(ANY, paramTypes));
+                         }
+                         // Convert Object returned by wrapper back into return type of the function
+                         checkCast(method.returnType);
+                         if (method.returnType.isPrimitive()) {
+                           unbox();
+                         }
+                       });
+    }
+    if (method.returnType.is(ITERATOR) && !isMethodCallTarget) {
+      // If Iterator is not going to have another method invoked on it then we need to convert
+      // to List since Iterators are not standard Jactl types.
+      invokeMaybeAsync(isAsync, ANY, 1, location, () -> {},
+                       () -> {
+                         loadNullContinuation();
+                         invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
+                       });
+    }
   }
 
   @Override public Void visitArrayLength(Expr.ArrayLength expr) {

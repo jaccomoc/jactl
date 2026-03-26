@@ -211,6 +211,9 @@ class Expr extends JactlUserDataHolder {
     // target of a chained method call (f().each()) and the result was an Iterator then
     // the result must be converted to a List.
     boolean @isMethodCallTarget;
+    
+    // Sometimes a function call is actually a method call to a method in a base class
+    MethodCall @methodCall;
   }
 
   class MethodCall extends Expr {
@@ -363,7 +366,7 @@ class Expr extends JactlUserDataHolder {
     Token @earliestForwardReference;
 
     public boolean isClosure()    { return nameToken == null; }
-    public boolean isStatic()     { return functionDescriptor.isStatic; }
+    public boolean isStatic()     { return functionDescriptor.isStaticImplementation; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
     public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync ? 2 : 1) : -1; }
   }

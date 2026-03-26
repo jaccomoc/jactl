@@ -974,7 +974,7 @@ public class Utils {
     return varDecl;
   }
 
-  private static Expr.FunDecl createWrapperFunDecl(Token token, FunctionDescriptor func) {
+  public static Expr.FunDecl createWrapperFunDecl(Token token, FunctionDescriptor func) {
     Expr.FunDecl wrapperFunDecl = createWrapperFunDecl(token, func.implementingMethod, func.isStaticImplementation);
     FunctionDescriptor wrapper = wrapperFunDecl.functionDescriptor;
     wrapper.implementingClassName = func.implementingClassName;
