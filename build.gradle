@@ -53,7 +53,10 @@ java {
     targetCompatibility = "1.8"
 }
 
-test { useJUnitPlatform() }
+test { 
+    useJUnitPlatform()
+    maxParallelForks = 8
+}
 
 jar {
     duplicatesStrategy 'exclude'

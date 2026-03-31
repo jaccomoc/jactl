@@ -241,7 +241,7 @@ public class Parser {
 
   /**
    * <pre>
-   * # packageDecl ::= PACKAGE IDENTIFIER ( DOT IDENTIFIER ) *
+   * # packageDecl ::= PACKAGE packageName
    * </pre>
    */
   private void packageDecl() {
@@ -249,19 +249,15 @@ public class Parser {
     Marker mark = tokeniser.mark();
     try {
       if (matchAny(PACKAGE)) {
-        Token        packageToken = previous();
-        List<String> packagePath  = new ArrayList<>();
-        packageToken = peek();
-        do {
-          packagePath.add(expect(IDENTIFIER).getStringValue());
-        } while (matchAny(DOT));
-        String pkg = String.join(".", packagePath);
+        Token packagePathToken = peek();
+        List<String> packagePath = packageName();
         matchAnyIgnoreEOL(SEMICOLON);
+        String pkg = String.join(".", packagePath);
         if (packageName != null && !packageName.isEmpty() && !pkg.equals(packageName)) {
-          error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packageToken, false);
+          error("Declared package name of '" + pkg + "' conflicts with package name '" + packageName + "'", packagePathToken, false);
         }
         packageName = pkg;
-        mark.done(new JactlName(packageToken, JactlName.NameType.PACKAGE));
+        mark.done(new JactlName(packagePathToken, JactlName.NameType.PACKAGE));
         mark = null;
       }
       if (packageName == null) {
@@ -276,6 +272,17 @@ public class Parser {
     catch (CompileError error) {
       markError(mark, error);
     }
+  }
+
+  /**
+   * #  packageName ::= IDENTIFIER (DOT IDENTIFIER) *
+   */
+  private List<String> packageName() {
+    List<String> packagePath = new ArrayList<>();
+    do {
+      packagePath.add(expect(IDENTIFIER).getStringValue());
+    } while (matchAny(DOT));
+    return packagePath;
   }
 
   /**
@@ -296,19 +303,24 @@ public class Parser {
   }
 
   /**
-   * # importStmt ::= IMPORT classPath (AS IDENTIFIER)? #              | IMPORT STATIC classPath DOT ( IDENTIFIER |
-   * STAR ) #
+   * # importStmt ::= IMPORT classPath (AS IDENTIFIER)?
+   * #              | IMPORT classPath DOT STAR
+   * #              | IMPORT packageName DOT STAR
+   * #              | IMPORT STATIC classPath DOT ( IDENTIFIER | STAR )
    */
   private Stmt.Import importStmt() {
     Token      importToken = advance();
     boolean    isStatic    = matchAny(STATIC);
     List<Expr> className   = new ArrayList<>(Utils.listOf(classPathOrIdentifier(false)));
+    boolean    isClassPath = className.size() == 1 && className.get(0) instanceof Expr.ClassPath;
     int        starCount   = 0;
     while (matchAny(DOT)) {
       if (starCount > 0) {
         error("Unexpected token '.' after '*'", previous(), false);
       }
-      Expr.Identifier identifier = marked(true, () -> identifier(IDENTIFIER, STAR));
+      // Can't have '*' after a class path unless a static import
+      Expr.Identifier identifier = isClassPath && !isStatic ? marked(true, () -> identifier(IDENTIFIER))
+                                                            : marked(true, () -> identifier(IDENTIFIER, STAR));
       if (identifier.identifier.is(STAR)) {
         starCount++;
       }

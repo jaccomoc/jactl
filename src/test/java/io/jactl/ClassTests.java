@@ -1667,7 +1667,12 @@ public class ClassTests extends BaseTest {
     packageName = null;
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; new X().f()", 3);
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X; new X().f()", 3);
+    testError(Utils.listOf("package a.b.c; class X{ class Y{ def f(){3}} }"), "package a.b.c; import a.b.c.*.Y; new X.Y().f()", "unexpected token '.' after '*'");
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package z; import a.b.c.*; new X().f()", 3);
+    testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package z; import b.c.*; new X().f()", "unknown class 'X'");
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}", "package a.b.c; class Y{static int g(){4}}"), "package a; import a.b.c.*; new X().f() + new Y().g()", 7);
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X as Y; new Y().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a; import a.b.c.X as Y; new Y().f()", 3);
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X; new X().f()", 3);
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import X as Y; new Y().f()", 3);
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; new X().f()", 3);
@@ -1683,6 +1688,8 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y.Z; new Z().f()", 3);
     testError(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.YYY.Z; new Z().f()", "unknown class a.b.c.X.YYY");
     test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y.Z as A; new A().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.Y; new Y.Z().f()", 3);
+    testError(Utils.listOf("package a.b.c; class X{ class Y{ class Z { def f(){3}} } }"), "package x.y.z; import a.b.c.X.*; new X.Y.Z().f()", "unexpected token '*'");
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X.Y as C; new C().f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{static def f(){3}} }"), "package x.y.z; import a.b.c.X; X.Y.f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package x.y.z; import a.b.c.X; new X.Y().f()", 3);
@@ -1691,6 +1698,7 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import a.b.c.X.Y as C; new C().f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y; new Y().f()", 3);
     test(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as C; new C().f()", 3);
+    test(Utils.listOf("package a.b.c; class X{ def f(){3} }", "package x.y; class X { int f(){4} }"), "package a; import x.y.*; import a.b.c.*; new X().f()", 4);
     testError(Utils.listOf("package a.b.c; class X{ class Y{def f(){3}} }"), "package a.b.c; import X.Y as c; new c().f()", "must start with uppercase");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
@@ -1702,6 +1710,7 @@ public class ClassTests extends BaseTest {
     packageName = null;
     test(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package a.b.c; X.A + X.b", 3);
     test(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package x.y; import static a.b.c.X.A; A + a.b.c.X.b", 3);
+    testError(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package x.y; import static a.b.c.*.A; A + a.b.c.X.b", "unexpected token '.' after '*'");
     test(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package a.b.c; import static X.A; A + X.b", 3);
     test(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package x.y; import static a.b.c.X.b; a.b.c.X.A + b", 3);
     test(Utils.listOf("package a.b.c; class X{ const int A=1,b=2 }"), "package a.b.c; import static X.A; import static X.b; X.A + b", 3);

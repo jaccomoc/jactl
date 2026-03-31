@@ -25,11 +25,9 @@ import org.objectweb.asm.Type;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
@@ -112,6 +110,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Stmt.Block     topBlock;           // Top most block (dummy block used by Intellij plugin)
 
   private final Map<String, ClassDescriptor> imports           = new HashMap<>();
+  private final List<String>                 importedPackages  = new ArrayList<>();
   private final Map<String, Expr.VarDecl>    importedConstants = new HashMap<>();
   private final Map<String, Expr.VarDecl>    importedConstantsRenamed = new HashMap<>();
   private final Map<String,ClassDescriptor>  localClasses      = new HashMap<>();
@@ -142,6 +141,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         Expr.VarDecl varDecl = createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed());
         if (varDecl.type.is(INSTANCE)) {
           ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
+          if (classDescriptor == null) {
+            classDescriptor = varDecl.type.getClassDescriptor();
+          }
           if (classDescriptor == null) {
             error("Unknown class " + varDecl.type.getInternalName() + " for global var " + name, location);
           }
@@ -229,10 +231,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStack.pop();
     }
     return errors;
-  }
-
-  public Map<String,ClassDescriptor> getImports() {
-    return imports;
   }
 
   public Map<String,Expr.VarDecl> getStaticImports() {
@@ -585,7 +583,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return null;
       }
       Expr.Identifier field     = (Expr.Identifier)fieldExpr;
-      JactlType       type      = resolveClassPath(stmt.className.subList(0, stmt.className.size() - 1));
+      JactlType       type      = resolveClassPath(stmt.className.subList(0, stmt.className.size() - 1)).get(0);
       if (type == null) {
         return null;
       }
@@ -664,35 +662,64 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     }
     else {
-      JactlType type = resolveClassPath(stmt.className);
-      if (type != null && type.getClassDescriptor() != null) {
-        ClassDescriptor classDesc = type.getClassDescriptor();
-        String name = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
-        ClassDescriptor old = imports.put(name, classDesc);
-        if (old != null) {
-          boolean autoImported = jactlContext.getRegisteredClasses().getAutoImportedClasses().containsKey(name);
-          error("Class of name '" + name + "' already " + (autoImported ? "auto-" : "") + "imported (" + old.getPackagedName() + ")", stmt.as != null ? stmt.as : stmt.className.get(0).location);
-        }
+      String importedPackage = packageImport(stmt.className);
+      if (importedPackage != null) {
+        importedPackages.add(importedPackage);
+      }
+      else {
+        resolveClassPath(stmt.className).forEach(type -> {
+          if (type != null && type.getClassDescriptor() != null) {
+            ClassDescriptor classDesc = type.getClassDescriptor();
+            String          name      = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
+            ClassDescriptor old       = imports.put(name, classDesc);
+            if (old != null) {
+              boolean autoImported = jactlContext.getRegisteredClasses().getAutoImportedClasses().containsKey(name);
+              error("Class of name '" + name + "' already " + (autoImported ? "auto-" : "") + "imported (" + old.getPackagedName() + ")", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+            }
+          }
+        });
       }
     }
     return null;
   }
 
-  private JactlType resolveClassPath(List<Expr> classPath) {
+  // Check for 'import a.b.c.*' and return the package name or null if not a package import
+  private String packageImport(List<Expr> classPath) {
+    if (classPath.size() > 1 && classPath.get(classPath.size() - 1).isStar()) {
+      final String NOT_IDENT = "???";
+      Function<Expr,String> strVal = expr -> expr instanceof Expr.Identifier ? ((Expr.Identifier)expr).identifier.getStringValue()
+                                                                             : NOT_IDENT;
+      String pkg = classPath.subList(0, classPath.size() - 1)
+                            .stream()
+                            .map(strVal)
+                            .collect(Collectors.joining("."));
+
+      if (!pkg.contains(NOT_IDENT)) {
+        Expr lastEntry = classPath.get(classPath.size() - 1);
+        if (lastEntry instanceof Expr.Identifier && ((Expr.Identifier) lastEntry).identifier.getStringValue().equals(STAR.asString)) {
+          return pkg;
+        }
+      }
+    }
+    return null;
+  }
+  
+  private List<JactlType> resolveClassPath(List<Expr> classPath) {
     if (classPath.isEmpty()) {
-      return null;
+      return Collections.EMPTY_LIST;
     }
     Consumer<Integer> createError = i -> error("Unknown class " + classPath.subList(0,i+1)
                                                                            .stream()
                                                                            .map(expr -> expr instanceof Expr.ClassPath ? ((Expr.ClassPath) expr).fullClassName() : ((Expr.Identifier)expr).identifier.getStringValue())
                                                                            .collect(Collectors.joining(".")), classPath.get(i).location);
 
+    List<JactlType> types = new ArrayList<>();
     JactlType classType = null;
     Expr first = classPath.get(0);
     if (first instanceof Expr.ClassPath) {
       resolve(first);
       if (first.type == null) {
-          return null;
+          return types;
       }
       classType = first.type;
     }
@@ -700,16 +727,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr.VarDecl varDecl = lookupClass(((Expr.Identifier) first).identifier.getStringValue(), first.location);
       if (varDecl == null) {
         createError.accept(0);
-        return null;
+        return types;
       }
       ClassDescriptor classDesc = varDecl.classDescriptor;
       first.type = classType = (classDesc == null ? null : JactlType.createClass(classDesc));
       if (classType == null) {
         createError.accept(0);
-        return null;
+        return types;
       }
     }
-
+    
     for (int i = 1; i < classPath.size(); i++) {
       Expr part = classPath.get(i);
       part.parentType = classType;
@@ -719,10 +746,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       identifier.type = classType = (inner == null ? null : JactlType.createClass(inner));
       if (classType == null) {
         createError.accept(i);
-        return null;
+        return types;
       }
     }
-    return classType;
+    return Collections.singletonList(classType);
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
@@ -2521,6 +2548,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (className == null) {
         // Check for imports
         ClassDescriptor importedClass = imports.get(firstClass);
+        if (importedClass == null) {
+          // Check imported packages
+          importedClass = importedPackages.stream().map(pkg -> jactlContext.getClassDescriptor(pkg, firstClass)).filter(Objects::nonNull).findFirst().orElse(null);
+        }
         if (importedClass != null) {
           className = importedClass.getNamePath() + subPath;
           classPkg  = importedClass.getPackageName();
