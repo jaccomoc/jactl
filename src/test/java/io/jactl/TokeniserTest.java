@@ -18,14 +18,12 @@
 package io.jactl;
 
 import io.jactl.runtime.RuntimeError;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 
 import static io.jactl.TokenType.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -274,19 +272,40 @@ class TokeniserTest {
       assertEquals(EOF, tokeniser.next().getType());
     };
 
-    doTest.accept("0", Utils.listOf(new Pair<>(TokenType.INTEGER_CONST, 0)));
-    doTest.accept("1", Utils.listOf(new Pair<>(TokenType.INTEGER_CONST, 1)));
-    doTest.accept("20", Utils.listOf(new Pair<>(TokenType.INTEGER_CONST, 20)));
-    doTest.accept("30", Utils.listOf(new Pair<>(TokenType.INTEGER_CONST, 30)));
-    doTest.accept("1.0", Utils.listOf(new Pair<>(TokenType.DECIMAL_CONST, new BigDecimal("1.0"))));
-    doTest.accept("0.12345", Utils.listOf(new Pair<>(TokenType.DECIMAL_CONST, new BigDecimal("0.12345"))));
-    doTest.accept("1L", Utils.listOf(new Pair<>(TokenType.LONG_CONST, 1L)));
-    doTest.accept("1L 1.0D", Utils.listOf(new Pair<>(TokenType.LONG_CONST, 1L), new Pair<>(TokenType.DOUBLE_CONST, 1.0D)));
-    doTest.accept("1D 1L", Utils.listOf(new Pair<>(TokenType.DOUBLE_CONST, 1D), new Pair<>(TokenType.LONG_CONST, 1L)));
-    doTest.accept("1L 1D", Utils.listOf(new Pair<>(TokenType.LONG_CONST, 1L), new Pair<>(TokenType.DOUBLE_CONST, 1.0D)));
-    doTest.accept("1D", Utils.listOf(new Pair<>(TokenType.DOUBLE_CONST, 1D)));
-    doTest.accept("1.0D", Utils.listOf(new Pair<>(TokenType.DOUBLE_CONST, 1.0D)));
-    doTest.accept("" + ((long)Integer.MAX_VALUE + 1L) + "L", Utils.listOf(new Pair<>(TokenType.LONG_CONST, (long)Integer.MAX_VALUE + 1L)));
+    doTest.accept("0", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 0)));
+    doTest.accept("1", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 1)));
+    doTest.accept("20", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 20)));
+    doTest.accept("30", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 30)));
+    doTest.accept("1.0", Utils.listOf(Pair.of(TokenType.DECIMAL_CONST, new BigDecimal("1.0"))));
+    doTest.accept("0.12345", Utils.listOf(Pair.of(TokenType.DECIMAL_CONST, new BigDecimal("0.12345"))));
+    doTest.accept("1L", Utils.listOf(Pair.of(TokenType.LONG_CONST, 1L)));
+    doTest.accept("1L 1.0D", Utils.listOf(Pair.of(TokenType.LONG_CONST, 1L), Pair.of(TokenType.DOUBLE_CONST, 1.0D)));
+    doTest.accept("1D 1L", Utils.listOf(Pair.of(TokenType.DOUBLE_CONST, 1D), Pair.of(TokenType.LONG_CONST, 1L)));
+    doTest.accept("1L 1D", Utils.listOf(Pair.of(TokenType.LONG_CONST, 1L), Pair.of(TokenType.DOUBLE_CONST, 1.0D)));
+    doTest.accept("1D", Utils.listOf(Pair.of(TokenType.DOUBLE_CONST, 1D)));
+    doTest.accept("1.0D", Utils.listOf(Pair.of(TokenType.DOUBLE_CONST, 1.0D)));
+    doTest.accept("" + ((long)Integer.MAX_VALUE + 1L) + "L", Utils.listOf(Pair.of(TokenType.LONG_CONST, (long)Integer.MAX_VALUE + 1L)));
+
+    doTest.accept("0x", Utils.listOf(Pair.of(ERROR, "Missing digits for numeric literal")));
+    doTest.accept("0x 1", Utils.listOf(Pair.of(ERROR, "Missing digits for numeric literal"), Pair.of(INTEGER_CONST, 1)));
+    doTest.accept("0x_0", Utils.listOf(Pair.of(TokenType.ERROR, "Missing digits for numeric literal"), Pair.of(IDENTIFIER, "_0")));
+    doTest.accept("0x_", Utils.listOf(Pair.of(TokenType.ERROR, "Missing digits for numeric literal"), Pair.of(UNDERSCORE, "_")));
+    doTest.accept("0_", Utils.listOf(Pair.of(INTEGER_CONST, 0), Pair.of(UNDERSCORE, "_")));
+    doTest.accept("0__", Utils.listOf(Pair.of(INTEGER_CONST, 0), Pair.of(IDENTIFIER, "__")));
+    doTest.accept("0x0_0", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 0x0_0)));
+    doTest.accept("0_0", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 0_0)));
+    doTest.accept("0_1", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 0_1)));
+    doTest.accept("2_0", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 2_0)));
+    doTest.accept("0_2_0", Utils.listOf(Pair.of(TokenType.INTEGER_CONST, 20)));
+    doTest.accept("0_1.0_0_0_0", Utils.listOf(Pair.of(TokenType.DECIMAL_CONST, new BigDecimal("1.0000"))));
+    doTest.accept("0_0.1_2_3_4__5", Utils.listOf(Pair.of(TokenType.DECIMAL_CONST, new BigDecimal("0.12345"))));
+    doTest.accept("0_1L", Utils.listOf(Pair.of(TokenType.LONG_CONST, 1L)));
+    doTest.accept("0_1L 0_1.0____0D", Utils.listOf(Pair.of(TokenType.LONG_CONST, 1L), Pair.of(TokenType.DOUBLE_CONST, 1.0D)));
+    doTest.accept("000_0_0_1D 0_0_01L", Utils.listOf(Pair.of(TokenType.DOUBLE_CONST, 1D), Pair.of(TokenType.LONG_CONST, 1L)));
+    doTest.accept("0_0_01L 0____01D", Utils.listOf(Pair.of(TokenType.LONG_CONST, 1L), Pair.of(TokenType.DOUBLE_CONST, 1.0D)));
+    doTest.accept("0__1D", Utils.listOf(Pair.of(TokenType.DOUBLE_CONST, 1D)));
+    doTest.accept("0_1.0____0D", Utils.listOf(Pair.of(TokenType.DOUBLE_CONST, 1.0D)));
+    doTest.accept("0_1.0____D", Utils.listOf(Pair.of(DECIMAL_CONST, new BigDecimal("1.0")), Pair.of(IDENTIFIER, "____D")));
   }
 
   @Test public void numericOverflow() {

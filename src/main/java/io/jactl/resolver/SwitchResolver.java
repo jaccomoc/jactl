@@ -246,7 +246,7 @@ public class SwitchResolver {
           mapLiteral.literalKeyMap.put(constructorParam.getKey(), arg);
           Expr.Literal fieldName = new Expr.Literal(arg.location.newIdent(constructorParam.getKey()));
           resolver.resolve(fieldName);
-          mapLiteral.entries.add(Pair.create(fieldName, arg));
+          mapLiteral.entries.add(Pair.of(fieldName, arg));
         }
         expr.args = mapLiteral;
       }
@@ -287,7 +287,7 @@ public class SwitchResolver {
         }
       }
       resolver.resolve(pair.second);
-      return Pair.create(pattern,pair.second);
+      return Pair.of(pattern, pair.second);
     }).collect(Collectors.toList());
     resolver.resolve(caseExpr.result);
     return caseExpr.type = ANY;
@@ -351,7 +351,7 @@ public class SwitchResolver {
 
   private static List<Pair<Expr,Expr>> _validateSwitchPattern(Resolver resolver, List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
     return exprs.stream()
-                .map(p -> Pair.create(_validateSwitchPattern(resolver, p.first, bindingVars, new HashSet<>()), p.second))
+                .map(p -> Pair.of(_validateSwitchPattern(resolver, p.first, bindingVars, new HashSet<>()), p.second))
                 .collect(Collectors.toList());
   }
 
@@ -385,7 +385,7 @@ public class SwitchResolver {
         if (!(pair.first instanceof Expr.Literal)) {
           resolver.error("Expected string constant for map key", pair.first.location);
         }
-        return Pair.create(pair.first, _validateSwitchPattern(resolver, pair.second, bindingVars, varsSeen));
+        return Pair.of(pair.first, _validateSwitchPattern(resolver, pair.second, bindingVars, varsSeen));
       }).collect(Collectors.toList());
       return mapLiteral;
     }
@@ -393,7 +393,7 @@ public class SwitchResolver {
       Expr.ConstructorPattern constructorPattern = (Expr.ConstructorPattern) expr;
       if (constructorPattern.args instanceof Expr.MapLiteral) {
         Expr.MapLiteral args = (Expr.MapLiteral) constructorPattern.args;
-        args.entries = args.entries.stream().map(a -> Pair.create(a.first,_validateSwitchPattern(resolver, a.second, bindingVars, varsSeen))).collect(Collectors.toList());
+        args.entries = args.entries.stream().map(a -> Pair.of(a.first, _validateSwitchPattern(resolver, a.second, bindingVars, varsSeen))).collect(Collectors.toList());
         args.literalKeyMap = args.entries.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.toString(), p -> p.second));
       }
       else {

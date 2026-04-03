@@ -55,7 +55,7 @@ public class SwitchCompiler {
       int j = i;
       for (; j < flattened.size() && isSimplePattern.apply(flattened.get(j)); j++) {}
       if (j - i > 2) {
-        emitSwitch(mc, flattened.subList(i, j).stream().map(t -> Pair.create(t.first, t.third.result)).collect(Collectors.toList()),
+        emitSwitch(mc, flattened.subList(i, j).stream().map(t -> Pair.of(t.first, t.third.result)).collect(Collectors.toList()),
                    expr.type, end, nonSimpleLabels, () -> mc.loadVar(expr.itVar));
         i = j - 1;
       }
@@ -66,7 +66,7 @@ public class SwitchCompiler {
           mc.loadDefaultValue(MATCHER);
           mc.storeVar(captureVarDecl);
         }
-        compileMatchCase(mc, expr, Pair.create(pattern.first,pattern.second), pattern.third.result, end, nonSimpleLabels);
+        compileMatchCase(mc, expr, Pair.of(pattern.first, pattern.second), pattern.third.result, end, nonSimpleLabels);
       }
     }
 
@@ -499,7 +499,7 @@ public class SwitchCompiler {
 
       // Sort literal values
       List<Pair<Integer,Label>> sorted = cases.stream()
-                                              .map(p -> Pair.create(((Number) p.first.constValue).intValue(), switchLabels.get(p.second)))
+                                              .map(p -> Pair.of(((Number) p.first.constValue).intValue(), switchLabels.get(p.second)))
                                               .sorted(Comparator.comparingInt(p -> p.first))
                                               .collect(Collectors.toList());
 
@@ -562,7 +562,7 @@ public class SwitchCompiler {
     List<Map.Entry<Integer,Pair<Label,List<Pair<Expr,Expr>>>>> hashed =
       cases.stream()
            .collect(Collectors.toMap(p -> p.first.constValue.hashCode(),
-                                     p -> Pair.create(new Label(), Utils.listOf(Pair.create(p.first, p.second))),
+                                     p -> Pair.of(new Label(), Utils.listOf(Pair.of(p.first, p.second))),
                                      (a, b) -> { a.second.addAll(b.second); return a; }))
            .entrySet().stream()
            .sorted(Comparator.comparingInt(Map.Entry::getKey))

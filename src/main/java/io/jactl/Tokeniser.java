@@ -672,16 +672,37 @@ public class Tokeniser {
     throw new IllegalStateException("Internal error: unexpected base " + base);
   }
 
+  // Skip digits and embedded '_' chars and return offset of
+  // first char after last digit
+  private int skipToNonDigit(int i, int base, int remaining) {
+    // Make sure initial char is a digit
+    if (i >= remaining || !isDigit(charAt(i), base)) {
+      return i;
+    }
+    // i is always position of last digit seen
+    // Skip '_' chars as long as following char is a digit
+    for (int j = i + 1; j < remaining; j++) {
+      if (charAt(j) == '_') {
+        continue;
+      }
+      if (isDigit(charAt(j), base)) {
+        i = j;          // record last digit position
+      }
+      else {
+        break;          // non digit or '_'
+      }
+    }
+    return i + 1;       // position after last digit seen
+  }
+  
   private Token parseNumber(Token token, int remaining) {
     // Check for binary or hex number
     int base = charsAtEquals(0, "0b", "0B") ? 2 :
                charsAtEquals(0, "0x", "0X") ? 16 :
                                                    /* default */ 10;
 
-    int i = base == 10 ? 1 : 2;
-    while (i < remaining && isDigit(charAt(i), base)) {
-      i++;
-    }
+    int i = base == 10 ? 0 : 2;
+    i = skipToNonDigit(i, base, remaining);
 
     // Check for double/decimal number but first check for special case where previous token
     // was a '.' to allow for numbers to be fields in a dotted path. E.g. a.1.2.b
@@ -692,10 +713,8 @@ public class Tokeniser {
                       i + 1 < remaining && charAt(i) == '.' && Character.isDigit(charAt(i + 1));
 
     if (decimal) {
-      i += 2;  // Skip '.' and first digit since we have already checked for their presence above
-      while (i < remaining && Character.isDigit(charAt(i))) {
-        i++;
-      }
+      i++;     // Skip '.'
+      i = skipToNonDigit(i, 10, remaining);
     }
 
     // Now check if there is a trailing 'L' or 'D'
@@ -715,7 +734,7 @@ public class Tokeniser {
     }
     advance(i);
     token.setLength(numberLength);
-    String value = token.getStringValue().substring(base == 10 ? 0 : 2);
+    String value = token.getStringValue().substring(base == 10 ? 0 : 2).replace("_","");
     if (value.isEmpty()) {
       return error("Missing digits for numeric literal", token);
     }

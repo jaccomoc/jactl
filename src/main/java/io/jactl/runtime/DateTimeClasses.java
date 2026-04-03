@@ -975,7 +975,7 @@ public class DateTimeClasses {
             Functions.INSTANCE.getAllMethods(type)
                               .stream()
                               .sorted(Comparator.comparing(pair -> pair.second.name))
-                              .flatMap(pair -> pair.second.getAliases().stream().map(alias -> Pair.create(alias, pair.second)))
+                              .flatMap(pair -> pair.second.getAliases().stream().map(alias -> Pair.of(alias, pair.second)))
                               .forEach(pair -> System.out.println(formatFn(pair.first, pair.second)));
             System.out.println("```\n");
           });

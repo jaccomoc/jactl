@@ -254,7 +254,7 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
    */
   public boolean addStaticField(String name, JactlType type) {
     return getField(name) == null && getMethod(name) == null &&
-           staticFields.put(name, Pair.create(type,null)) == null;
+           staticFields.put(name, Pair.of(type, null)) == null;
   }
 
   public void setStaticFieldValue(String name, Object value) {
@@ -262,7 +262,7 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     if (type == null) {
       throw new IllegalStateException("Internal error: no static field called " + name);
     }
-    staticFields.put(name, Pair.create(type,value));
+    staticFields.put(name, Pair.of(type, value));
   }
 
   public boolean addField(String name, JactlType type, boolean isMandatory) {

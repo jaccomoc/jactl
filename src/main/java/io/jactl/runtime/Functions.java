@@ -173,7 +173,7 @@ public class Functions {
     }
     return methods.keySet()
                   .stream()
-                  .map(name -> Pair.create(name,findMatching(objType, name)))
+                  .map(name -> Pair.of(name, findMatching(objType, name)))
                   .filter(p -> p.second != NO_SUCH_METHOD)
                   .collect(Collectors.toList());
   }

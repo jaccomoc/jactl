@@ -879,7 +879,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       callees = new ArrayList<>();
       asyncCallDependencies.put(caller, callees);
     }
-    callees.add(Pair.create(callSite, callee));
+    callees.add(Pair.of(callSite, callee));
   }
 
   private void resolveAsyncDependencies() {

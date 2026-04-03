@@ -298,7 +298,7 @@ public class Restorer {
       idx = _readInt(objTableOffset + objId * 4);
       int objOffset = idx;
       // Only add object to list of objects to be processed (restored) if not restoring now
-      Function<Object,Object> add = obj -> { if (!restore) { toBeProcessed.add(Pair.create(objOffset, obj)); }; return obj; };
+      Function<Object,Object> add = obj -> { if (!restore) { toBeProcessed.add(Pair.of(objOffset, obj)); }; return obj; };
       ordinal = buf[idx++];
       Object result;
 

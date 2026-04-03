@@ -2775,7 +2775,7 @@ public class Parser {
       expr = parseExpression();
       expr.isResultUsed = true;
     }
-    return Pair.create(switchPattern, expr);
+    return Pair.of(switchPattern, expr);
   }
 
   /**

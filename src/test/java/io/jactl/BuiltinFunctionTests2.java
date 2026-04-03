@@ -1199,7 +1199,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
           resumer.accept(new RuntimeError("Checkpoint id (" + checkpointId + ") does not match expected value of " + nextId, source, offset));
         }
         else {
-          list.add(Pair.create(checkpointId, checkpoint));
+          list.add(Pair.of(checkpointId, checkpoint));
           resumer.accept(result);
         }
       }

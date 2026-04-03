@@ -1104,7 +1104,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         else {
           if (parent.type.is(INSTANCE, CLASS, ARRAY)) {
             error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
-            return Pair.create(TYPE_FOR_BAD_REF, false);
+            return Pair.of(TYPE_FOR_BAD_REF, false);
           }
         }
       }
@@ -1112,14 +1112,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (fieldName == null) {
         if (parent.isSuper()) {
           error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
-          return Pair.create(TYPE_FOR_BAD_REF, false);
+          return Pair.of(TYPE_FOR_BAD_REF, false);
         }
         type = ANY;   // Can't determine type at compile time; wait for runtime
       }
       else {
         if (parent.isSuper() && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
           error("Field access for 'super' cannot be performed via '" + accessOperator.getChars() + "]'", accessOperator);
-          return Pair.create(TYPE_FOR_BAD_REF, false);
+          return Pair.of(TYPE_FOR_BAD_REF, false);
         }
 
         if (parent.type.is(INSTANCE, CLASS)) {
@@ -1129,7 +1129,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (parent.type.isHostClass()) {
             // NOTE: find matching method name or throw if no such method
             jactlContext.findMatchingMethod(parent.type.getJavaClass(), fieldName, null, false, msg -> new CompileError(msg, field.location));
-            return Pair.create(FUNCTION, false);
+            return Pair.of(FUNCTION, false);
           }
           
           // Check for valid field/method name
@@ -1158,7 +1158,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               // If we only want fields but have found a method then throw error
               if (fieldsOnly) {
                 error("Found method where field expected", field.location);
-                return Pair.create(TYPE_FOR_BAD_REF, false);
+                return Pair.of(TYPE_FOR_BAD_REF, false);
               }
               if (parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
                 error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
@@ -1177,7 +1177,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (type == null) {
             field.parentType = null;
             error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
-            return Pair.create(TYPE_FOR_BAD_REF, false);
+            return Pair.of(TYPE_FOR_BAD_REF, false);
           }
         }
         else {
@@ -1194,12 +1194,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
           else {
             error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
-            return Pair.create(TYPE_FOR_BAD_REF, false);
+            return Pair.of(TYPE_FOR_BAD_REF, false);
           }
         }
       }
     }
-    return Pair.create(type,isStatic);
+    return Pair.of(type, isStatic);
   }
 
   @Override public JactlType visitTernary(Expr.Ternary expr) {
