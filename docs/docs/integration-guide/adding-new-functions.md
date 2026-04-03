@@ -511,7 +511,7 @@ be passed in.
 Once we have configured our `.jactlrc` file (see [here](../command-line-scripts#jactlrc-file) for details)
 we can include our new function when running the Jactl REPL:
 ```groovy
-$ java -jar jactl-repl-2.5.2.jar
+$ java -jar jactl-repl-2.6.0.jar
 > long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }
 Function@1846982837
 > measure{ fib(40) }
