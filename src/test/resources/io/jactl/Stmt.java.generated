@@ -33,7 +33,7 @@ import java.util.Set;
 import java.util.HashSet;
 
 import io.jactl.Token;
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import org.objectweb.asm.Label;
 
 /**
@@ -146,7 +146,7 @@ public abstract class Stmt extends JactlUserDataHolder {
     public Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
     public boolean         isPrimaryClass = false;                      // Whether top level class in a class file (i.e. not script)
-    public ClassDescriptor classDescriptor;
+    public JactlClassDescriptor classDescriptor;
 
     public boolean isScriptClass() { return scriptMain != null; }
     public ClassDecl(Token name, String packageName, Token packageToken, Token baseClassToken, JactlType baseClass, boolean isInterface) {

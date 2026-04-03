@@ -217,10 +217,10 @@ public class JactlClass {
   public JactlType register()  {
     // We need to build a ClassDescriptor and register it. We do this by using reflection to find all the
     // methods and add them to the ClassDescriptor.
-    String          jactlClass      = Utils.pkgPathOf(jactlPackage, jactlClassName);
-    ClassDescriptor classDescriptor = getRegisteredClasses().getOrCreateClassDescriptor(jactlClass, javaClass.getName());
+    String               jactlClass      = Utils.pkgPathOf(jactlPackage, jactlClassName);
+    JactlClassDescriptor classDescriptor = getRegisteredClasses().getOrCreateClassDescriptor(jactlClass, javaClass.getName());
     if (baseClassName != null) {
-      ClassDescriptor baseClassDescriptor = getRegisteredClasses().getClassDescriptor(baseClassName);
+      JactlClassDescriptor baseClassDescriptor = getRegisteredClasses().getClassDescriptor(baseClassName);
       if (baseClassDescriptor == null) {
         throw new IllegalStateException("Unknown Jactl class " + baseClassName + " for base class");
       }
@@ -361,7 +361,7 @@ public class JactlClass {
     slot += 2;                                          // skip source/offset args
     // Other arguments
     for (int p = slot; p < paramTypes.size(); p++) {
-      slot += Utils.loadSlot(methodVisitor, slot, JactlContext.typeFromClass(paramTypes.get(p), getRegisteredClasses()));
+      slot += Utils.loadSlot(methodVisitor, slot, JactlContext.typeFromClass(paramTypes.get(p), getRegisteredClasses(), jactlContext));
     }
     if (isStatic) {
       methodVisitor.visitMethodInsn(INVOKESTATIC, Type.getInternalName(method.getDeclaringClass()), method.getName(), Type.getMethodDescriptor(method), false);
@@ -370,7 +370,7 @@ public class JactlClass {
       methodVisitor.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(method.getDeclaringClass()), method.getName(), Type.getMethodDescriptor(method), false);
     }
     methodVisitor.visitLabel(label1);
-    Utils.emitReturn(methodVisitor, JactlContext.typeFromClass(method.getReturnType(), getRegisteredClasses()));
+    Utils.emitReturn(methodVisitor, JactlContext.typeFromClass(method.getReturnType(), getRegisteredClasses(), jactlContext));
     methodVisitor.visitLabel(label2);
     int exceptionSlot = slot++;
     methodVisitor.visitVarInsn(ASTORE, exceptionSlot);       // Store caught exception

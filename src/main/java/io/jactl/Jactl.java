@@ -500,8 +500,8 @@ public class Jactl {
     System.exit(1);
   }
 
-  private ClassDescriptor lookup(String internalName, List<File> roots) {
-    ClassDescriptor classDescriptor = context.getExistingClassDescriptor(internalName);
+  private JactlClassDescriptor lookup(String internalName, List<File> roots) {
+    JactlClassDescriptor classDescriptor = context.getExistingClassDescriptor(internalName);
     if (classDescriptor != null) {
       return classDescriptor;
     }

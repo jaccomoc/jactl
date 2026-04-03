@@ -70,6 +70,7 @@ public class JactlType extends JactlUserDataHolder {
     NULL_TYPE,
     STRING_BUFFER,
     NAMED_ARGS_MAP,
+    VOID,
     OPTIONAL,       // Used for "for" variables which may have already been declared
     BUILTIN,        // Used during checkpoint/restore
     UNKNOWN         // Used as placeholder for "var" until we know type of initialiser for a variable
@@ -101,20 +102,22 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType NUMBER       = createRefType(TypeEnum.NUMBER);
   public static JactlType MATCHER      = createRefType(TypeEnum.MATCHER);
   public static JactlType CONTINUATION = createRefType(TypeEnum.CONTINUATION);
-  public static JactlType INSTANCE     = createInstanceType(ClassDescriptor.getJactlObjectDescriptor());
+  public static JactlType INSTANCE     = createInstanceType(JactlClassDescriptor.getJactlObjectDescriptor());
   public static JactlType CLASS        = createRefType(TypeEnum.CLASS);
   public static JactlType UNKNOWN      = createRefType(TypeEnum.UNKNOWN);
   public static JactlType OPTIONAL     = createRefType(TypeEnum.OPTIONAL);
+  public static JactlType VOID         = createRefType(TypeEnum.VOID);
 
   private TypeEnum type;
   private boolean  boxed;
   private boolean  isRef;
 
   // Used for INSTANCE and CLASS types
-  private Class           clss            = null;
+  private Class   javaClass   = null;
+  private boolean isHostClass = false;  // true if allowHostClass is true and this is a host class
   private String          internalName    = null;
   private ClassDescriptor classDescriptor = null;
-  private List<Expr>      className       = null;  // Unresolved className which resolves to classDescriptor
+  private List<Expr>      classNameExprs  = null;  // Unresolved className which resolves to classDescriptor
 
   // For array types
   private JactlType       arrayType       = null;
@@ -151,32 +154,68 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType createInstanceType(Class clss) {
     JactlType type    = createRefType(TypeEnum.INSTANCE);
     type.internalName = Type.getInternalName(clss);
-    type.clss         = clss;
+    type.javaClass = clss;
     return type;
+  }
+  public static JactlType createInstanceType(Class clss, boolean isHostClass, JactlContext context) {
+    JactlType type = createInstanceType(clss);
+    type.isHostClass = isHostClass;
+    type.classDescriptor = new HostClassDescriptor(clss, type, context);
+    return type;
+  }
+  
+  public Class<?> getJavaClass() {
+    return javaClass;
+  }
+  
+  public boolean isHostClass() {
+    return isHostClass;
   }
 
   /**
    * Create instance type from class type
-   * @param clss  the ClassDescriptor for the class
+   * @param descriptor  the ClassDescriptor for the class
    * @return a mew JactlType of type INSTANCE
    */
-  public static JactlType createInstanceType(ClassDescriptor clss) {
-    JactlType type      = createRefType(TypeEnum.INSTANCE);
-    type.classDescriptor = clss;
-    type.internalName    = clss == null ? null : type.classDescriptor.getInternalName();
+  public static JactlType createInstanceType(ClassDescriptor descriptor) {
+    JactlType type       = createRefType(TypeEnum.INSTANCE);
+    type.classDescriptor = descriptor;
+    type.internalName    = descriptor == null ? null : type.classDescriptor.getInternalName();
+    if (descriptor instanceof HostClassDescriptor) {
+      type.isHostClass = true;
+    }
     return type;
   }
 
-  public static JactlType createInstanceType(List<Expr> className) {
+  public static JactlType createInstanceType(List<Expr> className, JactlContext context) {
+    if (className.size() == 1 && className.get(0) instanceof Expr.ClassPath) {
+      Expr.ClassPath classPathExpr = (Expr.ClassPath) className.get(0);
+      if (classPathExpr.hostClass != null) {
+        JactlType type = createInstanceType(classPathExpr.hostClass);
+        type.isHostClass = true;
+        type.classDescriptor = new HostClassDescriptor(classPathExpr.hostClass, type, context);
+        return type;
+      }
+    }
     JactlType type = createRefType(TypeEnum.INSTANCE);
-    type.className  = className;
+    type.classNameExprs = className;
     return type;
   }
 
-  public static JactlType createClass(List<Expr> className) {
-    JactlType classType = createInstanceType(className);
+  public static JactlType createClass(List<Expr> className, JactlContext context) {
+    JactlType classType = createInstanceType(className, context);
     classType.type = TypeEnum.CLASS;
     return classType;
+  }
+  
+  public static JactlType createHostClass(Class<?> hostClass, JactlContext context) {
+    JactlType type = createRefType(TypeEnum.CLASS);
+    type.type = TypeEnum.CLASS;
+    type.isHostClass = true;
+    type.javaClass = hostClass;
+    type.internalName    = Type.getInternalName(hostClass);
+    type.classDescriptor = new HostClassDescriptor(hostClass, type, context);
+    return type;
   }
 
   // Create instance type from class type
@@ -192,7 +231,7 @@ public class JactlType extends JactlUserDataHolder {
     classType.type = TypeEnum.CLASS;
     return classType;
   }
-
+  
   public static JactlType createUnknown() {
     return new DelegatingJactlType(UNKNOWN);
   }
@@ -640,6 +679,9 @@ public class JactlType extends JactlUserDataHolder {
    * Check if type is compatible and can be converted to given type
    * Parameter isCast controls whether only strict assignment/cast conversion allowed
    * or whether more general "as" coercion allowed.
+   * <p>NOTE: For instance type checks, stricter testing is done during the compile phase 
+   * to detect whether the instance types are compatible. Here we just check if there
+   * an obvious discrepancy.</p>
    * @param otherType  the type to be converted to
    * @param isCast     true if looking for strict conversion
    * @return true if convertible
@@ -658,6 +700,7 @@ public class JactlType extends JactlUserDataHolder {
       if (is(STRING) && otherType.isNumeric())                                  { return true; }
       if (is(STRING) && otherType.is(LIST))                                     { return true; }
       if (is(MAP, LIST, ITERATOR) && otherType.is(MAP, LIST))                   { return true; }
+      if (is(MAP, INSTANCE) && otherType.is(MAP, INSTANCE))                     { return true; }
       if (is(MAP, INSTANCE) && otherType.is(MAP, INSTANCE))                     { return true; }
     }
     // Allow conversion between Strings and byte[]
@@ -679,6 +722,13 @@ public class JactlType extends JactlUserDataHolder {
 
   public boolean isAssignableFrom(JactlType otherType) {
     if (this.type == TypeEnum.INSTANCE && otherType.type == TypeEnum.INSTANCE) {
+      if (isHostClass && otherType.isHostClass) {
+        return getJavaClass() == otherType.getJavaClass() ||
+               getJavaClass().isAssignableFrom(otherType.getJavaClass());
+      }
+      if (isHostClass || otherType.isHostClass) {
+        return false;
+      }
       if (getClassDescriptor() == null)           { 
         throw new IllegalStateException("Internal error: classDescriptor should be set"); 
       }
@@ -843,9 +893,9 @@ public class JactlType extends JactlUserDataHolder {
 
   public String getPackagedName() {
     if (getClassDescriptor() == null) {
-      if (clss != null && JactlObject.class.isAssignableFrom(clss)) {
+      if (javaClass != null && JactlObject.class.isAssignableFrom(javaClass)) {
         try {
-          return (String)clss.getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
+          return (String) javaClass.getDeclaredField(Utils.JACTL_PRETTY_NAME_FIELD).get(null);
         }
         catch (IllegalAccessException | NoSuchFieldException e) {
           throw new IllegalStateException("Internal error: error accessing " + Utils.JACTL_PRETTY_NAME_FIELD, e);
@@ -856,8 +906,8 @@ public class JactlType extends JactlUserDataHolder {
     return classDescriptor.getPackagedName();
   }
 
-  public List<Expr> getClassName() {
-    return className;
+  public List<Expr> getClassNameExprs() {
+    return classNameExprs;
   }
 
   @Override public String toString() {
@@ -866,8 +916,25 @@ public class JactlType extends JactlUserDataHolder {
 
   public void setClassDescriptor(ClassDescriptor descriptor) {
     this.classDescriptor = descriptor;
+    if (descriptor instanceof HostClassDescriptor) {
+      isHostClass = true;
+      this.javaClass = ((HostClassDescriptor)descriptor).getHostClass();
+    }
   }
 
+  public JactlClassDescriptor getJactlClassDescriptor() {
+    if (classDescriptor == null) {
+      return null;
+    }
+    if (classDescriptor instanceof JactlClassDescriptor) {
+      return (JactlClassDescriptor)classDescriptor;
+    }
+    if (isHostClass) {
+      throw new IllegalStateException("Internal error: expected a Jactl class but was a host class");
+    }
+    throw new IllegalStateException("Internal error: expected a JactlClassDescriptor but was a " + classDescriptor.getClass().getName());
+  }
+  
   public ClassDescriptor getClassDescriptor() {
     return classDescriptor;
   }

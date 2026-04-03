@@ -604,6 +604,7 @@ public class LocalTypes {
   }
 
   private JactlType localsType(int slot) {
+    check(slot >= 0, "slot is " + slot + " but should be >= 0");
     LocalEntry entry = locals.get(slot);
     check(entry != null, "trying to get type of null entry");
     return entry.type;

@@ -17,7 +17,6 @@
 
 package io.jactl.engine;
 
-import io.jactl.runtime.NullError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -511,11 +510,11 @@ class JactlScriptEngineTest {
     assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "class is not public");
   }
 
-  public class NewBaseType {
+  public class NewTypeBase {
     public String base() { return "xyz"; }
   }
   
-  public class NewType extends NewBaseType {
+  public class NewType extends NewTypeBase {
     String prefix;
     NewType(String prefix) { this.prefix = prefix; }
     private String privateMethod(String x) { return "private: " + prefix + ": " + x; }
@@ -523,14 +522,14 @@ class JactlScriptEngineTest {
     public String overloadedMethod(String x) { return prefix + ": " + x; }
     public String overloadedMethod(int x) { return prefix + ": " + x; }
     public String overloadedMethod2(String x) { return prefix + ": " + x; }
-    public String overloadedMethod2(NewBaseType base) { return prefix + ": " + base.base(); }
+    public String overloadedMethod2(NewTypeBase base) { return prefix + ": " + base.base(); }
     public void voidMethod(Map x) { x.put("x","xyz"); }
   }
 
   @Test void accessHostClassLookupFails() throws ScriptException {
     engine.put("jactl.allowHostAccess", true);
     engine.put("x", new NewType("prefix"));
-    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "is not an allowed class");
+    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "not allowed");
   }
 
   @Test void accessHostNonPublicMethod() throws ScriptException {
@@ -549,7 +548,7 @@ class JactlScriptEngineTest {
     assertEquals("prefix: abc", engine.eval("x.process('abc')"));
     assertEquals("xyz", engine.eval("x.base()"));
     assertEquals(NewType.class.getName(), engine.eval("x.className()"));
-    assertThrows(() -> engine.eval("x.getClass().forName('xyz')"), ScriptException.class, "java.lang.Class is not an allowed class");
+    assertThrows(() -> engine.eval("x.getClass().forName('xyz')"), ScriptException.class, "not an allowed host class");
   }
 
   @Test void allowHostAccess() throws ScriptException {

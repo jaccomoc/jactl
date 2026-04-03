@@ -33,7 +33,7 @@ import java.util.*;
 import io.jactl.JactlType;
 import io.jactl.Stmt;
 import io.jactl.Utils;
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.SourceLocation;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -97,7 +97,7 @@ class Expr extends JactlUserDataHolder {
 
   // True if this is a "new X()" expression
   public boolean isNewInstance() {
-    return this instanceof Expr.MethodCall && ((Expr.MethodCall)this).parent instanceof Expr.InvokeNew;
+    return this instanceof Expr.InvokeNew;
   }
 
   // True if expression is "super"
@@ -272,8 +272,9 @@ class Expr extends JactlUserDataHolder {
   }
 
   class ClassPath extends Expr {
-    Token pkg;
-    Token className;
+    Token    pkg;
+    Token    className;
+    Class    @hostClass;
     public String fullClassName() { return pkg.getStringValue() + "." + className.getStringValue(); }
   }
 
@@ -304,7 +305,7 @@ class Expr extends JactlUserDataHolder {
     int             @nestingLevel;        // What level of nested function owns this variable (1 is top level)
     Label           @declLabel;           // Where variable comes into scope (for debugger)
     Expr.FunDecl    @funDecl;             // If type is FUNCTION then this is the function declaration
-    ClassDescriptor @classDescriptor;     // If type is CLASS then this is the class descriptor
+    JactlClassDescriptor @classDescriptor;     // If type is CLASS then this is the class descriptor
     VarDecl         @parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
     VarDecl         @originalVarDecl;     // VarDecl for actual original variable declaration
 
@@ -583,7 +584,7 @@ class Expr extends JactlUserDataHolder {
     Token            token;
     // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
     boolean          invokeSpecial;
-    ClassDescriptor  classDescriptor;
+    JactlClassDescriptor  classDescriptor;
     List<Expr>       args;
   }
 
@@ -605,6 +606,9 @@ class Expr extends JactlUserDataHolder {
     Token      token;
     JactlType  instanceType;
     List<Expr> @dimensions = new ArrayList<>();
+    List<Expr> @args;       // for invoking constructor of host class instances (where enabled)
+    Token      @leftParen;   // token for where args start
+    MethodCall @callInit;    // for Jactl objects the method call to _$j$init
   }
 
   /**

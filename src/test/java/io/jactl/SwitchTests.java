@@ -226,6 +226,8 @@ public class SwitchTests extends BaseTest {
     test("def x = null; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", 4);
     testError("List x = null; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", "can never match type long");
     test("def x = 'abc' as byte[]; switch(x) { long -> 1; int -> 2; String -> 3; def -> 4 }", 4);
+    test("class X{}; switch (new X()) { X -> 'X' }", "X");
+    test("class X{}; sleep(1, switch (new X()) { X -> sleep(1,'X') })", "X");
   }
 
   @Test public void patternCoverages() {

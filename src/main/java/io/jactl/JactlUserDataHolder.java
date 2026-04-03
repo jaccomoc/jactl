@@ -17,7 +17,7 @@
 
 package io.jactl;
 
-public class JactlUserDataHolder {
+public class JactlUserDataHolder implements JactlUserDataGetter {
   Object     userData;
   Stmt.Block block;
 

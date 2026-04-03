@@ -125,7 +125,7 @@ public class JactlFunction extends FunctionDescriptor {
   public void register() {
     init();
     if (type != null && type.is(CLASS,INSTANCE)) {
-      type.getClassDescriptor().addMethod(name, this);
+      type.getJactlClassDescriptor().addMethod(name, this);
     }
     if (context != null) {
       context.getFunctions().registerFunction(this);

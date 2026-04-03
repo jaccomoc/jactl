@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import org.objectweb.asm.Type;
 
 import java.util.List;
@@ -68,10 +69,11 @@ public class DelegatingJactlType extends JactlType {
   @Override public String getInternalName()                            { return getDelegate().getInternalName();       }
   @Override public Class classFromType()                               { return getDelegate().classFromType();         }
   @Override public String typeName()                                   { return getDelegate().typeName();              }
-  @Override public List<Expr> getClassName()                           { return getDelegate().getClassName();          }
+  @Override public List<Expr> getClassNameExprs()                           { return getDelegate().getClassNameExprs();          }
   @Override public String toString()                                   { return getDelegate().toString();              }
   @Override public void setClassDescriptor(ClassDescriptor descriptor) { getDelegate().setClassDescriptor(descriptor); }
   @Override public ClassDescriptor getClassDescriptor()                { return getDelegate().getClassDescriptor();    }
+  @Override public JactlClassDescriptor getJactlClassDescriptor()      { return getDelegate().getJactlClassDescriptor();  }
   @Override public JactlType getArrayElemType()                        { return getDelegate().getArrayElemType();          }
   @Override public boolean isAssignableFrom(JactlType otherType)       { return getDelegate().isAssignableFrom(otherType); }
   @Override public boolean equals(Object obj)                          { return getDelegate().equals(obj);             }

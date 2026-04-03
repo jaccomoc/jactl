@@ -981,7 +981,7 @@ public class DateTimeClasses {
           });
   }
 
-  private static String formatClassMethods(ClassDescriptor desc) {
+  private static String formatClassMethods(JactlClassDescriptor desc) {
     StringBuilder sb = new StringBuilder();
     sb.append("## ")
       .append(desc.className)

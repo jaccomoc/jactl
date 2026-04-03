@@ -55,6 +55,7 @@ public class BaseTest {
   protected boolean            allowHostAccess      = false;
   protected Predicate<String>  allowHostClassLookup = null;
   protected boolean            skipCheckpointTests;
+  protected boolean            runTestsWithAllowHostAccess = false;
   protected JactlEnv           jactlEnv;
 
   protected static int testCounter = 0;
@@ -430,7 +431,7 @@ public class BaseTest {
       }
     }
   }
-
+  
   protected void test(List<String> classCode, String scriptCode, Object expected) {
     testCounter++;
     doTest(classCode, scriptCode, true, false, false, expected);
@@ -450,6 +451,19 @@ public class BaseTest {
       doTest(classCode, scriptCode, true, true, true, expected);
       if (!skipCheckpointTests) {
         doTest(classCode, scriptCode, true, true, true, true, expected);
+      }
+    }
+    if (runTestsWithAllowHostAccess) {
+      boolean savedAllowHostAccess = allowHostAccess;
+      Predicate<String> savedAllowHostClassLookup = allowHostClassLookup;
+      try {
+        allowHostAccess = true;
+        allowHostClassLookup = n -> true;
+        doTest(classCode, scriptCode, true, false, false, expected);
+      }
+      finally {
+        allowHostAccess = savedAllowHostAccess;
+        allowHostClassLookup = savedAllowHostClassLookup;
       }
     }
   }

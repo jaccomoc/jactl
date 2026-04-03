@@ -234,7 +234,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
       name = (String)restorer.readObject();
       function = type == null ? restorer.getContext().getFunctions().lookupGlobalFunction(name) : restorer.getContext().getFunctions().lookupMethod(type, name);
       if (function == null) {
-        function = type.getClassDescriptor().getMethod(name);
+        function = type.getJactlClassDescriptor().getMethod(name);
       }
       if (function == null) {
         throw new IllegalStateException("Could not find function " + name + " for type " + type);

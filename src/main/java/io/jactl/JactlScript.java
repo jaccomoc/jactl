@@ -127,7 +127,7 @@ public class JactlScript {
   }
 
   private static void cleanUp(JactlScriptObject instance, JactlContext context) {
-    if (instance._$j$isCheckpointed()) {
+    if (instance != null && instance._$j$isCheckpointed()) {
       context.deleteCheckpoint(instance._$j$getInstanceId(), instance._$j$checkpointId());
     }
   }

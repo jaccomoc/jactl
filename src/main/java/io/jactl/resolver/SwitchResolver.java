@@ -2,10 +2,10 @@ package io.jactl.resolver;
 
 import io.jactl.*;
 import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -226,7 +226,7 @@ public class SwitchResolver {
   public static JactlType visitConstructorPattern(Resolver resolver, Expr.ConstructorPattern expr) {
     resolver.resolve(expr.typeExpr);
     resolver.resolve(expr.args);
-    ClassDescriptor                   descriptor      = expr.typeExpr.patternType().getClassDescriptor();
+    JactlClassDescriptor descriptor = expr.typeExpr.patternType().getJactlClassDescriptor();
     if (descriptor != null) {
       List<Map.Entry<String, JactlType>> constructorArgs = new ArrayList<>(descriptor.getAllMandatoryFields().entrySet());
       // Transform unnamed args into named args
@@ -302,19 +302,22 @@ public class SwitchResolver {
     // sure that the last "class name" in the dotted list is actually a class and if it is
     // actually a static field turn the pattern into a literal (based on the field value)
     Expr.TypeExpr typeExpr  = (Expr.TypeExpr)pattern;
-    List<Expr>    className = typeExpr.typeVal.getClassName();
-    if (className.size() == 1 && className.get(0) instanceof Expr.Identifier) {
-      // Check for a constant
-      Expr.Identifier identifier = (Expr.Identifier)className.get(0);
-      Expr.VarDecl    constant   = resolver.getStaticImports().get(identifier.identifier.getStringValue());
-      if (constant != null) {
-        Expr.Literal literal = (Expr.Literal)resolver.literalDefaultValue(pattern.location, constant.type);
-        literal.value.setValue(constant.constValue);
-        resolver.resolve(literal);
-        return literal;
+    JactlType     typeVal   = typeExpr.typeVal;
+    List<Expr> className = typeVal.getClassNameExprs();
+    if (!typeVal.isHostClass()) {
+      if (className.size() == 1 && className.get(0) instanceof Expr.Identifier) {
+        // Check for a constant
+        Expr.Identifier identifier = (Expr.Identifier) className.get(0);
+        Expr.VarDecl    constant   = resolver.getStaticImports().get(identifier.identifier.getStringValue());
+        if (constant != null) {
+          Expr.Literal literal = (Expr.Literal) resolver.literalDefaultValue(pattern.location, constant.type);
+          literal.value.setValue(constant.constValue);
+          resolver.resolve(literal);
+          return literal;
+        }
       }
     }
-    if (className.size() == 1 || resolver.lookupClass(className, true) != null) {
+    if (typeVal.isHostClass() || className.size() == 1 || resolver.lookupClass(className, true) != null) {
       resolver.resolve(typeExpr);
       return typeExpr;
     }
@@ -322,15 +325,15 @@ public class SwitchResolver {
     String          fieldName  = identifier.identifier.getStringValue();
     className = className.subList(0,className.size() - 1);
     // We must have a proper class name or we will throw a resolver.error now
-    ClassDescriptor descriptor = resolver.lookupClass(className, false);
-    JactlType fieldType = null;
+    JactlClassDescriptor descriptor = (JactlClassDescriptor)resolver.lookupClass(className, false);
+    JactlType            fieldType  = null;
     if (descriptor == null) {
       resolver.error("No such class static field '" + fieldName, identifier.location);
     }
     else {
       fieldType = descriptor.getStaticField(fieldName);
       if (fieldType == null) {
-        resolver.error("No class static field '" + fieldName + "' for class " + descriptor.getClassName(), identifier.location);
+        resolver.error("No class static field '" + fieldName + "' for class " + descriptor.getSimpleName(), identifier.location);
       }
       else {
         Expr.Literal literal = (Expr.Literal)resolver.literalDefaultValue(pattern.location, fieldType);
@@ -440,15 +443,29 @@ public class SwitchResolver {
       return expr;
     }
     if (expr instanceof Expr.TypeExpr && ((Expr.TypeExpr) expr).typeVal.is(CLASS,INSTANCE)) {
-      // Check that we don't have a constant that matches the class name of the TypeExpr
-      List<Expr> className = ((Expr.TypeExpr) expr).typeVal.getClassName();
-      if (className.size() == 1 && className.get(0) instanceof Expr.Identifier) {
-        Expr.Identifier ident   = (Expr.Identifier) className.get(0);
-        Expr.VarDecl    varDecl = resolver.lookup(ident.identifier.getStringValue(), ident.identifier, false, true);
-        if (varDecl != null && varDecl.isConstVar) {
-          Expr.Literal literal = (Expr.Literal) Resolver.literalDefaultValue(ident.identifier, varDecl.type);
-          literal.value.setValue(varDecl.constValue);
-          return literal;
+      JactlType       typeVal         = ((Expr.TypeExpr) expr).typeVal;
+      List<Expr>      classNameExprs  = typeVal.getClassNameExprs();
+      if (classNameExprs != null) {
+        // Check for class so we know whether type is a host class or not below
+        // NOTE: this is for when class has been imported and we don't know at parse time whether
+        //       we have a host class or not
+        ClassDescriptor classDescriptor = resolver.lookupClass(classNameExprs, true);
+        if (classDescriptor != null) {
+          typeVal.setClassDescriptor(classDescriptor);
+        }
+      }
+      
+      if (!typeVal.isHostClass()) {
+        // Check that we don't have a constant that matches the class name of the TypeExpr
+        List<Expr> className = classNameExprs;
+        if (className.size() == 1 && className.get(0) instanceof Expr.Identifier) {
+          Expr.Identifier ident   = (Expr.Identifier) className.get(0);
+          Expr.VarDecl    varDecl = resolver.lookup(ident.identifier.getStringValue(), ident.identifier, false, true);
+          if (varDecl != null && varDecl.isConstVar) {
+            Expr.Literal literal = (Expr.Literal) Resolver.literalDefaultValue(ident.identifier, varDecl.type);
+            literal.value.setValue(varDecl.constValue);
+            return literal;
+          }
         }
       }
       return expr;

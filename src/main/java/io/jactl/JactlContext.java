@@ -19,6 +19,7 @@ package io.jactl;
 
 import io.jactl.compiler.Compiler;
 import io.jactl.compiler.JactlClassLoader;
+import io.jactl.resolver.Imports;
 import io.jactl.runtime.*;
 
 import java.io.File;
@@ -27,10 +28,12 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -62,7 +65,8 @@ public class JactlContext {
   public long maxLoopLimit              = -1;      // -1 is no limit, otherwise number of loop iterations per script invocation
   public int  maxExecutionTimeMs        = -1;      // -1 is no limit, otherwise maximum duration in ms for a script invocation
 
-  private final Map<Class,Map<String,MethodInvoker>> hostMethods = new HashMap<>();
+  private final Map<Class,Map<String, HostClassMethodInvoker>> hostMethods       = new HashMap<>();
+  private final Map<Class,Map<String, HostClassMethodInvoker>> staticHostMethods = new HashMap<>();
   
   private final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
@@ -91,14 +95,17 @@ public class JactlContext {
   // at run time.
   public final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
 
+  // For repl mode keep track of imported classes
+  private Imports imports = null;
+  
   // Whether to dump byte code during compilation
   public int debugLevel = Integer.getInteger("jactl.debug.level", 0);
 
   public String javaPackage = Utils.JACTL_PKG;   // The Java package under which compiled classes will be generated
   public String internalJavaPackage;
 
-  Set<String>                  packages         = new HashSet<>();
-  Map<String, ClassDescriptor> classDescriptors = new HashMap<>();  // Keyed on internal name
+  Set<String>                       packages         = new HashSet<>();
+  Map<String, JactlClassDescriptor> classDescriptors = new HashMap<>();  // Keyed on internal name
 
   private PackageChecker       packageChecker = name -> packages.contains(name);
   private ClassLookup          classLookup    = name -> classDescriptors.get(name);
@@ -153,7 +160,7 @@ public class JactlContext {
     return classLoader.findClassByInternalName(internalName);
   }
 
-  public ClassDescriptor getExistingClassDescriptor(String internalName) {
+  public JactlClassDescriptor getExistingClassDescriptor(String internalName) {
     return classDescriptors.get(internalName);
   }
 
@@ -163,11 +170,11 @@ public class JactlContext {
     return new JactlContextBuilder();
   }
 
-  public Class<?> defineClass(ClassDescriptor descriptor, byte[] bytes) {
+  public Class<?> defineClass(JactlClassDescriptor descriptor, byte[] bytes) {
     return classAdder.addClass(descriptor, bytes);
   }
 
-  private Class<?> _defineClass(ClassDescriptor descriptor, byte[] bytes) {
+  private Class<?> _defineClass(JactlClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replace('/', '.');
     if (classLoader.getClass(className) != null) {
       // Redefining existing class so create a new ClassLoader. This allows already defined classes that
@@ -198,8 +205,8 @@ public class JactlContext {
   public interface PackageChecker { boolean exists(String name); }
 
   // Helper that maps internal name (jactl.pkg.a.b.c.A$B$C) to class descriptor
-  public interface ClassLookup    { ClassDescriptor lookup(String internalName); }
-  public interface ClassAdder     { Class<?>        addClass(ClassDescriptor descriptor, byte[] bytes); }
+  public interface ClassLookup    { JactlClassDescriptor lookup(String internalName); }
+  public interface ClassAdder     { Class<?>        addClass(JactlClassDescriptor descriptor, byte[] bytes); }
 
   public class JactlContextBuilder {
     private JactlContextBuilder() {}
@@ -520,14 +527,14 @@ public class JactlContext {
     return packageChecker.exists(name) || getRegisteredClasses().packageExists(name);
   }
 
-  public ClassDescriptor getClassDescriptor(String packageName, String className) {
+  public JactlClassDescriptor getClassDescriptor(String packageName, String className) {
     String name  = Utils.pkgPathOf(internalJavaPackage, packageName, className.replace('.', '$'));
     name = name.replace('.', '/');
     return getClassDescriptor(name);
   }
 
-  public ClassDescriptor getClassDescriptor(String internalName) {
-    ClassDescriptor desc = classLookup.lookup(internalName);
+  public JactlClassDescriptor getClassDescriptor(String internalName) {
+    JactlClassDescriptor desc = classLookup.lookup(internalName);
     if (desc == null) {
       internalName = internalName.startsWith(internalJavaPackage) ? internalName.substring(internalJavaPackage.length() + 1) : internalName;
       desc = getRegisteredClasses().getClassDescriptor(internalName.replace('/','.'));
@@ -619,12 +626,16 @@ public class JactlContext {
     return typeFromClass(obj.getClass(), context);
   }
 
-  public JactlType typeFromClass(Class<?> clss) {
-    return typeFromClass(clss, getRegisteredClasses(), ANY);
+  public JactlType typeFromClass(Class<?> clss, JactlType defaultType) {
+    return typeFromClass(clss, getRegisteredClasses(), defaultType, this);
   }
 
+  public JactlType typeFromClass(Class<?> clss) {
+    return typeFromClass(clss, getRegisteredClasses(), ANY, this);
+  }
+  
   public static JactlType typeFromClass(Class<?> clss, JactlContext context) {
-    return typeFromClass(clss, context == null ? RegisteredClasses.INSTANCE : context.getRegisteredClasses(), ANY);
+    return typeFromClass(clss, context == null ? RegisteredClasses.INSTANCE : context.getRegisteredClasses(), ANY, context);
   }
   
   private static final HashMap<Class<?>, JactlType> typeCache = new HashMap() {{
@@ -648,13 +659,19 @@ public class JactlContext {
     put(Continuation.class, CONTINUATION);
     put(Object.class, ANY);
     put(Class.class, CLASS);
+    put(void.class, VOID);
+    put(Void.class, VOID);
   }};
   
-  public static JactlType typeFromClass(Class<?> clss, RegisteredClasses classes) {
-    return typeFromClass(clss, classes, ANY);
+  public JactlType typeFromClass(Class<?> clss, RegisteredClasses classes) {
+    return typeFromClass(clss, classes, ANY, this);
+  }
+
+  public static JactlType typeFromClass(Class<?> clss, RegisteredClasses classes, JactlContext context) {
+    return typeFromClass(clss, classes, ANY, context);
   }
   
-  public static JactlType typeFromClass(Class<?> clss, RegisteredClasses classes, JactlType defaultType) {
+  private static JactlType typeFromClass(Class<?> clss, RegisteredClasses classes, JactlType defaultType, JactlContext context) {
     JactlType type = typeCache.get(clss);
     if (type != null) {
       return type;
@@ -662,11 +679,14 @@ public class JactlContext {
     if (Map.class.isAssignableFrom(clss))         { return MAP;  }
     if (List.class.isAssignableFrom(clss))        { return LIST; }
     if (JactlObject.class.isAssignableFrom(clss)) { return createInstanceType(clss); }
-    if (clss.isArray())                           { return JactlType.arrayOf(typeFromClass(clss.getComponentType(), classes, defaultType)); }
+    if (clss.isArray())                           { return JactlType.arrayOf(typeFromClass(clss.getComponentType(), classes, defaultType, context)); }
     
-    ClassDescriptor desc = classes.getClassDescriptor(clss);
+    JactlClassDescriptor desc = classes.getClassDescriptor(clss);
     if (desc != null) {
       return createInstanceType(desc);
+    }
+    if (context != null && context.allowHostAccess && context.allowHostClassLookup != null && context.allowHostClassLookup.test(clss.getName())) {
+      return createInstanceType(clss, true, context);
     }
     return defaultType;
   }
@@ -680,56 +700,61 @@ public class JactlContext {
     Class<?> parentClass = parent.getClass();
     if (allowHostClassLookup == null || !allowHostClassLookup.test(parentClass.getName())) {
       // Class is not an allowed class
-      throw new RuntimeError("Host class " + parent.getClass().getName() + " is not an allowed class (see allowHostClassLookup option)", source, offset);
+      throw new RuntimeError("Host class " + parentClass.getName() + " is not an allowed class (see allowHostClassLookup option)", source, offset);
     }
-    Map<String,MethodInvoker> methodsMap = hostMethods.computeIfAbsent(parentClass, clss -> new HashMap<>());
-    MethodInvoker invoker = methodsMap.get(field);
+    if (args != null && args.length == 1 && args[0] instanceof NamedArgsMap) {
+      throw new RuntimeError("Host class method invocation does not support named arguments", source, offset);
+    }
+    Map<String, HostClassMethodInvoker> methodsMap = hostMethods.computeIfAbsent(parentClass, clss -> new HashMap<>());
+    HostClassMethodInvoker              invoker    = methodsMap.get(field);
     // Check that cached method matches arg types if there were multiple matches originally
-    if (invoker != null && invoker.isMultipleMethods() && !paramsMatchArgs(invoker.method, args, false)) {
+    List<JactlType> argTypes = args == null ? null : Arrays.stream(args).map(a -> this.typeFromClass(a.getClass())).collect(Collectors.toList());
+    if (invoker != null && invoker.isMultipleMethods() && (argTypes == null || !paramsMatchArgs(invoker.method.getParameterTypes(), argTypes, false))) {
       invoker = null;
     }
     
     if (invoker == null) {
-      // Find method that matches on name and arg types
-      List<Method> methods = Arrays.stream(parentClass.getMethods())
-                                   .filter(m -> Modifier.isPublic(m.getModifiers()))
-                                   .filter(m -> m.getName().equals(field))
-                                   .collect(Collectors.toList());
-      boolean multipleMethods = methods.size() > 1;
-      if (multipleMethods) {
-        // Try to find matching method based on exact arg types
-        methods = methods.stream().filter(m -> paramsMatchArgs(m, args, false)).collect(Collectors.toList());
-        if (methods.isEmpty()) {
-          // Look for methods where arg types are "compatible"
-          methods = methods.stream().filter(m -> paramsMatchArgs(m, args, true)).collect(Collectors.toList());
-        }
-        if (methods.size() > 1) {
-          throw new RuntimeError("Multiple methods named '" + field + "' with compatible parameter types found in class " + parentClass.getName(), source, offset);
-        }
-        if (methods.isEmpty()) {
-          throw new RuntimeError("Multiple methods named '" + field + "' in class " + parentClass.getName() + " but none match argument types", source, offset);
-        }
-      }
-      else if (methods.isEmpty()) {
-        throw new RuntimeError("Could not find public method named '" + field + "' in class " + parentClass.getName(), source, offset);
-      }
-      invoker = new MethodInvoker(multipleMethods, parentClass, methods.get(0), source, offset);
+      invoker = findMatchingMethod(parentClass, field, argTypes, source, offset);
       methodsMap.put(field, invoker);
     };
     return invoker.getWrapperHandle().bindTo(parent);
   }
+
+  public JactlMethodHandle lookupStaticWrapperForHostClass(Class<?> parentClass, String methodName, String source, int offset) {
+    if (!allowHostAccess) {
+      throw new RuntimeError("Access to host classes not allowed (see allowHostAccess flag). Class is " + parentClass.getName(), source, offset);
+    }
+    if (allowHostClassLookup == null || !allowHostClassLookup.test(parentClass.getName())) {
+      // Class is not an allowed class
+      throw new RuntimeError("Host class " + parentClass.getName() + " is not an allowed class (see allowHostClassLookup option)", source, offset);
+    }
+    Map<String, HostClassMethodInvoker> methodsMap = staticHostMethods.computeIfAbsent(parentClass, clss -> new HashMap<>());
+    HostClassMethodInvoker              invoker    = methodsMap.get(methodName);
+    if (invoker == null) {
+      Method method = findMatchingMethod(parentClass, methodName, null, true, msg -> { throw new RuntimeError(msg, source, offset); });
+      invoker = new HostClassMethodInvoker(false, parentClass, method, source, offset);
+      methodsMap.put(methodName, invoker);
+    };
+    return invoker.getWrapperHandle();
+  }
   
-  private boolean paramsMatchArgs(Method m, Object[] args, boolean compatible) {
-    if (args == null) {
+  private HostClassMethodInvoker findMatchingMethod(Class<?> parentClass, String methodName, List<JactlType> argTypes, String source, int offset) {
+    AtomicBoolean   multipleMethods = new AtomicBoolean(false);
+    Method          method          = findMatchingMethod(parentClass, methodName, argTypes, false, msg -> { throw new RuntimeError(msg, source, offset); }, multipleMethods);
+    return new HostClassMethodInvoker(multipleMethods.get(), parentClass, method, source, offset);
+  }
+
+  public boolean paramsMatchArgs(Class[] parameterTypes, List<JactlType> argTypes, boolean compatible) {
+    if (argTypes == null) {
       return true;
     }
-    if (m.getParameterCount() != args.length) {
+    if (parameterTypes.length != argTypes.size()) {
       return false;
     }
-    for (int i = 0; i < args.length; i++) {
-      JactlType paramType = typeFromClass(m.getParameterTypes()[i], this);
-      JactlType argType = typeFromClass(args[i].getClass(), this);
-      if (compatible && !argType.isCastableTo(paramType)) {
+    for (int i = 0; i < parameterTypes.length; i++) {
+      JactlType paramType = this.typeFromClass(parameterTypes[i]);
+      JactlType argType = argTypes.get(i);
+      if (compatible && !(argType.isCastableTo(paramType) || paramType.isCastableTo(argType))) {
         return false;
       }
       if (!compatible && !argType.equals(paramType)) {
@@ -737,6 +762,96 @@ public class JactlContext {
       }
     }
     return true;
+  }
+
+  public Method findMatchingMethod(Class<?> parentClass, String methodName, List<JactlType> argTypes, boolean mustBeStatic, Consumer<String> errorHandler) {
+    return findMatchingMethod(parentClass, methodName, argTypes, mustBeStatic, errorHandler, new AtomicBoolean());
+  }
+  
+  private Method findMatchingMethod(Class<?> parentClass, String methodName, List<JactlType> argTypes, boolean mustBeStatic, Consumer<String> errorHandler, AtomicBoolean multipleMethods) {
+    List<Method> methods = Arrays.stream(parentClass.getMethods())
+                                 .filter(m -> m.getName().equals(methodName))
+                                 .filter(m -> Modifier.isPublic(m.getModifiers()))
+                                 .filter(m -> !mustBeStatic || Modifier.isStatic(m.getModifiers()))
+                                 .filter(m -> argTypes == null || m.getParameterCount() == argTypes.size())
+                                 .collect(Collectors.toList());
+
+    // Find method that matches on name and arg types
+    multipleMethods.set(methods.size() > 1);
+    if (multipleMethods.get()) {
+      if (argTypes == null) {
+        errorHandler.accept("Multiple methods named " + methodName + " found in class " + parentClass.getName());
+      }
+      // Try to find matching method based on exact arg types
+      List<Method> exactMethods = methods.stream().filter(m -> this.paramsMatchArgs(m.getParameterTypes(), argTypes, false)).collect(Collectors.toList());
+      if (exactMethods.isEmpty()) {
+        // Look for methods where arg types are "compatible"
+        methods = methods.stream().filter(m -> this.paramsMatchArgs(m.getParameterTypes(), argTypes, true)).collect(Collectors.toList());
+      }
+      else {
+        methods = exactMethods;
+      }
+      if (methods.size() > 1) {
+        // Eliminate methods belonging to base classes that have not been enabled
+        methods = methods.stream().filter(m -> this.allowHostClassLookup.test(m.getDeclaringClass().getName())).collect(Collectors.toList());
+      }
+      if (methods.size() > 1) {
+        errorHandler.accept("Multiple methods named '" + methodName + "' with compatible parameter types found class " + parentClass.getName());
+      }
+      if (methods.isEmpty()) {
+        errorHandler.accept("Multiple methods named '" + methodName + "' in class " + parentClass.getName() + " but none match argument types");
+      }
+    }
+    else if (methods.size() == 1) {
+      // Make sure parameter types match
+      if (argTypes != null && !paramsMatchArgs(methods.get(0).getParameterTypes(), argTypes, true)) {
+        errorHandler.accept("Argument " + Utils.plural("type", argTypes.size()) + (argTypes.size() == 1 ? " does" : " do") + " not match parameter types for method");
+      }
+    }
+    else {
+      // No methods found
+      errorHandler.accept("Could not find " + (mustBeStatic ? "static " : "") + "public method named '" + methodName + "' in class " + parentClass.getName() + " with matching argument count");
+    }
+    Method method = methods.get(0);
+    if (!this.allowHostClassLookup.test(method.getDeclaringClass().getName())) {
+      errorHandler.accept("Method is from base class '" + method.getDeclaringClass().getName() + "' that is not an allowed host class (see allowHostClassLookup option)");
+    }
+    return method;
+  }
+
+  public Constructor findMatchingConstructor(Class<?> parentClass, List<Expr> args, Token location) {
+    List<Constructor> constructors = Arrays.stream(parentClass.getConstructors())
+                                           .filter(c -> Modifier.isPublic(c.getModifiers()))
+                                           .filter(c -> c.getParameterCount() == args.size())
+                                           .collect(Collectors.toList());
+
+    // Find method that matches on arg types
+    List<JactlType> argTypes = args.stream().map(a -> a.type).collect(Collectors.toList());
+    boolean multipleConstructors = constructors.size() > 1;
+    if (multipleConstructors) {
+      // Try to find matching method based on exact arg types
+      constructors = constructors.stream().filter(c -> this.paramsMatchArgs(c.getParameterTypes(), argTypes, false)).collect(Collectors.toList());
+      if (constructors.isEmpty()) {
+        // Look for constructors where arg types are "compatible"
+        constructors = constructors.stream().filter(c -> this.paramsMatchArgs(c.getParameterTypes(), argTypes, true)).collect(Collectors.toList());
+      }
+      if (constructors.size() > 1) {
+        throw new CompileError("Multiple constructors with compatible parameter types found in class " + parentClass.getName(), location);
+      }
+      if (constructors.isEmpty()) {
+        throw new CompileError("Multiple constructors in class " + parentClass.getName() + " but none match argument types", location);
+      }
+    }
+    else if (constructors.size() == 1) {
+      // Make sure parameter types match
+      if (argTypes != null && !paramsMatchArgs(constructors.get(0).getParameterTypes(), argTypes, true)) {
+        throw new CompileError("Argument " + Utils.plural("type", argTypes.size()) + (argTypes.size() == 1 ? " does" : " do") + " not match parameter types for constructor", location);
+      }
+    }
+    else {
+      throw new CompileError("Could not find public constructor in class " + parentClass.getName() + " with matching number of arguments", location);
+    }
+    return constructors.get(0);
   }
 
   public void asyncWork(Consumer<Object> completion, Continuation c, JactlScriptObject instance) {
@@ -804,12 +919,26 @@ public class JactlContext {
     }
   }
 
-  private void addClass(ClassDescriptor descriptor) {
+  private void addClass(JactlClassDescriptor descriptor) {
     String packageName = descriptor.getPackageName();
     packages.add(packageName);
     classDescriptors.put(descriptor.getInternalName(), descriptor);
   }
 
+  public synchronized Imports getImports() {
+    if (imports == null) {
+      imports = new Imports();
+      imports.importedClasses.putAll(getRegisteredClasses().getAutoImportedClasses());
+    }
+    return imports;
+  }
+  
+  public synchronized void purgeImports() {
+    imports = null;
+  }
+  
+  ////////////////////////////////////////////
+  
   public class DynamicClassLoader extends ClassLoader {
     private Map<String,Class<?>> classes                = new HashMap<>();
     private Map<String,Class<?>> classesByInternalName  = new HashMap<>();
@@ -871,8 +1000,10 @@ public class JactlContext {
       return JactlContext.this;
     }
   }
+
+  //////////////////////////////////
   
-  private static class MethodInvoker {
+  private static class HostClassMethodInvoker {
     private Class<?> clss;
     private Method   method;
     private boolean  multipleMethods;
@@ -882,7 +1013,7 @@ public class JactlContext {
     private boolean isStatic;
     private JactlMethodHandle wrapperHandle;
 
-    public MethodInvoker(boolean multipleMethods, Class<?> clss, Method method, String source, int offset) {
+    public HostClassMethodInvoker(boolean multipleMethods, Class<?> clss, Method method, String source, int offset) {
       this.clss            = clss;
       this.method          = method;
       this.multipleMethods = multipleMethods;
@@ -897,13 +1028,13 @@ public class JactlContext {
       }
       try {
         MethodHandle handle =
-          isStatic ? MethodHandles.lookup().findVirtual(MethodInvoker.class, "wrapper",
+          isStatic ? MethodHandles.lookup().findVirtual(HostClassMethodInvoker.class, "wrapper",
                                                         MethodType.methodType(Object.class,
                                                                               Continuation.class,
                                                                               String.class,
                                                                               int.class,
                                                                               Object[].class))
-                   : MethodHandles.lookup().findVirtual(MethodInvoker.class, "wrapper",
+                   : MethodHandles.lookup().findVirtual(HostClassMethodInvoker.class, "wrapper",
                                                         MethodType.methodType(Object.class,
                                                                               Object.class,
                                                                               Continuation.class,
@@ -926,7 +1057,13 @@ public class JactlContext {
     public JactlMethodHandle getWrapperHandle() {
       return wrapperHandle;
     }
+
+    // For static methods
+    public Object wrapper(Continuation c, String source, int offset, Object[] args) {
+      return wrapper(null, c, source, offset, args);
+    }
     
+    // obj will be the target obj or null for static methods
     public Object wrapper(Object obj, Continuation c, String source, int offset, Object[] args) {
       // Named args
       if (args.length == 1 && args[0] instanceof NamedArgsMap) {
@@ -944,7 +1081,7 @@ public class JactlContext {
         }
 
         if (paramCount != args.length) {
-          throw new RuntimeError("Expected " + paramCount + " arguments but got " + args.length, source, offset);
+          throw new RuntimeError("Expected " + paramCount + Utils.plural(" argument", paramCount) + " but got " + args.length, source, offset);
         }
 
         // Check types and fill in any missing default values where value not supplied
@@ -972,7 +1109,7 @@ public class JactlContext {
         throw new RuntimeError("Incompatible argument type for " + clss.getName() + "." + method.getName() + "()", source, offset, e);
       }
       catch (Throwable e) {
-        throw new RuntimeError("Error invoking " + clss.getName() + "." + method.getName() + "()", source, offset, e);
+        throw new RuntimeError("Error invoking host class method '" + clss.getName() + "." + method.getName() + "()'", source, offset, e);
       }
     }
 

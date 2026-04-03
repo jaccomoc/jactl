@@ -55,7 +55,7 @@ java {
 
 test { 
     useJUnitPlatform()
-    maxParallelForks = 8
+    maxParallelForks = 18
 }
 
 jar {

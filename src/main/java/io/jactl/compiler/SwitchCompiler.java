@@ -106,37 +106,37 @@ public class SwitchCompiler {
 
   private static void compileMatchCase(MethodCompiler mc, Expr.Switch expr, Pair<Expr, Expr> patternPair, Expr result, Label end, Map<Expr, Label> nonSimpleLabels) {
     mc.emitIf(expr.isAsync, MethodCompiler.IfTest.IS_TRUE, () -> {
-             Label endCheck = new Label();
-             Consumer<JactlType> loadValue = type -> {
-               mc.loadVar(expr.itVar);
-               if (type != null && !type.is(ANY,LIST)) {
-                 mc.convertTo(type, expr.subject, true, expr.subject.location);
-               }
-             };
-             compileMatchCaseTest(mc, loadValue, expr.subject.type, patternPair, expr.subject.location, endCheck);
-             if (patternPair.second != null) {
-               // If pattern did not match
-               mc._dupVal();
-               mc.mv.visitJumpInsn(IFEQ, endCheck);
-               mc.popVal();
-               // Evaluate the "if" expression part
-               mc.compile(patternPair.second);
-             }
-             mc.mv.visitLabel(endCheck);
-           },
-           () -> {
-             if (result.isSimple()) {
-               mc.compile(result);
-               mc.convertTo(expr.type, expr, true, result.location);
-               mc.popType();
-               mc.mv.visitJumpInsn(GOTO, end);
-             }
-             else {
-               Label label = nonSimpleLabels.get(result);
-               mc.mv.visitJumpInsn(GOTO, label);    // Skip to location where we will generate result for non-simple values
-             }
-           },
-           null);
+                Label endCheck = new Label();
+                Consumer<JactlType> loadValue = type -> {
+                  mc.loadVar(expr.itVar);
+                  if (type != null && !type.is(ANY,LIST)) {
+                    mc.convertTo(type, expr.subject, true, expr.subject.location);
+                  }
+                };
+                compileMatchCaseTest(mc, loadValue, expr.subject.type, patternPair, expr.subject.location, endCheck);
+                if (patternPair.second != null) {
+                  // If pattern did not match
+                  mc._dupVal();
+                  mc.mv.visitJumpInsn(IFEQ, endCheck);
+                  mc.popVal();
+                  // Evaluate the "if" expression part
+                  mc.compile(patternPair.second);
+                }
+                mc.mv.visitLabel(endCheck);
+              },
+              () -> {
+                if (result.isSimple()) {
+                  mc.compile(result);
+                  mc.convertTo(expr.type, expr, true, result.location);
+                  mc.popType();
+                  mc.mv.visitJumpInsn(GOTO, end);
+                }
+                else {
+                  Label label = nonSimpleLabels.get(result);
+                  mc.mv.visitJumpInsn(GOTO, label);    // Skip to location where we will generate result for non-simple values
+                }
+              },
+              () -> {});
   }
 
   private static void compileMatchCaseTest(MethodCompiler mc, Consumer<JactlType> loadValue, JactlType subjectType, Pair<Expr, Expr> patternPair, Token subjectLocation, Label endCheck) {

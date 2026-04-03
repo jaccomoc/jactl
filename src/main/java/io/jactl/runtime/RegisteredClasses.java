@@ -29,12 +29,12 @@ public class RegisteredClasses {
   // static
   public static final RegisteredClasses INSTANCE = new RegisteredClasses(); 
   
-  private Map<String,Class<?>>        classByInternalJavaName             = new HashMap<>();  // name in '/' form
-  private Map<String,ClassDescriptor> registeredClassesByJavaName         = new HashMap<>();  // name in '.' form
-  private Map<String,ClassDescriptor> registeredClassesByInternalJavaName = new HashMap<>();  // name in '/' form
-  private Map<String,ClassDescriptor> registeredClassesByJactlName        = new HashMap<>();  // name in '.' form
-  private Set<String>                 registeredJactlPackages             = new HashSet<>();  // name in '.' form
-  private Map<String,ClassDescriptor> autoImportedClasses                 = new HashMap<>();  // Jactl class name (no pkg)
+  private Map<String,Class<?>>              classByInternalJavaName             = new HashMap<>();  // name in '/' form
+  private Map<String, JactlClassDescriptor> registeredClassesByJavaName         = new HashMap<>();  // name in '.' form
+  private Map<String, JactlClassDescriptor> registeredClassesByInternalJavaName = new HashMap<>();  // name in '/' form
+  private Map<String, JactlClassDescriptor> registeredClassesByJactlName        = new HashMap<>();  // name in '.' form
+  private Set<String>                       registeredJactlPackages             = new HashSet<>();  // name in '.' form
+  private Map<String, JactlClassDescriptor> autoImportedClasses                 = new HashMap<>();  // Jactl class name (no pkg)
   
   private Map<Class<?>, BiConsumer<Checkpointer,Object>> checkpointers = new HashMap<>();
   private Map<Class<?>, Function<Restorer,Object>>       restorers     = new HashMap<>();
@@ -47,8 +47,8 @@ public class RegisteredClasses {
     this.parent = other.parent;
   }
   
-  public Map<String, ClassDescriptor> getAutoImportedClasses() {
-    Map<String, ClassDescriptor> classes = new HashMap<>();
+  public Map<String, JactlClassDescriptor> getAutoImportedClasses() {
+    Map<String, JactlClassDescriptor> classes = new HashMap<>();
     if (parent != null) {
       classes.putAll(parent.getAutoImportedClasses());
     }
@@ -56,17 +56,17 @@ public class RegisteredClasses {
     return classes;
   }
 
-  public ClassDescriptor getClassDescriptor(String jactlName) {
-    ClassDescriptor classDescriptor = registeredClassesByJactlName.get(jactlName);
+  public JactlClassDescriptor getClassDescriptor(String jactlName) {
+    JactlClassDescriptor classDescriptor = registeredClassesByJactlName.get(jactlName);
     if (classDescriptor == null && parent != null) {
       classDescriptor = parent.getClassDescriptor(jactlName);
     }
     return classDescriptor;
   }
 
-  public ClassDescriptor getClassDescriptor(Class<?> javaClass) {
+  public JactlClassDescriptor getClassDescriptor(Class<?> javaClass) {
     for (Class<?> clss = javaClass; clss != null; clss = clss.getSuperclass()) {
-      ClassDescriptor descriptor = registeredClassesByJavaName.get(clss.getName());
+      JactlClassDescriptor descriptor = registeredClassesByJavaName.get(clss.getName());
       if (descriptor != null) {
         return descriptor;
       }
@@ -77,8 +77,8 @@ public class RegisteredClasses {
     return null;
   }
 
-  public ClassDescriptor getClassDescriptorByInternalJavaName(String internalJavaName) {
-    ClassDescriptor classDescriptor = registeredClassesByInternalJavaName.get(internalJavaName);
+  public JactlClassDescriptor getClassDescriptorByInternalJavaName(String internalJavaName) {
+    JactlClassDescriptor classDescriptor = registeredClassesByInternalJavaName.get(internalJavaName);
     if (classDescriptor == null && parent != null) {
       classDescriptor = parent.getClassDescriptorByInternalJavaName(internalJavaName);
     }
@@ -113,17 +113,17 @@ public class RegisteredClasses {
     getOrCreateClassDescriptor(jactlClass, javaClass);
   }
 
-  public ClassDescriptor getOrCreateClassDescriptor(String jactlClass, String javaClass) {
-    String jactlClassName = jactlClass.replaceAll("^.*\\.", "");
-    String jactlPackage = jactlClass.replaceAll("\\.[^.]*$", "");
-    ClassDescriptor desc = registeredClassesByJactlName.computeIfAbsent(jactlClass, n -> new ClassDescriptor(jactlClassName, false, "", jactlPackage, null, null, true, javaClass));
+  public JactlClassDescriptor getOrCreateClassDescriptor(String jactlClass, String javaClass) {
+    String               jactlClassName = jactlClass.replaceAll("^.*\\.", "");
+    String               jactlPackage   = jactlClass.replaceAll("\\.[^.]*$", "");
+    JactlClassDescriptor desc           = registeredClassesByJactlName.computeIfAbsent(jactlClass, n -> new JactlClassDescriptor(jactlClassName, false, "", jactlPackage, null, null, true, javaClass));
     registeredClassesByJavaName.putIfAbsent(javaClass, desc);
     registeredClassesByInternalJavaName.putIfAbsent(javaClass.replace('.','/'), desc);
     registeredJactlPackages.add(jactlPackage);
     return desc;
   }
   
-  void addAutoImported(String jactlClass, ClassDescriptor classDescriptor) {
+  void addAutoImported(String jactlClass, JactlClassDescriptor classDescriptor) {
     if (autoImportedClasses.put(jactlClass, classDescriptor) != null) {
       throw new IllegalStateException("Cannot auto-import two classes of the same name: new=" + jactlClass + ", old=" + classDescriptor.getPackagedName());
     }

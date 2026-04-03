@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.runtime.JactlObject;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -25,6 +26,11 @@ import java.util.LinkedHashMap;
 
 public class ClassTests extends BaseTest {
 
+  @BeforeEach
+  void beforeEach() {
+    runTestsWithAllowHostAccess = true;
+  }
+  
   @Test public void staticFuncNamedArgs() {
     test(Utils.listOf( "class X{ static int f(int x){x} }"), "X.f(x:3)", 3);
   }
@@ -93,6 +99,7 @@ public class ClassTests extends BaseTest {
     test("class X { int x; var f = {it*it} }; X x = new X(1); x.f(2)", 4);
     test("class X { int x; var f = {it*it} }; X x = new X(1); x.\"${'f'}\"(2)", 4);
     test("class X { int x; var f = {it*it} }; def x = new X(1); x.f(2)", 4);
+    test("class X { int x; var f = {it*it} }; def x = new X(x:1); x.f(2)", 4);
     test("class X { int x; var f = {it*it} }; def x = new X(1); x.\"${'f'}\"(2)", 4);
     testError("class X { int x; int i = sleep(0,-1)+sleep(0,2); static def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(1); def g = x.f(); g() + g() + x.i", "field in static function");
   }
@@ -691,6 +698,7 @@ public class ClassTests extends BaseTest {
     test("class X { String a; byte b; List c = []; Map d = [:] }; new X('abc',1).b", (byte)1);
     test("class X { String a; int b; List c; Map d }; new X('abc',1,[1,2,3],[a:5]).d.a", 5);
     test("class X { String a; int b; List c = []; Map d = [:] }; new X('abc',1).b", 1);
+    test("class X { String a; int b, e = 3; List c = []; Map d = [:] }; new X('abc',1).b", 1);
     testError("class X { String a; int b; List c = []; Map d = [:] }; new X('abc').b", "missing mandatory field");
     testError("class X { String a = ''; int b; List c = []; Map d = [:] }; new X('abc').b", "cannot be cast to int");
     test("class X { String a; int b; List c; Map d = [:] }; new X('abc', 1, [1,2,3]).c[2]", 3);
@@ -1664,6 +1672,9 @@ public class ClassTests extends BaseTest {
 
   @Test public void importStatements() {
     useAsyncDecorator = false;
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "import a.b.c.X", null);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "import a.b.c.X;", null);
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "import a.b.c.X\n", null);
     packageName = null;
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; new X().f()", 3);
     test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.X; new X().f()", 3);
@@ -1703,6 +1714,7 @@ public class ClassTests extends BaseTest {
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X as Y; import a.b.c.X as Y; new Y().f()", "class of name 'Y' already imported");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; import a.b.c.X; import a.b.c.X; new Y().f()", "class of name 'X' already imported");
     testError(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package x.y.z; class XXX{}; import a.b.c.X; import a.b.c.X; new Y().f()", "import statements can only occur");
+    test(Utils.listOf("package a.b.c; class X{def f(){3}}"), "package a.b.c; import a.b.c.*; new X().f()", 3);
   }
 
   @Test public void staticImportStatements() {

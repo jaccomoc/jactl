@@ -38,7 +38,7 @@ import java.util.Set;
 import java.util.HashSet;
 
 import io.jactl.Token;
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import org.objectweb.asm.Label;
 
 /**
@@ -126,7 +126,7 @@ class Stmt extends JactlUserDataHolder {
     Deque<Expr.FunDecl>      @nestedFunctions = new ArrayDeque<>();
 
     boolean         @isPrimaryClass = false;                      // Whether top level class in a class file (i.e. not script)
-    ClassDescriptor @classDescriptor;
+    JactlClassDescriptor @classDescriptor;
 
     public boolean isScriptClass() { return scriptMain != null; }
   }

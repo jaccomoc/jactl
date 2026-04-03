@@ -39,22 +39,22 @@ import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
 
-  final JactlContext   context;
-  final String         internalName;
-  final String              source;
-  final String              pkg;
-  final String         className;
-  final Stmt.ClassDecl classDecl;
-  final String         sourceName;      // Name of source file
-  protected String          internalBaseName;
-  protected ClassVisitor     cv;
-  protected JactlClassWriter cw;
-  protected MethodVisitor   constructor;
-  protected MethodVisitor   classInit;   // MethodVisitor for static class initialiser
-  protected ClassDescriptor classDescriptor;
-  protected Class           compiledClass;
-  protected Textifier printer;
-  protected int       printSize = 0;
+  final JactlContext             context;
+  final String                   internalName;
+  final String                   source;
+  final String                   pkg;
+  final String                   className;
+  final Stmt.ClassDecl           classDecl;
+  final String                   sourceName;      // Name of source file
+  protected String               internalBaseName;
+  protected ClassVisitor         cv;
+  protected JactlClassWriter     cw;
+  protected MethodVisitor        constructor;
+  protected MethodVisitor        classInit;   // MethodVisitor for static class initialiser
+  protected JactlClassDescriptor classDescriptor;
+  protected Class                compiledClass;
+  protected Textifier            printer;
+  protected int                  printSize = 0;
 
   private   Label           classInitTryStart   = new Label();
   private   Label           classInitTryEnd     = new Label();
@@ -522,10 +522,14 @@ public class ClassCompiler {
   //////////////////////////////////////
 
   protected void compileJactlObjectFunctions() {
-    compileToJsonFunction();
-    compileReadJsonFunction();
-    compileCheckpointFunction();
-    compileRestoreFunction();
+    // Only generate Json and Checkpoint functions if there are no fields that are hosts classes since we
+    // have no access to fields for host class types
+    if (!context.allowHostAccess || classDescriptor.getAllFields().entrySet().stream().noneMatch(value -> value.getValue().isHostClass())) {
+      compileToJsonFunction();
+      compileReadJsonFunction();
+      compileCheckpointFunction();
+      compileRestoreFunction();
+    }
     compileInitNoAsync();
     compileEqualsFunction();
     compileHashCodeFunction();
@@ -1172,7 +1176,7 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
         mv.visitJumpInsn(IFNULL, NULL_CHILD);
         mv.visitVarInsn(ALOAD, TMP_OBJ);
         mv.visitInsn(SWAP);
-        boolean async = type.getClassDescriptor().getMethod(Utils.JACTL_INIT_MISSING).isAsync;
+        boolean async = type.getJactlClassDescriptor().getMethod(Utils.JACTL_INIT_MISSING).isAsync;
         // Note we don't actually support async behaviour (it will be detected in JsonDecoder.decodeJactlObj())
         // but we need to pass in a null continuation just in case. If a Continuation is thrown it will be
         // converted into a RuntimeError.

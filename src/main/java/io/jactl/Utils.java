@@ -24,8 +24,8 @@ import org.objectweb.asm.Type;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -62,6 +62,7 @@ public class Utils {
   public static final String JACTL_PREFIX        = "_$j$";
   public static final String JACTL_SCRIPT_MAIN   = JACTL_PREFIX + "main";
   public static final String JACTL_INIT          = JACTL_PREFIX + "init";
+  public static final String JACTL_JAVA_INIT     = "<init>";    // for invoking constructors of host classes
   public static final String JACTL_INIT_WRAPPER  = Utils.wrapperName(JACTL_PREFIX + "init");
   public static final String JACTL_INIT_NOASYNC  = JACTL_PREFIX + "initNoAsync";
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
@@ -609,12 +610,22 @@ public class Utils {
     return word.endsWith("y") ? word.substring(0, word.length() - 1) + "ies" : word + "s";
   }
 
-  public static Expr createNewInstance(Token newToken, JactlType className, Token leftParen, List<Expr> args) {
+  public static Expr createNewInstance(JactlContext context, Token newToken, JactlType className, Token leftParen, List<Expr> args) {
     // We create the instance and then invoke _$j$init on it
-    Expr.InvokeNew  invokeNew  = new Expr.InvokeNew(newToken, className);
-    Expr.MethodCall invokeInit = new Expr.MethodCall(leftParen, invokeNew, new Token(DOT, newToken), JACTL_INIT, newToken, null, args);
-    invokeInit.couldBeNull = false;
-    return invokeInit;
+    Expr.InvokeNew expr = new Expr.InvokeNew(newToken, className);
+    expr.args = args;
+    expr.leftParen = leftParen;
+//    if (className.isHostClass()) {
+//      // For host classes we allow normal constructor invocation so look for constructor that matches args.
+//      // Throws CompileError if there is no matching constructor.
+//      context.findMatchingConstructor(className.getJavaClass(), args, newToken);
+//      ((Expr.InvokeNew)expr).args = args;
+//    }
+//    else {
+//      expr = new Expr.MethodCall(leftParen, expr, new Token(DOT, newToken), JACTL_INIT, newToken, null, args);
+//    }
+    expr.couldBeNull = false;
+    return expr;
   }
 
   public static Expr createNewInstance(Token newToken, JactlType type, List<Expr> dimensions) {
@@ -1099,5 +1110,27 @@ public class Utils {
       }
     }
     return result;
+  }
+
+  /**
+   * Return string up until last occurrence of specified delmiter.
+   * <p>E.g. turn 'a.b.c.d' into 'a.b.c'</p>
+   * <p>If there is no delimiter then return string as is.</p>
+   * @param str        the string
+   * @param delimiter  the delimiter
+   * @return the substring up to but not including last occurrence of delimiter
+   */
+  public static String untilLast(String str, char delimiter) {
+    int idx = str.lastIndexOf(delimiter);
+    return idx == -1 ? str : str.substring(0, idx);
+  }
+  
+  public static boolean hasUpperCase(String str) {
+    for (int i = 0; i < str.length(); i++) {
+      if (Character.isUpperCase(str.charAt(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -242,6 +242,14 @@ public enum TokenType {
 
   public boolean isNumber() { return this.is(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST); }
 
+  public static final TokenType[] TOKENS_WITH_UPPERCASE;
+  static{
+    TOKENS_WITH_UPPERCASE = Arrays.stream(TokenType.values())
+                                  .filter(tt -> tt.asString != null)
+                                  .filter(tt -> Character.isUpperCase(tt.asString.charAt(0)))
+                                  .toArray(TokenType[]::new);
+  }
+  
   @Override
   public String toString() {
     return asString != null ? asString : super.toString();

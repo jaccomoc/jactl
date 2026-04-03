@@ -506,7 +506,7 @@ public class Restorer {
     return clss;
   }
   
-  public ClassDescriptor getClassDescriptor(String internalName) {
+  public JactlClassDescriptor getClassDescriptor(String internalName) {
     return context.getClassDescriptor(internalName);
   }
 }

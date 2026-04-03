@@ -1311,19 +1311,35 @@ public class RuntimeUtils {
       throw new RuntimeError("Error during method invocation", source, offset, e);
     }
   }
-  
-  private static JactlMethodHandle lookupWrapper(Object parent, String field, Object[] args, String source, int offset) {
+
+  public static final String LOOKUP_WRAPPER = "lookupWrapper";
+  public static JactlMethodHandle lookupWrapper(Object parent, String field, Object[] args, String source, int offset) {
     JactlContext context = RuntimeState.getState().getContext();
     JactlMethodHandle handle = context.getFunctions().lookupWrapper(parent, field);
     if (handle != null) {
       return handle;
     }
     Class<?> parentClass = parent.getClass();
-    // If built-in type, and we haven't found method in standard lookup then we don't have a method for it
-    if (parentClass != Class.class && JactlContext.typeFromClass(parentClass, context.getRegisteredClasses(), null) != null) {
-      return null;
+    JactlType jactlType = context.typeFromClass(parentClass, (JactlType) null);
+    if (jactlType == null) {
+      String msg = context.allowHostAccess ? "Access to host class '" + parentClass.getName() + "' not allowed (see allowHostClassLookup setting)"
+                                           : "Access to host classes not allowed (see allowHostAccess and allowHostClassLookup settings)";
+      throw new RuntimeError(msg, source, offset);
     }
-    return context.lookupWrapperForHostClass(parent, field, args, source, offset);
+    if (jactlType.isHostClass()) {
+      return context.lookupWrapperForHostClass(parent, field, args, source, offset);
+    }
+    return null;
+  }
+
+  public static final String LOOKUP_HOST_STATIC_WRAPPER = "lookupHostStaticWrapper";
+  public static JactlMethodHandle lookupHostStaticWrapper(Class<?> parentClass, String field, String source, int offset) {
+    JactlContext context = RuntimeState.getState().getContext();
+    JactlType jactlType = context.typeFromClass(parentClass, (JactlType) null);
+    if (jactlType != null && jactlType.isHostClass()) {
+      return context.lookupStaticWrapperForHostClass(parentClass, field, source, offset);
+    }
+    return null;
   }
 
   /**
@@ -1566,10 +1582,17 @@ public class RuntimeUtils {
     }
   }
 
-  private static JactlMethodHandle.FunctionWrapperHandle getFunctionWrapperHandle(Class<?> clss, String fieldName, String source, int offset) {
-    ClassDescriptor descriptor = RuntimeState.getState().getContext().getRegisteredClasses().getClassDescriptor(clss);
+  private static JactlMethodHandle getFunctionWrapperHandle(Class<?> clss, String fieldName, String source, int offset) {
+    JactlContext         context    = RuntimeState.getState().getContext();
+    JactlClassDescriptor descriptor = context.getRegisteredClasses().getClassDescriptor(clss);
     if (descriptor == null) {
-      throw new RuntimeError("Class " + className(clss.getName()) + " not a supported Jactl type", source, offset);
+      // Check for a host class
+      if (context.allowHostAccess && context.allowHostClassLookup.test(clss.getName())) {
+        return context.lookupStaticWrapperForHostClass(clss, fieldName, source, offset);
+      }
+      else {
+        throw new RuntimeError("Class " + clss.getName() + " not a supported Jactl type", source, offset);
+      }
     }
     FunctionDescriptor funDesc = descriptor.getMethod(fieldName);
     if (funDesc == null) {
@@ -2606,9 +2629,9 @@ public class RuntimeUtils {
     if (context == null) {
       return obj.getClass().getName();
     }
-    ClassDescriptor desc = context.getRegisteredClasses().getClassDescriptor(obj.getClass());
+    JactlClassDescriptor desc = context.getRegisteredClasses().getClassDescriptor(obj.getClass());
     if (desc != null) {
-      return desc.getClassName();
+      return desc.getSimpleName();
     }
     return obj.getClass().getName();
   }

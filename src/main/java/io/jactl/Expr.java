@@ -28,7 +28,7 @@ import java.util.*;
 import io.jactl.JactlType;
 import io.jactl.Stmt;
 import io.jactl.Utils;
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.SourceLocation;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
@@ -95,7 +95,7 @@ public abstract class Expr extends JactlUserDataHolder {
 
   // True if this is a "new X()" expression
   public boolean isNewInstance() {
-    return this instanceof Expr.MethodCall && ((Expr.MethodCall)this).parent instanceof Expr.InvokeNew;
+    return this instanceof Expr.InvokeNew;
   }
 
   // True if expression is "super"
@@ -371,8 +371,9 @@ public abstract class Expr extends JactlUserDataHolder {
   }
 
   public static class ClassPath extends Expr {
-    public Token pkg;
-    public Token className;
+    public Token    pkg;
+    public Token    className;
+    public Class    hostClass;
     public String fullClassName() { return pkg.getStringValue() + "." + className.getStringValue(); }
     public ClassPath(Token pkg, Token className) {
       this.pkg = pkg;
@@ -416,7 +417,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public int             nestingLevel;        // What level of nested function owns this variable (1 is top level)
     public Label           declLabel;           // Where variable comes into scope (for debugger)
     public Expr.FunDecl    funDecl;             // If type is FUNCTION then this is the function declaration
-    public ClassDescriptor classDescriptor;     // If type is CLASS then this is the class descriptor
+    public JactlClassDescriptor classDescriptor;     // If type is CLASS then this is the class descriptor
     public VarDecl         parentVarDecl;       // If this is a HeapLocal parameter then this is the VarDecl from parent
     public VarDecl         originalVarDecl;     // VarDecl for actual original variable declaration
 
@@ -881,9 +882,9 @@ public abstract class Expr extends JactlUserDataHolder {
     public Token            token;
     // Whether to use INVOKESPECIAL or INVOKEVIRTUAL. INVOKESPECIAL needed when invoking super.method().
     public boolean          invokeSpecial;
-    public ClassDescriptor  classDescriptor;
+    public JactlClassDescriptor  classDescriptor;
     public List<Expr>       args;
-    public InvokeInit(Token token, boolean invokeSpecial, ClassDescriptor classDescriptor, List<Expr> args) {
+    public InvokeInit(Token token, boolean invokeSpecial, JactlClassDescriptor classDescriptor, List<Expr> args) {
       this.token = token;
       this.invokeSpecial = invokeSpecial;
       this.classDescriptor = classDescriptor;
@@ -922,6 +923,9 @@ public abstract class Expr extends JactlUserDataHolder {
     public Token      token;
     public JactlType  instanceType;
     public List<Expr> dimensions = new ArrayList<>();
+    public List<Expr> args;       // for invoking constructor of host class instances (where enabled)
+    public Token      leftParen;   // token for where args start
+    public MethodCall callInit;    // for Jactl objects the method call to _$j$init
     public InvokeNew(Token token, JactlType instanceType) {
       this.token = token;
       this.instanceType = instanceType;

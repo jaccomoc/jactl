@@ -23,11 +23,11 @@ import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
@@ -43,6 +43,7 @@ import static io.jactl.JactlType.OBJECT_ARR;
 import static io.jactl.JactlType.STRING;
 import static io.jactl.TokenType.*;
 import static io.jactl.Utils.JACTL_PREFIX;
+import static io.jactl.Utils.isNamedArgs;
 
 /**
  * The Resolver visits all statements and all expressions and performs the following:
@@ -109,12 +110,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Stmt.ClassDecl topLevelClass;      // Top level class (can be script class)
   private Stmt.Block     topBlock;           // Top most block (dummy block used by Intellij plugin)
 
-  private final Map<String, ClassDescriptor> imports           = new HashMap<>();
-  private final List<String>                 importedPackages  = new ArrayList<>();
-  private final Map<String, Expr.VarDecl>    importedConstants = new HashMap<>();
-  private final Map<String, Expr.VarDecl>    importedConstantsRenamed = new HashMap<>();
-  private final Map<String,ClassDescriptor>  localClasses      = new HashMap<>();
-  private final Map<String,Stmt.ClassDecl>   localClassDecls   = new HashMap<>();
+  private Imports imports = null;
+  
+  private final Map<String,JactlClassDescriptor>  localClasses      = new HashMap<>();
+  private final Map<String,Stmt.ClassDecl>        localClassDecls   = new HashMap<>();
 
   private boolean isWhileCondition = false;        // true while resolving while condition
   private int     lastLineNumber = -1;
@@ -152,7 +151,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         jactlContext.globalVars.put(name, varDecl);
       }
     });
-    imports.putAll(jactlContext.getRegisteredClasses().getAutoImportedClasses());
+    if (jactlContext.replMode) {
+      imports = jactlContext.getImports();
+    }
+    else {
+      imports = new Imports();
+      imports.importedClasses.putAll(jactlContext.getRegisteredClasses().getAutoImportedClasses());
+    }
   }
 
   public synchronized void resolveClass(Stmt.ClassDecl classDecl) {
@@ -169,7 +174,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Create a block that holds the static imports (used by Intellij plugin)
     topBlock             = new Stmt.Block(classDecl.location, new Stmt.Stmts(classDecl.location));
     topBlock.owningClass = this.topLevelClass;
-    topBlock.variables   = importedConstantsRenamed;
+    topBlock.variables   = imports.importedConstantsRenamed;
 
     classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
@@ -234,7 +239,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   public Map<String,Expr.VarDecl> getStaticImports() {
-    return importedConstants;
+    return imports.importedConstants;
   }
 
   public Stmt.ClassDecl getClassDecl(String name) {
@@ -310,8 +315,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       resolve(type.getArrayElemType());
       return;
     }
-    if (type.is(INSTANCE, CLASS) && type.getClassDescriptor() == null) {
-      type.setClassDescriptor(lookupClass(type.getClassName()));
+    if (type.is(INSTANCE, CLASS) && type.getJavaClass() == null && type.getClassDescriptor() == null) {
+      type.setClassDescriptor(lookupClass(type.getClassNameExprs()));
     }
   }
 
@@ -321,11 +326,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // NOTE: we only support class declarations at top level of script or directly within another class decl.
     // NOTE: When in repl mode we don't nest classes within the script itself since they will
     //       not then be accessible in subsequent lines being compiled in the repl.
-    ClassDescriptor       outerClass = outerClassDecl == null || outerClassDecl.isScriptClass() && jactlContext.replMode ? null : outerClassDecl.classDescriptor;
-    List<ClassDescriptor> interfaces = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
-    boolean               allFieldsAreDefaults = classDecl.fields.stream().allMatch(field -> Utils.isDefaultValue(field.declExpr));
-    ClassDescriptor classDescriptor = outerClass == null ? new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, classDecl.baseClass, interfaces, allFieldsAreDefaults)
-                                                         : new ClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, classDecl.baseClass, interfaces, allFieldsAreDefaults);
+    JactlClassDescriptor       outerClass           = outerClassDecl == null || outerClassDecl.isScriptClass() && jactlContext.replMode ? null : outerClassDecl.classDescriptor;
+    //List<JactlClassDescriptor> interfaces           = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
+    List<JactlClassDescriptor> interfaces = Collections.EMPTY_LIST;
+    boolean                    allFieldsAreDefaults = classDecl.fields.stream().allMatch(field -> Utils.isDefaultValue(field.declExpr));
+    JactlClassDescriptor classDescriptor = outerClass == null ? new JactlClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, classDecl.baseClass, interfaces, allFieldsAreDefaults)
+                                                              : new JactlClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, classDecl.baseClass, interfaces, allFieldsAreDefaults);
     classDecl.classDescriptor = classDescriptor;
     classDescriptor.setIsTopLevelClass(classDecl.isPrimaryClass);
     classDescriptor.setIsScriptClass(classDecl.isScriptClass());
@@ -349,8 +355,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(classDecl.baseClass);
     classStack.push(classDecl);
 
-    ClassDescriptor classDescriptor = classDecl.classDescriptor;
-    JactlType       classType       = JactlType.createClass(classDescriptor);
+    JactlClassDescriptor classDescriptor = classDecl.classDescriptor;
+    JactlType            classType       = JactlType.createClass(classDescriptor);
 
     checkForCyclicInheritance(classDecl, classDescriptor);
 
@@ -402,8 +408,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // the method is async or not so we have to assume always that a call to a non-final instance method is async.
           // If a method is final and it does not override a method that is async then we will mark it async (during
           // Analyser phase) only if it invokes something that is async.
-          ClassDescriptor    baseClass = classDescriptor.getBaseClass();
-          FunctionDescriptor method    = baseClass != null ? baseClass.getMethod(methodName) : null;
+          JactlClassDescriptor baseClass = classDescriptor.getBaseClassDescriptor();
+          FunctionDescriptor   method    = baseClass != null ? baseClass.getMethod(methodName) : null;
           if (!functionDescriptor.isFinal || baseClass != null && method != null && method.isAsync) {
             functionDescriptor.isAsync = true;
           }
@@ -418,10 +424,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Stmt.VarDecl thisStmt = thisDecl;
 
       // If we have a base class then add VarDecls for super fields
-      ClassDescriptor baseClass  = classDescriptor.getBaseClass();
-      ArrayList<Stmt> superStmts = new ArrayList<Stmt>();
+      JactlClassDescriptor baseClass  = classDescriptor.getBaseClassDescriptor();
+      ArrayList<Stmt>      superStmts = new ArrayList<Stmt>();
       if (baseClass != null) {
-        Stmt.VarDecl superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstanceType(classDescriptor.getBaseClass()));
+        Stmt.VarDecl superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstanceType(classDescriptor.getBaseClassType(true).getJactlClassDescriptor()));
         superDecl.declExpr.slot = 0;             // "super" is always in local var slot 0
         superStmts.add(superDecl);
         superStmts.addAll(baseClass.getAllFieldsStream()
@@ -457,11 +463,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     classStack.pop();
   }
 
-  private void checkForCyclicInheritance(Stmt.ClassDecl classDecl, ClassDescriptor classDescriptor) {
+  private void checkForCyclicInheritance(Stmt.ClassDecl classDecl, JactlClassDescriptor classDescriptor) {
     // Make sure we don't have circular extends relationship somewhere
     String previousBaseClass = null;
     Set<JactlType> seen = new HashSet<>();
-    for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = baseClass.getClassDescriptor().getBaseClassType(true)) {
+    for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = ((JactlClassDescriptor)baseClass.getClassDescriptor()).getBaseClassType(true)) {
+      if (baseClass.isHostClass()) {
+        classDecl.baseClass = null;
+        classDescriptor.resetBaseClass();
+        error("Classes cannot extend host classes (" + baseClass.getJavaClass().getName() + ")", classDecl.baseClassToken);
+        break;
+      }
       if (baseClass.getClassDescriptor() == null) {
         // Means we have detected cyclic inheritance in base class already
         error("Error in base class", classDecl.baseClassToken);
@@ -508,13 +520,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return declExpr;
   }
 
-  private void validateSignatures(Expr.FunDecl funDecl, ClassDescriptor baseClass, FunctionDescriptor baseMethod) {
+  private void validateSignatures(Expr.FunDecl funDecl, JactlClassDescriptor baseClass, FunctionDescriptor baseMethod) {
     if (baseMethod.isStaticImplementation || funDecl.isStatic()) {
       // Not overriding if one of the methods is static so no further check required
       return;
     }
     if (baseMethod.isFinal) {
-      error("Method " + baseMethod.name + "() is final in base class " + baseClass.getClassName() + " and cannot be overridden", funDecl.location);
+      error("Method " + baseMethod.name + "() is final in base class " + baseClass.getSimpleName() + " and cannot be overridden", funDecl.location);
     }
     resolve(funDecl.returnType);
     resolve(baseMethod.returnType);
@@ -583,12 +595,16 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return null;
       }
       Expr.Identifier field     = (Expr.Identifier)fieldExpr;
-      JactlType       type      = resolveClassPath(stmt.className.subList(0, stmt.className.size() - 1)).get(0);
+      JactlType       type      = resolveClassPath(stmt.className.subList(0, stmt.className.size() - 1)).orElse(null);
       if (type == null) {
         return null;
       }
       field.parentType = type;
-      ClassDescriptor classDesc = type.getClassDescriptor();
+      if (type.isHostClass()) {
+        error("Cannot use import static with a host class", stmt.location);
+        return null;
+      }
+      JactlClassDescriptor classDesc = (JactlClassDescriptor)type.getClassDescriptor();
       if (classDesc == null) {
         error("Could not find class descriptor for " + type, stmt.location);
         return null;
@@ -620,7 +636,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         else {
           JactlType fieldType = classDesc.getStaticField(name);
           if (fieldType == null) {
-            error("No class static field/method called '" + name + "' in class " + classDesc.getClassName(), field.location);
+            error("No class static field/method called '" + name + "' in class " + classDesc.getSimpleName(), field.location);
           }
           if (classDecl != null) {
             varDecl = classDecl.fieldVars.get(fieldName);
@@ -636,7 +652,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         varDecl.isConstVar = true;
         varDecl.isConst    = true;
         name = stmt.as == null ? name : stmt.as.getStringValue();
-        if (importedConstants.put(name, varDecl) != null) {
+        if (imports.importedConstants.put(name, varDecl) != null) {
           error("Duplicate constant name '" + name + "'", stmt.location);
         }
         // Create a renamed VarDecl so Intellij plugin can have one with the aliased name
@@ -648,7 +664,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           newDecl.isConstVar = true;
           varDecl = newDecl;
         }
-        importedConstantsRenamed.put(name, varDecl);
+        imports.importedConstantsRenamed.put(name, varDecl);
       };
       if (fieldName.equals(STAR.asString)) {
         // Import all static fields and methods
@@ -656,25 +672,34 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         classDesc.getAllMethods()
                  .filter(entry -> entry.getValue().isStaticImplementation)
                  .forEach(entry -> defineConst.accept(entry.getKey()));
+        if (jactlContext.replMode) imports.add("import static " + classDesc.getPackageName() + ".*");
       }
       else {
         defineConst.accept(fieldName);
+        if (jactlContext.replMode) imports.add("import static " + classDesc.getPackagedName() + "." + fieldName + (stmt.as == null ? "" : " as " + stmt.as.getStringValue())); 
       }
     }
     else {
       String importedPackage = packageImport(stmt.className);
       if (importedPackage != null) {
-        importedPackages.add(importedPackage);
+        if (!jactlContext.packageExists(importedPackage) && Package.getPackage(importedPackage) == null && Package.getPackage(jactlContext.javaPackage + "." + importedPackage) == null) {
+          error("No such package '" + importedPackage + "'", stmt.location);
+        }
+        imports.importedPackages.add(importedPackage);
+        if (jactlContext.replMode) imports.add("import " + importedPackage + ".*");
       }
       else {
-        resolveClassPath(stmt.className).forEach(type -> {
+        resolveClassPath(stmt.className).ifPresent(type -> {
           if (type != null && type.getClassDescriptor() != null) {
             ClassDescriptor classDesc = type.getClassDescriptor();
-            String          name      = stmt.as != null ? stmt.as.getStringValue() : classDesc.getClassName();
-            ClassDescriptor old       = imports.put(name, classDesc);
+            String          name      = stmt.as != null ? stmt.as.getStringValue() : classDesc.getSimpleName();
+            ClassDescriptor old       = imports.importedClasses.put(name, classDesc);
             if (old != null) {
               boolean autoImported = jactlContext.getRegisteredClasses().getAutoImportedClasses().containsKey(name);
               error("Class of name '" + name + "' already " + (autoImported ? "auto-" : "") + "imported (" + old.getPackagedName() + ")", stmt.as != null ? stmt.as : stmt.className.get(0).location);
+            }
+            else {
+              if (jactlContext.replMode) imports.add("import " + classDesc.getPackagedName() + (stmt.as == null ? "" : " as " + stmt.as.getStringValue()));
             }
           }
         });
@@ -704,52 +729,58 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
   
-  private List<JactlType> resolveClassPath(List<Expr> classPath) {
+  private Optional<JactlType> resolveClassPath(List<Expr> classPath) {
     if (classPath.isEmpty()) {
-      return Collections.EMPTY_LIST;
+      return Optional.empty();
     }
     Consumer<Integer> createError = i -> error("Unknown class " + classPath.subList(0,i+1)
                                                                            .stream()
                                                                            .map(expr -> expr instanceof Expr.ClassPath ? ((Expr.ClassPath) expr).fullClassName() : ((Expr.Identifier)expr).identifier.getStringValue())
                                                                            .collect(Collectors.joining(".")), classPath.get(i).location);
 
-    List<JactlType> types = new ArrayList<>();
     JactlType classType = null;
     Expr first = classPath.get(0);
     if (first instanceof Expr.ClassPath) {
       resolve(first);
       if (first.type == null) {
-          return types;
+        return Optional.empty();
       }
       classType = first.type;
     }
     else {
-      Expr.VarDecl varDecl = lookupClass(((Expr.Identifier) first).identifier.getStringValue(), first.location);
-      if (varDecl == null) {
-        createError.accept(0);
-        return types;
+      ClassDescriptor classDesc;
+      String          firstIdent = ((Expr.Identifier) first).identifier.getStringValue();
+      if (Utils.isValidClassName(firstIdent)) {
+        Expr.VarDecl varDecl = lookupClass(firstIdent, first.location);
+        if (varDecl == null) {
+          createError.accept(0);
+          return Optional.empty();
+        }
+        classDesc = varDecl.classDescriptor;
       }
-      ClassDescriptor classDesc = varDecl.classDescriptor;
+      else {
+        classDesc = lookupClass(classPath);
+      }
       first.type = classType = (classDesc == null ? null : JactlType.createClass(classDesc));
       if (classType == null) {
         createError.accept(0);
-        return types;
+        return Optional.empty();
       }
     }
     
     for (int i = 1; i < classPath.size(); i++) {
       Expr part = classPath.get(i);
       part.parentType = classType;
-      Expr.Identifier identifier      = (Expr.Identifier) part;
+      Expr.Identifier      identifier = (Expr.Identifier) part;
       ClassDescriptor classDescriptor = classType.getClassDescriptor();
-      ClassDescriptor inner           = classDescriptor == null ? null : classDescriptor.getInnerClass(identifier.identifier.getStringValue());
+      ClassDescriptor inner      = classDescriptor == null ? null : classDescriptor.getInnerClass(identifier.identifier.getStringValue());
       identifier.type = classType = (inner == null ? null : JactlType.createClass(inner));
       if (classType == null) {
         createError.accept(i);
-        return types;
+        return Optional.empty();
       }
     }
-    return Collections.singletonList(classType);
+    return Optional.of(classType);
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
@@ -1016,7 +1047,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr.operator.is(AS)) {
       assert expr.right instanceof Expr.TypeExpr;
       expr.isConst = false;
-      assert expr.right instanceof Expr.TypeExpr;
       Expr.TypeExpr typeExpr = (Expr.TypeExpr)expr.right;
       if (!expr.left.type.isConvertibleTo(typeExpr.typeVal)) {
         error("Cannot coerce from " + expr.left.type + " to " + typeExpr.typeVal, expr.operator);
@@ -1047,6 +1077,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return type;
   }
 
+  /**
+   * Look up field type for given parent
+   * @param parent         the parent expression
+   * @param accessOperator the type of access (DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)
+   * @param field          the expression giving the field name
+   * @param fieldsOnly     true if field look up only (not methods)
+   * @return Pair of field type and boolean indicating whether the field is a static constant
+   */
   private Pair<JactlType,Boolean> getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
     boolean isStatic = false;
     JactlType type = null;
@@ -1088,8 +1126,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // Store parent type so we can get easy access in Intellij plugin
           field.parentType = parent.type;
 
+          if (parent.type.isHostClass()) {
+            // NOTE: find matching method name or throw if no such method
+            jactlContext.findMatchingMethod(parent.type.getJavaClass(), fieldName, null, false, msg -> new CompileError(msg, field.location));
+            return Pair.create(FUNCTION, false);
+          }
+          
           // Check for valid field/method name
-          ClassDescriptor desc = parent.type.getClassDescriptor();
+          JactlClassDescriptor desc = (JactlClassDescriptor)parent.type.getClassDescriptor();
           if (desc == null) {
             error("Could not get class descriptor for " + parent.type, parent.location);
             return null;
@@ -1390,8 +1434,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitFunDecl(Expr.FunDecl expr) {
-    ClassDescriptor classDescriptor   = currentClass().classDescriptor;
-    String          implementingClass = classDescriptor.getInternalName();
+    JactlClassDescriptor classDescriptor   = currentClass().classDescriptor;
+    String               implementingClass = classDescriptor.getInternalName();
     expr.functionDescriptor.implementingClassName = implementingClass;
     String functionName = expr.nameToken == null ? null : expr.nameToken.getStringValue();
 
@@ -1401,8 +1445,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Make sure that if overriding a base class method we have same signature (including param names)
     if (functionName != null && !expr.isStatic() && !expr.isInitMethod()) {
-      ClassDescriptor    baseClass = classDescriptor.getBaseClass();
-      FunctionDescriptor method    = baseClass != null ? baseClass.getMethod(functionName) : null;
+      JactlClassDescriptor baseClass = classDescriptor.getBaseClassDescriptor();
+      FunctionDescriptor   method    = baseClass != null ? baseClass.getMethod(functionName) : null;
       if (baseClass != null) {
         if (method != null) {
           validateSignatures(expr, baseClass, method);
@@ -1836,43 +1880,59 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // (not ANY) and to be able to find the method in the list of registered methods.
     // Then we need to have the exact number of arguments that match the expected parameter count.
     // If we have less args we will do runtime lookup of MethodHandle that gets to wrapper method.
-    if (!expr.parent.type.is(ANY)) {
+    JactlType parentType = expr.parent.type;
+    if (!parentType.is(ANY)) {
       // For Intellij plugin to easily find class to which this method belongs
       if (expr.methodNameExpr != null) {
-        expr.methodNameExpr.parentType = expr.parent.type;
+        expr.methodNameExpr.parentType = parentType;
       }
 
-      FunctionDescriptor descriptor = lookupMethod(expr.parent.type, expr.methodName);
+      if (parentType.isHostClass()) {
+        if (isNamedArgs(expr.args)) {
+          error("Host class method invocation does not support named arguments", expr.leftParen);
+          return expr.type = ANY;
+        }
+        List<JactlType> argTypes = expr.args.stream().map(a -> a.type).collect(Collectors.toList());
+        Method m = jactlContext.findMatchingMethod(parentType.getJavaClass(), expr.methodName, argTypes, parentType.is(CLASS), msg -> { throw new CompileError(msg, expr.location); });
+        return expr.type = jactlContext.typeFromClass(m.getReturnType());
+      }
+      
+      FunctionDescriptor descriptor = lookupMethod(parentType, expr.methodName);
       if (descriptor != null) {
-        if (expr.parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
-          error("No static method '" + expr.methodName + "' exists for " + expr.parent.type, expr.location);
+        if (parentType.is(CLASS) && !descriptor.isStaticImplementation) {
+          error("No static method '" + expr.methodName + "' exists for " + parentType, expr.location);
         }
         expr.methodDescriptor = descriptor;
         expr.type = descriptor.returnType;
         return expr.type;
       }
       // Could be a field that has a MethodHandle in it
-      if (expr.parent.type.is(INSTANCE)) {
-        ClassDescriptor classDescriptor = expr.parent.type.getClassDescriptor();
+      if (parentType.is(INSTANCE) && !parentType.isHostClass()) {
+        ClassDescriptor classDescriptor = parentType.getClassDescriptor();
         if (classDescriptor == null) {
           // There has been an earlier error that prevented us creating a class descriptor
           return expr.type = ANY;
         }
-        JactlType       fieldType       = classDescriptor.getField(expr.methodName);
+        JactlType fieldType = classDescriptor.getField(expr.methodName);
         if (fieldType == null || !fieldType.is(FUNCTION,ANY)) {
           if (expr.methodName.equals(Utils.JACTL_INIT)) {
-            error("Class " + expr.parent.type.getPackagedName() + " is a built-in type and cannot be extended", expr.parent.location);
+            error("Class " + parentType.getPackagedName() + " is a built-in type and cannot be extended", expr.parent.location);
           }
           else {
-            error("No such method/field '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
+            error("No such method/field '" + expr.methodName + "' for object of type " + parentType, expr.methodNameLocation);
           }
         }
       }
-      else
-      if (!expr.parent.type.is(MAP)) {
+      else if (expr.parent instanceof Expr.ClassPath && ((Expr.ClassPath) expr.parent).hostClass != null) {
+        // Check if method exists
+        if (Arrays.stream(((Expr.ClassPath) expr.parent).hostClass.getMethods()).noneMatch(m -> m.getName().equals(expr.methodName) && Modifier.isStatic(m.getModifiers()))) {
+          error("No such static method '" + expr.methodName + "' for class " + ((Expr.ClassPath) expr.parent).hostClass.getName(), expr.methodNameLocation);
+        }
+      }
+      else if (!parentType.is(MAP)) {
         // If we are not a Map then we know at compile time that method does not exist. (If we are a Map then at
         // runtime someone could create a field in the Map with this name so we have to wait until runtime.)
-        error("No such method '" + expr.methodName + "' for object of type " + expr.parent.type, expr.methodNameLocation);
+        error("No such method '" + expr.methodName + "' for object of type " + parentType, expr.methodNameLocation);
       }
     }
 
@@ -2024,10 +2084,33 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     resolve(expr.instanceType);
     resolve(expr.dimensions);
     expr.couldBeNull = false;
-    return expr.type = expr.instanceType;
+    expr.type        = expr.instanceType;
+    expr.isResolved  = true;
+    
+    // If this is for a "new XXX(args)" (note we also use InvokeNew in fromJson()
+    // where we don't invoke _$j$init() and args will be null)
+    if (expr.args != null && expr.instanceType.is(INSTANCE)) {
+      if (expr.instanceType.isHostClass()) {
+        resolve(expr.args);
+      }
+      else {
+        // For Jactl objects we need to invoke the _$j$init method
+        // Use a dummy parent so that compile/resolve/analyse don't create stack overflow
+        // (which they will if we pass ourselves as parent)
+        Expr.Noop dummyParent = new Expr.Noop(expr.token);
+        dummyParent.type = expr.type;
+        dummyParent.couldBeNull = false;
+        expr.callInit = new Expr.MethodCall(expr.leftParen, dummyParent, new Token(DOT, expr.token), Utils.JACTL_INIT, expr.token, null, expr.args);
+        resolve(expr.callInit);
+      }
+    }
+    return expr.type;
   }
-
+  
   @Override public JactlType visitClassPath(Expr.ClassPath expr) {
+    if (expr.hostClass != null) {
+      return expr.type = JactlType.createHostClass(expr.hostClass, jactlContext);
+    }
     ClassDescriptor descriptor = lookupClass(Utils.listOf(expr));
     expr.type = descriptor == null ? TYPE_FOR_BAD_REF : JactlType.createClass(descriptor);
     return expr.type;
@@ -2436,8 +2519,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private FunctionDescriptor lookupMethod(JactlType type, String methodName) {
-    if (type.is(CLASS, INSTANCE)) {
-      ClassDescriptor clss = type.getClassDescriptor();
+    if (type.is(CLASS, INSTANCE) && !type.isHostClass()) {
+      JactlClassDescriptor clss = (JactlClassDescriptor)type.getClassDescriptor();
       if (clss != null) {
         FunctionDescriptor funDesc = clss.getMethod(methodName);
         if (funDesc != null) {
@@ -2500,8 +2583,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return null;
     }
     Expr.VarDecl classVarDecl = new Expr.VarDecl(location == null ? null : location.newIdent(className), null, null);
-    classVarDecl.classDescriptor = classDescriptor;
-    classVarDecl.type = JactlType.createClass(classDescriptor);
+    JactlType type;
+    if (classDescriptor instanceof JactlClassDescriptor) {
+      classVarDecl.classDescriptor = (JactlClassDescriptor) classDescriptor;
+      type = JactlType.createClass(classDescriptor);
+    }
+    else {
+      type = ((HostClassDescriptor)classDescriptor).getClassType();
+    }
+    classVarDecl.type = type;
     return classVarDecl;
   }
 
@@ -2539,22 +2629,33 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       // If not in current hierarchy and in a script then look for a top level class of that name
       if (className == null && isScript) {
-        String          topLevelClass = jactlContext.replMode ? firstClass : scriptName + '$' + firstClass;
-        ClassDescriptor topClass      = localClasses.get(topLevelClass);
+        String               topLevelClass = jactlContext.replMode ? firstClass : scriptName + '$' + firstClass;
+        JactlClassDescriptor topClass      = localClasses.get(topLevelClass);
         if (topClass != null) {
           className = topLevelClass + subPath;
         }
       }
       if (className == null) {
         // Check for imports
-        ClassDescriptor importedClass = imports.get(firstClass);
+        ClassDescriptor importedClass = imports.importedClasses.get(firstClass);
         if (importedClass == null) {
-          // Check imported packages
-          importedClass = importedPackages.stream().map(pkg -> jactlContext.getClassDescriptor(pkg, firstClass)).filter(Objects::nonNull).findFirst().orElse(null);
+          // Check imported packages for a Jactl class
+          importedClass = imports.importedPackages.stream().map(pkg -> jactlContext.getClassDescriptor(pkg, firstClass)).filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        if (importedClass == null && jactlContext.allowHostAccess) {
+          // Check for a host class
+          importedClass = imports.importedPackages.stream()
+                                          .map(pkg -> pkg + "." + firstClass)
+                                          .filter(name -> jactlContext.allowHostClassLookup.test(name))
+                                          .map(name -> classForName(name))
+                                          .filter(Objects::nonNull)
+                                          .map(clss -> JactlType.createHostClass(clss, jactlContext))
+                                          .map(type -> type.getClassDescriptor())
+                                          .findFirst()
+                                          .orElse(null);
         }
         if (importedClass != null) {
-          className = importedClass.getNamePath() + subPath;
-          classPkg  = importedClass.getPackageName();
+          return importedClass;
         }
       }
       if (className == null) {
@@ -2576,7 +2677,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // If no package supplied or current package
-    ClassDescriptor descriptor = null;
+    JactlClassDescriptor descriptor = null;
     if (classPkg == null) {
       classPkg = packageName;
     }
@@ -2595,7 +2696,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       else {
         if (!classPkg.equals(packageName)) {
           if (checkForExistence) { return null; }
-          error("Unknown package '" + classPkg + "'", packageToken);
+          if (jactlContext.allowHostAccess && Package.getPackage(classPkg) != null) {
+            error("Unknown class '" + classPkg + "." + className + "'", packageToken);
+          }
+          else {
+            error("Unknown package '" + classPkg + "'", packageToken);
+          }
         }
       }
     }
@@ -2607,6 +2713,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return descriptor;
   }
 
+  private Class<?> classForName(String className) {
+    try {
+      return Class.forName(className);
+    }
+    catch (ClassNotFoundException e) {
+      return null;
+    }
+  }
+  
   private Expr.VarDecl lookupFunction(Token identifier) {
     return lookup(identifier.getStringValue(), identifier, true, false);
   }
@@ -2665,7 +2780,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // and built-in functions
     if (varDecl == null) { varDecl = lookupClassMember(name, location);                  }
     if (varDecl == null) { varDecl = lookupClass(name, location);                        }
-    if (varDecl == null) { varDecl = importedConstants.get(name);                        }
+    if (varDecl == null) { varDecl = imports.importedConstants.get(name);                        }
     if (varDecl == null) { varDecl = jactlContext.getFunctions().getGlobalFunDecl(name); }
 
     // Finally check for global. If in repl mode then we will allow auto-creation of globals
@@ -2826,7 +2941,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Stmt.ClassDecl classDecl = currentClass();
     // Note: we have already checked for any of our current fields since our class block is at the bottom of the
     // stack of blocks. We need to check for any fields from our base classes.
-    ClassDescriptor baseClass = classDecl.classDescriptor.getBaseClass();
+    JactlClassDescriptor baseClass = classDecl.classDescriptor.getBaseClassDescriptor();
     if (baseClass == null) { return null; }
 
     FunctionDescriptor method = baseClass.getMethod(name);
@@ -3192,8 +3307,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * of a function.
    */
   private Stmt.FunDecl createInitMethod(Stmt.ClassDecl classDecl) {
-    ClassDescriptor classDescriptor = classDecl.classDescriptor;
-    Token           token           = classDecl.name;
+    JactlClassDescriptor classDescriptor = classDecl.classDescriptor;
+    Token                token           = classDecl.name;
     List<Stmt.VarDecl> mandatoryParams = classDescriptor.getAllMandatoryFields()
                                                         .entrySet()
                                                         .stream()
@@ -3226,8 +3341,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // assign mandatory values for child class and then run all initialisers for optional fields.
     if (classDescriptor.getBaseClass() != null) {
       // Invoke super.init() if we have a base class
-      Set<String> baseMandatoryFields = classDescriptor.getBaseClass().getAllMandatoryFields().keySet();
-      Expr.InvokeInit invokeSuperInit = new Expr.InvokeInit(token, true, classDescriptor.getBaseClass(),
+      Set<String> baseMandatoryFields = classDescriptor.getBaseClassDescriptor().getAllMandatoryFields().keySet();
+      Expr.InvokeInit invokeSuperInit = new Expr.InvokeInit(token, true, classDescriptor.getBaseClassDescriptor(),
                                                             baseMandatoryFields.stream()
                                                                        .map(f -> new Expr.Identifier(token.newIdent(paramName.apply(f))))
                                                                        .collect(Collectors.toList()));
@@ -3330,7 +3445,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     wrapperSmts.stmts.add(createVarDecl(classToken, initWrapper, argMapName, MAP, initialiser));
 
     // Invoke base class init wrapper first
-    ClassDescriptor classDescriptor = classDecl.classDescriptor;
+    JactlClassDescriptor classDescriptor = classDecl.classDescriptor;
     if (classDescriptor.getBaseClass() != null) {
       // Invoke super._$j$init$$w() if we have a base class
       Expr.MethodCall invokeSuperInitWrapper = new Expr.MethodCall(classToken,
@@ -3491,7 +3606,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private Stmt.FunDecl createFromJsonFunc(Stmt.ClassDecl classDecl) {
     Token classToken       = classDecl.name;
-    JactlType instanceType = JactlType.createInstanceType(Utils.listOf(new Expr.Identifier(classToken)));
+    JactlType instanceType = JactlType.createInstanceType(Utils.listOf(new Expr.Identifier(classToken)), jactlContext);
     Token        paramName = classToken.newIdent("json");
     Stmt.VarDecl param     = Utils.createParam(paramName, JactlType.STRING);
     Expr.FunDecl funDecl   = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_FROM_JSON), instanceType, Utils.listOf(param), true, false, true);
@@ -3537,7 +3652,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     final String FLAGS     = "flags";
     Token classToken       = classDecl.name;
     JactlType flagsType    = JactlType.LONG_ARR;
-    JactlType    instanceType = JactlType.createInstanceType(Utils.listOf(new Expr.Identifier(classToken)));
+    JactlType    instanceType = JactlType.createInstanceType(Utils.listOf(new Expr.Identifier(classToken)), jactlContext);
     Token        flagsParam   = classToken.newIdent(FLAGS);
     Stmt.VarDecl flagsVarDecl = Utils.createParam(flagsParam, flagsType);
     Expr.FunDecl funDecl      = Utils.createFunDecl(classToken, classToken.newIdent(Utils.JACTL_INIT_MISSING), instanceType, Utils.listOf(flagsVarDecl), false, false, false);

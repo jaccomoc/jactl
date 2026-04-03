@@ -302,7 +302,10 @@ public class Parser {
     return stmts;
   }
 
-  /**
+  private static final TokenType[] IDENTIFIER_AND_UPPERCASE      = Stream.concat(Stream.of(IDENTIFIER), Stream.of(TOKENS_WITH_UPPERCASE)).toArray(TokenType[]::new);
+  private static final TokenType[] IDENTIFIER_STAR_AND_UPPERCASE = Stream.concat(Stream.of(IDENTIFIER,STAR), Stream.of(TOKENS_WITH_UPPERCASE)).toArray(TokenType[]::new);
+
+                                                                                                             /**
    * # importStmt ::= IMPORT classPath (AS IDENTIFIER)?
    * #              | IMPORT classPath DOT STAR
    * #              | IMPORT packageName DOT STAR
@@ -319,8 +322,8 @@ public class Parser {
         error("Unexpected token '.' after '*'", previous(), false);
       }
       // Can't have '*' after a class path unless a static import
-      Expr.Identifier identifier = isClassPath && !isStatic ? marked(true, () -> identifier(IDENTIFIER))
-                                                            : marked(true, () -> identifier(IDENTIFIER, STAR));
+      Expr.Identifier identifier = isClassPath && !isStatic ? marked(true, () -> context.allowHostAccess ? identifier(IDENTIFIER_AND_UPPERCASE) : identifier(IDENTIFIER))
+                                                            : marked(true, () -> context.allowHostAccess ? identifier(IDENTIFIER_STAR_AND_UPPERCASE) : identifier(IDENTIFIER,STAR));
       if (identifier.identifier.is(STAR)) {
         starCount++;
       }
@@ -333,7 +336,13 @@ public class Parser {
     if (!isStatic && as != null && !Character.isUpperCase(as.getStringValue().charAt(0))) {
       error("Alias name for imported class must start with uppercase letter", as, false);
     }
-    expectOrNull(false, EOL, SEMICOLON);
+    expectOrNull(false, EOF, EOL, SEMICOLON);
+    if (!isClassPath && starCount == 0) {
+      // Check that initial segment looks like a class name (starts with uppercase char)
+      if (!Utils.isValidClassName(((Expr.Identifier)className.get(0)).identifier.getStringValue())) {
+        error("Expecting class name or valid package", className.get(0).location);
+      }
+    }
     return new Stmt.Import(importToken, className, as, isStatic);
   }
 
@@ -558,7 +567,7 @@ public class Parser {
       }
       else {
         if (peekIgnoreEOL().is(IDENTIFIER) && lookahead(() -> className(true) != null)){
-          type = createInstanceType(className(throwIfError));
+          type = createInstanceType(className(throwIfError), context);
         }
         else {
           if (throwIfError) {
@@ -731,7 +740,7 @@ public class Parser {
       return ANY;
     }
     if (type == null && peek().is(IDENTIFIER) && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
-      type = createInstanceType(className(false));   // we have a class name
+      type = createInstanceType(className(false), context);   // we have a class name
     }
     if (type == null) {
       mark.drop();
@@ -1183,7 +1192,7 @@ public class Parser {
       JactlType baseClass      = null;
       if (matchAny(EXTENDS)) {
         baseClassToken = peek();
-        baseClass = marked(true, () -> createClass(className(false)));
+        baseClass = marked(true, () -> createClass(className(false), context));
       }
       else if (peek().is(IDENTIFIER)) {
         unexpected("Expected 'extends' or '{'", false);
@@ -1798,7 +1807,7 @@ public class Parser {
       if (peekIgnoreEolIs(LEFT_PAREN)) {
         Token      leftParen = peekIgnoreEOL();
         List<Expr> args      = arguments();
-        return Utils.createNewInstance(token, type, leftParen, args);
+        return Utils.createNewInstance(context, token, type, leftParen, args);
       }
     }
     if (!peekIgnoreEolIs(LEFT_SQUARE)) {
@@ -2069,8 +2078,8 @@ public class Parser {
     return new Expr.Identifier(identifier);
   }
 
-  private Expr.Identifier identifier(TokenType... tokenTypes) {
-    Token token = expect(tokenTypes);
+  private Expr.Identifier identifier(TokenType... additionalTypes) {
+    Token token = expect(additionalTypes);
     return new Expr.Identifier(token);
   }
 
@@ -2095,7 +2104,7 @@ public class Parser {
     List<Token> path  = new ArrayList<>();
     Marker mark = tokeniser.mark();
     try {
-      while (matchAny(IDENTIFIER)) {
+      while (matchAny(IDENTIFIER_AND_UPPERCASE)) {
         Token token = previous();
         if (Utils.isLowerCase(token.getStringValue())) {
           path.add(token);
@@ -2103,9 +2112,49 @@ public class Parser {
         else {
           if (Utils.isValidClassName(token.getStringValue())) {
             if (!path.isEmpty()) {
-              // We have a possible class path so check for package name
+              // Build package name
               String pkg = path.stream().map(Token::getStringValue).collect(Collectors.joining("."));
-              if (!validatePackageName || pkg.equals(packageName) || context.packageExists(pkg)) {
+              if (context.allowHostAccess) {
+                Marker hostAccessMark = tokeniser.mark();
+                // Check for a host class. We need to parse entire class including nested classes
+                // and then validate against the accessHostClassLookup predicate.
+                Token outerClass = token;
+                List<Token> innerClassPath = new ArrayList();
+                Token lastToken = token;
+                while (peekIgnoreEolIs(DOT)) {
+                  Marker mark2 = tokeniser.mark();
+                  matchAnyIgnoreEOL(DOT);
+                  if (matchAny(IDENTIFIER) && Utils.isValidClassName(previous().getStringValue())) {
+                    lastToken = previous();
+                    innerClassPath.add(lastToken);
+                  }
+                  else {
+                    mark2.rollback();
+                    break;
+                  }
+                }
+                String fullClassName = pkg + "." + Stream.concat(Stream.of(outerClass.getStringValue()), innerClassPath.stream().map(Token::getStringValue)).collect(Collectors.joining("$"));
+                // If not a Jactl package and is a host class
+                if (!context.packageExists(pkg) && context.allowHostClassLookup.test(fullClassName)) {
+                  Expr.ClassPath classPath = new Expr.ClassPath(path.get(0).newIdent(pkg), outerClass.newIdent(String.join(".", outerClass.getStringValue(), innerClassPath.stream().map(Token::getStringValue).collect(Collectors.joining(".")))));
+                  try {
+                    classPath.hostClass = Class.forName(fullClassName);
+                  }
+                  catch (ClassNotFoundException e) {
+                    if (Package.getPackage(pkg) == null) {
+                      error("No such package '" + pkg + "'", token);
+                    }
+                    error("Host class not found: " + fullClassName, lastToken);
+                  }
+                  mark.done(classPath);
+                  return classPath;
+                }
+                // Was not a host class so rollback and continue with standard class path handling
+                hostAccessMark.rollback();
+              }
+              
+              // We have a possible class path so check for package name
+              if (!validatePackageName || pkg.equals(packageName) || context.packageExists(pkg) || (context.allowHostAccess && Package.getPackage(pkg) != null)) {
                 Expr.ClassPath classPath = new Expr.ClassPath(path.get(0).newIdent(pkg), token);
                 mark.done(classPath);
                 return classPath;
@@ -2141,7 +2190,7 @@ public class Parser {
     // Check for lowercase name to check if we have a package name in which case we look for a classpath
     Token next = peek();
     if (next.is(IDENTIFIER) && Utils.isLowerCase(next.getStringValue())) {
-      Expr classPath = classPath(throwIfError);
+      Expr classPath = classPath(false);
       if (classPath == null) {
         unexpected("Expected valid class name", throwIfError, IDENTIFIER);
       }
@@ -2793,7 +2842,7 @@ public class Parser {
           expect(IDENTIFIER);
           exprs.add(new Expr.Identifier(previous()));
         }
-        expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, createInstanceType(exprs));
+        expr = exprs.size() == 1 ? exprs.get(0) : new Expr.TypeExpr(exprs.get(0).location, createInstanceType(exprs, context));
       }
       else if (peek().is(UNDERSCORE)) {
         expr = identifier(UNDERSCORE);

@@ -20,7 +20,7 @@ package io.jactl.compiler;
 import io.jactl.*;
 import io.jactl.resolver.Resolver;
 import io.jactl.runtime.BuiltinFunctions;
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 
 import java.io.BufferedReader;
 import java.io.PrintStream;
@@ -64,11 +64,11 @@ public class Compiler {
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
-    ClassDescriptor descriptor = parseAndResolve(source, jactlContext, className, packageName, bindings);
+    JactlClassDescriptor descriptor = parseAndResolve(source, jactlContext, className, packageName, bindings);
     return compileClass(descriptor, jactlContext);
   }
 
-  public static ClassDescriptor parseAndResolve(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
+  public static JactlClassDescriptor parseAndResolve(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
     if (className == null) {
       className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     }
@@ -79,7 +79,7 @@ public class Compiler {
     return script.classDescriptor;
   }
 
-  private static JactlScript compileClass(ClassDescriptor descriptor, JactlContext jactlContext) {
+  private static JactlScript compileClass(JactlClassDescriptor descriptor, JactlContext jactlContext) {
     Analyser analyser = new Analyser(jactlContext);
     Stmt.ClassDecl script = descriptor.getUserData(Stmt.ClassDecl.class);
     analyser.analyseClass(script);

@@ -17,15 +17,14 @@
 
 package io.jactl;
 
-import io.jactl.runtime.ClassDescriptor;
+import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.FunctionDescriptor;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 
-import static io.jactl.JactlType.ANY;
-import static io.jactl.JactlType.INSTANCE;
+import static io.jactl.JactlType.*;
 
 /**
  * Class that analyses the AST for any final tweaks needed before generating the byte code.
@@ -353,7 +352,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If we have a wrapper then resolve it. Note that it has an embedded FunDecl for us, so we will
     // get analysed as part of its statement block. This means we need to check next time not to
-    // analyse wrapper if we are already analysiing it.
+    // analyse wrapper if we are already analysing it.
     if (funDecl.wrapper != null && getFunctions().peek() != funDecl.wrapper) {
       expr = funDecl.wrapper;
     }
@@ -431,7 +430,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // type has async initialisers then we are therefore potentially async...
     if (expr.expr != null && !expr.expr.isNull() && !expr.expr.type.is(expr.returnType)) {
       if (expr.returnType.is(INSTANCE) && !expr.expr.type.isCastableTo(expr.returnType)) {
-        FunctionDescriptor initMethod = expr.returnType.getClassDescriptor().getMethod(Utils.JACTL_INIT);
+        FunctionDescriptor initMethod = expr.returnType.getJactlClassDescriptor().getMethod(Utils.JACTL_INIT);
         if (initMethod.isAsync) {
           async(expr);
         }
@@ -493,12 +492,19 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
     expr.dimensions.forEach(this::analyse);
+    if (expr.callInit != null) {
+      analyse(expr.callInit);
+    }
+    else if (expr.args != null) {
+      expr.args.forEach(this::analyse);
+    }
     return null;
   }
 
   @Override public Void visitClassPath(Expr.ClassPath expr) { return null; }
 
   @Override public Void visitTypeExpr(Expr.TypeExpr expr)   {
+    asyncIfTypeIsAsync(expr, expr.typeVal);
     return null;
   }
 
@@ -517,8 +523,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.offset);
 
     // If converting to an instance then we are async if initialiser is async
-    if (expr.varType.is(INSTANCE)) {
-      FunctionDescriptor initMethod = expr.varType.getClassDescriptor().getInitMethod();
+    JactlType varType = expr.varType;
+    if (varType.is(INSTANCE) && !varType.isHostClass()) {
+      FunctionDescriptor initMethod = varType.getJactlClassDescriptor().getInitMethod();
       if (initMethod.isAsync == null) {
         assert isFirstPass;
         addAsyncCallDependency(currentFunction(), expr, initMethod);
@@ -574,7 +581,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitBlock(Stmt.Block stmt) {
     analyse(stmt.stmts);
-    int nonGlobals = (int)stmt.variables.values().stream().filter(v -> !v.isGlobal).count();
+    //int nonGlobals = (int)stmt.variables.values().stream().filter(v -> !v.isGlobal).count();
     return null;
   }
 
@@ -654,12 +661,16 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void asyncIfTypeIsAsync(Expr expr) {
-    if (!expr.type.is(INSTANCE)) { return; }
-    ClassDescriptor classDescriptor = expr.type.getClassDescriptor();
-    if (classDescriptor.getInitMethod() == null) {
+    asyncIfTypeIsAsync(expr, expr.type);
+  }
+  
+  private void asyncIfTypeIsAsync(Expr expr, JactlType type) {
+    if (!type.is(INSTANCE,CLASS)) { return; }
+    JactlClassDescriptor classDescriptor = type.isHostClass() ? null : type.getJactlClassDescriptor();
+    if (classDescriptor == null || classDescriptor.getInitMethod() == null) {
       return;
     }
-    ClassDescriptor existingClass   = context.getClassDescriptor(classDescriptor.getInternalName());
+    JactlClassDescriptor existingClass = context.getClassDescriptor(classDescriptor.getInternalName());
     if (existingClass != null) {
       if (existingClass.getInitMethod().isAsync) {
         async(expr);
