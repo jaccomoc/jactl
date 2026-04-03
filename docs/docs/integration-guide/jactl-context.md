@@ -98,6 +98,36 @@ JactlContext context = JactlContext.create()
                                    .build();
 ```
 
+## allowHostAccess(boolean allowed)
+
+This method, in combination with the `allowHostClassLookup()` method, allows you to permit scripts to perform
+operations on host classes (i.e. classes from the Java application in which Jactl is embedded).
+If this method sets this flag to `true` then when an unknown class is encountered, Jactl will pass the
+name of the class to the predicate configured with `allowHostClassLookup()` and if the predicate returns true,
+Jactl will permit method calls on instances of that class and permit static method calls on that class.
+
+:::warning
+Use of these flags will weaken the sandbox security built-in to Jactl.
+They should only be used with trusted host classes and trusted scripts.
+:::
+
+## allowHostClassLookup(Predicate&lt;String&gt; predicate)
+
+If the `allowHostAccess()` flag is set, then setting a predicate using this method allows you to control
+exactly which host classes are permitted to be accessed from Jactl scripts.
+The predicate will be passed a Java class name (e.g. `a.b.c.SomeClass`) and the predicate should return `true`
+if access is allowed or `false` otherwise.
+Note that inner classes will be passed using Java syntax (e.g. `a.b.c.SomeClass$InnerClass`).
+
+## allowHostClassLookup(boolean allowed)
+
+You can pass `true` as the value for this method if you are running trusted scripts and want to allow access to
+**all** host classes.
+
+:::warning
+This should be used only when you have complete trust in the scripts you are running.
+:::
+
 ## debug(int level)
 
 The `debug()` method allows you to enable debug output.

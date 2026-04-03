@@ -55,6 +55,7 @@ module.exports = {
             'integration-guide/compiling-classes',
             'integration-guide/script-location',
             'integration-guide/jactl-execution-environment',
+            'integration-guide/script-engine-jsr223',
             'integration-guide/checkpoints',
             'integration-guide/adding-new-functions',
             'integration-guide/adding-new-builtins',
