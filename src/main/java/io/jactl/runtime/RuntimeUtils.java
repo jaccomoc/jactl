@@ -1900,8 +1900,8 @@ public class RuntimeUtils {
     }
 
     if (!isDot && parent.getClass().isArray()) {
-      value = castTo(parent.getClass().getComponentType(), value, captureStackTrace, source, offset);
-      storeArrayField(parent, field, value, source, offset);
+      Object storedValue = castTo(parent.getClass().getComponentType(), value, captureStackTrace, source, offset);
+      storeArrayField(parent, field, storedValue, source, offset);
       return value;
     }
 

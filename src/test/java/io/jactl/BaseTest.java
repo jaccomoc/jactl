@@ -322,7 +322,7 @@ public class BaseTest {
     }
     assertTrue(o1 != null, "Expected " + o1 + " but was " + o2);
     assertTrue(o2 != null, "Expected " + o1 + " but was " + o2);
-    if (!o1.getClass().isArray() && !o2.getClass().isArray()) {
+    if (!o1.getClass().isArray() || !o2.getClass().isArray()) {
       assertEquals(o1, o2);
       return;
     }

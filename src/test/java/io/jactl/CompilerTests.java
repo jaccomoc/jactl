@@ -2150,23 +2150,23 @@ class CompilerTests extends BaseTest {
   }
 
   @Test public void percentEquals(){
-    test("byte x = 18; x %= 7L", (byte)4);
+    test("byte x = 18; x %= 7L", (long)4);
     test("byte x = 18; x %= 7; x", (byte)4);
-    test("byte x = 18; (x %= 7) + (x %= 3)", (byte)5);
+    test("byte x = 18; (x %= 7) + (x %= 3)", 5);
     test("byte x = 18; (x %= 7) + (x %= 3); x", (byte)1);
     test("byte x = 18; x %= 7; x", (byte)4);
-    test("int x = 18; x %= 7L", 4);
+    test("int x = 18; x %= 7L", 4L);
     test("int x = 18; x %= 7; x", 4);
     test("int x = 18; (x %= 7) + (x %= 3)", 5);
     test("int x = 18; (x %= 7) + (x %= 3); x", 1);
     test("int x = 18; x %= 7; x", 4);
     test("def x = 18; x %= 7L", 4L);
     test("def x = 18; x %= 7; x", 4);
-    test("var x = 18; x %= 7L", 4);
+    test("var x = 18; x %= 7L", 4L);
     test("var x = 18; x %= 7; x", 4);
     test("long x = 18; x %= 7L", 4L);
     test("long x = 18; x %= 7; x", 4L);
-    test("double x = 18; x %= 7L", 4.0D);
+    test("double x = 18; x %= 7L", 4D);
     test("double x = 18; x %= 7; x", 4.0D);
     test("Decimal x = 18.0; x %= 7L", "#4.0");
     test("Decimal x = 18.0; x %= 7; x", "#4.0");
@@ -2925,5 +2925,41 @@ class CompilerTests extends BaseTest {
     testError("def x; x.a && true", "null value");
     test("def x; true || x.a", true);
     test("def x; false && x.a", false);
+  }
+  
+  @Test public void compileNumericCalculations() {
+    //debugLevel = 1;
+    doTest("class PRandom {\n" +
+         "  long[] s = _init(timestamp())\n" +
+         "\n" +
+         "  final long[] _init(long seed) {\n" +
+         "    long z = seed\n" +
+         "    long[] s = new long[4]\n" +
+         "    for (int i = 0; i < 4; i++) {\n" +
+         "      z += 0x9e3779b97f4a7c15L\n" +
+         "      long x = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L\n" +
+         "      x = (x ^ (x >>> 27)) * 0x94d049bb133111ebL\n" +
+         "      s[i] = x ^ (x >>> 31)\n" +
+         "    }\n" +
+         "    return s\n" +
+         "  }\n" +
+         "\n" +
+         "  final long nextLong() {\n" +
+         "    long result = rotateLeft(s[1] * 5, 7) * 9\n" +
+         "    long t = s[1] << 17\n" +
+         "    s[2] ^= s[0]; s[3] ^= s[1]\n" +
+         "    s[1] ^= s[2]; s[0] ^= s[3]\n" +
+         "    s[2] ^= t\n" +
+         "    s[3] = rotateLeft(s[3], 45)\n" +
+         "    return result\n" +
+         "  }\n" +
+         "  \n" +
+         "  final long nextInt(int bound) { nextLong() % bound }\n" +
+         "  \n" +
+         "  static long rotateLeft(long i, int distance) {\n" +
+         "    return (i << distance) | (i >>> -distance)\n" +
+         "  }\n" +
+         "}\n" +
+         "new PRandom().nextLong() != 0", true);
   }
 }

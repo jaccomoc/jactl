@@ -79,6 +79,7 @@ public class LocalTypes {
     return stack.peek();
   }
 
+  // Get type of second element on stack
   public JactlType peekType2() {
     StackEntry top = stack.pop();
     JactlType result = stack.peek().type;

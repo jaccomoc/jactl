@@ -296,7 +296,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
+        if (type != null && (type.isPrimitive() || type.is(CLASS))
             || expr instanceof Expr.Literal || expr instanceof Expr.MapLiteral
             || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
@@ -1004,56 +1004,62 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Field access operators
-    if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
-      expr.isConst = false;
-      expr.type = ANY;     // default type
-      if (!expr.left.type.is(ANY)) {
-        // Do some level of validation
-        if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
-          expr.type = getFieldType(expr.left, expr.operator, expr.right, false).first;
-          if (expr.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
-            expr.type = expr.type.boxed();         // since with ?. and ?[ we could get null
+    switch (expr.operator.getType()) {
+      case DOT:
+      case QUESTION_DOT:
+      case LEFT_SQUARE:
+      case QUESTION_SQUARE: {
+        expr.isConst = false;
+        expr.type = ANY;     // default type
+        if (!expr.left.type.is(ANY)) {
+          // Do some level of validation
+          if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
+            expr.type = getFieldType(expr.left, expr.operator, expr.right, false).first;
+            if (expr.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
+              expr.type = expr.type.boxed();         // since with ?. and ?[ we could get null
+            }
+            // Field access if we have an instance and if field is not a function since some functions might be
+            // static functions or built-in functions which aren't fields from a GETFIELD point of view.
+            expr.isFieldAccess = expr.left.type.is(INSTANCE) && expr.right instanceof Expr.Literal && !expr.type.is(FUNCTION);
           }
-          // Field access if we have an instance and if field is not a function since some functions might be
-          // static functions or built-in functions which aren't fields from a GETFIELD point of view.
-          expr.isFieldAccess = expr.left.type.is(INSTANCE) && expr.right instanceof Expr.Literal && !expr.type.is(FUNCTION);
+          // '[' and '?['
+          if (expr.operator.is(LEFT_SQUARE, QUESTION_SQUARE) && !expr.left.type.is(MAP, LIST, ARRAY, ITERATOR, STRING, INSTANCE)) {
+            error("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
+          }
         }
-        // '[' and '?['
-        if (expr.operator.is(LEFT_SQUARE, QUESTION_SQUARE) && !expr.left.type.is(MAP, LIST, ARRAY, ITERATOR, STRING, INSTANCE)) {
-          error("Invalid object type (" + expr.left.type + ") for indexed (or field) access", expr.operator);
+
+        // For arrays, we don't currently support auto-creation
+        if (expr.left.type.is(ARRAY)) {
+          expr.createIfMissing = false;
         }
+
+        // Since we now know we are doing a map/list lookup we know what parent type should
+        // be so if parent type was ANY we can change to Map/List. This is used when field
+        // path is an lvalue to create missing fields/elements of the correct type.
+        if (expr.left.type.is(ANY) && expr.createIfMissing) {
+          expr.left.type = expr.operator.is(DOT, QUESTION_DOT) ? MAP : LIST;
+        }
+        return expr.type;
       }
 
-      // For arrays, we don't currently support auto-creation
-      if (expr.left.type.is(ARRAY)) {
-        expr.createIfMissing = false;
+      case INSTANCE_OF:
+      case BANG_INSTANCE_OF: {
+        assert expr.right instanceof Expr.TypeExpr;
+        expr.isConst = false;
+        return expr.type = BOOLEAN;
       }
 
-      // Since we now know we are doing a map/list lookup we know what parent type should
-      // be so if parent type was ANY we can change to Map/List. This is used when field
-      // path is an lvalue to create missing fields/elements of the correct type.
-      if (expr.left.type.is(ANY) && expr.createIfMissing) {
-        expr.left.type = expr.operator.is(DOT, QUESTION_DOT) ? MAP : LIST;
+      case AS: {
+        assert expr.right instanceof Expr.TypeExpr;
+        expr.isConst = false;
+        Expr.TypeExpr typeExpr = (Expr.TypeExpr) expr.right;
+        if (!expr.left.type.isConvertibleTo(typeExpr.typeVal)) {
+          error("Cannot coerce from " + expr.left.type + " to " + typeExpr.typeVal, expr.operator);
+        }
+        return expr.type = typeExpr.typeVal;
       }
-      return expr.type;
     }
-
-    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
-      assert expr.right instanceof Expr.TypeExpr;
-      expr.isConst = false;
-      return expr.type = BOOLEAN;
-    }
-
-    if (expr.operator.is(AS)) {
-      assert expr.right instanceof Expr.TypeExpr;
-      expr.isConst = false;
-      Expr.TypeExpr typeExpr = (Expr.TypeExpr)expr.right;
-      if (!expr.left.type.isConvertibleTo(typeExpr.typeVal)) {
-        error("Cannot coerce from " + expr.left.type + " to " + typeExpr.typeVal, expr.operator);
-      }
-      return expr.type = typeExpr.typeVal;
-    }
-
+    
     // Special check for ++/-- operators to get a better error message
     if (expr.originalOperator != null && expr.originalOperator.is(PLUS_PLUS,MINUS_MINUS) && !expr.left.type.isNumeric() && !expr.left.type.is(ANY)) {
       error("Non-numeric operand for " + expr.originalOperator.getChars(), expr.operator);
@@ -1584,12 +1590,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         jactlContext.globalVars.put(name, varDecl);
       }
     }
-    expr.type = resolve(expr.identifierExpr);
-    if (expr.type.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
+    JactlType varType = resolve(expr.identifierExpr);
+    if (varType.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
       error("Cannot assign to function", expr.identifierExpr.location);
     }
     resolve(expr.expr);
-    checkTypeConversion(expr.expr, expr.type, false, expr.operator);
+    checkTypeConversion(expr.expr, varType, false, expr.operator);
     if (expr.operator.is(QUESTION_EQUAL)) {
       // If using ?= have to allow for null being result
       expr.type = ANY;
@@ -1605,7 +1611,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Track last type assigned so we can supply better completions in Intellij plugin
     expr.identifierExpr.varDecl.lastAssignedType = expr.expr.type;
 
-    return expr.type;
+    // Result of assignment is actually type of the original value not the converted value
+    return expr.type = expr.expr.type;
   }
 
   /**
@@ -1636,7 +1643,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitVarOpAssign(Expr.VarOpAssign expr) {
-    expr.type = resolve(expr.identifierExpr);
+    JactlType varType = resolve(expr.identifierExpr);
     if (expr.identifierExpr.isSuper()) {
       error("Cannot assign to 'super'", expr.identifierExpr.location);
     }
@@ -1649,8 +1656,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolve(expr.expr);
 
-    if (!expr.expr.type.isCastableTo(expr.type)) {
-      error("Cannot convert from type of right-hand side (" + expr.expr.type + ") to " + expr.type, expr.operator);
+    if (!expr.expr.type.isCastableTo(varType)) {
+      error("Cannot convert from type of right-hand side (" + expr.expr.type + ") to " + varType, expr.operator);
     }
 
     if (expr.identifierExpr.varDecl.isConstVar) {
@@ -1660,7 +1667,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Flag variable as non-final since it has had an assignment to it
     expr.identifierExpr.varDecl.isFinal = false;
 
-    return expr.type;
+    return expr.type = expr.expr.type;
   }
 
   @Override public JactlType visitNoop(Expr.Noop expr) {
@@ -1702,7 +1709,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
 
-    return expr.type;
+    return expr.type = expr.expr.type;
   }
 
   private JactlType resolveFieldAssignment(Expr expr, Expr parent, Expr field, Expr valueExpr, Token accessType) {
@@ -1723,6 +1730,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (binaryParent.createIfMissing) {
         binaryParent.type = dottedAcess ? MAP : LIST;
       }
+    }
+
+    if (valueExpr instanceof Expr.Binary && parent.type.is(ARRAY)) {
+      Expr.Binary binaryExpr = (Expr.Binary)valueExpr;
+
+      // Set the type of the Noop in our binary expression to match the array element type
+      boolean couldBeNull = accessType.is(QUESTION_SQUARE);
+      binaryExpr.left.type = couldBeNull ? parent.type.getArrayElemType().boxed() : parent.type.getArrayElemType();
+      binaryExpr.left.couldBeNull = couldBeNull;
     }
     
     resolve(valueExpr);

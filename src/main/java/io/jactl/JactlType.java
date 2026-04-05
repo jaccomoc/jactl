@@ -513,77 +513,108 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType result(JactlType type1, Token operator, JactlType type2) {
     type1 = type1.getDelegate().unboxed();
     type2 = type2.getDelegate().unboxed();
-    if (operator.is(TokenType.IN, TokenType.BANG_IN)) {
-      if (!type2.is(ANY,STRING,LIST,MAP,ITERATOR)) {
-        throw new CompileError("Type " + type2 + " is not a valid type for right-hand side of '" + operator.getChars() + "'", operator);
-      }
-      return BOOLEAN;
-    }
-
-    // Boolean comparisons
-    if (operator.is(TokenType.EQUAL_EQUAL, TokenType.BANG_EQUAL, TokenType.TRIPLE_EQUAL,
-                    TokenType.BANG_EQUAL_EQUAL, TokenType.AMPERSAND_AMPERSAND, TokenType.PIPE_PIPE))   { return BOOLEAN; }
-    if (operator.getType().isBooleanOperator()) {
-      if (type1.is(ANY) || type2.is(ANY))                              { return BOOLEAN; }
-      if (type1.isNumeric() && type2.isNumeric())                      { return BOOLEAN; }
-      if (type1.is(BOOLEAN,STRING) && type1.equals(type2))             { return BOOLEAN; }
-      throw new CompileError("Type " + type1 + " cannot be compared to " + type2, operator);
-    }
-
-    if (operator.is(TokenType.COMPARE)) {
-      if (type1.is(BOOLEAN,STRING,ANY,LIST) &&
-          type2.is(BOOLEAN,STRING,ANY,LIST) &&
-          (type1.is(ANY,type2) || type2.is(ANY,type1)))        { return INT;     }
-      if (type1.isNumeric() && type2.isNumeric())              { return INT;     }
-      if (type1.isNumeric() && type2.is(ANY))                  { return INT;     }
-      if (type2.isNumeric() && type1.is(ANY))                  { return INT;     }
-      throw new CompileError("Cannot compare objects of type " + type1 + " and " + type2, operator);
-    }
-
-    if (operator.is(TokenType.EQUAL_GRAVE, TokenType.BANG_GRAVE)) {
-      if (type1.is(ANY,STRING) && type2.is(ANY,STRING))           { return BOOLEAN;   }
-      throw new CompileError("Cannot do regex match on types " + type1 + " and " + type2, operator);
-    }
-
-    if (operator.is(TokenType.PLUS, TokenType.MINUS) && type1.is(ANY))                 { return ANY;       }
-    if (operator.is(TokenType.PLUS) && type1.is(STRING))                    { return STRING;    }
-    if (operator.is(TokenType.PLUS) && type1.is(LIST, ITERATOR))             { return LIST;      }
-    if (operator.is(TokenType.PLUS) && type1.is(MAP) && type2.is(MAP, ANY))  { return MAP;       }
-    if (operator.is(TokenType.MINUS) && type1.is(MAP) && type2.is(MAP, LIST, ANY)) { return MAP; }
-    if (operator.is(TokenType.PLUS, TokenType.MINUS) && type1.is(MAP)) {
-      throw new CompileError("Cannot " + (operator.is(TokenType.PLUS) ? "add" : "subtract") + " " + type2
-                             + (operator.is(TokenType.PLUS) ? " to " : " from ") + "Map", operator);
-    }
-
-    if (operator.is(TokenType.STAR) && type1.is(STRING) &&
-        (type2.isNumeric() || type2.is(ANY)))                     { return STRING;    }
-
-    if (operator.is(TokenType.LEFT_SQUARE, TokenType.QUESTION_SQUARE) &&
-        type1.is(STRING))                                         { return STRING;    }
-
-    if (operator.is(TokenType.EQUAL, TokenType.QUESTION_COLON, TokenType.QUESTION)) {
-      if (type1 == type2)                                         { return type1; }
-      if (!type2.isCastableTo(type1)) {
-        throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
-      }
-      if (operator.is(TokenType.QUESTION)) {
-        if (type1.is(ANY) || type2.is(ANY))                       { return ANY; }
-        JactlType result = resultType(type1, type2);
-        if (result != null) {
-          return result;
+    
+    switch (operator.getType()) {
+      case IN:
+      case BANG_IN: {
+        if (!type2.is(ANY,STRING,LIST,MAP,ITERATOR)) {
+          throw new CompileError("Type " + type2 + " is not a valid type for right-hand side of '" + operator.getChars() + "'", operator);
         }
-        throw new CompileError("Types for both true and false cases must be compatible", operator);
+        return BOOLEAN;
       }
-      return type1;
-    }
 
-    if (operator.is(TokenType.DOUBLE_LESS_THAN)) {
-      if (type1.is(LIST,ITERATOR))                             { return LIST; }
-      if (type1.is(ANY))                                       { return ANY;  }
-    }
+      case EQUAL_EQUAL:
+      case BANG_EQUAL:
+      case TRIPLE_EQUAL:
+      case BANG_EQUAL_EQUAL:
+      case AMPERSAND_AMPERSAND:
+      case PIPE_PIPE: {
+        return BOOLEAN;
+      }
+      
+      case BANG:
+      case LESS_THAN:
+      case LESS_THAN_EQUAL:
+      case GREATER_THAN:
+      case GREATER_THAN_EQUAL:
+      case INSTANCE_OF:
+      case BANG_INSTANCE_OF:
+      case QUESTION_QUESTION: {
+        // Boolean comparisons
+        if (type1.is(ANY) || type2.is(ANY))                              { return BOOLEAN; }
+        if (type1.isNumeric() && type2.isNumeric())                      { return BOOLEAN; }
+        if (type1.is(BOOLEAN,STRING) && type1.equals(type2))             { return BOOLEAN; }
+        throw new CompileError("Type " + type1 + " cannot be compared to " + type2, operator);
+      }
 
-    if (operator.getType().isBooleanOperator()) {
-      return BOOLEAN;
+      case COMPARE: {
+        if (type1.is(BOOLEAN,STRING,ANY,LIST) &&
+            type2.is(BOOLEAN,STRING,ANY,LIST) &&
+            (type1.is(ANY,type2) || type2.is(ANY,type1)))        { return INT;     }
+        if (type1.isNumeric() && type2.isNumeric())              { return INT;     }
+        if (type1.isNumeric() && type2.is(ANY))                  { return INT;     }
+        if (type2.isNumeric() && type1.is(ANY))                  { return INT;     }
+        throw new CompileError("Cannot compare objects of type " + type1 + " and " + type2, operator);
+      }
+      
+      case EQUAL_GRAVE:
+      case BANG_GRAVE: {
+        if (type1.is(ANY,STRING) && type2.is(ANY,STRING))           { return BOOLEAN;   }
+        throw new CompileError("Cannot do regex match on types " + type1 + " and " + type2, operator);
+      }
+
+      case PLUS:
+      case MINUS: {
+        if (type1.is(ANY))                 { return ANY;       }
+        if (operator.is(TokenType.PLUS)) {
+          if (type1.is(STRING))                     { return STRING;    }
+          if (type1.is(LIST, ITERATOR))             { return LIST;      }
+          if (type1.is(MAP) && type2.is(MAP, ANY))  { return MAP;       }
+        }
+        if (operator.is(TokenType.MINUS) && type1.is(MAP) && type2.is(MAP, LIST, ANY)) { 
+          return MAP;
+        }
+        if (type1.is(MAP)) {
+          throw new CompileError("Cannot " + (operator.is(TokenType.PLUS) ? "add" : "subtract") + " " + type2
+                                 + (operator.is(TokenType.PLUS) ? " to " : " from ") + "Map", operator);
+        }
+        break;
+      }
+      
+      case STAR: {
+        if (type1.is(STRING) && (type2.isNumeric() || type2.is(ANY)))  { return STRING;    }
+        break;
+      }
+        
+      case LEFT_SQUARE:
+      case QUESTION_SQUARE: {
+        if (type1.is(STRING))                                         { return STRING;    }
+        break;
+      }
+        
+      case EQUAL:
+      case QUESTION_COLON:
+      case QUESTION: {
+        if (type1 == type2)                                         { return type1; }
+        if (!type2.isCastableTo(type1)) {
+          throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
+        }
+        if (operator.is(TokenType.QUESTION)) {
+          if (type1.is(ANY) || type2.is(ANY))                       { return ANY; }
+          JactlType result = resultType(type1, type2);
+          if (result != null) {
+            return result;
+          }
+        throw new CompileError("Types for both true and false cases must be compatible", operator);
+        }
+        return type1;
+      }
+
+      case DOUBLE_LESS_THAN: {
+        if (type1.is(LIST,ITERATOR))                             { return LIST; }
+        if (type1.is(ANY))                                       { return ANY;  }
+        break;
+      }
     }
 
     // Only numeric operations left so must have numeric (or ANY) operands
@@ -591,18 +622,24 @@ public class JactlType extends JactlUserDataHolder {
     checkIsNumeric(type2, "right", operator);
 
     // Check for bit manipulation operations which only work on int/byte/long values
-    if (operator.getType().isBitOperator()) {
-      if (!type1.is(BYTE,INT,LONG,ANY)) {
-        throw new CompileError("Left-hand operand for '" + operator.getChars() + "' must be int, byte, or long", operator);
+    switch (operator.getType()) {
+      case AMPERSAND: case AMPERSAND_EQUAL: case PIPE: case PIPE_EQUAL:
+      case ACCENT: case ACCENT_EQUAL: case GRAVE: case DOUBLE_LESS_THAN:
+      case DOUBLE_LESS_THAN_EQUAL: case DOUBLE_GREATER_THAN:
+      case DOUBLE_GREATER_THAN_EQUAL: case TRIPLE_GREATER_THAN:
+      case TRIPLE_GREATER_THAN_EQUAL: {
+        if (!type1.is(BYTE,INT,LONG,ANY)) {
+          throw new CompileError("Left-hand operand for '" + operator.getChars() + "' must be int, byte, or long", operator);
+        }
+        if (!type2.is(BYTE,INT,LONG,ANY)) {
+          throw new CompileError("Right-hand operand for '" + operator.getChars() + "' must be int, byte, or long", operator);
+        }
+        if (operator.getType().isBitShift()) { return type1;  }  // Result of bit shift is always type on lhs
+        if (type1.is(ANY) || type2.is(ANY))  { return ANY;    }
+        return type1.is(LONG) || type2.is(LONG) ? LONG :
+               type1.is(INT)  || type2.is(INT)  ? INT :
+               BYTE;
       }
-      if (!type2.is(BYTE,INT,LONG,ANY)) {
-        throw new CompileError("Right-hand operand for '" + operator.getChars() + "' must be int, byte, or long", operator);
-      }
-      if (operator.getType().isBitShift()) { return type1;  }  // Result of bit shift is always type on lhs
-      if (type1.is(ANY) || type2.is(ANY))  { return ANY;    }
-      return type1.is(LONG) || type2.is(LONG) ? LONG :
-             type1.is(INT)  || type2.is(INT)  ? INT :
-             BYTE;
     }
 
     if (type1.is(type2))                { return type1.unboxed(); }

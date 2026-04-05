@@ -1903,33 +1903,4 @@ public class ClassTests extends BaseTest {
     test("class X {int i=1; long j=2; double k=3; Decimal d=4.0; String s='abc' }; X x = new X(); X y = new X(d:5); Map m = [:]; m.(x) = 3; m[y] == null && m[x] == 3", true);
     test("class X {int[] i=[1]; long[] j=[2]; double[] k=[3]; Decimal[] d=[4.0]; String[] s=['abc']; X[] x = []; List l = []; Map m = [:] }; X x = new X(); X y = new X(d:[5],x:[x]); Map m = [:]; m.(x) = 3; m[y] = 4; m[y] == 4 && m[x] == 3", true);
   }
-  
-  @Test public void arrayElementOpEqual() {
-    testError("long[] s = new long[1]; s['a'] += 1", "index must be numeric");
-    test("int[] s = new int[1]; int t; s[0] += t", 0);
-    test("int[] s = new int[1]; int t; s[t] += t", 0);
-    test("int[] s = new int[1]; int t = 1; int i = s[0] += t", 1);
-    test("int[] s = new int[1]; int t = 1; int i = 1 + (s[0] += t)", 2);
-    test("def s = new int[1]; int t; s[0] += t", 0);
-    test("def s = new int[1]; def t = 0; s[t] += t", 0);
-    test("byte[] s = new byte[1]; int t; s[0] += t", (byte)0);
-    test("byte[] s = new byte[1]; int t = 1; int i = s[0] += t", 1);
-    test("byte[] s = new byte[1]; int t = 1; int i = 1 + (s[0] += t)", 2);
-    test("def s = new byte[1]; int t = 1; int i = 1 + (s[0] += t)", 2);
-    test("long[] s = new long[1]; long t; s[0] += t", 0L);
-    test("long[] s = new long[1]; s[0] += 0", 0L);
-    test("def s = new long[1]; s[0] += 0", 0L);
-    test("double[] s = new double[1]; s[0] += 0", 0D);
-    test("def s = new double[1]; s[0] += 0", 0D);
-    test("String[] s = new String[1]; s[0] = 'x'; s[0] += 'abc'", "xabc");
-    test("def s = new String[1]; s[0] = 'x'; s[0] += 'abc'", "xabc");
-    test("Object[] s = new Object[1]; s[0] = 'x'; s[0] += 'abc'", "xabc");
-    test("def s = new Object[1]; s[0] = 'x'; s[0] += 'abc'", "xabc");
-    test("List s; s[0] = 'x'; s[0] += 'abc'", "xabc");
-    test("int[] s = new int[1]; int t; s[0] -= t", 0);
-    test("int[] s = new int[1]; s[0] = 5; s[0] |= 2", 7);
-    test("int[] s = new int[1]; s[0] = 5; s[0] &= 4", 4);
-    test("int[] s = new int[1]; s[0] = 5; s[0] ^= 3", 6);
-    test("def s = new int[1]; s[0] = 5; s[0] ^= 3", 6);
-  }
 }

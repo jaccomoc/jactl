@@ -642,12 +642,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  expect(1);
 
                  Runnable storeValue = () -> {
-                   // If conditional assign then we know by now whether we have a null value or not
-                   // so we don't need to check again when checking for type conversion
-                   convertTo(expr.identifierExpr.type, null, false, expr.expr.location);
                    if (expr.isResultUsed) {
                      dupVal();
                    }
+                   // If conditional assign then we know by now whether we have a null value or not
+                   // so we don't need to check again when checking for type conversion
+                   convertTo(expr.identifierExpr.type, null, false, expr.expr.location);
                    storeVar(expr.identifierExpr.varDecl);
                    if (expr.isResultUsed) {
                      // Need to box if primitive because when we don't do the assign due to NullError
@@ -687,10 +687,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       // Normal assignment
       compile(expr.expr);
-      convertTo(expr.type, expr.expr, true, expr.expr.location);
       if (expr.isResultUsed) {
         dupVal();
       }
+      convertTo(expr.identifierExpr.type, expr.expr, true, expr.expr.location);
       storeVar(expr.identifierExpr.varDecl);
     }
 
@@ -716,10 +716,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     loadVar(expr.identifierExpr.varDecl);
     compile(expr.expr);
-    convertTo(expr.type, expr.expr, true, expr.expr.location);
     if (expr.isResultUsed) {
       dupVal();
     }
+    convertTo(expr.identifierExpr.type, expr.expr, true, expr.expr.location);
     storeVar(expr.identifierExpr.varDecl);
     return null;
   }
@@ -753,6 +753,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else
       if (expr.parent.type.is(ARRAY)) {
         storeArrayValue(expr);
+        if (!expr.isResultUsed) {
+          popVal();
+        }
       }
       else {
         box();
@@ -822,51 +825,121 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitFieldOpAssign(Expr.FieldOpAssign expr) {
     compile(expr.parent);
 
-    boolean   isField   = expr.parent.type.is(INSTANCE,CLASS) && expr.field instanceof Expr.Literal;
-    String    fieldName = isField ? ((Expr.Literal)expr.field).value.getStringValue() : null;
-    JactlType fieldType = isField ? getFieldType(expr.parent.type, fieldName) : null;
-    boolean   isStatic  = isField ? expr.parent.type.getClassDescriptor().getStaticField(fieldName) != null : false;
+    JactlType parentType       = expr.parent.type;
+    boolean   isField          = parentType.is(INSTANCE, CLASS) && expr.field instanceof Expr.Literal;
+    String    fieldName        = isField ? ((Expr.Literal)expr.field).value.getStringValue() : null;
+    JactlType fieldType        = isField ? getFieldType(parentType, fieldName) : null;
+    boolean   isStatic         = isField ? parentType.getClassDescriptor().getStaticField(fieldName) != null : false;
+    boolean   afterResultUsed  = expr.isResultUsed && !expr.isPreIncOrDec;
+    boolean   beforeResultUsed = expr.isResultUsed && expr.isPreIncOrDec;
     check(!isStatic, "cannot assign to static field");
-    if (isField) {
-      if (isStatic) {
-        popVal();
+    if (!isField) {
+      if (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE)) {
+        JactlType arrayElemType = parentType.getArrayElemType();
+
+        compile(expr.field);
+        unbox();
+        dupVal2();
+        if (expr.accessType.is(QUESTION_SQUARE)) {
+          int parentIsNull = stack.allocateSlot(BOOLEAN);
+          emitIf(true, IfTest.IS_NULL,
+                 () -> {
+                   swap();
+                   dupVal();
+                 },
+                 () -> {
+                   // Parent is null so load null and then evaluate the expression
+                   loadConst(true);
+                   storeLocal(parentIsNull);
+                   popVal();    // pop field
+                   popVal();    // pop parent
+                   expect(2);
+                   loadNull(arrayElemType.boxed());
+                 },
+                 () -> {
+                   // Not null parent
+                   loadConst(false);
+                   storeLocal(parentIsNull);
+                   swap();
+                   expect(3);
+                   loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
+                   box();
+                   expect(3);
+                 });
+          int temp = -1;
+          if (beforeResultUsed) {
+            saveAndDupVal();
+          }
+          compile(expr.expr);
+          temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
+          emitIf(false, IfTest.IS_TRUE,
+                 () -> loadLocal(parentIsNull),
+                 () -> {
+                   popVal();
+                   popVal();
+                   popVal();
+                 },
+                 () -> {
+                   Utils.storeArrayElement(mv, arrayElemType);
+                   popType(3);
+                 });
+          if (temp != -1) {
+            loadLocal(temp);
+          }
+          stack.freeSlot(temp);
+          stack.freeSlot(parentIsNull);
+        }
+        else {
+          if (expr.parent.couldBeNull) {
+            swap();
+            throwIfNull("Cannot load field from null parent", expr.parent.location);
+            swap();
+          }
+          loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
+          int temp = beforeResultUsed ? saveAndDupVal() : -1;
+          compile(expr.expr);
+          temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
+          expect(3);
+          Utils.storeArrayElement(mv, arrayElemType);
+          popType(3);
+          if (temp != -1) {
+            loadLocal(temp);
+          }
+          stack.freeSlot(temp);
+        }
+        return null;
       }
-      else {
-        dupVal();  // Need extra parent ref for later storing of field
-      }
-      loadClassField(expr.parent.type.getInternalName(), fieldName, fieldType, isStatic);
+    }
+    
+    // This is field access rather than array access
+    if (isStatic) {
+      popVal();
+    }
+    compile(expr.field);
+    box();
+
+    // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
+    // and field again to get value and to store value so duplicate parent and field on
+    // stack to get:
+    // ... parent, field, parent, field
+    if (isStatic) {
+      dupVal();
     }
     else {
-      if (expr.parent.type.is(ARRAY,STRING) && expr.accessType.is(LEFT_SQUARE,QUESTION_SQUARE)) {
-        dupVal();
-        compile(expr.field);
-        box();
-        swap();
-        loadArrayField(expr.parent, expr.accessType, expr.field);
-      }
-      else {
-        compile(expr.field);
-        box();
-
-        // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
-        // and field again to get value and to store value so duplicate parent and field on
-        // stack to get:
-        // ... parent, field, parent, field
-        dupVal2();
-
-        // Load the field value onto stack (or suitable default value).
-        // Default value will be based on the type of the rhs of the += or -= etc.
-        loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
-      }
+      dupVal2();
+    }
+    
+    if (isField) {
+      loadClassField(parentType.getInternalName(), fieldName, fieldType, isStatic);
+    }
+    else {
+      loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
     }
 
     // If we need the before value as the result then stash in a temp for later
     int temp = -1;
-    boolean beforeResultUsed = expr.isResultUsed && expr.isPreIncOrDec;
     if (beforeResultUsed) {
-      dupVal();
-      temp = stack.allocateSlot(expr.type);
-      storeLocal(temp);
+      temp = saveAndDupVal();
     }
 
     // Evaluate expression
@@ -875,17 +948,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If we need the after result and we have an instance field then stash in a temp for later retrieval.
     // For non-instance fields, the storeField() will return the after result so no need for a temp.
-    boolean afterResultUsed = expr.isResultUsed && !expr.isPreIncOrDec;
     if (afterResultUsed && isField) {
-      dupVal();
-      temp = stack.allocateSlot(expr.type);
-      storeLocal(temp);
+      temp = saveAndDupVal();
     }
     
     // Store result back into field
     if (isField) {
       // Parent ref still on stack from earlier
-      storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+      storeClassField(parentType.getInternalName(), fieldName, fieldType, false);
     }
     else {
       storeParentFieldValue(expr.accessType);
@@ -903,6 +973,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private int saveAndDupVal() {
+    int slot = stack.allocateSlot(peek());
+    dupVal();
+    storeLocal(slot);
+    return slot;
+  }
+  
   private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT, PERCENT_PERCENT};
   private static Map<TokenType,String> methodNames = Utils.mapOf(PLUS, RuntimeUtils.PLUS_METHOD,
                                                             MINUS, RuntimeUtils.MINUS_METHOD,
@@ -1080,358 +1157,273 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    //= Handle ?: default operator
-    if (expr.operator.is(QUESTION_COLON)) {
-      if (expr.isAsync) {
-        stack.convertStackToLocals();
-      }
-      if (expr.left.type.isPrimitive()) {
-        compile(expr.left);
-        convertTo(expr.type, null, false, expr.left.location);
-      }
-      else {
-        tryCatch(NullError.class, true,
-                 () -> { compile(expr.left); popType(); pushType(ANY); },
-                 // pop exception and push null if we get a NullError:
-                 () -> { popVal(); loadConst(null); });
-        Label isNull = new Label();
-        expect(1);
-        mv.visitInsn(DUP);
-        mv.visitJumpInsn(IFNULL, isNull);
-        Label end = new Label();
-        convertTo(expr.type, expr.left, true, expr.left.location);
-        popType();
-        mv.visitJumpInsn(GOTO, end);
-        mv.visitLabel(isNull);   // :isNull
-        mv.visitInsn(POP);
-        compile(expr.right);
-        convertTo(expr.type, expr.right, true, expr.right.location);
-        mv.visitLabel(end);         // :end
-      }
-      return null;
-    }
-
-    //= String concatenation
-    if (expr.operator.is(PLUS) && expr.type.is(STRING)) {
-      compile(expr.left);
-      if (couldBeNull(expr.left)) {
-        throwIfNull("Left hand side of String concatenation is null", expr.left.location);
-      }
-      convertToString();
-      compile(expr.right);
-      convertToString();
-      invokeMethod(String.class, "concat", String.class);
-      return null;
-    }
-
-    //= List + list
-    if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
-      compile(expr.left);
-      compile(expr.right);
-      expect(2);
-      box();
-      loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
-      invokeMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
-      return null;
-    }
-
-    //= List << elem
-    if (expr.operator.is(DOUBLE_LESS_THAN) && expr.type.is(LIST)) {
-      compile(expr.left);
-      compile(expr.right);
-      expect(2);
-      box();
-      loadConst(expr.originalOperator != null && expr.originalOperator.is(DOUBLE_LESS_THAN_EQUAL));
-      invokeMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
-      return null;
-    }
-
-    //= Map +/- map
-    if (expr.operator.is(PLUS, MINUS) && expr.type.is(MAP)) {
-      compile(expr.left);
-      compile(expr.right);
-      expect(2);
-      loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL, MINUS_EQUAL));
-      if (expr.operator.is(PLUS)) {
-        invokeMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
-      }
-      else {
-        loadLocation(expr.operator);
-        invokeMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
-      }
-      return null;
-    }
-
-    //= String repeat
-    if (expr.operator.is(STAR) && expr.type.is(STRING)) {
-      compile(expr.left);
-      convertToString();
-      compile(expr.right);
-      convertTo(INT, expr.right, true, expr.right.location);
-      expect(2);
-      loadConst(!insideTryCatchNullError());
-      loadConst(classCompiler.source);
-      loadConst(expr.operator.getOffset());
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.STRING_REPEAT, String.class, Integer.TYPE, boolean.class, String.class, Integer.TYPE);
-      return null;
-    }
-
-    //= Check for Map/List/Array/String/Instance/Class access via field/index
-    if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
-      if (expr.isFieldAccess) {
-        compileFieldAccess(expr);
+    switch(expr.operator.getType()) {
+      case QUESTION_COLON: {
+        if (expr.isAsync) {
+          stack.convertStackToLocals();
+        }
+        if (expr.left.type.isPrimitive()) {
+          compile(expr.left);
+          convertTo(expr.type, null, false, expr.left.location);
+        }
+        else {
+          tryCatch(NullError.class, true,
+                   () -> {
+                     compile(expr.left);
+                     popType();
+                     pushType(ANY);
+                   },
+            // pop exception and push null if we get a NullError:
+                   () -> {
+                     popVal();
+                     loadConst(null);
+                   });
+          Label isNull = new Label();
+          expect(1);
+          mv.visitInsn(DUP);
+          mv.visitJumpInsn(IFNULL, isNull);
+          Label end = new Label();
+          convertTo(expr.type, expr.left, true, expr.left.location);
+          popType();
+          mv.visitJumpInsn(GOTO, end);
+          mv.visitLabel(isNull);   // :isNull
+          mv.visitInsn(POP);
+          compile(expr.right);
+          convertTo(expr.type, expr.right, true, expr.right.location);
+          mv.visitLabel(end);         // :end
+        }
         return null;
       }
 
-      compile(expr.left);
-      JactlType leftType = expr.left.type;
-      if (leftType.is(INSTANCE, CLASS)) {
-        if (expr.right instanceof Expr.Literal) {
-          // We know the type so get the field/method directly.
-          // Note: we know that Resolver has already checked for valid field/method name.
-          String               name = literalString(expr.right);
-          if (leftType.isHostClass()) {
-            // For host class field access must return a wrapper handle to the method of that name
-            // NOTE: we have checked for existence of method of this name during Resolve phase
-            if (leftType.is(CLASS)) {
-              loadConst(leftType);
-              loadConst(name);
-              loadLocation(expr.right.location);
-              invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_HOST_STATIC_WRAPPER, Class.class, String.class, String.class, int.class);
-            }
-            else {
-              // We alread have parent on stack (if instance method)
-              loadConst(name);
-              loadNull(OBJECT_ARR);
-              loadLocation(expr.right.location);
-              invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_WRAPPER, Object.class, String.class, Object[].class, String.class, int.class);
-            }
-            return null;
-          }
-          JactlClassDescriptor clss = leftType.getJactlClassDescriptor();
+      case DOUBLE_LESS_THAN: {
+        if (expr.type.is(LIST)) {
+          //= List << elem
+          compile(expr.left);
+          compile(expr.right);
+          expect(2);
+          box();
+          loadConst(expr.originalOperator != null && expr.originalOperator.is(DOUBLE_LESS_THAN_EQUAL));
+          invokeMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
+          return null;
+        }
+        break;
+      }
 
-          // Check for inner class
-          JactlClassDescriptor innerClass = clss.getInnerClass(name);
-          if (innerClass != null) {
+      case PLUS:
+      case MINUS: {
+        if (expr.operator.is(PLUS)) {
+          //= String concatenation
+          if (expr.type.is(STRING)) {
+            compile(expr.left);
+            if (couldBeNull(expr.left)) {
+              throwIfNull("Left hand side of String concatenation is null", expr.left.location);
+            }
+            convertToString();
+            compile(expr.right);
+            convertToString();
+            invokeMethod(String.class, "concat", String.class);
             return null;
           }
 
-          // Look for a static field
-          JactlType fieldType = clss.getStaticField(name);
-          if (fieldType != null) {
-            Object fieldValue = clss.getStaticFieldValue(name);
-            loadConst(fieldValue);
-            convertTo(fieldType, expr, fieldValue == null, expr.right.location);
-            popType();
-            pushType(fieldType);
+          //= List + list
+          if (expr.type.is(LIST)) {
+            compile(expr.left);
+            compile(expr.right);
+            expect(2);
+            box();
+            loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
+            invokeMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
+            return null;
+          }
+        }
+
+        //= Map +/- map
+        if (expr.type.is(MAP)) {
+          compile(expr.left);
+          compile(expr.right);
+          expect(2);
+          loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL, MINUS_EQUAL));
+          if (expr.operator.is(PLUS)) {
+            invokeMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
           }
           else {
-            // We need to find the method handle for the given method
-            FunctionDescriptor method = clss.getMethod(name);
-            if (method == null) {
-              // Look for builtin method
-              method = classCompiler.context.getFunctions().lookupMethod(leftType.is(CLASS) ? leftType : clss.getInstanceType(), name);
-            }
-            check(method != null, "could not find method or field called ", name, " for ", leftType);
-            // We want the handle to the wrapper method.
-            loadWrapperHandle(method, expr);
+            loadLocation(expr.operator);
+            invokeMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
           }
           return null;
         }
+        break;
+      }
 
-        // Can't determine method/field at compile time so fall through to runtime lookup
-        if (leftType.is(CLASS)) {
-          // Need to tell runtime what class it is so load class onto stack
-          loadConst(leftType);
+      case STAR: {
+        //= String repeat
+        if (expr.type.is(STRING)) {
+          compile(expr.left);
+          convertToString();
+          compile(expr.right);
+          convertTo(INT, expr.right, true, expr.right.location);
+          expect(2);
+          loadConst(!insideTryCatchNullError());
+          loadConst(classCompiler.source);
+          loadConst(expr.operator.getOffset());
+          invokeMethod(RuntimeUtils.class, RuntimeUtils.STRING_REPEAT, String.class, Integer.TYPE, boolean.class, String.class, Integer.TYPE);
+          return null;
         }
+        break;
       }
 
-      box();
-      if (expr.isCallee && expr.operator.is(DOT, QUESTION_DOT)) {
-        compile(expr.right);
-        loadMethodOrField(expr.operator);
+      case DOT:
+      case QUESTION_DOT:
+      case LEFT_SQUARE:
+      case QUESTION_SQUARE: {
+        return fieldAccess(expr);
       }
-      else {
-        if (expr.createIfMissing) {
-          // If we are lvalue and auto-creating fields then at this point we don't know the type of the parent
-          // or the field we are going to create (otherwise we would have set the isFieldAccess flag which handles
-          // the case for auto-creation of instance fields where we know the types up front). We have to assume
-          // that we might end up invoking an instance initialiser here since parent could be an instance and since
-          // we don't know the type we assume that the initialiser could be async so we wrap in appropriate code to
-          // handle async invocation.
-          if (classCompiler.context.autoCreateAsync()) {
-            // This calls loadOrCreateInstanceField which creates way too much code.
-            // If we really want to support async during auto-create (which I don't think is needed)
-            // then we need to rewrite to generate less code.
-            emitIf(true,  // loadOrCreateInstanceField uses try/catch to protect against errors setting field
-                   IfTest.IS_TRUE,
-                   () -> { dupVal(); isInstanceOf(JactlObject.class); },
-                   () -> loadOrCreateInstanceField(expr),
-                   () -> {
-                     compile(expr.right);
-                     loadOrCreateField(expr.operator, expr.type, expr.right.location);
-                   });
-          }
-          else {
-            // No async allowed so can revert to loadOrCreateField for all types
-            compile(expr.right);
-            loadOrCreateField(expr.operator, expr.type, expr.right.location);
-          }
+
+      case INSTANCE_OF:
+      case BANG_INSTANCE_OF: {
+        //= instanceOf and !instanceOf
+        assert expr.right instanceof Expr.TypeExpr;
+        compile(expr.left);
+        box();
+        isInstanceOf(((Expr.TypeExpr) expr.right).typeVal.boxed());
+        if (expr.operator.is(BANG_INSTANCE_OF)) {
+          _booleanNot();
+        }
+        return null;
+      }
+
+      case IN:
+      case BANG_IN: {
+        //= in and !in
+        compile(expr.left);
+        box();
+        compile(expr.right);
+        expect(2);
+        loadConst(expr.operator.is(IN));   // true for in, false for !in
+        loadLocation(expr.operator);
+        invokeMethod(RuntimeUtils.class, "inOperator", Object.class, Object.class, boolean.class, String.class, int.class);
+        return null;
+      }
+
+      case AS: {
+        //= as
+        compile(expr.left);
+        if (expr.type.is(BOOLEAN)) {
+          convertToBoolean(false);
+          return null;
+        }
+        if (expr.type.is(STRING)) {
+          convertToStringOrNull();
+          return null;
+        }
+        if (peek().unboxed().is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) && expr.type.is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) ||
+            peek().is(ANY, INSTANCE, MAP, LIST) && expr.type.is(INSTANCE)) {
+          convertTo(expr.type, expr.left, !peek().isPrimitive(), expr.location);
+          return null;
+        }
+        expect(1);
+        box();
+        if (expr.type.is(ARRAY)) {
+          loadConst(expr.type);
+          loadConst(!insideTryCatchNullError());
+          loadLocation(expr.location);
+          invokeMethod(RuntimeUtils.class, RuntimeUtils.AS_ARRAY, Object.class, Class.class, boolean.class, String.class, int.class);
+          checkCast(expr.type);
         }
         else {
-          if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
-            loadArrayField(expr.left, expr.operator, expr.right);
-          }
-          else {
-            compile(expr.right);
-            loadField(expr.operator, null, expr.right.location);
-          }
+          loadConst(!insideTryCatchNullError());
+          loadLocation(expr.location);
+          invokeMethod(RuntimeUtils.class, "as" + Utils.capitalise(expr.type.typeName()), Object.class, boolean.class, String.class, int.class);
         }
-      }
-      return null;
-    }
-
-    //= instanceOf and !instanceOf
-    if (expr.operator.is(INSTANCE_OF, BANG_INSTANCE_OF)) {
-      assert expr.right instanceof Expr.TypeExpr;
-      compile(expr.left);
-      box();
-      isInstanceOf(((Expr.TypeExpr) expr.right).typeVal.boxed());
-      if (expr.operator.is(BANG_INSTANCE_OF)) {
-        _booleanNot();
-      }
-      return null;
-    }
-
-    //= in and !in
-    if (expr.operator.is(IN, BANG_IN)) {
-      compile(expr.left);
-      box();
-      compile(expr.right);
-      expect(2);
-      loadConst(expr.operator.is(IN));   // true for in, false for !in
-      loadLocation(expr.operator);
-      invokeMethod(RuntimeUtils.class, "inOperator", Object.class, Object.class, boolean.class, String.class, int.class);
-      return null;
-    }
-
-    //= as
-    if (expr.operator.is(AS)) {
-      compile(expr.left);
-      if (expr.type.is(BOOLEAN)) {
-        convertToBoolean(false);
         return null;
       }
-      if (expr.type.is(STRING)) {
-        convertToStringOrNull();
-        return null;
-      }
-      if (peek().unboxed().is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) && expr.type.is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) ||
-          peek().is(ANY, INSTANCE, MAP, LIST) && expr.type.is(INSTANCE)) {
-        convertTo(expr.type, expr.left, !peek().isPrimitive(), expr.location);
-        return null;
-      }
-      expect(1);
-      box();
-      if (expr.type.is(ARRAY)) {
-        loadConst(expr.type);
-        loadConst(!insideTryCatchNullError());
-        loadLocation(expr.location);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.AS_ARRAY, Object.class, Class.class, boolean.class, String.class, int.class);
-        checkCast(expr.type);
-      }
-      else {
-        loadConst(!insideTryCatchNullError());
-        loadLocation(expr.location);
-        invokeMethod(RuntimeUtils.class, "as" + Utils.capitalise(expr.type.typeName()), Object.class, boolean.class, String.class, int.class);
-      }
-      return null;
-    }
-
-    //= Boolean && or ||
-    if (expr.operator.is(AMPERSAND_AMPERSAND, PIPE_PIPE)) {
-      compile(expr.left);
-      convertToBoolean(false, expr.left);
-
-      // Look for short-cutting && or || (i.expr. if we already know the result
-      // we don't need to evaluate right-hand side)
-      if (expr.operator.is(AMPERSAND_AMPERSAND)) {
-        // Handle case for &&
-        Label isFalse = new Label();
-        Label end     = new Label();
-        expect(1);
-        mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
-        popType();
-        compile(expr.right);
-        convertToBoolean(false, expr.right);
-        expect(1);
-        mv.visitJumpInsn(IFEQ, isFalse);
-        popType();
-        _loadConst(true);
-        mv.visitJumpInsn(GOTO, end);
-        mv.visitLabel(isFalse);            // :isFalse
-        _loadConst(false);
-        mv.visitLabel(end);                // :end
-      }
-      else {
-        // Handle case for ||
-        Label end    = new Label();
-        Label isTrue = new Label();
-        expect(1);
-        mv.visitJumpInsn(IFNE, isTrue);
-        popType();
-        compile(expr.right);
-        convertToBoolean(false, expr.right);
-        expect(1);
-        popType();
-        mv.visitJumpInsn(IFNE, isTrue);
-        _loadConst(false);
-        mv.visitJumpInsn(GOTO, end);
-        mv.visitLabel(isTrue);
-        _loadConst(true);
-        mv.visitLabel(end);
-      }
-      pushType(BOOLEAN);
-      if (expr.type.isBoxed()) {
-        box();
-      }
-      return null;
-    }
-
-    // Compare operator <=>
-    if (expr.operator.is(COMPARE)) {
-      JactlType maxType = Utils.maxNumericType(expr.left.type, expr.right.type);
-      if (maxType != null || expr.left.type.is(BOOLEAN) && expr.right.type.is(BOOLEAN)) {
-        // If we have numeric types or boolean
-        if (maxType == null || maxType.is(BYTE,INT)) {
-          // There is no ICMP instruction so we turn int and boolean into longs so we can use LCMP
-          maxType = LONG;
-        }
+      
+      case AMPERSAND_AMPERSAND:
+      case PIPE_PIPE: {
+        //= Boolean && or ||
         compile(expr.left);
-        convertTo(maxType, expr.left, false, expr.left.location);
-        compile(expr.right);
-        convertTo(maxType, expr.right, false, expr.right.location);
-        expect(2);
-        switch (maxType.getType()) {
-          case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
-          case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);                break;
-          case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);                break;
-          default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
+        convertToBoolean(false, expr.left);
+        
+        // Look for short-cutting && or || (i.expr. if we already know the result
+        // we don't need to evaluate right-hand side)
+        if (expr.operator.is(AMPERSAND_AMPERSAND)) {
+          // Handle case for &&
+          Label isFalse = new Label();
+          Label end     = new Label();
+          expect(1);
+          mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
+          popType();
+          compile(expr.right);
+          convertToBoolean(false, expr.right);
+          expect(1);
+          mv.visitJumpInsn(IFEQ, isFalse);
+          popType();
+          _loadConst(true);
+          mv.visitJumpInsn(GOTO, end);
+          mv.visitLabel(isFalse);            // :isFalse
+          _loadConst(false);
+          mv.visitLabel(end);                // :end
+        }
+        else {
+          // Handle case for ||
+          Label end    = new Label();
+          Label isTrue = new Label();
+          expect(1);
+          mv.visitJumpInsn(IFNE, isTrue);
+          popType();
+          compile(expr.right);
+          convertToBoolean(false, expr.right);
+          expect(1);
+          popType();
+          mv.visitJumpInsn(IFNE, isTrue);
+          _loadConst(false);
+          mv.visitJumpInsn(GOTO, end);
+          mv.visitLabel(isTrue);
+          _loadConst(true);
+          mv.visitLabel(end);
+        }
+        pushType(BOOLEAN);
+        if (expr.type.isBoxed()) {
+          box();
         }
         return null;
       }
-      else {
-        compile(expr.left);
-        box();
-        compile(expr.right);
-        expect(2);
-        box();
-        loadLocation(expr.operator);
-        invokeMethod(RuntimeUtils.class, "compareTo", Object.class, Object.class, String.class, int.class);
-        return null;
+
+      case COMPARE: {
+        // Compare operator <=>
+        JactlType maxType = Utils.maxNumericType(expr.left.type, expr.right.type);
+        if (maxType != null || expr.left.type.is(BOOLEAN) && expr.right.type.is(BOOLEAN)) {
+          // If we have numeric types or boolean
+          if (maxType == null || maxType.is(BYTE,INT)) {
+            // There is no ICMP instruction so we turn int and boolean into longs so we can use LCMP
+            maxType = LONG;
+          }
+          compile(expr.left);
+          convertTo(maxType, expr.left, false, expr.left.location);
+          compile(expr.right);
+          convertTo(maxType, expr.right, false, expr.right.location);
+          expect(2);
+          switch (maxType.getType()) {
+            case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
+            case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);                break;
+            case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);                break;
+            default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
+          }
+          return null;
+        }
+        else {
+          compile(expr.left);
+          box();
+          compile(expr.right);
+          expect(2);
+          box();
+          loadLocation(expr.operator);
+          invokeMethod(RuntimeUtils.class, "compareTo", Object.class, Object.class, String.class, int.class);
+          return null;
+        }
       }
     }
-
+      
     // For remaining comparison operators
     if (expr.operator.isBooleanOperator()) {
       // If we don't have primitive types then delegate to RuntimeUtils.booleanOp
@@ -1596,41 +1588,132 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
-  /**
-   * Load field from array
-   * <p>Expect on stack: ...parent</p>
-   * @param parent     the array
-   * @param accessType the access type ('[' or '?[')
-   * @param field      the field to load
-   */
-  private void loadArrayField(Expr parent, Token accessType, Expr field) {
-    JactlType parentType = peek();
-    // Check for array type for efficient access
-    if (accessType.is(LEFT_SQUARE)) {
-      if (couldBeNull(parent)) {
-        throwIfNull("Cannot retrieve field from null parent", accessType);
+  private Void fieldAccess(Expr.Binary expr) {
+    if (expr.isFieldAccess) {
+      compileFieldAccess(expr);
+      return null;
+    }
+
+    compile(expr.left);
+    JactlType leftType = expr.left.type;
+    if (leftType.is(INSTANCE, CLASS)) {
+      if (expr.right instanceof Expr.Literal) {
+        // We know the type so get the field/method directly.
+        // Note: we know that Resolver has already checked for valid field/method name.
+        String               name = literalString(expr.right);
+        if (leftType.isHostClass()) {
+          // For host class field access must return a wrapper handle to the method of that name
+          // NOTE: we have checked for existence of method of this name during Resolve phase
+          if (leftType.is(CLASS)) {
+            loadConst(leftType);
+            loadConst(name);
+            loadLocation(expr.right.location);
+            invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_HOST_STATIC_WRAPPER, Class.class, String.class, String.class, int.class);
+          }
+          else {
+            // We alread have parent on stack (if instance method)
+            loadConst(name);
+            loadNull(OBJECT_ARR);
+            loadLocation(expr.right.location);
+            invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_WRAPPER, Object.class, String.class, Object[].class, String.class, int.class);
+          }
+          return null;
+        }
+        JactlClassDescriptor clss = leftType.getJactlClassDescriptor();
+
+        // Check for inner class
+        JactlClassDescriptor innerClass = clss.getInnerClass(name);
+        if (innerClass != null) {
+          return null;
+        }
+
+        // Look for a static field
+        JactlType fieldType = clss.getStaticField(name);
+        if (fieldType != null) {
+          Object fieldValue = clss.getStaticFieldValue(name);
+          loadConst(fieldValue);
+          convertTo(fieldType, expr, fieldValue == null, expr.right.location);
+          popType();
+          pushType(fieldType);
+        }
+        else {
+          // We need to find the method handle for the given method
+          FunctionDescriptor method = clss.getMethod(name);
+          if (method == null) {
+            // Look for builtin method
+            method = classCompiler.context.getFunctions().lookupMethod(leftType.is(CLASS) ? leftType : clss.getInstanceType(), name);
+          }
+          check(method != null, "could not find method or field called ", name, " for ", leftType);
+          // We want the handle to the wrapper method.
+          loadWrapperHandle(method, expr);
+        }
+        return null;
       }
-      // Get the index
-      compile(field);
-      loadIndexField(parent, accessType, field, parentType);
+
+      // Can't determine method/field at compile time so fall through to runtime lookup
+      if (leftType.is(CLASS)) {
+        // Need to tell runtime what class it is so load class onto stack
+        loadConst(leftType);
+      }
+    }
+
+    box();
+    if (expr.isCallee && expr.operator.is(DOT, QUESTION_DOT)) {
+      compile(expr.right);
+      loadMethodOrField(expr.operator);
     }
     else {
-      // QUESTION_SQUARE
-      if (couldBeNull(parent)) {
-        // If parent is null then value is null
-        dupVal();
-        compile(field);   // must always compile index expression in case there are side-effects
-        emitIf(false, IfTest.IS_NULL, () -> swap(),
-               () -> { popVal(); },
-               () -> loadIndexField(parent, accessType, field, parentType));
+      if (expr.createIfMissing) {
+        // If we are lvalue and auto-creating fields then at this point we don't know the type of the parent
+        // or the field we are going to create (otherwise we would have set the isFieldAccess flag which handles
+        // the case for auto-creation of instance fields where we know the types up front). We have to assume
+        // that we might end up invoking an instance initialiser here since parent could be an instance and since
+        // we don't know the type we assume that the initialiser could be async so we wrap in appropriate code to
+        // handle async invocation.
+        if (classCompiler.context.autoCreateAsync()) {
+          // This calls loadOrCreateInstanceField which creates way too much code.
+          // If we really want to support async during auto-create (which I don't think is needed)
+          // then we need to rewrite to generate less code.
+          emitIf(true,  // loadOrCreateInstanceField uses try/catch to protect against errors setting field
+                 IfTest.IS_TRUE,
+                 () -> { dupVal(); isInstanceOf(JactlObject.class); },
+                 () -> loadOrCreateInstanceField(expr),
+                 () -> {
+                   compile(expr.right);
+                   loadOrCreateField(expr.operator, expr.type, expr.right.location);
+                 });
+        }
+        else {
+          // No async allowed so can revert to loadOrCreateField for all types
+          compile(expr.right);
+          loadOrCreateField(expr.operator, expr.type, expr.right.location);
+        }
       }
       else {
-        compile(field);
-        loadIndexField(parent, accessType, parent, parentType);
+        JactlType parentType = expr.left.type;
+        if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
+          if (expr.left.couldBeNull) {
+            if (expr.operator.is(QUESTION_SQUARE)) {
+              emitIf(false, IfTest.IS_NULL, 
+                     () -> dupVal(),
+                     () -> { popVal(); loadNull(expr.type); },
+                     () -> { compile(expr.right); loadIndexField(expr.left, expr.operator, expr.right, parentType); });
+              return null;
+            }
+            throwIfNull("Cannot retrieve field from null parent", expr.left.location);
+          }
+          compile(expr.right);
+          loadIndexField(expr.left, expr.operator, expr.right, parentType);
+        }
+        else {
+          compile(expr.right);
+          loadField(expr.operator, null, expr.right.location);
+        }
       }
     }
+    return null;
   }
-
+  
   private void loadWrapperHandle(FunctionDescriptor method, Expr.Binary expr) {
     // If method is static then we don't need the instance
     if (method.isStaticMethod && expr.left.type.is(INSTANCE)) {
@@ -3051,6 +3134,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return stack.peek().type;
   }
 
+  /**
+   * Return type of second element on stack
+   */
   private JactlType peek2() {
     return stack.peekType2();
   }
@@ -5292,13 +5378,15 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
   /**
    * Store value into given index of an array
-   * <p>Expect to have on stack: ... value
+   * <p>Expect to have on stack: ... value</p>
+   * <p>Leaves original value on stack</p>
    */
   private void storeArrayValue(Expr.FieldAssign expr) {
     if (!expr.accessType.is(LEFT_SQUARE)) {
       error("Field access not supported for Array object", expr.accessType);
     }
     JactlType arrayType = expr.parent.type.getArrayElemType();
+    dupVal();         // save original result if needed
     convertTo(arrayType, expr.expr, true, expr.expr.location);
     compile(expr.parent);
     if (couldBeNull(expr.parent)) {
@@ -5311,9 +5399,6 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
       int    index = value.intValue();
       tryCatch(ArrayIndexOutOfBoundsException.class, false,
                () -> {
-                 if (expr.isResultUsed) {
-                   dupVal();
-                 }
                  loadLocal(parentVar);
                  swap();
                  loadConst(index);
@@ -5363,9 +5448,6 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
                  loadLocal(valueSlot);
                  Utils.storeArrayElement(mv, peek());
                  popType(3);
-                 if (expr.isResultUsed) {
-                   loadLocal(valueSlot);
-                 }
                  stack.freeSlot(valueSlot);
                },
                () -> {
