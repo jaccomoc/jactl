@@ -544,6 +544,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public Expr  field;
     public Token assignmentOperator;
     public Expr  expr;
+    public JactlType fieldType;
     public FieldAssign(Expr parent, Token accessType, Expr field, Token assignmentOperator, Expr expr) {
       this.parent = parent;
       this.accessType = accessType;

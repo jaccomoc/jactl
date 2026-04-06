@@ -399,6 +399,7 @@ class Expr extends JactlUserDataHolder {
     Expr  field;
     Token assignmentOperator;
     Expr  expr;
+    JactlType @fieldType;
   }
 
   /**

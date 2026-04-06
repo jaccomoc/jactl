@@ -1885,12 +1885,16 @@ public class RuntimeUtils {
   }
 
   public static String STORE_PARENT_FIELD_VALUE = "storeParentFieldValue";
-  public static Object storeParentFieldValue(Object parent, Object field, Object value, boolean isDot, boolean captureStackTrace, String source, int offset) {
-    return storeValueParentField(value, parent, field, isDot, captureStackTrace, source, offset);
+  public static Object storeParentFieldValue(Object parent, Object field, Object value, boolean isDot, boolean returnTypeOfField, boolean captureStackTrace, String source, int offset) {
+    return storeValueParentField(value, parent, field, isDot, returnTypeOfField, captureStackTrace, source, offset);
   }
 
   public static String STORE_VALUE_PARENT_FIELD = "storeValueParentField";
   public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, boolean captureStackTrace, String source, int offset) {
+    return storeValueParentField(value, parent, field, isDot, false, captureStackTrace, source, offset);
+  }
+  
+  public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, boolean returnTypeOfField, boolean captureStackTrace, String source, int offset) {
     if (parent instanceof Map) {
       return storeMapField(value, (Map)parent, field, captureStackTrace, source, offset);
     }
@@ -1902,11 +1906,11 @@ public class RuntimeUtils {
     if (!isDot && parent.getClass().isArray()) {
       Object storedValue = castTo(parent.getClass().getComponentType(), value, captureStackTrace, source, offset);
       storeArrayField(parent, field, storedValue, source, offset);
-      return value;
+      return returnTypeOfField ? storedValue : value;
     }
 
     if (parent instanceof JactlObject) {
-      return storeInstanceField(parent, field, value, captureStackTrace, source, offset);
+      return storeInstanceField(parent, field, value, returnTypeOfField, captureStackTrace, source, offset);
     }
 
     if (!(parent instanceof List)) {
@@ -1946,7 +1950,7 @@ public class RuntimeUtils {
     }
   }
 
-  private static Object storeInstanceField(Object parent, Object field, Object value, boolean captureStackTrace, String source, int offset) {
+  private static Object storeInstanceField(Object parent, Object field, Object value, boolean returnTypeOfField, boolean captureStackTrace, String source, int offset) {
     String       fieldName     = field.toString();
     JactlObject jactlObj     = (JactlObject) parent;
     Object       fieldOrMethod = jactlObj._$j$getFieldsAndMethods().get(fieldName);
@@ -1961,9 +1965,9 @@ public class RuntimeUtils {
     }
     try {
       Field fieldRef = (Field) fieldOrMethod;
-      value = castTo(fieldRef.getType(), value, captureStackTrace, source, offset);
-      fieldRef.set(parent, value);
-      return value;
+      Object storedValue = castTo(fieldRef.getType(), value, captureStackTrace, source, offset);
+      fieldRef.set(parent, storedValue);
+      return returnTypeOfField ? storedValue : value;
     }
     catch (IllegalAccessException e) {
       throw new IllegalStateException("Internal error: " + e, e);

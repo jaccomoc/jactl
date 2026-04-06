@@ -654,8 +654,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      // we leave null as the result so we need to box so that type of entire expression
                      // is compatible with use of null
                      box();
-                     popType();
-                     pushType(expr.type);
                    }
                  };
 
@@ -704,12 +702,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         !expr.identifierExpr.varDecl.isGlobal && expr.expr instanceof Expr.Binary) {
       Expr.Binary binary = (Expr.Binary)expr.expr;
       if (binary.right.isConst) {
-        incOrDecVar(true,
+        incOrDecVar(false,
                     expr.operator.is(PLUS_EQUAL, PLUS_PLUS),
                     expr.identifierExpr,
                     binary.right.constValue,
                     expr.isResultUsed,
-                    expr.operator);
+                    expr.operator,
+                    expr.type);
         return null;
       }
     }
@@ -748,6 +747,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         swap();
 
         JactlType fieldType = getFieldType(expr.parent.type, fieldName);
+        convertTo(fieldType, expr.expr, true, expr.expr.location);
         storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
       }
       else
@@ -833,106 +833,87 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean   afterResultUsed  = expr.isResultUsed && !expr.isPreIncOrDec;
     boolean   beforeResultUsed = expr.isResultUsed && expr.isPreIncOrDec;
     check(!isStatic, "cannot assign to static field");
-    if (!isField) {
-      if (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE)) {
-        JactlType arrayElemType = parentType.getArrayElemType();
+    if (!isField && (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE))) {
+      JactlType arrayElemType = parentType.getArrayElemType();
 
-        compile(expr.field);
-        unbox();
-        dupVal2();
-        if (expr.accessType.is(QUESTION_SQUARE)) {
-          int parentIsNull = stack.allocateSlot(BOOLEAN);
-          emitIf(true, IfTest.IS_NULL,
-                 () -> {
-                   swap();
-                   dupVal();
-                 },
-                 () -> {
-                   // Parent is null so load null and then evaluate the expression
-                   loadConst(true);
-                   storeLocal(parentIsNull);
-                   popVal();    // pop field
-                   popVal();    // pop parent
-                   expect(2);
-                   loadNull(arrayElemType.boxed());
-                 },
-                 () -> {
-                   // Not null parent
-                   loadConst(false);
-                   storeLocal(parentIsNull);
-                   swap();
-                   expect(3);
-                   loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
-                   box();
-                   expect(3);
-                 });
-          int temp = -1;
-          if (beforeResultUsed) {
-            saveAndDupVal();
-          }
-          compile(expr.expr);
-          temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
-          emitIf(false, IfTest.IS_TRUE,
-                 () -> loadLocal(parentIsNull),
-                 () -> {
-                   popVal();
-                   popVal();
-                   popVal();
-                 },
-                 () -> {
-                   Utils.storeArrayElement(mv, arrayElemType);
-                   popType(3);
-                 });
-          if (temp != -1) {
-            loadLocal(temp);
-          }
-          stack.freeSlot(temp);
-          stack.freeSlot(parentIsNull);
-        }
-        else {
-          if (expr.parent.couldBeNull) {
-            swap();
-            throwIfNull("Cannot load field from null parent", expr.parent.location);
-            swap();
-          }
-          loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
-          int temp = beforeResultUsed ? saveAndDupVal() : -1;
-          compile(expr.expr);
-          temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
-          expect(3);
-          Utils.storeArrayElement(mv, arrayElemType);
-          popType(3);
-          if (temp != -1) {
-            loadLocal(temp);
-          }
-          stack.freeSlot(temp);
-        }
-        return null;
-      }
-    }
-    
-    // This is field access rather than array access
-    if (isStatic) {
-      popVal();
-    }
-    compile(expr.field);
-    box();
-
-    // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
-    // and field again to get value and to store value so duplicate parent and field on
-    // stack to get:
-    // ... parent, field, parent, field
-    if (isStatic) {
-      dupVal();
-    }
-    else {
+      compile(expr.field);
+      unbox();
       dupVal2();
+      if (expr.accessType.is(QUESTION_SQUARE)) {
+        emitIf(true, false, IfTest.IS_NULL,
+               () -> {
+                 swap();
+                 dupVal();
+               },
+               () -> {
+                 // Null parent
+                 popVal();    // pop parent
+                 popVal();    // pop field
+                 popVal();    // pop field
+                 popVal();    // pop parent
+                 throwNullError("Cannot convert null value into " + expr.type, expr.expr.location);
+               },
+               () -> {
+                 // Not null parent
+                 swap();
+                 expect(3);
+                 loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
+                 box();
+                 expect(3);
+               });
+        int temp = -1;
+        if (beforeResultUsed) {
+          saveAndDupVal();
+        }
+        compile(expr.expr);
+        temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
+        Utils.storeArrayElement(mv, arrayElemType);
+        popType(3);
+        if (temp != -1) {
+          loadLocal(temp);
+        }
+        stack.freeSlot(temp);
+      }
+      else {
+        if (expr.parent.couldBeNull) {
+          swap();
+          throwIfNull("Cannot load field from null parent", expr.parent.location);
+          swap();
+        }
+        loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
+        int temp = beforeResultUsed ? saveAndDupVal() : -1;
+        compile(expr.expr);
+        temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
+        expect(3);
+        Utils.storeArrayElement(mv, arrayElemType);
+        popType(3);
+        if (temp != -1) {
+          loadLocal(temp);
+        }
+        stack.freeSlot(temp);
+      }
+      return null;
     }
     
+    // We have a field or non-array access
     if (isField) {
+      if (isStatic) {
+        popVal();
+      }
+      else {
+        dupVal();
+      }
       loadClassField(parentType.getInternalName(), fieldName, fieldType, isStatic);
     }
     else {
+      compile(expr.field);
+      box();
+
+      // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
+      // and field again to get value and to store value so duplicate parent and field on
+      // stack to get:
+      // ... parent, field, parent, field
+      dupVal2();
       loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
     }
 
@@ -955,10 +936,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Store result back into field
     if (isField) {
       // Parent ref still on stack from earlier
+      convertTo(fieldType, expr.expr, true, expr.location);
       storeClassField(parentType.getInternalName(), fieldName, fieldType, false);
     }
     else {
-      storeParentFieldValue(expr.accessType);
+      storeParentFieldValue(expr.accessType, expr.assignmentOperator.is(PLUS_PLUS,MINUS_MINUS));
       if (!afterResultUsed) {
         popVal();
       }
@@ -1503,7 +1485,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (expr.operator.getType().isBitOperator() && expr.left.type.is(ANY)) {
       // Don't do any conversion yet for bit manipulation ops since if we have ANY we don't know whether
-      // we want to an int or long manipulation yet. We need to box any primitives, however, if result
+      // we want to do an int or long manipulation yet. We need to box any primitives, however, if result
       // is ANY since we are going to pass them to RuntimeUtils a bit later
       box();
     }
@@ -1694,10 +1676,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
           if (expr.left.couldBeNull) {
             if (expr.operator.is(QUESTION_SQUARE)) {
-              emitIf(false, IfTest.IS_NULL, 
-                     () -> dupVal(),
-                     () -> { popVal(); loadNull(expr.type); },
-                     () -> { compile(expr.right); loadIndexField(expr.left, expr.operator, expr.right, parentType); });
+              int temp = saveAndDupVal();   // save parent for null check
+              compile(expr.right);
+              expect(2);
+              _loadLocal(temp);
+              Label ifNotNull = new Label();
+              Label end = new Label();
+              mv.visitJumpInsn(IFNONNULL, ifNotNull);
+              _popVal();
+              _popVal();
+              _loadConst(null);
+              mv.visitJumpInsn(GOTO, end);
+              mv.visitLabel(ifNotNull);     // :ifNotNull
+              expect(2);
+              loadIndexField(expr.left, expr.operator, expr.right, parentType);
+              box();
+              mv.visitLabel(end);           // :end
+              stack.freeSlot(temp);
               return null;
             }
             throwIfNull("Cannot retrieve field from null parent", expr.left.location);
@@ -1775,7 +1770,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                });
       }
       else {
-        swap();
         loadField(operator, null, index.location);
       }
     }
@@ -2865,6 +2859,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     final int opCode; IfTest(int opCode) { this.opCode = opCode; }
   }
   void emitIf(boolean usesTryCatch, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {
+    emitIf(usesTryCatch, true, testInstruction, condition, trueStmts, falseStmts);
+  }
+  
+  void emitIf(boolean usesTryCatch, boolean verifyStacks, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {
     trueStmts  = trueStmts == null ? () -> {} : trueStmts;
     falseStmts = falseStmts == null ? () -> {} : falseStmts;
     
@@ -2896,16 +2894,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     LocalTypes trueState = stack;
     stack = savedState;
     falseStmts.run();
-    // Make sure that both branches leave stack the same
-    check(stack.stackTypesEqual(trueState), "Stack for true/false branches differ:\n true=", trueState, "\n false=", stack);
-    // If there are differences about which stack elements are really on the stack and which ones are in locals
-    // then make the false branch match the true branch
-    if (!stack.stacksEqual(trueState)) {
-      check(stack.stacksAreMostlyEqual(1, trueState) && (trueState.peek().isStack() || stack.peek().isStack()),
-            "Stack for true/false branches differ by more than one entry:\n true=", trueState, "\n false=", stack);
+    if (verifyStacks) {
+      // Make sure that both branches leave stack the same
+      check(stack.stackTypesEqual(trueState), "Stack for true/false branches differ:\n true=", trueState, "\n false=", stack);
+      // If there are differences about which stack elements are really on the stack and which ones are in locals
+      // then make the false branch match the true branch
+      if (!stack.stacksEqual(trueState)) {
+        check(stack.stacksAreMostlyEqual(1, trueState) && (trueState.peek().isStack() || stack.peek().isStack()),
+              "Stack for true/false branches differ by more than one entry:\n true=", trueState, "\n false=", stack);
+      }
+      stack.makeSameAs(trueState, 1);
+      check(stack.localsEqual(trueState), "locals differ between true and false branches:\n true  = ", trueState, "\n false = ", stack);
     }
-    stack.makeSameAs(trueState, 1);
-    check(stack.localsEqual(trueState), "locals differ between true and false branches:\n true  = ", trueState, "\n false = ", stack);
     mv.visitLabel(end);                   // :end
   }
 
@@ -3292,7 +3292,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void loadNull(JactlType type) {
     _loadConst(null);
-    pushType(type);
+    pushType(type.boxed());
   }
 
   private void loadNullContinuation() {
@@ -3825,7 +3825,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void incOrDec(boolean isPrefix, boolean isInc, Expr expr, boolean isResultUsed, Token operator) {
     if (expr instanceof Expr.Identifier) {
-      incOrDecVar(isPrefix, isInc, (Expr.Identifier)expr, 1, isResultUsed, operator);
+      incOrDecVar(!isPrefix, isInc, (Expr.Identifier)expr, 1, isResultUsed, operator, expr.type);
     }
     else {
       compile(expr);
@@ -3849,18 +3849,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   /**
    * Increment or decrement variable by given amount.
    * Used for --,++ and for += and -= operations
-   * @param isPrefix          whether we are a prefix or postfix -- or ++
+   * @param isPostfix         true for postfix -- or ++ and false prefix --/++ and for any +=, -= etc operations
+   *                          where we want the result after the operation to be the resulting value
    * @param isInc             whether we are incrementing/adding or decrementing/subtracting
    * @param identifierExpr    the Expr.Identifier for the local variable
    * @param amount            the amount to inc/dec or null if amount is already on the stack
    * @param isResultUsed      whether the result is used after the inc/dec
    * @param operator          operator
+   * @param type              the type of the result
    */
-  private void incOrDecVar(boolean isPrefix, boolean isInc, Expr.Identifier identifierExpr, Object amount, boolean isResultUsed, Token operator) {
+  private void incOrDecVar(boolean isPostfix, boolean isInc, Expr.Identifier identifierExpr, Object amount, boolean isResultUsed, Token operator, JactlType type) {
     Expr.VarDecl varDecl = identifierExpr.varDecl;
     // If postfix and we use the value then load value before doing inc/dec so we leave
     // old value on the stack
-    if (!isPrefix && isResultUsed) {
+    if (isPostfix && isResultUsed) {
       loadVar(varDecl);
     }
 
@@ -3868,6 +3870,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Consumer<Runnable> incOrDec = (runnable) -> {
       loadVar(varDecl);
       unbox();
+      convertTo(type, null, identifierExpr.couldBeNull, operator);
 
       // If amount is null then value is already on the stack so swap otherwise
       // load the inc/dec amount
@@ -3876,14 +3879,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         convertTo(varDecl.type, null, true, operator);
       }
       else {
-        loadConst(Utils.convertNumberTo(varDecl.type, amount));
+        loadConst(Utils.convertNumberTo(type, amount));
       }
 
       runnable.run();
+      if (isResultUsed && !isPostfix) {
+        dupVal();
+      }
+      convertTo(varDecl.type, null, false, operator);
       storeVar(varDecl);
     };
 
-    switch (varDecl.type.getType()) {
+    switch (type.getType()) {
       case BYTE:
       case INT:
         if (varDecl.type.isBoxed() || varDecl.isHeapLocal || varDecl.isField || amount == null) {
@@ -3896,6 +3903,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         else {
           int intAmt = (int)Utils.convertNumberTo(INT, amount);
           mv.visitIincInsn(varDecl.slot, isInc ? intAmt : -intAmt);
+          if (isResultUsed && !isPostfix) {
+            loadVar(varDecl);
+            convertTo(type, null, false, operator);
+          }
         }
         break;
       case LONG:
@@ -3916,14 +3927,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           swap();
         }
         incOrDecValue(isInc, amount, operator);
+        if (isResultUsed && !isPostfix) {
+          dupVal();
+        }
         storeVar(varDecl);
         break;
       case MAP:   // Only get here if rhs is const but Map literals are not const at the moment so this shouldn't happen
       default:
         throw new IllegalStateException("Internal error: unexpected type " + varDecl.type);
-    }
-    if (isPrefix && isResultUsed) {
-      loadVar(varDecl);
     }
   }
 
@@ -5478,14 +5489,20 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
   /**
    * Expect to have on stack: ..., parent, field, value
+   * @param accessOperator        type of field access ('.' or '?.')
+   * @param shouldReturnFieldType true if return value should be value we stored in field after conversion.
+   *                              false if original value should be returned.
+   *                              When using ++/-- the type of the expression is the field type not the value type
+   *                              so we set this to true for ++/-- and false for other types like +=, -=, etc.
    */
-  private void storeParentFieldValue(Token accessOperator) {
+  private void storeParentFieldValue(Token accessOperator, boolean shouldReturnFieldType) {
     expect(3);
     box();
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
+    loadConst(shouldReturnFieldType);
     loadConst(!insideTryCatchNullError());
     loadLocation(accessOperator);
-    invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_PARENT_FIELD_VALUE, Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_PARENT_FIELD_VALUE, Object.class, Object.class, Object.class, boolean.class, boolean.class, boolean.class, String.class, int.class);
   }
 
   Void loadLocal(int slot) {

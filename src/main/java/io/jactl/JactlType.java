@@ -988,6 +988,10 @@ public class JactlType extends JactlUserDataHolder {
     if (this.type != other.type) {
       return false;
     }
+    // If one is boxed and the other isn't...
+    if (this.isRef() != other.isRef()) {
+      return false;
+    }
     if (is(INSTANCE,CLASS)) {
       if (this.getInternalName() != null) {
         return this.getInternalName().equals(other.getInternalName());

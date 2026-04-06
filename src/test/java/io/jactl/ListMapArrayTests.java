@@ -1799,6 +1799,11 @@ public class ListMapArrayTests extends BaseTest {
     test("def s = new int[1]; s[0] = 5; s[0] ^= 3", 6);
   }
   
+  @Test public void testStuff() {
+    debugLevel = 1;
+    test("class X { int i = 2 }; X x; x.i++", 0);
+  }
+  
   @Test public void opEqualsWithSideEffect() {
     test("long[] s = new long[4]; int i = 2; s[i++] += 7", 7L);
     test("long[] s = new long[4]; int i = 2; s[i] = 2; s[i++] += 7", 9L);
@@ -1811,7 +1816,28 @@ public class ListMapArrayTests extends BaseTest {
     test("def s = new long[4]; int i = 2; s[i++] += 7; i", 3);
     test("def s = new long[4]; int i = 3; int f(){ def r = i; i = i * i; r }; s[f()] += 7; i", 9);
     test("Map m = [a:2]; def x = 'a'; String f() { def r = x; x = x + x; r }; m[f()] += 3; x + m.a", "aa5");
+    test("long[] s = null; int i = 2; s?[i++]; i", 3);
+    test("def s = null; int i = 2; s?[i++]; i", 3);
+    test("String s = null; int i = 2; s?[i++]; i", 3);
+    test("Object[] s = null; int i = 2; s?[i++]; i", 3);
+    test("List s = null; int i = 2; s?[i++]; i", 3);
+    test("long[] s = null; int i = 2; s?[i++]", null);
+    test("def s = null; int i = 2; s?[i++]?.a; i", 3);
+    test("def s = null; int i = 2; s?[i++]?.a", null);
+    test("def s = null; int i = 2; s?[i++]?.a?[i++]?.b; i", 4);
     testError("long[] s = null; int i = 2; s?[i++] += 7; i", "cannot convert null");
     testError("long[] s = null; int i = 2; s?[i++] += 7", "cannot convert null");
+    testError("class X { int i = 2 }; X x; x.i", "null object");
+    test("class X { int i = 2 }; X x; x?.i", null);
+    test("class X { int i = 2 }; X x; x.i++", 0);
+    test("class X { int i = 2 }; X x; x?.i++", 0);
+    testError("def x; x.i", "null object");
+    test("def x; x?.i", null);
+    test("def x; x.i++", 0);
+    test("def x; x?.i++", 0);
+    testError("Map x; x.i", "null object");
+    test("Map x; x?.i", null);
+    test("Map x; x.i++", 0);
+    test("Map x; x?.i++", 0);
   }
 }

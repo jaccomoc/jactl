@@ -296,7 +296,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.isPrimitive() || type.is(CLASS))
+        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
             || expr instanceof Expr.Literal || expr instanceof Expr.MapLiteral
             || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
@@ -1682,7 +1682,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override public JactlType visitFieldAssign(Expr.FieldAssign expr) {
     resolveClassAllowed(expr.parent);
     resolve(expr.field);
-    return resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
+    expr.fieldType = resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
+    return expr.type;
   }
 
   @Override public JactlType visitFieldOpAssign(Expr.FieldOpAssign expr) {
@@ -1709,7 +1710,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
 
-    return expr.type = expr.expr.type;
+    return expr.type;
   }
 
   private JactlType resolveFieldAssignment(Expr expr, Expr parent, Expr field, Expr valueExpr, Token accessType) {
@@ -1759,7 +1760,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign) expr).assignmentOperator.is(QUESTION_EQUAL)) {
         fieldType = fieldType.boxed();
       }
-      return expr.type = fieldType;
+      expr.type = valueExpr.type;
+      return fieldType;
     }
 
     if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign)expr).assignmentOperator.is(QUESTION_EQUAL)) {

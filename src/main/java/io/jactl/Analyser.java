@@ -402,8 +402,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     analyse(expr.parent);
     analyse(expr.field);
     analyse(expr.expr);
-    if (!expr.expr.isNull() && expr.type.is(INSTANCE)) {
-      asyncIfTypeIsAsync(expr);
+    if (!expr.expr.isNull() && expr.fieldType.is(INSTANCE)) {
+      asyncIfTypeIsAsync(expr, expr.fieldType);
     }
     return null;
   }

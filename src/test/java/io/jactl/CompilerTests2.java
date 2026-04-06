@@ -860,7 +860,7 @@ public class CompilerTests2 extends BaseTest {
     test("Map x = [a:1]; (x.a?=3) + 2", 5);
     test("def x = [:]; int i; i ?= x.a", null);
     test("def x; int i; i ?= x.a", null);
-    test("def x = [a:3]; long y; y ?= x.a", 3L);
+    test("def x = [a:3]; long y; y ?= x.a", 3);
     test("Map x; int i; i ?= x.a", null);
     test("Map x = [a:[:]]; byte i = 5; i ?= x.a.b.c; i", (byte) 5);
     test("Map x = [a:[:]]; int i = 5; i ?= x.a.b.c; i", 5);
@@ -1010,7 +1010,7 @@ public class CompilerTests2 extends BaseTest {
     test("if (false) true", null);
     test("if (false) true else false", false);
     testError("if (true) int i = 2", "unexpected token 'int'");
-    test("byte x; if (x) { x += 1 } else { x += 2 }", (byte)2);
+    test("byte x; if (x) { x += 1 } else { x += 2 }", 2);
     test("int x; if (x) { x += 1 } else { x += 2 }", 2);
     test("int x; if (x) { x += 1 }", null);
     test("int x; if (x) { x += 1; x+= 2\n}", null);
@@ -2734,11 +2734,12 @@ public class CompilerTests2 extends BaseTest {
     test("def f = { for(var i=0;i<10;i++); }; f()", null);
     test("def f; f = { it = 2 -> { it * it }(it) }; f()", 4);
     test("List trees = [[1,2],[3,4]]; def f = { x,y -> \ndef h = trees[x][y]\ntrees[x][y] + h}; f(1,0)", 6);
+    test("def trees = [[1,2],[3,4]]; def f = { x,y -> \ndef h = trees[x][y]\ntrees[x][y] + h}; f(1,0)", 6);
   }
 
   @Test public void closedOverVars() {
     test("int x = 1; def f() { x.size() }; f()", 1);
-    test("byte x = 1; def f() { x-- }; x = 2", (byte)2);
+    test("byte x = 1; def f() { x-- }; x = 2; x", (byte)2);
     test("byte x = 1; def f() { x-- }; x++", (byte)1);
     test("byte x = 1; def f() { x-- }; ++x", (byte)2);
     test("byte x = 1; def f() { x++ }; f(); x", (byte)2);

@@ -153,7 +153,7 @@ public class CompilerTest3 extends BaseTest {
     test("int x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
     test("def x = 1; x += sleep(0,x) + sleep(0,x); x", 3);
     test("def f(int x, long y, String z, double d) { sleep(0,x++); sleep(0,y++); sleep(0,d++); z = sleep(0,z) * sleep(0,x); z + \": x=$x,y=$y,d=$d\" }; f(1,2,'x',3D)", "xx: x=2,y=3,d=4.0");
-    test("int x = 1; long y = 2; double d = 3; sleep(0, d = sleep(0, y = sleep(0, x += sleep(0,x=3)) + x) + y) + x", 20.0D);
+    test("int x = 1; long y = 2; double d = 3; sleep(0, d = sleep(0, y = sleep(0, x += sleep(0,x=3)) + x) + y) + x", 20L);
     test("def x = 1; x ?= sleep(0, null as int); x", 1);
     test("def f = null; f = { null as int }; def x = 1; x ?= sleep(0, 1) + f(); x", 1);
     test("def f = null; f = { sleep(0,null) as int }; def x = 1; x ?= f(); x", 1);

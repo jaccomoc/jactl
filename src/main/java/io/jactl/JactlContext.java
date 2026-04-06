@@ -757,7 +757,7 @@ public class JactlContext {
       if (compatible && !(argType.isCastableTo(paramType) || paramType.isCastableTo(argType))) {
         return false;
       }
-      if (!compatible && !argType.equals(paramType)) {
+      if (!compatible && !argType.boxed().equals(paramType.boxed())) {
         return false;
       }
     }
