@@ -1799,11 +1799,6 @@ public class ListMapArrayTests extends BaseTest {
     test("def s = new int[1]; s[0] = 5; s[0] ^= 3", 6);
   }
   
-  @Test public void testStuff() {
-    debugLevel = 1;
-    test("class X { int i = 2 }; X x; x.i++", 0);
-  }
-  
   @Test public void opEqualsWithSideEffect() {
     test("long[] s = new long[4]; int i = 2; s[i++] += 7", 7L);
     test("long[] s = new long[4]; int i = 2; s[i] = 2; s[i++] += 7", 9L);
@@ -1829,15 +1824,15 @@ public class ListMapArrayTests extends BaseTest {
     testError("long[] s = null; int i = 2; s?[i++] += 7", "cannot convert null");
     testError("class X { int i = 2 }; X x; x.i", "null object");
     test("class X { int i = 2 }; X x; x?.i", null);
-    test("class X { int i = 2 }; X x; x.i++", 0);
-    test("class X { int i = 2 }; X x; x?.i++", 0);
-    testError("def x; x.i", "null object");
+    testError("class X { int i = 2 }; X x; x.i++", "cannot load field from null parent");
+    testError("class X { int i = 2 }; X x; x?.i++", "cannot convert null");
+    testError("def x; x.i", "null value for parent");
     test("def x; x?.i", null);
-    test("def x; x.i++", 0);
+    test("def x; x.i++", 0);         // due to auto-creation
     test("def x; x?.i++", 0);
-    testError("Map x; x.i", "null object");
-    test("Map x; x?.i", null);
-    test("Map x; x.i++", 0);
-    test("Map x; x?.i++", 0);
+    testError("Map x = null; x.i", "null value for parent");
+    test("Map x = null; x?.i", null);
+    test("Map x = null; x?.i++", 0);  // due to auto-creation
+    test("Map x = null; x.a += 3", 3);
   }
 }

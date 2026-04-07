@@ -833,69 +833,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean   afterResultUsed  = expr.isResultUsed && !expr.isPreIncOrDec;
     boolean   beforeResultUsed = expr.isResultUsed && expr.isPreIncOrDec;
     check(!isStatic, "cannot assign to static field");
-    if (!isField && (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE))) {
-      JactlType arrayElemType = parentType.getArrayElemType();
+    boolean  arrayElem         = !isField && (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE));
 
-      compile(expr.field);
-      unbox();
-      dupVal2();
-      if (expr.accessType.is(QUESTION_SQUARE)) {
-        emitIf(true, false, IfTest.IS_NULL,
-               () -> {
-                 swap();
-                 dupVal();
-               },
-               () -> {
-                 // Null parent
-                 popVal();    // pop parent
-                 popVal();    // pop field
-                 popVal();    // pop field
-                 popVal();    // pop parent
-                 throwNullError("Cannot convert null value into " + expr.type, expr.expr.location);
-               },
-               () -> {
-                 // Not null parent
-                 swap();
-                 expect(3);
-                 loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
-                 box();
-                 expect(3);
-               });
-        int temp = -1;
-        if (beforeResultUsed) {
-          saveAndDupVal();
-        }
-        compile(expr.expr);
-        temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
-        Utils.storeArrayElement(mv, arrayElemType);
-        popType(3);
-        if (temp != -1) {
-          loadLocal(temp);
-        }
-        stack.freeSlot(temp);
-      }
-      else {
-        if (expr.parent.couldBeNull) {
-          swap();
-          throwIfNull("Cannot load field from null parent", expr.parent.location);
-          swap();
-        }
-        loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
-        int temp = beforeResultUsed ? saveAndDupVal() : -1;
-        compile(expr.expr);
-        temp = temp == -1 && afterResultUsed ? saveAndDupVal() : temp;
-        expect(3);
-        Utils.storeArrayElement(mv, arrayElemType);
-        popType(3);
-        if (temp != -1) {
-          loadLocal(temp);
-        }
-        stack.freeSlot(temp);
-      }
-      return null;
-    }
-    
-    // We have a field or non-array access
     if (isField) {
       if (isStatic) {
         popVal();
@@ -903,38 +842,80 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         dupVal();
       }
-      loadClassField(parentType.getInternalName(), fieldName, fieldType, isStatic);
     }
     else {
       compile(expr.field);
-      box();
-
+      if (arrayElem) {
+        unbox();
+      }
+      else {
+        box();
+      }
       // Since assignment is +=, -=, etc (rather than just '=' or '?=') we will need parent
       // and field again to get value and to store value so duplicate parent and field on
       // stack to get:
       // ... parent, field, parent, field
       dupVal2();
-      loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
     }
 
-    // If we need the before value as the result then stash in a temp for later
+    Runnable loadField = () -> {
+      if (arrayElem) {
+        loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
+      }
+      else if (isField) {
+        loadClassField(parentType.getInternalName(), fieldName, fieldType, isStatic);
+      }
+      else {
+        loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
+      }
+    };
+    
+    if (!isStatic && expr.accessType.is(QUESTION_SQUARE,QUESTION_DOT)) {
+      emitIf(true, false, IfTest.IS_NULL,
+             () -> {
+               swap(!isField);   // swap if not isField
+               dupVal();
+             },
+             () -> {
+               // Null parent so pop parent/field values
+               popVal(!isField);
+               popVal(!isField);
+               popVal();
+               popVal();
+               throwNullError("Cannot convert null value into " + expr.type, expr.expr.location);
+             },
+             () -> {
+               // Not null parent
+               swap(!isField);
+               expect(isField ? 2 : 3);
+               loadField.run();
+               box();
+               expect(isField ? 2 : 3);
+             });
+    }
+    else {
+      if (expr.parent.couldBeNull) {
+        swap(!isField);
+        throwIfNull("Cannot load field from null parent", expr.parent.location);
+        swap(!isField);
+      }
+      loadField.run();
+    }
+
     int temp = -1;
     if (beforeResultUsed) {
       temp = saveAndDupVal();
     }
-
-    // Evaluate expression
     compile(expr.expr);
-    convertTo(expr.type, expr.expr, true, expr.location);
-
-    // If we need the after result and we have an instance field then stash in a temp for later retrieval.
-    // For non-instance fields, the storeField() will return the after result so no need for a temp.
-    if (afterResultUsed && isField) {
+    if (afterResultUsed && (isField || arrayElem)) {
       temp = saveAndDupVal();
     }
-    
-    // Store result back into field
-    if (isField) {
+    if (arrayElem) {
+      expect(3);
+      Utils.storeArrayElement(mv, parentType.getArrayElemType());
+      popType(3);
+    }
+    else if (isField) {
       // Parent ref still on stack from earlier
       convertTo(fieldType, expr.expr, true, expr.location);
       storeClassField(parentType.getInternalName(), fieldName, fieldType, false);
@@ -945,13 +926,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         popVal();
       }
     }
-
-    // Retrieve the required value from temp if we have used it
     if (temp != -1) {
       loadLocal(temp);
-      stack.freeSlot(temp);
     }
-
+    stack.freeSlot(temp);
     return null;
   }
 
@@ -3173,6 +3151,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   void swap() {
     stack.swap();
   }
+  
+  void swap(boolean doSwap) {
+    if (doSwap) {
+      swap();
+    }
+  }
 
   /**
    * Duplicate whatever is on the JVM stack and duplicate type on type stack.
@@ -3219,6 +3203,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   void popVal() {
     stack.popVal();
+  }
+  
+  void popVal(boolean doPop) {
+    if (doPop) {
+      popVal();
+    }
   }
 
   /**
