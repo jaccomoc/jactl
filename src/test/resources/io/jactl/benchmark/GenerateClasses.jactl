@@ -1,33 +1,16 @@
-/*
- * Copyright © 2022,2023 James Crawford
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
-def types = []
-def fields = []
-def attributes = []
-def rootClass
-def className
-def extendsClass
-def inClass = false
-def baseClasses = [:]
+List types
+List fields
+List attributes
+String rootClass
+String className
+String extendsClass
+boolean inClass = false
+Map baseClasses
 
 source.lines().each{
   // Strip '#' comments
   return if /^#/r
-  s/ *#.*$//
+  s/ *#.*//
 
   /^package /r and do {
     println it
@@ -40,24 +23,27 @@ source.lines().each{
     return
   }
 
-  /^class +([A-Z][a-z]*)/r and rootClass = $1 and do {
+  if (/^class +([A-Z][a-z]*)/r) {
+    rootClass = $1
     println "public abstract $it\n"
     println "  public abstract <T> T accept(Visitor<T> visitor);\n"
-  } and return
+    return
+  }
 
-  /^}/r and do {
+  if (/^}/r) {
     print "\n  public interface Visitor<T> {\n"
     types.each{ print "    T visit$it($it ${rootClass.toLowerCase(1)});\n" }
     print "  }\n"
     println it
-  } and return
+    return
+  }
 
-  /^ +}/r and inClass and do {
-    def constructorFields = []
-    def superFields = []
+  if (/^ +}/r and inClass) {
+    List constructorFields
+    List superFields
     if (extendsClass != rootClass) {
       if (!baseClasses[extendsClass]) {
-        def forwardRefence = source.lines().filter{ /^ +(abstract)? *class *$extendsClass/r }.size() > 0
+        boolean forwardRefence = source.lines().filter{ /^ +(abstract)? *class *$extendsClass/r }.size() > 0
         println "Error: ${forwardRefence ? "Forward reference to" : "Unknown"} base class $extendsClass"
         return        // Need to have proper way to generate an error
       }
@@ -70,31 +56,37 @@ source.lines().each{
     println "    public $className(${constructorFields.map{ "${it[1]} ${it[0]}" }.join(', ')}) {"
     superFields and print """      super(${superFields.join(", ")});\n"""
     fields.each{ println "      this.${it[0]} = ${it[0]};" }
-    def firstTokenArg = constructorFields.filter{ name,type -> type == 'Token' }.map{ it[0] }?[0]
+    String firstTokenArg = constructorFields.filter{ name,type -> type == 'Token' }.map{ it[0] }?[0]
     // If no super field has a type Token then assign location in subclass
     if (firstTokenArg && !superFields.filter{ it == firstTokenArg }) {
       println "      this.location = $firstTokenArg;"
     }
     println "    }"
-    
     println "    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visit$className(this); }"
-    
+
     // Generate toString()
-    def fieldValues = constructorFields.map{ it[0] }.map{""""$it=" + $it"""}.join(' + ", " + ')
+    String fieldValues = constructorFields.map{ it[0] }.map{""""$it=" + $it"""}.join(' + ", " + ')
     println """    @Override public String toString() { return "$className[" +${fieldValues?" $fieldValues +":""} "]"; }""";
-    
+
     // Remember fields in case another class extends us
     baseClasses[className] = fields
-    
+
     // Reset for next class in file
     inClass = false
     fields = []
     attributes = []
     println it
-  } and return
+    return
+  }
 
-  inClass and /^ +([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+) *;/r  and fields += [[$2, $1]] and s/^( +)/$1public /
-  inClass and /^ +([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)/r and attributes += $2 and s/^( +)/$1public /
+  if (inClass && /^ +([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+) *;/r) {
+   fields += [[$2, $1]]
+   s/^( +)/$1public /
+  }
+  if (inClass && /^ +([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)/r) {
+   attributes += $2
+   s/^( +)/$1public /
+  }
   s/@//
 
   /class (.*) extends +(\w*)/r and do {
@@ -103,8 +95,10 @@ source.lines().each{
     extendsClass = $2
     types += className and s/class/public static class/
   }
-
-  !inClass and !/public/r and /^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)/r and s/^( +)/$1public /
+  
+  if (!inClass && !/public/r && /^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)/r) {
+    s/^( +)/$1public /
+  }
 
   println it
 }

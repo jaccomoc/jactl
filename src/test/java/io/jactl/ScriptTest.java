@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class ScriptTest {
   @Test public void generateExprClasses() throws Exception {
-    String                script   = readResource("/io/jactl/GenerateClasses.jactl");
+    String                script   = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
     String                source   = readResource("/Expr.java");
     String                expected = readResource("/io/jactl/Expr.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
@@ -46,7 +46,7 @@ public class ScriptTest {
   }
 
   @Test public void generateStmtClasses() throws Exception {
-    String                script   = readResource("/io/jactl/GenerateClasses.jactl");
+    String                script   = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
     String                source   = readResource("/Stmt.java");
     String                expected = readResource("/io/jactl/Stmt.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();

@@ -70,7 +70,7 @@ public class RegexMatcher implements Checkpointable {
       }
     });
 
-  public static int patternCacheSize = 100;   // Per thread cache size
+  public static int patternCacheSize = Integer.getInteger("jactl.regex.cache.size", 100); // Per thread cache size
 
   private JactlMatcher globalMatcher    = new GlobalMatcher();
   private JactlMatcher nonGlobalMatcher = new NonGlobalMatcher();
