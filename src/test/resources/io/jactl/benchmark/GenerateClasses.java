@@ -12,7 +12,17 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class GenerateClasses {
-  public static void generateClasses(String source, PrintStream out) {
+
+  static Pattern commentLine = Pattern.compile("^ *#");
+  static Pattern classLine = Pattern.compile("^class +([A-Z][a-z]*)");
+  static Pattern endClassPattern = Pattern.compile("^ +}");
+  static Pattern fieldPattern = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);");
+  static Pattern attrPattern = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)");
+  static Pattern otherPattern = Pattern.compile("^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)");
+  static Pattern classExtendsPattern = Pattern.compile("class (.*) extends +(\\w*)");
+  static Pattern publicPattern = Pattern.compile("public");
+
+  public static void run(String source, PrintStream out) {
     List    types       = new ArrayList<>();
     List<List<String>> fields      = new ArrayList<>();
     List    attributes = new ArrayList<>();
@@ -22,15 +32,6 @@ public class GenerateClasses {
     boolean inClass      = false;
     Map     baseClasses = new HashMap();
 
-    Pattern commentLine = Pattern.compile("^ *#");
-    Pattern classLine = Pattern.compile("^class +([A-Z][a-z]*)");
-    Pattern endClassPattern = Pattern.compile("^ +}");
-    Pattern fieldPattern = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);");
-    Pattern attrPattern = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)");
-    Pattern otherPattern = Pattern.compile("^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)");
-    Pattern classExtendsPattern = Pattern.compile("class (.*) extends +(\\w*)");
-    Pattern publicPattern = Pattern.compile("public");
-    
     for (String it: source.split("\\n")) {
 
       // Strip '#' comments

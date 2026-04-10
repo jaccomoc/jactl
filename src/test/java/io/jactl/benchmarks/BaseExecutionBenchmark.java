@@ -1,5 +1,5 @@
 /*
- * Copyright © 2022,2023,2024  James Crawford
+ * Copyright © 2022-2026  James Crawford
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,54 +24,85 @@ import io.jactl.DefaultEnv;
 import io.jactl.JactlContext;
 import io.jactl.JactlScript;
 import io.jactl.compiler.Compiler;
-import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.options.*;
 
 import javax.tools.*;
 import java.io.*;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
-@BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.SECONDS)
-@State(Scope.Thread)
-@Warmup(iterations = 3, time = 2)
-@Measurement(iterations = 5, time = 2)
-@Fork(value = 1, jvmArgs = "-ea")
-public class ExecutionBenchmark {
-
+public abstract class BaseExecutionBenchmark {
+  
   // Java execution state
-  private Method javaMethod;
+  protected Method      javaMethod;
 
   // Jactl execution state
-  private JactlScript jactlScript;
+  protected JactlScript jactlScript;
 
   // Groovy execution state
-  private Script groovyScript;
+  protected Script      groovyScript;
 
   // Shared input/expected output
-  private String input;
-  private String expectedOutput;
+  protected String      input;
+  protected String expectedOutput;
+  
+  // Source code
+  protected String  javaSource;
+  protected String  jactlSource;
+  protected String  groovySource;
 
-  @Setup(Level.Trial)
   public void setup() throws Exception {
-    input = readResource("/Expr.java");
-    expectedOutput  = readResource("/io/jactl/Expr.java.generated").trim();
-
     setupJava();
     setupJactl();
     setupGroovy();
   }
-  
-  @TearDown(Level.Trial)
+
   public void tearDown() {
     DefaultEnv.shutdown();
   }
 
-  @Benchmark
+  protected void setupJava() throws Exception {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    Writer devNull = new Writer() {
+      public void write(char[] cbuf, int off, int len) {}
+      public void flush() {}
+      public void close() {}
+    };
+    String packageName = null;
+    String className = null;
+    for (String line: javaSource.split("\n")) {
+      if (line.matches("^ *package *[a-z.]*.*$")) {
+        packageName = line.replaceAll("^ *package *", "").replaceAll(" *;.*$", "");
+      }
+      if (line.matches("^ *public class *[a-z.]*.*$")) {
+        className = line.replaceAll(".*class *", "").replaceAll("[ {].*$", "");
+      }
+    }
+    StringFile      code        = new StringFile(className + ".java", javaSource);
+    TestFileManager fileManager = new TestFileManager(compiler.getStandardFileManager(null, null, null));
+
+    boolean result = compiler.getTask(devNull, fileManager, null, null, null, Arrays.asList(code)).call();
+    assert result : "Java compilation failed during setup";
+
+    String fullClassName = packageName + "." + className;
+    StringFile classFile = fileManager.getFile(fullClassName);
+    assert classFile != null : "Compiled class file not found for " + fullClassName;
+
+    TestClassLoader classLoader = new TestClassLoader(getClass().getClassLoader());
+    fileManager.getFiles().forEach(file -> classLoader.defineClass(file.getName().substring(1), file.getBytes()));
+    Class<?> cls = classLoader.loadClass(fullClassName);
+    javaMethod = cls.getMethod("run", String.class, PrintStream.class);
+  }
+
+  protected void setupJactl() throws IOException {
+    JactlContext context  = JactlContext.create().build();
+    jactlScript = Compiler.compileScript(jactlSource, context, Collections.singletonMap("source", ""));
+  }
+
+  protected void setupGroovy() throws IOException {
+    groovyScript = new GroovyShell().parse(groovySource);
+  }
+
   public void javaExecution() throws Exception {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream           out  = new PrintStream(baos);
@@ -80,7 +111,6 @@ public class ExecutionBenchmark {
     assert diff == null : "Java output mismatch: diff=\n" + diff;
   }
 
-  @Benchmark
   public void jactlExecution() throws Exception {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream           out  = new PrintStream(baos);
@@ -89,7 +119,6 @@ public class ExecutionBenchmark {
     assert diff == null : "Jactl output mismatch: diff=\n" + diff;
   }
 
-  @Benchmark
   public void groovyExecution() {
     Binding binding = new Binding();
     binding.setVariable("source", input);
@@ -102,16 +131,21 @@ public class ExecutionBenchmark {
     assert diff == null : "Groovy output mismatch: diff=\n" + diff;
   }
 
-  public static void main(String[] args) throws Exception {
-    Options opts = new OptionsBuilder()
-        .include(ExecutionBenchmark.class.getSimpleName())
-        .build();
-    new Runner(opts).run();
-  }
 
   ////////////////////////////////////////
 
-  private String diff(String expected, String actualOutput) {
+  protected String readResource(String resource) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    try (InputStream in = getClass().getResourceAsStream(resource)) {
+      int c;
+      while ((c = in.read()) != -1) {
+        sb.append((char) c);
+      }
+    }
+    return sb.toString();
+  }
+
+  String diff(String expected, String actualOutput) {
     if (!expected.equals(actualOutput)) {
       Iterator<String> expectedIter = Arrays.asList(expected.split("\n")).iterator();
       Iterator<String> actualIter   = Arrays.asList(actualOutput.split("\n")).iterator();
@@ -152,58 +186,7 @@ public class ExecutionBenchmark {
     return null;
   }
 
-
-  private void setupJava() throws Exception {
-    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-    Writer devNull = new Writer() {
-      public void write(char[] cbuf, int off, int len) {}
-      public void flush() {}
-      public void close() {}
-    };
-    String          javaSource  = readResource("/io/jactl/benchmark/GenerateClasses.java");
-    StringFile      code        = new StringFile("GenerateClasses.java", javaSource);
-    TestFileManager fileManager = new TestFileManager(compiler.getStandardFileManager(null, null, null));
-
-    boolean result = compiler.getTask(devNull, fileManager, null, null, null, Arrays.asList(code)).call();
-    assert result : "Java compilation failed during setup";
-
-    String          className   = "io.jactl.benchmark.GenerateClasses";
-    StringFile      classFile   = fileManager.getFile(className);
-    assert classFile != null : "Compiled class file not found for " + className;
-
-    TestClassLoader classLoader = new TestClassLoader(getClass().getClassLoader());
-    classLoader.defineClass(className, classFile.getBytes());
-    Class<?> cls = classLoader.loadClass(className);
-    javaMethod = cls.getMethod("generateClasses", String.class, PrintStream.class);
-  }
-
-  private void setupJactl() throws IOException {
-    JactlContext context    = JactlContext.create().build();
-    String       jactlSrc   = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
-    jactlScript = Compiler.compileScript(jactlSrc, context, Collections.singletonMap("source", ""));
-  }
-
-  private void setupGroovy() throws IOException {
-    String groovySrc = readResource("/io/jactl/benchmark/GenerateClasses.groovy");
-    groovyScript = new GroovyShell().parse(groovySrc, "GenerateClasses.groovy");
-  }
-
-  ////////////////////////////////////////
-
-  private String readResource(String resource) throws IOException {
-    StringBuilder sb = new StringBuilder();
-    try (InputStream in = getClass().getResourceAsStream(resource)) {
-      int c;
-      while ((c = in.read()) != -1) {
-        sb.append((char) c);
-      }
-    }
-    return sb.toString();
-  }
-
-  private static int countLines(String s) {
-    return (int) s.chars().filter(c -> c == '\n').count();
-  }
+  //////////////////////////////////////////
 
   static class StringFile extends SimpleJavaFileObject {
     String                text;
@@ -238,14 +221,19 @@ public class ExecutionBenchmark {
     }
 
     public StringFile getFile(String className) { return files.get(className); }
+    
+    public List<StringFile> getFiles() { return new ArrayList<>(files.values()); }
   }
 
   static class TestClassLoader extends ClassLoader {
     private Map<String, Class<?>> classes = new HashMap<>();
 
-    public TestClassLoader(ClassLoader parent) { super(parent); }
+    public TestClassLoader(ClassLoader parent) {
+      super(parent);
+    }
 
-    @Override protected Class<?> findClass(String name) throws ClassNotFoundException {
+    @Override
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
       Class<?> cls = classes.get(name);
       if (cls == null) throw new ClassNotFoundException(name);
       return cls;
@@ -255,5 +243,4 @@ public class ExecutionBenchmark {
       classes.put(name, super.defineClass(name, bytes, 0, bytes.length));
     }
   }
-
 }
