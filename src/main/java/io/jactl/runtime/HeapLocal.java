@@ -44,6 +44,9 @@ public class HeapLocal extends Number implements Checkpointable {
   @Override public double doubleValue() { return ((Number)value).doubleValue(); }
 
   public BigDecimal decimalValue() {
+    if (value == null) {
+      return null;
+    }
     if (value instanceof BigDecimal) {
       return (BigDecimal)value;
     }
@@ -51,6 +54,9 @@ public class HeapLocal extends Number implements Checkpointable {
   }
 
   public String stringValue() {
+    if (value == null) {
+      return null;
+    }
     if (value instanceof String) {
       return (String)value;
     }

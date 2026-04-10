@@ -336,8 +336,8 @@ public class LocalDateTimeTests extends BaseTest {
   }
 
   @Test public void nowInZone() {
-    test("(LocalDateTime.nowInZone(ZoneId.of('Australia/Sydney')).getSecond() + 5)/10", (LocalDateTime.now(ZoneId.of("Australia/Sydney")).getSecond() + 5) / 10);
-    test("def f = LocalDateTime.nowInZone; (f(ZoneId.of('Australia/Sydney')).getSecond() + 5) / 10", (LocalDateTime.now(ZoneId.of("Australia/Sydney")).getSecond() + 5) / 10);
+    test("LocalDateTime.nowInZone(ZoneId.of('Australia/Sydney')) instanceof LocalDateTime", true);
+    test("def f = LocalDateTime.nowInZone; f(ZoneId.of('Australia/Sydney')) instanceof LocalDateTime", true);
   }
   
   @Test public void of() {

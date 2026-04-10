@@ -2738,6 +2738,10 @@ public class CompilerTests2 extends BaseTest {
   }
 
   @Test public void closedOverVars() {
+    test("List s = null; { s }(); s", null);
+    test("Map s = null; { s }(); s", null);
+    test("Decimal s = null; { s }(); s", null);
+    test("String s = null; { s }(); s", null);
     test("int x = 1; def f() { x.size() }; f()", 1);
     test("byte x = 1; def f() { x-- }; x = 2; x", (byte)2);
     test("byte x = 1; def f() { x-- }; x++", (byte)1);
