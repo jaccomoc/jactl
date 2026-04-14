@@ -92,6 +92,10 @@ public interface ClassDescriptor extends JactlUserDataGetter {
   default JactlType getField(String name) {
     return null;
   }
+  
+  default boolean isFinal(String fieldName) {
+    return false;
+  }
 
   default List<Map.Entry<String,JactlType>> getFields() {
     return Collections.EMPTY_LIST;

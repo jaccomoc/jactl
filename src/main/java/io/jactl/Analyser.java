@@ -701,7 +701,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr instanceof Expr.Identifier) {
       Expr.Identifier callee = (Expr.Identifier)expr;
       if (callee.varDecl == null)         { return null; }
-      if (!callee.varDecl.isFinal)        { return null; }
+      if (!callee.varDecl.isEffectivelyFinal)        { return null; }
       if (callee.varDecl.funDecl != null) { return callee.varDecl.funDecl; }
 
       if (callee.varDecl.initialiser != null) {
@@ -709,10 +709,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       Expr.VarDecl decl = callee.varDecl;
-      while (decl.parentVarDecl != null && decl.isFinal) {
+      while (decl.parentVarDecl != null && decl.isEffectivelyFinal) {
         decl = decl.parentVarDecl;
       }
-      if (!decl.isFinal) { return null; }
+      if (!decl.isEffectivelyFinal) { return null; }
       return getFunDecl(decl.initialiser);
     }
 
@@ -790,7 +790,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Expr.VarDecl decl = (Expr.VarDecl)arg;
 
       // If not final then we can't assume anything about it
-      if (!decl.isFinal) {
+      if (!decl.isEffectivelyFinal) {
         return true;
       }
 

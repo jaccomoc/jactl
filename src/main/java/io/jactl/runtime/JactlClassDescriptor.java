@@ -38,6 +38,7 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
   protected List<JactlClassDescriptor>          interfaces;
   protected Map<String, JactlType>              fields              = new LinkedHashMap<>();
   protected Map<String, JactlType>              mandatoryFields = new LinkedHashMap<>();
+  protected Set<String>                         finalFields = new HashSet<>();
   protected Map<String, FunctionDescriptor>     methods             = new LinkedHashMap<>();
   protected Map<String, JactlClassDescriptor>   innerClasses        = new LinkedHashMap<>();
   protected JactlClassDescriptor                enclosingClass      = null;
@@ -219,6 +220,7 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     return methods.put(name, fun) == null;
   }
 
+  @Override
   public JactlType getField(String name) {
     JactlType type = fields.get(name);
     if (type == null && getBaseClass() != null) {
@@ -227,6 +229,12 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     return type;
   }
 
+  @Override
+  public boolean isFinal(String fieldName) {
+    return finalFields.contains(fieldName);
+  }
+
+  @Override
   public JactlType getStaticField(String name) {
     Pair<JactlType,Object> f = staticFields.get(name);
     if (f == null) {
@@ -235,6 +243,7 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     return f.first;
   }
 
+  @Override
   public Object getStaticFieldValue(String name) {
     Pair<JactlType,Object> f = staticFields.get(name);
     if (f == null) {
@@ -265,12 +274,15 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     staticFields.put(name, Pair.of(type, value));
   }
 
-  public boolean addField(String name, JactlType type, boolean isMandatory) {
+  public boolean addField(String name, JactlType type, boolean isMandatory, boolean isFinal) {
     if (getField(name) != null)       { return false; }
     if (getMethod(name) != null)      { return false; }
     if (getStaticField(name) != null) { return false; }
     if (isMandatory) {
       mandatoryFields.put(name, type);
+    }
+    if (isFinal) {
+      finalFields.add(name);
     }
     return fields.put(name, type) == null;
   }

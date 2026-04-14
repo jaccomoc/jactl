@@ -27,6 +27,8 @@ import io.jactl.compiler.Compiler;
 
 import javax.tools.*;
 import java.io.*;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.*;
@@ -34,7 +36,7 @@ import java.util.*;
 public abstract class BaseExecutionBenchmark {
   
   // Java execution state
-  protected Method      javaMethod;
+  protected MethodHandle javaMethod;
 
   // Jactl execution state
   protected JactlScript jactlScript;
@@ -91,7 +93,8 @@ public abstract class BaseExecutionBenchmark {
     TestClassLoader classLoader = new TestClassLoader(getClass().getClassLoader());
     fileManager.getFiles().forEach(file -> classLoader.defineClass(file.getName().substring(1), file.getBytes()));
     Class<?> cls = classLoader.loadClass(fullClassName);
-    javaMethod = cls.getMethod("run", String.class, PrintStream.class);
+    Method method = cls.getMethod("run", String.class, PrintWriter.class);
+    javaMethod = MethodHandles.lookup().unreflect(method);
   }
 
   protected void setupJactl() throws IOException {
@@ -103,10 +106,11 @@ public abstract class BaseExecutionBenchmark {
     groovyScript = new GroovyShell().parse(groovySource);
   }
 
-  public void javaExecution() throws Exception {
+  public void javaExecution() throws Throwable {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    PrintStream           out  = new PrintStream(baos);
-    javaMethod.invoke(null, input, out);
+    PrintWriter           out  = new PrintWriter(baos);
+    javaMethod.invokeExact(input, out);
+    out.close();
     String diff = diff(expectedOutput, baos.toString());
     assert diff == null : "Java output mismatch: diff=\n" + diff;
   }
@@ -115,6 +119,7 @@ public abstract class BaseExecutionBenchmark {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream           out  = new PrintStream(baos);
     jactlScript.runSync(Collections.singletonMap("source", input), null, out);
+    out.close();
     String diff = diff(expectedOutput, baos.toString());
     assert diff == null : "Jactl output mismatch: diff=\n" + diff;
   }
@@ -123,10 +128,11 @@ public abstract class BaseExecutionBenchmark {
     Binding binding = new Binding();
     binding.setVariable("source", input);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    PrintStream           out  = new PrintStream(baos);
+    PrintWriter           out  = new PrintWriter(baos);
     binding.setVariable("out", out);
     groovyScript.setBinding(binding);
     groovyScript.run();
+    out.close();
     String diff = diff(expectedOutput, baos.toString());
     assert diff == null : "Groovy output mismatch: diff=\n" + diff;
   }
@@ -134,9 +140,9 @@ public abstract class BaseExecutionBenchmark {
 
   ////////////////////////////////////////
 
-  protected String readResource(String resource) throws IOException {
+  static public String readResource(String resource) throws IOException {
     StringBuilder sb = new StringBuilder();
-    try (InputStream in = getClass().getResourceAsStream(resource)) {
+    try (InputStream in = BaseExecutionBenchmark.class.getResourceAsStream(resource)) {
       int c;
       while ((c = in.read()) != -1) {
         sb.append((char) c);

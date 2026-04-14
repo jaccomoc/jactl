@@ -2930,36 +2930,38 @@ class CompilerTests extends BaseTest {
   @Test public void compileNumericCalculations() {
     //debugLevel = 1;
     doTest("class PRandom {\n" +
-         "  long[] s = _init(timestamp())\n" +
-         "\n" +
-         "  final long[] _init(long seed) {\n" +
-         "    long z = seed\n" +
-         "    long[] s = new long[4]\n" +
-         "    for (int i = 0; i < 4; i++) {\n" +
-         "      z += 0x9e3779b97f4a7c15L\n" +
-         "      long x = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L\n" +
-         "      x = (x ^ (x >>> 27)) * 0x94d049bb133111ebL\n" +
-         "      s[i] = x ^ (x >>> 31)\n" +
-         "    }\n" +
-         "    return s\n" +
-         "  }\n" +
+         "  long[] s = [-2152535657050944081L, 7960286522194355700L, 487617019471545679L, -537132696929009172L]\n" +
          "\n" +
          "  final long nextLong() {\n" +
-         "    long result = rotateLeft(s[1] * 5, 7) * 9\n" +
-         "    long t = s[1] << 17\n" +
+         "    long result = rol(s[1] * 5, 7) * 9\n" +
+         "    long temp = s[1] << 17\n" +
          "    s[2] ^= s[0]; s[3] ^= s[1]\n" +
          "    s[1] ^= s[2]; s[0] ^= s[3]\n" +
-         "    s[2] ^= t\n" +
-         "    s[3] = rotateLeft(s[3], 45)\n" +
+         "    s[2] ^= temp\n" +
+         "    s[3] = rol(s[3], 45)\n" +
          "    return result\n" +
          "  }\n" +
          "  \n" +
          "  final long nextInt(int bound) { nextLong() % bound }\n" +
          "  \n" +
-         "  static long rotateLeft(long i, int distance) {\n" +
-         "    return (i << distance) | (i >>> -distance)\n" +
-         "  }\n" +
+         "  static long rol(long i, int amt) { (i << amt) | (i >>> -amt) }\n" +
          "}\n" +
          "new PRandom().nextLong() != 0", true);
+  }
+  
+  @Test public void finalVarsAndFields() {
+    test("class X { final int i = 3; def f() { i } }; new X().f()", 3);
+    testError("class X { final int i = 3; def f() { i += 3 } }; new X().f()", "cannot modify 'final' variable 'i'");
+    testError("class X { final int i = 3; def f() { ++i } }; new X().f()", "cannot modify 'final' variable 'i'");
+    testError("final int i; i = 3", "cannot modify 'final' variable 'i'");
+    testError("final int i = 3; int j; j = 2; ++i", "cannot modify 'final' variable 'i'");
+    testError("class X { final int i = 3; def f() { i } }; X x = new X(); x.i = 7", "cannot modify 'final' field");
+    testError("class X { final int i = 3; def f() { i } }; def x = new X(); x.i = 7", "cannot modify 'final' field");
+    testError("class X { final int i = 3; def f() { i } }; X x = new X(); x.i++", "cannot modify 'final' field");
+    testError("class X { final int i = 3; def f() { i } }; X x = new X(); ++x.i", "cannot modify 'final' field");
+    test("class X { final int i = 3; int j = 4; def f() { i } }; X x = new X(); ++x.j", 5);
+    testError("class X { final int i = 3; def f() { i } }; X x = new X(); ++x.'i'", "cannot modify 'final' field");
+    testError("class X { final int i = 3; def f() { i } }; X x = new X(); ++x['i']", "cannot modify 'final' field");
+    testError("class X { final int i = 3; def f() { i } }; X x = new X(); ++x.\"${'i'}\"", "cannot modify 'final' field");
   }
 }

@@ -60,6 +60,9 @@ public abstract class Expr extends JactlUserDataHolder {
   public boolean    couldBeNull = true;  // Whether result could be null
   public boolean    isAsync     = false; // Whether expression contains an async call
 
+  public boolean    isLValue      = false; // Whether expression is field or variable in a.b.c = xxx or v = xxx 
+  public boolean    isInitialiser = false; // Whether expression is an initialiser for a variable/field
+  
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when
   // the expression is used as a condition for if/while/for or as assignment to a variable.
@@ -412,6 +415,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public boolean         isExplicitParam;     // True if explicit declared parameter of function
     public boolean         isField;             // True if instance field of a class
     public boolean         isConstVar;          // True if declared as a constant
+    public boolean         isFinal;             // True if declared as a "final" variable
     public boolean         isBindingVar;        // True if this is a binding variable in a switch destructing pattern
     public int             slot = -1;           // Which local variable slot
     public int             nestingLevel;        // What level of nested function owns this variable (1 is top level)
@@ -424,8 +428,9 @@ public abstract class Expr extends JactlUserDataHolder {
     // If never reassigned we know it is effectively final. This means that if we have "def f = { ... }" and
     // closure is not async and f is never reassigned (isFinal == true) we know that calls to "f()" will never
     // be async.
-    public boolean      isFinal = true;
+    public boolean      isEffectivelyFinal = true;
 
+    
     public JactlType    lastAssignedType;      // Track last type assigned for completions in Intellij plugin
 
     // When we are in the wrapper function we create a variable for every parameter.

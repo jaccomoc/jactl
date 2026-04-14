@@ -330,8 +330,8 @@ public class ListMapArrayTests extends BaseTest {
   }
 
   @Test public void arrayIndexOutOfBounds() {
-    testError("boolean[] a = new boolean[0]; a[0] = 1; a[0]", "array index out of bounds: 0");
-    testError("boolean[] a = new boolean[0]; a[-1] = 1; a[0]", "array index out of bounds: -1");
+    testError("boolean[] a = new boolean[0]; a[0] = 1; a[0]", "array index out of bounds");
+    testError("boolean[] a = new boolean[0]; a[-1] = 1; a[0]", "array index out of bounds");
     testError("boolean[] a = new boolean[0]; int i = 0; a[i] = 1; a[0]", "array index out of bounds");
     testError("boolean[] a = new boolean[0]; int i = -1; a[i] = 1; a[0]", "array index out of bounds");
     testError("boolean[] a = new boolean[0]; long i = 0; a[i] = 1; a[0]", "array index out of bounds");

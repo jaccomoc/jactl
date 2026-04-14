@@ -428,7 +428,7 @@ public class SwitchResolver {
       if (!name.is(UNDERSCORE,STAR)) {
         if (!bindingVars.contains(varName)) {
           bindingVars.add(varName);
-          expr = Utils.createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, false, true);
+          expr = Utils.createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, false, true, false);
         }
         else {
           // Check if we are first use in this pattern. Previous patterns for the case (separate by commas)

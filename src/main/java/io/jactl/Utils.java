@@ -25,7 +25,6 @@ import org.objectweb.asm.Type;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -54,7 +53,7 @@ public class Utils {
   // Support Java 8 and later
   public static final int    JAVA_VERSION        = V1_8;
 
-  public static final String JACTL_VERSION          = "2.6.0";    // Jactl version
+  public static final String JACTL_VERSION          = "2.6.1";    // Jactl version
   public static final String JACTL_LANGUAGE_VERSION = "2.6";      // Version of language. 2.6 due to support for '_' in numeric literals
   
   public static final String JACTL_PKG           = "jactl.pkg";   // Java base package for Jactl classes
@@ -774,7 +773,7 @@ public class Utils {
     newDecl.classDescriptor      = varDecl.classDescriptor;
     newDecl.parentVarDecl        = varDecl.parentVarDecl;
     newDecl.originalVarDecl      = varDecl.originalVarDecl;
-    newDecl.isFinal              = varDecl.isFinal;
+    newDecl.isEffectivelyFinal = varDecl.isEffectivelyFinal;
     newDecl.lastAssignedType     = varDecl.lastAssignedType;
     newDecl.paramVarDecl         = varDecl.paramVarDecl;
     return newDecl;
@@ -954,13 +953,17 @@ public class Utils {
     return true;
   }
 
-  public static Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isConst, boolean isBindingVar) {
+  public static Expr.VarDecl createVarDeclExpr(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isConst, boolean isBindingVar, boolean isFinal) {
+    if (initialiser != null) {
+      initialiser.isInitialiser = true;
+    }
     Expr.VarDecl varDecl = new Expr.VarDecl(identifier, assignmentOp, initialiser);
     varDecl.isResultUsed = false;      // Result not used unless last stmt of a function used as implicit return
     varDecl.type = type;
     varDecl.isField = inClassDecl;
     varDecl.isBindingVar = isBindingVar;
     varDecl.isConstVar = isConst;
+    varDecl.isFinal = isFinal;
     return varDecl;
   }
 

@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import io.jactl.benchmarks.BaseExecutionBenchmark;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.JactlMethodHandle;
 import io.jactl.runtime.RuntimeError;

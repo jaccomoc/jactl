@@ -393,16 +393,20 @@ public class BaseTest {
   }
 
   private static Expr.Call sleepify(Expr expr) {
-    return new Expr.Call(expr.location,
-                         new Expr.Identifier(expr.location.newIdent("sleep")),
-                         Utils.listOf(new Expr.Literal(new Token(TokenType.LONG_CONST, expr.location).setValue(0)),
-                                 expr));
+    Expr.Call caller = new Expr.Call(expr.location,
+                                     new Expr.Identifier(expr.location.newIdent("sleep")),
+                                     Utils.listOf(new Expr.Literal(new Token(TokenType.LONG_CONST, expr.location).setValue(0)),
+                                                  expr));
+    caller.isInitialiser = expr.isInitialiser;
+    return caller;
   }
 
   private static Expr.Call checkpointify(Expr expr) {
-    return new Expr.Call(expr.location,
-                         new Expr.Identifier(expr.location.newIdent("_checkpoint")),
-                         Utils.listOf(expr));
+    Expr.Call caller = new Expr.Call(expr.location,
+                                     new Expr.Identifier(expr.location.newIdent("_checkpoint")),
+                                     Utils.listOf(expr));
+    caller.isInitialiser = expr.isInitialiser;
+    return caller;
   }
 
   protected void test(String code, Object expected) {

@@ -473,8 +473,11 @@ public class ClassCompiler {
   }
 
   public void defineField(String name, Expr.VarDecl varDecl) {
-    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | (varDecl.isConstVar ? ACC_STATIC | ACC_FINAL : 0),
-                                              name, varDecl.type.descriptor(), null, null);
+    int flags = varDecl.isConstVar ? ACC_STATIC | ACC_FINAL : 0;
+    if (varDecl.isFinal) {
+      flags |= ACC_FINAL;
+    }
+    FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | flags, name, varDecl.type.descriptor(), null, null);
     fieldVisitor.visitEnd();
 
     // If not an internal field

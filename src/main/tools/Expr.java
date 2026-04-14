@@ -62,6 +62,9 @@ class Expr extends JactlUserDataHolder {
   boolean    couldBeNull = true;  // Whether result could be null
   boolean    isAsync     = false; // Whether expression contains an async call
 
+  boolean    isLValue      = false; // Whether expression is field or variable in a.b.c = xxx or v = xxx 
+  boolean    isInitialiser = false; // Whether expression is an initialiser for a variable/field
+  
   // Flag that indicates whether result for the Expr is actually used. Most expressions
   // have their value used, for example, when nested within another expression or when
   // the expression is used as a condition for if/while/for or as assignment to a variable.
@@ -300,6 +303,7 @@ class Expr extends JactlUserDataHolder {
     boolean         @isExplicitParam;     // True if explicit declared parameter of function
     boolean         @isField;             // True if instance field of a class
     boolean         @isConstVar;          // True if declared as a constant
+    boolean         @isFinal;             // True if declared as a "final" variable
     boolean         @isBindingVar;        // True if this is a binding variable in a switch destructing pattern
     int             @slot = -1;           // Which local variable slot
     int             @nestingLevel;        // What level of nested function owns this variable (1 is top level)
@@ -312,8 +316,9 @@ class Expr extends JactlUserDataHolder {
     // If never reassigned we know it is effectively final. This means that if we have "def f = { ... }" and
     // closure is not async and f is never reassigned (isFinal == true) we know that calls to "f()" will never
     // be async.
-    boolean      @isFinal = true;
+    boolean      @isEffectivelyFinal = true;
 
+    
     JactlType    @lastAssignedType;      // Track last type assigned for completions in Intellij plugin
 
     // When we are in the wrapper function we create a variable for every parameter.

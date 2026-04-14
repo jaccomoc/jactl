@@ -719,7 +719,7 @@ public class Parser {
     // Note that unlike a normal varDecl where commas separate different vars of the same type,
     // with parameters we expect a separate comma for parameter with a separate type for each one,
     // so we build up a list of singleVarDecl.
-    return singleVarDecl(type, false, false, true);
+    return singleVarDecl(type, false, false, true, false);
   }
 
   /**
@@ -781,32 +781,38 @@ public class Parser {
    *       a list of VarDecls if multiple variables declared.
    */
   private Stmt varDecl(boolean inClassDecl) {
-    if (matchAny(STATIC, FINAL)) {
+    if (matchAny(STATIC)) {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
     boolean   isConst = matchAny(CONST);
     JactlType type    = isConst ? createUnknown() : ANY;
+    boolean   isFinal;
     if (isConst) {
+      isFinal = false;
       if (peek().is(simpleTypes)) {
         // Only simple types allowed for constants. If no type given then will work like 'var' and
         // inherit type from initialiser.
         type = JactlType.valueOf(expect(simpleTypes).getType());
+      }
+      else if (peek().is(FINAL)) {
+        unexpected("Const and final cannot be combined");
       }
       else if (peek().is(builtinTypes)) {
         unexpected("Constants can only be simple types");
       }
     }
     else {
+      isFinal = matchAny(FINAL);
       type = type(true, false, false, false);
     }
     Stmt.Stmts stmts     = new Stmt.Stmts(peek());
     JactlType  finalType = type;
     stmts.stmts = marked(false, () -> {
       List<Stmt> varDecls = new ArrayList<>();
-      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false));
+      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal));
       while (matchAny(COMMA)) {
         matchAny(EOL);
-        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false)));
+        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false, isFinal)));
       }
       return varDecls;
     });
@@ -825,7 +831,7 @@ public class Parser {
   /**
    *# singleVarDecl ::= IDENTIFIER ( EQUAL expression ) ?
    */
-  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst, boolean isParameter) {
+  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst, boolean isParameter, boolean isFinal) {
     if (isConst && peek().is(LEFT_SQUARE)) {
       // Catches: const int[] x = [1,2,3] (for example)
       error("Constants can only be simple types", previous());
@@ -876,11 +882,11 @@ public class Parser {
       initialiser = asExpr(type, initialiser);
     }
 
-    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl, isConst);
+    return createVarDecl(identifier, type, equalsToken, initialiser, inClassDecl, isConst, isFinal);
   }
 
-  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isConst) {
-    return new Stmt.VarDecl(identifier, Utils.createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, isConst, false));
+  private Stmt.VarDecl createVarDecl(Token identifier, JactlType type, Token assignmentOp, Expr initialiser, boolean inClassDecl, boolean isConst, boolean isFinal) {
+    return new Stmt.VarDecl(identifier, Utils.createVarDeclExpr(identifier, type, assignmentOp, initialiser, inClassDecl, isConst, false, isFinal));
   }
 
   private static Expr.Binary asExpr(JactlType type, Expr expr) {
@@ -938,7 +944,7 @@ public class Parser {
       // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
       // end of current scope - could handle this better but not a high priority since not an actual leak.
       //: def _$jmultiAssignN = expression() as List
-      stmts.stmts.add(createVarDecl(rhsName, ANY, equalToken, rhsExpr, isInClassDecl, false));
+      stmts.stmts.add(createVarDecl(rhsName, ANY, equalToken, rhsExpr, isInClassDecl, false, false));
       for (int i = 0; i < identifiers.size(); i++) {
         Token varName = identifiers.get(i).third;
         // def variable = _$jmultiAssignN[i]
@@ -946,14 +952,14 @@ public class Parser {
                                       new Expr.Binary(new Expr.Identifier(rhsName),
                                                       new Token(LEFT_SQUARE, equalToken),
                                                       new Expr.Literal(new Token(INTEGER_CONST, equalToken).setValue(i))),
-                                      isInClassDecl, false));
+                                      isInClassDecl, false, false));
       }
     }
     else {
       // No initialisers
       for (int i = 0; i < identifiers.size(); i++) {
         Token varName = identifiers.get(i).third;
-        stmts.stmts.add(createVarDecl(varName, identifiers.get(i).second, null, null, isInClassDecl, false));
+        stmts.stmts.add(createVarDecl(varName, identifiers.get(i).second, null, null, isInClassDecl, false, false));
       }
     }
     stmts.isSingleStmt = true;
@@ -1648,15 +1654,20 @@ public class Parser {
           Expr  unary      = unary(precedenceLevel);
           Expr  prefixExpr = new Expr.PrefixUnary(operator, unary);
           expr = prefixExpr;
-          if (operator.is(PLUS_PLUS, MINUS_MINUS) && unary instanceof Expr.Binary && ((Expr.Binary) unary).operator.is(Utils.fieldAccessOp)) {
-            // If we are acting on a field (rather than directly on a variable) then
-            // we might need to create intermediate fields etc so turn the inc/dec
-            // into the equivalent of:
-            //   ++a.b.c ==> a.b.c += 1
-            //   --a.b.c ==> a.b.c -= 1
-            // That way we can use the lvalue mechanism of creating missing fields if
-            // necessary.
-            expr = convertToLValue(unary, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
+          if (operator.is(PLUS_PLUS, MINUS_MINUS)) { 
+            if (unary instanceof Expr.Binary && ((Expr.Binary) unary).operator.is(Utils.fieldAccessOp)) {
+              // If we are acting on a field (rather than directly on a variable) then
+              // we might need to create intermediate fields etc so turn the inc/dec
+              // into the equivalent of:
+              //   ++a.b.c ==> a.b.c += 1
+              //   --a.b.c ==> a.b.c -= 1
+              // That way we can use the lvalue mechanism of creating missing fields if
+              // necessary.
+              expr = convertToLValue(unary, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
+            }
+            else if (unary instanceof Expr.Identifier) {
+              unary.isLValue = true;
+            }
           }
           mark2.done(prefixExpr);
         }
@@ -1683,6 +1694,9 @@ public class Parser {
           // necessary.
           // NOTE: for postfix we need the beforeValue if result is being used.
           postfix = convertToLValue(expr, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), true, true);
+        }
+        else if (expr instanceof Expr.Identifier) {
+          expr.isLValue = true;
         }
         return postfix;
       }
@@ -3019,7 +3033,7 @@ public class Parser {
     // We either have a type on its own or a type and an identifier for a binding variable
     JactlType type = type(false, false, false, true);
     if (matchAny(IDENTIFIER)) {
-      expr = Utils.createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, false, true);
+      expr = Utils.createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, false, true, false);
     }
     else {
       // Is a type
@@ -3916,6 +3930,7 @@ public class Parser {
       if (((Expr.Identifier)variable).identifier.getStringValue().charAt(0) == '$') {
         return error("Capture variable cannot be modified (invalid lvalue)", variable.location);
       }
+      variable.isLValue = true;
       if (arithmeticOp == null) {
         // Just a standard = or ?=
         return new Expr.VarAssign((Expr.Identifier) variable, assignmentOperator, rhs);
@@ -3954,6 +3969,7 @@ public class Parser {
 
     Token     accessOperator = fieldPath.operator;
     Expr      field          = fieldPath.right;
+    field.isLValue = true;
 
     // If arithmeticOp is null it means we have a simple = or ?=
     if (arithmeticOp == null) {
@@ -3998,7 +4014,7 @@ public class Parser {
     // Create a variable for storing rhs. We don't need it after assignment, but it hangs around until
     // end of current scope - could handle this better but not a high priority since not an actual leak.
     //: def _$jmultiAssignN = expression()
-    stmts.stmts.add(createVarDecl(rhsName, ANY, equalToken, rhsExpr, false, false));
+    stmts.stmts.add(createVarDecl(rhsName, ANY, equalToken, rhsExpr, false, false, true));
 
     List<Expr> lhs = lhsExprs.exprs;
     // For each expression in lhs create a "lvalue = _$jmultiAssignN[i]"

@@ -296,9 +296,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS))
-            || expr instanceof Expr.Literal || expr instanceof Expr.MapLiteral
-            || expr instanceof Expr.ListLiteral) {
+        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS)) ||
+            expr instanceof Expr.Literal && ((Expr.Literal)expr).value.getValue() != null ||
+            expr instanceof Expr.MapLiteral || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
         }
         expr.isResolved = true;
@@ -373,7 +373,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               error("Static field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
             }
           }
-          else if (!classDescriptor.addField(fieldName, varDecl.type, varDecl.initialiser == null)) {
+          else if (!classDescriptor.addField(fieldName, varDecl.type, varDecl.initialiser == null, varDecl.isFinal)) {
             error("Field '" + fieldName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), varDecl.name);
           }
         }
@@ -1089,11 +1089,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * @param accessOperator the type of access (DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)
    * @param field          the expression giving the field name
    * @param fieldsOnly     true if field look up only (not methods)
-   * @return Pair of field type and boolean indicating whether the field is a static constant
+   * @return Pair of field type and a pair of booleans indicating whether the field is a static constant and whether field is final
    */
-  private Pair<JactlType,Boolean> getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
-    boolean isStatic = false;
-    JactlType type = null;
+  private Pair<JactlType,Pair<Boolean,Boolean>> getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
+    boolean isStaticConst = false;
+    boolean isFinal  = false;
+    JactlType type   = null;
     if (parent.type.is(ARRAY) && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
       if (!(field.type.isNumeric() || field.type.is(ANY))) {
         error("Array index must be numeric, not " + field.type, field.location);
@@ -1110,7 +1111,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         else {
           if (parent.type.is(INSTANCE, CLASS, ARRAY)) {
             error("Invalid field name '" + fieldValue + "' for type " + parent.type, field.location);
-            return Pair.of(TYPE_FOR_BAD_REF, false);
+            return Pair.of(TYPE_FOR_BAD_REF, null);
           }
         }
       }
@@ -1118,14 +1119,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (fieldName == null) {
         if (parent.isSuper()) {
           error("Cannot determine field/method of 'super': dynamic field lookup not supported for super", field.location);
-          return Pair.of(TYPE_FOR_BAD_REF, false);
+          return Pair.of(TYPE_FOR_BAD_REF, null);
         }
         type = ANY;   // Can't determine type at compile time; wait for runtime
       }
       else {
         if (parent.isSuper() && accessOperator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
           error("Field access for 'super' cannot be performed via '" + accessOperator.getChars() + "]'", accessOperator);
-          return Pair.of(TYPE_FOR_BAD_REF, false);
+          return Pair.of(TYPE_FOR_BAD_REF, null);
         }
 
         if (parent.type.is(INSTANCE, CLASS)) {
@@ -1135,7 +1136,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (parent.type.isHostClass()) {
             // NOTE: find matching method name or throw if no such method
             jactlContext.findMatchingMethod(parent.type.getJavaClass(), fieldName, null, false, msg -> new CompileError(msg, field.location));
-            return Pair.of(FUNCTION, false);
+            return Pair.of(FUNCTION, Pair.of(false, false));
           }
           
           // Check for valid field/method name
@@ -1151,8 +1152,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (type == null && fieldName != null) {
             type = desc.getStaticField(fieldName);
             if (type != null) {
-              isStatic = true;
+              isStaticConst = true;
             }
+          }
+          if (type != null) {
+            isFinal = desc.isFinal(fieldName);
           }
           if (type == null && fieldName != null) {
             FunctionDescriptor descriptor = desc.getMethod(fieldName);
@@ -1164,7 +1168,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               // If we only want fields but have found a method then throw error
               if (fieldsOnly) {
                 error("Found method where field expected", field.location);
-                return Pair.of(TYPE_FOR_BAD_REF, false);
+                return Pair.of(TYPE_FOR_BAD_REF, null);
               }
               if (parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
                 error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
@@ -1183,7 +1187,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           if (type == null) {
             field.parentType = null;
             error("No such field " + (fieldsOnly ? "" : "or method ") + "'" + fieldName + "' for " + parent.type, field.location);
-            return Pair.of(TYPE_FOR_BAD_REF, false);
+            return Pair.of(TYPE_FOR_BAD_REF, null);
           }
         }
         else {
@@ -1200,12 +1204,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
           else {
             error("Invalid object type (" + parent.type + ") for field access (and no matching method of that name)", accessOperator);
-            return Pair.of(TYPE_FOR_BAD_REF, false);
+            return Pair.of(TYPE_FOR_BAD_REF, null);
           }
         }
       }
     }
-    return Pair.of(type, isStatic);
+    return Pair.of(type, Pair.of(isStaticConst, isFinal));
   }
 
   @Override public JactlType visitTernary(Expr.Ternary expr) {
@@ -1568,6 +1572,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.constValue = varDecl.constValue;
     }
 
+    if (expr.varDecl.isFinal && expr.isLValue) {
+      error("Cannot modify 'final' variable '" + expr.identifier.getStringValue() + "'", expr.location);
+    }
+
+    if (varDecl.isEffectivelyFinal && varDecl.initialiser != null && !varDecl.initialiser.couldBeNull) {
+      expr.couldBeNull = false;
+    }
+    
     return expr.type = varDecl.type;
   }
 
@@ -1578,8 +1590,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitVarAssign(Expr.VarAssign expr) {
-    if (expr.identifierExpr.isSuper()) {
-      error("Cannot assign to 'super'", expr.identifierExpr.location);
+    if (expr.identifierExpr.isSuper() || expr.identifierExpr.isThis()) {
+      error("Cannot assign to '" + expr.identifierExpr.identifier.getStringValue() + "'", expr.identifierExpr.location);
     }
     if (jactlContext.replMode && isScriptScope()) {
       // In repl mode if variable doesn't exist yet we create it when first assigned to
@@ -1606,7 +1618,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Flag variable as non-final since it has had an assignment to it
-    expr.identifierExpr.varDecl.isFinal = false;
+    expr.identifierExpr.varDecl.isEffectivelyFinal = false;
 
     // Track last type assigned so we can supply better completions in Intellij plugin
     expr.identifierExpr.varDecl.lastAssignedType = expr.expr.type;
@@ -1665,7 +1677,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Flag variable as non-final since it has had an assignment to it
-    expr.identifierExpr.varDecl.isFinal = false;
+    expr.identifierExpr.varDecl.isEffectivelyFinal = false;
 
     return expr.type = expr.expr.type;
   }
@@ -1706,7 +1718,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // know the field type (e.g. it comes from a Map) then we will just use ANY as the type
       // and figure it all out at runtime.
       Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-      valueExpr.left.type = getFieldType(expr.parent, expr.accessType, expr.field, true).first;
+      Pair<JactlType,Pair<Boolean,Boolean>> fieldInfo = getFieldType(expr.parent, expr.accessType, expr.field, true);
+      valueExpr.left.type = fieldInfo.first;
     }
     resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
 
@@ -1746,13 +1759,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (parent.type.is(INSTANCE, CLASS)) {
       // Type will be the field type (boxed if ?= being used due to possibility of null value)
-      Pair<JactlType,Boolean> pair = getFieldType(parent, accessType, field, true);
+      Pair<JactlType,Pair<Boolean,Boolean>> pair = getFieldType(parent, accessType, field, true);
       JactlType fieldType = pair.first;
       if (fieldType.is(CLASS)) {
         error("Invalid operation on a class", field.location);
       }
-      if (pair.second) {
-        error ("Cannot modify a constant", field.location);
+      Pair<Boolean,Boolean> flags = pair.second;
+      if (flags != null) {
+        if (flags.first) {
+          error("Cannot modify a constant", field.location);
+        }
+        if (flags.second && !valueExpr.isInitialiser) {
+          error("Cannot modify 'final' field", field.location);
+        }
       }
       if (parent.type.is(CLASS)) {
         error("Cannot modify class field", field.location);
@@ -3273,6 +3292,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (param.type.is(INSTANCE)) {
         initialiser = new Expr.ConvertTo(startToken, param.type, initialiser, sourceIdent, offsetIdent);
       }
+      initialiser.isInitialiser = true;
       Stmt.VarDecl varDecl = paramVarDecl(wrapperFunDecl, param, initialiser);
       stmtList.add(varDecl);
     }
@@ -3460,6 +3480,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                           new Expr.CheckCast(classToken, arg0, MAP),
                                                           new Token(COLON, classToken),
                                                           new Expr.InvokeUtility(classToken, RuntimeUtils.class, "copyNamedArgs", Utils.listOf(Object.class), Utils.listOf(arg0)));
+    initialiser.isInitialiser = true;
     wrapperSmts.stmts.add(createVarDecl(classToken, initWrapper, argMapName, MAP, initialiser));
 
     // Invoke base class init wrapper first
@@ -3496,6 +3517,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                                                                       Utils.listOf(Object.class), Utils.listOf(argMapIdent, fieldNameLiteral))),
                                                                  new Token(COLON, fieldToken),
                                                                  new Expr.Cast(fieldToken, varDecl.type, varDecl.initialiser));
+      value.isInitialiser = true;
       Expr.FieldAssign assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
                                                      new Token(DOT, fieldToken),
                                                      new Expr.Literal(fieldToken),

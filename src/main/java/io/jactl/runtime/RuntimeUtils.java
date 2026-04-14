@@ -1970,7 +1970,7 @@ public class RuntimeUtils {
       return returnTypeOfField ? storedValue : value;
     }
     catch (IllegalAccessException e) {
-      throw new IllegalStateException("Internal error: " + e, e);
+      throw new RuntimeError("Cannot modify 'final' field", source, offset);
     }
   }
 

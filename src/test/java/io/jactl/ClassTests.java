@@ -146,7 +146,6 @@ public class ClassTests extends BaseTest {
   @Test public void staticFields() {
     alwaysEvalConsts = true;         // Have to have this so that we use const expressions for static fields
     testError("class X { static int i = 0; }; new X().i", "cannot be static");
-    testError("class X { final int i = 0; }; new X().i", "cannot be final");
     testError("class X { static final int i = 1 }; X.i = 2; X.i", "cannot be static");
     testError("class X { int i = 1 }; X.i", "static access to non-static field");
     testError("class X { const int i = sleep(0,1) }; X.i", "must be initialised to simple constant values");

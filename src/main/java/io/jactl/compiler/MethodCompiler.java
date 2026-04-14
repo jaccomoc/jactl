@@ -762,7 +762,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         compile(expr.parent);
         compile(expr.field);
         box();
-        storeValueParentField(expr.accessType);
+        storeValueParentField(expr.accessType, expr.field.location);
         if (!expr.isResultUsed) {
           popVal();
         }
@@ -835,7 +835,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     check(!isStatic, "cannot assign to static field");
     boolean  arrayElem         = !isField && (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE));
 
+    boolean simpleIndex;
     if (isField) {
+      simpleIndex = false;
       if (isStatic) {
         popVal();
       }
@@ -844,7 +846,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     else {
-      compile(expr.field);
+      simpleIndex = compileIndex(expr.parent, expr.field);
       if (arrayElem) {
         unbox();
       }
@@ -860,7 +862,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Runnable loadField = () -> {
       if (arrayElem) {
-        loadIndexField(expr.parent, expr.accessType, expr.field, parentType);
+        loadIndexField(expr.parent, expr.accessType, expr.field, parentType, simpleIndex);
       }
       else if (isField) {
         loadClassField(parentType.getInternalName(), fieldName, fieldType, isStatic);
@@ -1513,6 +1515,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                   expr.type.isBoxedOrUnboxed(LONG) ? longIdx
                                                    : doubleIdx;
       List<Integer> ops = (List<Integer>) opCodes.get(index);
+      Runnable compileOps = () -> {
+        ops.forEach(op -> mv.visitInsn(op));
+        popType(2);
+        if (expr.type.is(BYTE)) {
+          _loadConst(255);
+          mv.visitInsn(IAND);
+        }
+        pushType(expr.type);
+      };
       // Check for divide by zero or remainder 0 if int/long (double returns NaN or INFINITY)
       if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
         _dupVal();
@@ -1525,14 +1536,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _popVal();
         throwError("Divide by zero error", expr.operator);
         mv.visitLabel(nonZero);
+//        tryCatch(ArithmeticException.class, false,
+//                 () -> compileOps.run(),
+//                 () -> {
+//                   popVal();
+//                   throwError("Divide by zero error", expr.operator);
+//                 });
+        compileOps.run();
       }
-      ops.forEach(op -> mv.visitInsn(op));
-      popType(2);
-      if (expr.type.is(BYTE)) {
-        _loadConst(255);
-        mv.visitInsn(IAND);
+      else {
+        compileOps.run();
       }
-      pushType(expr.type);
     }
     else
     if (expr.type.is(DECIMAL)) {
@@ -1655,7 +1669,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           if (expr.left.couldBeNull) {
             if (expr.operator.is(QUESTION_SQUARE)) {
               int temp = saveAndDupVal();   // save parent for null check
-              compile(expr.right);
+              boolean simpleIndex = compileIndex(expr.left, expr.right);
               expect(2);
               _loadLocal(temp);
               Label ifNotNull = new Label();
@@ -1667,7 +1681,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
               mv.visitJumpInsn(GOTO, end);
               mv.visitLabel(ifNotNull);     // :ifNotNull
               expect(2);
-              loadIndexField(expr.left, expr.operator, expr.right, parentType);
+              loadIndexField(expr.left, expr.operator, expr.right, parentType, simpleIndex);
               box();
               mv.visitLabel(end);           // :end
               stack.freeSlot(temp);
@@ -1675,8 +1689,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             }
             throwIfNull("Cannot retrieve field from null parent", expr.left.location);
           }
-          compile(expr.right);
-          loadIndexField(expr.left, expr.operator, expr.right, parentType);
+          boolean simpleIndex = compileIndex(expr.left, expr.right);
+          loadIndexField(expr.left, expr.operator, expr.right, parentType, simpleIndex);
         }
         else {
           compile(expr.right);
@@ -1711,16 +1725,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (expr instanceof Expr.Identifier) {
       Expr.Identifier ident = (Expr.Identifier)expr;
-      if (ident.varDecl.isFinal && ident.varDecl.initialiser != null && !couldBeNull(ident.varDecl.initialiser)) {
+      if (ident.varDecl.isEffectivelyFinal && ident.varDecl.initialiser != null && !couldBeNull(ident.varDecl.initialiser)) {
         return false;
       }
     }
     return expr.couldBeNull;
   }
 
-  private void loadIndexField(Expr parent, Token operator, Expr index, JactlType parentType) {
+  private void loadIndexField(Expr parent, Token operator, Expr index, JactlType parentType, boolean simpleIndex) {
     if (parentType.is(ARRAY, STRING)) {
-      loadArrElemOrStringChar(parent, index);
+      loadArrElemOrStringChar(parent, index, simpleIndex);
     }
     else {
       if (parentType.is(ANY)) {
@@ -5284,27 +5298,71 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
+   * Compile an index for given parent. If we know the size of the parent and
+   * we have a constant number as the index we can avoid some runtime checks.
+   * @param   parent   the parent
+   * @param   index    the index
+   * @return true if we had a constant numerical index and index is in range
+   */
+  private boolean compileIndex(Expr parent, Expr index) {
+    JactlType parentType = parent.type;
+    
+    // If we have a "final" array and we know the size of its initialiser then we know
+    // the size of the array so we can avoid having to do runtime checks if we also
+    // know that the value of the index at compile time
+    if (index.isConst && index.constValue instanceof Number && parent instanceof Expr.Identifier && parentType.is(ARRAY)) {
+      Expr.Identifier ident = (Expr.Identifier) parent;
+      if (ident.varDecl.isEffectivelyFinal) {
+        int length = length(ident.varDecl.initialiser);
+        if (length >= 0) {
+          int idx = ((Number)index.constValue).intValue();
+          int originalIdx = idx;
+          if (idx < 0) {
+            idx = idx + length;
+          }
+          if (idx < 0 || idx >= length) {
+            error("Array index out of bounds: index " + originalIdx + " not in range for array of size " + length, index.location);
+            return false;
+          }
+          expect(1);
+          loadConst(idx);
+          return true;
+        }
+      }
+    }
+
+    compile(index);
+    return false;
+  }
+  
+  /**
    * Load array element or string char
    * <p>Expect on stack: ...,parent,index
    * @param parent the parent expr
    * @param index  the index
+   * @param simpleIndex true if index is a range checked constant number
    */
-  private void loadArrElemOrStringChar(Expr parent, Expr index) {
+  private void loadArrElemOrStringChar(Expr parent, Expr index, boolean simpleIndex) {
     JactlType parentType = parent.type;
+    expect(2);
     convertToInt(index.location);
-    expect(2);        // in case parent has been stored in a local due to async in index expression
 
-    Label NOT_NEGATIVE = new Label();
+    if (simpleIndex) {
+      unsafeLoadElem(parentType, null);
+      return;
+    }
+    
     // Check for negative value (offset from length) unless we have a constant value that is already >= 0
     if (!index.isConst || !(index.constValue instanceof Number) || ((Number) index.constValue).intValue() < 0) {
+      Label NOT_NEGATIVE = new Label();
       _dupVal();
       mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
       mv.visitInsn(SWAP);
       mv.visitInsn(DUP_X1);
       emitLength(parentType, parent.location);
       mv.visitInsn(IADD);
+      mv.visitLabel(NOT_NEGATIVE);     // :NOT_NEGATIVE
     }
-NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
 
     tryCatch(IndexOutOfBoundsException.class, false,
              () -> {
@@ -5316,6 +5374,25 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
              });
   }
 
+  private int length(Expr expr) {
+    if (expr instanceof Expr.Identifier) {
+      Expr.VarDecl varDecl = ((Expr.Identifier) expr).varDecl;
+      if (varDecl.isEffectivelyFinal) {
+        expr = varDecl.initialiser;
+      }
+    }
+    if (expr instanceof Expr.InvokeNew) {
+      Expr dim1 = ((Expr.InvokeNew) expr).dimensions.get(0);
+      if (dim1.isConst && dim1.constValue instanceof Number) {
+        return ((Number)dim1.constValue).intValue();
+      }
+    }
+    else if (expr instanceof Expr.ListLiteral) {
+      return ((Expr.ListLiteral) expr).exprs.size();
+    }
+    return -1;
+  }
+  
   void emitLength(Token location) {
     emitLength(peek(), location);
   }
@@ -5398,24 +5475,46 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     if (expr.field instanceof Expr.Literal && expr.field.type.isNumeric()) {
       Number value = (Number)((Expr.Literal) expr.field).value.getValue();
       int    index = value.intValue();
-      tryCatch(ArrayIndexOutOfBoundsException.class, false,
-               () -> {
-                 loadLocal(parentVar);
-                 swap();
-                 loadConst(index);
-                 if (index < 0) {
-                   _loadLocal(parentVar);
-                   mv.visitInsn(ARRAYLENGTH);
-                   mv.visitInsn(IADD);
-                 }
-                 swap();
-                 Utils.storeArrayElement(mv, peek());
-                 popType(3);
-               },
-               () -> {
-                 loadConst(index);
-                 _throwErrorWithInt("Array index out of bounds: ", expr.field.location);
-               });
+      int parentLength = length(expr.parent);
+      if (parentLength >= 0) {
+        if (index < 0) {
+          // Index is from end of array
+          index += parentLength;
+        }
+        if (index < 0 || index >= parentLength) {
+          error("Array index out of bounds: index " + index + " not in range for array of size " + parentVar, expr.field.location);
+          return;
+        }
+        else {
+          loadLocal(parentVar);
+          swap();
+          loadConst(index);
+          swap();
+          Utils.storeArrayElement(mv, peek());
+          popType(3);
+        }
+      }
+      else {
+        int finalIndex = index;
+        tryCatch(ArrayIndexOutOfBoundsException.class, false,
+                 () -> {
+                   loadLocal(parentVar);
+                   swap();
+                   loadConst(finalIndex);
+                   if (finalIndex < 0) {
+                     _loadLocal(parentVar);
+                     mv.visitInsn(ARRAYLENGTH);
+                     mv.visitInsn(IADD);
+                   }
+                   swap();
+                   Utils.storeArrayElement(mv, peek());
+                   popType(3);
+                 },
+                 () -> {
+                   loadConst(finalIndex);
+                   _throwErrorWithInt("Array index out of bounds: ", expr.field.location);
+                 });
+      }
     }
     else {
       compile(expr.field);
@@ -5462,17 +5561,17 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
   /**
    * Expect to have on stack: ..., value, parent, field
    */
-  private void storeValueParentField(Token accessOperator) {
+  private void storeValueParentField(Token accessOperator, Token location) {
     expect(3);
     if (peek2().is(MAP)) {
       loadConst(!insideTryCatchNullError());
-      loadLocation(accessOperator);
+      loadLocation(location);
       invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_MAP_FIELD, Object.class, Map.class, Object.class, boolean.class, String.class, int.class);
     }
     else {
       loadConst(accessOperator.is(DOT, QUESTION_DOT));
       loadConst(!insideTryCatchNullError());
-      loadLocation(accessOperator);
+      loadLocation(location);
       invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_VALUE_PARENT_FIELD, Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
     }
   }
