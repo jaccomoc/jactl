@@ -2,7 +2,11 @@ package io.jactl.benchmark;
 
 import io.jactl.Utils;
 
+import java.io.IOException;
 import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -13,16 +17,24 @@ import java.util.stream.Collectors;
 
 public class GenerateClasses {
 
-  static Pattern commentLine = Pattern.compile("^ *#");
-  static Pattern classLine = Pattern.compile("^class +([A-Z][a-z]*)");
-  static Pattern endClassPattern = Pattern.compile("^ +}");
-  static Pattern fieldPattern = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);");
-  static Pattern attrPattern = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)");
-  static Pattern otherPattern = Pattern.compile("^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)");
+  static Pattern commentLine         = Pattern.compile("^ *#");
+  static Pattern classLine           = Pattern.compile("^class +([A-Z][a-z]*)");
+  static Pattern endClassPattern     = Pattern.compile("^ +}");
+  static Pattern fieldPattern        = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+);");
+  static Pattern attrPattern         = Pattern.compile("([A-Za-z][a-zA-Z<,>.]*) +@([a-zA-Z0-9]+)");
+  static Pattern otherPattern        = Pattern.compile("^  ([A-Za-z][a-zA-Z<,>.]*) +([a-zA-Z0-9]+)");
   static Pattern classExtendsPattern = Pattern.compile("class (.*) extends +(\\w*)");
-  static Pattern publicPattern = Pattern.compile("public");
+  static Pattern publicPattern       = Pattern.compile("public");
+  static Pattern stripInlineComment  = Pattern.compile(" *#.*$");
+  static Pattern addPublicPrefix     = Pattern.compile("^( +)");
+  static Pattern atSign              = Pattern.compile("@");
+  static Pattern classKeyword        = Pattern.compile("\\bclass\\b");
 
   public static void run(String source, PrintStream out) {
+    run(source, new PrintWriter(out));
+  }
+
+  public static void run(String source, PrintWriter out) {
     List    types       = new ArrayList<>();
     List<List<String>> fields      = new ArrayList<>();
     List    attributes = new ArrayList<>();
@@ -39,7 +51,7 @@ public class GenerateClasses {
       if (matcher.find()) {
         continue;
       }
-      it = it.replaceAll(" *#.*$", "");
+      it = stripInlineComment.matcher(it).replaceAll("");
 
       if (it.startsWith("package")) {
         out.println(it);
@@ -116,14 +128,14 @@ public class GenerateClasses {
       matcher = fieldPattern.matcher(it);
       if (inClass && matcher.find()) {
         fields.add(Utils.listOf(matcher.group(2), matcher.group(1)));
-        it = it.replaceAll("^( +)", "$1public ");
+        it = addPublicPrefix.matcher(it).replaceAll("$1public ");
       }
       matcher = attrPattern.matcher(it);
       if (inClass && matcher.find()) {
         attributes.add(matcher.group(2));
-        it = it.replaceAll("^( +)", "$1public ");
+        it = addPublicPrefix.matcher(it).replaceAll("$1public ");
       }
-      it = it.replaceAll("@", "");
+      it = atSign.matcher(it).replaceAll("");
 
       matcher = classExtendsPattern.matcher(it);
       if (matcher.find()) {
@@ -131,18 +143,19 @@ public class GenerateClasses {
         className = matcher.group(1);
         extendsClass = matcher.group(2);
         types.add(className);
-        it = it.replaceAll("class", "public static class");
+        it = classKeyword.matcher(it).replaceAll("public static class");
       }
 
       matcher = publicPattern.matcher(it);
       if (!inClass && !matcher.find()) {
         matcher = otherPattern.matcher(it);
         if (matcher.find()) {
-          it = it.replaceAll("^( +)", "$1public ");
+          it = addPublicPrefix.matcher(it).replaceAll("$1public ");
         }
       }
       out.println(it);
     }
+    out.flush();
   }
 }
 

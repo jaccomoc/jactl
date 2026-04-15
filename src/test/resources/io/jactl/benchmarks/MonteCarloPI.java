@@ -1,0 +1,41 @@
+package io.jactl.benchmark;
+
+import java.io.PrintWriter;
+
+public class MonteCarloPI {
+  static class PRandom {
+    final long[] s = new long[] { -2152535657050944081L, 7960286522194355700L, 487617019471545679L, -537132696929009172L };
+
+    long nextLong() {
+      long result = rol(s[1] * 5, 7) * 9;
+      long t = s[1] << 17;
+      s[2] ^= s[0];
+      s[3] ^= s[1];
+      s[1] ^= s[2];
+      s[0] ^= s[3];
+      s[2] ^= t;
+      s[3] = rol(s[3], 45);
+      return result;
+    }
+
+    int nextInt(int bound) {
+      return (int)(((nextLong() % bound) + bound) % bound);
+    }
+
+    static long rol(long i, int amt) { return (i << amt) | (i >>> -amt);  }
+  }
+
+  public static void run(String source, PrintWriter out) {
+    double x, y;
+    PRandom r = new PRandom();
+    int count = 0;
+    int loops = 1_000_000;
+    int N = 1_000_000_000;
+    for (int i = 0; i < loops; i++) {
+      x = r.nextInt(N)/(double)N;
+      y = r.nextInt(N)/(double)N;
+      if (x*x + y*y <= 1) count++;
+    }
+    out.println("PI=" + 4*(double)count/(double)loops);
+  }
+}

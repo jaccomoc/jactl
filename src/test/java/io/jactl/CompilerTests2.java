@@ -2691,6 +2691,11 @@ public class CompilerTests2 extends BaseTest {
     testError("def f(a,b) {a+b}; f(a:123,", "Unexpected end-of-file");
   }
 
+  @Test public void testStuff() {
+    debugLevel = 1;
+    test("def f = { -> 10 }; f()", 10);
+  }
+  
   @Test public void simpleClosures() {
     test("{;}()", null);
     test("int i = 1, j = 2; boolean b = i == j-1; b == true",  true);

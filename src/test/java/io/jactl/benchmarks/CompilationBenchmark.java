@@ -21,6 +21,8 @@ import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
 import io.jactl.CompileError;
 import io.jactl.JactlContext;
+import io.jactl.Pair;
+import io.jactl.Utils;
 import io.jactl.compiler.Compiler;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
@@ -29,27 +31,28 @@ import org.openjdk.jmh.runner.options.*;
 import javax.tools.*;
 import java.io.*;
 import java.net.URI;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
 @State(Scope.Thread)
-@Warmup(iterations = 3, time = 2)
-@Measurement(iterations = 5, time = 2)
+@Warmup(iterations = 3, time = 5)
+@Measurement(iterations = 5, time = 5)
 @Fork(value = 1, jvmArgs = "-ea")
 public class CompilationBenchmark {
 
+  private static final int FILE_COUNT = 100;    // How many files to compile at once
+  
   // Java compilation state
-  private JavaCompiler    javaCompiler;
-  private StringFile      javaFile;
-  private TestFileManager javaFileManager;
-  private String          javaSource;
-  private Writer          devNull;
-  private TestClassLoader javaClassLoader;
+  private JavaCompiler     javaCompiler;
+  private List<StringFile> javaFiles;
+  private TestFileManager  javaFileManager;
+  private String           javaSource;
+  private Writer           devNull;
+  private TestClassLoader  javaClassLoader;
 
   // Jactl compilation state
   private JactlContext jactlContext;
@@ -78,9 +81,12 @@ public class CompilationBenchmark {
     // Java
     javaCompiler    = ToolProvider.getSystemJavaCompiler();
     javaFileManager = new TestFileManager(javaCompiler.getStandardFileManager(null, null, null));
-    javaSource      = readResource("/io/jactl/benchmark/GenerateClasses.java");
+    javaSource      = readResource("/io/jactl/benchmarks/GenerateClasses.java");
     javaLineCount   = countLines(javaSource);
-    javaFile        = new StringFile("GenerateClasses.java", javaSource);
+    javaFiles = IntStream.range(0, FILE_COUNT)
+                         .mapToObj(i -> Pair.of(i, javaSource.replaceAll("class GenerateClasses", "class GenerateClasses" + i)))
+                         .map(pair -> new StringFile("GenerateClasses" + pair.first + ".java", pair.second))
+                         .collect(Collectors.toList());
     javaClassLoader = new TestClassLoader(this.getClass().getClassLoader());
     devNull         = new Writer() {
       public void write(char[] cbuf, int off, int len) {}
@@ -90,46 +96,53 @@ public class CompilationBenchmark {
 
     // Jactl
     jactlContext       = JactlContext.create().build();
-    jactlSource        = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
+    jactlSource        = readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
     jactlLineCount     = countLines(jactlSource);
     jactlScriptCounter = 0;
 
     // Groovy
-    groovyShell     = new GroovyShell(groovyBinding);
-    groovySource    = readResource("/io/jactl/benchmark/GenerateClasses.groovy");
+    groovyShell     = new GroovyShell(new TestClassLoader(this.getClass().getClassLoader()), groovyBinding);
+    groovySource    = readResource("/io/jactl/benchmarks/GenerateClasses.groovy");
     groovyLineCount = countLines(groovySource);
   }
 
   @Benchmark
   public void javaCompilation(LineCounter counter) {
-    boolean result = javaCompiler.getTask(devNull, javaFileManager, null, null, null, Arrays.asList(javaFile)).call();
+    boolean result = javaCompiler.getTask(devNull, javaFileManager, null, null, null, javaFiles).call();
     assert result : "Java compilation failed";
-    StringFile compiledClass = javaFileManager.getFile("io.jactl.benchmark.GenerateClasses");
-    assert compiledClass != null : "Couldn't find compiled class with name GenerateClasses";
-    javaClassLoader.defineClass("io.jactl.benchmark.GenerateClasses", compiledClass.getBytes());
-    counter.linesCompiled += javaLineCount;
+    for (int i = 0; i < FILE_COUNT; i++) {
+      String     className     = "io.jactl.benchmark.GenerateClasses" + i;
+      StringFile compiledClass = javaFileManager.getFile(className);
+      assert compiledClass != null : "Couldn't find compiled class with name " + className;
+      javaClassLoader.defineClass(className, compiledClass.getBytes());
+      counter.linesCompiled += javaLineCount;
+    }
   }
 
   @Benchmark
   public void jactlCompilation(LineCounter counter) {
     try {
-      Compiler.compileScript(jactlSource, jactlContext, jactlBindings);
+      for (int i = 0; i < FILE_COUNT; i++) {
+        Compiler.compileScript(jactlSource, jactlContext, "GenerateClasses" + i, Utils.DEFAULT_JACTL_PKG, jactlBindings);
+        counter.linesCompiled += jactlLineCount;
+      }
     }
     catch (CompileError e) {
       assert false : "Jactl compilation failed: " + e.getMessage();
     }
-    counter.linesCompiled += jactlLineCount;
   }
 
   @Benchmark
   public void groovyCompilation(LineCounter counter) {
     try {
-      groovyShell.parse(groovySource);
+      for (int i = 0; i < FILE_COUNT; i++) {
+        groovyShell.parse(groovySource, "GenerateClasses" + i, groovyBinding);
+        counter.linesCompiled += groovyLineCount;
+      }
     }
     catch (Exception e) {
       assert false : "Groovy compilation failed: " + e.getMessage();
     }
-    counter.linesCompiled += groovyLineCount;
   }
 
   public static void main(String[] args) throws Exception {

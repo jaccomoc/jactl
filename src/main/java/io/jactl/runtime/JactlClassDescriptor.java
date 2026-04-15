@@ -231,7 +231,14 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
 
   @Override
   public boolean isFinal(String fieldName) {
-    return finalFields.contains(fieldName);
+    boolean isFinal = finalFields.contains(fieldName);
+    if (isFinal) {
+      return true;
+    }
+    if (getBaseClassDescriptor() != null) {
+      return getBaseClassDescriptor().isFinal(fieldName);
+    }
+    return false;
   }
 
   @Override

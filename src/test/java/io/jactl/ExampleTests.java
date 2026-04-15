@@ -277,4 +277,25 @@ public class ExampleTests {
     
     assertEquals(2.8284271247461903D, Jactl.eval("Point p = Point.of(1,2); p.distanceTo(Point.of(3,4))"));
   }
+  
+  @Test public void jactlMain() throws IOException {
+    PrintStream out = System.out;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    System.setOut(ps);
+    try {
+      assertEquals(0, new Jactl().run(new String[]{"-e", "println 3"}));
+      assertEquals("3\n", baos.toString());
+    }
+    finally {
+      System.setOut(out);
+    }
+  }
+  
+  @Test public void jactlMonteCarlo() throws IOException {
+    String jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/MonteCarloPI.jactl");
+    JactlContext ctx = JactlContext.create().debug(1).build();
+    JactlScript script = Jactl.compileScript(jactlSource, new HashMap<>(), ctx);
+    script.runSync(new HashMap<>());
+  }
 }

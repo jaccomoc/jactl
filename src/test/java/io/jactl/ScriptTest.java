@@ -17,8 +17,6 @@
 
 package io.jactl;
 
-import io.jactl.runtime.RuntimeState;
-import io.jactl.runtime.RuntimeUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -29,13 +27,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ScriptTest {
   @Test public void generateExprClasses() throws Exception {
-    String                script   = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
+    String                script   = readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
     String                source   = readResource("/Expr.java");
     String                expected = readResource("/io/jactl/Expr.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();
@@ -46,7 +43,7 @@ public class ScriptTest {
   }
 
   @Test public void generateStmtClasses() throws Exception {
-    String                script   = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
+    String                script   = readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
     String                source   = readResource("/Stmt.java");
     String                expected = readResource("/io/jactl/Stmt.java.generated").trim();
     ByteArrayOutputStream baos   = new ByteArrayOutputStream();

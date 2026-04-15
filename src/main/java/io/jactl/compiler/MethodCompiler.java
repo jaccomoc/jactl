@@ -182,6 +182,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private       int           longArr = -1;
   private       int           objArr  = -1;
   private       int           globalsVar = -1;    // For when access globals from classes
+  
+  private       JactlType     desiredType;        // Used when compiling expressions to indicate the type we are
+                                                  // about to convert to. For literal values this lets us load a
+                                                  // constant of the right type to avoid having to do an unnecessary
+                                                  // runtime conversion
 
   private List<CompileError>  errors = new ArrayList<>();
 
@@ -411,6 +416,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                       stmt.falseStmt != null && stmt.falseStmt.isAsync;
     emitIf(isAsync, IfTest.IS_TRUE,
            () -> {
+             desiredType = BOOLEAN;
              compile(stmt.condition);
              convertToBoolean(false, stmt.condition);
            },
@@ -509,15 +515,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       if (expr.isConst) {
         if (expr.isResultUsed) {
-          loadConst(expr.constValue);
-          if (expr.constValue == null) {
+          Object constVal = desiredType != null ? convertConstTo(expr.constValue, desiredType) : expr.constValue;
+          loadConst(constVal);
+          if (constVal == null) {
             popType();
             pushType(expr.type);
           }
         }
+        desiredType = null;
         return null;
       }
 
+      desiredType = null;
       try {
         if (classCompiler.annotate()) {
           _loadConst(Utils.repeat("  ", indent++) + "==> " + expr.getClass().getName() + "<" + expr.hashCode() + ">");
@@ -546,6 +555,39 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private static Object convertConstTo(Object val, JactlType type) {
+    if (val == null) {
+      return null;
+    }
+    switch (type.getType()) {
+      case BOOLEAN: return RuntimeUtils.isTruth(val, false);
+      case STRING:  return RuntimeUtils.toString(val);
+      case INT: {
+        if (val instanceof Number) { return ((Number) val).intValue(); }
+        return val;
+      }
+      case BYTE: {
+        if (val instanceof Number) { return (byte)(((Number) val).intValue()); }
+        return val;
+      }
+      case LONG: {
+        if (val instanceof Number) { return ((Number) val).longValue(); }
+        return val;
+      }
+      case DOUBLE: {
+        if (val instanceof Number) { return ((Number) val).doubleValue(); }
+        return val;
+      }
+      case DECIMAL: {
+        if (val instanceof Number) { return RuntimeUtils.toBigDecimal((Number) val); }
+        return val;
+      }
+      default: {
+        return val;
+      }
+    }
+  }
+  
   @Override public Void visitStackCast(Expr.StackCast expr) {
     convertTo(expr.castType, expr, true, expr.location);
     return null;
@@ -585,6 +627,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       if (expr.initialiser != null) {
+        desiredType = expr.type;
         compile(expr.initialiser);
         // No need to cast if null
         if (expr.type.isRef() && expr.initialiser.isNull()) {
@@ -815,6 +858,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitLabel(end);
     }
     else {
+      desiredType = expr.type;
       compile(expr.expr);
       convertTo(expr.type, expr.expr, true, expr.expr.location);
       storeFieldValue.run();
@@ -1125,6 +1169,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           stack.convertStackToLocals();
         }
         if (expr.left.type.isPrimitive()) {
+          desiredType = expr.type;
           compile(expr.left);
           convertTo(expr.type, null, false, expr.left.location);
         }
@@ -1150,6 +1195,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           mv.visitJumpInsn(GOTO, end);
           mv.visitLabel(isNull);   // :isNull
           mv.visitInsn(POP);
+          desiredType = expr.type;
           compile(expr.right);
           convertTo(expr.type, expr.right, true, expr.right.location);
           mv.visitLabel(end);         // :end
@@ -1181,6 +1227,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
               throwIfNull("Left hand side of String concatenation is null", expr.left.location);
             }
             convertToString();
+            desiredType = STRING;
             compile(expr.right);
             convertToString();
             invokeMethod(String.class, "concat", String.class);
@@ -1220,8 +1267,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case STAR: {
         //= String repeat
         if (expr.type.is(STRING)) {
+          desiredType = STRING;
           compile(expr.left);
           convertToString();
+          desiredType = INT;
           compile(expr.right);
           convertTo(INT, expr.right, true, expr.right.location);
           expect(2);
@@ -1269,15 +1318,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       case AS: {
         //= as
-        compile(expr.left);
         if (expr.type.is(BOOLEAN)) {
+          desiredType = BOOLEAN;
+          compile(expr.left);
           convertToBoolean(false);
           return null;
         }
         if (expr.type.is(STRING)) {
+          desiredType = STRING;
+          compile(expr.left);
           convertToStringOrNull();
           return null;
         }
+        compile(expr.left);
         if (peek().unboxed().is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) && expr.type.is(BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL) ||
             peek().is(ANY, INSTANCE, MAP, LIST) && expr.type.is(INSTANCE)) {
           convertTo(expr.type, expr.left, !peek().isPrimitive(), expr.location);
@@ -1303,6 +1356,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case AMPERSAND_AMPERSAND:
       case PIPE_PIPE: {
         //= Boolean && or ||
+        desiredType = BOOLEAN;
         compile(expr.left);
         convertToBoolean(false, expr.left);
         
@@ -1315,6 +1369,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(1);
           mv.visitJumpInsn(IFEQ, isFalse);    // If first operand is false
           popType();
+          desiredType = BOOLEAN;
           compile(expr.right);
           convertToBoolean(false, expr.right);
           expect(1);
@@ -1333,6 +1388,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(1);
           mv.visitJumpInsn(IFNE, isTrue);
           popType();
+          desiredType = BOOLEAN;
           compile(expr.right);
           convertToBoolean(false, expr.right);
           expect(1);
@@ -1360,8 +1416,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             // There is no ICMP instruction so we turn int and boolean into longs so we can use LCMP
             maxType = LONG;
           }
+          desiredType = maxType;
           compile(expr.left);
           convertTo(maxType, expr.left, false, expr.left.location);
+          desiredType = maxType;
           compile(expr.right);
           convertTo(maxType, expr.right, false, expr.right.location);
           expect(2);
@@ -1421,33 +1479,97 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                               expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
                               expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
                               INT;
+      if (operandType.is(INT) && expr.operator.is(LESS_THAN,LESS_THAN_EQUAL,GREATER_THAN,GREATER_THAN_EQUAL)) {
+        // Promote ints to longs for these comparisons
+        operandType = LONG;
+      }
+      desiredType = operandType;
       compile(expr.left);
       convertTo(operandType, expr.left, false, expr.left.location);
       unbox();
+      desiredType = operandType;
       compile(expr.right);
       convertTo(operandType, expr.right, false, expr.right.location);
       unbox();
       expect(2);
-      mv.visitInsn(operandType.is(INT) ? ISUB : operandType.is(LONG) ? LCMP : DCMPL);
+      if (operandType.is(INT)) {
+        // We have INT
+        switch (expr.operator.getType()) {
+          // Turn -x, 0, x value into appropriate boolean of 0 or 1
+          case EQUAL_EQUAL:
+          case TRIPLE_EQUAL:
+            mv.visitInsn(IXOR);       // a ^ b
+            mv.visitInsn(DUP);
+            mv.visitInsn(INEG);
+            mv.visitInsn(IOR);        // (a - b) | -(a - b)
+            mv.visitInsn(ICONST_M1);
+            mv.visitInsn(ISHR);      // ((a - b) | -(a - b)) >> 31 : 0 if equal, -1 if unequal
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(IADD);
+            break;
+          case BANG_EQUAL:
+          case BANG_EQUAL_EQUAL:
+            mv.visitInsn(IXOR);       // a ^ b
+            mv.visitInsn(DUP);
+            mv.visitInsn(INEG);
+            mv.visitInsn(IOR);        // (a - b) | -(a - b)
+            mv.visitInsn(ICONST_M1);
+            mv.visitInsn(IUSHR);      // ((a - b) | -(a - b)) >> 31 : 0 if equal, 1 if unequal 
+            break;
+          default:
+            throw new IllegalStateException("Internal error: unexpected operator " + expr.operator);
+        }
+      }
+      else {
+        mv.visitInsn(operandType.is(LONG) ? LCMP : expr.operator.is(LESS_THAN,LESS_THAN_EQUAL) ? DCMPG : DCMPL);
+        switch (expr.operator.getType()) {
+          // Turn -1, 0, 1 value into appropriate boolean of 0 or 1
+          case EQUAL_EQUAL:
+          case TRIPLE_EQUAL:
+            // (x*x) ^ 1
+            mv.visitInsn(DUP);
+            mv.visitInsn(IMUL);
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(IXOR);
+            break;
+          case BANG_EQUAL:
+          case BANG_EQUAL_EQUAL:
+            // x * x
+            mv.visitInsn(DUP);
+            mv.visitInsn(IMUL);
+            break;
+          case LESS_THAN:
+            // x >>> 31  (< 0 maps to 1, >= 0 maps to 0)
+            // note IUSHR only uses bottom 5 bits so push -1 and we will shift 31 bits 
+            mv.visitInsn(ICONST_M1);
+            mv.visitInsn(IUSHR);
+            break;
+          case LESS_THAN_EQUAL:
+            // (x - 1) >>> 31
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(ISUB);
+            mv.visitInsn(ICONST_M1);
+            mv.visitInsn(IUSHR);
+            break;
+          case GREATER_THAN:
+            // (x + 1) >> 1
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(IADD);
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(ISHR);
+            break;
+          case GREATER_THAN_EQUAL:
+            // (x >> 31) + 1
+            mv.visitInsn(ICONST_M1);
+            mv.visitInsn(ISHR);
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(IADD);
+            break;
+          default:
+            throw new IllegalStateException("Internal error: unexpected operator " + expr.operator);
+        }
+      }
       popType(2);
-      int opCode = expr.operator.is(EQUAL_EQUAL) ? IFEQ :
-                   expr.operator.is(TRIPLE_EQUAL) ? IFEQ :
-                   expr.operator.is(BANG_EQUAL) ? IFNE :
-                   expr.operator.is(BANG_EQUAL_EQUAL) ? IFNE :
-                   expr.operator.is(LESS_THAN) ? IFLT :
-                   expr.operator.is(LESS_THAN_EQUAL) ? IFLE :
-                   expr.operator.is(GREATER_THAN) ? IFGT :
-                   expr.operator.is(GREATER_THAN_EQUAL) ? IFGE :
-                   -1;
-      check(opCode != -1, "Unexpected operator ", expr.operator);
-      Label resultIsTrue = new Label();
-      Label end          = new Label();
-      mv.visitJumpInsn(opCode, resultIsTrue);
-      _loadConst(false);
-      mv.visitJumpInsn(GOTO, end);
-      mv.visitLabel(resultIsTrue);   // :resultIsTrue
-      _loadConst(true);
-      mv.visitLabel(end);            // :end
       pushType(BOOLEAN);
       return null;
     }
@@ -1770,14 +1892,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitTernary(Expr.Ternary expr) {
     emitIf(expr.second.isAsync || expr.third.isAsync, IfTest.IS_TRUE,
            () -> {
+             desiredType = BOOLEAN;
              compile(expr.first);
              convertToBoolean(false, expr.first);
            },
            () -> {
+             desiredType = expr.type;
              compile(expr.second);
              convertTo(expr.type, expr.second, true, expr.second.location);
            },
            () -> {
+             desiredType = expr.type;
              compile(expr.third);
              convertTo(expr.type, expr.third, true, expr.third.location);
            }
@@ -1826,6 +1951,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitCast(Expr.Cast expr) {
+    desiredType = expr.type;
     compile(expr.expr);
     convertTo(expr.type, expr.expr, true, expr.location);
     return null;
@@ -1967,6 +2093,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         dupVal();
         loadConst(i);
         Expr subExpr = expr.exprList.get(i);
+        desiredType = STRING;
         compile(subExpr);
         convertToString();
         expect(3);
@@ -1978,6 +2105,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(String.class, "join", CharSequence.class, CharSequence[].class);
     }
     else {
+      desiredType = STRING;
       compile(expr.exprList.get(0));
       convertToString();
     }
@@ -2203,8 +2331,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          // Get the args
                          for (int i = 0; i < args.size(); i++) {
                            Expr arg = args.get(i);
+                           JactlType paramType = method.paramTypes.get(i);
+                           desiredType = paramType;
                            compile(arg);
-                           convertTo(method.paramTypes.get(i), arg, !arg.type.isPrimitive(), arg.location);
+                           convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
                          }
                        },
                        () -> {
@@ -2322,6 +2452,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitReturn(Expr.Return returnExpr) {
+    desiredType = returnExpr.returnType;
     compile(returnExpr.expr);
     convertTo(returnExpr.returnType, returnExpr.expr, true, returnExpr.expr.location);
     emitReturn(returnExpr.returnType);
@@ -2348,6 +2479,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitPrint(Expr.Print expr) {
     loadLocation(expr.location);
+    desiredType = STRING;
     compile(expr.expr);
     convertToString();
     invokeMethod(RuntimeUtils.class, expr.newLine ? RuntimeUtils.PRINTLN : RuntimeUtils.PRINT, String.class, int.class, String.class);
@@ -2355,6 +2487,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitDie(Expr.Die expr) {
+    desiredType = STRING;
     compile(expr.expr);
     convertToString();
     loadLocation(expr.dieToken);
@@ -2961,8 +3094,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void compileAndConvert(List<Expr> args, Class<?>[] types) {
     for (int i = 0; i < args.size(); i++) {
       Expr arg = args.get(i);
+      JactlType argType = getTypeFromClass(types[i]);
+      desiredType = argType;
       compile(arg);
-      convertTo(getTypeFromClass(types[i]), arg, true, arg.location);
+      convertTo(argType, arg, true, arg.location);
     }
   }
 
@@ -3619,6 +3754,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       switch (peek().getType()) {
+        case BOOLEAN:
         case BYTE:
         case INT:     mv.visitInsn(I2L);   break;
         case DOUBLE:  mv.visitInsn(D2L);   break;
@@ -4531,8 +4667,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                          for (int i = 0; i < expr.args.size(); i++) {
                            Expr arg = expr.args.get(i);
-                           compile(arg);
                            Expr.VarDecl paramDecl = funDecl.parameters.get(i).declExpr;
+                           desiredType = paramDecl.type;
+                           compile(arg);
                            convertTo(paramDecl.type, arg, !arg.type.isPrimitive(), arg.location);
                            if (paramDecl.isPassedAsHeapLocal) {
                              box();
@@ -4609,6 +4746,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          for (; argIdx < nonVarArgCount; argIdx++, param++) {
                            Expr       arg       = expr.args.get(argIdx);
                            JactlType paramType = finalParamTypes.get(param);
+                           desiredType = paramType;
                            compile(arg);
                            convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
                          }

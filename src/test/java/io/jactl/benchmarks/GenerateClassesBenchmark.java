@@ -36,9 +36,9 @@ public class GenerateClassesBenchmark extends BaseExecutionBenchmark {
     try {
       input = readResource("/Expr.java");
       expectedOutput = readResource("/io/jactl/Expr.java.generated");
-      javaSource = readResource("/io/jactl/benchmark/GenerateClasses.java");
-      jactlSource = readResource("/io/jactl/benchmark/GenerateClasses.jactl");
-      groovySource = readResource("/io/jactl/benchmark/GenerateClasses.groovy");
+      javaSource = readResource("/io/jactl/benchmarks/GenerateClasses.java");
+      jactlSource = readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
+      groovySource = readResource("/io/jactl/benchmarks/GenerateClasses.groovy");
     }
     catch (IOException e) {
       assert false : "Error reading resources: " + e.getMessage();
@@ -56,7 +56,7 @@ public class GenerateClassesBenchmark extends BaseExecutionBenchmark {
   }
 
   @Benchmark
-  public void javaExecution() throws Exception {
+  public void javaExecution() throws Throwable {
     super.javaExecution();
   }
 

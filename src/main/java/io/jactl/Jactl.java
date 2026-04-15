@@ -25,6 +25,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -299,7 +300,13 @@ public class Jactl {
    * @throws IOException if an error occurs
    */
   public static void main(String[] args) throws IOException {
-    new Jactl().run(args);
+    try {
+      int exitCode = new Jactl().run(args);
+      System.exit(exitCode);
+    }
+    catch (RuntimeException e) {
+      System.exit(1);
+    }
   }
 
   ////////////////////////////////////
@@ -309,24 +316,29 @@ public class Jactl {
     "         -p               : run in a print loop reading input from stdin or files\n" +
     "         -n               : run in a loop without printing each line\n" +
     "         -e script        : script string is interpreted as Jactl code (programFile not used)\n" +
-    "         -v               : show verbose errors (give stack trace)\n" +
+    "         -E               : show verbose errors (give stack trace)\n" +
     "         -V var=value     : initialise Jactl variable before running script\n" +
     "         -P path,path,... : paths to package root for importing classes\n" +
     "         -k pkgName       : run script as though it belongs to this package\n" +
     "         -d               : debug: output generated code\n" +
     "         -c               : do not read .jactlrc config file\n" +
     "         -g path          : run script to get map of global variable values\n" +
+    "         -v               : print Jactl version\n" +
     "         -h               : print this help\n";
 
   JactlContext context;
   boolean      verbose;
 
-  private void run(String[] args) throws IOException {
-    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*vcCpng:e:P:V:*", usage);
+  public int run(String[] args) throws IOException {
+    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*EvcCpng:e:P:V:*", usage);
+    if (argMap.containsKey('v')) {
+      System.out.println("Jactl version " + Utils.JACTL_VERSION);
+      return 0;
+    }
     List<String> files     = (List<String>) argMap.get('*');
     List<String> arguments = (List<String>) argMap.get('@');
     String       script    = null;
-    verbose = argMap.containsKey('v');
+    verbose = argMap.containsKey('E');
     String scriptClassName;
     if (argMap.containsKey('e')) {
       script = (String) argMap.get('e');
@@ -370,21 +382,14 @@ public class Jactl {
       List<InputStream> fileStreams = files.stream().map(Jactl::getFileStream).collect(Collectors.toList());
       InputStream inputStream = fileStreams.size() > 0 ? new SequenceInputStream(Collections.enumeration(fileStreams))
                                                        : System.in;
-      BufferedReader input = new BufferedReader(new InputStreamReader(inputStream));
-      boolean[] printInvoked = new boolean[]{ false };
-      PrintStream output = new PrintStream(System.out) {
-        @Override
-        public void print(String s) {
-          super.print(s);
-          printInvoked[0] = true;
-        }
-
-        @Override
-        public void println(String x) {
-          super.println(x);
-          super.flush();
-          printInvoked[0] = true;
-        }
+      BufferedReader input        = new BufferedReader(new InputStreamReader(inputStream));
+      AtomicBoolean  printInvoked = new AtomicBoolean(false);
+      Writer output = new PrintWriter(System.out) {
+        @Override public void write(char[] cbuf, int off, int len) { super.write(cbuf, off, len); printInvoked.set(true);  }
+        @Override public void write(int c) { super.write(c); printInvoked.set(true); }
+        @Override public void write(char[] buf) { super.write(buf); printInvoked.set(true); }
+        @Override public void write(String s, int off, int len) { super.write(s, off, len); printInvoked.set(true); }
+        @Override public void write(String s) { super.write(s); printInvoked.set(true); }
       };
 
       JactlContext.JactlContextBuilder builder = JactlContext.create()
@@ -445,14 +450,14 @@ public class Jactl {
       }
 
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself
-      if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked[0]) {
+      if (!context.printLoop() && !context.nonPrintLoop && result != null && !printInvoked.get()) {
         System.out.println(result);
       }
     }
     catch (Throwable t) {
       error(t);
     }
-    System.exit(0);
+    return 0;
   }
 
   private static void validateName(String name) {
@@ -476,9 +481,7 @@ public class Jactl {
       return name.equals("-") ? System.in : new FileInputStream(name);
     }
     catch (FileNotFoundException e) {
-      System.err.println("Error reading " + name + ": " + e.getMessage());
-      System.exit(1);
-      return null;
+      throw new RuntimeException("Error reading " + name + ": " + e.getMessage());
     }
   }
 
@@ -488,7 +491,7 @@ public class Jactl {
     }
     if (verbose) {
       t.printStackTrace(System.err);
-      System.exit(1);
+      throw new RuntimeException(t.getMessage(), t);
     }
     else {
       error(t.getClass().getName() + ": " + t.getMessage());
@@ -496,8 +499,7 @@ public class Jactl {
   }
 
   private static void error(String msg) {
-    System.err.println(msg);
-    System.exit(1);
+    throw new RuntimeException(msg);
   }
 
   private JactlClassDescriptor lookup(String internalName, List<File> roots) {

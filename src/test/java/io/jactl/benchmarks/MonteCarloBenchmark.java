@@ -17,29 +17,39 @@
 
 package io.jactl.benchmarks;
 
+import groovy.lang.Binding;
+import groovy.lang.GroovyShell;
+import groovy.lang.Script;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.concurrent.TimeUnit;
 
-@BenchmarkMode(Mode.SingleShotTime)
+@BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
 @State(Scope.Thread)
 @Warmup(iterations = 3, time = 2)
 @Measurement(iterations = 5, time = 2)
 @Fork(value = 1, jvmArgs = "-ea")
-public class CalculationsBenchmark extends BaseExecutionBenchmark {
+public class MonteCarloBenchmark extends BaseExecutionBenchmark {
  
-  public CalculationsBenchmark() {
+  private Script groovyStaticScript;
+  
+  public MonteCarloBenchmark() {
     try {
       input = "";
-      expectedOutput = "PI=3.14146204";
-      javaSource = readResource("/io/jactl/benchmark/MonteCarloPI.java");
-      jactlSource = readResource("/io/jactl/benchmark/MonteCarloPI.jactl");
-      groovySource = readResource("/io/jactl/benchmark/MonteCarloPI.groovy");
+      //expectedOutput = "PI=3.14146204";     // 100_000_000
+      //expectedOutput = "PI=3.141548816";    // 500_000_000 
+      expectedOutput = "PI=3.13726";        // 1_000_000 
+      //expectedOutput = "PI=3.14104";        // 100_000
+      javaSource = readResource("/io/jactl/benchmarks/MonteCarloPI.java");
+      jactlSource = readResource("/io/jactl/benchmarks/MonteCarloPI.jactl");
+      groovySource = readResource("/io/jactl/benchmarks/MonteCarloPI.groovy");
     }
     catch (IOException e) {
       assert false : "Error reading resources: " + e.getMessage();
@@ -49,6 +59,7 @@ public class CalculationsBenchmark extends BaseExecutionBenchmark {
   @Setup(Level.Trial)
   public void setup() throws Exception {
     super.setup();
+    groovyStaticScript = new GroovyShell().parse(readResource("/io/jactl/benchmarks/MonteCarloPIStatic.groovy"));
   }
 
   @TearDown(Level.Trial)
@@ -56,8 +67,8 @@ public class CalculationsBenchmark extends BaseExecutionBenchmark {
     super.tearDown();
   }
 
-  @Benchmark
-  public void javaExecution() throws Exception {
+  //@Benchmark
+  public void javaExecution() throws Throwable {
     super.javaExecution();
   }
 
@@ -66,14 +77,27 @@ public class CalculationsBenchmark extends BaseExecutionBenchmark {
     super.jactlExecution();
   }
 
-  @Benchmark
+  //@Benchmark
   public void groovyExecution() {
     super.groovyExecution();
+  }
+  
+  //@Benchmark
+  public void groovyStatic() throws Throwable {
+    Binding binding = new Binding();
+    binding.setVariable("source", input);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream           out  = new PrintStream(baos);
+    binding.setVariable("out", out);
+    groovyStaticScript.setBinding(binding);
+    groovyStaticScript.run();
+    String diff = diff(expectedOutput, baos.toString());
+    assert diff == null : "Groovy output mismatch: diff=\n" + diff;
   }
 
   public static void main(String[] args) throws Exception {
     Options opts = new OptionsBuilder()
-                     .include(CalculationsBenchmark.class.getSimpleName())
+                     .include(MonteCarloBenchmark.class.getSimpleName())
                      .build();
     new Runner(opts).run();
   }

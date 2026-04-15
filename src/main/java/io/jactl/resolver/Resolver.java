@@ -418,7 +418,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classDecl.methods = RuntimeUtils.concat(initMethod, classDecl.methods);
 
       // Create varDecl for "this"
-      Stmt.VarDecl thisDecl = fieldDecl(classDecl.name, Utils.THIS_VAR, JactlType.createInstanceType(classDescriptor));
+      Stmt.VarDecl thisDecl = fieldDecl(classDecl.name, Utils.THIS_VAR, JactlType.createInstanceType(classDescriptor), true);
       thisDecl.declExpr.slot = 0;                // "this" is always in local var slot 0
       classDecl.thisField = thisDecl.declExpr;
       Stmt.VarDecl thisStmt = thisDecl;
@@ -427,11 +427,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       JactlClassDescriptor baseClass  = classDescriptor.getBaseClassDescriptor();
       ArrayList<Stmt>      superStmts = new ArrayList<Stmt>();
       if (baseClass != null) {
-        Stmt.VarDecl superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstanceType(classDescriptor.getBaseClassType(true).getJactlClassDescriptor()));
+        Stmt.VarDecl superDecl = fieldDecl(classDecl.name, Utils.SUPER_VAR, JactlType.createInstanceType(classDescriptor.getBaseClassType(true).getJactlClassDescriptor()), true);
         superDecl.declExpr.slot = 0;             // "super" is always in local var slot 0
         superStmts.add(superDecl);
         superStmts.addAll(baseClass.getAllFieldsStream()
-                                   .map(e -> fieldDecl(classDecl.name, e.getKey(), e.getValue()))
+                                   .map(e -> fieldDecl(classDecl.name, e.getKey(), e.getValue(), baseClass.isFinal(e.getKey())))
                                    .collect(Collectors.toList()));
       }
 
@@ -496,12 +496,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
   }
 
-  private Stmt.VarDecl fieldDecl(Token token, String name, JactlType instanceType) {
+  private Stmt.VarDecl fieldDecl(Token token, String name, JactlType instanceType, boolean isFinal) {
     Token        ident   = token.newIdent(name);
     Expr.VarDecl varDecl = new Expr.VarDecl(ident, null, null);
     varDecl.isResultUsed = false;
     varDecl.type = instanceType;
     varDecl.isField = true;
+    varDecl.isFinal = isFinal;
     return new Stmt.VarDecl(ident, varDecl);
   }
 
@@ -1438,7 +1439,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         classDesc.classDescriptor.setStaticFieldValue(varName, expr.constValue);
       }
     }
-
+    
+    if (expr.isField && !expr.isFinal) {
+      // We can't tell if a field will get assigned to in some other class or via logic like x."${xxx}" = 123
+      expr.isEffectivelyFinal = false;
+    }
+    
     define(expr.name, expr);
     return expr.type;
   }
@@ -1573,10 +1579,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (expr.varDecl.isFinal && expr.isLValue) {
-      error("Cannot modify 'final' variable '" + expr.identifier.getStringValue() + "'", expr.location);
+      error("Cannot modify 'final' " + (expr.varDecl.isField ? "field" : "variable") + " '" + expr.identifier.getStringValue() + "'", expr.location);
     }
 
-    if (varDecl.isEffectivelyFinal && varDecl.initialiser != null && !varDecl.initialiser.couldBeNull) {
+    if ((varDecl.isField && varDecl.isFinal || !varDecl.isField && varDecl.isEffectivelyFinal) &&
+        varDecl.initialiser != null && !varDecl.initialiser.couldBeNull) {
       expr.couldBeNull = false;
     }
     
@@ -1606,6 +1613,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (varType.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
       error("Cannot assign to function", expr.identifierExpr.location);
     }
+    
+    if (expr.identifierExpr.varDecl.isFinal) {
+      error("Cannot modify 'final' " + (expr.identifierExpr.varDecl.isField ? "field" : "variable") + " '" + expr.identifierExpr.identifier.getStringValue() + "'", expr.identifierExpr.location);
+    }
+    
     resolve(expr.expr);
     checkTypeConversion(expr.expr, varType, false, expr.operator);
     if (expr.operator.is(QUESTION_EQUAL)) {

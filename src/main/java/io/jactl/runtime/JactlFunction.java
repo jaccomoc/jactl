@@ -229,6 +229,7 @@ public class JactlFunction extends FunctionDescriptor {
    * @return the current JactlFunction for method chaining
    * @deprecated 
    */
+  @Deprecated
   public JactlFunction impl(Class clss, String methodName, String fieldName) {
     return _impl(clss, methodName, fieldName);
   }

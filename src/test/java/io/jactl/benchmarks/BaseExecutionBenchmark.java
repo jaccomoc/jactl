@@ -83,7 +83,7 @@ public abstract class BaseExecutionBenchmark {
     StringFile      code        = new StringFile(className + ".java", javaSource);
     TestFileManager fileManager = new TestFileManager(compiler.getStandardFileManager(null, null, null));
 
-    boolean result = compiler.getTask(devNull, fileManager, null, null, null, Arrays.asList(code)).call();
+    boolean result = compiler.getTask(null, fileManager, null, null, null, Arrays.asList(code)).call();
     assert result : "Java compilation failed during setup";
 
     String fullClassName = packageName + "." + className;
