@@ -1,5 +1,5 @@
 ---
-title:      "Groovy vs Jactl: A Practical Comparison for Embedded JVM Scripting"
+title:      "Groovy vs Jactl: An Honest Comparison for Embedded JVM Scripting"
 date:       2026-03-16T14:12:47+01:00
 authors:    [james]
 tags: [jvm]
@@ -16,13 +16,13 @@ following:
 - per-tenant configuration for multi-tenant applications
 - rapid prototyping for new features
 
-<!-- truncate -->
-
 When selecting a JVM scripting language there are many options to choose from including
 Jactl, Groovy, Jython (Python), JRuby (Ruby), JavaScript, and Lua.
 Out of these, Groovy is probably the most widely used scripting language for Java applications.
 This article compares Jactl and Groovy in order to show their strengths and weaknesses and when
 you might choose to use one over the other.
+
+<!-- truncate -->
 
 ## Setup, Integration, and Dependencies
 
