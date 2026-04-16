@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monte Carlo PI Benchmark</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .chart-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 40px 50px 30px;
+      width: 600px;
+    }
+
+    h2 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a2e;
+      text-align: center;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 36px;
+    }
+
+    .bars {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .label {
+      width: 90px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .bar-track {
+      flex: 1;
+      background: #f0f0f0;
+      border-radius: 6px;
+      height: 38px;
+      position: relative;
+      overflow: visible;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 10px;
+      box-sizing: border-box;
+      transition: width 0.8s ease;
+      overflow: hidden;
+    }
+
+    .bar-fill span {
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      white-space: nowrap;
+    }
+
+    /* Label outside bar (for tiny bars) */
+    .bar-label-outside {
+      position: absolute;
+      left: calc(3% + 6px);
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .groovy        .bar-fill { background: linear-gradient(90deg, #e8702a, #c9561f); }
+    .groovy-static .bar-fill { background: linear-gradient(90deg, #9b59b6, #7d3c98); }
+    .jactl         .bar-fill { background: linear-gradient(90deg, #4a90d9, #357abd); }
+    .java          .bar-fill { background: linear-gradient(90deg, #27ae60, #1e8449); }
+
+    .speedup {
+      font-size: 12px;
+      color: #999;
+      width: 78px;
+      flex-shrink: 0;
+      text-align: left;
+    }
+
+    .speedup strong {
+      color: #555;
+    }
+
+    .axis-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-left: 104px;
+      margin-right: 92px;
+      margin-top: 8px;
+    }
+
+    .axis-labels span {
+      font-size: 11px;
+      color: #bbb;
+    }
+  </style>
+</head>
+<body>
+  <div class="chart-container">
+    <h2>Monte Carlo PI Benchmark</h2>
+    <p class="subtitle">Operations per second (higher is better)</p>
+
+    <div class="bars">
+
+      <div class="bar-row groovy">
+        <div class="label">Groovy</div>
+        <div class="bar-track">
+          <!-- 1.551 / 400 ≈ 0.39% — use min 3% so it's visible, label outside -->
+          <div class="bar-fill" style="width: 3%">
+          </div>
+          <div class="bar-label-outside">1.551</div>
+        </div>
+        <div class="speedup">baseline</div>
+      </div>
+
+      <div class="bar-row groovy-static">
+        <div class="label">Groovy Static</div>
+        <div class="bar-track">
+          <!-- 306 / 400 = 76.5% -->
+          <div class="bar-fill" style="width: 76.5%">
+            <span>306</span>
+          </div>
+        </div>
+        <div class="speedup"><strong>197×</strong> faster</div>
+      </div>
+
+      <div class="bar-row jactl">
+        <div class="label">Jactl</div>
+        <div class="bar-track">
+          <!-- 325 / 400 = 81.25% -->
+          <div class="bar-fill" style="width: 81.25%">
+            <span>325</span>
+          </div>
+        </div>
+        <div class="speedup"><strong>210×</strong> faster</div>
+      </div>
+
+      <div class="bar-row java">
+        <div class="label">Java</div>
+        <div class="bar-track">
+          <!-- 306 / 400 = 76.5% -->
+          <div class="bar-fill" style="width: 76.5%">
+            <span>306</span>
+          </div>
+        </div>
+        <div class="speedup"><strong>197×</strong> faster</div>
+      </div>
+
+    </div>
+
+    <div class="axis-labels">
+      <span>0</span>
+      <span>100</span>
+      <span>200</span>
+      <span>300</span>
+      <span>400</span>
+    </div>
+  </div>
+</body>
+</html>

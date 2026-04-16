@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compilation Speed Comparison</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .chart-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 40px 50px 30px;
+      width: 560px;
+    }
+
+    h2 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a2e;
+      text-align: center;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 36px;
+    }
+
+    .bars {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .label {
+      width: 58px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .bar-track {
+      flex: 1;
+      background: #f0f0f0;
+      border-radius: 6px;
+      height: 38px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 10px;
+      box-sizing: border-box;
+      transition: width 0.8s ease;
+    }
+
+    .bar-fill span {
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      white-space: nowrap;
+    }
+
+    .groovy .bar-fill  { background: linear-gradient(90deg, #e8702a, #c9561f); }
+    .jactl  .bar-fill  { background: linear-gradient(90deg, #4a90d9, #357abd); }
+    .java   .bar-fill  { background: linear-gradient(90deg, #27ae60, #1e8449); }
+
+    .speedup {
+      font-size: 12px;
+      color: #999;
+      width: 72px;
+      flex-shrink: 0;
+      text-align: left;
+    }
+
+    .speedup strong {
+      color: #555;
+    }
+
+    .axis-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-left: 72px;
+      margin-right: 86px;
+      margin-top: 8px;
+    }
+
+    .axis-labels span {
+      font-size: 11px;
+      color: #bbb;
+    }
+  </style>
+</head>
+<body>
+  <div class="chart-container">
+    <h2>Compilation Speed</h2>
+    <p class="subtitle">Lines compiled per second (higher is better)</p>
+
+    <div class="bars">
+
+      <div class="bar-row groovy">
+        <div class="label">Groovy</div>
+        <div class="bar-track">
+          <!-- 33205 / 120000 = 27.7% -->
+          <div class="bar-fill" style="width: 27.7%">
+            <span>33,205</span>
+          </div>
+        </div>
+        <div class="speedup">baseline</div>
+      </div>
+
+      <div class="bar-row jactl">
+        <div class="label">Jactl</div>
+        <div class="bar-track">
+          <!-- 82840 / 120000 = 69.0% -->
+          <div class="bar-fill" style="width: 69.0%">
+            <span>82,840</span>
+          </div>
+        </div>
+        <div class="speedup"><strong>2.5×</strong> faster</div>
+      </div>
+
+      <div class="bar-row java">
+        <div class="label">Java</div>
+        <div class="bar-track">
+          <!-- 89799 / 120000 = 74.8% -->
+          <div class="bar-fill" style="width: 74.8%">
+            <span>89,799</span>
+          </div>
+        </div>
+        <div class="speedup"><strong>2.7×</strong> faster</div>
+      </div>
+
+    </div>
+
+    <div class="axis-labels">
+      <span>0</span>
+      <span>30k</span>
+      <span>60k</span>
+      <span>90k</span>
+      <span>120k</span>
+    </div>
+  </div>
+</body>
+</html>
