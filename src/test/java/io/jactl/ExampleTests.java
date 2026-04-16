@@ -33,8 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Examples used in documentation
@@ -292,9 +291,27 @@ public class ExampleTests {
     }
   }
   
+  @Test public void jactlMainError() throws IOException {
+    PrintStream out = System.out;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    System.setOut(ps);
+    try {
+      assertEquals(0, new Jactl().run(new String[]{"-Ee", "int i = 'this is a string'"}));
+      fail("Expected error");
+    }
+    catch (Throwable e) {
+      assertTrue(e.getMessage().contains("String with multiple chars cannot be cast to int"));
+      assertTrue(e.getMessage().contains("CompileError"));
+    }
+    finally {
+      System.setOut(out);
+    }
+  }
+
   @Test public void jactlMonteCarlo() throws IOException {
     String jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/MonteCarloPI.jactl");
-    JactlContext ctx = JactlContext.create().debug(1).build();
+    JactlContext ctx = JactlContext.create().debug(0).build();
     JactlScript script = Jactl.compileScript(jactlSource, new HashMap<>(), ctx);
     script.runSync(new HashMap<>());
   }

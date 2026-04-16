@@ -499,6 +499,7 @@ public class Jactl {
   }
 
   private static void error(String msg) {
+    System.err.println(msg);
     throw new RuntimeException(msg);
   }
 

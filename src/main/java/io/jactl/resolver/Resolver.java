@@ -1661,6 +1661,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (!from.type.isCastableTo(to) && !(toAndFrom && from.type.isAssignableFrom(to))) {
       error("Cannot convert from " + from.type + " to " + to, location);
     }
+    // Check casting from empty or multiple char string to a number. Single char is fine as we use single char
+    // strings to represent a single character which then has a numeric value (the ASCII value).
+    if (to.isNumeric() && from.type.is(STRING) && from.isConst && from.constValue instanceof  String) {
+      String str = (String)from.constValue;
+      if (str.isEmpty()) {
+        error("Empty string cannot be cast to " + to, location);
+      }
+      else if (str.length() > 1) {
+        error("String with multiple chars cannot be cast to " + to, location);
+      }
+    }
     if (to.is(BOOLEAN) && from instanceof Expr.RegexMatch && from.type.is(STRING)) {
       error("Regex string used in boolean context", from.location);
     }

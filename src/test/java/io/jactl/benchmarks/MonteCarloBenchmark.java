@@ -67,7 +67,7 @@ public class MonteCarloBenchmark extends BaseExecutionBenchmark {
     super.tearDown();
   }
 
-  //@Benchmark
+  @Benchmark
   public void javaExecution() throws Throwable {
     super.javaExecution();
   }
@@ -77,12 +77,12 @@ public class MonteCarloBenchmark extends BaseExecutionBenchmark {
     super.jactlExecution();
   }
 
-  //@Benchmark
+  @Benchmark
   public void groovyExecution() {
     super.groovyExecution();
   }
   
-  //@Benchmark
+  @Benchmark
   public void groovyStatic() throws Throwable {
     Binding binding = new Binding();
     binding.setVariable("source", input);
