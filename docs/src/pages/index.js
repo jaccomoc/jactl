@@ -142,6 +142,20 @@ export default function Home() {
         <section className={styles.features}>
           <HomepageFeatures/>
         </section>
+        <section className={styles.opensource}>
+          <div className="container" >
+            <div className="row">
+              <div className="col">
+                <h2>Open Source</h2>
+                Licensed under the Apache 2.0 license.
+              </div>
+              <div className="col">
+                <br/>
+                Please consider giving the project a ⭐ on GitHub: <a href={"https://github.com/jaccomoc/jactl"}>https://github.com/jaccomoc/jactl</a> 
+              </div>
+            </div>
+          </div>
+        </section>
         <section className={styles.examples}>
           <ExamplesSection/>
         </section>

@@ -42,8 +42,21 @@
   width: 100%;
 }
 
+.opensource {
+  background: #105086;
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+  color: #ffffff;
+  a { color: #ccccff; }
+}
+
 [data-theme="dark"] {
   .examples {
+    background: #1D5Ea6;
+  }
+  .features {
     background: #1D5Ea6;
   }
 }
