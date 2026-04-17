@@ -59,24 +59,27 @@ $ jbang run io.jactl:jactl-repl:2.7.1
 [jbang] Dependencies resolved
 > 10.map{ it + 1 }.sum()
 55
-> :h
+> :help
 
 Available commands:
-  :h       Help - print this text
-  :?       Alias for :h
-  :x       Exit
-  :q       Quit - alias for :x
-  :c       Clear current buffer
-  :r file  Read and execute contents of file
-  :l       Load - alias for :r
-  :s       Show variables and their values (concise form)
-  :S       Show variables and their values in pretty printed form
-  :p       Purge variables
-  :e arg   Enable/disable stack traces for errors (true - enable, false - disable)
-  :d level Enable/disable debug output for errors (0 - off, 1 - on, 2 - more detail)
-  :H [n]   Show recent history (last n entries - defaults to 50)
-  :! n     Recall history entry with given number
->  
+  :help          Help - print this text
+  :?             Alias for :help
+  :exit          Exit
+  :quit          Quit - alias for :exit
+  :clear         Clear current buffer
+  :read file     Read and execute contents of file
+  :load          Load - alias for :read
+  :vars          Show variables and their values (concise form)
+  :show          Show variables and their values in pretty printed form
+  :purge         Purge variables and imports
+  :imports       Show imports
+  :java          Enable/disable Java interoperability
+  :stack arg     Enable/disable stack traces for errors (true - enable, false - disable)
+  :debug level   Enable/disable debug output for errors (0 - off, 1 - on, 2 - more detail)
+  :history [n]   Show recent history (last n entries - defaults to 50)
+  :!n            Recall history entry with given number
+
+>
 ```
 
 ## Integrating Jactl into an Application
@@ -137,7 +140,7 @@ This will compile a script, run it, and then wait for it to complete:
 ```java
 Map<String,Object> globals = new HashMap<>();
 JactlScript script = Jactl.compileScript("3 + 4", globals);
-Object      result = script.runSync(globals);          // result will be 7
+Object      result = script.eval(globals);          // result will be 7
 assertEquals(7, result);
 ```
 
