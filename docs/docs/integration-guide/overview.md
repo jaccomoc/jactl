@@ -42,8 +42,10 @@ Jactl supports the following object types as values for the global variables:
 Jactl also supports these java.time classes:
 * Instant, LocalTime, LocalDate, LocalDateTime, ZonedDateTime, ZoneId, Duration, Period
 
-For Maps, the keys must be Strings and for both Lists and Maps, the values in the List or Map should be one of the
-types listed above.
+For List objects, the elements of the List should correspond to one of the listed types.
+Similarly, Map objects should have keys and values of types that are supported types.
+
+Arrays of these types are also supported.
 
 It is also allowed that the value of a variable is `null` which can be used as a way to create the variable when there is no
 initial value that makes sense for it.
@@ -60,6 +62,9 @@ globals.put("x", x);
 Object result = (int)Jactl.eval("x.f(3)", globals, context);
 assertEquals(6, result);
 ```
+
+Jactl also supports the ability to configure access to specific "host classes" (application or Java classes)
+and if so enabled, these types can also be used in the globals bindings (see [Allow Host Access](jactl-context#allowhostaccessboolean-allowed)).
 
 ## Setting input/output for scripts
 
@@ -86,12 +91,13 @@ This returns a `JactlScript` object which can then be run as many times as neede
 `JactlScript` objects can be run using the `eval()` or `run()` methods.
 
 If a scripts perform an asynchronous or blocking operation (for example invoking `sleep()` or performing a database
-operation) then Jactl suspends the script and resumes it once the result is ready.
+operation) then Jactl suspends the script and resumes it once the result is ready (unless [async(false)](jactl-context#asyncboolean-enabled) has
+been set).
 This allows event-loop based applications to run Jactl scrips without worrying about blocking the event-loop thread that
 invokes a Jactl script.
 The `eval()` method works like `Jactl.eval()` in that it waits for the script to complete before returning the result to
 the caller.
-If invoking scripts from an event-loop thread of your application be aware that this might therefore block that thread
+If you are invoking scripts from an event-loop thread of your application, be aware that this might therefore block that thread
 if the script does something asynchronous.
 If the threading model of the application requires that the result of an asynchronous operation is processed on the
 same event-loop thread that invoked the operation (for example Vert.x based applications) then using `eval()` will
@@ -142,6 +148,9 @@ globalValues.put("y", 3);
 
 // Invoke run() with a completion callback
 script.run(globalValues, result -> System.out.println("Result is " + result));
+
+// Invoke eval() since we know that this script is synchronous
+System.out.println("Result is " + script.eval(globalValues));
 ```
 
 Alternatively, you can use the version of `run()` that returns a `Future`:
@@ -152,7 +161,7 @@ System.out.println("Result is " + future.get());
 
 ## Input/Output
 
-Both `run()` and `eval()` have overloaded versions that also accept a `BufferedReader` and `PrintStream`
+Both `run()` and `eval()` have overloaded versions that also accept a `Reader` and `Writer`
 for the input/output of the script.
 
 For example:
@@ -236,3 +245,5 @@ class JSR223Test {
 ```
 
 The `JactlScriptEngine` implements the optional `Invocable` and `Compilable` interfaces.
+
+See [Java Scripting API](script-engine-jsr223) for more detail about invoking Jactl scripts using this API.

@@ -177,6 +177,35 @@ would like all scripts to have access to before creating any `JactlContext` obje
 
 See [Adding New Built-In TYpes](adding-new-builtins) for more details.
 
+## async(boolean enabled)
+
+By default, Jactl support asynchronous functions that can block waiting on a long-running operation to complete
+by suspending the script and then resuming it once the operation has completed.
+In many situations this functionality is not needed.
+
+For example, if running on a modern version of Java (Java 21 or later), Java now has VirtualThreads that implement
+a similar mechanism to that of Jactl's Continuations and Jactl's suspend/resume may not be wanted.
+
+Even if not running on Java 21 or later, users may not have any async functions that their scripts will invoke and
+will want to avoid the small overhead that async scripts incur.
+
+This `async(false)` method allows you to tell Jactl not to generate async handling code.
+
+This will have a marginal improvement in compilation times and will allow more compact byte code to be
+generated in some situations.
+
+:::warning
+This also means that checkpointing will be disabled since it relies on the same suspend/resume mechanism
+that the async handling uses.
+Any call to `checkpoint()` will invoke the `commit` closure every time without actually checkpointing the state.
+The rationale for this is that this way you can measure the overhead of checkpointing by running a test with and
+without async enabled and still have the scripts function normally.
+:::
+
+If async mode is disabled there is no need for a `JactlEnv` object to be supplied and the default environment will
+not be created since everything runs on the thread on which the script is invoked and there is no need for events
+to be scheduled on other threads.
+
 ## Disabling Some Types of Statements
 
 For various reasons, applications may want to allow scripts but prevent them from invoking

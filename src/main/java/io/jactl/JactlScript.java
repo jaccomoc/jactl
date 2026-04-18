@@ -210,12 +210,28 @@ public class JactlScript {
    * Runs the script with the provided global variables, input, and output, returning
    * a future that completes with the script's result when it finishes executing.
    * </p>
-    * @param globals     a Map of global variables and their values
-    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
-    * @param output      PrintStream where print/println output will go (can be null)
-   *  @return a {@link Future} that will be completed with the script's result
+   * @param globals     a Map of global variables and their values
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output      PrintStream where print/println output will go (can be null)
+   * @return a {@link Future} that will be completed with the script's result
    */
   public Future<Object> run(Map<String,Object> globals, Reader input, PrintStream output) {
+    CompletableFuture<Object> future = new CompletableFuture<>();
+    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
+    return future;
+  }
+
+  /**
+   * <p>
+   * Runs the script with the provided global variables, input, and output, returning
+   * a future that completes with the script's result when it finishes executing.
+   * </p>
+   * @param globals     a Map of global variables and their values
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output      Writer where print/println output will go (can be null)
+   *  @return a {@link Future} that will be completed with the script's result
+   */
+  public Future<Object> run(Map<String,Object> globals, Reader input, Writer output) {
     CompletableFuture<Object> future = new CompletableFuture<>();
     jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
     return future;

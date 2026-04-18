@@ -325,4 +325,22 @@ public class ExampleTests {
     script.eval(globals);
   }
   
+  @Test public void readerWriterExample() throws ExecutionException, InterruptedException {
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    globals.put("x", null);
+    globals.put("y", null);
+    JactlScript script = Jactl.compileScript("def result = stream(nextLine).map{ it as int }.sum() + x + y\n" +
+                                             "println 'Result is ' + result\n" +
+                                             "return result",
+                                             globals);
+
+    HashMap<String, Object> globalValues = new HashMap<String,Object>();
+    globalValues.put("x", 7);
+    globalValues.put("y", 3);
+
+    ByteArrayOutputStream out    = new ByteArrayOutputStream();
+    Future<Object> future = script.run(globalValues, new StringReader("1\n2\n3\n"), new PrintWriter(out));
+    assertEquals(16, future.get());
+    assertEquals("Result is 16\n", out.toString());
+  }
 }
