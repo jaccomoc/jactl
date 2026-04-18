@@ -1,5 +1,5 @@
 /*
- * Copyright © 2022,2023 James Crawford
+ * Copyright © 2022-2026 James Crawford
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 package io.jactl;
 
 import io.jactl.benchmarks.BaseExecutionBenchmark;
+import io.jactl.benchmarks.CompilationBenchmark;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.JactlMethodHandle;
 import io.jactl.runtime.RuntimeError;
