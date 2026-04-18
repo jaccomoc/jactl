@@ -23,6 +23,8 @@ import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -40,24 +42,28 @@ import java.util.function.Supplier;
  */
 public class JactlScript {
 
-  private BiConsumer<Map<String, Object>, Consumer<Object>> script;
+  private BiConsumer<Map<String, Object>, Consumer<Object>> asyncInvoker;
+  private Function<Map<String, Object>, Object>             invoker;
   private JactlContext                                      jactlContext;
   private Class<?>                                          compiledClass;
+  private boolean                                           isAsync;
+  private volatile Constructor<?>                           scriptConstructor;
+  private volatile MethodHandle                             scriptMainMethodHandle;
 
-  public JactlScript(Class<?> compiledClass, JactlContext jactlContext, BiConsumer<Map<String, Object>, Consumer<Object>> script) {
+  private JactlScript(Class<?> compiledClass, JactlContext jactlContext, boolean isAsync) {
     this.compiledClass = compiledClass;
     this.jactlContext = jactlContext;
-    this.script = script;
-  }
+    this.isAsync = isAsync;
+    init();
 
-  public static JactlScript createScript(Class<?> compiledClass, Function<Map<String, Object>, Object> invoker, JactlContext context) {
-    return new JactlScript(compiledClass, context, (map, completion) -> {
+    // For async invocation where we call back on completion once finished
+    this.asyncInvoker = (map, completion) -> {
       try {
         Object result = invoker.apply(map);
         completion.accept(result);
       }
       catch (Continuation c) {
-        context.asyncWork(completion, c, c.scriptInstance);
+        jactlContext.asyncWork(completion, c, c.scriptInstance);
       }
       catch (JactlError | IllegalStateException | IllegalArgumentException e) {
         completion.accept(e);
@@ -65,65 +71,109 @@ public class JactlScript {
       catch (Throwable t) {
         completion.accept(new IllegalStateException("Invocation error: " + t, t));
       }
-    });
+    };
   }
 
-  public static Function<Map<String, Object>, Object> createInvoker(Class clazz, JactlContext context) {
-    AtomicReference<MethodHandle> atomicMh = new AtomicReference<>();
-    AtomicBoolean                 isAsync  = new AtomicBoolean();
-    Supplier<MethodHandle> mhSupplier = () -> {
-      MethodHandle mh = atomicMh.get();
-      if (mh != null) {
-        return mh;
-      }
-      Method method = null;
-      try {
-        method = clazz.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Map.class);
-      }
-      catch (NoSuchMethodException e) {
-      }
-      if (method == null) {
+  public static JactlScript createScript(Class<?> compiledClass, JactlContext context) {
+    boolean async;
+    try {
+      compiledClass.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class);
+      async = true;
+    }
+    catch (NoSuchMethodException e) {
+      async = false;
+    }
+    return createScript(compiledClass, context, async);
+  }
+
+  public static JactlScript createScript(Class<?> compiledClass, JactlContext context, boolean isAsync) {
+    return new JactlScript(compiledClass, context, isAsync);
+  }
+
+  /**
+   * Used by eval()
+   * @return the invoker
+   */
+  public Function<Map<String, Object>, Object> getInvoker() {
+    init();
+    return invoker;
+  }
+  
+  private void init() {
+    if (isAsync) {
+      invoker = map -> {
+        JactlScriptObject instance = null;
         try {
-          method = clazz.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class);
+          instance = (JactlScriptObject) getScriptConstructor().newInstance();
+          Object result = getScriptMainMethodHandle().invoke(instance, (Continuation) null, map);
+          cleanUp(instance, jactlContext);
+          return result;
         }
-        catch (NoSuchMethodException e) {
+        catch (Continuation c) {
+          throw c;
+        }
+        catch (RuntimeError e) {
+          cleanUp(instance, jactlContext);
+          throw e;
+        }
+        catch (Throwable e) {
+          cleanUp(instance, jactlContext);
           throw new RuntimeException(e);
         }
+      };
+    }
+    else {
+      invoker = map -> {
+        try {
+          return getScriptMainMethodHandle().invoke(getScriptConstructor().newInstance(), map);
+        }
+        catch (RuntimeError e) {
+          throw e;
+        }
+        catch (Throwable e) {
+          throw new RuntimeException(e);
+        }
+      };
+    }
+  }
+
+  public Constructor<?> getScriptConstructor() {
+    Constructor<?> result = scriptConstructor;
+    if (result == null) { 
+      synchronized(this) {
+        result = scriptConstructor;
+        if (result == null) {
+          try {
+            scriptConstructor = result = compiledClass.getDeclaredConstructor();
+          }
+          catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+          }
+        }
       }
-      //Method       method     = Utils.findMethod(clazz, Utils.JACTL_SCRIPT_MAIN, false);
-      MethodType methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
-      try {
-        mh = MethodHandles.publicLookup().findVirtual(clazz, Utils.JACTL_SCRIPT_MAIN, methodType);
+    }
+    return result;
+  }
+
+  public MethodHandle getScriptMainMethodHandle() {
+    MethodHandle result = scriptMainMethodHandle;
+    if (result == null) { 
+      synchronized(this) {
+        result = scriptMainMethodHandle;
+        if (result == null) {
+          try {
+            Method method = isAsync ? compiledClass.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class)
+                                    : compiledClass.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Map.class);
+            MethodType methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
+            scriptMainMethodHandle = result = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACTL_SCRIPT_MAIN, methodType);
+          }
+          catch (NoSuchMethodException | IllegalAccessException e) {
+            throw new IllegalStateException("Internal error: " + e, e);
+          }
+        }
       }
-      catch (NoSuchMethodException | IllegalAccessException e) {
-        throw new IllegalStateException("Internal error: " + e, e);
-      }
-      isAsync.set(method.getParameterTypes().length != 1);
-      atomicMh.set(mh);
-      return mh;
-    };
-    return map -> {
-      JactlScriptObject instance = null;
-      try {
-        instance = (JactlScriptObject) clazz.getDeclaredConstructor().newInstance();
-        MethodHandle methodHandle = mhSupplier.get();
-        Object result = isAsync.get() ? methodHandle.invoke(instance, (Continuation) null, map)
-                                      : methodHandle.invoke(instance, map);
-        cleanUp(instance, context);
-        return result;
-      }
-      catch (Continuation c) {
-        throw c;
-      }
-      catch (RuntimeError e) {
-        cleanUp(instance, context);
-        throw e;
-      }
-      catch (Throwable e) {
-        cleanUp(instance, context);
-        throw new RuntimeException(e);
-      }
-    };
+    }
+    return result;
   }
 
   private static void cleanUp(JactlScriptObject instance, JactlContext context) {
@@ -140,23 +190,7 @@ public class JactlScript {
    * <p>Run the script with the given global variables. When finished it will invoke the
    * completion with the result. The completion may or may not be invoked on the same
    * thread depending on whether the script has any asynchronous/blocking function calls.
-   * The globals should be a Map of global variable names whose values are simple Java
-   * objects.</p>
-   * <p>Supported types for the values in the Map are:</p>
-   * <ul>
-   *   <li>Boolean</li>
-   *   <li>Integer</li>
-   *   <li>Long</li>
-   *   <li>Double</li>
-   *   <li>BigDecimal</li>
-   *   <li>String</li>
-   *   <li>List</li>
-   *   <li>Map</li>
-   *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
-   *   <li>null - Object with value null</li>
-   * </ul>
-   * <p>Also supported are object instances of Jactl classes that have been returned
-   * from a previous script invocation.</p>
+   * </p>
    * @param globals     a Map of global variables and their values
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
@@ -168,7 +202,7 @@ public class JactlScript {
   
   public void run(Map<String,Object> globals, Reader input, Writer output, Consumer<Object> completion) {
     RuntimeState.setState(jactlContext, globals, input, output);
-    script.accept(globals, completion);
+    asyncInvoker.accept(globals, completion);
   }
 
   /**
@@ -176,23 +210,6 @@ public class JactlScript {
    * Runs the script with the provided global variables, input, and output, returning
    * a future that completes with the script's result when it finishes executing.
    * </p>
-   *
-   * <p>Supported types for the values in the globals Map are:</p>
-   * <ul>
-   *   <li>Boolean</li>
-   *   <li>Integer</li>
-   *   <li>Long</li>
-   *   <li>Double</li>
-   *   <li>BigDecimal</li>
-   *   <li>String</li>
-   *   <li>List</li>
-   *   <li>Map</li>
-   *   <li>Arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
-   *   <li>null - Object with value null</li>
-   * </ul>
-   * <p>Also supported are object instances of Jactl classes that have been returned
-   * from a previous script invocation.</p>
-   *
     * @param globals     a Map of global variables and their values
     * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
     * @param output      PrintStream where print/println output will go (can be null)
@@ -210,21 +227,6 @@ public class JactlScript {
    * thread depending on whether the script has any asynchronous/blocking function calls.
    * The globals should be a Map of global variable names whose values are simple Java
    * objects.</p>
-   * <p>Supported types for the values in the Map are:</p>
-   * <ul>
-   *   <li>Boolean</li>
-   *   <li>Integer</li>
-   *   <li>Long</li>
-   *   <li>Double</li>
-   *   <li>BigDecimal</li>
-   *   <li>String</li>
-   *   <li>List</li>
-   *   <li>Map</li>
-   *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
-   *   <li>null - Object with value null</li>
-   * </ul>
-   * <p>Also supported are object instances of Jactl classes that have been returned
-   * from a previous script invocation.</p>
    * @param globals     a Map of global variables and their values
    * @param completion  code to be run once script finishes
    */
@@ -237,23 +239,6 @@ public class JactlScript {
    * Runs the script with the provided global variables and return a future
    * that will return the script's result when it finishes executing.
    * </p>
-   *
-   * <p>Supported types for the values in the globals Map are:</p>
-   * <ul>
-   *   <li>Boolean</li>
-   *   <li>Integer</li>
-   *   <li>Long</li>
-   *   <li>Double</li>
-   *   <li>BigDecimal</li>
-   *   <li>String</li>
-   *   <li>List</li>
-   *   <li>Map</li>
-   *   <li>Arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
-   *   <li>null - Object with value null</li>
-   * </ul>
-   * <p>Also supported are object instances of Jactl classes that have been returned
-   * from a previous script invocation.</p>
-   *
    * @param globals     a Map of global variables and their values
    *  @return a {@link Future} that will be completed with the script's result
    */
@@ -269,26 +254,12 @@ public class JactlScript {
    * thread and wait for the script to complete before returning.</p>
    * <p>This should not be invoked if caller is already on an event-loop thread as
    * it blocks the current thread until the script completes.</p>
-   * <p>Supported types for the values in the Map are:</p>
-   * <ul>
-   *   <li>Boolean</li>
-   *   <li>Integer</li>
-   *   <li>Long</li>
-   *   <li>Double</li>
-   *   <li>BigDecimal</li>
-   *   <li>String</li>
-   *   <li>List</li>
-   *   <li>Map</li>
-   *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
-   *   <li>null - Object with value null</li>
-   * </ul>
-   * <p>Also supported are object instances of Jactl classes that have been returned
-   * from a previous script invocation.</p>
    * @param globals     a Map of global variables and their values
    * @return the result returned from the script
+   * @deprecated Use {@link #eval(Map)} instead
    */
   public Object runSync(Map<String,Object> globals) {
-    return runSync(globals, null, (Writer)null);
+    return eval(globals, null, (Writer)null);
   }
 
   /**
@@ -297,31 +268,60 @@ public class JactlScript {
    * thread and wait for the script to complete before returning.</p>
    * <p>This should not be invoked if caller is already on an event-loop thread as
    * it blocks the current thread until the script completes.</p>
-   * <p>Supported types for the values in the Map are:</p>
-   * <ul>
-   *   <li>Boolean</li>
-   *   <li>Integer</li>
-   *   <li>Long</li>
-   *   <li>Double</li>
-   *   <li>BigDecimal</li>
-   *   <li>String</li>
-   *   <li>List</li>
-   *   <li>Map</li>
-   *   <li>arrays and multidimensional arrays of boolean, int, long, double, BigDecimal, String, List, Map</li>
-   *   <li>null - Object with value null</li>
-   * </ul>
-   * <p>Also supported are object instances of Jactl classes that have been returned
-   * from a previous script invocation.</p>
+   * @param globals     a Map of global variables and their values
+   * @return the result returned from the script
+   */
+  public Object eval(Map<String,Object> globals) {
+    return eval(globals, null, (Writer)null);
+  }
+
+  /**
+   * <p>Run the script with the given global variables and wait for the result.</p>
+   * <p>This will schedule the script invocation on an event-loop (non-blocking)
+   * thread and wait for the script to complete before returning.</p>
+   * <p>This should not be invoked if caller is already on an event-loop thread as
+   * it blocks the current thread until the script completes.</p>
+   * @param globals     a Map of global variables and their values
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output      PrintStream where print/println output will go (can be null)
+   * @return the result returned from the script
+   * @deprecated Use {@link #eval(Map, Reader, PrintStream)} instead
+   */
+  public Object runSync(Map<String,Object> globals, Reader input, PrintStream output) {
+    return eval(globals, input, output == null ? null : new PrintWriter(output));
+  }
+  
+  /**
+   * <p>Run the script with the given global variables and wait for the result.</p>
+   * <p>This will schedule the script invocation on an event-loop (non-blocking)
+   * thread and wait for the script to complete before returning.</p>
+   * <p>This should not be invoked if caller is already on an event-loop thread as
+   * it blocks the current thread until the script completes.</p>
    * @param globals     a Map of global variables and their values
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
    * @return the result returned from the script
    */
-  public Object runSync(Map<String,Object> globals, Reader input, PrintStream output) {
-    return runSync(globals, input, output == null ? null : new PrintWriter(output));
+  public Object eval(Map<String,Object> globals, Reader input, PrintStream output) {
+    return eval(globals, input, output == null ? null : new PrintWriter(output));
   }
   
-  public Object runSync(Map<String,Object> globals, Reader input, Writer output) {
+  /**
+   * <p>Run script with given global variables and wait for result.</p>
+   * @param globals     a Map of global variables and their values
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output      PrintWriter where print/println output will go (can be null)
+   * @return the result of the script
+   */
+  public Object eval(Map<String,Object> globals, Reader input, Writer output) {
+    if (!isAsync) {
+      // We can run directly on this thread and return the result since we know script won't
+      // throw a Continuation for async functions
+      RuntimeState.setState(jactlContext, globals, input, output);
+      return invoker.apply(globals);
+    }
+
+    // Potentially async code so run on a separate thread and wait for result
     CompletableFuture<Object> future = new CompletableFuture<Object>();
     jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
     try {
@@ -334,5 +334,17 @@ public class JactlScript {
     catch (InterruptedException | ExecutionException e) {
       throw new IllegalStateException("Internal error: " + e.getMessage(), e);
     }
+  }
+
+  /**
+   * <p>Run script with given global variables and wait for result.</p>
+   * @param globals     a Map of global variables and their values
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output      PrintWriter where print/println output will go (can be null)
+   * @return the result of the script
+   * @deprecated Use {@link #eval(Map, Reader, Writer)} instead
+   */
+  public Object runSync(Map<String,Object> globals, Reader input, Writer output) {
+    return eval(globals, input, output);
   }
 }

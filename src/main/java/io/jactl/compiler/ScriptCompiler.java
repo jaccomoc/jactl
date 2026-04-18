@@ -32,26 +32,12 @@ public class ScriptCompiler extends ClassCompiler {
     super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jactl");
   }
 
-  /**
-   * Return a compiled script that accepts a Map of globals and Consumer which is the completion
-   * code to run once the script has finished (and which will accept the result).
-   * @return the script
-   */
-  JactlScript compileWithCompletion() {
+  JactlScript compile() {
     Class<?> compiledClass = compileToClass();
     if (compiledClass == null) {
       return null;
     }
-    Function<Map<String, Object>, Object> scriptMain = JactlScript.createInvoker(compiledClass, context);
-    return JactlScript.createScript(compiledClass, scriptMain, context);
-  }
-
-  public Function<Map<String,Object>, Object> compile() {
-    Class<?> compiledClass = compileToClass();
-    if (compiledClass == null) {
-      return null;
-    }
-    return JactlScript.createInvoker(compiledClass, context);
+    return JactlScript.createScript(compiledClass, context, classDecl.scriptMain.declExpr.functionDescriptor.isAsync());
   }
   
   private Class<?> compileToClass() {

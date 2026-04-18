@@ -83,7 +83,7 @@ public abstract class BaseExecutionBenchmark {
     StringFile      code        = new StringFile(className + ".java", javaSource);
     TestFileManager fileManager = new TestFileManager(compiler.getStandardFileManager(null, null, null));
 
-    boolean result = compiler.getTask(null, fileManager, null, null, null, Arrays.asList(code)).call();
+    boolean result = compiler.getTask(devNull, fileManager, null, null, null, Arrays.asList(code)).call();
     assert result : "Java compilation failed during setup";
 
     String fullClassName = packageName + "." + className;
@@ -98,7 +98,7 @@ public abstract class BaseExecutionBenchmark {
   }
 
   protected void setupJactl() throws IOException {
-    JactlContext context  = JactlContext.create().build();
+    JactlContext context  = JactlContext.create().async(false).build();
     jactlScript = Compiler.compileScript(jactlSource, context, Collections.singletonMap("source", ""));
   }
 
@@ -118,7 +118,7 @@ public abstract class BaseExecutionBenchmark {
   public void jactlExecution() throws Exception {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream           out  = new PrintStream(baos);
-    jactlScript.runSync(Collections.singletonMap("source", input), null, out);
+    jactlScript.eval(Collections.singletonMap("source", input), null, out);
     out.close();
     String diff = diff(expectedOutput, baos.toString());
     assert diff == null : "Jactl output mismatch: diff=\n" + diff;

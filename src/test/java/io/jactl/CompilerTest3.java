@@ -359,22 +359,22 @@ public class CompilerTest3 extends BaseTest {
     JactlScript scriptSleepInt = compile(fibIntSleep + "; fib(20)");
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      scriptDef.runSync(globals);
+      scriptDef.eval(globals);
       System.out.println("Def Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      scriptInt.runSync(globals);
+      scriptInt.eval(globals);
       System.out.println("Int Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      scriptSleepDef.runSync(globals);
+      scriptSleepDef.eval(globals);
       System.out.println("sleep Def Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
-      scriptSleepInt.runSync(globals);
+      scriptSleepInt.eval(globals);
       System.out.println("sleep Int Duration=" + (System.currentTimeMillis() - start) + "ms");
     });
   }
@@ -576,14 +576,14 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def f() { unknown } }; new X().f()", null);
     JactlContext ctx = getJactlContext(false);
     JactlScript script = Jactl.compileScript("unknown", new HashMap(), ctx);
-    assertEquals(null, script.runSync(new HashMap<>()));
-    assertEquals("xxx", script.runSync(Utils.mapOf("unknown", "xxx")));
-    assertEquals(123, script.runSync(Utils.mapOf("unknown", 123)));
+    assertEquals(null, script.eval(new HashMap<>()));
+    assertEquals("xxx", script.eval(Utils.mapOf("unknown", "xxx")));
+    assertEquals(123, script.eval(Utils.mapOf("unknown", 123)));
     Jactl.compileClass("class X { def f() { unknown } }", ctx);
     script = Jactl.compileScript("new X().f()", new HashMap<>(), ctx);
-    assertEquals(null, script.runSync(new HashMap<>()));
-    assertEquals("xxx", script.runSync(Utils.mapOf("unknown", "xxx")));
-    assertEquals(123, script.runSync(Utils.mapOf("unknown", 123)));
+    assertEquals(null, script.eval(new HashMap<>()));
+    assertEquals("xxx", script.eval(Utils.mapOf("unknown", "xxx")));
+    assertEquals(123, script.eval(Utils.mapOf("unknown", 123)));
     globals.put("unknown", "abcdef");
     test(Utils.listOf("class X { def f() { unknown } }"), "new X().f()", "abcdef");
   }

@@ -18,11 +18,11 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
+import io.jactl.engine.JactlScriptEngine;
 import io.jactl.resolver.Resolver;
 import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.Functions;
 import io.jactl.runtime.RuntimeError;
-import io.jactl.runtime.RuntimeUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -47,6 +47,7 @@ public class BaseTest {
   protected boolean            checkClasses = true;
   protected String             packageName;
   protected Map<String,Object> globals;
+  protected boolean            isAsync = Boolean.valueOf(System.getProperty(JactlScriptEngine.JACTL_ASYNC, "true"));
   protected boolean            useAsyncDecorator;
   protected boolean            classAccessToGlobals;
   protected boolean            alwaysEvalConsts;
@@ -134,10 +135,10 @@ public class BaseTest {
       JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
 
       if (input == null && output == null) {
-        return compiled.runSync(bindings);
+        return compiled.eval(bindings);
       }
       else {
-        return compiled.runSync(bindings,
+        return compiled.eval(bindings,
                                 input == null ? null : new BufferedReader(new StringReader(input)),
                                 output == null ? null: new PrintStream(output));
       }
@@ -159,8 +160,10 @@ public class BaseTest {
   }
 
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected) {
-    doTestCheckpoint(classCode, scriptCode, expected, false);
-    doTestCheckpoint(classCode, scriptCode, expected, true);
+    if (isAsync) {
+      doTestCheckpoint(classCode, scriptCode, expected, false);
+      doTestCheckpoint(classCode, scriptCode, expected, true);
+    }
   }
 
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected, boolean loopDetection) {
@@ -215,7 +218,7 @@ public class BaseTest {
       JactlScript compiled = compileScript(scriptCode, jactlContext1, packageName, asyncDecorator, bindings);
       compileScript(scriptCode, jactlContext2, packageName, asyncDecorator, bindings);
 
-      Object result   = compiled.runSync(bindings);
+      Object result   = compiled.eval(bindings);
       checkEqual(expected, result);
 
       assertEquals(0, errors[0]);
@@ -299,13 +302,14 @@ public class BaseTest {
 
   protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint, boolean loopDetection) {
     JactlContext jactlContext = JactlContext.create()
-                                            .environment(jactlEnv)
+                                            .environment(isAsync ? jactlEnv : null)
+                                            .async(isAsync)
                                             .classAccessToGlobals(classAccessToGlobals)
                                             .evaluateConstExprs(evalConsts)
                                             .replMode(replMode)
                                             .debug(debugLevel)
-                                            .checkpoint(testCheckpoint)
-                                            .restore(testCheckpoint)
+                                            .checkpoint(isAsync && testCheckpoint)
+                                            .restore(isAsync && testCheckpoint)
                                             .checkClasses(checkClasses)
                                             .allowUndeclaredGlobals(allowUndeclaredGlobals)
                                             .allowHostAccess(allowHostAccess)
@@ -511,7 +515,7 @@ public class BaseTest {
       Object              result[] = new Object[1];
       Arrays.stream(code).forEach(scriptCode -> {
         JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, null, bindings);
-        result[0]    = compiled.runSync(bindings);
+        result[0]    = compiled.eval(bindings);
       });
       if (expected instanceof Object[]) {
         assertTrue(result[0] instanceof Object[]);

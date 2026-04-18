@@ -241,7 +241,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     methodFunDecl.heapLocals.values().forEach(varDecl -> defineVar(varDecl));
 
     // If async or wrapper then allocate slot for the Continuation
-    if (methodFunDecl.isWrapper || methodFunDecl.functionDescriptor.isAsync) {
+    if (methodFunDecl.isWrapper || methodFunDecl.functionDescriptor.isAsync()) {
       continuationVar = stack.allocateSlot(CONTINUATION);
     }
     if (!methodFunDecl.isWrapper && methodFunDecl.functionDescriptor.needsLocation) {
@@ -263,13 +263,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Check to see if we have been resumed after a suspend
     Label isContinuation = new Label();
-    if (methodFunDecl.functionDescriptor.isAsync) {
+    if (methodFunDecl.functionDescriptor.isAsync()) {
       _loadLocal(continuationVar);
       mv.visitJumpInsn(IFNONNULL, isContinuation);
     }
 
     // Allocate slots for our long[] and Object[] that we will use when saving state during suspension.
-    if (methodFunDecl.functionDescriptor.isAsync) {
+    if (methodFunDecl.functionDescriptor.isAsync()) {
       longArr = stack.allocateSlot(LONG_ARR);
       objArr  = stack.allocateSlot(OBJECT_ARR);
     }
@@ -304,7 +304,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       undefineAliases();
     }
 
-    if (methodFunDecl.functionDescriptor.isAsync) {
+    if (methodFunDecl.functionDescriptor.isAsync()) {
       mv.visitLabel(isContinuation);      // :isContinuation
       Label defaultLabel = new Label();
       _loadLocal(continuationVar);
@@ -2242,7 +2242,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // exists we will assume that there is a field of that name that holds a method handle.
     // Since we invoke through a method handle we don't know whether we are async or not so we assume
     // the worst.
-    invokeMaybeAsync(true, ANY, 0, expr.location,
+    invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
                      () -> {
                        compile(expr.parent);           // The instance to invoke method on
                        loadConst(expr.methodName);
@@ -2259,7 +2259,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // If we are not chaining method calls then it is possible that the method we just invoked returned
       // an Iterator and since Iterators are not standard types we need to convert into a List to make the
       // result usable by other code.
-      convertIteratorToList(true, expr.location);
+      convertIteratorToList(asyncEnabled(), expr.location);
     }
     return null;
   }
@@ -2322,7 +2322,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            popVal();
                          }
 
-                         if (method.isAsync) {
+                         if (method.isAsync()) {
                            loadNullContinuation();
                          }
                          if (method.needsLocation) {
@@ -2430,7 +2430,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // loading values from our own local slots that are needed by the function.
     expr.funDecl.heapLocals.values().forEach(p -> loadLocal(p.parentVarDecl.slot));
 
-    if (expr.funDecl.functionDescriptor.isAsync) {
+    if (expr.funDecl.functionDescriptor.isAsync()) {
       loadNullContinuation();
     }
 
@@ -2496,7 +2496,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitEval(Expr.Eval expr) {
-    invokeMaybeAsync(true, ANY, 0, expr.location,
+    invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
                      () -> {
                        loadNull(CONTINUATION);
                        compile(expr.script);
@@ -2575,11 +2575,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInvokeInit(Expr.InvokeInit expr) {
     FunctionDescriptor initMethod = expr.classDescriptor.getInitMethod();
-    invokeMaybeAsync(initMethod.isAsync, expr.type, 0, expr.location,
+    invokeMaybeAsync(initMethod.isAsync(), expr.type, 0, expr.location,
                      () -> {
                        loadLocal(0);    // this
 
-                       if (initMethod.isAsync) {
+                       if (initMethod.isAsync()) {
                          loadNullContinuation();
                        }
 
@@ -2630,7 +2630,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void convertIteratorToList(boolean isAsync, Token location) {
     dupVal();
-    emitIf(true, IfTest.IS_TRUE,
+    emitIf(isAsync, IfTest.IS_TRUE,
            () -> isInstanceOf(ITERATOR),
            () -> invokeMaybeAsync(isAsync, ANY, 1, location, () -> {},
                                   () -> {
@@ -2673,7 +2673,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return;
     }
 
-    invokeMaybeAsync(method != null && method.isAsync, ANY, 0, compileTimeLocation,
+    invokeMaybeAsync(method != null && method.isAsync(), ANY, 0, compileTimeLocation,
                      () -> {
                        if (valueType.is(ANY)) {
                          // If we don't know type at compile time then check for types at runtime
@@ -3227,7 +3227,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // before adding a type for each actual parameter.
     Stream<JactlType> params = Collections.nCopies(funDecl.heapLocals.size(), HEAPLOCAL).stream();
     // Add Continuation after HeapLocals for async functions and for wrappers
-    if (funDecl.functionDescriptor.isAsync || funDecl.isWrapper) {
+    if (funDecl.functionDescriptor.isAsync() || funDecl.isWrapper) {
       params = Stream.concat(params, Stream.of(CONTINUATION));
     }
     if (funDecl.functionDescriptor.needsLocation) {
@@ -4589,6 +4589,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private boolean asyncEnabled() {
+    return classCompiler.context.isAsync;
+  }
+
   private void insertDebug(String info) {
     _loadConst(null);
     _loadConst(info);
@@ -4637,15 +4641,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     List<String> badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
     if (badVars.size() > 0) {
       boolean plural = badVars.size() > 1;
-      error("Invocation of " + funDecl.nameToken.getStringValue() +
-                             " requires forward reference to closed over variable" + (plural?"s ":" ") +
-                             String.join(",", badVars.toArray(new String[badVars.size()])) +
-                             (plural ? " that have" : " that has") +
-                             " not yet been initialised",
-                             expr.location);
+      error("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
+            (plural?"s ":" ") + String.join(",", badVars.toArray(new String[badVars.size()])) +
+            " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
     }
 
-    invokeMaybeAsync(func.isAsync, invokeWrapper ? ANY : func.returnType, 0, expr.location,
+    invokeMaybeAsync(func.isAsync(), invokeWrapper ? ANY : func.returnType, 0, expr.location,
                      () -> {
                        if (!func.isStaticImplementation) {
                          // Load this
@@ -4662,7 +4663,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        }
                        else {
                          // If invoking directly and async function then load null for the Continuation
-                         if (func.isAsync) {
+                         if (func.isAsync()) {
                            loadNullContinuation();
                          }
                          for (int i = 0; i < expr.args.size(); i++) {
@@ -4704,7 +4705,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
       List<JactlType> finalParamTypes = paramTypes;
 
-      invokeMaybeAsync(func.isAsync, func.returnType, 0, expr.location,
+      invokeMaybeAsync(func.isAsync() && asyncEnabled(), func.returnType, 0, expr.location,
                        () -> {
                          loadClassField(func.getWrapperHandleClassName(), func.wrapperHandleField, FUNCTION, true);
                          loadNullContinuation();         // Continuation
@@ -4724,7 +4725,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // Add location types to the front
         paramTypes = Stream.concat(Stream.of(STRING, INT), paramTypes.stream()).collect(Collectors.toList());
       }
-      if (func.isAsync) {
+      if (func.isAsync()) {
         // Add Continuation to the front if async
         paramTypes = Stream.concat(Stream.of(CONTINUATION), paramTypes.stream()).collect(Collectors.toList());
       }
@@ -4733,7 +4734,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMaybeAsync(expr.isAsync, func.returnType, 0, expr.location,
                        () -> {
                          int param = 0;
-                         if (func.isAsync) {
+                         if (func.isAsync()) {
                            loadNullContinuation();    // Continuation
                            param++;
                          }
@@ -5408,10 +5409,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         if (asyncAutoCreateAllowed()) {
-          invokeMaybeAsync(initMethod.isAsync, type, 0, location,
+          invokeMaybeAsync(initMethod.isAsync(), type, 0, location,
                            () -> {
                              newInstance(type);
-                             if (initMethod.isAsync) {
+                             if (initMethod.isAsync()) {
                                loadNullContinuation();
                              }
                              if (initMethod.needsLocation) {

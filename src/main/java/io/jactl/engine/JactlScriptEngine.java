@@ -43,6 +43,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   private boolean                  untypedGlobals;
 
   public static String JACTL_DEBUG_LEVEL              = "jactl.debug.level";
+  public static String JACTL_ASYNC                    = "jactl.async";
   public static String JACTL_ALLOW_UNDECLARED_GLOBALS = "jactl.allowUndeclaredGlobals";
   public static String JACTL_UNTYPED_GLOBALS          = "jactl.untypedGlobals";
   public static String JACTL_ALLOW_HOST_ACCESS        = "jactl.allowHostAccess";
@@ -97,7 +98,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     }
     this.jactlScript = jactlScript;
     try {
-      return jactlScript.runSync(ctxGlobals, reader, writer);
+      return jactlScript.eval(ctxGlobals, reader, writer);
     }
     catch (JactlError e) {
       ScriptException scriptException = new ScriptException("Script error: " + e.getMessage());
@@ -279,6 +280,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
 
       jactlContext = JactlContext.create()
                                  .debug(debugLevel)
+                                 .async(getBoolean(JACTL_ASYNC, false))
                                  .classAccessToGlobals(true)
                                  .allowUndeclaredGlobals(getBoolean(JACTL_ALLOW_UNDECLARED_GLOBALS))
                                  .allowHostAccess(getBoolean(JACTL_ALLOW_HOST_ACCESS))
@@ -324,7 +326,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     public JactlCompiledScript(JactlScript jactlScript) { this.jactlScript = jactlScript; }
     @Override public Object eval(ScriptContext context) throws ScriptException {
       try {
-        return jactlScript.runSync(extractGlobals(context), context.getReader(), context.getWriter());
+        return jactlScript.eval(extractGlobals(context), context.getReader(), context.getWriter());
       }
       catch (JactlError e) {
         ScriptException scriptException = new ScriptException("Script error: " + e.getMessage());

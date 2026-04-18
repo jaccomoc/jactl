@@ -93,8 +93,8 @@ public class FunctionDescriptor {
       // are invoking method on as first arg
       types.add(firstArgtype);
     }
-    if (isAsync || isWrapper) { types.add(CONTINUATION); }
-    if (needsLocation)        { types.addAll(Utils.listOf(JactlType.STRING, JactlType.INT)); }
+    if (isAsync() || isWrapper) { types.add(CONTINUATION); }
+    if (needsLocation)          { types.addAll(Utils.listOf(JactlType.STRING, JactlType.INT)); }
     types.addAll(paramTypes);
     return types;
   }
@@ -129,6 +129,10 @@ public class FunctionDescriptor {
     return null;
   }
 
+  public boolean isAsync() {
+    return isAsync == null ? false : isAsync;
+  }
+  
 //  public void invoke(MethodVisitor mv, boolean isInvokeSpecial, LocalTypes stack) {
 //    int stackCount = paramTypes.size() + (isStatic ? 0 : 1);
 //    stack.expect(stackCount);

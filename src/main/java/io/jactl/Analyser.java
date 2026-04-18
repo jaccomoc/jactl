@@ -91,18 +91,23 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private boolean isFirstPass = true;       // True if doing first pass through
 
+  private boolean asyncEnabled = true;
+  
   public Analyser(JactlContext context) {
     this.context = context;
+    this.asyncEnabled = context.isAsync;
   }
 
   public void analyseClass(Stmt.ClassDecl classDecl) {
     isFirstPass = true;
     analyse(classDecl);
 
-    resolveAsyncDependencies();
+    if (asyncEnabled) {
+      resolveAsyncDependencies();
 
-    isFirstPass = false;
-    analyse(classDecl);
+      isFirstPass = false;
+      analyse(classDecl);
+    }
   }
 
   ////////////////////////////////////////
@@ -115,9 +120,11 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       finally {
         currentStmt.pop();
-        Stmt parent = currentStmt.peek();
-        if (parent != null && stmt.isAsync) {
-          parent.isAsync = true;
+        if (asyncEnabled) {
+          Stmt parent = currentStmt.peek();
+          if (parent != null && stmt.isAsync) {
+            parent.isAsync = true;
+          }
         }
       }
     }
@@ -218,7 +225,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           async(expr);
         }
       }
-      if (!function.isBuiltin) {
+      if (!function.isBuiltin && isFirstPass) {
         resolveHeapLocals(currentFunction(), Utils.isInvokeWrapper(expr, function) ? funDecl.wrapper : funDecl);
       }
     }
@@ -371,7 +378,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     // If we are the wrapper
-    if (expr != funDecl) {
+    if (expr != funDecl && asyncEnabled) {
       // If we were the wrapper, and we are async then function is also marked as async.
       // If we were cleverer we could track better when invoking wrapper and wouldn't need
       // to be so conservative about this...
@@ -645,6 +652,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   ///////////////////////////////////////
 
   private void async(Expr expr) {
+    if (!asyncEnabled) {
+      return;
+    }
+    
     // Error if this would make a toString() implementation async.
     // We don't support async toString() in order to support toString() invocations if object leaks into Java
     // domain (by being stored in the globals Map) and to save on the extra generated code needed for invoking
@@ -665,6 +676,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   
   private void asyncIfTypeIsAsync(Expr expr, JactlType type) {
+    if (!asyncEnabled) {
+      return;
+    }
     if (!type.is(INSTANCE,CLASS)) { return; }
     JactlClassDescriptor classDescriptor = type.isHostClass() ? null : type.getJactlClassDescriptor();
     if (classDescriptor == null || classDescriptor.getInitMethod() == null) {

@@ -21,6 +21,7 @@ import io.jactl.compiler.Compiler;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.Functions;
 import io.jactl.runtime.RuntimeError;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

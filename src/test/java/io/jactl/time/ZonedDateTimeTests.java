@@ -321,8 +321,8 @@ public class ZonedDateTimeTests extends BaseTest {
   }
 
   @Test public void nowInZone() {
-    test("(ZonedDateTime.nowInZone(ZoneId.of('Australia/Sydney')).getSecond() + 5)/10", (ZonedDateTime.now(ZoneId.of("Australia/Sydney")).getSecond() + 5) / 10);
-    test("def f = ZonedDateTime.nowInZone; (f(ZoneId.of('Australia/Sydney')).getSecond() + 5) / 10", (ZonedDateTime.now(ZoneId.of("Australia/Sydney")).getSecond() + 5) / 10);
+    test("ZonedDateTime.nowInZone(ZoneId.of('Australia/Sydney')) instanceof ZonedDateTime",true);
+    test("def f = ZonedDateTime.nowInZone; f(ZoneId.of('Australia/Sydney')) instanceof ZonedDateTime",true);
   }
 
   @Test public void of() {

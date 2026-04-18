@@ -494,7 +494,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStaticImplementation; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
-    public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync ? 2 : 1) : -1; }
+    public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync() ? 2 : 1) : -1; }
     public FunDecl(Token startToken, Token nameToken, JactlType returnType, List<Stmt.VarDecl> parameters) {
       this.startToken = startToken;
       this.nameToken = nameToken;

@@ -1186,7 +1186,9 @@ public class ClassTests extends BaseTest {
   @Test public void toStringTest() {
     useAsyncDecorator = false;
     test("class X { int i = 1; def toString() { \"[ii:$i]\" + 'abc' } }; new X().toString()", "[ii:1]abc");
-    testError("class X { int i = 1; def toString() { sleep(0,\"[ii:$i]\") + sleep(0,'abc') } }; [x:new X()].toString()", "cannot invoke anything that is async");
+    if (isAsync) {
+      testError("class X { int i = 1; def toString() { sleep(0,\"[ii:$i]\") + sleep(0,'abc') } }; [x:new X()].toString()", "cannot invoke anything that is async");
+    }
     test("class X { X x; byte i; String s }; new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz').toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; byte i; String s }; X x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
     test("class X { X x; byte i; String s }; def x = new X(x:[x:null,i:2,s:'abc'],i:3,s:'xyz'); x.toString()", "[x:[x:null, i:2, s:'abc'], i:3, s:'xyz']");
@@ -1260,8 +1262,10 @@ public class ClassTests extends BaseTest {
     }
     else {
       useAsyncDecorator = false;
-      testError("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", "detected async");
-      testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
+      if (isAsync) {
+        testError("class X { Y y }; class Y { int i = sleep(0,3) }; X x = new X(null); x.y.i = 4; x.y.i", "detected async");
+        testError("class X { Y y }; class Y { int i = sleep(0,3) }; def x = new X(null); x.y.i = 4; x.y.i", "detected async");
+      }
     }
     test("class X { Y y }; class Y { byte i = 3 }; X x = new X(null); x.y.i = 4; x.y.i", (byte)4);
     test("class X { Y y = null }; class Y { byte i = 3 }; X x; x.y.i = 4; x.y.i", (byte)4);
@@ -1547,7 +1551,9 @@ public class ClassTests extends BaseTest {
       test("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", 2);
     }
     else {
-      testError("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "detected async");
+      if (isAsync) {
+        testError("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "detected async");
+      }
     }
     testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "null value for parent");
     testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; def x = new X(); x.y.i = 2", "mandatory fields");
@@ -1816,10 +1822,12 @@ public class ClassTests extends BaseTest {
       test("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=4}; X x = null; (x?:new X())?.y?.i = 5", 5);
     }
     else {
-      testError("class X{ int i = 3; Y y = null }; class Y{ int i = sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
-      testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
-      testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.\"${'y'}\"?.i = 5", "detected async");
-      testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.(sleep(0,'y'))?.i = 5", "detected async");
+      if (isAsync) {
+        testError("class X{ int i = 3; Y y = null }; class Y{ int i = sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
+        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
+        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.\"${'y'}\"?.i = 5", "detected async");
+        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.(sleep(0,'y'))?.i = 5", "detected async");
+      }
     }
     test("class X{ int i = sleep(0,3) }; (null?:new X())?.i = 5", 5);
   }

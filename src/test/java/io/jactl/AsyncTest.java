@@ -71,7 +71,7 @@ public class AsyncTest {
     classSources.forEach(s -> Jactl.compileClass(s, context));
     assertEquals(isAsync, isAsync(source, context), isAsync ? "Was not async" : "Was not sync");
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
-    assertEquals(expected, script.runSync(Utils.mapOf(), new BufferedReader(new StringReader(input)), (Writer)null));
+    assertEquals(expected, script.eval(Utils.mapOf(), new BufferedReader(new StringReader(input)), (Writer)null));
   }
 
   @Test public void asyncTests() {

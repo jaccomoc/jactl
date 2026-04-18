@@ -39,7 +39,7 @@ public class Compiler {
   
   public static Object eval(String source, JactlContext jactlContext, String packageName, Map<String,Object> bindings) {
     JactlScript compiled = compileScript(source, jactlContext, packageName, bindings);
-    return compiled.runSync(bindings);
+    return compiled.eval(bindings);
   }
 
   public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings) {
@@ -47,12 +47,12 @@ public class Compiler {
   }
   public static Object eval(String source, JactlContext jactlContext, Map<String,Object> bindings, BufferedReader input, PrintStream output) {
     JactlScript compiled = compileScript(source, jactlContext, bindings);
-    return compiled.runSync(bindings, input, output);
+    return compiled.eval(bindings, input, output);
   }
 
   public static Object eval(String source, JactlContext jactlContext, String scriptClassName, String packageName, Map<String,Object> bindings) {
     JactlScript compiled = compileScript(source, jactlContext, scriptClassName, packageName, bindings);
-    return compiled.runSync(bindings);
+    return compiled.eval(bindings);
   }
 
   public static JactlScript compileScript(String source, JactlContext jactlContext, Map<String, Object> bindings) {
@@ -96,7 +96,7 @@ public class Compiler {
     Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);
     ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script);
-    return compiler.compile();
+    return compiler.compile().getInvoker();
   }
 
   public static void compileClass(String source, JactlContext jactlContext, String packageName) {
@@ -115,7 +115,7 @@ public class Compiler {
 
   public static JactlScript compileWithCompletion(String source, JactlContext jactlContext, Stmt.ClassDecl script) {
     ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script);
-    return compiler.compileWithCompletion();
+    return compiler.compile();
   }
 
   public static void compileClass(String source, JactlContext jactlContext, String packageName, Stmt.ClassDecl clss) {

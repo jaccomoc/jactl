@@ -579,13 +579,20 @@ public class BuiltinFunctions {
   // = checkpoint
 
   public static Object _checkpoint(Continuation c, String source, int offset, Object data) {
-    Continuation.checkpoint(source, offset, data);
+    if (RuntimeState.getState().getContext().isAsync) {
+      Continuation.checkpoint(source, offset, data);
+    }
     return data;
   }
 
   public static Object checkpoint(Continuation c, String source, int offset, JactlMethodHandle commitClosure, JactlMethodHandle recoveryClosure) {
     int location = c == null ? 0 : c.methodLocation;
     try {
+      // When async behaviour is disabled then checkpointing is also disabled so invoke the "commit" closure
+      // each time to simulate what would have happened if checkpointing were enabled
+      if (!RuntimeState.getState().getContext().isAsync) {
+        return commitClosure.invoke(null, source, offset, Utils.EMPTY_OBJ_ARR);
+      }
       switch (location) {
         case 0:
           Continuation.checkpoint(source, offset, commitClosure, recoveryClosure);
@@ -632,9 +639,19 @@ public class BuiltinFunctions {
   // = sleep
   public static Object sleep(Continuation c, String source, int offset, long timeMs, Object data) {
     if (timeMs >= 0) {
-      Continuation.suspendNonBlocking(source, offset, data, (context, dataObj, resumer) -> {
-        context.scheduleEvent(() -> resumer.accept(dataObj), timeMs);
-      });
+      if (RuntimeState.getState().getContext().isAsync) {
+        Continuation.suspendNonBlocking(source, offset, data, (context, dataObj, resumer) -> {
+          context.scheduleEvent(() -> resumer.accept(dataObj), timeMs);
+        });
+      }
+      else {
+        try {
+          Thread.sleep(timeMs);
+        }
+        catch (InterruptedException e) {
+          throw new RuntimeError("sleep() interrupted", source, offset);
+        }
+      }
     }
     return data;
   }

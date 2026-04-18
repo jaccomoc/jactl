@@ -1167,20 +1167,23 @@ public class BuiltinFunctionTests2 extends BaseTest {
   }
 
   @Test public void _checkpoint() throws ExecutionException, InterruptedException {
-    Map<UUID,byte[]> checkpoints = new HashMap<>();
-    jactlEnv = new DefaultEnv() {
-      @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
-        checkpoints.put(id, checkpoint);
-        resumer.accept(result);
-      }
-    };
-    JactlContext context = getJactlContext(false);
-    JactlScript script = Jactl.compileScript("_checkpoint(123)", Utils.mapOf(), context);
-    assertEquals(123, script.runSync(Utils.mapOf()));
-    assertEquals(1, checkpoints.size());
-    CompletableFuture result = new CompletableFuture();
-    context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
-    assertEquals(123, result.get());
+    if (isAsync) {
+      Map<UUID, byte[]> checkpoints = new HashMap<>();
+      jactlEnv = new DefaultEnv() {
+        @Override
+        public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+          checkpoints.put(id, checkpoint);
+          resumer.accept(result);
+        }
+      };
+      JactlContext context = getJactlContext(false);
+      JactlScript  script  = Jactl.compileScript("_checkpoint(123)", Utils.mapOf(), context);
+      assertEquals(123, script.eval(Utils.mapOf()));
+      assertEquals(1, checkpoints.size());
+      CompletableFuture result = new CompletableFuture();
+      context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
+      assertEquals(123, result.get());
+    }
   }
 
   private void checkpointTest(String source, Object commitExpected, Object recoverExpected) throws InterruptedException, ExecutionException {
@@ -1206,7 +1209,10 @@ public class BuiltinFunctionTests2 extends BaseTest {
     };
     JactlContext context = getJactlContext(loopDetection);
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
-    assertEquals(commitExpected, script.runSync(Utils.mapOf()));
+    assertEquals(commitExpected, script.eval(Utils.mapOf()));
+    if (!isAsync) {
+      return;
+    }
     assertEquals(1, checkpoints.size());
     UUID                        key  = checkpoints.keySet().iterator().next();
     List<Pair<Integer, byte[]>> list = checkpoints.get(key);
@@ -1274,7 +1280,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
         assertTrue(e.getMessage().contains("unknown variable 'testFunc'"));
       }
       JactlScript compiled = Compiler.compileScript("sleep(1,99)", contextBefore, packageName, globals);
-      assertEquals(99,compiled.runSync(globals));
+      assertEquals(99,compiled.eval(globals));
 
       Jactl.function().name("testFunc").param("arg", 10).impl(BuiltinFunctionTests2.class, "testFunc").register();
       test("testFunc(3)", 9);
@@ -1284,19 +1290,19 @@ public class BuiltinFunctionTests2 extends BaseTest {
                                               .hasOwnFunctions(true)
                                               .build();
       compiled = Compiler.compileScript("testFunc(3)", contextAfter, packageName, globals);
-      assertEquals(9, compiled.runSync(globals));
+      assertEquals(9, compiled.eval(globals));
       compiled = Compiler.compileScript("sleep(1,99)", contextBefore, packageName, globals);
-      assertEquals(99,compiled.runSync(globals));
+      assertEquals(99,compiled.eval(globals));
 
       contextBefore.function().name("testFunc2").param("arg", 9).impl(BuiltinFunctionTests2.class, "testFunc").register();
 
       contextAfter.function().name("testFunc2").param("arg", 10).impl(BuiltinFunctionTests2.class, "testFunc").register();
       compiled = Compiler.compileScript("testFunc2()", contextAfter, packageName, globals);
-      assertEquals(100, compiled.runSync(globals));
+      assertEquals(100, compiled.eval(globals));
 
       contextBefore.function().name("testFunc2").param("arg", 10).impl(BuiltinFunctionTests2.class, "testFunc").register();
       compiled = Compiler.compileScript("testFunc2()", contextBefore, packageName, globals);
-      assertEquals(100, compiled.runSync(globals));
+      assertEquals(100, compiled.eval(globals));
       contextBefore.deregister("testFunc2");
       try {
         Compiler.compileScript("testFunc2()", contextBefore, packageName, globals);
@@ -1331,13 +1337,13 @@ public class BuiltinFunctionTests2 extends BaseTest {
                                               .hasOwnFunctions(true)
                                               .build();
       JactlScript compiled = Compiler.compileScript("3.testMethod(3)", contextAfter, packageName, globals);
-      assertEquals(9, compiled.runSync(globals));
+      assertEquals(9, compiled.eval(globals));
       compiled = Compiler.compileScript("3.testMethod()", contextAfter, packageName, globals);
-      assertEquals(30,compiled.runSync(globals));
+      assertEquals(30,compiled.eval(globals));
 
       contextBefore.method(INT).name("testMethod2").param("arg", 10).impl(BuiltinFunctionTests2.class, "testMethod").register();
       compiled = Compiler.compileScript("4.testMethod2()", contextBefore, packageName, globals);
-      assertEquals(40, compiled.runSync(globals));
+      assertEquals(40, compiled.eval(globals));
       contextBefore.deregister(INT, "testMethod2");
       try {
         Compiler.compileScript("4.testMethod2()", contextBefore, packageName, globals);

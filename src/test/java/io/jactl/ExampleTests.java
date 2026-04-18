@@ -51,7 +51,7 @@ public class ExampleTests {
   @Test public void example2() {
     HashMap<String, Object> globals = new HashMap<String,Object>();
     JactlScript             script  = Jactl.compileScript("3 + 4", globals);
-    Object result      = script.runSync(globals);          // result will be 7
+    Object result      = script.eval(globals);          // result will be 7
     assertEquals(7, result);
   }
 
@@ -139,7 +139,7 @@ public class ExampleTests {
            .register();
 
       JactlScript script   = Jactl.compileScript("measure{ sleep(1000) }", new HashMap<>());
-      long        duration = (long)script.runSync(new HashMap<>());
+      long        duration = (long)script.eval(new HashMap<>());
       assertTrue(duration >= Duration.ofMillis(1000).toNanos() && duration <= Duration.ofMillis(1100).toNanos());
     }
     finally {
@@ -311,8 +311,17 @@ public class ExampleTests {
 
   @Test public void jactlMonteCarlo() throws IOException {
     String jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/MonteCarloPI.jactl");
-    JactlContext ctx = JactlContext.create().debug(0).build();
+    JactlContext ctx = JactlContext.create().debug(0).async(false).build();
     JactlScript script = Jactl.compileScript(jactlSource, new HashMap<>(), ctx);
-    script.runSync(new HashMap<>());
+    script.eval(new HashMap<>());
   }
+  
+  @Test public void jactlGenerateClasses() throws IOException {
+    String       jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
+    JactlContext ctx         = JactlContext.create().debug(0).async(false).build();
+    HashMap      globals     = new HashMap() {{ put("source", ""); }};
+    JactlScript  script      = Jactl.compileScript(jactlSource, globals, ctx);
+    script.eval(globals);
+  }
+  
 }

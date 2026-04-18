@@ -433,7 +433,7 @@ In order to compare compile time performance and runtime performance we will use
 | Language | Version       |
 |----------|---------------|
 | Groovy   | 4.0.31        |
-| Jactl    | 2.7.1         |
+| Jactl    | 2.7.2         |
 | Java     | 8 (1.8.0_472) |
 
 The reason we are using Groovy 4 (rather than Groovy 5) is that Groovy 4 is the most recent version that still

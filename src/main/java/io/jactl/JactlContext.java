@@ -58,6 +58,7 @@ public class JactlContext {
   public boolean classAccessToGlobals   = false;   // Whether to allow class methods to access globals
   public boolean allowUndeclaredGlobals = false;   // Whether to allow compilation of access to undeclared globals
   public boolean allowHostAccess        = false;   // Whether to allow calls to methods on binding variables of unknown type
+  public boolean isAsync                = true;    // Whether async functions use Continuations (true) or block (false)
   
   public Predicate<String> allowHostClassLookup = s -> false; // A Predicate that returns true for host classes on which static methods can be invoked
   
@@ -249,6 +250,15 @@ public class JactlContext {
     public JactlContextBuilder javaPackage(String pkg)           { javaPackage        = pkg;     return this; }
 
     /**
+     * Whether long running functions (like sleep()) will run asynchronously or whether they will block.
+     * By default this is enabled but if you are running Java 21 or later and would prefer that the Java
+     * VirtualThread mechanism is used instead of Jactl's Continuation based mechanism, you can set this to false.
+     * @param enabled  true if async functions cause script to suspend, false if script should block
+     * @return this JactlContextBuilder
+     */
+    public JactlContextBuilder async(boolean enabled)            { isAsync            = enabled; return this; }
+    
+    /**
      * Whether globals passed into a script execution can be accessed within a Jactl class.
      * By default, globals can only be accessed by a script, not in methods of a class.
      * @param accessAllowed true if class methods have access to globals (defaults to false)
@@ -375,7 +385,7 @@ public class JactlContext {
      * @return the JactlContext object
      */
     public JactlContext build() {
-      if (executionEnv == null) {
+      if (executionEnv == null && isAsync) {
         executionEnv = new DefaultEnv();
       }
       internalJavaPackage = javaPackage.replace('.', '/');

@@ -376,10 +376,6 @@ public class JactlFunction extends FunctionDescriptor {
 
   ////////////////////////////////////////////////////////
 
-  public boolean isAsync() {
-    return isAsync;
-  }
-
   public JactlType getReturnType() {
     return JactlContext.typeFromClass(method.getReturnType(), context);
   }
@@ -519,7 +515,7 @@ public class JactlFunction extends FunctionDescriptor {
     if (isMethod()) {
       argVals[i++] = obj;
     }
-    if (isAsync) {
+    if (isAsync()) {
       argVals[i++] = null;       // Continuation
     }
     if (needsLocation) {

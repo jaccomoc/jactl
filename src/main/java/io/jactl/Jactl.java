@@ -439,14 +439,13 @@ public class Jactl {
       if (argMap.containsKey('C')) {
         Class           clazz     = JactlClassLoader.forName(scriptClassName);
         AtomicReference resultRef = new AtomicReference();
-        Function<Map<String,Object>,Object> invoker = JactlScript.createInvoker(clazz, context);
-        JactlScript     jactlScript = JactlScript.createScript(clazz, invoker, context);
+        JactlScript     jactlScript = JactlScript.createScript(clazz, context);
 
-        result = jactlScript.runSync(globals, input, output);
+        result = jactlScript.eval(globals, input, output);
       }
       else {
         JactlScript compiled = Compiler.compileScript(script, context, scriptClassName, argMap.containsKey('k') ? (String) argMap.get('k') : Utils.DEFAULT_JACTL_PKG, globals);
-        result = compiled.runSync(globals, input, output);
+        result = compiled.eval(globals, input, output);
       }
 
       // Print result only if non-null and if we aren't in a stdin loop and script hasn't invoked print itself

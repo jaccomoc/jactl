@@ -354,12 +354,12 @@ public class ClassCompiler {
         classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
       }
 
-      if (wrapper.functionDescriptor.isAsync) {
+      if (wrapper.functionDescriptor.isAsync()) {
         createContinuationHandle.accept(wrapper);
       }
     }
 
-    if (funDecl.functionDescriptor.isAsync) {
+    if (funDecl.functionDescriptor.isAsync()) {
       createContinuationHandle.accept(funDecl);
     }
   }
@@ -412,7 +412,7 @@ public class ClassCompiler {
     methodCompiler.compile();
     mv.visitEnd();
 
-    if (method.functionDescriptor.isAsync) {
+    if (method.functionDescriptor.isAsync()) {
       emitContinuationWrapper(method);
     }
   }
@@ -1179,7 +1179,7 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
         mv.visitJumpInsn(IFNULL, NULL_CHILD);
         mv.visitVarInsn(ALOAD, TMP_OBJ);
         mv.visitInsn(SWAP);
-        boolean async = type.getJactlClassDescriptor().getMethod(Utils.JACTL_INIT_MISSING).isAsync;
+        boolean async = type.getJactlClassDescriptor().getMethod(Utils.JACTL_INIT_MISSING).isAsync();
         // Note we don't actually support async behaviour (it will be detected in JsonDecoder.decodeJactlObj())
         // but we need to pass in a null continuation just in case. If a Continuation is thrown it will be
         // converted into a RuntimeError.

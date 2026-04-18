@@ -410,8 +410,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // Analyser phase) only if it invokes something that is async.
           JactlClassDescriptor baseClass = classDescriptor.getBaseClassDescriptor();
           FunctionDescriptor   method    = baseClass != null ? baseClass.getMethod(methodName) : null;
-          if (!functionDescriptor.isFinal || baseClass != null && method != null && method.isAsync) {
-            functionDescriptor.isAsync = true;
+          if (!functionDescriptor.isFinal || baseClass != null && method != null && method.isAsync()) {
+            functionDescriptor.isAsync = jactlContext.isAsync;
           }
         }
       });

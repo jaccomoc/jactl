@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 James Crawford
+ * Copyright © 2022-2026 James Crawford
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ plugins {
 }
 
 group   'io.jactl'
-version '2.7.1'
+version '2.7.2'
 
 repositories {
     mavenCentral()
@@ -59,6 +59,19 @@ java {
 test { 
     useJUnitPlatform()
     maxParallelForks = 18
+    systemProperty 'jactl.async', 'true'
+}
+
+tasks.register('testSync', Test) {
+    useJUnitPlatform()
+    maxParallelForks = 18
+    systemProperty 'jactl.async', 'false'
+
+    // Give it a separate results/reports dir so outputs don't collide
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    reports.html.outputLocation = layout.buildDirectory.dir('reports/tests/syncTests')
+    reports.junitXml.outputLocation = layout.buildDirectory.dir('test-results/syncTests')
 }
 
 jar {

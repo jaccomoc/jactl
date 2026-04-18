@@ -83,27 +83,27 @@ Jactl.eval("stream(nextLine).each{ println \"$prefix: $it\\n\" }", globals, inpu
 The preferred way to run Jactl scripts is to compile them using `Jactl.compile()`.
 This returns a `JactlScript` object which can then be run as many times as needed.
 
-`JactlScript` objects can be run using the `runSync()` or `run()` methods.
+`JactlScript` objects can be run using the `eval()` or `run()` methods.
 
 If a scripts perform an asynchronous or blocking operation (for example invoking `sleep()` or performing a database
 operation) then Jactl suspends the script and resumes it once the result is ready.
 This allows event-loop based applications to run Jactl scrips without worrying about blocking the event-loop thread that
 invokes a Jactl script.
-The `runSync()` method works like `eval()` in that it waits for the script to complete before returning the result to
+The `eval()` method works like `Jactl.eval()` in that it waits for the script to complete before returning the result to
 the caller.
 If invoking scripts from an event-loop thread of your application be aware that this might therefore block that thread
 if the script does something asynchronous.
 If the threading model of the application requires that the result of an asynchronous operation is processed on the
-same event-loop thread that invoked the operation (for example Vert.x based applications) then using `runSync()` will
+same event-loop thread that invoked the operation (for example Vert.x based applications) then using `eval()` will
 cause the event-loop thread to block forever if the script does something asynchronous since the thread waiting for
 the script to complete is also the thread that the result needs to be processed on before the script can return.
-This is why `runSync()` should only be used if the caller can guarantee that the script does not invoke an asynchronous
+This is why `eval()` should only be used if the caller can guarantee that the script does not invoke an asynchronous
 function or if the caller is not running on an event-loop thread.
 
 ```java
 Map<String,Object> globals = new HashMap<>();
 JactlScript script = Jactl.compileScript("3 + 4", globals);
-Object      result = script.runSync(globals);          // result will be 7
+Object      result = script.eval(globals);          // result will be 7
 assertEquals(7, result);
 ```
 
@@ -112,7 +112,7 @@ The globals you pass in at compile time should contain all the global variables 
 The values in the Map can all be `null` at this point since the compiler just uses the Map to decide if a variable
 exists or not.
 
-The globals Map passed into `runSync()` (and `run()`) will be then be the one that the script
+The globals Map passed into `eval()` (and `run()`) will be then be the one that the script
 uses at runtime.
 This can be a different Map each time but should, obviously, contain an entry for each variable passed in at compile
 time or you will get a runtime error when the script tries to access a global variable not present in the map passed
@@ -152,7 +152,7 @@ System.out.println("Result is " + future.get());
 
 ## Input/Output
 
-Both `run()` and `runSync()` have overloaded versions that also accept a `BufferedReader` and `PrintStream`
+Both `run()` and `eval()` have overloaded versions that also accept a `BufferedReader` and `PrintStream`
 for the input/output of the script.
 
 For example:

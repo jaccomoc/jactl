@@ -52,10 +52,10 @@ class JactlTest {
     assertEquals(6, result);
   }
 
-  @Test void compileRunSync() {
+  @Test void compileeval() {
     HashMap<String, Object> globals = new HashMap<String,Object>();
     JactlScript             script  = Jactl.compileScript("3 + 4", globals);
-    Object result = script.runSync(globals);          // result will be 7
+    Object result = script.eval(globals);          // result will be 7
     assertEquals(7, result);
   }
 

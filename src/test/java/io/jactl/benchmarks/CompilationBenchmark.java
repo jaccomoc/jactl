@@ -95,7 +95,7 @@ public class CompilationBenchmark {
     };
 
     // Jactl
-    jactlContext       = JactlContext.create().build();
+    jactlContext       = JactlContext.create().async(false).build();
     jactlSource        = readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
     jactlLineCount     = countLines(jactlSource);
     jactlScriptCounter = 0;
