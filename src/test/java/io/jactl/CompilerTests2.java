@@ -2330,6 +2330,10 @@ public class CompilerTests2 extends BaseTest {
     test("int i, j; for (i = 0, j = 5; i < 10; i++,j++) {}; i + j", 25);
     test("int i = 5; for (i = 0; i < 10; i++) {}; i", 10);
     test("int i = 3, j = 6; for (i = 0; i < 5; i++) { j++ }; j", 11);
+    testError("for (inx i ", "unexpected token 'i'");
+    testError("for (int;", "unexpected token");
+    testError("for (int i =;", "unexpected token ';'");
+    testError("for (int i =; ) { i++ }", "unexpected token ';'");
     testError("for (int i = 0;", "Unexpected end-of-file");
     testError("for (int i = 0;\n", "Unexpected end-of-file");
     testError("for (int i = 0; i < 10;", "Unexpected end-of-file");
@@ -2363,6 +2367,32 @@ public class CompilerTests2 extends BaseTest {
     testError("double f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
     testError("boolean f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
   }
+  
+  @Test public void forInLoops() {
+    test("for (int i in [1,2,3]) { }", null);
+    test("for (int i: [1,2,3]) { }", null);
+    test("int sum; for (int i in [1,2,3]) { sum += i }; sum", 6);
+    testError("int sum; for (var i = 1 in [1,2,3]) { sum += i }; sum", "unexpected token ')'");
+    testError("int sum; for (var i = 1: [1,2,3]) { sum += i }; sum", "unexpected token ':'");
+    testError("int sum; for (var i; i < 10; i++) { sum += i }; sum", "declaration using 'var' must have an initialiser");
+    test("int sum; for (var i in [1,2,3]) { sum += i }; sum", 6);
+    test("int sum; for (def i in [1,2,3]) { sum += i }; sum", 6);
+    test("int sum; int i; for (i in [1,2,3]) { sum += i }; sum", 6);
+    testError("for (int i in [1,2,3]) i++; i",  "unknown variable 'i'");
+    testError("for (var i in [1,2,3]) i++; i",  "unknown variable 'i'");
+    test("for (i in 3) {}; i", 2);
+    test("for (i in [1,2,3]) {}; i", 3);
+    test("int sum; for (i in 3.map{ it + 1 }) { sum += i }; i + sum", 9);
+    test("int sum; int i; for (i in 3.map{ it + 1 }) { sum += i }; i + sum", 9);
+    test("int sum; for (int i in 3.map{ it + 1 }) { sum += i }; sum", 6);
+    test("int sum; String i; for (int i in 3.map{ it + 1 }) { sum += i }; sum", 6);
+    test("int sum; String i; for (i: []); sum", 0);
+    test("int sum; String i; for (i: 'abc'); sum", 0);
+    test("int sum; String i; for (i in [])sum++; sum", 0);
+    test("int sum; String i; for (i in ['1'])sum++; sum", 1);
+    test("def sum = ''; String i; for (i in 'abc')sum=i+sum; sum", "cba");
+    test("def sum = ''; for (i in 'abc')sum=i+sum; sum", "cba");
+  }
 
   @Test public void breakContinue() {
     testError("break", "break must be within");
@@ -2391,8 +2421,13 @@ public class CompilerTests2 extends BaseTest {
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { sum += i * j } }; sum", 36);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) break; sum += i * j } }; sum", 18);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
+    test("int sum = 0; for (i in [0,1,2,3]) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
+    test("int sum = 0; for (i : [0,1,2,3]) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
     test("int x; for (int i = 0; i < 10; i++) { i < 5 and continue or x += i }; x", 35);
+    test("int x; for (int i in 10) { i < 5 and continue or x += i }; x", 35);
+    test("int x; for (var i in 10) { i < 5 and continue or x += i }; x", 35);
     test("int x; for (int i = 0; i < 10; i++) { i > 5 and break or x += i }; x", 15);
+    test("int x; for (var i: 10) { i > 5 and break or x += i }; x", 15);
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and continue; sum += i }; sum", 15);
     test("int sum = 0; double i = 0; while (i++ < 10) { i > 5 and sleep(0,continue); sum += i }; sum", 15);
     test("def f(x){x}; int sum = 0; double i = 0; while (i++ < 10) { i > 5 and f(continue); sum += i }; sum", 15);
@@ -2412,8 +2447,10 @@ public class CompilerTests2 extends BaseTest {
     testError("int i = 0; int sum = 0; OUTER: do{ int j = 0; LABEL: do{ break XXX if i >= 10; sum++; j++; continue LABEL } until (j >= i); i++ } until (i >= 15); sum", "could not find enclosing loop");
     test("int sum = 0; LABEL: for (int i=0; i < 10; i++) { sum += i }; sum", 45);
     test("int sum = 0; for (int i=0; i < 10; ) { LABEL: for (int j = 0; j < i; ) { sum++; j++; continue LABEL }; i++ }; sum", 45);
+    test("int sum = 0; for (i:10) { LABEL: for (j:i) { sum++; continue LABEL }; i++ }; sum", 45);
     test("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue OUTER }; i++ }; sum", 9);
     test("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
+    test("int sum = 0; OUTER:\n for (int i : 15) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; i++ }; sum", 55);
     testError("int sum = 0; OUTER: for (int i = 0; i < 10; ) { LABEL: for (int j = 0; j < i; j++) { sum++; i++; continue XXX }; i++ }; sum", "could not find enclosing loop");
     testError("int sum = 0; OUTER:\n for (int i = 0; i < 15; ) { LABEL:\n for (int j = 0; j < i; ) { break OUTER if i >= 10; sum++; j++; continue LABEL; j++; i++ }; sum++; continue LABEL; i++ }; sum",  "could not find enclosing loop");
     testError("LABEL: println 'xxx'", "labels can only be applied to for, while, and do/until");

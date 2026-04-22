@@ -240,6 +240,10 @@ public class JactlType extends JactlUserDataHolder {
     throw new IllegalStateException("Internal error: typeDependsOn() should only be invoke on UNKNOWN types not " + this);
   }
 
+  public void typeDependsOnElementOf(Expr expr) {
+    throw new IllegalStateException("Internal error: typeDependsOnElementOf() should only be invoke on UNKNOWN types not " + this);
+  }
+
   public TypeEnum getType() {
     return type;
   }

@@ -218,6 +218,8 @@ public class CompilerTest3 extends BaseTest {
     test("int\ni =\n3\n", 3);
     test("int\ni =\n1,\nj =\n2,\nk\ni+j", 3);
     test("for\n(\nint\ni =\n4-\n3,\nj =\n4/\n2\n;\ni\n<\n10\n;\ni++\n)\n;", null);
+    test("for\n(\nvar\ni =\n4-\n3,\nj =\n4/\n2\n;\ni\n<\n10\n;\ni++\n)\n;", null);
+    test("int s; for\n(\nvar\ni\nin\n[\n4\n,\n2\n])\ns\n+=\ni;s", 6);
     test("def x = [1,2]; if\n(\nx\n[\n0\n]\n)\n4", 4);
     test("def x = [1,2]; def i = 0; while\n(\nx\n[\n0\n]\n>\n10\n||\ni++\n<2\n)\nx[\n2\n]\n=\n7\nx[2]", 7);
     test("def (i\n,\nj\n)\n=\n[\n1\n,\n2\n]\ni+j\n", 3);

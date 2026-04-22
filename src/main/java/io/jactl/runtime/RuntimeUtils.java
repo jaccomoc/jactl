@@ -2007,6 +2007,7 @@ public class RuntimeUtils {
     return JactlIterator.of(obj);
   }
 
+  public static final String CREATE_ITERATOR = "createIterator";
   public static JactlIterator createIterator(Object obj) {
     JactlIterator iter = createIteratorOrNull(obj);
     if (iter != null) {
@@ -2789,7 +2790,7 @@ public class RuntimeUtils {
   public static Object[] listToObjectArray(Object obj) {
     return ((List)obj).toArray();
   }
-
+  
   public static boolean inOperator(Object elem, Object collection, boolean isIn, String source, int offset) {
     // Handle List, Map, and String
     if (collection instanceof String) {

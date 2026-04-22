@@ -626,7 +626,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadBoundMethodHandle(expr.funDecl);
     }
     else {
-      if (expr.initialiser != null) {
+      if (expr.initialiser != null && !(expr.initialiser instanceof Expr.Noop)) {
         desiredType = expr.type;
         compile(expr.initialiser);
         // No need to cast if null
@@ -2451,6 +2451,64 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override public Void visitForLoopIterableInit(Expr.ForLoopIterableInit expr) {
+    desiredType = expr.type;
+    compile(expr.initExpr);
+    convertTo(expr.type, expr.initExpr, expr.initExpr.couldBeNull, expr.initExpr.location);
+    return null;
+  }
+
+  @Override public Void visitForLoopIteratorInit(Expr.ForLoopIteratorInit expr) {
+    if (expr.iterableVarDecl.type.is(ARRAY)) {
+      loadConst(0);
+    }
+    else {
+      loadLocal(expr.iterableVarDecl.slot);
+      box();
+      invokeMethod(RuntimeUtils.class, RuntimeUtils.CREATE_ITERATOR, Object.class);
+    }
+    return null;
+  }
+
+  @Override public Void visitForLoopIterNext(Expr.ForLoopIterNext expr) {
+    if (expr.iterableVarDecl.type.is(ARRAY)) {
+      loadLocal(expr.iterableVarDecl.slot);
+      loadLocal(expr.iteratorVarDecl.slot);
+      unsafeLoadElem(expr.iterableVarDecl.type, expr.location);
+      mv.visitIincInsn(expr.iteratorVarDecl.slot, 1);
+    }
+    else {
+      loadLocal(expr.iteratorVarDecl.slot);
+      invokeMethod(Iterator.class, "next");
+    }
+    return null;
+  }
+
+  @Override public Void visitForLoopIterHasNext(Expr.ForLoopIterHasNext expr) {
+    if (expr.iterableVarDecl.type.is(ARRAY)) {
+      _loadLocal(expr.iteratorVarDecl.slot);
+      if (expr.iterableVarDecl.initialiser.isConst) {
+        _loadConst(((List)expr.iterableVarDecl.initialiser.constValue).size());
+      }
+      else {
+        _loadLocal(expr.iterableVarDecl.slot);
+        mv.visitInsn(ARRAYLENGTH);
+      }
+      mv.visitInsn(ISUB);
+      // Now if i < length we will have a negative value on stack so convert negative values to 1
+      // and everything else to 0
+      mv.visitInsn(ICONST_M1);      // -1 but bottom 5 bits used so really 31
+      mv.visitInsn(IUSHR);          // (i - length) >>> 31
+      pushType(BOOLEAN);
+    }
+    else {
+      loadLocal(expr.iteratorVarDecl.slot);
+      invokeMethod(Iterator.class, "hasNext");
+    }
+    return null;
+  }
+
+
   @Override public Void visitReturn(Expr.Return returnExpr) {
     desiredType = returnExpr.returnType;
     compile(returnExpr.expr);
@@ -3445,7 +3503,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param obj  object to load on stack
    */
   Void loadConst(Object obj) {
-    if (obj instanceof List || obj instanceof Map) {
+    if (obj != null && (obj instanceof List || obj instanceof Map || obj.getClass().isArray())) {
       loadClassConstant(obj);
     }
     else {
@@ -4961,12 +5019,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadClassConstant(Object obj) {
-    assert obj instanceof List || obj instanceof Map;
     String fieldName = classCompiler.classConstantNames.get(obj);
     if (fieldName == null) {
       throw new IllegalStateException("Internal error: missing class constant for constant value " + obj);
     }
-    loadClassField(classCompiler.internalName, fieldName, obj instanceof List ? LIST : MAP, true);
+    loadClassField(classCompiler.internalName, fieldName, classCompiler.context.typeFromClass(obj.getClass()), true);
   }
 
   void loadClassField(String internalClassName, String fieldName, JactlType type, boolean isStatic) {

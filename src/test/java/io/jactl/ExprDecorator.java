@@ -56,7 +56,6 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
 
   // = Expr
 
-
   @Override public Expr visitStackCast(Expr.StackCast expr) {
     return expr;
   }
@@ -237,6 +236,11 @@ public class ExprDecorator implements Expr.Visitor<Expr>, Stmt.Visitor<Void> {
     expr.expr = decorate(expr.expr);
     return expr;
   }
+
+  @Override public Expr visitForLoopIterableInit(Expr.ForLoopIterableInit expr) { return expr; }
+  @Override public Expr visitForLoopIteratorInit(Expr.ForLoopIteratorInit expr) { return expr; }
+  @Override public Expr visitForLoopIterNext(Expr.ForLoopIterNext expr)         { return expr; }
+  @Override public Expr visitForLoopIterHasNext(Expr.ForLoopIterHasNext expr)   { return expr; }
 
   @Override public Expr visitBreak(Expr.Break expr) { return expr; }
   @Override public Expr visitContinue(Expr.Continue expr) { return expr; }

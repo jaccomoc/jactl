@@ -22,6 +22,7 @@ import io.jactl.runtime.*;
 import org.objectweb.asm.*;
 import org.objectweb.asm.util.Textifier;
 
+import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -151,9 +152,9 @@ public class ClassCompiler {
 
     // Create class static fields for all list/map constants
     classDecl.classConstants.forEach(c -> {
-      assert c instanceof List || c instanceof Map;
+      assert c instanceof List || c instanceof Map || c.getClass().isArray();
       String       fieldName  = JACTL_PREFIX + "constant_" + classConstantCnt++;
-      String       descriptor = c instanceof List ? LIST.descriptor() : MAP.descriptor();
+      String       descriptor = c instanceof List ? LIST.descriptor() : c instanceof Map ? MAP.descriptor() : Type.getDescriptor(c.getClass());
       FieldVisitor fv         = cv.visitField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, fieldName, descriptor, null, null);
       fv.visitEnd();
       loadConstant(c);
@@ -1510,6 +1511,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       list.forEach(elem -> {
         classInit.visitInsn(DUP);
         loadConstant(elem);
+        Utils.box(classInit, context.typeOf(elem));
         classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
         classInit.visitInsn(POP);   // don't need result of add
       });
@@ -1525,15 +1527,30 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       map.forEach((key,value) -> {
         classInit.visitInsn(DUP);
         loadConstant(key);
+        Utils.box(classInit, context.typeOf(key));
         loadConstant(value);
+        Utils.box(classInit, context.typeOf(value));
         classInit.visitMethodInsn(INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true);
         classInit.visitInsn(POP);   // don't need result of put
       });
       classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;", false);
       return;
     }
+    if (obj != null && obj.getClass().isArray()) {
+      int arrLen = Array.getLength(obj);
+      Utils.loadConst(classInit, arrLen, context);
+      Class<?> elemClass = obj.getClass().getComponentType();
+      JactlType elemType = context.typeFromClass(elemClass).unboxed();
+      Utils.newArray(classInit, JactlType.arrayOf(elemType), 1);
+      for (int i = 0; i < arrLen; i++) {
+        classInit.visitInsn(DUP);
+        Utils.loadConst(classInit, i, context);
+        loadConstant(Array.get(obj, i));
+        Utils.storeArrayElement(classInit, elemType);
+      }
+      return;
+    }
     // Must be a simple value
     Utils.loadConst(classInit, obj, context);
-    Utils.box(classInit, context.typeOf(obj));
   }
 }

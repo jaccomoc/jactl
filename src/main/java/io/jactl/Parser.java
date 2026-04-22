@@ -460,7 +460,7 @@ public class Parser {
       return funDecl(inClassDecl);
     }
     if ((typeOrVar || isStaticFinalIdent) && isVarDecl()) {
-      return varDecl(inClassDecl);
+      return varDecl(inClassDecl, false);
     }
     if (token.is(CLASS)) {
       return classDecl();
@@ -719,7 +719,7 @@ public class Parser {
     // Note that unlike a normal varDecl where commas separate different vars of the same type,
     // with parameters we expect a separate comma for parameter with a separate type for each one,
     // so we build up a list of singleVarDecl.
-    return singleVarDecl(type, false, false, true, false);
+    return singleVarDecl(type, false, false, true, false, false);
   }
 
   /**
@@ -764,7 +764,7 @@ public class Parser {
   }
 
   private boolean isForVarDecl() {
-    if (lookahead(() -> matchAnyIgnoreEOL(IDENTIFIER), () -> matchAnyIgnoreEOL(EQUAL))) {
+    if (lookahead(() -> matchAnyIgnoreEOL(IDENTIFIER), () -> matchAnyIgnoreEOL(EQUAL,COLON,IN))) {
       return true;
     }
     return lookahead(() -> {
@@ -780,7 +780,7 @@ public class Parser {
    * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
    *       a list of VarDecls if multiple variables declared.
    */
-  private Stmt varDecl(boolean inClassDecl) {
+  private Stmt varDecl(boolean inClassDecl, boolean allowVarWithoutInitialiser) {
     if (matchAny(STATIC)) {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
@@ -809,10 +809,11 @@ public class Parser {
     JactlType  finalType = type;
     stmts.stmts = marked(false, () -> {
       List<Stmt> varDecls = new ArrayList<>();
-      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal));
+      // For first variable we could be in "for (var x in [...])" so we allow no initialiser
+      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, allowVarWithoutInitialiser));
       while (matchAny(COMMA)) {
         matchAny(EOL);
-        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false, isFinal)));
+        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, false)));
       }
       return varDecls;
     });
@@ -831,7 +832,7 @@ public class Parser {
   /**
    *# singleVarDecl ::= IDENTIFIER ( EQUAL expression ) ?
    */
-  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst, boolean isParameter, boolean isFinal) {
+  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst, boolean isParameter, boolean isFinal, boolean allowVarWithoutInitialiser) {
     if (isConst && peek().is(LEFT_SQUARE)) {
       // Catches: const int[] x = [1,2,3] (for example)
       error("Constants can only be simple types", previous());
@@ -863,13 +864,13 @@ public class Parser {
       }
     }
 
-    if ((type.is(UNKNOWN) || isConst) && initialiser == null) {
+    if ((type.is(UNKNOWN) || isConst) && initialiser == null && !allowVarWithoutInitialiser) {
       if (isConst && peek().is(IDENTIFIER,LEFT_SQUARE) && Character.isUpperCase(identifier.getStringValue().charAt(0))) {
         error("Constants can only be simple types", previous());
       }
       error("Initialiser expression required for '" + (isConst ? "const" : "var") + "' declaration", previous());
     }
-    if (type.is(UNKNOWN)) {
+    if (type.is(UNKNOWN) && initialiser != null) {
       // Create a new one in case we are in a multi-variable declaration where we need a separate type per variable
       type = createUnknown();
       type.typeDependsOn(initialiser);   // Once initialiser type is known the type will then be known
@@ -1029,8 +1030,7 @@ public class Parser {
 
   /**
    * <pre>
-   *# forStmt ::= FOR LEFT_PAREN declaration SEMICOLON condition SEMICOLON
-   *#                         commaSeparatedStatements RIGHT_PAREN statement
+   *# forStmt ::= FOR LEFT_PAREN declaration ( SEMICOLON condition SEMICOLON commaSeparatedStatements | COLON expr | IN expr ) RIGHT_PAREN statement
    * </pre>
    */
   private Stmt forStmt(Token label) {
@@ -1039,16 +1039,83 @@ public class Parser {
     skipNewLines();
     List forParts = new ArrayList();
     Marker mark = tokeniser.mark();
+    Stmt forInLoopAssignment = null;      // Will contain the v = iter.next() stmt if we have a for/in loop
+    boolean forVarDecl = isForVarDecl();
     try {
-      forParts.add(isForVarDecl() ? marked(false, () -> varDecl(false), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, EOL)
-                                  : commaSeparatedStatements());
-      if (!previous().is(SEMICOLON)) {
-        expectOrNull(true, SEMICOLON);
+      Stmt init = forVarDecl ? marked(false, () -> varDecl(false, true), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, COLON, IN, EOL)
+                             : commaSeparatedStatements();
+      Token next = peekIgnoreEOL();
+      switch (next.getType()) {
+        case SEMICOLON:
+          if (init != null && init instanceof Stmt.VarDecl && ((Stmt.VarDecl) init).declExpr.initialiser == null) {
+            error("Declaration using 'var' must have an initialiser", init.location);
+          }
+          advanceIgnoreEol();
+          forParts.add(init);
+          forParts.add(peekIgnoreEolIs(SEMICOLON, EOF, RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
+                                                                    : marked(false, () -> condition(false, SEMICOLON)));
+          expectOrNull(true, SEMICOLON);
+          forParts.add(peekIgnoreEolIs(EOF,RIGHT_PAREN) ? null : commaSeparatedStatements());
+          break;
+        case COLON: case IN:
+          if (!forVarDecl || init instanceof Stmt.Stmts) {
+            expect(COLON,IN);
+            if (init instanceof Stmt.Stmts) {
+              if (((Stmt.Stmts) init).stmts.isEmpty()) {
+                error("Missing variable declaration", init.location);
+              }
+              else {
+                error("Multiple variables not supported when using '" + previous() + "'", init.location);
+              }
+            }
+            expect(SEMICOLON);
+          }
+          else {
+            Stmt.VarDecl loopVar = (Stmt.VarDecl)init;
+            if (loopVar.declExpr.initialiser != null) {
+              expect(SEMICOLON);
+              break;
+            }
+            Token token = expect(COLON,IN);
+            Expr iterableExpr = new Expr.ForLoopIterableInit(peek(), expression());
+            if (loopVar.declExpr.type.is(UNKNOWN)) {
+              // If type not declared then we will infer type from type of array (if we have an array or equivalent)
+              // or else it will result in ANY if we have a generic list, or we don't know the type
+              loopVar.declExpr.type.typeDependsOnElementOf(iterableExpr);
+            }
+            else if (loopVar.declExpr.type.is(OPTIONAL)) {
+              Expr.Noop initialiser = new Expr.Noop(loopVar.location);
+              loopVar.declExpr.initialiser = initialiser;
+              initialiser.type = JactlType.createUnknown();
+              initialiser.type.typeDependsOnElementOf(iterableExpr);
+              initialiser.originalExpr = iterableExpr;      // A bit of a hack but we need access to this during Resolve.visitVarDecl()
+            }
+            Token        iterableName = loopVar.name.newIdent(Utils.JACTL_PREFIX + "iterable" + uniqueVarCnt);
+            JactlType    iterableType = createUnknown();
+            iterableType.typeDependsOn(iterableExpr);
+            Stmt.VarDecl iterable     = createVarDecl(iterableName, iterableType, new Token(EQUAL, token), iterableExpr, false, false, true);
+            Token        iteratorName = loopVar.name.newIdent(Utils.JACTL_PREFIX + "iterator" + uniqueVarCnt);
+            Expr         iteratorInit = new Expr.ForLoopIteratorInit(iteratorName, iterable.declExpr);
+            JactlType    iteratorType = createUnknown();
+            iteratorType.typeDependsOn(iteratorInit);
+            Stmt.VarDecl iterator     = createVarDecl(iteratorName, iteratorType, new Token(EQUAL, token), iteratorInit, false, false, true);
+            Stmt.Stmts   initStmts    = new Stmt.Stmts(token);
+            initStmts.stmts.add(loopVar);
+            initStmts.stmts.add(iterable);
+            initStmts.stmts.add(iterator);
+            forParts.add(initStmts);  // Initialisations
+            Expr varAssign = new Expr.VarAssign(new Expr.Identifier(loopVar.name), new Token(EQUAL, token), new Expr.ForLoopIterNext(iterableExpr.location, iterable.declExpr, iterator.declExpr));
+            varAssign.isResultUsed = false;
+            forInLoopAssignment = new Stmt.ExprStmt(token, varAssign);
+            Expr hasnext = new Expr.ForLoopIterHasNext(iterableExpr.location, iterable.declExpr, iterator.declExpr);
+            forParts.add(hasnext);   // Condition
+            forParts.add(null);      // Nothing to do here
+          }
+          break;
+        default:
+          expectOrNull(true, SEMICOLON,COLON,IN);
+          break;
       }
-      forParts.add(peekIgnoreEolIs(SEMICOLON,EOF,RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
-                                                              : marked(false, () -> condition(false, SEMICOLON)));
-      expectOrNull(true, SEMICOLON);
-      forParts.add(peekIgnoreEolIs(EOF,RIGHT_PAREN) ? null : commaSeparatedStatements());
       if (!peekIgnoreEolIs(EOF)) {
         expectOrNull(true, RIGHT_PAREN);
       }
@@ -1062,6 +1129,24 @@ public class Parser {
     whileStmt.updates = (Stmt)forParts.get(2);
     matchAny(EOL);
     whileStmt.body = marked(false, this::_statement, EOL, RIGHT_BRACE);
+    if (forInLoopAssignment != null) {
+      // if we have "for (x in xxx)" then add the "x = xxx.next()" statement as first in body
+      if (whileStmt.body == null) {
+        whileStmt.body = forInLoopAssignment;
+      }
+      else if (whileStmt.body instanceof Stmt.Stmts) {
+        ((Stmt.Stmts) whileStmt.body).stmts.add(0, whileStmt);
+      }
+      else if (whileStmt.body instanceof Stmt.Block) {
+        insertStmtsInto(Utils.listOf(forInLoopAssignment), (Stmt.Block)whileStmt.body);
+      }
+      else {
+        Stmt.Stmts stmts = new Stmt.Stmts(forToken);
+        stmts.stmts.add(forInLoopAssignment);
+        stmts.stmts.add(whileStmt.body);
+        whileStmt.body = stmts;
+      }
+    }
 
     Stmt forStmt;
     Stmt initialisation = (Stmt)forParts.get(0);
@@ -1538,14 +1623,14 @@ public class Parser {
           // be mutated:
           // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
           if (operator.is(IN, BANG_IN, EQUAL_EQUAL, BANG_EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL, LEFT_SQUARE, QUESTION_SQUARE)) {
-            if (expr.isLiteral() && isConstListOrMap(expr)) {
+            if (expr.isLiteral() && Utils.isConstListOrMap(expr)) {
               expr.isConst = true;
-              expr.constValue = literalValue(expr);
+              expr.constValue = getLiteralValue(expr);
               addClassConstant(expr);
             }
-            if (rhs.isLiteral() && isConstListOrMap(rhs)) {
+            if (rhs.isLiteral() && Utils.isConstListOrMap(rhs)) {
               rhs.isConst = true;
-              rhs.constValue = literalValue(rhs);
+              rhs.constValue = getLiteralValue(rhs);
               addClassConstant(rhs);
             }
           }
@@ -2812,13 +2897,13 @@ public class Parser {
       if (isLiteral()) {
         expr = literal();
         expr.isConst = true;
-        expr.constValue = literalValue(expr);
+        expr.constValue = getLiteralValue(expr);
       }
       else if (peek().is(LEFT_SQUARE)) {
         expr = mapOrListPattern(LEFT_SQUARE, RIGHT_SQUARE, true);
-        if (isConstListOrMap(expr)) {
+        if (Utils.isConstListOrMap(expr)) {
           expr.isConst = true;
-          expr.constValue = literalValue(expr);
+          expr.constValue = getLiteralValue(expr);
           addClassConstant(expr);
         }
       }
@@ -3743,11 +3828,11 @@ public class Parser {
    * @param stmts  list of statements to insert
    * @param block  block in which to insert statements
    */
-  private static void insertStmtsInto(List<Stmt.VarDecl> stmts, Stmt.Block block) {
+  private static void insertStmtsInto(List stmts, Stmt.Block block) {
     if (stmts.size() == 0) {
       return;  // Nothing to do
     }
-    List<Stmt> originalStmts = block.stmts.stmts;
+    List<Stmt> originalStmts = block.stmts == null ? Collections.EMPTY_LIST : block.stmts.stmts;
     block.stmts.stmts = new ArrayList<>(stmts);
     block.stmts.stmts.addAll(originalStmts);
   }
@@ -3779,6 +3864,11 @@ public class Parser {
       @Override public Boolean visitFunDecl(Expr.FunDecl expr)       { return true; }
       @Override public Boolean visitTypeExpr(Expr.TypeExpr expr)     { return true; }
       @Override public Boolean visitInstanceOf(Expr.InstanceOf expr) { return true; }
+      @Override public Boolean visitForLoopIterableInit(Expr.ForLoopIterableInit expr) { return true; }
+      @Override public Boolean visitForLoopIteratorInit(Expr.ForLoopIteratorInit expr) { return true; }
+      @Override public Boolean visitForLoopIterNext(Expr.ForLoopIterNext expr)         { return true; }
+      @Override public Boolean visitForLoopIterHasNext(Expr.ForLoopIterHasNext expr)   { return true; }
+
 
       @Override public Boolean visitExprList(Expr.ExprList expr)           { return expr.exprs.stream().allMatch(this::isSimple); }
       @Override public Boolean visitCall(Expr.Call expr)                   { return isSimple(expr.callee) && expr.args.stream().allMatch(this::isSimple); }
@@ -4051,41 +4141,18 @@ public class Parser {
   }
 
   /**
-   * Check if a list or map is a constant
-   */
-  private boolean isConstListOrMap(Expr expr) {
-    if (expr instanceof Expr.Literal) {
-      return true;
-    }
-    if (expr instanceof Expr.ListLiteral) {
-      return ((Expr.ListLiteral) expr).exprs.stream().allMatch(this::isConstListOrMap);
-    }
-    if (expr instanceof Expr.MapLiteral) {
-      return ((Expr.MapLiteral) expr).entries.stream().allMatch(entry -> isConstListOrMap(entry.first) &&
-                                                                         isConstListOrMap(entry.second));
-    }
-    return false;
-  }
-
-  /**
    * Get the value of a constant expression (Literal or ListLiteral or MapLiteral)
    * @param expr  the expression
    * @return the constant value
    */
-  private Object literalValue(Expr expr) {
-    if (expr instanceof Expr.Literal) {
-      return ((Expr.Literal) expr).value.getValue();
+  public Object getLiteralValue(Expr expr) {
+    try {
+      return Utils.literalValue(expr); 
     }
-    if (expr instanceof Expr.ListLiteral) {
-      return ((Expr.ListLiteral) expr).exprs.stream().map(this::literalValue).collect(Collectors.toList());
+    catch (RuntimeException e) {
+      error("Only constant values allowed for cases of match expressions", expr.location);
+      return null;
     }
-    if (expr instanceof Expr.MapLiteral) {
-      Map map = new LinkedHashMap();
-      ((Expr.MapLiteral) expr).entries.stream().forEach(pair -> map.put(literalValue(pair.first), literalValue(pair.second)));
-      return map;
-    }
-    error("Only constant values allowed for cases of match expressions", expr.location);
-    return null;
   }
 
   private Stmt setLastResultIsUsed(Stmt stmt) {

@@ -27,6 +27,7 @@ import java.util.*;
 
 import io.jactl.JactlType;
 import io.jactl.Stmt;
+import io.jactl.Token;
 import io.jactl.Utils;
 import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.SourceLocation;
@@ -638,6 +639,71 @@ public abstract class Expr extends JactlUserDataHolder {
   }
 
   /**
+   * Initialiser of iterable when we have: for (i in iterable) or for (i: iterable)
+   */
+  public static class ForLoopIterableInit extends Expr implements ManagesResult {
+    public Token token;
+    public Expr  initExpr;
+    public ForLoopIterableInit(Token token, Expr initExpr) {
+      this.token = token;
+      this.initExpr = initExpr;
+      this.location = token;
+    }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitForLoopIterableInit(this); }
+    @Override public String toString() { return "ForLoopIterableInit[" + "token=" + token + ", " + "initExpr=" + initExpr + "]"; }
+  }
+  
+  /**
+   * Initialiser of iterator for iterating over iterable.
+   * Could be an actual iterator or an int if we have an array as our iterable.
+   */
+  public static class ForLoopIteratorInit extends Expr implements ManagesResult {
+    public Token token;
+    public VarDecl iterableVarDecl;
+    public ForLoopIteratorInit(Token token, VarDecl iterableVarDecl) {
+      this.token = token;
+      this.iterableVarDecl = iterableVarDecl;
+      this.location = token;
+    }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitForLoopIteratorInit(this); }
+    @Override public String toString() { return "ForLoopIteratorInit[" + "token=" + token + ", " + "iterableVarDecl=" + iterableVarDecl + "]"; }
+  }
+  
+  /**
+   * Expression for returning next element when performing for (i: iterable)
+   */
+  public static class ForLoopIterNext extends Expr implements ManagesResult {
+    public Token token;
+    public VarDecl iterableVarDecl;
+    public VarDecl iteratorVarDecl;
+    public ForLoopIterNext(Token token, VarDecl iterableVarDecl, VarDecl iteratorVarDecl) {
+      this.token = token;
+      this.iterableVarDecl = iterableVarDecl;
+      this.iteratorVarDecl = iteratorVarDecl;
+      this.location = token;
+    }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitForLoopIterNext(this); }
+    @Override public String toString() { return "ForLoopIterNext[" + "token=" + token + ", " + "iterableVarDecl=" + iterableVarDecl + ", " + "iteratorVarDecl=" + iteratorVarDecl + "]"; }
+  }
+
+  /**
+   * Expression for hasNext() on the iterator when performing for (i: iterable)
+   */
+  public static class ForLoopIterHasNext extends Expr implements ManagesResult {
+    public Token token;
+    public VarDecl iterableVarDecl;
+    public VarDecl iteratorVarDecl;
+    public ForLoopIterHasNext(Token token, VarDecl iterableVarDecl, VarDecl iteratorVarDecl) {
+      this.token = token;
+      this.iterableVarDecl = iterableVarDecl;
+      this.iteratorVarDecl = iteratorVarDecl;
+      this.location = token;
+    }
+    @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitForLoopIterHasNext(this); }
+    @Override public String toString() { return "ForLoopIterHasNext[" + "token=" + token + ", " + "iterableVarDecl=" + iterableVarDecl + ", " + "iteratorVarDecl=" + iteratorVarDecl + "]"; }
+  }
+  
+  /**
    * Break statement
    */
   public static class Break extends Expr {
@@ -1069,6 +1135,10 @@ public abstract class Expr extends JactlUserDataHolder {
     T visitNoop(Noop expr);
     T visitClosure(Closure expr);
     T visitReturn(Return expr);
+    T visitForLoopIterableInit(ForLoopIterableInit expr);
+    T visitForLoopIteratorInit(ForLoopIteratorInit expr);
+    T visitForLoopIterNext(ForLoopIterNext expr);
+    T visitForLoopIterHasNext(ForLoopIterHasNext expr);
     T visitBreak(Break expr);
     T visitContinue(Continue expr);
     T visitPrint(Print expr);

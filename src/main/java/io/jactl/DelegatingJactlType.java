@@ -33,8 +33,9 @@ import java.util.List;
  */
 public class DelegatingJactlType extends JactlType {
 
-  JactlType delegate;
+  JactlType  delegate;
   Expr       expr;
+  boolean    dependsOnElementType = false;
 
   public DelegatingJactlType(JactlType delegate) {
     this.delegate = delegate;
@@ -44,9 +45,24 @@ public class DelegatingJactlType extends JactlType {
     this.expr = expr;
   }
 
+  /**
+   * This creates a dependence on the array element type of the dependent expression.
+   * If the expression evaluates instead to anything that is not an array then the
+   * resulting type will be ANY.
+   * @param expr the expr on whose type this type depends on
+   */
+  public void typeDependsOnElementOf(Expr expr) {
+    this.expr = expr;
+    this.dependsOnElementType = true;
+  }
+
   protected JactlType getDelegate() {
     if (expr == null || expr.type == null) {
       return delegate;
+    }
+    if (dependsOnElementType) {
+      JactlType elemType = expr.type.getArrayElemType();
+      return elemType == null ? ANY : elemType;
     }
     return expr.type;
   }

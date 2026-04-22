@@ -370,6 +370,8 @@ public class BaseTest {
               expr instanceof Expr.RegexSubst ||
               expr instanceof Expr.InvokeNew ||
               expr instanceof Expr.SpecialVar ||
+              expr instanceof Expr.ForLoopIterableInit || expr instanceof Expr.ForLoopIteratorInit ||
+              expr instanceof Expr.ForLoopIterNext || expr instanceof Expr.ForLoopIterHasNext ||
               expr instanceof Expr.ClassPath) {
             return expr;
           }

@@ -1137,4 +1137,38 @@ public class Utils {
     }
     return false;
   }
+
+  /**
+   * Check if a list or map is a constant
+   * @param expr the expression
+   * @return true if expression is a constant list or map
+   */
+  public static boolean isConstListOrMap(Expr expr) {
+    if (expr instanceof Expr.Literal) {
+      return true;
+    }
+    if (expr instanceof Expr.ListLiteral) {
+      return ((Expr.ListLiteral) expr).exprs.stream().allMatch(Utils::isConstListOrMap);
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      return ((Expr.MapLiteral) expr).entries.stream().allMatch(entry -> isConstListOrMap(entry.first) &&
+                                                                         isConstListOrMap(entry.second));
+    }
+    return false;
+  }
+
+  public static Object literalValue(Expr expr) {
+    if (expr instanceof Expr.Literal) {
+      return ((Expr.Literal) expr).value.getValue();
+    }
+    if (expr instanceof Expr.ListLiteral) {
+      return ((Expr.ListLiteral) expr).exprs.stream().map(Utils::literalValue).collect(Collectors.toList());
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      Map map = new LinkedHashMap();
+      ((Expr.MapLiteral) expr).entries.stream().forEach(pair -> map.put(literalValue(pair.first), literalValue(pair.second)));
+      return map;
+    }
+    throw new RuntimeException("Unexpected type " + expr.getClass().getName());
+  }
 }

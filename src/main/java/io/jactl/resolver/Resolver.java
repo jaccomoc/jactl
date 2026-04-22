@@ -22,6 +22,7 @@ import io.jactl.compiler.LocalLocation;
 import io.jactl.runtime.*;
 import org.objectweb.asm.Type;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -1392,13 +1393,26 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // This is a brand-new variable which will have type corresponding to the initialiser
         expr.type = JactlType.createUnknown();
         expr.type.typeDependsOn(expr.initialiser);
+        if (expr.initialiser instanceof Expr.Noop) {
+          resolve(((Expr.Noop) expr.initialiser).originalExpr);
+          expr.type = expr.initialiser.type;
+        }
       }
       else {
+        expr.owner = currentFunction();
+        expr.isGlobal = varDecl.isGlobal;
+        
         // Treat initialiser just like a normal statement since we are reinitialising an existing variable
+        // If we don't have an initialiser (which can happen in "for (i in xxx)" then mark initialiser as Noop
+        // so we can ignore this during compilation phase
+        if (expr.initialiser instanceof Expr.Noop) {
+          expr.type = varDecl.type;
+          return expr.type;
+        }
+        
         expr.initialiser = new Expr.VarAssign(new Expr.Identifier(varDecl.name), expr.initialiser.location, expr.initialiser);
         expr.initialiser.isResultUsed = false;
         resolve(expr.initialiser);
-        expr.owner = currentFunction();
         expr.type = JactlType.createUnknown();
         return expr.initialiser.type;
       }
@@ -1823,8 +1837,63 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type = STRING;
   }
 
-  @Override
-  public JactlType visitReturn(Expr.Return returnExpr) {
+  @Override public JactlType visitForLoopIterableInit(Expr.ForLoopIterableInit expr) {
+    resolve(expr.initExpr);
+    if (expr.initExpr instanceof Expr.ListLiteral) {
+      // Use an array instead of a list for faster access
+      List<Expr> elements = ((Expr.ListLiteral)expr.initExpr).exprs;
+      if (elements.size() == 0) {
+        return expr.type = OBJECT_ARR;
+      }
+      JactlType elementType = elements.get(0).type;
+      for (int i = 1; i < elements.size(); i++) {
+        elementType = JactlType.commonSuperType(elementType, elements.get(i).type);
+      }
+      expr.type = JactlType.arrayOf(elementType);
+      
+      // If we have a constant list then turn it into the appropriate array type and store it as a class
+      // constant so it will get constructed only once at runtime
+      if (Utils.isConstListOrMap(expr.initExpr)) {
+        List list = (List)Utils.literalValue(expr.initExpr);
+        expr.initExpr.isConst = true;
+        expr.initExpr.constValue = Array.newInstance(elementType.classFromType(), list.size());
+        for (int i = 0; i < list.size(); i++) {
+          Array.set(expr.initExpr.constValue, i, list.get(i));
+        }
+        expr.initExpr.type = expr.type;
+        currentClass().classConstants.add(expr.initExpr.constValue);
+      }
+      return expr.type;
+    }
+    if (expr.initExpr instanceof Expr.MethodCall) {
+      // Set this to false so that we don't convert back to a list if we already have an iterator
+      ((Expr.MethodCall) expr.initExpr).isMethodCallTarget = true;
+    }
+    return expr.type = expr.initExpr.type;
+  }
+  
+  @Override public JactlType visitForLoopIteratorInit(Expr.ForLoopIteratorInit expr) {
+    resolve(expr.iterableVarDecl);
+    if (expr.iterableVarDecl.type.is(ARRAY)) {
+      return expr.type = INT;
+    }
+    return expr.type = ITERATOR;
+  }
+  
+  @Override public JactlType visitForLoopIterNext(Expr.ForLoopIterNext expr) {
+    resolve(expr.iterableVarDecl);
+    if (expr.iterableVarDecl.type.is(ARRAY)) {
+      return expr.type = expr.iterableVarDecl.type.getArrayElemType();
+    }
+    return expr.type = ANY;
+  }
+  
+  @Override public JactlType visitForLoopIterHasNext(Expr.ForLoopIterHasNext expr) {
+    resolve(expr.iterableVarDecl);
+    return expr.type = BOOLEAN;
+  }
+  
+  @Override public JactlType visitReturn(Expr.Return returnExpr) {
     resolve(returnExpr.expr);
     resolve(returnExpr.expr.type);
     resolve(returnExpr.returnType);
@@ -2535,7 +2604,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // In repl mode we don't have a top level block, and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (!decl.isParam && !decl.isConstVar && isAtTopLevel() && jactlContext.replMode) {
+    if (!decl.isParam && !decl.isConstVar && isAtTopLevel() && jactlContext.replMode && !decl.name.getStringValue().startsWith(JACTL_PREFIX)) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }

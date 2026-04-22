@@ -32,6 +32,7 @@ import java.util.*;
 
 import io.jactl.JactlType;
 import io.jactl.Stmt;
+import io.jactl.Token;
 import io.jactl.Utils;
 import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.SourceLocation;
@@ -450,6 +451,41 @@ class Expr extends JactlUserDataHolder {
     FunDecl    @funDecl;
   }
 
+  /**
+   * Initialiser of iterable when we have: for (i in iterable) or for (i: iterable)
+   */
+  class ForLoopIterableInit extends Expr implements ManagesResult {
+    Token token;
+    Expr  initExpr;
+  }
+  
+  /**
+   * Initialiser of iterator for iterating over iterable.
+   * Could be an actual iterator or an int if we have an array as our iterable.
+   */
+  class ForLoopIteratorInit extends Expr implements ManagesResult {
+    Token token;
+    VarDecl iterableVarDecl;
+  }
+  
+  /**
+   * Expression for returning next element when performing for (i: iterable)
+   */
+  class ForLoopIterNext extends Expr implements ManagesResult {
+    Token token;
+    VarDecl iterableVarDecl;
+    VarDecl iteratorVarDecl;
+  }
+
+  /**
+   * Expression for hasNext() on the iterator when performing for (i: iterable)
+   */
+  class ForLoopIterHasNext extends Expr implements ManagesResult {
+    Token token;
+    VarDecl iterableVarDecl;
+    VarDecl iteratorVarDecl;
+  }
+  
   /**
    * Break statement
    */
