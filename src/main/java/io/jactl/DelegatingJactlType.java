@@ -77,7 +77,6 @@ public class DelegatingJactlType extends JactlType {
   @Override public boolean isPrimitive()                               { return getDelegate().isPrimitive();           }
   @Override public JactlType boxed()                                   { return getDelegate().boxed();                 }
   @Override public JactlType unboxed()                                 { return getDelegate().unboxed();               }
-  @Override public boolean is(JactlType... types)                      { return getDelegate().is(types);               }
   @Override public boolean isBoxedOrUnboxed(JactlType... types)        { return getDelegate().isBoxedOrUnboxed(types); }
   @Override public boolean isCastableTo(JactlType otherType)           { return getDelegate().isCastableTo(otherType); }
   @Override public String descriptor()                                 { return getDelegate().descriptor();            }
@@ -85,7 +84,7 @@ public class DelegatingJactlType extends JactlType {
   @Override public String getInternalName()                            { return getDelegate().getInternalName();       }
   @Override public Class classFromType()                               { return getDelegate().classFromType();         }
   @Override public String typeName()                                   { return getDelegate().typeName();              }
-  @Override public List<Expr> getClassNameExprs()                           { return getDelegate().getClassNameExprs();          }
+  @Override public List<Expr> getClassNameExprs()                      { return getDelegate().getClassNameExprs();     }
   @Override public String toString()                                   { return getDelegate().toString();              }
   @Override public void setClassDescriptor(ClassDescriptor descriptor) { getDelegate().setClassDescriptor(descriptor); }
   @Override public ClassDescriptor getClassDescriptor()                { return getDelegate().getClassDescriptor();    }
@@ -93,6 +92,19 @@ public class DelegatingJactlType extends JactlType {
   @Override public JactlType getArrayElemType()                        { return getDelegate().getArrayElemType();          }
   @Override public boolean isAssignableFrom(JactlType otherType)       { return getDelegate().isAssignableFrom(otherType); }
   @Override public boolean equals(Object obj)                          { return getDelegate().equals(obj);             }
+
+  @Override public boolean is(JactlType... types)                      { return getDelegate().is(types);               }
+  @Override public boolean is(JactlType type)                          { return getDelegate().is(type);                }
+  @Override public boolean is(JactlType type1, JactlType type2)        { return getDelegate().is(type1, type2);        }
+  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3) {
+    return getDelegate().is(type1, type2,  type3);
+  }
+  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3,  JactlType type4) {
+    return getDelegate().is(type1, type2,  type3,  type4);
+  }
+  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3,  JactlType type4,  JactlType type5) {
+    return getDelegate().is(type1, type2,  type3,  type4,   type5); 
+  }
 
   // JactlUserDataHolder
   @Override public Stmt.Block getBlock()           { return delegate.getBlock(); }
