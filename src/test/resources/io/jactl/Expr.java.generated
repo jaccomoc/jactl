@@ -24,6 +24,7 @@ package io.jactl;
 
 
 import java.util.*;
+import java.lang.reflect.Method;
 
 import io.jactl.JactlType;
 import io.jactl.Stmt;
@@ -972,20 +973,16 @@ public abstract class Expr extends JactlUserDataHolder {
    */
   public static class InvokeUtility extends Expr {
     public Token       token;
-    public Class       clss;
-    public String      methodName;
-    public List<Class> paramTypes;
+    public Method      method;
     public List<Expr>  args;
-    public InvokeUtility(Token token, Class clss, String methodName, List<Class> paramTypes, List<Expr> args) {
+    public InvokeUtility(Token token, Method method, List<Expr> args) {
       this.token = token;
-      this.clss = clss;
-      this.methodName = methodName;
-      this.paramTypes = paramTypes;
+      this.method = method;
       this.args = args;
       this.location = token;
     }
     @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitInvokeUtility(this); }
-    @Override public String toString() { return "InvokeUtility[" + "token=" + token + ", " + "clss=" + clss + ", " + "methodName=" + methodName + ", " + "paramTypes=" + paramTypes + ", " + "args=" + args + "]"; }
+    @Override public String toString() { return "InvokeUtility[" + "token=" + token + ", " + "method=" + method + ", " + "args=" + args + "]"; }
   }
 
   /**

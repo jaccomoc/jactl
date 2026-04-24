@@ -17,13 +17,10 @@
 
 package io.jactl;
 
-import io.jactl.*;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static io.jactl.TokenType.*;
 
@@ -67,6 +64,11 @@ public class BuilderImpl implements Builder {
     previousToken = impl.ourPreviousToken;
   }
 
+  @Override public void rewind(Token previous, Token current) {
+    tokeniser.rewind(previous, current);
+    previousToken = previous;
+  }
+  
   @Override
   public Token previous() {
     return previousToken;

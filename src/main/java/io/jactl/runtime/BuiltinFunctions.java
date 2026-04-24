@@ -22,6 +22,7 @@ import org.objectweb.asm.MethodVisitor;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -932,6 +933,9 @@ public class BuiltinFunctions {
   ////////////////////////////////
 
   // = sublist
+  
+  public static final Method LIST_SUB_LIST_METHOD = Utils.getMethod(BuiltinFunctions.class, "listSubList", List.class, String.class, int.class, int.class, int.class);
+  
   public static List listSubList(List list, String source, int offset, int start, int end) {
     try {
       if (end == Integer.MAX_VALUE) {

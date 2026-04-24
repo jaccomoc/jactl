@@ -25,6 +25,7 @@ import org.objectweb.asm.Type;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -260,7 +261,7 @@ public class LocalTypes {
       }
       else {
         // x is on stack
-        check(x.isStack(), "x should be on stack (not in locals)");
+        check(x.isStack(), () -> "x should be on stack (not in locals)");
         stack.push(y);
         locals.get(y.slot).refCount++;
         push(x.type);
@@ -300,7 +301,7 @@ public class LocalTypes {
     // Pop real values off stack but leave type stack unchanged
     Iterator<StackEntry> iter = stack.iterator();
     for (int i = 0; i < n; i++) {
-      check(iter.hasNext(), "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack);
+      check(iter.hasNext(), () -> "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack);
       StackEntry entry = iter.next();
       if (entry.slot != -1) {
         continue;  // Nothing to do since "stack" location is a local var
@@ -316,7 +317,7 @@ public class LocalTypes {
    * @param count  how many entries to ensure are on the stack
    */
   public void expect(int count) {
-    check(stack.size() >= count, "stack size is " + stack.size() + " but expecting at least " + count + Utils.plural(" entry", count));
+    check(stack.size() >= count, () -> "stack size is " + stack.size() + " but expecting at least " + count + Utils.plural(" entry", count));
 
     Iterator<StackEntry> iter             = stack.iterator();
     boolean              seenEntryOnStack = false;
@@ -372,12 +373,12 @@ public class LocalTypes {
    * @param n      how many to convert (only 1 is currently supported)
    */
   public void makeSameAs(LocalTypes other, int n) {
-    check(n <= 1, "no support for converting more than 1 element at the moment");
+    check(n <= 1, () -> "no support for converting more than 1 element at the moment");
     maxIndex = Math.max(maxIndex, other.maxIndex);
     if (stack.size() == 0 && other.stack.size() == 0) { return; }
     if (peek().isStack() && other.peek().isStack())   { return; }
     if (peek().isLocal() && other.peek().isLocal()) {
-      check(peek().slot == other.peek().slot, "Slots are different between two stacks:" + "\n this=" + this + "\n other=" + other);
+      check(peek().slot == other.peek().slot, () -> "Slots are different between two stacks:" + "\n this=" + this + "\n other=" + other);
       return;
     }
     if (other.peek().isStack()) {
@@ -564,7 +565,7 @@ public class LocalTypes {
   }
 
   public void loadLocal(int slot) {
-    check(slot != -1, "trying to load from unitilialised variable (slot is -1)");
+    check(slot != -1, () -> "trying to load from unitilialised variable (slot is -1)");
     _loadLocal(slot);
     JactlType type = localsType(slot);
     push(type);
@@ -605,9 +606,9 @@ public class LocalTypes {
   }
 
   private JactlType localsType(int slot) {
-    check(slot >= 0, "slot is " + slot + " but should be >= 0");
+    check(slot >= 0, () -> "slot is " + slot + " but should be >= 0");
     LocalEntry entry = locals.get(slot);
-    check(entry != null, "trying to get type of null entry");
+    check(entry != null, () -> "trying to get type of null entry");
     return entry.type;
   }
 
@@ -722,9 +723,9 @@ public class LocalTypes {
   }
 
 
-  private static void check(boolean condition, String msg) {
+  private static void check(boolean condition, Supplier<String> msg) {
     if (!condition) {
-      throw new IllegalStateException("Internal error: " + msg);
+      throw new IllegalStateException("Internal error: " + msg.get());
     }
   }
 

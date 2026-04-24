@@ -125,7 +125,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
 
-  private static JactlType TYPE_FOR_BAD_REF = UNKNOWN;
+  private static final JactlType TYPE_FOR_BAD_REF = UNKNOWN;
 
   /**
    * Resolve variables, references, etc
@@ -2089,15 +2089,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override
   public JactlType visitInvokeUtility(Expr.InvokeUtility expr) {
-    try {
-      expr.args.forEach(this::resolve);
-      Method method = expr.clss.getDeclaredMethod(expr.methodName, expr.paramTypes.toArray(new Class[expr.paramTypes.size()]));
-      return expr.type = jactlContext.typeFromClass(method.getReturnType());
-    }
-    catch (NoSuchMethodException e) {
-      error("Could not find method " + expr.methodName + " in class " + expr.clss.getName(), expr.token);
-    }
-    return null;
+    expr.args.forEach(this::resolve);
+    return expr.type = jactlContext.typeFromClass(expr.method.getReturnType());
   }
 
   @Override public JactlType visitBlock(Expr.Block expr) {
@@ -2641,7 +2634,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return topBlock;
     }
     if (funDecl.blocks.isEmpty()) {
-      funDecl = currentClass().nestedFunctions.stream().skip(1).findFirst().orElse(null);
+      // Get the second nested function (our parent) if it exists
+      Iterator<Expr.FunDecl> iter = currentClass().nestedFunctions.iterator();
+      if (iter.hasNext()) { iter.next(); }
+      if (iter.hasNext()) { funDecl = iter.next(); }
     }
     Stmt.Block block = funDecl == null ? null : funDecl.blocks.peek();
     return block == null ? topBlock : block;
@@ -3286,7 +3282,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr       arg0IsList  = instOfExpr.apply(new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)), LIST);
       Stmt.Stmts ifTrueStmts = new Stmt.Stmts(startToken);
       Expr.ArrayGet getArg0     = new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0));
-      Expr.InvokeUtility toObjectArr = new Expr.InvokeUtility(startToken, RuntimeUtils.class, "listToObjectArray", Utils.listOf(Object.class), Utils.listOf(getArg0));
+      Expr.InvokeUtility toObjectArr = new Expr.InvokeUtility(startToken, RuntimeUtils.LIST_TO_OBJECT_ARRAY_METHOD, Utils.listOf(getArg0));
       ifTrueStmts.stmts.add(assignStmt.apply(Utils.ARGS_VAR_NAME, toObjectArr));
       ifTrueStmts.stmts.add(assignStmt.apply(argCountName, new Expr.ArrayLength(startToken, argsIdent)));
       Stmt.If ifArg0IsList = new Stmt.If(startToken,
@@ -3310,9 +3306,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                       new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsMap),
                                       mapStmts,
                                       null);
-    mapStmts.stmts.add(assignStmt.apply(mapCopyName, new Expr.InvokeUtility(startToken, RuntimeUtils.class,
-                                                                            "copyArg0AsMap",
-                                                                            Utils.listOf(Object[].class), Utils.listOf(argsIdent))));
+    mapStmts.stmts.add(assignStmt.apply(mapCopyName, new Expr.InvokeUtility(startToken, RuntimeUtils.COPY_ARG0_AS_MAP_METHOD, Utils.listOf(argsIdent))));
     mapStmts.stmts.add(assignStmt.apply(isObjArrName, falseExpr));
     stmtList.add(ifArg0IsMap);
 
@@ -3347,8 +3341,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr initialiser;
       if (param.initialiser == null) {
         param.location.setGenerateLineNumber(false);
-        Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
-                                                 Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
+        Expr getOrThrow = new Expr.InvokeUtility(startToken, RuntimeUtils.REMOVE_OR_THROW_METHOD,
                                                  Utils.listOf(mapCopyIdent, paramNameIdent,
                                                          falseLiteral,
                                                          sourceIdent, offsetIdent));
@@ -3367,11 +3360,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // :                                                         : param.initialiser
         initialiser = new Expr.Ternary(new Expr.Binary(new Expr.PrefixUnary(new Token(BANG, param.name), isObjArrIdent),
                                                        new Token(AMPERSAND_AMPERSAND, param.name),
-                                                       new Expr.InvokeUtility(param.name, Map.class, "containsKey",
-                                                                              Utils.listOf(Object.class), Utils.listOf(mapCopyIdent, paramNameIdent))),
+                                                       new Expr.InvokeUtility(param.name, Utils.MAP_CONTAINS_KEY_METHOD, Utils.listOf(mapCopyIdent, paramNameIdent))),
                                        new Token(QUESTION, param.name),
-                                       new Expr.InvokeUtility(param.name, Map.class, "remove",
-                                                              Utils.listOf(Object.class), Utils.listOf(mapCopyIdent, paramNameIdent)),
+                                       new Expr.InvokeUtility(param.name, Utils.MAP_REMOVE_METHOD, Utils.listOf(mapCopyIdent, paramNameIdent)),
                                        new Token(COLON, param.name),
                                        new Expr.Ternary(new Expr.Binary(isObjArrIdent, new Token(AMPERSAND_AMPERSAND, param.name), new Expr.Binary(intLiteral.apply(i), token.apply(LESS_THAN), argCountIdent)),
                                                         new Token(QUESTION, param.name),
@@ -3395,9 +3386,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // : }
     final Stmt.ExprStmt checkForExtraArgs = new Stmt.ExprStmt(startToken,
                                                               new Expr.InvokeUtility(startToken,
-                                                                           RuntimeUtils.class,
-                                                                           "checkForExtraArgs",
-                                                                           Utils.listOf(Map.class, boolean.class, String.class, int.class),
+                                                                           RuntimeUtils.CHECK_FOR_EXTRA_ARGS_METHOD,
                                                                            Utils.listOf(mapCopyIdent,
                                                                                    falseLiteral,
                                                                                    sourceIdent,
@@ -3571,7 +3560,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                                           new Token(QUESTION, classToken),
                                                           new Expr.CheckCast(classToken, arg0, MAP),
                                                           new Token(COLON, classToken),
-                                                          new Expr.InvokeUtility(classToken, RuntimeUtils.class, "copyNamedArgs", Utils.listOf(Object.class), Utils.listOf(arg0)));
+                                                          new Expr.InvokeUtility(classToken, RuntimeUtils.COPY_NAMED_ARGS_METHOD, Utils.listOf(arg0)));
     initialiser.isInitialiser = true;
     wrapperSmts.stmts.add(createVarDecl(classToken, initWrapper, argMapName, MAP, initialiser));
 
@@ -3597,16 +3586,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Expr.VarDecl varDecl          = entry.getValue();
       Token        fieldToken       = varDecl.name;
       Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
-      Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.class, RuntimeUtils.REMOVE_OR_THROW,
-                                                                        Utils.listOf(Map.class, String.class, boolean.class, String.class, int.class),
+      Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.REMOVE_OR_THROW_METHOD,
                                                                         Utils.listOf(argMapIdent, fieldNameLiteral,
                                                                                trueLiteral, new Expr.Identifier(sourceToken), new Expr.Identifier(offsetToken)))
-                                               : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, Map.class, "containsKey",
-                                                                                        Utils.listOf(Object.class), Utils.listOf(argMapIdent, fieldNameLiteral)),
+                                               : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, Utils.MAP_CONTAINS_KEY_METHOD, Utils.listOf(argMapIdent, fieldNameLiteral)),
                                                                  new Token(QUESTION, fieldToken),
                                                                  new Expr.Cast(fieldToken, varDecl.type,
-                                                                               new Expr.InvokeUtility(fieldToken, Map.class, "remove",
-                                                                                                      Utils.listOf(Object.class), Utils.listOf(argMapIdent, fieldNameLiteral))),
+                                                                               new Expr.InvokeUtility(fieldToken, Utils.MAP_REMOVE_METHOD, Utils.listOf(argMapIdent, fieldNameLiteral))),
                                                                  new Token(COLON, fieldToken),
                                                                  new Expr.Cast(fieldToken, varDecl.type, varDecl.initialiser));
       value.isInitialiser = true;
@@ -3621,8 +3607,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     });
 
     // If we created arg map copy (arg0 isn't NamedArgsMapCopy) then check that there are no additional arg values left in named args map
-    Expr.InvokeUtility checkForExtraArgs = new Expr.InvokeUtility(classToken, RuntimeUtils.class, "checkForExtraArgs",
-                                                                  Utils.listOf(Map.class, boolean.class, String.class, int.class),
+    Expr.InvokeUtility checkForExtraArgs = new Expr.InvokeUtility(classToken, RuntimeUtils.CHECK_FOR_EXTRA_ARGS_METHOD,
                                                                   Utils.listOf(argMapIdent, trueLiteral, new Expr.Identifier(sourceToken),
                                                            new Expr.Identifier(offsetToken)));
     checkForExtraArgs.isResultUsed = false;
@@ -3751,8 +3736,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     JactlType flagsType    = JactlType.LONG_ARR;
 
     // Decode JSON and store in "retVal"
-    stmts.stmts.add(Utils.createVarDecl(funDecl, retValIdent, ANY, new Expr.InvokeUtility(classToken, JsonDecoder.class, "decodeJactlObj",
-                                                                                          Utils.listOf(String.class, String.class, int.class, JactlObject.class),
+    stmts.stmts.add(Utils.createVarDecl(funDecl, retValIdent, ANY, new Expr.InvokeUtility(classToken, JsonDecoder.DECODE_JACTL_OBJ_METHOD,
                                                                                           Utils.listOf(new Expr.Identifier(paramName),
                                                                                                   new Expr.SpecialVar(classToken.newIdent(Utils.SOURCE_VAR_NAME)),
                                                                                                   new Expr.SpecialVar(classToken.newIdent(Utils.OFFSET_VAR_NAME)),

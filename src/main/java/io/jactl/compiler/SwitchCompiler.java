@@ -152,7 +152,7 @@ public class SwitchCompiler {
       loadValue.accept(null);
       mc.box();
       mc.loadConst(caseType.boxed());
-      mc.invokeMethod(RuntimeUtils.class, RuntimeUtils.IS_PATTERN_COMPATIBLE, Object.class, Class.class);
+      mc.invokeMethod(RuntimeUtils.IS_PATTERN_COMPATIBLE_METHOD);
       mc.dupVal();
       mc.mv.visitJumpInsn(IFEQ, endCheck);
       mc.popType();
@@ -305,7 +305,7 @@ public class SwitchCompiler {
                   // Convert to list if not already
                   mc.loadConst(false);
                   mc.loadLocation(subExpr.location);
-                  mc.invokeMethod(RuntimeUtils.class, "asList", Object.class, boolean.class, String.class, int.class);
+                  mc.invokeMethod(RuntimeUtils.AS_LIST_METHOD);
                 }
                 mc.loadLocation(subExpr.location);
                 mc.loadConst(i);
@@ -315,7 +315,7 @@ public class SwitchCompiler {
                 else {
                   mc.loadConst(i - size + 1);   // negative to count from end
                 }
-                mc.invokeMethod(BuiltinFunctions.class, "listSubList", List.class, String.class, int.class, int.class, int.class);
+                mc.invokeMethod(BuiltinFunctions.LIST_SUB_LIST_METHOD);
                 subElemSlot = subElemSlots.get(LIST);
                 mc.storeLocal(subElemSlot);
                 elemType = parentType;
@@ -358,7 +358,7 @@ public class SwitchCompiler {
               loadValue.accept(MAP);
               mc.compile(keyVal.first);
               mc.expect(2);
-              mc.invokeMethod(Map.class, "containsKey", Object.class);
+              mc.invokeMethod(Utils.MAP_CONTAINS_KEY_METHOD);
               mc._dupVal();
               mc.mv.visitJumpInsn(IFEQ, endCheck);
               mc.popVal();
@@ -367,7 +367,7 @@ public class SwitchCompiler {
             loadValue.accept(MAP);
             mc.compile(keyVal.first);
             mc.expect(2);
-            mc.invokeMethod(Map.class, "get", Object.class);
+            mc.invokeMethod(Utils.MAP_GET_METHOD);
             mc._dupVal();
             subElemSlot = subElemSlots.get(ANY);
             mc.storeLocal(subElemSlot);
@@ -466,7 +466,7 @@ public class SwitchCompiler {
       mc.pushType(BOOLEAN);
     }
     else {
-      mc.invokeMethod(RuntimeUtils.class, RuntimeUtils.SWITCH_EQUALS, Object.class, Object.class);
+      mc.invokeMethod(RuntimeUtils.SWITCH_EQUALS_METHOD);
     }
   }
 
@@ -514,14 +514,14 @@ public class SwitchCompiler {
         // Make sure we have a subject of the right type
         switch (mc.peek().getType()) {
           case ANY: {
-            mc.invokeMethod(RuntimeUtils.class, RuntimeUtils.INT_VALUE, Object.class);
+            mc.invokeMethod(RuntimeUtils.INT_VALUE_METHOD);
             mc._dupVal();
             Label isInt = new Label();
             mc.mv.visitJumpInsn(IFNONNULL, isInt);
             mc.mv.visitInsn(POP);
             mc.mv.visitJumpInsn(GOTO, noMatch);
             mc.mv.visitLabel(isInt);
-            mc.invokeMethod(Integer.class, "intValue");
+            mc.invokeMethod(MethodCompiler.INT_VALUE_METHOD);
             break;
           }
           case BYTE: case INT:     break;
@@ -554,7 +554,7 @@ public class SwitchCompiler {
     mc.popType();
     loadSubject.run();
     mc.box();
-    mc.invokeMethod(Object.class, "hashCode");
+    mc.invokeMethod(MethodCompiler.OBJECT_HASH_CODE_METHOD);
 
     // Annoyingly, we need to support multiple literal values that could hash to the same value so
     // we calculate a list of unique hashCodes combined with a pair of label and a list of pattern/result pairs
@@ -581,7 +581,7 @@ public class SwitchCompiler {
         mc.compile(pair.first);       // literal value
         mc.box();
         Label notEqual = new Label();
-        mc.invokeMethod(RuntimeUtils.class, RuntimeUtils.SWITCH_EQUALS, Object.class, Object.class);
+        mc.invokeMethod(RuntimeUtils.SWITCH_EQUALS_METHOD);
         mc.mv.visitJumpInsn(IFEQ, notEqual);
         mc.popType();
         Label nonSimple = nonSimpleLabels.get(pair.second);

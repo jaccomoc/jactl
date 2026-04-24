@@ -27,6 +27,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -201,7 +202,50 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   LocalTypes stack;
 
   private Deque<TryCatch>   tryCatches = new ArrayDeque<>();
-
+  
+  // Static data
+  public static final Method STRING_BUFFER_TO_STRING_METHOD = Utils.getMethod(StringBuffer.class, "toString");
+  public static final Method STRING_CONCAT_METHOD           = Utils.getMethod(String.class, "concat", String.class);
+  public static final Method STRING_LENGTH_METHOD           = Utils.getMethod(String.class, "length");
+  public static final Method STRING_CHAR_AT_METHOD          = Utils.getMethod(String.class, "charAt", int.class);
+  public static final Method STRING_VALUE_OF_METHOD         = Utils.getMethod(String.class, "valueOf", char.class);
+  public static final Method LIST_SIZE_METHOD               = Utils.getMethod(List.class, "size");
+  public static final Method LIST_GET_METHOD                = Utils.getMethod(List.class, "get", int.class);
+  public static final Method MAP_SIZE_METHOD                = Utils.getMethod(Map.class, "size");
+  public static final Method INTEGER_TO_STRING_METHOD       = Utils.getMethod(Integer.class, "toString", int.class);
+  public static final Method STRING_JOIN_METHOD             = Utils.getMethod(String.class, "join", CharSequence.class, CharSequence[].class);
+  public static final Method BIG_DECIMAL_COMPARE_TO_METHOD  = Utils.getMethod(BigDecimal.class, "compareTo", BigDecimal.class);
+  public static final Method OBJECT_GET_CLASS_METHOD        = Utils.getMethod(Object.class, "getClass");
+  public static final Method OBJECT_HASH_CODE_METHOD        = Utils.getMethod(Object.class, "hashCode");
+  public static final Method CLASS_IS_ARRAY_METHOD          = Utils.getMethod(Class.class, "isArray");
+  public static final Method CLASS_IS_ASSIGNABLE_FROM_METHOD= Utils.getMethod(Class.class, "isAssignableFrom", Class.class);
+  public static final Method CLASS_GET_CONSTRUCTOR_METHOD   = Utils.getMethod(Class.class, "getConstructor", Class[].class);
+  public static final Method CLASS_GET_CLASS_LOADER_METHOD  = Utils.getMethod(Class.class, "getClassLoader");
+  public static final Method CONSTRUCTOR_NEW_INSTANCE_METHOD= Utils.getMethod(Constructor.class, "newInstance", Object[].class);
+  public static final Method LIST_ADD_METHOD                = Utils.getMethod(List.class, "add", Object.class);
+  public static final Method MAP_PUT_METHOD                 = Utils.getMethod(Map.class, "put", Object.class, Object.class);
+  public static final Method MAP_GET_METHOD                 = Utils.getMethod(Map.class, "get", Object.class);
+  public static final Method ITERATOR_NEXT_METHOD           = Utils.getMethod(Iterator.class, "next");
+  public static final Method ITERATOR_HAS_NEXT_METHOD       = Utils.getMethod(Iterator.class, "hasNext");
+  public static final Method THROWABLE_GET_MESSAGE_METHOD   = Utils.getMethod(Throwable.class, "getMessage");
+  public static final Method BOOLEAN_VALUE_METHOD           = Utils.getMethod(Boolean.class, "booleanValue");
+  public static final Method BYTE_VALUE_METHOD              = Utils.getMethod(Byte.class, "byteValue");
+  public static final Method INT_VALUE_METHOD               = Utils.getMethod(Integer.class, "intValue");
+  public static final Method LONG_VALUE_METHOD              = Utils.getMethod(Long.class, "longValue");
+  public static final Method DOUBLE_VALUE_METHOD            = Utils.getMethod(Double.class, "doubleValue");
+  public static final Method NUMBER_BYTE_VALUE_METHOD       = Utils.getMethod(Number.class, "byteValue");
+  public static final Method NUMBER_INT_VALUE_METHOD        = Utils.getMethod(Number.class, "intValue");
+  public static final Method NUMBER_LONG_VALUE_METHOD       = Utils.getMethod(Number.class, "longValue");
+  public static final Method NUMBER_DOUBLE_VALUE_METHOD         = Utils.getMethod(Number.class, "doubleValue");
+  public static final Method BIG_DECIMAL_VALUE_OF_LONG_METHOD   = Utils.getMethod(BigDecimal.class, "valueOf", long.class);
+  public static final Method BIG_DECIMAL_VALUE_OF_DOUBLE_METHOD = Utils.getMethod(BigDecimal.class, "valueOf", double.class);
+  public static final Method BIG_DECIMAL_ADD_METHOD             = Utils.getMethod(BigDecimal.class, "add", BigDecimal.class);
+  public static final Method BIG_DECIMAL_SUBTRACT_METHOD        = Utils.getMethod(BigDecimal.class, "subtract", BigDecimal.class);
+  public static final Method FIELD_SET_METHOD                   = Utils.getMethod(Field.class, "set", Object.class, Object.class);
+  public static final Method FIELD_GET_METHOD                   = Utils.getMethod(Field.class, "get", Object.class);
+  public static final Method FIELD_GET_TYPE_METHOD              = Utils.getMethod(Field.class, "getType");
+  
+  
   MethodCompiler(ClassCompiler classCompiler, Expr.FunDecl funDecl, String methodName, MethodVisitor mv) {
     this.classCompiler = classCompiler;
     this.methodFunDecl = funDecl;
@@ -987,7 +1031,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   
   private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT, PERCENT_PERCENT};
-  private static Map<TokenType,String> methodNames = Utils.mapOf(PLUS, RuntimeUtils.PLUS_METHOD,
+  private static Map<TokenType,Method> methodNames = Utils.mapOf(PLUS, RuntimeUtils.PLUS_METHOD,
                                                             MINUS, RuntimeUtils.MINUS_METHOD,
                                                             STAR, RuntimeUtils.MULTIPLY_METHOD,
                                                             SLASH, RuntimeUtils.DIVIDE_METHOD,
@@ -1025,7 +1069,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(globalModifier);
     loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeMethod(RegexMatcher.class, "regexFind", String.class, String.class, boolean.class, String.class, String.class, int.class);
+    invokeMethod(RegexMatcher.REGEX_FIND_METHOD);
     if (expr.operator.is(BANG_GRAVE)) {
       _booleanNot();
     }
@@ -1056,7 +1100,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(globalModifier);
       loadConst(modifiers);
       loadLocation(expr.operator);
-      invokeMethod(RegexMatcher.class, "regexSubstitute", String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+      invokeMethod(RegexMatcher.REGEX_SUBSTITUTE_METHOD);
       return null;
     }
 
@@ -1074,7 +1118,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(globalModifier);
     loadConst(modifiers);
     loadLocation(expr.operator);
-    invokeMethod(RegexMatcher.class, "regexFind", String.class, String.class, boolean.class, String.class, String.class, int.class);
+    invokeMethod(RegexMatcher.REGEX_FIND_METHOD);
 
     Label done = new Label();
     Label loop = new Label();
@@ -1096,12 +1140,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadLocal(sbVar);
     mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
     swap();
-    invokeMethod(RegexMatcher.class, "appendReplacement", StringBuffer.class, String.class);
+    invokeMethod(RegexMatcher.APPEND_REPLACEMENT_METHOD);
 
     // If in loop
     if (globalModifier) {
       loadVar(expr.captureArrVarDecl);
-      invokeMethod(RegexMatcher.class, "regexFindNext");
+      invokeMethod(RegexMatcher.REGEX_FIND_NEXT_METHOD);
       mv.visitJumpInsn(IFNE, loop);
       popType();
     }
@@ -1110,11 +1154,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadVar(expr.captureArrVarDecl);
     loadLocal(sbVar);
     mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
-    invokeMethod(RegexMatcher.class, "appendTail", StringBuffer.class);
+    invokeMethod(RegexMatcher.APPEND_TAIL_METHOD);
 
     loadLocal(sbVar);
     mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
-    invokeMethod(StringBuffer.class, "toString");
+    invokeMethod(STRING_BUFFER_TO_STRING_METHOD);
 
     stack.freeSlot(sbVar);
     return null;
@@ -1156,9 +1200,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.context.minScale);
       loadConst(!insideTryCatchNullError());
       loadLocation(expr.operator);
-      String methodName = methodNames.get(expr.operator.getType());
-      check(methodName != null, "unsupported operator type ", expr.operator.getChars());
-      invokeMethod(RuntimeUtils.class, methodName, Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+      Method method = methodNames.get(expr.operator.getType());
+      check(method != null, "unsupported operator type ", expr.operator.getChars());
+      invokeMethod(method);
       convertTo(expr.type, expr,true, expr.operator);  // Convert to expected type
       return null;
     }
@@ -1211,7 +1255,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(2);
           box();
           loadConst(expr.originalOperator != null && expr.originalOperator.is(DOUBLE_LESS_THAN_EQUAL));
-          invokeMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
+          invokeMethod(RuntimeUtils.LIST_ADD_SINGLE_METHOD);
           return null;
         }
         break;
@@ -1230,7 +1274,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             desiredType = STRING;
             compile(expr.right);
             convertToString();
-            invokeMethod(String.class, "concat", String.class);
+            invokeMethod(STRING_CONCAT_METHOD);
             return null;
           }
 
@@ -1241,7 +1285,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             expect(2);
             box();
             loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
-            invokeMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
+            invokeMethod(RuntimeUtils.LIST_ADD_METHOD);
             return null;
           }
         }
@@ -1253,11 +1297,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(2);
           loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL, MINUS_EQUAL));
           if (expr.operator.is(PLUS)) {
-            invokeMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
+            invokeMethod(RuntimeUtils.MAP_ADD_METHOD);
           }
           else {
             loadLocation(expr.operator);
-            invokeMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
+            invokeMethod(RuntimeUtils.MAP_SUBSTRACT_METHOD);
           }
           return null;
         }
@@ -1277,7 +1321,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           loadConst(!insideTryCatchNullError());
           loadConst(classCompiler.source);
           loadConst(expr.operator.getOffset());
-          invokeMethod(RuntimeUtils.class, RuntimeUtils.STRING_REPEAT, String.class, Integer.TYPE, boolean.class, String.class, Integer.TYPE);
+          invokeMethod(RuntimeUtils.STRING_REPEAT_METHOD);
           return null;
         }
         break;
@@ -1312,7 +1356,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         expect(2);
         loadConst(expr.operator.is(IN));   // true for in, false for !in
         loadLocation(expr.operator);
-        invokeMethod(RuntimeUtils.class, "inOperator", Object.class, Object.class, boolean.class, String.class, int.class);
+        invokeMethod(RuntimeUtils.IN_OPERATOR_METHOD);
         return null;
       }
 
@@ -1342,13 +1386,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           loadConst(expr.type);
           loadConst(!insideTryCatchNullError());
           loadLocation(expr.location);
-          invokeMethod(RuntimeUtils.class, RuntimeUtils.AS_ARRAY, Object.class, Class.class, boolean.class, String.class, int.class);
+          invokeMethod(RuntimeUtils.AS_ARRAY_METHOD);
           checkCast(expr.type);
         }
         else {
           loadConst(!insideTryCatchNullError());
           loadLocation(expr.location);
-          invokeMethod(RuntimeUtils.class, "as" + Utils.capitalise(expr.type.typeName()), Object.class, boolean.class, String.class, int.class);
+          switch (expr.type.getType()) {
+            case BYTE:    invokeMethod(RuntimeUtils.AS_BYTE_METHOD);    break;
+            case INT:     invokeMethod(RuntimeUtils.AS_INT_METHOD);     break;
+            case LONG:    invokeMethod(RuntimeUtils.AS_LONG_METHOD);    break;
+            case DOUBLE:  invokeMethod(RuntimeUtils.AS_DOUBLE_METHOD);  break;
+            case DECIMAL: invokeMethod(RuntimeUtils.AS_DECIMAL_METHOD); break;
+            case LIST:    invokeMethod(RuntimeUtils.AS_LIST_METHOD);    break;
+            case MAP:     invokeMethod(RuntimeUtils.AS_MAP_METHOD);     break;
+            default: throw new IllegalStateException("Internal error: unexpected type " + expr.type);
+          }
         }
         return null;
       }
@@ -1424,9 +1477,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           convertTo(maxType, expr.right, false, expr.right.location);
           expect(2);
           switch (maxType.getType()) {
-            case DECIMAL: invokeMethod(BigDecimal.class, "compareTo", BigDecimal.class);  break;
-            case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);                break;
-            case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);                break;
+            case DECIMAL: invokeMethod(BIG_DECIMAL_COMPARE_TO_METHOD);                          break;
+            case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);     break;
+            case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);     break;
             default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
           }
           return null;
@@ -1438,7 +1491,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(2);
           box();
           loadLocation(expr.operator);
-          invokeMethod(RuntimeUtils.class, "compareTo", Object.class, Object.class, String.class, int.class);
+          invokeMethod(RuntimeUtils.COMPARE_TO_METHOD);
           return null;
         }
       }
@@ -1455,7 +1508,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         box();
         loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
         loadLocation(expr.operator);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.BOOLEAN_OP, Object.class, Object.class, String.class, String.class, int.class);
+        invokeMethod(RuntimeUtils.BOOLEAN_OP_METHOD);
         return null;
       }
 
@@ -1622,7 +1675,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(expr.originalOperator != null && expr.originalOperator.getChars().endsWith("="));
       loadConst(!insideTryCatchNullError());
       loadLocation(expr.operator);
-      invokeMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, boolean.class, boolean.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.BIT_OPERATION_METHOD);
       return null;
     }
 
@@ -1676,7 +1729,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(opCodes.get(decimalIdx));
       loadConst(classCompiler.context.minScale);
       loadLocation(expr.operator);
-      invokeMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.DECIMAL_BINARY_OPERATION_METHOD);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + expr.type + " for operator " + expr.operator.getType());
@@ -1704,14 +1757,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             loadConst(leftType);
             loadConst(name);
             loadLocation(expr.right.location);
-            invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_HOST_STATIC_WRAPPER, Class.class, String.class, String.class, int.class);
+            invokeMethod(RuntimeUtils.LOOKUP_HOST_STATIC_WRAPPER_METHOD);
           }
           else {
             // We alread have parent on stack (if instance method)
             loadConst(name);
             loadNull(OBJECT_ARR);
             loadLocation(expr.right.location);
-            invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_WRAPPER, Object.class, String.class, Object[].class, String.class, int.class);
+            invokeMethod(RuntimeUtils.LOOKUP_WRAPPER_METHOD);
           }
           return null;
         }
@@ -1833,7 +1886,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If not static then bind to instance
     if (!method.isStaticMethod && (method.isBuiltin || !method.isStaticImplementation)) {
       swap();
-      invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
+      invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
     }
   }
 
@@ -1866,8 +1919,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> isInstanceOf(String.class),
                () -> {
                  dupVal();
-                 invokeMethod(Object.class, "getClass");
-                 invokeMethod(Class.class, "isArray");
+                 invokeMethod(OBJECT_GET_CLASS_METHOD);
+                 invokeMethod(CLASS_IS_ARRAY_METHOD);
                },
                () -> loadConst(true));
         emitIf(false, IfTest.IS_TRUE,
@@ -1876,7 +1929,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  swap();
                  box();
                  loadLocation(operator);
-                 invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD, Object.class, Object.class, String.class, int.class);
+                 invokeMethod(RuntimeUtils.LOAD_ARRAY_FIELD_METHOD);
                },
                () -> {
                  swap();
@@ -1985,7 +2038,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       compile(entry);
       expect(3);
       box();
-      invokeMethod(List.class, "add", Object.class);
+      invokeMethod(LIST_ADD_METHOD);
       popVal();    // Pop boolean return value of add
     });
     return null;
@@ -2008,7 +2061,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       compile(entry.second);
       box();
-      invokeMethod(Map.class, "put", Object.class, Object.class);
+      invokeMethod(MAP_PUT_METHOD);
       popVal();    // Ignore return value from put
     });
     return null;
@@ -2030,14 +2083,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (isBuiltinFunction) {
       // If we have the name of a built-in function then lookup its method handle
       loadConst(name);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOOKUP_METHOD_HANDLE, String.class);
+      invokeMethod(RuntimeUtils.LOOKUP_METHOD_HANDLE_METHOD);
     }
     else
     if (name.charAt(0) == '$' && Utils.isDigits(name.substring(1))) {
       loadVar(expr.varDecl);
       // We have a capture var so we need to extract the matching group from the $@ matcher
       loadConst(Integer.parseInt(name.substring(1)));
-      invokeMethod(RegexMatcher.class, "regexGroup", int.class);
+      invokeMethod(RegexMatcher.REGEX_GROUP_METHOD);
     }
     else {
       loadVar(expr.varDecl);
@@ -2056,7 +2109,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    newInstance(expr.type);
                  }
                  else {
-                   invokeMethod(RuntimeUtils.class, expr.createAsList ? RuntimeUtils.CREATE_LIST : RuntimeUtils.CREATE_MAP);
+                   invokeMethod(expr.createAsList ? RuntimeUtils.CREATE_LIST_METHOD : RuntimeUtils.CREATE_MAP_METHOD);
                  }
                  dupVal();
                  storeVar(expr.varDecl);
@@ -2102,7 +2155,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       loadConst(""); // Join string
       swap();
-      invokeMethod(String.class, "join", CharSequence.class, CharSequence[].class);
+      invokeMethod(STRING_JOIN_METHOD);
     }
     else {
       desiredType = STRING;
@@ -2164,7 +2217,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           invokeMaybeAsync(expr.isAsync, ANY, 1, expr.location, () -> {},
                            () -> {
                              loadNullContinuation();
-                             invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
+                             invokeMethod(RuntimeUtils.CONVERT_ITERATOR_TO_LIST_METHOD);
                            });
         }
       }
@@ -2252,8 +2305,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        loadConst(!insideTryCatchNullError());
                        loadLocation(expr.methodNameLocation);
                      },
-                     () -> invokeMethod(RuntimeUtils.class, RuntimeUtils.INVOKE_METHOD_OR_FIELD, Object.class, String.class,
-                                        boolean.class, boolean.class, Object[].class, boolean.class, String.class, int.class));
+                     () -> invokeMethod(RuntimeUtils.INVOKE_METHOD_OR_FIELD_METHOD));
 
     if (!expr.isMethodCallTarget) {
       // If we are not chaining method calls then it is possible that the method we just invoked returned
@@ -2366,7 +2418,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            if (!method.isGlobalFunction && method.isInstanceMethod()) {
                              // Is "method" so bind to parent object
                              swap();
-                             invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
+                             invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
                            }
                          }
                          loadNullContinuation();
@@ -2398,7 +2450,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        },
                        () -> {
                          loadNullContinuation();
-                         invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
+                         invokeMethod(RuntimeUtils.CONVERT_ITERATOR_TO_LIST_METHOD);
                        });
     }
   }
@@ -2447,7 +2499,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInvokeUtility(Expr.InvokeUtility expr) {
     expr.args.forEach(this::compile);
-    invokeMethod(expr.clss, expr.methodName, expr.paramTypes.toArray(new Class[0]));
+    invokeMethod(expr.method);
     return null;
   }
 
@@ -2465,7 +2517,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       loadLocal(expr.iterableVarDecl.slot);
       box();
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CREATE_ITERATOR, Object.class);
+      invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
     }
     return null;
   }
@@ -2479,7 +2531,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       loadLocal(expr.iteratorVarDecl.slot);
-      invokeMethod(Iterator.class, "next");
+      invokeMethod(ITERATOR_NEXT_METHOD);
     }
     return null;
   }
@@ -2503,7 +2555,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       loadLocal(expr.iteratorVarDecl.slot);
-      invokeMethod(Iterator.class, "hasNext");
+      invokeMethod(ITERATOR_HAS_NEXT_METHOD);
     }
     return null;
   }
@@ -2540,7 +2592,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     desiredType = STRING;
     compile(expr.expr);
     convertToString();
-    invokeMethod(RuntimeUtils.class, expr.newLine ? RuntimeUtils.PRINTLN : RuntimeUtils.PRINT, String.class, int.class, String.class);
+    invokeMethod(expr.newLine ? RuntimeUtils.PRINTLN_METHOD : RuntimeUtils.PRINT_METHOD);
     return null;
   }
 
@@ -2549,7 +2601,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     compile(expr.expr);
     convertToString();
     loadLocation(expr.dieToken);
-    invokeMethod(RuntimeUtils.class, "die", String.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.DIE_METHOD);
     return null;
   }
 
@@ -2569,10 +2621,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        // Need to get our JactlContext from our class loader so pass in our class loader
                        //   this.getClass().getClassLoader();
                        loadLocal(0);
-                       invokeMethod(Object.class, "getClass");
-                       invokeMethod(Class.class, "getClassLoader");
+                       invokeMethod(OBJECT_GET_CLASS_METHOD);
+                       invokeMethod(CLASS_GET_CLASS_LOADER_METHOD);
                      },
-                     () -> invokeMethod(RuntimeUtils.class, RuntimeUtils.EVAL_SCRIPT, Continuation.class, String.class, Map.class, ClassLoader.class));
+                     () -> invokeMethod(RuntimeUtils.EVAL_SCRIPT_METHOD));
     return null;
   }
 
@@ -2593,7 +2645,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       tryCatch(NegativeArraySizeException.class, false,
                () -> newInstance(expr.type, expr.dimensions.size(), expr.callInit, expr.args, expr.leftParen),
                () -> {
-                 invokeMethod(Throwable.class, "getMessage");
+                 invokeMethod(THROWABLE_GET_MESSAGE_METHOD);
                  throwErrorWithStringOrNull("Negative array index", expr.location);
                });
     }
@@ -2694,7 +2746,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   () -> {
                                     expect(1);
                                     loadNullContinuation();
-                                    invokeMethod(RuntimeUtils.class, RuntimeUtils.CONVERT_ITERATOR_TO_LIST, Object.class, Continuation.class);
+                                    invokeMethod(RuntimeUtils.CONVERT_ITERATOR_TO_LIST_METHOD);
                                     popType();
                                     pushType(ANY);   // Don't know if call occurs so we still have to assume ANY
                                   }),
@@ -3225,7 +3277,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // For non-static methods we need to bind them to "this" (for closures the constructor has already done this)
       if (!isStatic) {
         loadLocal(0);
-        invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
+        invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
       }
     }
 
@@ -3250,7 +3302,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Load HeapLocal  (not the value contained in it) from _our_ copy of this
       // var (p.varDecl.slot not p.slot)
       loadLocal(p.parentVarDecl.slot);
-      invokeMethod(JactlMethodHandle.class, "bindTo", Object.class);
+      invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
     });
   }
 
@@ -3458,21 +3510,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     switch (peek().getType()) {
       case BOOLEAN:
-        invokeMethod(Boolean.class, "booleanValue");
+        invokeMethod(BOOLEAN_VALUE_METHOD);
         break;
       case BYTE:
-        invokeMethod(Byte.class, "byteValue");
+        invokeMethod(BYTE_VALUE_METHOD);
         _loadConst(255);
         mv.visitInsn(IAND);
         break;
       case INT:
-        invokeMethod(Integer.class, "intValue");
+        invokeMethod(INT_VALUE_METHOD);
         break;
       case LONG:
-        invokeMethod(Long.class, "longValue");
+        invokeMethod(LONG_VALUE_METHOD);
         break;
       case DOUBLE:
-        invokeMethod(Double.class, "doubleValue");
+        invokeMethod(DOUBLE_VALUE_METHOD);
         break;
       default:
         // For other types (expr.g. DECIMAL) don't do anything if asked to unbox
@@ -3581,7 +3633,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(1);
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, type.is(INT) ? RuntimeUtils.CAST_TO_INT_VALUE: RuntimeUtils.CAST_TO_LONG_VALUE, Object.class, boolean.class, String.class, int.class);
+      invokeMethod(type.is(INT) ? RuntimeUtils.CAST_TO_INT_VALUE_METHOD : RuntimeUtils.CAST_TO_LONG_VALUE_METHOD);
       return;
     }
     throw new IllegalStateException("Internal error: unexpected type " + peek());
@@ -3679,7 +3731,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // For any type that is an Object
     if (!peek().isPrimitive()) {
       loadConst(negated ? true : false);
-      invokeMethod(RuntimeUtils.class, "isTruth", Object.class, Boolean.TYPE);
+      invokeMethod(RuntimeUtils.IS_TRUTH_METHOD);
       return null;
     }
 
@@ -3725,7 +3777,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY, STRING)) {
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_BYTE, Object.class, boolean.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_BYTE_METHOD);
       _loadConst(255);
       mv.visitInsn(IAND);
       popType();
@@ -3734,7 +3786,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else
     if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      invokeMethod(Number.class, "byteValue");
+      invokeMethod(NUMBER_BYTE_VALUE_METHOD);
       _loadConst(255);
       mv.visitInsn(IAND);
     }
@@ -3768,12 +3820,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY, STRING)) {
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_INT, Object.class, boolean.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_INT_METHOD);
     }
     else
     if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      invokeMethod(Number.class, "intValue");
+      invokeMethod(NUMBER_INT_VALUE_METHOD);
     }
     else {
       switch (peek().getType()) {
@@ -3796,19 +3848,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY,STRING)) {
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_NUMBER, Object.class, boolean.class, String.class, Integer.TYPE);
-      invokeMethod(Number.class, "longValue");
+      invokeMethod(RuntimeUtils.CAST_TO_NUMBER_METHOD);
+      invokeMethod(NUMBER_LONG_VALUE_METHOD);
     }
     else if (peek().is(BYTE.boxed())) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
-      invokeMethod(Number.class, "byteValue");
+      invokeMethod(NUMBER_BYTE_VALUE_METHOD);
       _loadConst(255);
       mv.visitInsn(IAND);
       mv.visitInsn(I2L);
     }
     else if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      invokeMethod(Number.class, "longValue");
+      invokeMethod(NUMBER_LONG_VALUE_METHOD);
     }
     else {
       switch (peek().getType()) {
@@ -3833,19 +3885,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY,STRING)) {
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_NUMBER, Object.class, boolean.class, String.class, Integer.TYPE);
-      invokeMethod(Number.class, "doubleValue");
+      invokeMethod(RuntimeUtils.CAST_TO_NUMBER_METHOD);
+      invokeMethod(NUMBER_DOUBLE_VALUE_METHOD);
     }
     else if (peek().is(BYTE.boxed())) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
-      invokeMethod(Number.class, "byteValue");
+      invokeMethod(NUMBER_BYTE_VALUE_METHOD);
       _loadConst(255);
       mv.visitInsn(IAND);
       mv.visitInsn(I2D);
     }
     else if (peek().isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
-      invokeMethod(Number.class, "doubleValue");
+      invokeMethod(NUMBER_DOUBLE_VALUE_METHOD);
     }
     else {
       switch (peek().getType()) {
@@ -3867,7 +3919,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     if (peek().is(ANY,STRING)) {
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "castToDecimal", Object.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_DECIMAL_METHOD);
     }
     else
     switch (peek().getType()) {
@@ -3875,11 +3927,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case INT:
       case LONG:
         convertToLong(location);
-        invokeMethod(BigDecimal.class, "valueOf", Long.TYPE);
+        invokeMethod(BIG_DECIMAL_VALUE_OF_LONG_METHOD);
         break;
       case DOUBLE:
         convertToDouble(location);
-        invokeMethod(BigDecimal.class, "valueOf", Double.TYPE);
+        invokeMethod(BIG_DECIMAL_VALUE_OF_DOUBLE_METHOD);
         break;
       case DECIMAL:
         break;
@@ -3896,7 +3948,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ANY)) {
       expect(1);
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "castToMap", Object.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_MAP_METHOD);
       return null;
     }
     error("Cannot convert " + peek() + " to Map", (Token)location);
@@ -3908,7 +3960,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().is(ITERATOR,ANY)) {
       expect(1);
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, "castToList", Object.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_LIST_METHOD);
       return null;
     }
     error("Cannot convert " + peek() + " to List", (Token)location);
@@ -3924,7 +3976,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(1);
       loadConst(true);    // captureStackTrace
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_NUMBER, Object.class, boolean.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.CAST_TO_NUMBER_METHOD);
       return null;
     }
     error("Cannot convert " + peek() + " to Number", (Token)location);
@@ -3937,7 +3989,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expect(1);
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_FUNCTION, Object.class, boolean.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_FUNCTION_METHOD);
       return null;
     }
     error("Cannot convert " + peek() + " to Function", (Token)location);
@@ -3953,7 +4005,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(type);
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.CAST_TO_ARRAY, Object.class, Class.class, boolean.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.CAST_TO_ARRAY_METHOD);
       checkCast(type);
       return null;
     }
@@ -3993,7 +4045,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case ANY:
         loadConst(!insideTryCatchNullError());
         loadLocation(location);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.ARITHMETIC_NOT, Object.class, boolean.class, String.class, int.class);
+        invokeMethod(RuntimeUtils.ARITHMETIC_NOT_METHOD);
         break;
       default: throw new IllegalStateException("Internal error: Unexpected type " + peek().getType() + " for '~'");
     }
@@ -4014,7 +4066,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(!insideTryCatchNullError());
         loadConst(classCompiler.source);
         loadConst(location.getOffset());
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.NEGATE_NUMBER, Object.class, boolean.class, String.class, Integer.TYPE);
+        invokeMethod(RuntimeUtils.NEGATE_NUMBER_METHOD);
         break;
       default:
         throw new IllegalStateException("Internal error: unexpected type " + peek());
@@ -4114,7 +4166,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         incOrDec.accept(() -> { mv.visitInsn(isInc ? DADD : DSUB); popType(); });
         break;
       case DECIMAL:
-        incOrDec.accept(() -> invokeMethod(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class));
+        incOrDec.accept(() -> invokeMethod(isInc ? BIG_DECIMAL_ADD_METHOD : BIG_DECIMAL_SUBTRACT_METHOD));
         break;
       case ANY:
       case STRING:
@@ -4156,7 +4208,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           loadConst(RuntimeUtils.getOperatorType(operator.getType()));
           loadConst(!insideTryCatchNullError());
           loadLocation(operator);
-          invokeMethod(RuntimeUtils.class, isInc ? RuntimeUtils.INC_NUMBER : RuntimeUtils.DEC_NUMBER, Object.class, String.class, boolean.class, String.class, Integer.TYPE);
+          invokeMethod(isInc ? RuntimeUtils.INC_NUMBER_METHOD : RuntimeUtils.DEC_NUMBER_METHOD);
           return;
         }
 
@@ -4171,7 +4223,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(!insideTryCatchNullError());
       loadConst(classCompiler.source);
       loadConst(operator.getOffset());
-      invokeMethod(RuntimeUtils.class, isInc ? RuntimeUtils.PLUS_METHOD : RuntimeUtils.MINUS_METHOD, Object.class, Object.class, String.class, String.class, Integer.TYPE, boolean.class, String.class, Integer.TYPE);
+      invokeMethod(isInc ? RuntimeUtils.PLUS_METHOD : RuntimeUtils.MINUS_METHOD);
       return;
     }
 
@@ -4187,7 +4239,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case INT:     mv.visitInsn(isInc ? IADD : ISUB);   popType();      break;
       case LONG:    mv.visitInsn(isInc ? LADD : LSUB);   popType();      break;
       case DOUBLE:  mv.visitInsn(isInc ? DADD : DSUB);   popType();      break;
-      case DECIMAL: invokeMethod(BigDecimal.class, isInc ? "add" : "subtract", BigDecimal.class); break;
+      case DECIMAL: invokeMethod(isInc ? BIG_DECIMAL_ADD_METHOD : BIG_DECIMAL_SUBTRACT_METHOD);
       default:      throw new IllegalStateException("Internal error: unexpected type " + peek());
     }
   }
@@ -4200,7 +4252,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().isPrimitive()) {
       box();
     }
-    invokeMethod(RuntimeUtils.class, "toString", Object.class);
+    invokeMethod(RuntimeUtils.TO_STRING_METHOD);
     if (end != null) {
       mv.visitLabel(end);
     }
@@ -4213,7 +4265,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (peek().isPrimitive()) {
       box();
     }
-    invokeMethod(RuntimeUtils.class, "toStringOrNull", Object.class);
+    invokeMethod(RuntimeUtils.TO_STRING_OR_NULL_METHOD);
   }
 
   private Void castToString(SourceLocation location) {
@@ -4226,7 +4278,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();
     }
     loadLocation(location);
-    invokeMethod(RuntimeUtils.class, "castToString", Object.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.CAST_TO_STRING_METHOD);
     if (end != null) {
       mv.visitLabel(end);
     }
@@ -4259,8 +4311,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     if (type.is(ARRAY) && type.getArrayElemType() == null) {
       // Just want to know if we have an array and don't care about the actual type
-      invokeMethod(Object.class, "getClass");
-      invokeMethod(Class.class, "isArray");
+      invokeMethod(OBJECT_GET_CLASS_METHOD);
+      invokeMethod(CLASS_IS_ARRAY_METHOD);
     }
     else {
       mv.visitTypeInsn(INSTANCEOF, type.boxed().getInternalName());
@@ -4377,7 +4429,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(SWAP);
     _loadConst(msg);
     mv.visitInsn(SWAP);
-    invokeMethod(String.class, "concat", String.class);
+    invokeMethod(STRING_CONCAT_METHOD);
     _loadLocation(location);
     mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
     mv.visitInsn(ATHROW);
@@ -4405,8 +4457,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitInsn(DUP);
     loadConst(msg);
     loadLocal(intSlot);
-    invokeMethod(Integer.class, "toString", int.class);
-    invokeMethod(String.class, "concat", String.class);
+    invokeMethod(INTEGER_TO_STRING_METHOD);
+    invokeMethod(STRING_CONCAT_METHOD);
     popType();
     _loadLocation(location);
     mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
@@ -4625,7 +4677,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(continuation);       // :continuation
     // Convert result to return type of function we invoked.
     loadLocal(continuationVar);
-    invokeMethod(Continuation.class, "getResult");
+    invokeMethod(Continuation.GET_RESULT_METHOD);
     if (returnType.isPrimitive()) {
       convertTo(returnType, null, false, location);
     }
@@ -4643,7 +4695,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (classCompiler.context.maxExecutionTimeMs >= 0) {
       loadConst(location.getSource());
       loadConst(location.getOffset());
-      invokeMethod(RuntimeState.class, RuntimeState.CHECK_TIMEOUT, String.class, int.class);
+      invokeMethod(RuntimeState.CHECK_TIMEOUT_METHOD);
     }
   }
 
@@ -4737,7 +4789,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              dupType();
                              storeLocal(temp);
                              swap();
-                             invokeMethod(HeapLocal.class, "setValue", Object.class);
+                             invokeMethod(HeapLocal.SET_VALUE_METHOD);
                              loadLocal(temp);
                              stack.freeSlot(temp);
                            }
@@ -4823,12 +4875,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Expect on stack: ...,methodHandle, continuation, source, offset, Object[]
    */
   private void invokeMethodHandle() {
-    invokeMethod(JactlMethodHandle.class, "invoke", Continuation.class, String.class, int.class, Object[].class);
+    invokeMethod(JactlMethodHandle.INVOKE_METHOD);
   }
 
   void invokeMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {
     Method method = findMethod(clss, methodName, paramTypes);
     invokeMethod(clss, method, getTypeFromClass(method.getReturnType()));
+  }
+  
+  void invokeMethod(Method method) {
+    invokeMethod(method.getDeclaringClass(), method.getName(), method.getParameterTypes());
   }
   
   void invokeMethod(Class<?> clss, Executable method, JactlType returnType) {
@@ -4864,14 +4920,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param paramTypes optional array of paramter types to narrow down search if multiple methods
    */
   private Method findMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {
-    try {
-      return clss.getDeclaredMethod(methodName, paramTypes);
-    }
-    catch (NoSuchMethodException e) {
-      throw new IllegalStateException("Internal error: could not find static method " + methodName + " for class " +
-                                      clss.getName() + " with param types " + Arrays.toString(paramTypes));
-    }
+      return methodCache.computeIfAbsent(clss.getName() + "#" + methodName + Arrays.toString(paramTypes), k -> {
+        try {
+          return clss.getDeclaredMethod(methodName, paramTypes);
+        }
+        catch (NoSuchMethodException e) {
+          throw new IllegalStateException("Internal error: could not find static method " + methodName + " for class " +
+                                          clss.getName() + " with param types " + Arrays.toString(paramTypes));
+        }
+      });
   }
+  
+  private static ConcurrentHashMap<String,Method> methodCache = new ConcurrentHashMap<>();
 
   private void invokeUserMethod(Expr.FunDecl funDecl) {
     // Note: param types can include heap locals if funDecl has any
@@ -5008,7 +5068,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else if (classCompiler.context.classAccessToGlobals) {
       if (globalsVar == -1) {
         globalsVar = stack.allocateSlot(MAP);
-        invokeMethod(RuntimeState.class, RuntimeState.GET_CURRENT_GLOBALS);
+        invokeMethod(RuntimeState.GET_CURRENT_GLOBALS_METHOD);
         storeLocal(globalsVar);
       }
       loadLocal(globalsVar);
@@ -5103,7 +5163,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int slot = stack.globalVarSlot(varName);
     loadGlobals();
     loadConst(varName);
-    invokeMethod(Map.class, "get", Object.class);
+    invokeMethod(MAP_GET_METHOD);
     if (create) {
       tryCatch(ClassCastException.class, false,
                () -> Utils.checkCast(mv, varDecl.type),
@@ -5131,7 +5191,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       loadGlobals();
       loadConst(varName);
-      invokeMethod(Map.class, "get", Object.class);
+      invokeMethod(MAP_GET_METHOD);
       checkCast(varDecl.type);
       popType();
       pushType(varDecl.type.boxed());
@@ -5164,18 +5224,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // method) then treat like a normal local not a HeapLocal.
     if (varDecl.isHeapLocal) {
       loadLocal(varDecl.slot);
-      String methodName;
+      Method method;
       switch (varDecl.type.getType()) {
-        case BYTE:         methodName = "byteValue";         break;
-        case INT:          methodName = "intValue";          break;
-        case LONG:         methodName = "longValue";         break;
-        case DOUBLE:       methodName = "doubleValue";       break;
-        case DECIMAL:      methodName = "decimalValue";      break;
-        case STRING:       methodName = "stringValue";       break;
-        case MATCHER:      methodName = "matcherValue";      break;
-        default:           methodName = "getValue";          break;
+        case BYTE:         method = HeapLocal.BYTE_VALUE_METHOD;         break;
+        case INT:          method = HeapLocal.INT_VALUE_METHOD;          break;
+        case LONG:         method = HeapLocal.LONG_VALUE_METHOD;         break;
+        case DOUBLE:       method = HeapLocal.DOUBLE_VALUE_METHOD;       break;
+        case DECIMAL:      method = HeapLocal.DECIMAL_VALUE_METHOD;      break;
+        case STRING:       method = HeapLocal.STRING_VALUE_METHOD;       break;
+        case MATCHER:      method = HeapLocal.MATCHER_VALUE_METHOD;      break;
+        default:           method = HeapLocal.GET_VALUE_METHOD;          break;
       }
-      invokeMethod(HeapLocal.class, methodName);
+      invokeMethod(method);
       if (varDecl.type.is(BYTE)) {
         _loadConst(255);
         mv.visitInsn(IAND);
@@ -5238,7 +5298,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       swap();
       loadConst(varName);
       swap();
-      invokeMethod(Map.class, "put", Object.class, Object.class);
+      invokeMethod(MAP_PUT_METHOD);
       // Pop result of put since we are not interested in previous value
       popVal();
       return;
@@ -5255,7 +5315,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();
       loadLocal(varDecl.slot);
       swap();
-      invokeMethod(HeapLocal.class, "setValue", Object.class);
+      invokeMethod(HeapLocal.SET_VALUE_METHOD);
       return;
     }
 
@@ -5299,7 +5359,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       box();
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_FIELD_OR_DEFAULT, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, boolean.class, String.class, Integer.TYPE);
+      invokeMethod(RuntimeUtils.LOAD_FIELD_OR_DEFAULT_METHOD);
     }
     else {
       if (accessOperator.is(DOT,QUESTION_DOT) && !peek().is(STRING)) {
@@ -5310,14 +5370,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
         loadConst(!insideTryCatchNullError());
         loadLocation(location);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_MAP_FIELD, Object.class, Object.class, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+        invokeMethod(RuntimeUtils.LOAD_MAP_FIELD_METHOD);
       }
       else {
         loadConst(accessOperator.is(DOT, QUESTION_DOT));
         loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
         loadConst(!insideTryCatchNullError());
         loadLocation(location);
-        invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_FIELD, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+        invokeMethod(RuntimeUtils.LOAD_FIELD_METHOD);
       }
     }
   }
@@ -5336,7 +5396,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
     loadConst(!insideTryCatchNullError());
     loadLocation(accessOperator);
-    invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_FIELD, Object.class, Object.class, boolean.class, boolean.class, boolean.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.LOAD_FIELD_METHOD);
   }
 
   /**
@@ -5351,7 +5411,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadConst(defaultType.is(MAP));
     loadConst(!insideTryCatchNullError());
     loadLocation(location);
-    invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_OR_CREATE_FIELD, Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+    invokeMethod(RuntimeUtils.LOAD_OR_CREATE_FIELD_METHOD);
   }
 
   /**
@@ -5367,12 +5427,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     box();                        // Field name/index passed as Object
     loadConst(!insideTryCatchNullError());
     loadLocation(expr.right.location);
-    invokeMethod(RuntimeUtils.class, RuntimeUtils.GET_FIELD_GETTER, Object.class, Object.class, boolean.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.GET_FIELD_GETTER_METHOD);
     setStackType(JactlType.createInstanceType(Field.class));
     dupVal();
     int fieldVar = stack.saveInTemp();
     loadLocal(parentVar);
-    invokeMethod(Field.class, "get", Object.class);
+    invokeMethod(FIELD_GET_METHOD);
     // If value is non-null then nothing else to do
     dupVal();
     Label end = new Label();
@@ -5386,18 +5446,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     emitIf(async, IfTest.IS_TRUE,
            () -> {
              loadLocal(fieldVar);
-             invokeMethod(Field.class, "getType");
+             invokeMethod(FIELD_GET_TYPE_METHOD);
              dupVal();
              loadConst(JactlObject.class);
              swap();
-             invokeMethod(Class.class, "isAssignableFrom", Class.class);
+             invokeMethod(CLASS_IS_ASSIGNABLE_FROM_METHOD);
            },
            () -> {
              // Construct new object
              loadConst(null);
-             invokeMethod(Class.class, "getConstructor", Class[].class);
+             invokeMethod(CLASS_GET_CONSTRUCTOR_METHOD);
              loadConst(null);
-             invokeMethod(Constructor.class, "newInstance", Object[].class);
+             invokeMethod(CONSTRUCTOR_NEW_INSTANCE_METHOD);
              invokeMaybeAsync(async, ANY, 1, expr.right.location,
                               () -> {
                                 loadNullContinuation();
@@ -5413,8 +5473,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   Label afterCatch = new Label();
                                   mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
                                   mv.visitLabel(blockStart);
-                                  invokeMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class,
-                                               String.class, int.class, Object[].class);
+                                  invokeMethod(Utils.JACTL_INIT_WRAPPER_METHOD);
                                   mv.visitJumpInsn(GOTO, afterCatch);
                                   mv.visitLabel(blockEnd);
                                   mv.visitLabel(catchLabel);
@@ -5422,8 +5481,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   mv.visitLabel(afterCatch);
                                 }
                                 else {
-                                  invokeMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class,
-                                               String.class, int.class, Object[].class);
+                                  invokeMethod(Utils.JACTL_INIT_WRAPPER_METHOD);
                                 }
                               });
            },
@@ -5431,7 +5489,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
              popVal();     // Don't need the field class
              loadConst(isMap ? MAP : LIST);
              loadLocation(expr.right.location);
-             invokeMethod(RuntimeUtils.class, "defaultValue", Class.class, String.class, int.class);
+             invokeMethod(RuntimeUtils.DEFAULT_VALUE_METHOD);
            });
 
     mv.visitLabel(end);        // :end
@@ -5441,7 +5499,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadLocal(parentVar);
     swap();
     tryCatch(IllegalArgumentException.class,
-             true, () -> invokeMethod(Field.class, "set", Object.class, Object.class),
+             true, () -> invokeMethod(FIELD_SET_METHOD),
              () -> {
                popVal();
                throwError("Cannot set field to " + (isMap ? "Map" : "List") + ": field type incomptible", expr.right.location);
@@ -5565,7 +5623,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                unsafeLoadElem(parentType, null);
              },
              () -> {
-               invokeMethod(Throwable.class, "getMessage");
+               invokeMethod(THROWABLE_GET_MESSAGE_METHOD);
                _throwErrorWithString("Index out of bounds: ", index.location);
              });
   }
@@ -5596,13 +5654,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void emitLength(JactlType parentType, Token location) {
     expect(1);
     if (parentType.is(STRING)) {
-      invokeMethod(String.class, "length");
+      invokeMethod(STRING_LENGTH_METHOD);
     }
     else if (parentType.is(LIST)) {
-      invokeMethod(List.class, "size");
+      invokeMethod(LIST_SIZE_METHOD);
     }
     else if (parentType.is(MAP)) {
-      invokeMethod(Map.class, "size");
+      invokeMethod(MAP_SIZE_METHOD);
     }
     else if (parentType.is(ARRAY)) {
       popType();
@@ -5611,7 +5669,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else if (parentType.is(ANY)) {
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.LENGTH, Object.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.LENGTH_METHOD);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + parentType);
@@ -5626,19 +5684,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   void unsafeLoadElem(JactlType parentType, Token location) {
     expect(2);
     if (parentType.is(STRING)) {
-      invokeMethod(String.class, "charAt", int.class);
-      invokeMethod(String.class, "valueOf", char.class);
+      invokeMethod(STRING_CHAR_AT_METHOD);
+      invokeMethod(STRING_VALUE_OF_METHOD);
     }
     else if (parentType.is(ARRAY)) {
       popType(2);
       loadArrayElem(parentType);
     }
     else if (parentType.is(LIST)) {
-      invokeMethod(List.class, "get", int.class);
+      invokeMethod(LIST_GET_METHOD);
     }
     else if (parentType.is(ANY)) {
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.LOAD_ARRAY_FIELD_INT, Object.class, int.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.LOAD_ARRAY_FIELD_INT_METHOD);
     }
     else {
       throw new IllegalStateException("Internal error: unexpected type " + parentType);
@@ -5721,9 +5779,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       unbox();
       switch (expr.field.type.getType()) {
         case DECIMAL:
-        case ANY:      invokeMethod(Number.class, "intValue");  break;
-        case LONG:     mv.visitInsn(L2I);                                   break;
-        case DOUBLE:   mv.visitInsn(D2I);                                   break;
+        case ANY:      invokeMethod(NUMBER_INT_VALUE_METHOD);  break;
+        case LONG:     mv.visitInsn(L2I);                      break;
+        case DOUBLE:   mv.visitInsn(D2I);                      break;
       }
       setStackType(INT);
       _dupVal();
@@ -5747,7 +5805,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
                  stack.freeSlot(valueSlot);
                },
                () -> {
-                 invokeMethod(Throwable.class, "getMessage");
+                 invokeMethod(THROWABLE_GET_MESSAGE_METHOD);
                  _throwErrorWithString("Array index out of bounds: ", expr.field.location);
                });
     }
@@ -5762,13 +5820,13 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     if (peek2().is(MAP)) {
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_MAP_FIELD, Object.class, Map.class, Object.class, boolean.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.STORE_MAP_FIELD_METHOD);
     }
     else {
       loadConst(accessOperator.is(DOT, QUESTION_DOT));
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
-      invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_VALUE_PARENT_FIELD, Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
+      invokeMethod(RuntimeUtils.STORE_VALUE_PARENT_FIELD_METHOD);
     }
   }
 
@@ -5787,7 +5845,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     loadConst(shouldReturnFieldType);
     loadConst(!insideTryCatchNullError());
     loadLocation(accessOperator);
-    invokeMethod(RuntimeUtils.class, RuntimeUtils.STORE_PARENT_FIELD_VALUE, Object.class, Object.class, Object.class, boolean.class, boolean.class, boolean.class, String.class, int.class);
+    invokeMethod(RuntimeUtils.STORE_PARENT_FIELD_VALUE_METHOD);
   }
 
   Void loadLocal(int slot) {

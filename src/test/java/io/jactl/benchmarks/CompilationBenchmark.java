@@ -42,6 +42,7 @@ import java.util.stream.IntStream;
 @Warmup(iterations = 3, time = 5)
 @Measurement(iterations = 5, time = 5)
 @Fork(value = 1, jvmArgs = "-ea")
+//@Fork(value = 0)
 public class CompilationBenchmark {
 
   private static final int FILE_COUNT = 100;    // How many files to compile at once

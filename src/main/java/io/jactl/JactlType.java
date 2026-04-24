@@ -401,26 +401,53 @@ public class JactlType extends JactlUserDataHolder {
    */
   public boolean is(JactlType... types) {
     for (JactlType type: types) {
-      type = type.getDelegate();
-      if (this == type) {
+      if (typeMatches(type)) {
         return true;
-      }
-      // Can't use == for INSTANCE/CLASS type since we create a new one for each class
-      if (this.type == TypeEnum.INSTANCE && type.type == TypeEnum.INSTANCE) {
-        return true;
-      }
-      if (this.type == TypeEnum.CLASS && type.type == TypeEnum.CLASS) {
-        return true;
-      }
-      if (this.type == TypeEnum.ARRAY && type.type == TypeEnum.ARRAY) {
-        if (this.getArrayElemType() == null || type.getArrayElemType() == null || this.getArrayElemType().is(type.getArrayElemType())) {
-          return true;
-        }
       }
     }
     return false;
   }
   
+  public boolean is(JactlType type) {
+    return typeMatches(type);
+  }
+  
+  public boolean is(JactlType type1, JactlType type2) {
+    return typeMatches(type1) || typeMatches(type2);
+  }
+
+  public boolean is(JactlType type1, JactlType type2, JactlType type3) {
+    return typeMatches(type1) || typeMatches(type2) || typeMatches(type3);
+  }
+
+  public boolean is(JactlType type1, JactlType type2, JactlType type3, JactlType type4) {
+    return typeMatches(type1) || typeMatches(type2) || typeMatches(type3) || typeMatches(type4);
+  }
+
+  public boolean is(JactlType type1, JactlType type2, JactlType type3, JactlType type4, JactlType type5) {
+    return typeMatches(type1) || typeMatches(type2) || typeMatches(type3) || typeMatches(type4) || typeMatches(type5);
+  }
+
+  private boolean typeMatches(JactlType type) {
+    type = type.getDelegate();
+    if (this == type) {
+      return true;
+    }
+    // Can't use == for INSTANCE/CLASS type since we create a new one for each class
+    if (this.type == TypeEnum.INSTANCE && type.type == TypeEnum.INSTANCE) {
+      return true;
+    }
+    if (this.type == TypeEnum.CLASS && type.type == TypeEnum.CLASS) {
+      return true;
+    }
+    if (this.type == TypeEnum.ARRAY && type.type == TypeEnum.ARRAY) {
+      if (this.getArrayElemType() == null || type.getArrayElemType() == null || this.getArrayElemType().is(type.getArrayElemType())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Check if type is one of the supplied types ignoring whether
    * any type is boxed (allows quick check for INT, LONG, etc

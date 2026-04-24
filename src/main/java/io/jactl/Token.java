@@ -157,6 +157,22 @@ public class Token extends Location {
    */
   public TokenType getType() { return type; }
 
+  public boolean is(TokenType type) {
+    return this.type == type;
+  }
+
+  public boolean is(TokenType type1, TokenType type2) {
+    return this.type == type1 || this.type == type2;
+  }
+  
+  public boolean is(TokenType type1, TokenType type2, TokenType type3) {
+    return this.type == type1 || this.type == type2 || this.type == type3;
+  }
+
+  public boolean is(TokenType type1, TokenType type2, TokenType type3, TokenType type4) {
+    return this.type == type1 || this.type == type2 || this.type == type3 || this.type == type4;
+  }
+  
   /**
    * Check if type of token matches any of types passed in
    * @param types  the types to check
@@ -172,7 +188,12 @@ public class Token extends Location {
   }
 
   public boolean is(List<TokenType> types) {
-    return is(types.toArray(new TokenType[types.size()]));
+    for (TokenType type: types) {
+      if (type == this.type) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public boolean isCommentOrWhiteSpace() {

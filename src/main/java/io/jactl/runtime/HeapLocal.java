@@ -18,7 +18,9 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import io.jactl.Utils;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.Objects;
 
@@ -34,6 +36,17 @@ public class HeapLocal extends Number implements Checkpointable {
 
   Object value;
 
+  public static final Method SET_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "setValue", Object.class);
+  public static final Method BYTE_VALUE_METHOD    = Utils.getMethod(HeapLocal.class, "byteValue");
+  public static final Method INT_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "intValue");
+  public static final Method LONG_VALUE_METHOD    = Utils.getMethod(HeapLocal.class, "longValue");
+  public static final Method FLOAT_VALUE_METHOD   = Utils.getMethod(HeapLocal.class, "floatValue");
+  public static final Method DOUBLE_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "doubleValue");
+  public static final Method DECIMAL_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "decimalValue");
+  public static final Method STRING_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "stringValue");
+  public static final Method MATCHER_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "matcherValue");
+  public static final Method GET_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "getValue");
+  
   public void   setValue(Object value) { this.value = value; }
   public Object getValue()             { return value; }
 

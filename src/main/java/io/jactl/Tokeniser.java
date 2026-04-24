@@ -166,6 +166,11 @@ public class Tokeniser {
     previousToken = state.previous;
     currentToken  = state.current;
   }
+  
+  public void rewind(Token previous, Token current) {
+    previousToken = previous;
+    currentToken  = current;
+  }
 
   public State saveState() {
     return new State(previousToken, previousToken == null ? peek() : currentToken);
@@ -314,22 +319,25 @@ public class Tokeniser {
     }
 
     // Iterate through possible symbols from longest to shortest until we find one that matches
-    Optional<Symbol> symbolOptional = symbols.stream().sequential()
-                                             .filter(symbol -> symbolMatches(symbol, remaining))
-                                             .findFirst();
+    Symbol symbol = null;
+    for (Symbol sym : symbols) {
+      if (symbolMatches(sym, remaining)) {
+        symbol = sym;
+        break;
+      }
+    }
 
     // If we did not find matching symbol or we have an underscore then we must have an identifier
     // (or an unknown token character)
-    if (!symbolOptional.isPresent() || symbolOptional.get().type.is(UNDERSCORE)) {
+    if (symbol == null || symbol.type.is(UNDERSCORE)) {
       return parseIdentifier(token, remaining);
     }
 
     // We found matching symbol
-    Symbol sym = symbolOptional.get();
-    advance(sym.length());
+    advance(symbol.length());
 
     // Some special handling for specific tokens
-    switch (sym.type) {
+    switch (symbol.type) {
       case EOL: {
         if (!newLinesAllowed()) {
           popStringState();
@@ -372,7 +380,7 @@ public class Tokeniser {
       case DOLLAR_BRACE:
       case LEFT_BRACE: {
         nestedBraces++;
-        return token.setType(sym.type).setLength(sym.length);
+        return token.setType(symbol.type).setLength(symbol.length);
       }
       case RIGHT_BRACE: {
         nestedBraces--;
@@ -387,7 +395,7 @@ public class Tokeniser {
       }
       case TRUE:
       case FALSE: {
-        token.setValue(sym.type == TRUE);
+        token.setValue(symbol.type == TRUE);
         break;
       }
       case NULL: {
@@ -396,9 +404,9 @@ public class Tokeniser {
       }
     }
 
-    return token.setType(sym.type)
-                .setLength(sym.length())
-                .setKeyword(sym.isKeyword);
+    return token.setType(symbol.type)
+                .setLength(symbol.length())
+                .setKeyword(symbol.isKeyword);
   }
 
   private boolean symbolMatches(Symbol sym, int remaining) {
@@ -796,7 +804,7 @@ public class Tokeniser {
   }
 
   private boolean charsAtEquals(int lookahead, int length, String value) {
-    return available(length) && source.substring(offset + lookahead, offset + lookahead + length).equals(value);
+    return available(length) && source.regionMatches(offset + lookahead, value, 0, length);
   }
 
   private boolean available(int avail) {

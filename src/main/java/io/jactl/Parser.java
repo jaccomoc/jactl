@@ -164,9 +164,9 @@ public class Parser {
 
   // = Stmt
 
-  public static final TokenType[]     simpleTypes  = new TokenType[]{BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL, STRING};
-  public static final List<TokenType> builtinTypes = RuntimeUtils.concat(simpleTypes, new TokenType[]{DEF, OBJECT, MAP, LIST});
-  public static final List<TokenType> typesAndVar  = RuntimeUtils.concat(builtinTypes, VAR);
+  public static final TokenType[] simpleTypes  = new TokenType[]{BOOLEAN, BYTE, INT, LONG, DOUBLE, DECIMAL, STRING};
+  public static final TokenType[] builtinTypes = Stream.concat(Arrays.stream(simpleTypes), Stream.of(DEF, OBJECT, MAP, LIST)).toArray(TokenType[]::new);
+  public static final TokenType[] typesAndVar  = Stream.concat(Arrays.stream(builtinTypes), Stream.of(VAR)).toArray(TokenType[]::new);
 
   /**
    * <pre>
@@ -583,7 +583,7 @@ public class Parser {
       if (type != OPTIONAL && !ignoreArrays) {
         while (matchAny(LEFT_SQUARE)) {
           type = arrayOf(type);
-          expectOrSkip(true, Utils.listOf(RIGHT_SQUARE), Utils.listOf(EOL,COMMA,RIGHT_PAREN,RIGHT_BRACE,RIGHT_SQUARE));
+          expectOrSkip(RIGHT_SQUARE, true, EOL, COMMA, RIGHT_PAREN, RIGHT_BRACE, RIGHT_SQUARE);
         }
       }
       mark.done(type, location);
@@ -689,7 +689,7 @@ public class Parser {
     List<Stmt.VarDecl> parameters = new ArrayList<>();
     while (!peek().is(EOF,endToken)) {
       if (!parameters.isEmpty()) {
-        if (expectOrSkip(true, Utils.listOf(COMMA), Utils.listOf(EOL, COMMA, endToken, LEFT_BRACE, RIGHT_BRACE)) != null) {
+        if (expectOrSkip(COMMA, true, EOL, COMMA, endToken, LEFT_BRACE, RIGHT_BRACE) != null) {
           matchAny(EOL);
         }
         else if (isLookahead()) {
@@ -906,7 +906,7 @@ public class Parser {
       List<Triple<Token,JactlType,Token>> identifierAndTypes = new ArrayList<>();
       while (!matchAnyIgnoreEOL(RIGHT_PAREN)) {
         // Expect a comma if not first one
-        if (!identifierAndTypes.isEmpty() && expectOrSkip(true, Utils.listOf(COMMA), Utils.listOf(COMMA, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE)) == null && !matchAny(COMMA)) {
+        if (!identifierAndTypes.isEmpty() && expectOrSkip(COMMA, true, COMMA, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE) == null && !matchAny(COMMA)) {
           break;
         }
         matchAny(EOL);
@@ -1548,9 +1548,9 @@ public class Parser {
 
     // Get list of operators at this level of precedence along with flag
     // indicating whether they are left-associative or not.
-    Pair<Boolean, List<TokenType>> operatorsPair     = Utils.operatorsByPrecedence.get(level);
-    boolean                        isLeftAssociative = operatorsPair.first;
-    List<TokenType> operators = operatorsPair.second;
+    Pair<Boolean, TokenType[]> operatorsPair     = Utils.operatorsByPrecedence.get(level);
+    boolean                    isLeftAssociative = operatorsPair.first;
+    TokenType[] operators = operatorsPair.second;
 
     // If this level of precedence is for our unary operators (includes type cast)
     if (operators == Utils.unaryOps) {
@@ -1910,7 +1910,7 @@ public class Parser {
       }
     }
     if (!peekIgnoreEolIs(LEFT_SQUARE)) {
-      expectOrSkip(false, Utils.listOf(LEFT_SQUARE), Utils.listOf(EOL));
+      expectOrSkip(LEFT_SQUARE, false, EOL);
       return Utils.createNewInstance(token, type, Collections.EMPTY_LIST);
     }
     boolean seenEmptyBrackets = false;
@@ -1928,7 +1928,7 @@ public class Parser {
           // Can't have dimensions after first []
           dimensions.add(marked(true, () -> expression(true), EOL, RIGHT_SQUARE));
         }
-        expectOrSkip(true, Utils.listOf(RIGHT_SQUARE), Utils.listOf(EOL));
+        expectOrSkip(RIGHT_SQUARE, true, EOL);
       }
     }
     return Utils.createNewInstance(token, type, dimensions);
@@ -1942,7 +1942,7 @@ public class Parser {
   private List<Expr> expressionList(TokenType endToken) {
     List<Expr> exprs = new ArrayList<>();
     while (!matchAnyIgnoreEOL(endToken)) {
-      if (!exprs.isEmpty() && expectOrSkip(true, Utils.listOf(endToken,COMMA), Utils.listOf(EOL, COMMA, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE)) == null && !matchAny(COMMA)) {
+      if (!exprs.isEmpty() && expectOrSkip(new TokenType[]{ endToken, COMMA }, true, EOL, COMMA, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE) == null && !matchAny(COMMA)) {
         break;
       }
       exprs.add(ifUnlessExpr(true));
@@ -3149,7 +3149,7 @@ public class Parser {
    * If there is an EOL as first token then we ignore unless operator is one that could
    * start an expression and we are not already in a nested expression of some sort.
    */
-  boolean peekOp(List<TokenType> types) {
+  boolean peekOp(TokenType[] types) {
     if (!peekIsEOL()) {
       return peek().is(types);
     }
@@ -3402,13 +3402,14 @@ public class Parser {
   }
 
   private Token peek() {
-    Marker mark = tokeniser.mark();
     Token token = tokeniser.peek();
     if (ignoreEol && token.is(EOL)) {
+      Token previous = tokeniser.previous();
+      Token current  = token;
       advance();
       token = tokeniser.peek();
+      tokeniser.rewind(previous, current);
     }
-    mark.rollback();
     return token;
   }
 
@@ -3478,13 +3479,6 @@ public class Parser {
     return false;
   }
 
-  private boolean matchAny(List<TokenType> types) {
-    if (ignoreEol) {
-      return matchAnyIgnoreEOL(types);
-    }
-    return matchAnyNoEOL(types);
-  }
-
   /**
    * Match any type after optionally consuming EOL. If not match then state is
    * unchanged (EOL is not consumed).
@@ -3494,7 +3488,13 @@ public class Parser {
   }
 
   private boolean matchAnyNoEOL(TokenType... types) {
-    return matchAnyNoEOL(Arrays.asList(types));
+    for (TokenType type : types) {
+      if (peekNoEOL().is(type)) {
+        advance();
+        return true;
+      }
+    }
+    return false;
   }
 
   private boolean matchAnyNoEOL(List<TokenType> types) {
@@ -3740,12 +3740,28 @@ public class Parser {
     return null;
   }
 
-  private Token expectOrSkip(boolean ignoreEol, List<TokenType> types, List<TokenType> skipTypes) {
+  private Token expectOrSkip(TokenType type, boolean ignoreEol, TokenType... skipTypes) {
+    if (ignoreEol ? matchAnyIgnoreEOL(type) : matchAnyNoEOL(type)) {
+      return previous();
+    }
+    try {
+      expectError(type);
+    }
+    catch (CompileError error) {
+      if (isLookahead()) {
+        throw error;
+      }
+      skipUntil(skipTypes);
+    }
+    return null;
+  }
+  
+  private Token expectOrSkip(TokenType[] types, boolean ignoreEol, TokenType... skipTypes) {
     if (ignoreEol ? matchAnyIgnoreEOL(types) : matchAnyNoEOL(types)) {
       return previous();
     }
     try {
-      expectError(types.toArray(new TokenType[0]));
+      expectError(types);
     }
     catch (CompileError error) {
       if (isLookahead()) {
@@ -3770,7 +3786,7 @@ public class Parser {
     return null;
   }
 
-  private void expectError(TokenType[] types) {
+  private void expectError(TokenType... types) {
     if (types.length > 1) {
       unexpected("Expecting one of " +
                  Arrays.stream(types)
@@ -4276,14 +4292,14 @@ public class Parser {
     int i = 0;
     int count = Utils.operatorsByPrecedence.size();
     String unaryNext = null;
-    for (Pair<Boolean,List<TokenType>> pair: Utils.operatorsByPrecedence) {
+    for (Pair<Boolean,TokenType[]> pair: Utils.operatorsByPrecedence) {
       String current   = "expr";
       if (i > 0) {
         current += i;
       }
       String next      = i+1 == count ? "primary" : "expr" + (i + 1);
-      String operators = pair.second.stream().map(Enum::name).collect(Collectors.joining(" | "));
-      if (pair.second.size() > 1) {
+      String operators = Arrays.stream(pair.second).map(Enum::name).collect(Collectors.joining(" | "));
+      if (pair.second.length > 1) {
         operators = "(" + operators + ")";
       }
       System.out.print("  *# ");
@@ -4292,7 +4308,7 @@ public class Parser {
         unaryNext = next;
       }
       else {
-        List<TokenType> ops = new ArrayList<>(pair.second);
+        List<TokenType> ops = Arrays.asList(pair.second);
         if (ops.remove(QUESTION)) {
           System.out.println(current + " ::= " + next + "a ( QUESTION " + next + "a COLON " + next + "a ) ?");
           current = next + "a";

@@ -17,7 +17,9 @@
 
 package io.jactl;
 
+import io.jactl.runtime.Continuation;
 import io.jactl.runtime.FunctionDescriptor;
+import io.jactl.runtime.JactlObject;
 import io.jactl.runtime.RuntimeUtils;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
@@ -35,6 +37,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
@@ -63,6 +66,7 @@ public class Utils {
   public static final String JACTL_INIT          = JACTL_PREFIX + "init";
   public static final String JACTL_JAVA_INIT     = "<init>";    // for invoking constructors of host classes
   public static final String JACTL_INIT_WRAPPER  = Utils.wrapperName(JACTL_PREFIX + "init");
+  public static final Method JACTL_INIT_WRAPPER_METHOD = getMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class, String.class, int.class, Object[].class);
   public static final String JACTL_INIT_NOASYNC  = JACTL_PREFIX + "initNoAsync";
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
 
@@ -106,46 +110,49 @@ public class Utils {
   public static final char   REGEX_CAPTURE_NUMS    = 'n';
 
   public static final Object[] EMPTY_OBJ_ARR = new Object[0];
+  public static final Method MAP_GET_METHOD          = getMethod(Map.class, "get", Object.class);
+  public static final Method MAP_CONTAINS_KEY_METHOD = getMethod(Map.class, "containsKey", Object.class);
+  public static final Method MAP_REMOVE_METHOD       = getMethod(Map.class, "remove", Object.class);
 
   static TokenType[] fieldAccessOp = new TokenType[] {DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
   // NOTE: type cast also has same precedence as unaryOps but has no specific operator
-  static List<TokenType> unaryOps = listOf(QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */);
+  static TokenType[] unaryOps = new TokenType[] { QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS, MINUS, PLUS /*, (type) */ };
 
   // Operators from least precedence to highest precedence. Each entry in list is
   // a pair of a boolean and a list of the operators at that level of precedence.
   // The boolean indicates whether the operators are left-associative (true) or
   // right-associative (false).
-  static List<Pair<Boolean,List<TokenType>>> operatorsByPrecedence =
+  static List<Pair<Boolean,TokenType[]>> operatorsByPrecedence =
     listOf(
       // These are handled separately in separate productions to parseExpression:
-      //      new Pair(true, Utils.listOf(OR)),
-      //      new Pair(true, Utils.listOf(AND)),
-      //      new Pair(true, Utils.listOf(NOT)),
+      //      Pair.of(true, Utils.listOf(OR)),
+      //      Pair.of(true, Utils.listOf(AND)),
+      //      Pair.of(true, Utils.listOf(NOT)),
 
-      new Pair(false, listOf(EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
+      Pair.of(false, new TokenType[] {EQUAL, QUESTION_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL, PLUS_EQUAL, MINUS_EQUAL,
       /* STAR_STAR_EQUAL, */ DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL,
-                             PIPE_EQUAL, ACCENT_EQUAL)),
-      new Pair(true, listOf(QUESTION, QUESTION_COLON)),
-      new Pair(true, listOf(PIPE_PIPE)),
-      new Pair(true, listOf(AMPERSAND_AMPERSAND)),
-      new Pair(true, listOf(PIPE)),
-      new Pair(true, listOf(ACCENT)),
-      new Pair(true, listOf(AMPERSAND)),
-      new Pair(true, listOf(EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL)),
-      new Pair(true, listOf(LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS)),
-      new Pair(true, listOf(DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN)),
-      new Pair(true, listOf(MINUS, PLUS)),
-      new Pair(true, listOf(STAR, SLASH, PERCENT, PERCENT_PERCENT)),
+                             PIPE_EQUAL, ACCENT_EQUAL}),
+      Pair.of(true, new TokenType[] {QUESTION, QUESTION_COLON}),
+      Pair.of(true, new TokenType[] {PIPE_PIPE}),
+      Pair.of(true, new TokenType[] {AMPERSAND_AMPERSAND}),
+      Pair.of(true, new TokenType[] {PIPE}),
+      Pair.of(true, new TokenType[] {ACCENT}),
+      Pair.of(true, new TokenType[] {AMPERSAND}),
+      Pair.of(true, new TokenType[] {EQUAL_EQUAL, BANG_EQUAL, COMPARE, EQUAL_GRAVE, BANG_GRAVE, TRIPLE_EQUAL, BANG_EQUAL_EQUAL}),
+      Pair.of(true, new TokenType[] {LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, INSTANCE_OF, BANG_INSTANCE_OF, IN, BANG_IN, AS}),
+      Pair.of(true, new TokenType[] {DOUBLE_LESS_THAN, DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN}),
+      Pair.of(true, new TokenType[] {MINUS, PLUS}),
+      Pair.of(true, new TokenType[] {STAR, SLASH, PERCENT, PERCENT_PERCENT}),
       //      Utils.listOf(STAR_STAR)
-      new Pair(true, unaryOps),
-      new Pair(true, RuntimeUtils.concat(fieldAccessOp, LEFT_PAREN, LEFT_BRACE))
+      Pair.of(true, unaryOps),
+      Pair.of(true, Stream.concat(Arrays.stream(fieldAccessOp), Stream.of(LEFT_PAREN, LEFT_BRACE)).toArray(TokenType[]::new))
     );
 
   private static Set<TokenType> operators = new HashSet<TokenType>() {{
     addAll(Arrays.asList(fieldAccessOp));
-    addAll(unaryOps);
-    addAll(operatorsByPrecedence.stream().flatMap(pair -> pair.second.stream()).collect(Collectors.toList()));
+    addAll(Arrays.asList(unaryOps));
+    addAll(operatorsByPrecedence.stream().flatMap(pair -> Arrays.stream(pair.second)).collect(Collectors.toList()));
   }};
 
   public static boolean isOperator(TokenType type) {
@@ -1170,5 +1177,13 @@ public class Utils {
       return map;
     }
     throw new RuntimeException("Unexpected type " + expr.getClass().getName());
+  }
+  
+  public static Method getMethod(Class<?> clss, String methodName, Class<?>... parameterTypes) {
+    try {
+      return clss.getMethod(methodName, parameterTypes);
+    } catch (NoSuchMethodException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

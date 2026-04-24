@@ -29,6 +29,7 @@
 package io.jactl;
 
 import java.util.*;
+import java.lang.reflect.Method;
 
 import io.jactl.JactlType;
 import io.jactl.Stmt;
@@ -635,9 +636,7 @@ class Expr extends JactlUserDataHolder {
    */
   class InvokeUtility extends Expr {
     Token       token;
-    Class       clss;
-    String      methodName;
-    List<Class> paramTypes;
+    Method      method;
     List<Expr>  args;
   }
 

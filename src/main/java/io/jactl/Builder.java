@@ -26,4 +26,5 @@ public interface Builder {
   void startRegex();
   void skipCommentsAndWhiteSpace();
   void done();
-}
+  default void rewind(Token previous, Token current) {}
+  }
