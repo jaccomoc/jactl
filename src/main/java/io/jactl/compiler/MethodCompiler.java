@@ -371,7 +371,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitLocalVariable("this", "L" + classCompiler.internalName + ";", null, globalsLabel, end, 0);
     }
 
-    check(stack.isEmpty(), "non-empty stack at end of method ", methodFunDecl.functionDescriptor.implementingMethod, ". Type stack = ", stack);
+    assert stack.isEmpty() : "non-empty stack at end of method " + methodFunDecl.functionDescriptor.implementingMethod + ". Type stack = " + stack;
   }
 
   private boolean globalAliases() {
@@ -3131,7 +3131,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     falseStmts.run();
     if (verifyStacks) {
       // Make sure that both branches leave stack the same
-      check(stack.stackTypesEqual(trueState), "Stack for true/false branches differ:\n true=", trueState, "\n false=", stack);
+      assert stack.stackTypesEqual(trueState) : "Stack for true/false branches differ:\n true=" + trueState + "\n false=" + stack;
       // If there are differences about which stack elements are really on the stack and which ones are in locals
       // then make the false branch match the true branch
       if (!stack.stacksEqual(trueState)) {
@@ -3139,7 +3139,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
               "Stack for true/false branches differ by more than one entry:\n true=", trueState, "\n false=", stack);
       }
       stack.makeSameAs(trueState, 1);
-      check(stack.localsEqual(trueState), "locals differ between true and false branches:\n true  = ", trueState, "\n false = ", stack);
+      assert stack.localsEqual(trueState) : "locals differ between true and false branches:\n true  = " + trueState + "\n false = " + stack;
     }
     mv.visitLabel(end);                   // :end
   }

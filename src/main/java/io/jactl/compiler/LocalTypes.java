@@ -44,7 +44,7 @@ public class LocalTypes {
   private int minimumSlot = 0;
   private int maxIndex    = -1;
 
-  private Deque<StackEntry> stack  = new ArrayDeque<>();
+  private ArrayList<StackEntry> stack  = new ArrayList<>();
 
   private final MethodVisitor mv;
   private final boolean       isStatic;
@@ -77,23 +77,24 @@ public class LocalTypes {
   }
 
   public StackEntry peek() {
-    return stack.peek();
+    return stack.get(stack.size() - 1);
   }
-
+  
+  public StackEntry peek(int index) {
+    return stack.get(stack.size() - index - 1);
+  }
+  
   // Get type of second element on stack
   public JactlType peekType2() {
-    StackEntry top = stack.pop();
-    JactlType result = stack.peek().type;
-    stack.push(top);
-    return result;
+    return stack.get(stack.size() - 2).type;
   }
 
   public void push(JactlType type) {
-    stack.push(new StackEntry(type));
+    stack.add(new StackEntry(type));
   }
 
   public JactlType pop() {
-    StackEntry entry = stack.pop();
+    StackEntry entry = stack.remove(stack.size() - 1);
     freeSlot(entry.slot);
     return entry.type;
   }
@@ -105,24 +106,24 @@ public class LocalTypes {
   }
 
   public void setStackType(JactlType type) {
-    stack.peek().type = type;
+    stack.get(stack.size() - 1).type = type;
   }
 
   public void dup() {
-    StackEntry entry = stack.peek();
+    StackEntry entry = stack.get(stack.size() - 1);
     if (entry.slot >= 0) {
       locals.get(entry.slot).refCount++;
     }
     StackEntry dup = new StackEntry(entry);
-    stack.push(dup);
+    stack.add(dup);
   }
 
   /**
    * Swap types on type stack and also swap values on JVM stack
    */
   public void swap() {
-    StackEntry entry1 = stack.pop();
-    StackEntry entry2 = stack.pop();
+    StackEntry entry1 = stack.get(stack.size() - 1);
+    StackEntry entry2 = stack.get(stack.size() - 2);
     if (entry1.slot == -1 && entry2.slot == -1) {
       if (slotsNeeded(entry1.type) == 1 && slotsNeeded(entry2.type) == 1) {
         mv.visitInsn(SWAP);
@@ -137,14 +138,14 @@ public class LocalTypes {
         freeSlot(temp2);
         freeSlot(temp1);
       }
-      push(entry1.type);
-      push(entry2.type);
+      stack.set(stack.size() - 2, new StackEntry(entry1.type));
+      stack.set(stack.size() - 1, new StackEntry(entry2.type));
     }
     else {
       // We have at least one "stack" value in a local var slot so we don't need to manipulate the real
       // stack - we just need to swap the entries on the type stack
-      stack.push(entry1);
-      stack.push(entry2);
+      stack.set(stack.size() - 2, entry1);
+      stack.set(stack.size() - 1, entry2);
     }
   }
 
@@ -154,7 +155,7 @@ public class LocalTypes {
    */
   public void dupVal() {
     dup();
-    int slot = stack.peek().slot;
+    int slot = stack.get(stack.size() - 1).slot;
     if (slot == -1) {
       _dupVal();
     }
@@ -168,8 +169,8 @@ public class LocalTypes {
    * </pre>
    */
   public void dupValX1() {
-    StackEntry x = stack.pop();
-    StackEntry y = stack.pop();
+    StackEntry x = stack.get(stack.size() - 1);
+    StackEntry y = stack.get(stack.size() - 2);
     if (x.isStack() && y.isStack()) {
       int xslots = slotsNeeded(x.type);
       int yslots = slotsNeeded(y.type);
@@ -200,9 +201,7 @@ public class LocalTypes {
       // x local or both local
       locals.get(x.slot).refCount++;
     }
-    stack.push(x);
-    stack.push(y);
-    stack.push(new StackEntry(x));
+    stack.add(stack.size() - 2, new StackEntry(x));
   }
 
   /**
@@ -213,18 +212,18 @@ public class LocalTypes {
   }
 
   /**
-   * Duplicate top two elemenets on the stack:
+   * Duplicate top two elemeents on the stack:
    * <pre>
-   *   ... x, y -&gt;
-   *   ... x, y, x, y
+   *   ... y, x -&gt;
+   *   ... y, x, y, x
    * </pre>
    * Note that we need to take care whether any of the types are long or double
    * since the JVM operation dup2 only duplicates the top two slots of the stack
    * rather than the top two values.
    */
   public void dupVal2() {
-    StackEntry x = stack.pop();
-    StackEntry y = stack.pop();
+    StackEntry x = stack.get(stack.size() - 1);
+    StackEntry y = stack.get(stack.size() - 2);
 
     if (x.isStack() && y.isStack()) {
       JactlType type1 = x.type;
@@ -246,27 +245,22 @@ public class LocalTypes {
       }
       push(type2);
       push(type1);
-      push(type2);
-      push(type1);
     }
     else {
       // We have at least one value in local vars
       if (y.isStack()) {
-        push(y.type);
+        // x is in local var, not on stack
         _dupVal();
-        stack.push(x);
         locals.get(x.slot).refCount++;
         push(y.type);
-        stack.push(new StackEntry(x));
+        stack.add(new StackEntry(x));
       }
       else {
-        // x is on stack
-        check(x.isStack(), () -> "x should be on stack (not in locals)");
-        stack.push(y);
+        // x is on stack, y is local
+        assert x.isStack() : "x should be on stack (not in locals)";
         locals.get(y.slot).refCount++;
-        push(x.type);
         _dupVal();
-        stack.push(new StackEntry(y));
+        stack.add(new StackEntry(y));
         push(x.type);
       }
     }
@@ -276,10 +270,11 @@ public class LocalTypes {
    * Pop value off JVM stack and corresponding type off type stack
    */
   public void popVal() {
-    if (stack.peek().isStack()) {
-      _popVal();
+    StackEntry entry = stack.remove(stack.size() - 1);
+    freeSlot(entry.slot);
+    if (entry.isStack()) {
+      _popVal(entry.type);
     }
-    pop();
   }
 
   /**
@@ -298,11 +293,10 @@ public class LocalTypes {
   }
 
   public void _popVal(int n) {
+    assert stack.size() >= n : "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack;
     // Pop real values off stack but leave type stack unchanged
-    Iterator<StackEntry> iter = stack.iterator();
-    for (int i = 0; i < n; i++) {
-      check(iter.hasNext(), () -> "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack);
-      StackEntry entry = iter.next();
+    for (int i = stack.size() - 1; i >= 0; i--) {
+      StackEntry entry = stack.get(i);
       if (entry.slot != -1) {
         continue;  // Nothing to do since "stack" location is a local var
       }
@@ -317,13 +311,11 @@ public class LocalTypes {
    * @param count  how many entries to ensure are on the stack
    */
   public void expect(int count) {
-    check(stack.size() >= count, () -> "stack size is " + stack.size() + " but expecting at least " + count + Utils.plural(" entry", count));
-
-    Iterator<StackEntry> iter             = stack.iterator();
-    boolean              seenEntryOnStack = false;
+    assert stack.size() >= count : "stack size is " + stack.size() + " but expecting at least " + count + Utils.plural(" entry", count);
+    boolean seenEntryOnStack = false;
     boolean needToStoreInLocals = false;
-    for (int i = 0; i < count; i++) {
-      StackEntry entry = iter.next();
+    for (int i = stack.size() - 1; i >= stack.size() - count; i--) {
+      StackEntry entry = stack.get(i);
       // Need to store stack values in locals if we have a local value in the middle of our stack
       if (entry.isLocal() && seenEntryOnStack) {
         needToStoreInLocals = true;
@@ -346,17 +338,35 @@ public class LocalTypes {
 
   public void convertStackToLocals(int n) {
     // If entry is on the real stack then store in a local
-    stack.stream().limit(n).forEachOrdered(StackEntry::convertToLocal);
+    for (int i = stack.size() - 1; i >= stack.size() - n; i--) {
+      stack.get(i).convertToLocal();
+    }
+  }
+
+  private void convertLocalsToStack(int n) {
+    // Push them in reverse order so most recent is top of stack
+    for (int i = stack.size() - n; i < stack.size(); i++) {
+      stack.get(i).convertToStack();
+    }
   }
 
   public void convertStackToLocalsExcept(int n) {
     // First check if there are any to convert
-    if (stack.stream().skip(n).anyMatch(StackEntry::isStack)) {
+    boolean seenEntryOnStack = false;
+    for (int i = stack.size() - 1 - n; i >= 0; i--) {
+      if (stack.get(i).isStack()) {
+        seenEntryOnStack = true;
+        break;
+      }
+    }
+    if (seenEntryOnStack) {
       // Need to save first n elements and restore afterwards
       convertStackToLocals(n);
 
       // If entry is on the real stack then store in a local
-      stack.stream().skip(n).forEachOrdered(StackEntry::convertToLocal);
+      for (int i = stack.size() - 1 - n; i >= 0; i--) {
+        stack.get(i).convertToLocal();
+      }
 
       // Restore our first n
       convertLocalsToStack(n);
@@ -373,12 +383,12 @@ public class LocalTypes {
    * @param n      how many to convert (only 1 is currently supported)
    */
   public void makeSameAs(LocalTypes other, int n) {
-    check(n <= 1, () -> "no support for converting more than 1 element at the moment");
+    assert n <= 1 : "no support for converting more than 1 element at the moment";
     maxIndex = Math.max(maxIndex, other.maxIndex);
-    if (stack.size() == 0 && other.stack.size() == 0) { return; }
+    if (stack.isEmpty() && other.stack.isEmpty()) { return; }
     if (peek().isStack() && other.peek().isStack())   { return; }
     if (peek().isLocal() && other.peek().isLocal()) {
-      check(peek().slot == other.peek().slot, () -> "Slots are different between two stacks:" + "\n this=" + this + "\n other=" + other);
+      assert peek().slot == other.peek().slot : "Slots are different between two stacks:" + "\n this=" + this + "\n other=" + other;
       return;
     }
     if (other.peek().isStack()) {
@@ -388,7 +398,7 @@ public class LocalTypes {
       int slot = other.peek().slot;
       // Make sure slot is available
       if (slotIsFree(slot)) {
-        stack.peek().convertToLocal(slot);
+        stack.get(stack.size() - 1).convertToLocal(slot);
       }
       else {
         throw new IllegalStateException("Internal error: could not allocate slot " + slot + "\n this=" + this + "\n other=" + other);
@@ -396,26 +406,27 @@ public class LocalTypes {
     }
   }
 
-  private void convertLocalsToStack(int n) {
-    // Restore in reverse order
-    stack.stream()
-         .limit(n)
-         .collect(Collectors.toCollection(ArrayDeque::new))
-         .descendingIterator()
-         .forEachRemaining(StackEntry::convertToStack);
-  }
-
   public void saveLocals(int continuationVar, int globalsVar, int longArr, int objArr, JactlContext jactlContext) {
-    Function<Integer,Boolean>    ignoreEntry = i -> i == continuationVar || i == globalsVar || i == longArr || i == objArr;
     int  startSlot = isStatic ? 0 : 1;
-    List<LocalEntry> entries = IntStream.range(startSlot, locals.size())
-                                        .filter(i -> !ignoreEntry.apply(i))
-                                        .mapToObj(i -> locals.get(i))
-                                        .filter(entry -> entry != null)
-                                        .filter(entry -> !entry.isGlobalVar)
-                                        .collect(Collectors.toList());
-    boolean savePrimitives = entries.stream().anyMatch(entry -> entry.type.isPrimitive());
-    boolean saveObjects    = entries.stream().anyMatch(entry -> !entry.type.isPrimitive());
+    List<LocalEntry> entries = new ArrayList<>(locals.size() - startSlot);
+    boolean savePrimitives = false;
+    boolean saveObjects = false;
+    for (int i = startSlot; i < locals.size(); i++) {
+      if (i == continuationVar || i == globalsVar || i == longArr || i == objArr) {
+        continue;
+      }
+      LocalEntry entry = locals.get(i);
+      if (entry != null && !entry.isGlobalVar) {
+        entries.add(entry);
+        if (entry.type.isPrimitive()) {
+          savePrimitives = true;
+        }
+        else {
+          saveObjects = true;
+        }
+        i += slotsNeeded(entry.type) - 1;
+      }
+    }
 
     if (!savePrimitives) {
       mv.visitInsn(ACONST_NULL);
@@ -443,26 +454,44 @@ public class LocalTypes {
       _storeLocal(objArr);
     }
 
-    for (int i = startSlot; i < locals.size(); ) {
-      LocalEntry entry = locals.get(i);
-      JactlType  type  = entry == null ? null : entry.type;
-      if (entry != null && !ignoreEntry.apply(i) && !entry.isGlobalVar) {
-        _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
-        Utils.loadConst(mv, i, jactlContext);
-        _loadLocal(i);
-        if (type.isPrimitive()) {
-          if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
-          if (type.is(DOUBLE)) {
-            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
-                               "doubleToRawLongBits",
-                               Type.getMethodDescriptor(Type.getType(long.class),
-                                                        Type.getType(double.class)),
-                               false); }
-        }
-        mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
+    for (int i = 0; i < entries.size(); i++) {
+      LocalEntry entry = entries.get(i);
+      JactlType  type  = entry.type;
+      _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
+      Utils.loadConst(mv, entry.slot, jactlContext);
+      _loadLocal(entry.slot);
+      if (type.isPrimitive()) {
+        if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
+        if (type.is(DOUBLE)) {
+          mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
+                             "doubleToRawLongBits",
+                             Type.getMethodDescriptor(Type.getType(long.class),
+                                                      Type.getType(double.class)),
+                             false); }
       }
-      i += type == null ? 1 : slotsNeeded(type);
+      mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
     }
+
+//    for (int i = startSlot; i < locals.size(); ) {
+//      LocalEntry entry = locals.get(i);
+//      JactlType  type  = entry == null ? null : entry.type;
+//      if (entry != null && !ignoreEntry.apply(i) && !entry.isGlobalVar) {
+//        _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
+//        Utils.loadConst(mv, i, jactlContext);
+//        _loadLocal(i);
+//        if (type.isPrimitive()) {
+//          if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
+//          if (type.is(DOUBLE)) {
+//            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
+//                               "doubleToRawLongBits",
+//                               Type.getMethodDescriptor(Type.getType(long.class),
+//                                                        Type.getType(double.class)),
+//                               false); }
+//        }
+//        mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
+//      }
+//      i += type == null ? 1 : slotsNeeded(type);
+//    }
   }
 
   public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr, JactlContext context) {
@@ -498,11 +527,11 @@ public class LocalTypes {
    * @return the slot allocated (or reused) for the temp value
    */
   public int saveInTemp() {
-    StackEntry entry = stack.peek();
+    StackEntry entry = stack.get(stack.size() - 1);
     if (entry.slot != -1) {
       // No need to inc ref count since we would dec when popping stack and then inc again here
       // so net result is no change
-      stack.pop();
+      stack.remove(stack.size() - 1);
       return entry.slot;
     }
     int temp = allocateSlot(entry.type);
@@ -565,7 +594,7 @@ public class LocalTypes {
   }
 
   public void loadLocal(int slot) {
-    check(slot != -1, () -> "trying to load from unitilialised variable (slot is -1)");
+    assert slot != -1 : "trying to load from unitilialised variable (slot is -1)";
     _loadLocal(slot);
     JactlType type = localsType(slot);
     push(type);
@@ -606,9 +635,9 @@ public class LocalTypes {
   }
 
   private JactlType localsType(int slot) {
-    check(slot >= 0, () -> "slot is " + slot + " but should be >= 0");
+    assert slot >= 0 : "slot is " + slot + " but should be >= 0";
     LocalEntry entry = locals.get(slot);
-    check(entry != null, () -> "trying to get type of null entry");
+    assert entry != null : "trying to get type of null entry";
     return entry.type;
   }
 
@@ -658,22 +687,30 @@ public class LocalTypes {
 
   ////////////////////////////////////////////////////
 
-  private Deque<StackEntry> copyStack(LocalTypes other) {
-    ArrayDeque<StackEntry> copy = stack.stream().map(other::copy).collect(Collectors.toCollection(ArrayDeque::new));
+  private ArrayList<StackEntry> copyStack(LocalTypes other) {
+    ArrayList<StackEntry> copy = new ArrayList<>(stack.size());
+    for (int i = 0; i < stack.size(); i++) {
+      StackEntry stackEntry = stack.get(i);
+      copy.add(other.copy(stackEntry));
+    }
     return copy;
   }
 
   private List<LocalEntry> copyLocals() {
-    List<LocalEntry> copy = locals.stream().map(local -> local == null ? null : new LocalEntry(local)).collect(Collectors.toList());
+    List<LocalEntry> copy =  new ArrayList<>(locals.size());
+    for (int i = 0; i < locals.size(); i++) {
+      LocalEntry localEntry = locals.get(i);
+      copy.add(localEntry == null ? null : new LocalEntry(localEntry));
+    }
     return copy;
   }
 
   public boolean stackTypesEqual(LocalTypes other) {
-    Collection<StackEntry> stack2 = other.stack;
+    List<StackEntry> stack2 = other.stack;
     if (stack.size() != stack2.size()) { return false; }
-    for (Iterator<StackEntry> iter1 = stack.iterator(), iter2 = stack2.iterator(); iter1.hasNext() && iter2.hasNext(); ) {
-      JactlType type1 = iter1.next().type;
-      JactlType type2 = iter2.next().type;
+    for (int i = 0; i < stack.size(); i++) {
+      JactlType type1 = stack.get(i).type;
+      JactlType type2 = stack2.get(i).type;
       if (!type1.isCastableTo(type2) && !type2.isCastableTo(type1)) {
         return false;
       }
@@ -686,22 +723,11 @@ public class LocalTypes {
   }
 
   public boolean localsEqual(LocalTypes other) {
-    return stacksAreMostlyEqual(0, locals, other.locals);
-  }
-
-  public boolean stacksAreMostlyEqual(int skip, LocalTypes other) {
-    return stacksAreMostlyEqual(skip, stack, other.stack);
-  }
-
-  private static boolean stacksAreMostlyEqual(int skip, Collection stack1, Collection stack2) {
-    Iterator iter1 = stack1.iterator();
-    Iterator iter2 = stack2.iterator();
-    while (iter1.hasNext() && iter2.hasNext()) {
-      Object next1 = iter1.next();
-      Object next2 = iter2.next();
-      if (skip-- > 0) {
-        continue;
-      }
+    int i1 = 0;
+    int i2 = 0;
+    for (; i1 < locals.size() && i2 < other.locals.size(); i1++, i2++) {
+      Object next1 = locals.get(i1);
+      Object next2 = other.locals.get(i2);
       if (next1 == next2) {
         continue;
       }
@@ -713,20 +739,43 @@ public class LocalTypes {
       }
     }
     // Can have different sizes if all remaining values are null
-    Iterator iter = iter1.hasNext() ? iter1 : iter2;
-    while (iter.hasNext()) {
-      if (iter.next() != null) {
+    List stack = i1 < locals.size() ? locals : other.locals;
+    for (int idx = i1 < locals.size() ? i1 : i2; idx < stack.size(); idx++) {
+      if (stack.get(idx) != null) {
         return false;
       }
     }
     return true;
   }
 
+  public boolean stacksAreMostlyEqual(int skip, LocalTypes other) {
+    return stacksAreMostlyEqual(skip, stack, other.stack);
+  }
 
-  private static void check(boolean condition, Supplier<String> msg) {
-    if (!condition) {
-      throw new IllegalStateException("Internal error: " + msg.get());
+  private static boolean stacksAreMostlyEqual(int skip, List stack1, List stack2) {
+    int i1 = stack1.size() - skip - 1;
+    int i2 = stack2.size() - skip - 1;
+    for (; i1 >= 0 && i2 >= 0; i1--, i2--) {
+      Object next1 = stack1.get(i1);
+      Object next2 = stack2.get(i2);
+      if (next1 == next2) {
+        continue;
+      }
+      if (next1 == null || next2 == null) {
+        return false;
+      }
+      if (!next1.equals(next2)) {
+        return false;
+      }
     }
+    // Can have different sizes if all remaining values are null
+    List stack = i1 >= 0 ? stack1 : stack2;
+    for (int idx = i1 >= 0 ? i1 : i2; idx >= 0; idx--) {
+      if (stack.get(idx) != null) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /////////////////////////////////////////////////////
