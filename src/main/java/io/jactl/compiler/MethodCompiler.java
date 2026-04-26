@@ -920,7 +920,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean   isStatic         = isField ? parentType.getClassDescriptor().getStaticField(fieldName) != null : false;
     boolean   afterResultUsed  = expr.isResultUsed && !expr.isPreIncOrDec;
     boolean   beforeResultUsed = expr.isResultUsed && expr.isPreIncOrDec;
-    check(!isStatic, "cannot assign to static field");
+    assert !isStatic : "cannot assign to static field";
     boolean  arrayElem         = !isField && (parentType.is(ARRAY) && expr.accessType.is(LEFT_SQUARE, QUESTION_SQUARE));
 
     boolean simpleIndex;
@@ -1201,7 +1201,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(!insideTryCatchNullError());
       loadLocation(expr.operator);
       Method method = methodNames.get(expr.operator.getType());
-      check(method != null, "unsupported operator type ", expr.operator.getChars());
+      assert method != null : "unsupported operator type " + expr.operator.getChars();
       invokeMethod(method);
       convertTo(expr.type, expr,true, expr.operator);  // Convert to expected type
       return null;
@@ -1516,7 +1516,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if ((expr.left.type.is(BOOLEAN) || expr.right.type.is(BOOLEAN)) && !expr.left.type.equals(expr.right.type)) {
         // If one type is boolean and the other isn't then we must be doing == or != or === or !== comparison
         // since Resolver would have already given compile error if other type of comparison
-        check(expr.operator.is(EQUAL_EQUAL, BANG_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL), "Unexpected operator ", expr.operator, " comparing boolean and non-boolean");
+        assert expr.operator.is(EQUAL_EQUAL, BANG_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL) : "Unexpected operator " + expr.operator + " comparing boolean and non-boolean";
         // Since types are not compatible we already know that they are not equal so pop values and
         // load result
         compile(expr.left);
@@ -1792,7 +1792,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             // Look for builtin method
             method = classCompiler.context.getFunctions().lookupMethod(leftType.is(CLASS) ? leftType : clss.getInstanceType(), name);
           }
-          check(method != null, "could not find method or field called ", name, " for ", leftType);
+          assert method != null : "could not find method or field called " + name + " for " + leftType;
           // We want the handle to the wrapper method.
           loadWrapperHandle(method, expr);
         }
@@ -2881,7 +2881,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (isStatic) {
         fieldType = parentClass.getStaticField(fieldName);
       }
-      check(fieldType != null, "could not find field '", fieldName, "' for ", JactlType.createClass(parentClass));
+      assert fieldType != null : "could not find field '" + fieldName + "' for " + JactlType.createClass(parentClass);
       JactlType finalFieldType = fieldType;
       if (createIfMissing) {
         dupVal();    // Save parent in case field is null and we need to store a value
@@ -3075,7 +3075,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (fieldType == null) {
       fieldType = type.getClassDescriptor().getStaticField(fieldName);
     }
-    check(fieldType != null, "couldn't find field '", fieldName, "' in class ", type);
+    assert fieldType != null : "couldn't find field '" + fieldName + "' in class " + type;
     return fieldType;
   }
 
@@ -3134,10 +3134,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       assert stack.stackTypesEqual(trueState) : "Stack for true/false branches differ:\n true=" + trueState + "\n false=" + stack;
       // If there are differences about which stack elements are really on the stack and which ones are in locals
       // then make the false branch match the true branch
-      if (!stack.stacksEqual(trueState)) {
-        check(stack.stacksAreMostlyEqual(1, trueState) && (trueState.peek().isStack() || stack.peek().isStack()),
-              "Stack for true/false branches differ by more than one entry:\n true=", trueState, "\n false=", stack);
-      }
+      assert stack.stacksEqual(trueState) || stack.stacksAreMostlyEqual(1, trueState) && (trueState.peek().isStack() || stack.peek().isStack()) :
+              "Stack for true/false branches differ by more than one entry:\n true=" + trueState + "\n false=" + stack;
       stack.makeSameAs(trueState, 1);
       assert stack.localsEqual(trueState) : "locals differ between true and false branches:\n true  = " + trueState + "\n false = " + stack;
     }
@@ -4546,7 +4544,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Validate that the two stacks are the same
     if (checkStacksMatch) {
-      check(stack.stacksEqual(postTryState), "Stack after try does not match stack after catch:\n  tryStack=", postTryState, "\n  catchStack=", stack);
+      assert stack.stacksEqual(postTryState) : "Stack after try does not match stack after catch:\n  tryStack=" + postTryState + "\n  catchStack=" + stack;
       stack.makeSameAs(postTryState, 0);   // Make sure maxIndex is tracked properly
     }
     else {
@@ -4596,7 +4594,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void invokeAsync(JactlType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
-    check(longArr != -1 && objArr != -1, "Async code in method that is not marked as async: " + classCompiler.className + "." + methodName);
+    assert longArr != -1 && objArr != -1 : "Async code in method that is not marked as async: " + classCompiler.className + "." + methodName;
 
     // We need to preserve our stack and locals so that when we are resumed we can restore these
     // values as they were when we were suspended.
@@ -5407,7 +5405,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     box();                        // Field name/index passed as Object
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
-    check(defaultType.is(MAP, LIST), "Type must be MAP/LIST when createIfMissing set");
+    assert defaultType.is(MAP, LIST) : "Type must be MAP/LIST when createIfMissing set";
     loadConst(defaultType.is(MAP));
     loadConst(!insideTryCatchNullError());
     loadLocation(location);
@@ -5856,18 +5854,6 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
   void _loadLocal(int slot) {
     stack._loadLocal(slot);
   }
-
-  ////////////////////////////////////////////////////////
-
-  // = Misc
-
-  private static void check(boolean condition, Object... msg) {
-    if (!condition) {
-      throw new IllegalStateException("Internal error: " + Arrays.asList(msg).stream().map(m -> m.toString()).collect(Collectors.joining(" ")));
-    }
-  }
-
-  ///////////////////////////////////
 
   void loadLocation(SourceLocation location) {
     _loadLocation(location);
