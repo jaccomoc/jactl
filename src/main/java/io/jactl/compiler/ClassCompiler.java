@@ -77,11 +77,11 @@ public class ClassCompiler {
     cv = cw.getClassVisitor();
     internalBaseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : null;
     if (classDecl.isScriptClass()) {
-      internalBaseName = Type.getInternalName(JactlScriptObject.class);
+      internalBaseName = JACTL_SCRIPT_OBJECT_INTERNAL;
     }
-    String superName = internalBaseName == null ? Type.getInternalName(Object.class) : internalBaseName;
+    String superName = internalBaseName == null ? OBJECT_INTERNAL : internalBaseName;
 
-    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, superName, new String[] {Type.getInternalName(JactlObject.class) });
+    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, superName, new String[] {JactlType.JACTL_OBJECT_INTERNAL });
     cv.visitSource(sourceName, null);
 
     classInit = cv.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
@@ -95,20 +95,20 @@ public class ClassCompiler {
 
     FieldVisitor fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
+    classInit.visitTypeInsn(NEW, JactlType.JACTL_MAP_INTERNAL);
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, JactlType.JACTL_MAP_INTERNAL, "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, "Ljava/util/Map;");
     fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, MAP.descriptor(), null, null);
     fieldVisitor.visitEnd();
-    classInit.visitTypeInsn(NEW, Type.getInternalName(Utils.JACTL_MAP_TYPE));
+    classInit.visitTypeInsn(NEW, JactlType.JACTL_MAP_INTERNAL);
     classInit.visitInsn(DUP);
-    classInit.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Utils.JACTL_MAP_TYPE), "<init>", "()V", false);
+    classInit.visitMethodInsn(INVOKESPECIAL, JactlType.JACTL_MAP_INTERNAL, "<init>", "()V", false);
     classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_STATIC_FIELDS_METHODS_MAP, "Ljava/util/Map;");
-    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class), null, null);
+    fieldVisitor = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, Utils.JACTL_PRETTY_NAME_FIELD, JactlType.STRING_TYPE_DESCRIPTOR, null, null);
     fieldVisitor.visitEnd();
     classInit.visitLdcInsn(classDescriptor.getPrettyName());
-    classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_PRETTY_NAME_FIELD, Type.getDescriptor(String.class));
+    classInit.visitFieldInsn(PUTSTATIC, internalName, Utils.JACTL_PRETTY_NAME_FIELD, JactlType.STRING_TYPE_DESCRIPTOR);
 
     // Add instance method and static for retrieving map of static Jactl fields and methods
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_STATIC_FIELDS_METHODS_GETTER,
@@ -254,7 +254,7 @@ public class ClassCompiler {
     Consumer<Expr.FunDecl> createContinuationHandle = (decl) -> {
       String       continuationMethod = Utils.continuationMethod(decl.functionDescriptor.implementingMethod);
       String       handleName         = Utils.continuationHandle(decl.functionDescriptor.implementingMethod);
-      FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, handleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+      FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, handleName, JactlMethodHandle.TYPE_DESCRIPTOR, null, null);
       handleVar.visitEnd();
 
       classInit.visitVarInsn(ALOAD, 0);
@@ -282,7 +282,7 @@ public class ClassCompiler {
       classInit.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/JactlMethodHandle", "create", "(Ljava/lang/invoke/MethodHandle;Ljava/lang/Class;Ljava/lang/String;)Lio/jactl/runtime/JactlMethodHandle;", false);
 
       // Store handle in static field
-      classInit.visitFieldInsn(PUTSTATIC, internalName, handleName, Type.getDescriptor(JactlMethodHandle.class));
+      classInit.visitFieldInsn(PUTSTATIC, internalName, handleName, JactlMethodHandle.TYPE_DESCRIPTOR);
     };
 
     if (!funDecl.isScriptMain) {
@@ -343,7 +343,7 @@ public class ClassCompiler {
       }
 
       // Store in static field
-      classInit.visitFieldInsn(PUTSTATIC, internalName, staticHandleName, Type.getDescriptor(JactlMethodHandle.class));
+      classInit.visitFieldInsn(PUTSTATIC, internalName, staticHandleName, JactlMethodHandle.TYPE_DESCRIPTOR);
 
       // For methods/functions store in either _$j$FieldsAndMethods or _$j$StaticMethods as appropriate
       if (!funDecl.isClosure()) {
@@ -372,22 +372,22 @@ public class ClassCompiler {
     // so that we can pass the method by value (by passing the method handle).
     String       wrapperMethodName = method.wrapper.functionDescriptor.implementingMethod;
     String       staticHandleName  = Utils.staticHandleName(wrapperMethodName);
-    FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, staticHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+    FieldVisitor handleVar          = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, staticHandleName, JactlMethodHandle.TYPE_DESCRIPTOR, null, null);
     handleVar.visitEnd();
     if (!method.isStatic() && method.isClosure()) {
       // For non-static closures we also create a non-static method handle for the wrapper method
       // that will be bound to the instance. For non-static functions we bind the handle when we
       // compile the declaration and store it in the variable.
       String instanceHandleName = Utils.handleName(wrapperMethodName);
-      handleVar = cv.visitField(ACC_PUBLIC | ACC_SYNTHETIC, instanceHandleName, Type.getDescriptor(JactlMethodHandle.class), null, null);
+      handleVar = cv.visitField(ACC_PUBLIC | ACC_SYNTHETIC, instanceHandleName, JactlMethodHandle.TYPE_DESCRIPTOR, null, null);
       handleVar.visitEnd();
 
       // Add code to constructor to initialise this handle
       constructor.visitVarInsn(ALOAD, 0);
-      constructor.visitFieldInsn(GETSTATIC, internalName, staticHandleName, Type.getDescriptor(JactlMethodHandle.class));
+      constructor.visitFieldInsn(GETSTATIC, internalName, staticHandleName, JactlMethodHandle.TYPE_DESCRIPTOR);
       constructor.visitVarInsn(ALOAD, 0);
       constructor.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/JactlMethodHandle", "bindTo", "(Ljava/lang/Object;)Lio/jactl/runtime/JactlMethodHandle;", false);
-      constructor.visitFieldInsn(PUTFIELD, internalName, instanceHandleName, Type.getDescriptor(JactlMethodHandle.class));
+      constructor.visitFieldInsn(PUTFIELD, internalName, instanceHandleName, JactlMethodHandle.TYPE_DESCRIPTOR);
     }
 
     doCompileMethod(method, methodName, false);
@@ -424,7 +424,7 @@ public class ClassCompiler {
   protected void emitContinuationWrapper(Expr.FunDecl funDecl) {
     String methodName = Utils.continuationMethod(funDecl.functionDescriptor.implementingMethod);
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC + (funDecl.isStatic() ? ACC_STATIC : 0), methodName,
-                                      Type.getMethodDescriptor(Type.getType(Object.class), Type.getType(Continuation.class)),
+                                      Type.getMethodDescriptor(JactlType.OBJECT_TYPE, JactlType.CONTINUATION_TYPE),
                                       null, null);
     mv.visitCode();
 
@@ -646,7 +646,7 @@ public class ClassCompiler {
   }
 
   private void compileHashCodeFunction() {
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, "hashCode", Type.getMethodDescriptor(Type.getType(int.class)),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, "hashCode", Type.getMethodDescriptor(JactlType.INT_TYPE),
                                       null, null);
     mv.visitCode();
 
@@ -724,10 +724,10 @@ public class ClassCompiler {
     final int BUFF_SLOT      = 1;
     final int FIRST_SLOT     = 2;
     final int ARR_SLOT_START = 3;
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_WRITE_JSON, Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JsonEncoder.class)),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_WRITE_JSON, Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.JSON_ENCODER_TYPE),
                                       null, null);
-    BiConsumer<String, Class> invoke = (method,type) -> mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonEncoder.class), method,
-                                                                           Type.getMethodDescriptor(Type.getType(void.class), Type.getType(type)),
+    BiConsumer<String, Class> invoke = (method,type) -> mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_ENCODER_INTERNAL, method,
+                                                                           Type.getMethodDescriptor(JactlType.VOID_TYPE, Type.getType(type)),
                                                                            false);
 
     mv.visitCode();
@@ -823,14 +823,14 @@ public class ClassCompiler {
         mv.visitInsn(DUP);
         mv.visitJumpInsn(IFNULL, NULL_VAL);
         mv.visitInsn(SWAP);
-        mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_WRITE_JSON,
-                           Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JsonEncoder.class)),
+        mv.visitMethodInsn(INVOKEINTERFACE, JactlType.JACTL_OBJECT_INTERNAL, Utils.JACTL_WRITE_JSON,
+                           Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.JSON_ENCODER_TYPE),
                            true);
         mv.visitJumpInsn(GOTO, NEXT);
 NULL_VAL: mv.visitLabel(NULL_VAL);
         mv.visitInsn(POP);
-        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonEncoder.class), "writeNull",
-                           Type.getMethodDescriptor(Type.getType(void.class)), false);
+        mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_ENCODER_INTERNAL, "writeNull",
+                           Type.getMethodDescriptor(JactlType.VOID_TYPE), false);
 NEXT:   mv.visitLabel(NEXT);
         break;
       }
@@ -895,12 +895,12 @@ NEXT:   mv.visitLabel(NEXT);
     // Need for array and array index. If multi-dimensions we use extra two slots for each dimension
     final int ARR_SLOTS      = DUP_FLAGS + 2 + classDecl.fields.size() / 64;
 
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(Type.getType(long[].class), Type.getType(JsonDecoder.class)),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(JactlType.LONG_ARR_TYPE, JactlType.JSON_DECODER_TYPE),
                                       null, null);
     mv.visitCode();
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     Utils.loadConst(mv, '{', context);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expectOrNull", Type.getMethodDescriptor(Type.getType(boolean.class), Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "expectOrNull", Type.getMethodDescriptor(JactlType.BOOLEAN_TYPE, JactlType.CHAR_TYPE), false);
     Label BRACE = new Label();
     mv.visitJumpInsn(IFNE, BRACE);
     // Was null so return null value
@@ -935,7 +935,7 @@ BRACE: mv.visitLabel(BRACE);
 
 LOOP: mv.visitLabel(LOOP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "nextChar", Type.getMethodDescriptor(JactlType.CHAR_TYPE), false);
     mv.visitInsn(DUP);
     Utils.loadConst(mv, '}', context);
     mv.visitJumpInsn(IF_ICMPNE, NOT_END);
@@ -956,15 +956,15 @@ ERROR: mv.visitLabel(ERROR);
     mv.visitInsn(DUP_X2);
     mv.visitInsn(POP);
     mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class), Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "error",
+                       Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.STRING_TYPE, JactlType.CHAR_TYPE), false);
     mv.visitInsn(ACONST_NULL);
     mv.visitInsn(ATHROW);
 
 COMMA: mv.visitLabel(COMMA);
     mv.visitInsn(POP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "nextChar", Type.getMethodDescriptor(JactlType.CHAR_TYPE), false);
 FIRST: mv.visitLabel(FIRST);
     mv.visitInsn(DUP);
     Utils.loadConst(mv, '"', context);
@@ -975,7 +975,7 @@ QUOTE: mv.visitLabel(QUOTE);
     mv.visitInsn(POP);
     mv.visitIincInsn(FIRST_SLOT, 1);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "decodeString", Type.getMethodDescriptor(Type.getType(String.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "decodeString", Type.getMethodDescriptor(JactlType.STRING_TYPE), false);
     mv.visitInsn(DUP);
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "hashCode", "()I", false);
 
@@ -1021,7 +1021,7 @@ NO_DUP: mv.visitLabel(NO_DUP);
         mv.visitVarInsn(LSTORE, flag);          // set flag to remember we have seen this field
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
         Utils.loadConst(mv, ':', context);
-        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expect", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(char.class)), false);
+        mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "expect", Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.CHAR_TYPE), false);
         mv.visitVarInsn(ALOAD, THIS_SLOT);
         JactlType type = getField(fieldName);
         readJsonField(mv, type, fieldName, ERROR, DECODER_SLOT, TMP_OBJ, ARR_SLOTS);
@@ -1031,24 +1031,24 @@ NO_DUP: mv.visitLabel(NO_DUP);
     }
 DEFAULT_LABEL: mv.visitLabel(DEFAULT_LABEL);
     Utils.loadConst(mv, " field in JSON data does not exist in " + className, context);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.STRING_INTERNAL, "concat", Type.getMethodDescriptor(JactlType.STRING_TYPE, JactlType.STRING_TYPE), false);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "error",
+                       Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.STRING_TYPE), false);
     mv.visitInsn(ACONST_NULL);
     mv.visitInsn(ATHROW);
 
 DUP_FOUND: mv.visitLabel(DUP_FOUND);
     Utils.loadConst(mv, "Field '", context);
     mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.STRING_INTERNAL, "concat", Type.getMethodDescriptor(JactlType.STRING_TYPE, JactlType.STRING_TYPE), false);
     Utils.loadConst(mv, "' for class " + className + " appears multiple times in JSON data", context);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(String.class), "concat", Type.getMethodDescriptor(Type.getType(String.class), Type.getType(String.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.STRING_INTERNAL, "concat", Type.getMethodDescriptor(JactlType.STRING_TYPE, JactlType.STRING_TYPE), false);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "error",
+                       Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.STRING_TYPE), false);
     mv.visitInsn(ACONST_NULL);
     mv.visitInsn(ATHROW);
 
@@ -1102,8 +1102,8 @@ MISSING_FIELDS: mv.visitLabel(MISSING_FIELDS);
       mv.visitInsn(SWAP);         // swap with i which is still on stack
       mv.visitVarInsn(LLOAD, TMP_LONG);
       mv.visitVarInsn(ALOAD, THIS_SLOT);
-      mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "missingFields",
-                         Type.getMethodDescriptor(Type.getType(void.class), Type.getType(int.class), Type.getType(long.class), Type.getType(JactlObject.class)),
+      mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "missingFields",
+                         Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.INT_TYPE, JactlType.LONG_TYPE, JactlType.JACTL_OBJECT_TYPE),
                          false);
       mv.visitInsn(ACONST_NULL);
       mv.visitInsn(ATHROW);
@@ -1137,7 +1137,7 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
     }
     else {
       // No flags to return
-      mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "EMPTY_LONG_ARR", Type.getInternalName(long[].class));
+      mv.visitFieldInsn(GETSTATIC, JactlType.RUNTIME_UTILS_INTERNAL, "EMPTY_LONG_ARR", JactlType.LONG_ARR_INTERNAL);
     }
 
     mv.visitInsn(ARETURN);
@@ -1159,7 +1159,7 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
     switch (type.getType()) {
       case BOOLEAN: case BYTE: case INT: case LONG: case DOUBLE: case DECIMAL: case STRING: case MAP: case LIST: case ANY:
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
-        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class),
+        mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL,
                            type.is(ANY) ? "_decode" : "get" + typeName,
                            Type.getMethodDescriptor(type.descriptorType()), false);
         break;
@@ -1171,9 +1171,9 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
         mv.visitInsn(DUP);
         mv.visitVarInsn(ASTORE, TMP_OBJ);
         mv.visitInsn(SWAP);
-        mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(JactlObject.class), Utils.JACTL_READ_JSON,
-                           Type.getMethodDescriptor(Type.getType(long[].class),
-                                                    Type.getType(JsonDecoder.class)),
+        mv.visitMethodInsn(INVOKEINTERFACE, JactlType.JACTL_OBJECT_INTERNAL, Utils.JACTL_READ_JSON,
+                           Type.getMethodDescriptor(JactlType.LONG_ARR_TYPE,
+                                                    JactlType.JSON_DECODER_TYPE),
                            true);
         mv.visitInsn(DUP);
         Label NULL_CHILD = new Label();
@@ -1189,8 +1189,8 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
           mv.visitInsn(SWAP);
         }
         mv.visitMethodInsn(INVOKEVIRTUAL, type.getInternalName(), Utils.JACTL_INIT_MISSING,
-                           async ? Type.getMethodDescriptor(type.descriptorType(), Type.getType(Continuation.class), Type.getType(long[].class))
-                                 : Type.getMethodDescriptor(type.descriptorType(), Type.getType(long[].class)),
+                           async ? Type.getMethodDescriptor(type.descriptorType(), JactlType.CONTINUATION_TYPE, JactlType.LONG_ARR_TYPE)
+                                 : Type.getMethodDescriptor(type.descriptorType(), JactlType.LONG_ARR_TYPE),
                            false);
 NULL_CHILD: mv.visitLabel(NULL_CHILD);
         Utils.checkCast(mv, type);
@@ -1201,8 +1201,8 @@ NULL_CHILD: mv.visitLabel(NULL_CHILD);
       case FUNCTION:
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
         Utils.loadConst(mv, "Field " + fieldName + " of type function/closure cannot be instantiated from json", context);
-        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                           Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class)), false);
+        mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "error",
+                           Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.STRING_TYPE), false);
         mv.visitInsn(ACONST_NULL);
         break;
       default:
@@ -1221,7 +1221,7 @@ NULL_CHILD: mv.visitLabel(NULL_CHILD);
 
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
     Utils.loadConst(mv, '[', context);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "expectOrNull", Type.getMethodDescriptor(Type.getType(boolean.class), Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "expectOrNull", Type.getMethodDescriptor(JactlType.BOOLEAN_TYPE, JactlType.CHAR_TYPE), false);
     mv.visitJumpInsn(IFNE, BRACKET);
     // Was null so return null value
     mv.visitInsn(ACONST_NULL);
@@ -1240,13 +1240,13 @@ BRACKET: mv.visitLabel(BRACKET);
     Label NOT_END     = new Label();
 LOOP: mv.visitLabel(LOOP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "skipWhitespace", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "skipWhitespace", Type.getMethodDescriptor(JactlType.CHAR_TYPE), false);
     mv.visitInsn(DUP);
     Utils.loadConst(mv, ']', context);
     mv.visitJumpInsn(IF_ICMPNE, NOT_END);
     mv.visitInsn(POP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "nextChar", Type.getMethodDescriptor(JactlType.CHAR_TYPE), false);
     mv.visitInsn(POP);
     mv.visitJumpInsn(GOTO, END_LOOP);
 
@@ -1261,15 +1261,15 @@ NOT_END: mv.visitLabel(NOT_END);
     mv.visitInsn(DUP_X2);
     mv.visitInsn(POP);
     mv.visitInsn(SWAP);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "error",
-                       Type.getMethodDescriptor(Type.getType(void.class), Type.getType(String.class), Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "error",
+                       Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.STRING_TYPE, JactlType.CHAR_TYPE), false);
     mv.visitInsn(ACONST_NULL);
     mv.visitInsn(ATHROW);
 
 READ_FIELD: mv.visitLabel(READ_FIELD);
     mv.visitInsn(POP);
     mv.visitVarInsn(ALOAD, DECODER_SLOT);
-    mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(JsonDecoder.class), "nextChar", Type.getMethodDescriptor(Type.getType(char.class)), false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.JSON_DECODER_INTERNAL, "nextChar", Type.getMethodDescriptor(JactlType.CHAR_TYPE), false);
 
 FIRST_FIELD: mv.visitLabel(FIRST_FIELD);
     mv.visitInsn(POP);
@@ -1329,7 +1329,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
   private void compileCheckpointFunction() {
     final int THIS_SLOT         = 0;
     final int CHECKPOINTER_SLOT = 1;
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_CHECKPOINT_FN, Type.getMethodDescriptor(Type.getType(void.class), Type.getType(Checkpointer.class)),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_CHECKPOINT_FN, Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.CHECKPOINTER_TYPE),
                                       null, null);
     mv.visitCode();
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
@@ -1381,10 +1381,10 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
   private void compileRestoreFunction() {
     final int THIS_SLOT         = 0;
     final int RESTORER_SLOT     = 1;
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_RESTORE_FN, Type.getMethodDescriptor(Type.getType(void.class), Type.getType(Restorer.class)),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_RESTORE_FN, Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.RESTORER_TYPE),
                                       null, null);
-    BiConsumer<String, Class> invoke = (method,type) -> mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(Restorer.class), method,
-                                                                           Type.getMethodDescriptor(Type.getType(void.class), Type.getType(type)),
+    BiConsumer<String, Class> invoke = (method,type) -> mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.RESTORER_INTERNAL, method,
+                                                                           Type.getMethodDescriptor(JactlType.VOID_TYPE, Type.getType(type)),
                                                                            false);
     mv.visitCode();
     mv.visitVarInsn(ALOAD, RESTORER_SLOT);
@@ -1447,13 +1447,13 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
 
     Type classType = Type.getType(classDecl.classDescriptor.getClassType().descriptor());
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_INIT_NOASYNC,
-                                      Type.getMethodDescriptor(classType, Type.getType(String.class), Type.getType(int.class)),
+                                      Type.getMethodDescriptor(classType, JactlType.STRING_TYPE, JactlType.INT_TYPE),
                                       null, null);
 
     mv.visitCode();
 
     Consumer<String> error = msg -> {
-      mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+      mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
       mv.visitInsn(DUP);
       Utils.loadConst(mv, msg, context);
       mv.visitVarInsn(ALOAD, SOURCE_SLOT);
@@ -1477,7 +1477,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       Label blockStart = new Label();
       Label blockEnd   = new Label();
       Label catchLabel = new Label();
-      mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+      mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, JactlType.CONTINUATION_INTERNAL);
       mv.visitLabel(blockStart);
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitInsn(ACONST_NULL);      // Continuation
@@ -1485,9 +1485,9 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitVarInsn(ILOAD, OFFSET_SLOT);
       mv.visitInsn(ACONST_NULL);
       mv.visitMethodInsn(INVOKEVIRTUAL, internalName, Utils.JACTL_INIT_WRAPPER,
-                         Type.getMethodDescriptor(Type.getType(Object.class),
-                                                  Type.getType(Continuation.class), Type.getType(String.class),
-                                                  Type.getType(int.class), Type.getType(Object[].class)),
+                         Type.getMethodDescriptor(JactlType.OBJECT_TYPE,
+                                                  JactlType.CONTINUATION_TYPE, JactlType.STRING_TYPE,
+                                                  JactlType.INT_TYPE, JactlType.OBJECT_ARR_TYPE),
                          false);
       mv.visitTypeInsn(CHECKCAST, internalName);
       mv.visitInsn(ARETURN);
@@ -1504,7 +1504,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
   private void loadConstant(Object obj) {
     if (obj instanceof List) {
       List list = (List)obj;
-      String listClassName = Type.getInternalName(Utils.JACTL_LIST_TYPE);
+      String listClassName = JactlType.JACTL_LIST_INTERNAL;
       classInit.visitTypeInsn(NEW, listClassName);
       classInit.visitInsn(DUP);
       classInit.visitMethodInsn(INVOKESPECIAL, listClassName, "<init>", "()V", false);
@@ -1520,7 +1520,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     }
     if (obj instanceof Map) {
       Map map = (Map)obj;
-      String mapClassName = Type.getInternalName(Utils.JACTL_MAP_TYPE);
+      String mapClassName = JactlType.JACTL_MAP_INTERNAL;
       classInit.visitTypeInsn(NEW, mapClassName);
       classInit.visitInsn(DUP);
       classInit.visitMethodInsn(INVOKESPECIAL, mapClassName, "<init>", "()V", false);

@@ -41,7 +41,7 @@ public class ScriptCompiler extends ClassCompiler {
   }
   
   private Class<?> compileToClass() {
-    FieldVisitor globalVars = cv.visitField(ACC_PUBLIC, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class), null, null);
+    FieldVisitor globalVars = cv.visitField(ACC_PUBLIC, Utils.JACTL_GLOBALS_NAME, JactlType.MAP_TYPE_DESCRIPTOR, null, null);
     globalVars.visitEnd();
 
     compileInnerClasses();

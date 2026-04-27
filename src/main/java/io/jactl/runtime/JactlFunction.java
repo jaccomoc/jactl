@@ -583,11 +583,11 @@ public class JactlFunction extends FunctionDescriptor {
     String helperClassName    = Utils.JACTL_PREFIX + "Helper" + classCounter.getAndIncrement() + '$' + name;
     String helperPkgClassName = Utils.pkgPathOf(packageName, helperClassName);
     String internalName       = helperPkgClassName.replace('.', '/');
-    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, Type.getInternalName(Object.class), new String[0]);
+    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, JactlType.OBJECT_INTERNAL, new String[0]);
     cv.visitSource(helperClassName + ".java", null);
 
     // Add MethodHandle fields
-    FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(name), Type.getDescriptor(JactlMethodHandle.class), null, null);
+    FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(name), JactlMethodHandle.TYPE_DESCRIPTOR, null, null);
     handleVar.visitEnd();
     cv.visitEnd();
     byte[] bytes = cw.toByteArray();

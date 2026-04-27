@@ -808,23 +808,23 @@ public class JactlType extends JactlUserDataHolder {
 
   public String descriptor() {
     switch (this.type) {
-      case BOOLEAN:        return Type.getDescriptor(isBoxed() ? Boolean.class : boolean.class);
-      case BYTE:           return Type.getDescriptor(isBoxed() ? Byte.class : byte.class);
-      case INT:            return Type.getDescriptor(isBoxed() ? Integer.class : int.class);
-      case LONG:           return Type.getDescriptor(isBoxed() ? Long.class    : long.class);
-      case DOUBLE:         return Type.getDescriptor(isBoxed() ? Double.class  : double.class);
-      case DECIMAL:        return Type.getDescriptor(BigDecimal.class);
-      case STRING:         return Type.getDescriptor(String.class);
-      case MAP:            return Type.getDescriptor(Map.class);
-      case LIST:           return Type.getDescriptor(List.class);
+      case BOOLEAN:        return isBoxed() ? BOOLEAN_BOXED_TYPE_DESCRIPTOR : BOOLEAN_TYPE_DESCRIPTOR;
+      case BYTE:           return isBoxed() ? BYTE_BOXED_TYPE_DESCRIPTOR : BYTE_TYPE_DESCRIPTOR;
+      case INT:            return isBoxed() ? INT_BOXED_TYPE_DESCRIPTOR : INT_TYPE_DESCRIPTOR;
+      case LONG:           return isBoxed() ? LONG_BOXED_TYPE_DESCRIPTOR : LONG_TYPE_DESCRIPTOR;
+      case DOUBLE:         return isBoxed() ? DOUBLE_BOXED_TYPE_DESCRIPTOR : DOUBLE_TYPE_DESCRIPTOR;
+      case DECIMAL:        return DECIMAL_TYPE_DESCRIPTOR;
+      case STRING:         return STRING_TYPE_DESCRIPTOR;
+      case MAP:            return MAP_TYPE_DESCRIPTOR;
+      case LIST:           return LIST_TYPE_DESCRIPTOR;
       case INSTANCE:       return "L" + getInternalName() + ";";
       case CLASS:          return "L" + getInternalName() + ";";
-      case ANY:            return Type.getDescriptor(Object.class);
-      case FUNCTION:       return Type.getDescriptor(JactlMethodHandle.class);
-      case HEAPLOCAL:      return Type.getDescriptor(HeapLocal.class);
-      case ITERATOR:       return Type.getDescriptor(JactlIterator.class);
-      case MATCHER:        return Type.getDescriptor(RegexMatcher.class);
-      case CONTINUATION:   return Type.getDescriptor(Continuation.class);
+      case ANY:            return OBJECT_TYPE_DESCRIPTOR;
+      case FUNCTION:       return JactlMethodHandle.TYPE_DESCRIPTOR;
+      case HEAPLOCAL:      return HEAP_LOCAL_TYPE_DESCRIPTOR;
+      case ITERATOR:       return JACTL_ITERATOR_TYPE_DESCRIPTOR;
+      case MATCHER:        return REGEX_MATCHER_TYPE_DESCRIPTOR;
+      case CONTINUATION:   return CONTINUATION_TYPE_DESCRIPTOR;
       case ARRAY:          return "[" + arrayType.descriptor();
       default:             throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
@@ -832,47 +832,47 @@ public class JactlType extends JactlUserDataHolder {
 
   public Type descriptorType() {
     switch (this.type) {
-      case BOOLEAN:        return Type.getType(isBoxed() ? Boolean.class : boolean.class);
-      case BYTE:           return Type.getType(isBoxed() ? Byte.class : byte.class);
-      case INT:            return Type.getType(isBoxed() ? Integer.class : int.class);
-      case LONG:           return Type.getType(isBoxed() ? Long.class    : long.class);
-      case DOUBLE:         return Type.getType(isBoxed() ? Double.class  : double.class);
-      case DECIMAL:        return Type.getType(BigDecimal.class);
-      case STRING:         return Type.getType(String.class);
-      case MAP:            return Type.getType(Map.class);
-      case LIST:           return Type.getType(List.class);
+      case BOOLEAN:        return isBoxed() ? BOOLEAN_BOXED_TYPE : BOOLEAN_TYPE;
+      case BYTE:           return isBoxed() ? BYTE_BOXED_TYPE : BYTE_TYPE;
+      case INT:            return isBoxed() ? INT_BOXED_TYPE : INT_TYPE;
+      case LONG:           return isBoxed() ? LONG_BOXED_TYPE : LONG_TYPE;
+      case DOUBLE:         return isBoxed() ? DOUBLE_BOXED_TYPE : DOUBLE_TYPE;
+      case DECIMAL:        return DECIMAL_TYPE;
+      case STRING:         return STRING_TYPE;
+      case MAP:            return MAP_TYPE;
+      case LIST:           return LIST_TYPE;
       case INSTANCE:       return Type.getType(descriptor());
       case CLASS:          return Type.getType(descriptor());
       case ARRAY:          return Type.getType(descriptor());
-      case ANY:            return Type.getType(Object.class);
-      case FUNCTION:       return Type.getType(JactlMethodHandle.class);
-      case HEAPLOCAL:      return Type.getType(HeapLocal.class);
-      case ITERATOR:       return Type.getType(JactlIterator.class);
-      case NUMBER:         return Type.getType(Number.class);
-      case MATCHER:        return Type.getType(RegexMatcher.class);
-      case CONTINUATION:   return Type.getType(Continuation.class);
+      case ANY:            return OBJECT_TYPE;
+      case FUNCTION:       return JACTL_METHOD_HANDLE_TYPE;
+      case HEAPLOCAL:      return HEAP_LOCAL_TYPE;
+      case ITERATOR:       return JACTL_ITERATOR_TYPE;
+      case NUMBER:         return NUMBER_TYPE;
+      case MATCHER:        return REGEX_MATCHER_TYPE;
+      case CONTINUATION:   return CONTINUATION_TYPE;
       default:             throw new IllegalStateException("Internal error: unexpected type " + this.type);
     }
   }
 
   public String getInternalName() {
     switch (this.type) {
-      case BOOLEAN:      return Type.getInternalName(isBoxed() ? Boolean.class : boolean.class);
-      case BYTE:         return Type.getInternalName(isBoxed() ? Byte.class : byte.class);
-      case INT:          return Type.getInternalName(isBoxed() ? Integer.class : int.class);
-      case LONG:         return Type.getInternalName(isBoxed() ? Long.class    : long.class);
-      case DOUBLE:       return Type.getInternalName(isBoxed() ? Double.class  : double.class);
-      case DECIMAL:      return Type.getInternalName(BigDecimal.class);
-      case STRING:       return Type.getInternalName(String.class);
-      case MAP:          return Type.getInternalName(Map.class);
-      case LIST:         return Type.getInternalName(List.class);
-      case ANY:          return Type.getInternalName(Object.class);
-      case FUNCTION:     return Type.getInternalName(JactlMethodHandle.class);
-      case HEAPLOCAL:    return Type.getInternalName(HeapLocal.class);
-      case ITERATOR:     return Type.getInternalName(JactlIterator.class);
-      case NUMBER:       return Type.getInternalName(Number.class);
-      case MATCHER:      return Type.getInternalName(RegexMatcher.class);
-      case CONTINUATION: return Type.getInternalName(Continuation.class);
+      case BOOLEAN:      return isBoxed() ? BOOLEAN_BOXED_INTERNAL : BOOLEAN_INTERNAL;
+      case BYTE:         return isBoxed() ? BYTE_BOXED_INTERNAL : BYTE_INTERNAL;
+      case INT:          return isBoxed() ? INT_BOXED_INTERNAL : INT_INTERNAL;
+      case LONG:         return isBoxed() ? LONG_BOXED_INTERNAL : LONG_INTERNAL;
+      case DOUBLE:       return isBoxed() ? DOUBLE_BOXED_INTERNAL : DOUBLE_INTERNAL;
+      case DECIMAL:      return DECIMAL_INTERNAL;
+      case STRING:       return STRING_INTERNAL;
+      case MAP:          return MAP_INTERNAL;
+      case LIST:         return LIST_INTERNAL;
+      case ANY:          return OBJECT_INTERNAL;
+      case FUNCTION:     return JACTL_METHOD_HANDLE_INTERNAL;
+      case HEAPLOCAL:    return HEAP_LOCAL_INTERNAL;
+      case ITERATOR:     return JACTL_ITERATOR_INTERNAL;
+      case NUMBER:       return NUMBER_INTERNAL;
+      case MATCHER:      return REGEX_MATCHER_INTERNAL;
+      case CONTINUATION: return CONTINUATION_INTERNAL;
       case ARRAY: {
         if (arrayType.is(ARRAY)) {
           return "[" + arrayType.getInternalName();
@@ -1034,4 +1034,93 @@ public class JactlType extends JactlUserDataHolder {
     }
     return true;
   }
+  
+  public static final String BOOLEAN_TYPE_DESCRIPTOR = Type.getDescriptor(boolean.class);
+  public static final String BOOLEAN_BOXED_TYPE_DESCRIPTOR = Type.getDescriptor(Boolean.class);
+  public static final String BYTE_TYPE_DESCRIPTOR = Type.getDescriptor(byte.class);
+  public static final String BYTE_BOXED_TYPE_DESCRIPTOR = Type.getDescriptor(Byte.class);
+  public static final String INT_TYPE_DESCRIPTOR = Type.getDescriptor(int.class);
+  public static final String INT_BOXED_TYPE_DESCRIPTOR = Type.getDescriptor(Integer.class);
+  public static final String LONG_TYPE_DESCRIPTOR = Type.getDescriptor(long.class);
+  public static final String LONG_BOXED_TYPE_DESCRIPTOR = Type.getDescriptor(Long.class);
+  public static final String DOUBLE_TYPE_DESCRIPTOR = Type.getDescriptor(double.class);
+  public static final String DOUBLE_BOXED_TYPE_DESCRIPTOR = Type.getDescriptor(Double.class);
+  public static final String DECIMAL_TYPE_DESCRIPTOR = Type.getDescriptor(BigDecimal.class);
+  public static final String STRING_TYPE_DESCRIPTOR = Type.getDescriptor(String.class);
+  public static final String MAP_TYPE_DESCRIPTOR = Type.getDescriptor(Map.class);
+  public static final String LIST_TYPE_DESCRIPTOR = Type.getDescriptor(List.class);
+  public static final String OBJECT_TYPE_DESCRIPTOR = Type.getDescriptor(Object.class);
+  public static final String HEAP_LOCAL_TYPE_DESCRIPTOR = Type.getDescriptor(HeapLocal.class);
+  public static final String JACTL_ITERATOR_TYPE_DESCRIPTOR = Type.getDescriptor(JactlIterator.class);
+  public static final String REGEX_MATCHER_TYPE_DESCRIPTOR = Type.getDescriptor(RegexMatcher.class);
+  public static final String CONTINUATION_TYPE_DESCRIPTOR = Type.getDescriptor(Continuation.class);
+  public static final String CLASS_TYPE_DESCRIPTOR = Type.getDescriptor(Class.class);
+
+  public static final Type BOOLEAN_TYPE = Type.getType(boolean.class);
+  public static final Type BOOLEAN_BOXED_TYPE = Type.getType(Boolean.class);
+  public static final Type BYTE_TYPE = Type.getType(byte.class);
+  public static final Type CHAR_TYPE = Type.getType(char.class);
+  public static final Type BYTE_BOXED_TYPE = Type.getType(Byte.class);
+  public static final Type INT_TYPE = Type.getType(int.class);
+  public static final Type INT_BOXED_TYPE = Type.getType(Integer.class);
+  public static final Type LONG_TYPE = Type.getType(long.class);
+  public static final Type LONG_ARR_TYPE = Type.getType(long[].class);
+  public static final Type LONG_BOXED_TYPE = Type.getType(Long.class);
+  public static final Type DOUBLE_TYPE = Type.getType(double.class);
+  public static final Type DOUBLE_BOXED_TYPE = Type.getType(Double.class);
+  public static final Type DECIMAL_TYPE = Type.getType(BigDecimal.class);
+  public static final Type NUMBER_TYPE = Type.getType(Number.class);
+  public static final Type STRING_TYPE = Type.getType(String.class);
+  public static final Type MAP_TYPE = Type.getType(Map.class);
+  public static final Type LIST_TYPE = Type.getType(List.class);
+  public static final Type OBJECT_TYPE = Type.getType(Object.class);
+  public static final Type OBJECT_ARR_TYPE = Type.getType(Object[].class);
+  public static final Type JACTL_METHOD_HANDLE_TYPE = Type.getType(JactlMethodHandle.class);
+  public static final Type HEAP_LOCAL_TYPE = Type.getType(HeapLocal.class);
+  public static final Type JACTL_ITERATOR_TYPE = Type.getType(JactlIterator.class);
+  public static final Type REGEX_MATCHER_TYPE = Type.getType(RegexMatcher.class);
+  public static final Type CONTINUATION_TYPE = Type.getType(Continuation.class);
+  public static final Type VOID_TYPE = Type.getType(void.class);
+  public static final Type JSON_ENCODER_TYPE = Type.getType(JsonEncoder.class);
+  public static final Type JSON_DECODER_TYPE = Type.getType(JsonDecoder.class);
+  public static final Type CHECKPOINTER_TYPE = Type.getType(Checkpointer.class);
+  public static final Type RESTORER_TYPE = Type.getType(Restorer.class);
+  public static final Type JACTL_OBJECT_TYPE = Type.getType(JactlObject.class);
+  public static final Type JACTL_SCRIPT_OBJECT_TYPE = Type.getType(JactlScriptObject.class);
+  
+  public static final String JACTL_OBJECT_INTERNAL = Type.getInternalName(JactlObject.class);
+  public static final String JACTL_SCRIPT_OBJECT_INTERNAL = Type.getInternalName(JactlScriptObject.class);
+  public static final String JACTL_MAP_INTERNAL = Type.getInternalName(Utils.JACTL_MAP_TYPE);
+  public static final String JACTL_LIST_INTERNAL = Type.getInternalName(Utils.JACTL_LIST_TYPE);
+  public static final String JSON_ENCODER_INTERNAL = Type.getInternalName(JsonEncoder.class);
+  public static final String JSON_DECODER_INTERNAL = Type.getInternalName(JsonDecoder.class);
+  public static final String BOOLEAN_INTERNAL = Type.getInternalName(boolean.class);
+  public static final String BOOLEAN_BOXED_INTERNAL = Type.getInternalName(Boolean.class);
+  public static final String BYTE_INTERNAL = Type.getInternalName(byte.class);
+  public static final String BYTE_BOXED_INTERNAL = Type.getInternalName(Byte.class);
+  public static final String INT_INTERNAL = Type.getInternalName(int.class);
+  public static final String INT_BOXED_INTERNAL = Type.getInternalName(Integer.class);
+  public static final String LONG_INTERNAL = Type.getInternalName(long.class);
+  public static final String LONG_ARR_INTERNAL = Type.getInternalName(long[].class);
+  public static final String LONG_BOXED_INTERNAL = Type.getInternalName(Long.class);
+  public static final String DOUBLE_INTERNAL = Type.getInternalName(double.class);
+  public static final String DOUBLE_BOXED_INTERNAL = Type.getInternalName(Double.class);
+  public static final String DECIMAL_INTERNAL = Type.getInternalName(BigDecimal.class);
+  public static final String NUMBER_INTERNAL = Type.getInternalName(Number.class);
+  public static final String STRING_INTERNAL = Type.getInternalName(String.class);
+  public static final String MAP_INTERNAL = Type.getInternalName(Map.class);
+  public static final String LIST_INTERNAL = Type.getInternalName(List.class);
+  public static final String OBJECT_INTERNAL = Type.getInternalName(Object.class);
+  public static final String JACTL_METHOD_HANDLE_INTERNAL = Type.getInternalName(JactlMethodHandle.class);
+  public static final String HEAP_LOCAL_INTERNAL = Type.getInternalName(HeapLocal.class);
+  public static final String JACTL_ITERATOR_INTERNAL = Type.getInternalName(JactlIterator.class);
+  public static final String REGEX_MATCHER_INTERNAL = Type.getInternalName(RegexMatcher.class);
+  public static final String CONTINUATION_INTERNAL = Type.getInternalName(Continuation.class);
+  public static final String CLASS_INTERNAL = Type.getInternalName(Class.class);
+  public static final String RUNTIME_UTILS_INTERNAL = Type.getInternalName(RuntimeUtils.class);
+  public static final String RESTORER_INTERNAL = Type.getInternalName(Restorer.class);
+  public static final String RUNTIME_ERROR_INTERNAL = Type.getInternalName(RuntimeError.class);
+  public static final String STRING_BUFFER_INTERNAL = Type.getInternalName(StringBuffer.class);
+  public static final String NAMED_ARGS_MAP_INTERNAL = Type.getInternalName(NamedArgsMap.class);
+  public static final String NAMED_ARGS_MAP_COPY_INTERNAL = Type.getInternalName(NamedArgsMapCopy.class);
 }

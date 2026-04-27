@@ -3300,7 +3300,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     //  :   }
     Expr.InstanceOf arg0IsMap = new Expr.InstanceOf(startToken,
                                                     new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)),
-                                                    Type.getInternalName(NamedArgsMap.class));
+                                                    JactlType.NAMED_ARGS_MAP_INTERNAL);
     Stmt.Stmts mapStmts = new Stmt.Stmts(startToken);
     Stmt.If ifArg0IsMap = new Stmt.If(startToken,
                                       new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsMap),
@@ -3552,7 +3552,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     wrapperSmts.stmts.add(ifNullArgArr);
 
     Expr.ArrayGet   arg0                = new Expr.ArrayGet(classToken, new Expr.Identifier(objectArrToken), zero);
-    Expr.InstanceOf instanceOfNamedArgs = new Expr.InstanceOf(classToken, arg0, Type.getInternalName(NamedArgsMapCopy.class));
+    Expr.InstanceOf instanceOfNamedArgs = new Expr.InstanceOf(classToken, arg0, JactlType.NAMED_ARGS_MAP_COPY_INTERNAL);
 
     String          argMapName  = JACTL_PREFIX + "argMap";
     Expr.Identifier argMapIdent = new Expr.Identifier(classToken.newIdent(argMapName));

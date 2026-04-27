@@ -68,6 +68,7 @@ public class Tokeniser {
   private final String source;            // The source code of the script
   private final int    length;            // Length of source code
   private       int    offset = 0;        // The current position in the source code as offset
+  private       int    lineNum = 0;
 
   // Whether to return WHITESPACE and COMMENT tokens or just filter them out.
   private boolean tokeniseCommentsAndWhitespace = false;
@@ -742,7 +743,10 @@ public class Tokeniser {
     }
     advance(i);
     token.setLength(numberLength);
-    String value = token.getStringValue().substring(base == 10 ? 0 : 2).replace("_","");
+    String value = base == 10 ? token.getStringValue() : token.getStringValue().substring(2);
+    if (value.indexOf('_') >= 0) {
+      value = value.replace("_","");
+    }
     if (value.isEmpty()) {
       return error("Missing digits for numeric literal", token);
     }
@@ -849,8 +853,8 @@ public class Tokeniser {
     if (!available(1)) {
       return null;
     }
-    Token token = createToken();
     if (isSpace(charAt(0))) {
+      Token token = createToken();
       do { advance(1); } while (available(1) && isSpace(charAt(0)));
       return token.setType(WHITESPACE).setEnd(offset);
     }
@@ -859,6 +863,7 @@ public class Tokeniser {
       return null;  // Not start of line or multi-line comment
     }
 
+    Token token = createToken();
     advance(1);
     if (charAt(0) == '/') {
       // Single line comment
@@ -921,7 +926,7 @@ public class Tokeniser {
   }
 
   private Token createToken(int start) {
-    int lineNum = lineNum(start);
+    int lineNum = lineNumIdx(start);
     int colNum  = start - lineOffsets[lineNum];
     String line = lineNum < lines.size() ? lines.get(lineNum) : "";
     return new Token(source, start, line, lineNum + 1, colNum + 1);
@@ -949,7 +954,21 @@ public class Tokeniser {
     lineOffsets[lines.size()] = source.length() + 1;
   }
 
-  private int lineNum(int pos) {
+  /**
+   * Return the index into the lineOffsets table for the given pos
+   * @param pos  the position in the source
+   * @return the index in the lineOffsets table (i.e. lineNum - 1)
+   */
+  private int lineNumIdx(int pos) {
+    // Keep track of current line number and search forward
+    assert pos >= lineOffsets[lineNum] && pos <= lineOffsets[lineOffsets.length - 1];
+    while (lineNum < lineOffsets.length && pos >= lineOffsets[lineNum + 1]) {
+      lineNum++;
+    }
+    return lineNum;
+  }
+  
+  private int oldLineNum(int pos) {
     int lower = 0;
     int upper = lineOffsets.length - 1;
     while (true) {

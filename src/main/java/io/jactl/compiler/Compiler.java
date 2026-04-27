@@ -69,10 +69,14 @@ public class Compiler {
   }
 
   public static JactlClassDescriptor parseAndResolve(String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
+    return parseAndResolve(false, source, jactlContext, className, packageName, bindings);
+  }
+  
+  public static JactlClassDescriptor parseAndResolve(boolean tokeniseComments, String source, JactlContext jactlContext, String className, String packageName, Map<String, Object> bindings) {
     if (className == null) {
       className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     }
-    Parser         parser   = new Parser(new Tokeniser(source, true), jactlContext, packageName);
+    Parser         parser   = new Parser(new Tokeniser(source, tokeniseComments), jactlContext, packageName);
     Stmt.ClassDecl script   = parser.parseScript(className);
     Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
     resolver.resolveScript(script);

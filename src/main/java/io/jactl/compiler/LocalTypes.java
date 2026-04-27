@@ -463,35 +463,14 @@ public class LocalTypes {
       if (type.isPrimitive()) {
         if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
         if (type.is(DOUBLE)) {
-          mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
+          mv.visitMethodInsn(INVOKESTATIC, JactlType.DOUBLE_BOXED_INTERNAL,
                              "doubleToRawLongBits",
-                             Type.getMethodDescriptor(Type.getType(long.class),
-                                                      Type.getType(double.class)),
+                             Type.getMethodDescriptor(JactlType.LONG_TYPE,
+                                                      JactlType.DOUBLE_TYPE),
                              false); }
       }
       mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
     }
-
-//    for (int i = startSlot; i < locals.size(); ) {
-//      LocalEntry entry = locals.get(i);
-//      JactlType  type  = entry == null ? null : entry.type;
-//      if (entry != null && !ignoreEntry.apply(i) && !entry.isGlobalVar) {
-//        _loadLocal(type.isPrimitive() ? longArr : objArr, type.isPrimitive() ? LONG_ARR : OBJECT_ARR);
-//        Utils.loadConst(mv, i, jactlContext);
-//        _loadLocal(i);
-//        if (type.isPrimitive()) {
-//          if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
-//          if (type.is(DOUBLE)) {
-//            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Double.class),
-//                               "doubleToRawLongBits",
-//                               Type.getMethodDescriptor(Type.getType(long.class),
-//                                                        Type.getType(double.class)),
-//                               false); }
-//        }
-//        mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
-//      }
-//      i += type == null ? 1 : slotsNeeded(type);
-//    }
   }
 
   public void restoreLocals(int continuationVar, int globalsVar, int longArr, int objArr, JactlContext context) {

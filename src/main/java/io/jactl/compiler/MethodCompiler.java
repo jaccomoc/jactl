@@ -326,7 +326,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // FieldAssign globals map to field so we can access it from anywhere
       mv.visitVarInsn(ALOAD, 0);
       mv.visitVarInsn(ALOAD, methodFunDecl.globalsVar());
-      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Type.getDescriptor(Map.class));
+      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, MAP_TYPE_DESCRIPTOR);
     }
 
     if (classCompiler.classDecl.isScriptClass() || classCompiler.context.classAccessToGlobals) {
@@ -1138,7 +1138,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadVar(expr.captureArrVarDecl);
     swap();
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
+    mv.visitTypeInsn(CHECKCAST, JactlType.STRING_BUFFER_INTERNAL);
     swap();
     invokeMethod(RegexMatcher.APPEND_REPLACEMENT_METHOD);
 
@@ -1153,11 +1153,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(done);      // :done
     loadVar(expr.captureArrVarDecl);
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
+    mv.visitTypeInsn(CHECKCAST, JactlType.STRING_BUFFER_INTERNAL);
     invokeMethod(RegexMatcher.APPEND_TAIL_METHOD);
 
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, Type.getInternalName(StringBuffer.class));
+    mv.visitTypeInsn(CHECKCAST, JactlType.STRING_BUFFER_INTERNAL);
     invokeMethod(STRING_BUFFER_TO_STRING_METHOD);
 
     stack.freeSlot(sbVar);
@@ -2031,7 +2031,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    _newInstance(Type.getInternalName(Utils.JACTL_LIST_TYPE));
+    _newInstance(JactlType.JACTL_LIST_INTERNAL);
     pushType(LIST);
     expr.exprs.forEach(entry -> {
       dupVal();
@@ -4339,7 +4339,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void throwIfNotNumber(String msg, SourceLocation location) {
     expect(1);
     _dupVal();
-    mv.visitTypeInsn(INSTANCEOF, Type.getInternalName(Number.class));
+    mv.visitTypeInsn(INSTANCEOF, JactlType.NUMBER_INTERNAL);
     Label isNumber = new Label();
     mv.visitJumpInsn(IFNE, isNumber);
     _popVal();
@@ -4407,7 +4407,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void throwError(String msg, SourceLocation location) {
-    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+    mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP);
     _loadConst(msg);
     _loadLocation(location);
@@ -4422,7 +4422,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param location
    */
   private void _throwErrorWithString(String msg, SourceLocation location) {
-    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+    mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP_X1);
     mv.visitInsn(SWAP);
     _loadConst(msg);
@@ -4451,7 +4451,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void _throwErrorWithInt(String msg, SourceLocation location) {
     int intSlot = stack.allocateSlot(INT);
     _storeLocal(intSlot);
-    mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeError.class));
+    mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP);
     loadConst(msg);
     loadLocal(intSlot);
@@ -4622,7 +4622,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Label blockStart = new Label();
     Label blockEnd   = new Label();
     Label catchLabel = new Label();
-    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, JactlType.CONTINUATION_INTERNAL);
 
     mv.visitLabel(blockStart);   // :blockStart
     final int methodLocation = asyncLocations.size();
@@ -4668,7 +4668,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (methodFunDecl.isScriptMain) {
       mv.visitInsn(DUP);
       _loadLocal(0);
-      mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(Continuation.class), "setScriptInstance", Type.getMethodDescriptor(Type.getType(void.class), Type.getType(JactlScriptObject.class)), false);
+      mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.CONTINUATION_INTERNAL, "setScriptInstance", Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.JACTL_SCRIPT_OBJECT_TYPE), false);
     }
     mv.visitInsn(ATHROW);
 
@@ -4704,10 +4704,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void insertDebug(String info) {
     _loadConst(null);
     _loadConst(info);
-    mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(RuntimeUtils.class), "debugBreakPoint",
-                       Type.getMethodDescriptor(Type.getType(boolean.class),
-                                                Type.getType(Object.class),
-                                                Type.getType(String.class)),
+    mv.visitMethodInsn(INVOKESTATIC, JactlType.RUNTIME_UTILS_INTERNAL, "debugBreakPoint",
+                       Type.getMethodDescriptor(JactlType.BOOLEAN_TYPE,
+                                                JactlType.OBJECT_TYPE,
+                                                JactlType.STRING_TYPE),
                        false);
     mv.visitInsn(POP);
   }
@@ -4715,10 +4715,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void insertDebug(String info, Runnable data) {
     data.run();
     _loadConst(info);
-    mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(RuntimeUtils.class), RuntimeUtils.DEBUG_BREAK_POINT,
-                       Type.getMethodDescriptor(Type.getType(Object.class),
-                                                Type.getType(Object.class),
-                                                Type.getType(String.class)),
+    mv.visitMethodInsn(INVOKESTATIC, JactlType.RUNTIME_UTILS_INTERNAL, RuntimeUtils.DEBUG_BREAK_POINT,
+                       Type.getMethodDescriptor(JactlType.OBJECT_TYPE,
+                                                JactlType.OBJECT_TYPE,
+                                                JactlType.STRING_TYPE),
                        false);
     mv.visitInsn(POP);
   }
@@ -4882,7 +4882,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   
   void invokeMethod(Method method) {
-    invokeMethod(method.getDeclaringClass(), method.getName(), method.getParameterTypes());
+    invokeMethod(method.getDeclaringClass(), method, getTypeFromClass(method.getReturnType()));
   }
   
   void invokeMethod(Class<?> clss, Executable method, JactlType returnType) {
@@ -5348,7 +5348,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
       // Special case for RuntimeUtils.DEFAULT_VALUE
       if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
-        mv.visitFieldInsn(GETSTATIC, Type.getInternalName(RuntimeUtils.class), "DEFAULT_VALUE", "Ljava/lang/Object;");
+        mv.visitFieldInsn(GETSTATIC, JactlType.RUNTIME_UTILS_INTERNAL, "DEFAULT_VALUE", "Ljava/lang/Object;");
         pushType(ANY);
       }
       else {
@@ -5469,7 +5469,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   Label blockEnd   = new Label();
                                   Label catchLabel = new Label();
                                   Label afterCatch = new Label();
-                                  mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(Continuation.class));
+                                  mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, JactlType.CONTINUATION_INTERNAL);
                                   mv.visitLabel(blockStart);
                                   invokeMethod(Utils.JACTL_INIT_WRAPPER_METHOD);
                                   mv.visitJumpInsn(GOTO, afterCatch);

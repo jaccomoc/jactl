@@ -39,6 +39,8 @@ public abstract class JactlMethodHandle implements Checkpointable {
   public static final Method BIND_TO_METHOD = Utils.getMethod(JactlMethodHandle.class, "bindTo", Object.class);
   public static final Method INVOKE_METHOD = Utils.getMethod(JactlMethodHandle.class, "invoke", Continuation.class, String.class, int.class, Object[].class);
   
+  public static final String TYPE_DESCRIPTOR = Type.getDescriptor(JactlMethodHandle.class);
+  
   enum HandleType {
     HANDLE,
     ITERATOR_HANDLE,

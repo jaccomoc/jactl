@@ -3609,7 +3609,7 @@ public class Parser {
     // Remember current state
     Marker mark = tokeniser.mark();
     boolean currentIgnoreEol         = ignoreEol;
-    List<CompileError> currentErrors = new ArrayList<>(errors);
+    List<CompileError> currentErrors = errors.isEmpty() ? errors : new ArrayList<>(errors);
 
     // Set flag so that we know not to collect state such as functions per block etc
     // while doing a lookahead
