@@ -81,8 +81,7 @@ public class BuilderImpl implements Builder {
    */
   @Override
   public Token peek() {
-    skipCommentsAndWhiteSpace();
-    return tokeniser.peek();
+    return _skipCommentsAndWhiteSpace();
   }
 
   /**
@@ -116,7 +115,15 @@ public class BuilderImpl implements Builder {
 
   @Override
   public void skipCommentsAndWhiteSpace() {
-    while (tokeniser.peek().is(COMMENT,WHITESPACE)) {
+    _skipCommentsAndWhiteSpace();
+  }
+
+  private Token _skipCommentsAndWhiteSpace() {
+    while (true) {
+      Token token = tokeniser.peek();
+      if (!token.is(COMMENT,WHITESPACE)) {
+        return token;
+      }
       _advance();
     }
   }

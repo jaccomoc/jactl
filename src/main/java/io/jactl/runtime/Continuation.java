@@ -20,6 +20,7 @@ package io.jactl.runtime;
 import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 
 import java.lang.reflect.Method;
 import java.util.function.Consumer;
@@ -57,7 +58,7 @@ public class Continuation extends RuntimeException implements Checkpointable {
   public         JactlScriptObject scriptInstance = null;
   private        Object            result;             // Result of the async call when continuing after suspend
 
-  public static final Method GET_RESULT_METHOD = Utils.getMethod(Continuation.class, "getResult");
+  public static final MethodRef GET_RESULT_METHOD = Utils.getMethod(Continuation.class, "getResult");
   
   Continuation(AsyncTask asyncTask, Object data) {
     super(null, null, false, false);

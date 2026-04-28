@@ -20,7 +20,6 @@ package io.jactl.resolver;
 import io.jactl.*;
 import io.jactl.compiler.LocalLocation;
 import io.jactl.runtime.*;
-import org.objectweb.asm.Type;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
@@ -2090,7 +2089,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   @Override
   public JactlType visitInvokeUtility(Expr.InvokeUtility expr) {
     expr.args.forEach(this::resolve);
-    return expr.type = jactlContext.typeFromClass(expr.method.getReturnType());
+    return expr.type = expr.method.getReturnType(jactlContext);
   }
 
   @Override public JactlType visitBlock(Expr.Block expr) {
@@ -3300,7 +3299,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     //  :   }
     Expr.InstanceOf arg0IsMap = new Expr.InstanceOf(startToken,
                                                     new Expr.ArrayGet(startToken, argsIdent, intLiteral.apply(0)),
-                                                    JactlType.NAMED_ARGS_MAP_INTERNAL);
+                                                    Utils.NAMED_ARGS_MAP_INTERNAL);
     Stmt.Stmts mapStmts = new Stmt.Stmts(startToken);
     Stmt.If ifArg0IsMap = new Stmt.If(startToken,
                                       new Expr.Binary(argCountIs1, token.apply(AMPERSAND_AMPERSAND), arg0IsMap),
@@ -3552,7 +3551,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     wrapperSmts.stmts.add(ifNullArgArr);
 
     Expr.ArrayGet   arg0                = new Expr.ArrayGet(classToken, new Expr.Identifier(objectArrToken), zero);
-    Expr.InstanceOf instanceOfNamedArgs = new Expr.InstanceOf(classToken, arg0, JactlType.NAMED_ARGS_MAP_COPY_INTERNAL);
+    Expr.InstanceOf instanceOfNamedArgs = new Expr.InstanceOf(classToken, arg0, Utils.NAMED_ARGS_MAP_COPY_INTERNAL);
 
     String          argMapName  = JACTL_PREFIX + "argMap";
     Expr.Identifier argMapIdent = new Expr.Identifier(classToken.newIdent(argMapName));

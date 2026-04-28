@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.*;
+import io.jactl.compiler.MethodRef;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -140,7 +141,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static final Method DECIMAL_BINARY_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
+  public static final MethodRef DECIMAL_BINARY_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
   public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int minScale, String source, int offset) {
     BigDecimal result;
     switch (operator) {
@@ -218,7 +219,7 @@ public class RuntimeUtils {
     return obj1.equals(obj2);
   }
 
-  public static final Method COMPARE_TO_METHOD = Utils.getMethod(RuntimeUtils.class, "compareTo", Object.class, Object.class, String.class, int.class);
+  public static final MethodRef COMPARE_TO_METHOD = Utils.getMethod(RuntimeUtils.class, "compareTo", Object.class, Object.class, String.class, int.class);
   public static int compareTo(Object obj1, Object obj2, String source, int offset) {
     if (obj1 == null && obj2 == null) {
       return 0;
@@ -381,7 +382,7 @@ public class RuntimeUtils {
     return result;
   }
 
-  public static final Method PLUS_METHOD = Utils.getMethod(RuntimeUtils.class, "plus", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef PLUS_METHOD = Utils.getMethod(RuntimeUtils.class, "plus", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object plus(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (left == DEFAULT_VALUE || !(left instanceof Number)) {
       return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
@@ -419,7 +420,7 @@ public class RuntimeUtils {
     return lhs + rhs;
   }
 
-  public static final Method MULTIPLY_METHOD = Utils.getMethod(RuntimeUtils.class, "multiply", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef MULTIPLY_METHOD = Utils.getMethod(RuntimeUtils.class, "multiply", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (isString(left)) {
       return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
@@ -460,7 +461,7 @@ public class RuntimeUtils {
     return lhs * rhs;
   }
 
-  public static final Method MINUS_METHOD = Utils.getMethod(RuntimeUtils.class, "minus", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef MINUS_METHOD = Utils.getMethod(RuntimeUtils.class, "minus", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object minus(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (left instanceof Map) {
       return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
@@ -500,7 +501,7 @@ public class RuntimeUtils {
     return lhs - rhs;
   }
 
-  public static final Method DIVIDE_METHOD = Utils.getMethod(RuntimeUtils.class, "divide", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef DIVIDE_METHOD = Utils.getMethod(RuntimeUtils.class, "divide", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object divide(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, captureStackTrace, source, offset);
@@ -542,7 +543,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static final Method REMAINDER_METHOD = Utils.getMethod(RuntimeUtils.class, "remainder", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef REMAINDER_METHOD = Utils.getMethod(RuntimeUtils.class, "remainder", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object remainder(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, captureStackTrace, source, offset);
@@ -584,7 +585,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static final Method MODULO_METHOD = Utils.getMethod(RuntimeUtils.class, "modulo", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef MODULO_METHOD = Utils.getMethod(RuntimeUtils.class, "modulo", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object modulo(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (!(left instanceof Number)) {
       throwOperandError(left, true, operator, captureStackTrace, source, offset);
@@ -642,7 +643,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Operand for " + operand + operator + "' must be int, byte, or long: was " + className(obj), source, offset);
   }
 
-  public static final Method BOOLEAN_OP_METHOD = Utils.getMethod(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, int.class);
+  public static final MethodRef BOOLEAN_OP_METHOD = Utils.getMethod(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, int.class);
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
     if (operator == TRIPLE_EQUAL) {
       if (left == right)                                        { return true;  }
@@ -902,9 +903,9 @@ public class RuntimeUtils {
     if (left instanceof Integer || right instanceof Integer) { return (int)result; }
     return (byte)result;
   }
-  public static final Method BIT_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, boolean.class, boolean.class, String.class, int.class);
+  public static final MethodRef BIT_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "bitOperation", Object.class, Object.class, String.class, boolean.class, boolean.class, String.class, int.class);
 
-  public static final Method ARITHMETIC_NOT_METHOD = Utils.getMethod(RuntimeUtils.class, "arithmeticNot", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef ARITHMETIC_NOT_METHOD = Utils.getMethod(RuntimeUtils.class, "arithmeticNot", Object.class, boolean.class, String.class, int.class);
   public static Object arithmeticNot(Object obj, boolean captureStackTrace, String source, int offset) {
     if (!(obj instanceof Long) && !(obj instanceof Integer || obj instanceof Byte)) {
       throwBitOperandError(obj, OperandType.UNARY, "~", captureStackTrace, source, offset);
@@ -916,7 +917,7 @@ public class RuntimeUtils {
     return (byte)~(byte)obj;
   }
 
-  public static final Method NEGATE_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "negateNumber", Object.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef NEGATE_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "negateNumber", Object.class, boolean.class, String.class, Integer.TYPE);
   public static Object negateNumber(Object obj, boolean captureStackTrace, String source, int offset) {
     ensureNonNull(obj, captureStackTrace, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal) obj).negate(); }
@@ -927,7 +928,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Type " + className(obj) + " cannot be negated", source, offset);
   }
 
-  public static final Method INC_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "incNumber", Object.class, String.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef INC_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "incNumber", Object.class, String.class, boolean.class, String.class, Integer.TYPE);
   public static Object incNumber(Object obj, String operator, boolean captureStackTrace, String source, int offset) {
     ensureNonNull(obj, captureStackTrace, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal) obj).add(BigDecimal.ONE);  }
@@ -938,7 +939,7 @@ public class RuntimeUtils {
     return binaryOp(obj, 1, PLUS, operator, -1, captureStackTrace, source, offset);
   }
 
-  public static final Method DEC_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "decNumber", Object.class, String.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef DEC_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "decNumber", Object.class, String.class, boolean.class, String.class, Integer.TYPE);
   public static Object decNumber(Object obj, String operator, boolean captureStackTrace, String source, int offset) {
     ensureNonNull(obj, captureStackTrace, source, offset);
     if (obj instanceof BigDecimal) { return ((BigDecimal) obj).subtract(BigDecimal.ONE); }
@@ -949,7 +950,7 @@ public class RuntimeUtils {
     return binaryOp(obj, 1, MINUS, operator, -1, captureStackTrace, source, offset);
   }
 
-  public static final Method STRING_REPEAT_METHOD = Utils.getMethod(RuntimeUtils.class, "stringRepeat", String.class, int.class, boolean.class, String.class, int.class);
+  public static final MethodRef STRING_REPEAT_METHOD = Utils.getMethod(RuntimeUtils.class, "stringRepeat", String.class, int.class, boolean.class, String.class, int.class);
   public static String stringRepeat(String str, int count, boolean captureStackTrace, String source, int offset) {
     if (count < 0) {
       throw new RuntimeError("String repeat count must be >= 0", source, offset);
@@ -977,7 +978,7 @@ public class RuntimeUtils {
     }
     return result;
   }
-  public static final Method LIST_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
+  public static final MethodRef LIST_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
 
   /**
    * Add single element to a list even if element is itself a list.
@@ -991,7 +992,7 @@ public class RuntimeUtils {
     result.add(elem);
     return result;
   }
-  public static final Method LIST_ADD_SINGLE_METHOD = Utils.getMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
+  public static final MethodRef LIST_ADD_SINGLE_METHOD = Utils.getMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
 
   /**
    * Add twp maps together. The result is a new map with a merge of the keys and values from the two maps. If the same
@@ -1008,7 +1009,7 @@ public class RuntimeUtils {
     result.putAll(map2);
     return result;
   }
-  public static final Method MAP_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
+  public static final MethodRef MAP_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
 
   public static Map mapSubtract(Map map1, Object obj2, boolean isMinusEqual, String source, int offset) {
     Map result = isMinusEqual ? map1 : new LinkedHashMap(map1);
@@ -1022,7 +1023,7 @@ public class RuntimeUtils {
     }
     throw new RuntimeError("Cannot subtract object of type " + className(obj2) + " from Map", source, offset);
   }
-  public static final Method MAP_SUBSTRACT_METHOD = Utils.getMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef MAP_SUBSTRACT_METHOD = Utils.getMethod(RuntimeUtils.class, "mapSubtract", Map.class, Object.class, boolean.class, String.class, int.class);
   
 
   /**
@@ -1053,9 +1054,9 @@ public class RuntimeUtils {
     if (value instanceof Object[])    { return negated == (((Object[]) value).length == 0); }
     return !negated;
   }
-  public static final Method IS_TRUTH_METHOD = Utils.getMethod(RuntimeUtils.class, "isTruth", Object.class, boolean.class);
+  public static final MethodRef IS_TRUTH_METHOD = Utils.getMethod(RuntimeUtils.class, "isTruth", Object.class, boolean.class);
 
-  public static final Method TO_STRING_OR_NULL_METHOD = Utils.getMethod(RuntimeUtils.class, "toStringOrNull", Object.class);
+  public static final MethodRef TO_STRING_OR_NULL_METHOD = Utils.getMethod(RuntimeUtils.class, "toStringOrNull", Object.class);
   public static String toStringOrNull(Object obj) {
     if (obj == null) {
       return null;
@@ -1067,7 +1068,7 @@ public class RuntimeUtils {
     return toString(obj);
   }
 
-  public static final Method TO_STRING_METHOD = Utils.getMethod(RuntimeUtils.class, "toString", Object.class);
+  public static final MethodRef TO_STRING_METHOD = Utils.getMethod(RuntimeUtils.class, "toString", Object.class);
   public static String toString(Object obj) {
     return doToString(obj, new HashSet<>(), "", 0);
   }
@@ -1281,9 +1282,9 @@ public class RuntimeUtils {
     }
     return value;
   }
-  public static final Method LOAD_FIELD_OR_DEFAULT_METHOD = Utils.getMethod(RuntimeUtils.class, "loadFieldOrDefault", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef LOAD_FIELD_OR_DEFAULT_METHOD = Utils.getMethod(RuntimeUtils.class, "loadFieldOrDefault", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Object.class, boolean.class, String.class, Integer.TYPE);
 
-  public static Method INVOKE_METHOD_OR_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class, boolean.class, boolean.class, Object[].class, boolean.class, String.class, int.class);
+  public static final MethodRef INVOKE_METHOD_OR_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "invokeMethodOrField", Object.class, String.class, boolean.class, boolean.class, Object[].class, boolean.class, String.class, int.class);
   public static Object invokeMethodOrField(Object parent, String field, boolean onlyField, boolean isOptional, Object[] args, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
@@ -1323,7 +1324,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static final Method LOOKUP_WRAPPER_METHOD = Utils.getMethod(RuntimeUtils.class, "lookupWrapper", Object.class, String.class, Object[].class, String.class, int.class); 
+  public static final MethodRef LOOKUP_WRAPPER_METHOD = Utils.getMethod(RuntimeUtils.class, "lookupWrapper", Object.class, String.class, Object[].class, String.class, int.class); 
   public static JactlMethodHandle lookupWrapper(Object parent, String field, Object[] args, String source, int offset) {
     JactlContext context = RuntimeState.getState().getContext();
     JactlMethodHandle handle = context.getFunctions().lookupWrapper(parent, field);
@@ -1343,7 +1344,7 @@ public class RuntimeUtils {
     return null;
   }
 
-  public static final Method LOOKUP_HOST_STATIC_WRAPPER_METHOD = Utils.getMethod(RuntimeUtils.class, "lookupHostStaticWrapper", Class.class, String.class, String.class, int.class);
+  public static final MethodRef LOOKUP_HOST_STATIC_WRAPPER_METHOD = Utils.getMethod(RuntimeUtils.class, "lookupHostStaticWrapper", Class.class, String.class, String.class, int.class);
   public static JactlMethodHandle lookupHostStaticWrapper(Class<?> parentClass, String field, String source, int offset) {
     JactlContext context = RuntimeState.getState().getContext();
     JactlType jactlType = context.typeFromClass(parentClass, (JactlType) null);
@@ -1391,7 +1392,7 @@ public class RuntimeUtils {
 
     return loadOther(parent, field, isDot, source, offset);
   }
-  public static final Method LOAD_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef LOAD_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
 
   private static Object loadOther(Object parent, Object field, boolean isDot, String source, int offset) {
     if (parent instanceof Class) {
@@ -1493,7 +1494,7 @@ public class RuntimeUtils {
 
     return loadOrCreateListElem((List) parent, index, isMap, source, offset);
   }
-  public static final Method LOAD_OR_CREATE_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadOrCreateField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef LOAD_OR_CREATE_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadOrCreateField", Object.class, Object.class, Boolean.TYPE, Boolean.TYPE, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
 
   private static Object loadOrCreateListElem(List parent, int index, boolean isMap, String source, int offset) {
     List   list  = parent;
@@ -1631,7 +1632,7 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static final Method LOAD_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadMapField", Object.class, Object.class, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef LOAD_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadMapField", Object.class, Object.class, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
   public static Object loadMapField(Object parent, Object field, boolean isOptional, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
@@ -1657,13 +1658,13 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static final Method LOAD_ARRAY_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadArrayField", Object.class, Object.class, String.class, int.class);
+  public static final MethodRef LOAD_ARRAY_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadArrayField", Object.class, Object.class, String.class, int.class);
   public static Object loadArrayField(Object parent, Object idxObj, String source, int offset) {
     int idx = castToInt(idxObj, true, source, offset);
     return loadArrayFieldInt(parent, idx, source, offset);
   }
 
-  public static final Method LOAD_ARRAY_FIELD_INT_METHOD = Utils.getMethod(RuntimeUtils.class, "loadArrayFieldInt", Object.class, int.class, String.class, int.class);
+  public static final MethodRef LOAD_ARRAY_FIELD_INT_METHOD = Utils.getMethod(RuntimeUtils.class, "loadArrayFieldInt", Object.class, int.class, String.class, int.class);
   public static Object loadArrayFieldInt(Object parent, int idx, String source, int offset) {
     try {
       if (parent instanceof String) {
@@ -1847,7 +1848,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static final Method GET_FIELD_GETTER_METHOD = Utils.getMethod(RuntimeUtils.class, "getFieldGetter", Object.class, Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef GET_FIELD_GETTER_METHOD = Utils.getMethod(RuntimeUtils.class, "getFieldGetter", Object.class, Object.class, boolean.class, String.class, int.class);
   public static Field getFieldGetter(Object parentObj, Object field, boolean captureStackTrace, String source, int offset) {
     JactlObject parent = (JactlObject) parentObj;
     if (field == null) {
@@ -1867,7 +1868,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Expected field '" + fieldName + "' but found method", source, offset);
   }
 
-  public static final Method DEFAULT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "defaultValue", Class.class, String.class, int.class);
+  public static final MethodRef DEFAULT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "defaultValue", Class.class, String.class, int.class);
   public static Object defaultValue(Class clss, String source, int offset) {
     if (Map.class.isAssignableFrom(clss)) {
       return new LinkedHashMap<>();
@@ -1896,12 +1897,12 @@ public class RuntimeUtils {
     throw new RuntimeError("Default value for " + clss.getName() + " not supported", source, offset);
   }
 
-  public static final Method STORE_PARENT_FIELD_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "storeParentFieldValue", Object.class, Object.class, Object.class, boolean.class, boolean.class, boolean.class, String.class, int.class);
+  public static final MethodRef STORE_PARENT_FIELD_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "storeParentFieldValue", Object.class, Object.class, Object.class, boolean.class, boolean.class, boolean.class, String.class, int.class);
   public static Object storeParentFieldValue(Object parent, Object field, Object value, boolean isDot, boolean returnTypeOfField, boolean captureStackTrace, String source, int offset) {
     return storeValueParentField(value, parent, field, isDot, returnTypeOfField, captureStackTrace, source, offset);
   }
 
-  public static final Method STORE_VALUE_PARENT_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "storeValueParentField", Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
+  public static final MethodRef STORE_VALUE_PARENT_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "storeValueParentField", Object.class, Object.class, Object.class, boolean.class, boolean.class, String.class, int.class);
   public static Object storeValueParentField(Object value, Object parent, Object field, boolean isDot, boolean captureStackTrace, String source, int offset) {
     return storeValueParentField(value, parent, field, isDot, false, captureStackTrace, source, offset);
   }
@@ -1986,7 +1987,7 @@ public class RuntimeUtils {
     }
   }
 
-  public static final Method STORE_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "storeMapField", Object.class, Map.class, Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef STORE_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "storeMapField", Object.class, Map.class, Object.class, boolean.class, String.class, int.class);
   public static Object storeMapField(Object value, Map parent, Object field, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       throw new NullError("Null value for Map/List/Object storing field value", source, offset, captureStackTrace);
@@ -2019,7 +2020,7 @@ public class RuntimeUtils {
     return JactlIterator.of(obj);
   }
 
-  public static final Method CREATE_ITERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "createIterator", Object.class);
+  public static final MethodRef CREATE_ITERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "createIterator", Object.class);
   public static JactlIterator createIterator(Object obj) {
     JactlIterator iter = createIteratorOrNull(obj);
     if (iter != null) {
@@ -2060,7 +2061,7 @@ public class RuntimeUtils {
     return result;
   }
 
-  public static final Method CREATE_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "createMap");
+  public static final MethodRef CREATE_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "createMap");
   public static Map createMap() {
     return new LinkedHashMap();
   }
@@ -2069,7 +2070,7 @@ public class RuntimeUtils {
     return new LinkedHashMap(map);
   }
 
-  public static final Method CREATE_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "createList");
+  public static final MethodRef CREATE_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "createList");
   public static List createList() {
     return new ArrayList();
   }
@@ -2131,7 +2132,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot convert from " + className(value) + " to type " + clss.getName(), source, offset);
   }
 
-  public static final Method CAST_TO_INT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "castToIntValue", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef CAST_TO_INT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "castToIntValue", Object.class, boolean.class, String.class, int.class);
   public static int castToIntValue(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Integer) { return (int) obj; }
     if (obj instanceof Long)    { return (int)(long) obj; }
@@ -2140,7 +2141,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to int", source, offset);
   }
 
-  public static final Method CAST_TO_LONG_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "castToLongValue", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef CAST_TO_LONG_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "castToLongValue", Object.class, boolean.class, String.class, int.class);
   public static long castToLongValue(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Long)    { return (long) obj; }
     if (obj instanceof Integer) { return (int) obj; }
@@ -2149,7 +2150,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Must be int or long: cannot cast object of type " + className(obj) + " to long", source, offset);
   }
 
-  public static final Method CAST_TO_STRING_METHOD = Utils.getMethod(RuntimeUtils.class, "castToString", Object.class, String.class, int.class);
+  public static final MethodRef CAST_TO_STRING_METHOD = Utils.getMethod(RuntimeUtils.class, "castToString", Object.class, String.class, int.class);
   public static String castToString(Object obj, String source, int offset) {
     if (obj instanceof String) {
       return (String) obj;
@@ -2163,7 +2164,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot convert object of type " + className(obj) + " to String", source, offset);
   }
 
-  public static final Method CAST_TO_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "castToMap", Object.class, String.class, int.class);
+  public static final MethodRef CAST_TO_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "castToMap", Object.class, String.class, int.class);
   public static Map castToMap(Object obj, String source, int offset) {
     if (obj instanceof Map) {
       return (Map) obj;
@@ -2174,7 +2175,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Map", source, offset);
   }
 
-  public static final Method CAST_TO_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "castToList", Object.class, String.class, int.class);
+  public static final MethodRef CAST_TO_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "castToList", Object.class, String.class, int.class);
   public static List castToList(Object obj, String source, int offset) {
     if (obj instanceof List) {
       return (List) obj;
@@ -2193,7 +2194,7 @@ public class RuntimeUtils {
     return convertIteratorToList(c.localObjects[1], c);
   }
 
-  public static final Method CONVERT_ITERATOR_TO_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
+  public static final MethodRef CONVERT_ITERATOR_TO_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
   public static List convertIteratorToList(Object iterable, Continuation c) {
     JactlIterator iter = createIterator(iterable);
 
@@ -2255,7 +2256,7 @@ public class RuntimeUtils {
     return Byte.valueOf(b >= 128 ? (byte)(b - 256) : (byte)b);
   }
 
-  public static final Method CAST_TO_BYTE_METHOD = Utils.getMethod(RuntimeUtils.class, "castToByte", Object.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef CAST_TO_BYTE_METHOD = Utils.getMethod(RuntimeUtils.class, "castToByte", Object.class, boolean.class, String.class, Integer.TYPE);
   public static byte castToByte(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Number) {
       return ((Number) obj).byteValue();
@@ -2273,7 +2274,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to byte", source, offset);
   }
 
-  public static final Method CAST_TO_INT_METHOD = Utils.getMethod(RuntimeUtils.class, "castToInt", Object.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef CAST_TO_INT_METHOD = Utils.getMethod(RuntimeUtils.class, "castToInt", Object.class, boolean.class, String.class, Integer.TYPE);
   public static int castToInt(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Byte) {
       return ((int)(byte)obj) & 0xff;
@@ -2302,7 +2303,7 @@ public class RuntimeUtils {
     return castToNumber(obj, captureStackTrace, source, offset).doubleValue();
   }
 
-  public static final Method CAST_TO_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "castToNumber", Object.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef CAST_TO_NUMBER_METHOD = Utils.getMethod(RuntimeUtils.class, "castToNumber", Object.class, boolean.class, String.class, Integer.TYPE);
   public static Number castToNumber(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof Byte) {
       return ((int)(byte)obj) & 0xff;
@@ -2323,7 +2324,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Number", source, offset);
   }
 
-  public static final Method CAST_TO_DECIMAL_METHOD = Utils.getMethod(RuntimeUtils.class, "castToDecimal", Object.class, String.class, int.class);
+  public static final MethodRef CAST_TO_DECIMAL_METHOD = Utils.getMethod(RuntimeUtils.class, "castToDecimal", Object.class, String.class, int.class);
   public static BigDecimal castToDecimal(Object obj, String source, int offset) {
     if (obj instanceof Number) {
       return toBigDecimal(obj);
@@ -2341,7 +2342,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Decimal", source, offset);
   }
 
-  public static final Method CAST_TO_FUNCTION_METHOD = Utils.getMethod(RuntimeUtils.class, "castToFunction", Object.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef CAST_TO_FUNCTION_METHOD = Utils.getMethod(RuntimeUtils.class, "castToFunction", Object.class, boolean.class, String.class, Integer.TYPE);
   public static JactlMethodHandle castToFunction(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj instanceof JactlMethodHandle) {
       return (JactlMethodHandle) obj;
@@ -2352,12 +2353,12 @@ public class RuntimeUtils {
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Function", source, offset);
   }
 
-  public static final Method AS_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "asArray", Object.class, Class.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "asArray", Object.class, Class.class, boolean.class, String.class, int.class);
   public static Object asArray(Object obj, Class clss, boolean captureStackTrace, String source, int offset) {
     return convertToArray(obj, clss, false, captureStackTrace, source, offset);
   }
 
-  public static final Method CAST_TO_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "castToArray", Object.class, Class.class, boolean.class, String.class, Integer.TYPE);
+  public static final MethodRef CAST_TO_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "castToArray", Object.class, Class.class, boolean.class, String.class, Integer.TYPE);
   public static Object castToArray(Object obj, Class clss, boolean captureStackTrace, String source, int offset) {
     return convertToArray(obj, clss, true, captureStackTrace, source, offset);
   }
@@ -2471,7 +2472,7 @@ public class RuntimeUtils {
    * Note that o1 can be an array in which case it can be compared with
    * a list value for o2.
    */
-  public static final Method SWITCH_EQUALS_METHOD = Utils.getMethod(RuntimeUtils.class, "switchEquals", Object.class, Object.class);
+  public static final MethodRef SWITCH_EQUALS_METHOD = Utils.getMethod(RuntimeUtils.class, "switchEquals", Object.class, Object.class);
   public static boolean switchEquals(Object o1, Object o2) {
     if (o1 == null || o2 == null) {
       return o1 == o2;
@@ -2520,7 +2521,7 @@ public class RuntimeUtils {
   /**
    * Get integer value or null if not int/byte
    */
-  public static final Method INT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "intValue", Object.class);
+  public static final MethodRef INT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "intValue", Object.class);
   public static Integer intValue(Object obj) {
     if (obj instanceof Integer) {
       return (Integer)obj;
@@ -2531,7 +2532,7 @@ public class RuntimeUtils {
     return null;
   }
 
-  public static final Method IS_PATTERN_COMPATIBLE_METHOD = Utils.getMethod(RuntimeUtils.class, "isPatternCompatible", Object.class, Class.class);
+  public static final MethodRef IS_PATTERN_COMPATIBLE_METHOD = Utils.getMethod(RuntimeUtils.class, "isPatternCompatible", Object.class, Class.class);
   public static boolean isPatternCompatible(Object obj, Class clss) {
     if (clss.isArray())  { return isArrayType(obj, clss); }
     if (obj == null)     { return clss.equals(Object.class); }
@@ -2576,12 +2577,12 @@ public class RuntimeUtils {
     return false;
   }
 
-  public static Method PRINT_METHOD = Utils.getMethod(RuntimeUtils.class, "print", String.class, int.class, String.class);
+  public static final MethodRef PRINT_METHOD = Utils.getMethod(RuntimeUtils.class, "print", String.class, int.class, String.class);
   public static boolean print(String source, int offset, String obj) {
     return doPrint(source, offset, obj, false);
   }
 
-  public static Method PRINTLN_METHOD = Utils.getMethod(RuntimeUtils.class, "println", String.class, int.class, String.class);
+  public static final MethodRef PRINTLN_METHOD = Utils.getMethod(RuntimeUtils.class, "println", String.class, int.class, String.class);
   public static boolean println(String source, int offset, String obj) {
     return doPrint(source, offset, obj, true);
   }
@@ -2803,12 +2804,12 @@ public class RuntimeUtils {
     return elem;
   }
 
-  public static final Method LIST_TO_OBJECT_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "listToObjectArray", Object.class);
+  public static final MethodRef LIST_TO_OBJECT_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "listToObjectArray", Object.class);
   public static Object[] listToObjectArray(Object obj) {
     return ((List)obj).toArray();
   }
   
-  public static final Method IN_OPERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "inOperator", Object.class, Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef IN_OPERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "inOperator", Object.class, Object.class, boolean.class, String.class, int.class);
   public static boolean inOperator(Object elem, Object collection, boolean isIn, String source, int offset) {
     // Handle List, Map, and String
     if (collection instanceof String) {
@@ -2833,7 +2834,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Operator '" + (isIn?"in":"!in") + "': Expecting String/List/Map for right-hand side not " + className(collection), source, offset);
   }
 
-  public static final Method LENGTH_METHOD = Utils.getMethod(RuntimeUtils.class, "length", Object.class, String.class, int.class);
+  public static final MethodRef LENGTH_METHOD = Utils.getMethod(RuntimeUtils.class, "length", Object.class, String.class, int.class);
   public static int length(Object obj, String source, int offset) {
     if (obj instanceof List)      { return ((List)obj).size(); }
     if (obj instanceof Map)       { return ((Map)obj).size();  }
@@ -2850,7 +2851,7 @@ public class RuntimeUtils {
   // "as" operator tries to convert anything where it makes sense to do so whereas with cast the object
   // must already be the right type (or very close to it - e.g for numbers).
 
-  public static final Method AS_BYTE_METHOD = Utils.getMethod(RuntimeUtils.class, "asByte", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_BYTE_METHOD = Utils.getMethod(RuntimeUtils.class, "asByte", Object.class, boolean.class, String.class, int.class);
   public static byte asByte(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)              { throw new NullError("Null value cannot be coerced to byte", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).byteValue(); }
@@ -2861,7 +2862,7 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid number", source, offset, e); }
   }
 
-  public static final Method AS_INT_METHOD = Utils.getMethod(RuntimeUtils.class, "asInt", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_INT_METHOD = Utils.getMethod(RuntimeUtils.class, "asInt", Object.class, boolean.class, String.class, int.class);
   public static int asInt(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)              { throw new NullError("Null value cannot be coerced to int", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).intValue(); }
@@ -2872,7 +2873,7 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid int", source, offset, e); }
   }
 
-  public static final Method AS_LONG_METHOD = Utils.getMethod(RuntimeUtils.class, "asLong", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_LONG_METHOD = Utils.getMethod(RuntimeUtils.class, "asLong", Object.class, boolean.class, String.class, int.class);
   public static long asLong(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)              { throw new NullError("Null value cannot be coerced to long", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).longValue(); }
@@ -2883,7 +2884,7 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid long", source, offset, e); }
   }
 
-  public static final Method AS_DOUBLE_METHOD = Utils.getMethod(RuntimeUtils.class, "asDouble", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_DOUBLE_METHOD = Utils.getMethod(RuntimeUtils.class, "asDouble", Object.class, boolean.class, String.class, int.class);
   public static double asDouble(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)              { throw new NullError("Null value cannot be coerced to double", source, offset, captureStackTrace); }
     if (obj instanceof Number)    { return ((Number)obj).doubleValue(); }
@@ -2894,7 +2895,7 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid double", source, offset, e); }
   }
 
-  public static final Method AS_DECIMAL_METHOD = Utils.getMethod(RuntimeUtils.class, "asDecimal", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_DECIMAL_METHOD = Utils.getMethod(RuntimeUtils.class, "asDecimal", Object.class, boolean.class, String.class, int.class);
   public static BigDecimal asDecimal(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)               { throw new NullError("Null value cannot be coerced to Decimal", source, offset, captureStackTrace); }
     if (obj instanceof BigDecimal) { return (BigDecimal)obj; }
@@ -2913,7 +2914,7 @@ public class RuntimeUtils {
     catch (NumberFormatException e) { throw new RuntimeError("String value is not a valid Decimal", source, offset); }
   }
 
-  public static final Method AS_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "asList", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "asList", Object.class, boolean.class, String.class, int.class);
   public static List asList(Object obj, boolean captureStackTrace, String source, int offset) {
     if (obj == null)           { return null; }
     if (obj instanceof List)   { return (List)obj; }
@@ -2968,7 +2969,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to List", source, offset);
   }
 
-  public static final Method AS_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "asMap", Object.class, boolean.class, String.class, int.class);
+  public static final MethodRef AS_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "asMap", Object.class, boolean.class, String.class, int.class);
   public static Map asMap(Object obj, boolean captureStackTrace, String source, int offset) {
     return doAsMap(obj, source, offset, new HashMap<>());
   }
@@ -3035,17 +3036,17 @@ public class RuntimeUtils {
     map.put(key, value);
   }
 
-  public static final Method COPY_ARG0_AS_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "copyArg0AsMap", Object[].class);
+  public static final MethodRef COPY_ARG0_AS_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "copyArg0AsMap", Object[].class);
   public static Map copyArg0AsMap(Object[] args) {
     return new LinkedHashMap((Map)args[0]);
   }
 
-  public static final Method COPY_NAMED_ARGS_METHOD = Utils.getMethod(RuntimeUtils.class, "copyNamedArgs", Object.class);
+  public static final MethodRef COPY_NAMED_ARGS_METHOD = Utils.getMethod(RuntimeUtils.class, "copyNamedArgs", Object.class);
   public static Map copyNamedArgs(Object arg) {
     return new NamedArgsMapCopy((Map)arg);
   }
 
-  public static final Method REMOVE_OR_THROW_METHOD = Utils.getMethod(RuntimeUtils.class, "removeOrThrow", Map.class, String.class, boolean.class, String.class, int.class);
+  public static final MethodRef REMOVE_OR_THROW_METHOD = Utils.getMethod(RuntimeUtils.class, "removeOrThrow", Map.class, String.class, boolean.class, String.class, int.class);
   public static Object removeOrThrow(Map map, String key, boolean isInitMethod, String source, int offset) {
     if (map.containsKey(key)) {
       return map.remove(key);
@@ -3053,7 +3054,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Missing value for mandatory " + (isInitMethod ? "field" : "parameter") + " '" + key + "'", source, offset);
   }
 
-  public static final Method CHECK_FOR_EXTRA_ARGS_METHOD = Utils.getMethod(RuntimeUtils.class, "checkForExtraArgs", Map.class, boolean.class, String.class, int.class);
+  public static final MethodRef CHECK_FOR_EXTRA_ARGS_METHOD = Utils.getMethod(RuntimeUtils.class, "checkForExtraArgs", Map.class, boolean.class, String.class, int.class);
   public static boolean checkForExtraArgs(Map<String,Object> map, boolean isInitMethod, String source, int offset) {
     if (!map.isEmpty()) {
       String names = map.keySet().stream().collect(Collectors.joining(", "));
@@ -3068,7 +3069,7 @@ public class RuntimeUtils {
     return data;
   }
 
-  public static final Method EVAL_SCRIPT_METHOD = Utils.getMethod(RuntimeUtils.class, "evalScript", Continuation.class, String.class, Map.class, ClassLoader.class);
+  public static final MethodRef EVAL_SCRIPT_METHOD = Utils.getMethod(RuntimeUtils.class, "evalScript", Continuation.class, String.class, Map.class, ClassLoader.class);
   public static Object evalScript(Continuation c, String code, Map bindings, ClassLoader classLoader) {
     if (c != null) {
       return c.getResult();
@@ -3098,7 +3099,7 @@ public class RuntimeUtils {
     return context.getEvalScript(code, bindings);
   }
 
-  public static final Method DIE_METHOD = Utils.getMethod(RuntimeUtils.class, "die", String.class, String.class, int.class);
+  public static final MethodRef DIE_METHOD = Utils.getMethod(RuntimeUtils.class, "die", String.class, String.class, int.class);
   public static boolean die(String msg, String source, int offset) {
     throw new DieError(msg, source, offset);
   }
@@ -3163,7 +3164,7 @@ public class RuntimeUtils {
     return Utils.repeat(str, repeat);
   }
 
-  public static final Method LOOKUP_METHOD_HANDLE_METHOD = Utils.getMethod(RuntimeUtils.class, "lookupMethodHandle", String.class);
+  public static final MethodRef LOOKUP_METHOD_HANDLE_METHOD = Utils.getMethod(RuntimeUtils.class, "lookupMethodHandle", String.class);
   public static JactlMethodHandle lookupMethodHandle(String name) {
     return RuntimeState.getState().getContext().getFunctions().lookupMethodHandle(name);
   }

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlContext;
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 
 import java.io.*;
 import java.lang.reflect.Method;
@@ -59,7 +60,7 @@ public class RuntimeState {
     return state;
   }
 
-  public static final Method GET_CURRENT_GLOBALS_METHOD = Utils.getMethod(RuntimeState.class, "getCurrentGlobals");
+  public static final MethodRef GET_CURRENT_GLOBALS_METHOD = Utils.getMethod(RuntimeState.class, "getCurrentGlobals");
   public static Map getCurrentGlobals() { return getState().globals; }
 
   public static void setState(RuntimeState value) {
@@ -115,7 +116,7 @@ public class RuntimeState {
     }
   }
 
-  public static final Method CHECK_TIMEOUT_METHOD = Utils.getMethod(RuntimeState.class, "checkTimeout", String.class, int.class);
+  public static final MethodRef CHECK_TIMEOUT_METHOD = Utils.getMethod(RuntimeState.class, "checkTimeout", String.class, int.class);
   public static void checkTimeout(String source, int offset) {
     RuntimeState state = getState();
     if (state.endTime > 0 && System.nanoTime() >= state.endTime) {

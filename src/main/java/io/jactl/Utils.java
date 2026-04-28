@@ -17,10 +17,8 @@
 
 package io.jactl;
 
-import io.jactl.runtime.Continuation;
-import io.jactl.runtime.FunctionDescriptor;
-import io.jactl.runtime.JactlObject;
-import io.jactl.runtime.RuntimeUtils;
+import io.jactl.compiler.MethodRef;
+import io.jactl.runtime.*;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -66,7 +64,7 @@ public class Utils {
   public static final String JACTL_INIT          = JACTL_PREFIX + "init";
   public static final String JACTL_JAVA_INIT     = "<init>";    // for invoking constructors of host classes
   public static final String JACTL_INIT_WRAPPER  = Utils.wrapperName(JACTL_PREFIX + "init");
-  public static final Method JACTL_INIT_WRAPPER_METHOD = getMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class, String.class, int.class, Object[].class);
+  public static final MethodRef JACTL_INIT_WRAPPER_METHOD = getMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class, String.class, int.class, Object[].class);
   public static final String JACTL_INIT_NOASYNC  = JACTL_PREFIX + "initNoAsync";
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
 
@@ -84,7 +82,9 @@ public class Utils {
   public static final String JACTL_RESTORE_FN                   = JACTL_PREFIX + "restore";
 
   public static final Class JACTL_MAP_TYPE  = LinkedHashMap.class;
+  public static final String JACTL_MAP_INTERNAL = Type.getInternalName(JACTL_MAP_TYPE);
   public static final Class JACTL_LIST_TYPE = ArrayList.class;
+  public static final String JACTL_LIST_INTERNAL = Type.getInternalName(JACTL_LIST_TYPE);
 
   public static final String JACTL_GLOBALS_NAME = JACTL_PREFIX + "globals";
   public static final String SOURCE_VAR_NAME    = JACTL_PREFIX + "source";
@@ -110,9 +110,95 @@ public class Utils {
   public static final char   REGEX_CAPTURE_NUMS    = 'n';
 
   public static final Object[] EMPTY_OBJ_ARR = new Object[0];
-  public static final Method MAP_GET_METHOD          = getMethod(Map.class, "get", Object.class);
-  public static final Method MAP_CONTAINS_KEY_METHOD = getMethod(Map.class, "containsKey", Object.class);
-  public static final Method MAP_REMOVE_METHOD       = getMethod(Map.class, "remove", Object.class);
+  
+  public static final MethodRef MAP_GET_METHOD          = getMethod(Map.class, "get", Object.class);
+  public static final MethodRef MAP_CONTAINS_KEY_METHOD = getMethod(Map.class, "containsKey", Object.class);
+  public static final MethodRef MAP_REMOVE_METHOD       = getMethod(Map.class, "remove", Object.class);
+  
+  public static final String BOOLEAN_TYPE_DESCRIPTOR        = Type.getDescriptor(boolean.class);
+  public static final String BOOLEAN_BOXED_TYPE_DESCRIPTOR  = Type.getDescriptor(Boolean.class);
+  public static final String BYTE_TYPE_DESCRIPTOR           = Type.getDescriptor(byte.class);
+  public static final String BYTE_BOXED_TYPE_DESCRIPTOR     = Type.getDescriptor(Byte.class);
+  public static final String INT_TYPE_DESCRIPTOR            = Type.getDescriptor(int.class);
+  public static final String INT_BOXED_TYPE_DESCRIPTOR      = Type.getDescriptor(Integer.class);
+  public static final String LONG_TYPE_DESCRIPTOR           = Type.getDescriptor(long.class);
+  public static final String LONG_BOXED_TYPE_DESCRIPTOR     = Type.getDescriptor(Long.class);
+  public static final String DOUBLE_TYPE_DESCRIPTOR         = Type.getDescriptor(double.class);
+  public static final String DOUBLE_BOXED_TYPE_DESCRIPTOR   = Type.getDescriptor(Double.class);
+  public static final String DECIMAL_TYPE_DESCRIPTOR        = Type.getDescriptor(BigDecimal.class);
+  public static final String STRING_TYPE_DESCRIPTOR         = Type.getDescriptor(String.class);
+  public static final String MAP_TYPE_DESCRIPTOR            = Type.getDescriptor(Map.class);
+  public static final String LIST_TYPE_DESCRIPTOR           = Type.getDescriptor(List.class);
+  public static final String OBJECT_TYPE_DESCRIPTOR         = Type.getDescriptor(Object.class);
+  public static final String HEAP_LOCAL_TYPE_DESCRIPTOR     = Type.getDescriptor(HeapLocal.class);
+  public static final String JACTL_ITERATOR_TYPE_DESCRIPTOR = Type.getDescriptor(JactlIterator.class);
+  public static final String REGEX_MATCHER_TYPE_DESCRIPTOR  = Type.getDescriptor(RegexMatcher.class);
+  public static final String CONTINUATION_TYPE_DESCRIPTOR   = Type.getDescriptor(Continuation.class);
+  public static final String CLASS_TYPE_DESCRIPTOR          = Type.getDescriptor(Class.class);
+  public static final Type   BOOLEAN_TYPE                   = Type.getType(boolean.class);
+  public static final Type   BOOLEAN_BOXED_TYPE             = Type.getType(Boolean.class);
+  public static final Type   BYTE_TYPE                      = Type.getType(byte.class);
+  public static final Type   CHAR_TYPE                      = Type.getType(char.class);
+  public static final Type   BYTE_BOXED_TYPE                = Type.getType(Byte.class);
+  public static final Type   INT_TYPE                       = Type.getType(int.class);
+  public static final Type   INT_BOXED_TYPE                 = Type.getType(Integer.class);
+  public static final Type   LONG_TYPE                      = Type.getType(long.class);
+  public static final Type   LONG_ARR_TYPE                  = Type.getType(long[].class);
+  public static final Type   LONG_BOXED_TYPE                = Type.getType(Long.class);
+  public static final Type   DOUBLE_TYPE                    = Type.getType(double.class);
+  public static final Type   DOUBLE_BOXED_TYPE              = Type.getType(Double.class);
+  public static final Type   DECIMAL_TYPE                   = Type.getType(BigDecimal.class);
+  public static final Type   NUMBER_TYPE                    = Type.getType(Number.class);
+  public static final Type   STRING_TYPE                    = Type.getType(String.class);
+  public static final Type   MAP_TYPE                       = Type.getType(Map.class);
+  public static final Type   LIST_TYPE                      = Type.getType(List.class);
+  public static final Type   OBJECT_TYPE                    = Type.getType(Object.class);
+  public static final Type   OBJECT_ARR_TYPE                = Type.getType(Object[].class);
+  public static final Type   JACTL_METHOD_HANDLE_TYPE       = Type.getType(JactlMethodHandle.class);
+  public static final Type   HEAP_LOCAL_TYPE                = Type.getType(HeapLocal.class);
+  public static final Type   JACTL_ITERATOR_TYPE            = Type.getType(JactlIterator.class);
+  public static final Type   REGEX_MATCHER_TYPE             = Type.getType(RegexMatcher.class);
+  public static final Type   CONTINUATION_TYPE              = Type.getType(Continuation.class);
+  public static final Type   VOID_TYPE                      = Type.getType(void.class);
+  public static final Type   JSON_ENCODER_TYPE              = Type.getType(JsonEncoder.class);
+  public static final Type   JSON_DECODER_TYPE              = Type.getType(JsonDecoder.class);
+  public static final Type   CHECKPOINTER_TYPE              = Type.getType(Checkpointer.class);
+  public static final Type   RESTORER_TYPE                  = Type.getType(Restorer.class);
+  public static final Type   JACTL_OBJECT_TYPE              = Type.getType(JactlObject.class);
+  public static final Type   JACTL_SCRIPT_OBJECT_TYPE       = Type.getType(JactlScriptObject.class);
+  public static final String JACTL_OBJECT_INTERNAL          = Type.getInternalName(JactlObject.class);
+  public static final String JACTL_SCRIPT_OBJECT_INTERNAL   = Type.getInternalName(JactlScriptObject.class);
+  public static final String JSON_ENCODER_INTERNAL          = Type.getInternalName(JsonEncoder.class);
+  public static final String JSON_DECODER_INTERNAL          = Type.getInternalName(JsonDecoder.class);
+  public static final String BOOLEAN_INTERNAL               = Type.getInternalName(boolean.class);
+  public static final String BOOLEAN_BOXED_INTERNAL         = Type.getInternalName(Boolean.class);
+  public static final String BYTE_INTERNAL                  = Type.getInternalName(byte.class);
+  public static final String BYTE_BOXED_INTERNAL            = Type.getInternalName(Byte.class);
+  public static final String INT_INTERNAL                   = Type.getInternalName(int.class);
+  public static final String INT_BOXED_INTERNAL             = Type.getInternalName(Integer.class);
+  public static final String LONG_INTERNAL                  = Type.getInternalName(long.class);
+  public static final String LONG_ARR_INTERNAL              = Type.getInternalName(long[].class);
+  public static final String LONG_BOXED_INTERNAL            = Type.getInternalName(Long.class);
+  public static final String DOUBLE_INTERNAL                = Type.getInternalName(double.class);
+  public static final String DOUBLE_BOXED_INTERNAL          = Type.getInternalName(Double.class);
+  public static final String DECIMAL_INTERNAL               = Type.getInternalName(BigDecimal.class);
+  public static final String NUMBER_INTERNAL                = Type.getInternalName(Number.class);
+  public static final String STRING_INTERNAL                = Type.getInternalName(String.class);
+  public static final String MAP_INTERNAL                   = Type.getInternalName(Map.class);
+  public static final String LIST_INTERNAL                  = Type.getInternalName(List.class);
+  public static final String OBJECT_INTERNAL                = Type.getInternalName(Object.class);
+  public static final String JACTL_METHOD_HANDLE_INTERNAL   = Type.getInternalName(JactlMethodHandle.class);
+  public static final String HEAP_LOCAL_INTERNAL            = Type.getInternalName(HeapLocal.class);
+  public static final String JACTL_ITERATOR_INTERNAL        = Type.getInternalName(JactlIterator.class);
+  public static final String REGEX_MATCHER_INTERNAL         = Type.getInternalName(RegexMatcher.class);
+  public static final String CONTINUATION_INTERNAL          = Type.getInternalName(Continuation.class);
+  public static final String CLASS_INTERNAL                 = Type.getInternalName(Class.class);
+  public static final String RUNTIME_UTILS_INTERNAL         = Type.getInternalName(RuntimeUtils.class);
+  public static final String RESTORER_INTERNAL              = Type.getInternalName(Restorer.class);
+  public static final String RUNTIME_ERROR_INTERNAL         = Type.getInternalName(RuntimeError.class);
+  public static final String STRING_BUFFER_INTERNAL         = Type.getInternalName(StringBuffer.class);
+  public static final String NAMED_ARGS_MAP_INTERNAL        = Type.getInternalName(NamedArgsMap.class);
+  public static final String NAMED_ARGS_MAP_COPY_INTERNAL   = Type.getInternalName(NamedArgsMapCopy.class);
 
   static TokenType[] fieldAccessOp = new TokenType[] {DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
@@ -1179,9 +1265,10 @@ public class Utils {
     throw new RuntimeException("Unexpected type " + expr.getClass().getName());
   }
   
-  public static Method getMethod(Class<?> clss, String methodName, Class<?>... parameterTypes) {
+  public static MethodRef getMethod(Class<?> clss, String methodName, Class<?>... parameterTypes) {
     try {
-      return clss.getMethod(methodName, parameterTypes);
+      Method method = clss.getMethod(methodName, parameterTypes);
+      return new MethodRef(method);
     } catch (NoSuchMethodException e) {
       throw new RuntimeException(e);
     }

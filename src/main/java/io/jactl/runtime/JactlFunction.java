@@ -22,7 +22,6 @@ import io.jactl.JactlType;
 import io.jactl.Utils;
 import io.jactl.compiler.JactlClassLoader;
 import io.jactl.compiler.JactlClassWriter;
-import io.jactl.runtime.JactlMethodHandle.FunctionWrapperHandle;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Type;
@@ -32,7 +31,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -583,7 +581,7 @@ public class JactlFunction extends FunctionDescriptor {
     String helperClassName    = Utils.JACTL_PREFIX + "Helper" + classCounter.getAndIncrement() + '$' + name;
     String helperPkgClassName = Utils.pkgPathOf(packageName, helperClassName);
     String internalName       = helperPkgClassName.replace('.', '/');
-    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, JactlType.OBJECT_INTERNAL, new String[0]);
+    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, Utils.OBJECT_INTERNAL, new String[0]);
     cv.visitSource(helperClassName + ".java", null);
 
     // Add MethodHandle fields

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -36,16 +37,16 @@ public class HeapLocal extends Number implements Checkpointable {
 
   Object value;
 
-  public static final Method SET_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "setValue", Object.class);
-  public static final Method BYTE_VALUE_METHOD    = Utils.getMethod(HeapLocal.class, "byteValue");
-  public static final Method INT_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "intValue");
-  public static final Method LONG_VALUE_METHOD    = Utils.getMethod(HeapLocal.class, "longValue");
-  public static final Method FLOAT_VALUE_METHOD   = Utils.getMethod(HeapLocal.class, "floatValue");
-  public static final Method DOUBLE_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "doubleValue");
-  public static final Method DECIMAL_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "decimalValue");
-  public static final Method STRING_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "stringValue");
-  public static final Method MATCHER_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "matcherValue");
-  public static final Method GET_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "getValue");
+  public static final MethodRef SET_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "setValue", Object.class);
+  public static final MethodRef BYTE_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "byteValue");
+  public static final MethodRef INT_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "intValue");
+  public static final MethodRef LONG_VALUE_METHOD    = Utils.getMethod(HeapLocal.class, "longValue");
+  public static final MethodRef FLOAT_VALUE_METHOD   = Utils.getMethod(HeapLocal.class, "floatValue");
+  public static final MethodRef DOUBLE_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "doubleValue");
+  public static final MethodRef DECIMAL_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "decimalValue");
+  public static final MethodRef STRING_VALUE_METHOD  = Utils.getMethod(HeapLocal.class, "stringValue");
+  public static final MethodRef MATCHER_VALUE_METHOD = Utils.getMethod(HeapLocal.class, "matcherValue");
+  public static final MethodRef GET_VALUE_METHOD     = Utils.getMethod(HeapLocal.class, "getValue");
   
   public void   setValue(Object value) { this.value = value; }
   public Object getValue()             { return value; }

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
@@ -36,8 +37,8 @@ public abstract class JactlMethodHandle implements Checkpointable {
   private static int VERSION = 1;
   protected MethodHandle handle;
 
-  public static final Method BIND_TO_METHOD = Utils.getMethod(JactlMethodHandle.class, "bindTo", Object.class);
-  public static final Method INVOKE_METHOD = Utils.getMethod(JactlMethodHandle.class, "invoke", Continuation.class, String.class, int.class, Object[].class);
+  public static final MethodRef BIND_TO_METHOD = Utils.getMethod(JactlMethodHandle.class, "bindTo", Object.class);
+  public static final MethodRef INVOKE_METHOD  = Utils.getMethod(JactlMethodHandle.class, "invoke", Continuation.class, String.class, int.class, Object[].class);
   
   public static final String TYPE_DESCRIPTOR = Type.getDescriptor(JactlMethodHandle.class);
   

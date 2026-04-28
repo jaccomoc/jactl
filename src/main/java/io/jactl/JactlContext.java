@@ -647,32 +647,7 @@ public class JactlContext {
   public static JactlType typeFromClass(Class<?> clss, JactlContext context) {
     return typeFromClass(clss, context == null ? RegisteredClasses.INSTANCE : context.getRegisteredClasses(), ANY, context);
   }
-  
-  private static final HashMap<Class<?>, JactlType> typeCache = new HashMap() {{
-    put(boolean.class, BOOLEAN);
-    put(Boolean.class, BOXED_BOOLEAN);
-    put(byte.class, BYTE);
-    put(Byte.class, BOXED_BYTE);
-    put(int.class, INT);
-    put(Integer.class, BOXED_INT);
-    put(long.class, LONG);
-    put(Long.class, BOXED_LONG);
-    put(double.class, DOUBLE);
-    put(Double.class, BOXED_DOUBLE);
-    put(BigDecimal.class, DECIMAL);
-    put(String.class, STRING);
-    put(JactlMethodHandle.class, FUNCTION);
-    put(HeapLocal.class, HEAPLOCAL);
-    put(JactlIterator.class, ITERATOR);
-    put(Number.class, NUMBER);
-    put(RegexMatcher.class, MATCHER);
-    put(Continuation.class, CONTINUATION);
-    put(Object.class, ANY);
-    put(Class.class, CLASS);
-    put(void.class, VOID);
-    put(Void.class, VOID);
-  }};
-  
+
   public JactlType typeFromClass(Class<?> clss, RegisteredClasses classes) {
     return typeFromClass(clss, classes, ANY, this);
   }

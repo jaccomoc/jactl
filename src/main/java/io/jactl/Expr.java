@@ -24,14 +24,10 @@ package io.jactl;
 
 
 import java.util.*;
-import java.lang.reflect.Method;
 
-import io.jactl.JactlType;
-import io.jactl.Stmt;
-import io.jactl.Token;
-import io.jactl.Utils;
 import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.SourceLocation;
+import io.jactl.compiler.MethodRef;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -973,9 +969,9 @@ public abstract class Expr extends JactlUserDataHolder {
    */
   public static class InvokeUtility extends Expr {
     public Token       token;
-    public Method      method;
+    public MethodRef   method;
     public List<Expr>  args;
-    public InvokeUtility(Token token, Method method, List<Expr> args) {
+    public InvokeUtility(Token token, MethodRef method, List<Expr> args) {
       this.token = token;
       this.method = method;
       this.args = args;

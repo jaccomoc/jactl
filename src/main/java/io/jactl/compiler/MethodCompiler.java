@@ -204,46 +204,46 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private Deque<TryCatch>   tryCatches = new ArrayDeque<>();
   
   // Static data
-  public static final Method STRING_BUFFER_TO_STRING_METHOD = Utils.getMethod(StringBuffer.class, "toString");
-  public static final Method STRING_CONCAT_METHOD           = Utils.getMethod(String.class, "concat", String.class);
-  public static final Method STRING_LENGTH_METHOD           = Utils.getMethod(String.class, "length");
-  public static final Method STRING_CHAR_AT_METHOD          = Utils.getMethod(String.class, "charAt", int.class);
-  public static final Method STRING_VALUE_OF_METHOD         = Utils.getMethod(String.class, "valueOf", char.class);
-  public static final Method LIST_SIZE_METHOD               = Utils.getMethod(List.class, "size");
-  public static final Method LIST_GET_METHOD                = Utils.getMethod(List.class, "get", int.class);
-  public static final Method MAP_SIZE_METHOD                = Utils.getMethod(Map.class, "size");
-  public static final Method INTEGER_TO_STRING_METHOD       = Utils.getMethod(Integer.class, "toString", int.class);
-  public static final Method STRING_JOIN_METHOD             = Utils.getMethod(String.class, "join", CharSequence.class, CharSequence[].class);
-  public static final Method BIG_DECIMAL_COMPARE_TO_METHOD  = Utils.getMethod(BigDecimal.class, "compareTo", BigDecimal.class);
-  public static final Method OBJECT_GET_CLASS_METHOD        = Utils.getMethod(Object.class, "getClass");
-  public static final Method OBJECT_HASH_CODE_METHOD        = Utils.getMethod(Object.class, "hashCode");
-  public static final Method CLASS_IS_ARRAY_METHOD          = Utils.getMethod(Class.class, "isArray");
-  public static final Method CLASS_IS_ASSIGNABLE_FROM_METHOD= Utils.getMethod(Class.class, "isAssignableFrom", Class.class);
-  public static final Method CLASS_GET_CONSTRUCTOR_METHOD   = Utils.getMethod(Class.class, "getConstructor", Class[].class);
-  public static final Method CLASS_GET_CLASS_LOADER_METHOD  = Utils.getMethod(Class.class, "getClassLoader");
-  public static final Method CONSTRUCTOR_NEW_INSTANCE_METHOD= Utils.getMethod(Constructor.class, "newInstance", Object[].class);
-  public static final Method LIST_ADD_METHOD                = Utils.getMethod(List.class, "add", Object.class);
-  public static final Method MAP_PUT_METHOD                 = Utils.getMethod(Map.class, "put", Object.class, Object.class);
-  public static final Method MAP_GET_METHOD                 = Utils.getMethod(Map.class, "get", Object.class);
-  public static final Method ITERATOR_NEXT_METHOD           = Utils.getMethod(Iterator.class, "next");
-  public static final Method ITERATOR_HAS_NEXT_METHOD       = Utils.getMethod(Iterator.class, "hasNext");
-  public static final Method THROWABLE_GET_MESSAGE_METHOD   = Utils.getMethod(Throwable.class, "getMessage");
-  public static final Method BOOLEAN_VALUE_METHOD           = Utils.getMethod(Boolean.class, "booleanValue");
-  public static final Method BYTE_VALUE_METHOD              = Utils.getMethod(Byte.class, "byteValue");
-  public static final Method INT_VALUE_METHOD               = Utils.getMethod(Integer.class, "intValue");
-  public static final Method LONG_VALUE_METHOD              = Utils.getMethod(Long.class, "longValue");
-  public static final Method DOUBLE_VALUE_METHOD            = Utils.getMethod(Double.class, "doubleValue");
-  public static final Method NUMBER_BYTE_VALUE_METHOD       = Utils.getMethod(Number.class, "byteValue");
-  public static final Method NUMBER_INT_VALUE_METHOD        = Utils.getMethod(Number.class, "intValue");
-  public static final Method NUMBER_LONG_VALUE_METHOD       = Utils.getMethod(Number.class, "longValue");
-  public static final Method NUMBER_DOUBLE_VALUE_METHOD         = Utils.getMethod(Number.class, "doubleValue");
-  public static final Method BIG_DECIMAL_VALUE_OF_LONG_METHOD   = Utils.getMethod(BigDecimal.class, "valueOf", long.class);
-  public static final Method BIG_DECIMAL_VALUE_OF_DOUBLE_METHOD = Utils.getMethod(BigDecimal.class, "valueOf", double.class);
-  public static final Method BIG_DECIMAL_ADD_METHOD             = Utils.getMethod(BigDecimal.class, "add", BigDecimal.class);
-  public static final Method BIG_DECIMAL_SUBTRACT_METHOD        = Utils.getMethod(BigDecimal.class, "subtract", BigDecimal.class);
-  public static final Method FIELD_SET_METHOD                   = Utils.getMethod(Field.class, "set", Object.class, Object.class);
-  public static final Method FIELD_GET_METHOD                   = Utils.getMethod(Field.class, "get", Object.class);
-  public static final Method FIELD_GET_TYPE_METHOD              = Utils.getMethod(Field.class, "getType");
+  public static final MethodRef STRING_BUFFER_TO_STRING_METHOD = Utils.getMethod(StringBuffer.class, "toString");
+  public static final MethodRef STRING_CONCAT_METHOD           = Utils.getMethod(String.class, "concat", String.class);
+  public static final MethodRef STRING_LENGTH_METHOD           = Utils.getMethod(String.class, "length");
+  public static final MethodRef STRING_CHAR_AT_METHOD          = Utils.getMethod(String.class, "charAt", int.class);
+  public static final MethodRef STRING_VALUE_OF_METHOD         = Utils.getMethod(String.class, "valueOf", char.class);
+  public static final MethodRef LIST_SIZE_METHOD               = Utils.getMethod(List.class, "size");
+  public static final MethodRef LIST_GET_METHOD                = Utils.getMethod(List.class, "get", int.class);
+  public static final MethodRef MAP_SIZE_METHOD                = Utils.getMethod(Map.class, "size");
+  public static final MethodRef INTEGER_TO_STRING_METHOD       = Utils.getMethod(Integer.class, "toString", int.class);
+  public static final MethodRef STRING_JOIN_METHOD             = Utils.getMethod(String.class, "join", CharSequence.class, CharSequence[].class);
+  public static final MethodRef BIG_DECIMAL_COMPARE_TO_METHOD  = Utils.getMethod(BigDecimal.class, "compareTo", BigDecimal.class);
+  public static final MethodRef OBJECT_GET_CLASS_METHOD        = Utils.getMethod(Object.class, "getClass");
+  public static final MethodRef OBJECT_HASH_CODE_METHOD        = Utils.getMethod(Object.class, "hashCode");
+  public static final MethodRef CLASS_IS_ARRAY_METHOD          = Utils.getMethod(Class.class, "isArray");
+  public static final MethodRef CLASS_IS_ASSIGNABLE_FROM_METHOD= Utils.getMethod(Class.class, "isAssignableFrom", Class.class);
+  public static final MethodRef CLASS_GET_CONSTRUCTOR_METHOD   = Utils.getMethod(Class.class, "getConstructor", Class[].class);
+  public static final MethodRef CLASS_GET_CLASS_LOADER_METHOD  = Utils.getMethod(Class.class, "getClassLoader");
+  public static final MethodRef CONSTRUCTOR_NEW_INSTANCE_METHOD= Utils.getMethod(Constructor.class, "newInstance", Object[].class);
+  public static final MethodRef LIST_ADD_METHOD                = Utils.getMethod(List.class, "add", Object.class);
+  public static final MethodRef MAP_PUT_METHOD                 = Utils.getMethod(Map.class, "put", Object.class, Object.class);
+  public static final MethodRef MAP_GET_METHOD                 = Utils.getMethod(Map.class, "get", Object.class);
+  public static final MethodRef ITERATOR_NEXT_METHOD           = Utils.getMethod(Iterator.class, "next");
+  public static final MethodRef ITERATOR_HAS_NEXT_METHOD       = Utils.getMethod(Iterator.class, "hasNext");
+  public static final MethodRef THROWABLE_GET_MESSAGE_METHOD   = Utils.getMethod(Throwable.class, "getMessage");
+  public static final MethodRef BOOLEAN_VALUE_METHOD           = Utils.getMethod(Boolean.class, "booleanValue");
+  public static final MethodRef BYTE_VALUE_METHOD              = Utils.getMethod(Byte.class, "byteValue");
+  public static final MethodRef INT_VALUE_METHOD               = Utils.getMethod(Integer.class, "intValue");
+  public static final MethodRef LONG_VALUE_METHOD              = Utils.getMethod(Long.class, "longValue");
+  public static final MethodRef DOUBLE_VALUE_METHOD            = Utils.getMethod(Double.class, "doubleValue");
+  public static final MethodRef NUMBER_BYTE_VALUE_METHOD       = Utils.getMethod(Number.class, "byteValue");
+  public static final MethodRef NUMBER_INT_VALUE_METHOD        = Utils.getMethod(Number.class, "intValue");
+  public static final MethodRef NUMBER_LONG_VALUE_METHOD       = Utils.getMethod(Number.class, "longValue");
+  public static final MethodRef NUMBER_DOUBLE_VALUE_METHOD         = Utils.getMethod(Number.class, "doubleValue");
+  public static final MethodRef BIG_DECIMAL_VALUE_OF_LONG_METHOD   = Utils.getMethod(BigDecimal.class, "valueOf", long.class);
+  public static final MethodRef BIG_DECIMAL_VALUE_OF_DOUBLE_METHOD = Utils.getMethod(BigDecimal.class, "valueOf", double.class);
+  public static final MethodRef BIG_DECIMAL_ADD_METHOD             = Utils.getMethod(BigDecimal.class, "add", BigDecimal.class);
+  public static final MethodRef BIG_DECIMAL_SUBTRACT_METHOD        = Utils.getMethod(BigDecimal.class, "subtract", BigDecimal.class);
+  public static final MethodRef FIELD_SET_METHOD                   = Utils.getMethod(Field.class, "set", Object.class, Object.class);
+  public static final MethodRef FIELD_GET_METHOD                   = Utils.getMethod(Field.class, "get", Object.class);
+  public static final MethodRef FIELD_GET_TYPE_METHOD              = Utils.getMethod(Field.class, "getType");
   
   
   MethodCompiler(ClassCompiler classCompiler, Expr.FunDecl funDecl, String methodName, MethodVisitor mv) {
@@ -326,7 +326,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // FieldAssign globals map to field so we can access it from anywhere
       mv.visitVarInsn(ALOAD, 0);
       mv.visitVarInsn(ALOAD, methodFunDecl.globalsVar());
-      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, MAP_TYPE_DESCRIPTOR);
+      mv.visitFieldInsn(PUTFIELD, classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, Utils.MAP_TYPE_DESCRIPTOR);
     }
 
     if (classCompiler.classDecl.isScriptClass() || classCompiler.context.classAccessToGlobals) {
@@ -1031,12 +1031,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   
   private static TokenType[] numericOperator = new TokenType[] {PLUS, MINUS, STAR, SLASH, PERCENT, PERCENT_PERCENT};
-  private static Map<TokenType,Method> methodNames = Utils.mapOf(PLUS, RuntimeUtils.PLUS_METHOD,
-                                                            MINUS, RuntimeUtils.MINUS_METHOD,
-                                                            STAR, RuntimeUtils.MULTIPLY_METHOD,
-                                                            SLASH, RuntimeUtils.DIVIDE_METHOD,
-                                                            PERCENT, RuntimeUtils.MODULO_METHOD,
-                                                            PERCENT_PERCENT, RuntimeUtils.REMAINDER_METHOD);
+  private static Map<TokenType,MethodRef> methodNames = Utils.mapOf(PLUS, RuntimeUtils.PLUS_METHOD,
+                                                                    MINUS, RuntimeUtils.MINUS_METHOD,
+                                                                    STAR, RuntimeUtils.MULTIPLY_METHOD,
+                                                                    SLASH, RuntimeUtils.DIVIDE_METHOD,
+                                                                    PERCENT, RuntimeUtils.MODULO_METHOD,
+                                                                    PERCENT_PERCENT, RuntimeUtils.REMAINDER_METHOD);
 
   @Override public Void visitRegexMatch(Expr.RegexMatch expr) {
     if (expr.string == null) {
@@ -1138,7 +1138,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadVar(expr.captureArrVarDecl);
     swap();
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, JactlType.STRING_BUFFER_INTERNAL);
+    mv.visitTypeInsn(CHECKCAST, Utils.STRING_BUFFER_INTERNAL);
     swap();
     invokeMethod(RegexMatcher.APPEND_REPLACEMENT_METHOD);
 
@@ -1153,11 +1153,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitLabel(done);      // :done
     loadVar(expr.captureArrVarDecl);
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, JactlType.STRING_BUFFER_INTERNAL);
+    mv.visitTypeInsn(CHECKCAST, Utils.STRING_BUFFER_INTERNAL);
     invokeMethod(RegexMatcher.APPEND_TAIL_METHOD);
 
     loadLocal(sbVar);
-    mv.visitTypeInsn(CHECKCAST, JactlType.STRING_BUFFER_INTERNAL);
+    mv.visitTypeInsn(CHECKCAST, Utils.STRING_BUFFER_INTERNAL);
     invokeMethod(STRING_BUFFER_TO_STRING_METHOD);
 
     stack.freeSlot(sbVar);
@@ -1200,7 +1200,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(classCompiler.context.minScale);
       loadConst(!insideTryCatchNullError());
       loadLocation(expr.operator);
-      Method method = methodNames.get(expr.operator.getType());
+      MethodRef method = methodNames.get(expr.operator.getType());
       assert method != null : "unsupported operator type " + expr.operator.getChars();
       invokeMethod(method);
       convertTo(expr.type, expr,true, expr.operator);  // Convert to expected type
@@ -2031,7 +2031,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    _newInstance(JactlType.JACTL_LIST_INTERNAL);
+    _newInstance(Utils.JACTL_LIST_INTERNAL);
     pushType(LIST);
     expr.exprs.forEach(entry -> {
       dupVal();
@@ -4339,7 +4339,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void throwIfNotNumber(String msg, SourceLocation location) {
     expect(1);
     _dupVal();
-    mv.visitTypeInsn(INSTANCEOF, JactlType.NUMBER_INTERNAL);
+    mv.visitTypeInsn(INSTANCEOF, Utils.NUMBER_INTERNAL);
     Label isNumber = new Label();
     mv.visitJumpInsn(IFNE, isNumber);
     _popVal();
@@ -4407,7 +4407,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void throwError(String msg, SourceLocation location) {
-    mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
+    mv.visitTypeInsn(NEW, Utils.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP);
     _loadConst(msg);
     _loadLocation(location);
@@ -4422,7 +4422,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param location
    */
   private void _throwErrorWithString(String msg, SourceLocation location) {
-    mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
+    mv.visitTypeInsn(NEW, Utils.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP_X1);
     mv.visitInsn(SWAP);
     _loadConst(msg);
@@ -4451,7 +4451,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void _throwErrorWithInt(String msg, SourceLocation location) {
     int intSlot = stack.allocateSlot(INT);
     _storeLocal(intSlot);
-    mv.visitTypeInsn(NEW, JactlType.RUNTIME_ERROR_INTERNAL);
+    mv.visitTypeInsn(NEW, Utils.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP);
     loadConst(msg);
     loadLocal(intSlot);
@@ -4622,7 +4622,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Label blockStart = new Label();
     Label blockEnd   = new Label();
     Label catchLabel = new Label();
-    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, JactlType.CONTINUATION_INTERNAL);
+    mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Utils.CONTINUATION_INTERNAL);
 
     mv.visitLabel(blockStart);   // :blockStart
     final int methodLocation = asyncLocations.size();
@@ -4668,7 +4668,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (methodFunDecl.isScriptMain) {
       mv.visitInsn(DUP);
       _loadLocal(0);
-      mv.visitMethodInsn(INVOKEVIRTUAL, JactlType.CONTINUATION_INTERNAL, "setScriptInstance", Type.getMethodDescriptor(JactlType.VOID_TYPE, JactlType.JACTL_SCRIPT_OBJECT_TYPE), false);
+      mv.visitMethodInsn(INVOKEVIRTUAL, Utils.CONTINUATION_INTERNAL, "setScriptInstance", Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.JACTL_SCRIPT_OBJECT_TYPE), false);
     }
     mv.visitInsn(ATHROW);
 
@@ -4704,10 +4704,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void insertDebug(String info) {
     _loadConst(null);
     _loadConst(info);
-    mv.visitMethodInsn(INVOKESTATIC, JactlType.RUNTIME_UTILS_INTERNAL, "debugBreakPoint",
-                       Type.getMethodDescriptor(JactlType.BOOLEAN_TYPE,
-                                                JactlType.OBJECT_TYPE,
-                                                JactlType.STRING_TYPE),
+    mv.visitMethodInsn(INVOKESTATIC, Utils.RUNTIME_UTILS_INTERNAL, "debugBreakPoint",
+                       Type.getMethodDescriptor(Utils.BOOLEAN_TYPE,
+                                                Utils.OBJECT_TYPE,
+                                                Utils.STRING_TYPE),
                        false);
     mv.visitInsn(POP);
   }
@@ -4715,10 +4715,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void insertDebug(String info, Runnable data) {
     data.run();
     _loadConst(info);
-    mv.visitMethodInsn(INVOKESTATIC, JactlType.RUNTIME_UTILS_INTERNAL, RuntimeUtils.DEBUG_BREAK_POINT,
-                       Type.getMethodDescriptor(JactlType.OBJECT_TYPE,
-                                                JactlType.OBJECT_TYPE,
-                                                JactlType.STRING_TYPE),
+    mv.visitMethodInsn(INVOKESTATIC, Utils.RUNTIME_UTILS_INTERNAL, RuntimeUtils.DEBUG_BREAK_POINT,
+                       Type.getMethodDescriptor(Utils.OBJECT_TYPE,
+                                                Utils.OBJECT_TYPE,
+                                                Utils.STRING_TYPE),
                        false);
     mv.visitInsn(POP);
   }
@@ -4881,28 +4881,34 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeMethod(clss, method, getTypeFromClass(method.getReturnType()));
   }
   
+  void invokeMethod(MethodRef methodRef) {
+    invokeMethod(methodRef.declaringClassInternal, methodRef.method, methodRef.getReturnType(classCompiler.context), methodRef.methodDescriptor, methodRef.methodName, methodRef.isStatic, false, methodRef.isInterface, methodRef.parameterTypes); 
+  }
+  
   void invokeMethod(Method method) {
     invokeMethod(method.getDeclaringClass(), method, getTypeFromClass(method.getReturnType()));
   }
   
   void invokeMethod(Class<?> clss, Executable method, JactlType returnType) {
     boolean isConstructor = method instanceof Constructor;
-    Class<?>[] paramTypes = method.getParameterTypes();
     String descriptor = isConstructor ? Type.getConstructorDescriptor((Constructor) method)
                                       : Type.getMethodDescriptor((Method) method);
     String methodName = isConstructor ? JACTL_JAVA_INIT : method.getName();
-    if (Modifier.isStatic(method.getModifiers())) {
+    boolean isInterface = clss.isInterface();
+    invokeMethod(Type.getInternalName(clss), method, returnType, descriptor, methodName, Modifier.isStatic(method.getModifiers()), isConstructor, isInterface, method.getParameterTypes());
+  }
+  void invokeMethod(String internalClassName, Executable method, JactlType returnType, String methodDescriptor, String methodName, boolean isStatic, boolean isConstructor, boolean isInterface, Class<?>[] paramTypes) {
+    if (isStatic) {
       expect(paramTypes.length);
-      mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(clss), methodName, descriptor, false);
+      mv.visitMethodInsn(INVOKESTATIC, internalClassName, methodName, methodDescriptor, false);
       popType(paramTypes.length);
     }
     else {
       expect(paramTypes.length + 1);
-      boolean isInterface = clss.isInterface();
       int invocationType = isConstructor ? INVOKESPECIAL
                                          : isInterface ? INVOKEINTERFACE
                                                        : INVOKEVIRTUAL;
-      mv.visitMethodInsn(invocationType, Type.getInternalName(clss), methodName, descriptor, isInterface);
+      mv.visitMethodInsn(invocationType, internalClassName, methodName, methodDescriptor, isInterface);
       popType(paramTypes.length + 1);
     }
     if (!returnType.is(VOID)) {
@@ -5222,7 +5228,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // method) then treat like a normal local not a HeapLocal.
     if (varDecl.isHeapLocal) {
       loadLocal(varDecl.slot);
-      Method method;
+      MethodRef method;
       switch (varDecl.type.getType()) {
         case BYTE:         method = HeapLocal.BYTE_VALUE_METHOD;         break;
         case INT:          method = HeapLocal.INT_VALUE_METHOD;          break;
@@ -5348,7 +5354,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
       // Special case for RuntimeUtils.DEFAULT_VALUE
       if (defaultValue == RuntimeUtils.DEFAULT_VALUE) {
-        mv.visitFieldInsn(GETSTATIC, JactlType.RUNTIME_UTILS_INTERNAL, "DEFAULT_VALUE", "Ljava/lang/Object;");
+        mv.visitFieldInsn(GETSTATIC, Utils.RUNTIME_UTILS_INTERNAL, "DEFAULT_VALUE", "Ljava/lang/Object;");
         pushType(ANY);
       }
       else {
@@ -5469,7 +5475,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                   Label blockEnd   = new Label();
                                   Label catchLabel = new Label();
                                   Label afterCatch = new Label();
-                                  mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, JactlType.CONTINUATION_INTERNAL);
+                                  mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Utils.CONTINUATION_INTERNAL);
                                   mv.visitLabel(blockStart);
                                   invokeMethod(Utils.JACTL_INIT_WRAPPER_METHOD);
                                   mv.visitJumpInsn(GOTO, afterCatch);

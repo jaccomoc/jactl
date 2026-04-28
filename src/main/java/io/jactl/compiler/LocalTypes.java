@@ -24,10 +24,6 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.util.*;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
@@ -125,7 +121,7 @@ public class LocalTypes {
     StackEntry entry1 = stack.get(stack.size() - 1);
     StackEntry entry2 = stack.get(stack.size() - 2);
     if (entry1.slot == -1 && entry2.slot == -1) {
-      if (slotsNeeded(entry1.type) == 1 && slotsNeeded(entry2.type) == 1) {
+      if (entry1.type.slotsNeeded() == 1 && entry2.type.slotsNeeded() == 1) {
         mv.visitInsn(SWAP);
       }
       else {
@@ -172,8 +168,8 @@ public class LocalTypes {
     StackEntry x = stack.get(stack.size() - 1);
     StackEntry y = stack.get(stack.size() - 2);
     if (x.isStack() && y.isStack()) {
-      int xslots = slotsNeeded(x.type);
-      int yslots = slotsNeeded(y.type);
+      int xslots = x.type.slotsNeeded();
+      int yslots = y.type.slotsNeeded();
       if (xslots == 1 && yslots == 1) {
         mv.visitInsn(DUP_X1);
       }
@@ -228,7 +224,7 @@ public class LocalTypes {
     if (x.isStack() && y.isStack()) {
       JactlType type1 = x.type;
       JactlType type2 = y.type;
-      if (slotsNeeded(type1) == 1 && slotsNeeded(type2) == 1) {
+      if (type1.slotsNeeded() == 1 && type2.slotsNeeded() == 1) {
         mv.visitInsn(DUP2);
       }
       else {
@@ -424,7 +420,7 @@ public class LocalTypes {
         else {
           saveObjects = true;
         }
-        i += slotsNeeded(entry.type) - 1;
+        i += entry.type.slotsNeeded() - 1;
       }
     }
 
@@ -463,10 +459,10 @@ public class LocalTypes {
       if (type.isPrimitive()) {
         if (type.is(BOOLEAN,BYTE,INT)) { mv.visitInsn(I2L); }
         if (type.is(DOUBLE)) {
-          mv.visitMethodInsn(INVOKESTATIC, JactlType.DOUBLE_BOXED_INTERNAL,
+          mv.visitMethodInsn(INVOKESTATIC, Utils.DOUBLE_BOXED_INTERNAL,
                              "doubleToRawLongBits",
-                             Type.getMethodDescriptor(JactlType.LONG_TYPE,
-                                                      JactlType.DOUBLE_TYPE),
+                             Type.getMethodDescriptor(Utils.LONG_TYPE,
+                                                      Utils.DOUBLE_TYPE),
                              false); }
       }
       mv.visitInsn(type.isPrimitive() ? LASTORE : AASTORE);
@@ -483,7 +479,7 @@ public class LocalTypes {
       JactlType type = entry.type;
       Utils.loadStoredValue(mv, continuationVar, i, type, context);
       _storeLocal(type, i);
-      i += slotsNeeded(type) - 1;
+      i += type.slotsNeeded() - 1;
     }
 
   }
@@ -492,7 +488,7 @@ public class LocalTypes {
     if (slot == -1) { return; }
     LocalEntry entry = locals.get(slot);
     if (--entry.refCount == 0) {
-      int slots = slotsNeeded(entry.type);
+      int slots = entry.type.slotsNeeded();
       for (int i = 0; i < slots; i++) {
         locals.set(slot + i, null);
       }
@@ -527,8 +523,8 @@ public class LocalTypes {
    */
   public int allocateSlot(JactlType type) {
     int i;
-    for (i = minimumSlot; i < locals.size(); i += locals.get(i) == null ? 1 : slotsNeeded(localsType(i))) {
-      if (slotsFree(i, slotsNeeded(type))) {
+    for (i = minimumSlot; i < locals.size(); i += locals.get(i) == null ? 1 : localsType(i).slotsNeeded()) {
+      if (slotsFree(i, type.slotsNeeded())) {
         break;
       }
     }
@@ -620,13 +616,6 @@ public class LocalTypes {
     return entry.type;
   }
 
-  private static int slotsNeeded(JactlType type) {
-    if (type == null) {
-      return 1;
-    }
-    return type.is(LONG,DOUBLE) ? 2 : 1;
-  }
-
   /**
    * Check if there are num free slots at given index
    */
@@ -640,10 +629,10 @@ public class LocalTypes {
 
   private void setSlot(int idx, JactlType type) {
     // Grow array if needed
-    ntimes(idx + slotsNeeded(type) - locals.size(), () -> locals.add(null));
+    ntimes(idx + type.slotsNeeded() - locals.size(), () -> locals.add(null));
 
     // Set first slot to type. For multi-slot types others are marked as ANY.
-    for(int i = 0; i < slotsNeeded(type); i++) {
+    for(int i = 0; i < type.slotsNeeded(); i++) {
       LocalEntry entry = new LocalEntry(i == 0 ? type : ANY, idx);
       locals.set(idx + i, entry);
     }

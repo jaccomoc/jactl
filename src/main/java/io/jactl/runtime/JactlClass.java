@@ -304,7 +304,7 @@ public class JactlClass {
     ClassVisitor     cv = cw.getClassVisitor();
 
     String internalHelperClassName = helperClassName.replace('.', '/');
-    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalHelperClassName, null, JactlType.OBJECT_INTERNAL, new String[0]);
+    cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalHelperClassName, null, Utils.OBJECT_INTERNAL, new String[0]);
     cv.visitSource(helperClassName + ".java", null);
 
     // Add MethodHandle fields

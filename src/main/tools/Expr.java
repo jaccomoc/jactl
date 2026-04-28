@@ -29,14 +29,10 @@
 package io.jactl;
 
 import java.util.*;
-import java.lang.reflect.Method;
 
-import io.jactl.JactlType;
-import io.jactl.Stmt;
-import io.jactl.Token;
-import io.jactl.Utils;
 import io.jactl.runtime.JactlClassDescriptor;
 import io.jactl.runtime.SourceLocation;
+import io.jactl.compiler.MethodRef;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
 
@@ -376,7 +372,7 @@ class Expr extends JactlUserDataHolder {
     public boolean isClosure()    { return nameToken == null; }
     public boolean isStatic()     { return functionDescriptor.isStaticImplementation; }
     public boolean isInitMethod() { return functionDescriptor.isInitMethod; }
-    public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync ? 2 : 1) : -1; }
+    public int     globalsVar()   { return isScriptMain ? (functionDescriptor.isAsync() ? 2 : 1) : -1; }
   }
 
   /**
@@ -636,7 +632,7 @@ class Expr extends JactlUserDataHolder {
    */
   class InvokeUtility extends Expr {
     Token       token;
-    Method      method;
+    MethodRef   method;
     List<Expr>  args;
   }
 

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -79,12 +80,12 @@ public class RegexMatcher implements Checkpointable {
   public  boolean      captureAsNums;         // Whether to try to parse strings that look like numbers as numbers
 
   // Create Method objects to avoid expensive reflection every time
-  public static final Method REGEX_FIND_METHOD         = Utils.getMethod(RegexMatcher.class, "regexFind", String.class, String.class, boolean.class, String.class, String.class, int.class);
-  public static final Method REGEX_SUBSTITUTE_METHOD   = Utils.getMethod(RegexMatcher.class, "regexSubstitute", String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
-  public static final Method REGEX_FIND_NEXT_METHOD    = Utils.getMethod(RegexMatcher.class, "regexFindNext");
-  public static final Method REGEX_GROUP_METHOD        = Utils.getMethod(RegexMatcher.class, "regexGroup", int.class);
-  public static final Method APPEND_REPLACEMENT_METHOD = Utils.getMethod(RegexMatcher.class, "appendReplacement", StringBuffer.class, String.class);
-  public static final Method APPEND_TAIL_METHOD        = Utils.getMethod(RegexMatcher.class, "appendTail", StringBuffer.class);
+  public static final MethodRef REGEX_FIND_METHOD       = Utils.getMethod(RegexMatcher.class, "regexFind", String.class, String.class, boolean.class, String.class, String.class, int.class);
+  public static final MethodRef REGEX_SUBSTITUTE_METHOD = Utils.getMethod(RegexMatcher.class, "regexSubstitute", String.class, String.class, String.class, boolean.class, String.class, String.class, int.class);
+  public static final MethodRef REGEX_FIND_NEXT_METHOD    = Utils.getMethod(RegexMatcher.class, "regexFindNext");
+  public static final MethodRef REGEX_GROUP_METHOD        = Utils.getMethod(RegexMatcher.class, "regexGroup", int.class);
+  public static final MethodRef APPEND_REPLACEMENT_METHOD = Utils.getMethod(RegexMatcher.class, "appendReplacement", StringBuffer.class, String.class);
+  public static final MethodRef APPEND_TAIL_METHOD        = Utils.getMethod(RegexMatcher.class, "appendTail", StringBuffer.class);
   
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(JactlType.MATCHER);

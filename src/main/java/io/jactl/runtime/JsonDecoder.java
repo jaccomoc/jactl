@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -38,7 +39,7 @@ public class JsonDecoder {
   String source;
   int    sourceOffset;
 
-  public static final Method DECODE_JACTL_OBJ_METHOD = Utils.getMethod(JsonDecoder.class, "decodeJactlObj", String.class, String.class, int.class, JactlObject.class);
+  public static final MethodRef DECODE_JACTL_OBJ_METHOD = Utils.getMethod(JsonDecoder.class, "decodeJactlObj", String.class, String.class, int.class, JactlObject.class);
   
   public static JsonDecoder get(String json, String source, int sourceOffset) {
     JsonDecoder decoder = threadDecoder.get();

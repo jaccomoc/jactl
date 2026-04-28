@@ -19,10 +19,6 @@ package io.jactl.compiler;
 
 import io.jactl.*;
 import org.objectweb.asm.FieldVisitor;
-import org.objectweb.asm.Type;
-
-import java.util.Map;
-import java.util.function.Function;
 
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 
@@ -41,7 +37,7 @@ public class ScriptCompiler extends ClassCompiler {
   }
   
   private Class<?> compileToClass() {
-    FieldVisitor globalVars = cv.visitField(ACC_PUBLIC, Utils.JACTL_GLOBALS_NAME, JactlType.MAP_TYPE_DESCRIPTOR, null, null);
+    FieldVisitor globalVars = cv.visitField(ACC_PUBLIC, Utils.JACTL_GLOBALS_NAME, Utils.MAP_TYPE_DESCRIPTOR, null, null);
     globalVars.visitEnd();
 
     compileInnerClasses();
