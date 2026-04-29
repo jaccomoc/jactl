@@ -454,6 +454,28 @@ class TokeniserTest {
     assertEquals(EOF, token.getType());
   }
 
+  @Test public void lineNumbers2() {
+    Tokeniser tokeniser = new Tokeniser("1");
+    Token     token     = tokeniser.next();
+    assertEquals(1, token.getLineNum());
+    token = tokeniser.next();
+    assertEquals(1, token.getLineNum());
+    assertEquals(EOF, token.getType());
+  }
+
+  @Test public void lineNumbers3() {
+    Tokeniser tokeniser = new Tokeniser("1\n", true);
+    Token     token     = tokeniser.next();
+    assertEquals(1, token.getLineNum());
+    token = tokeniser.next();
+    assertEquals(1, token.getLineNum());
+    assertEquals(EOL, token.getType());
+    token = tokeniser.next();
+    assertEquals(2, token.getLineNum());
+    token = tokeniser.next();
+    assertEquals(EOF, token.getType());
+  }
+
   @Test public void lineColumnNumbers() {
     String    source    = "1a b\na\n\na 1.234D c\n{";
     Tokeniser tokeniser = new Tokeniser(source);

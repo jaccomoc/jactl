@@ -49,17 +49,23 @@ public class Location implements SourceLocation {
   public int     getOffset()     { return offset; }
 
   public String getLine() {
-    calculateLineAndColumn();
+    if (line == null) {
+      calculateLineAndColumn();
+    }
     return line;
   }
 
   public int getLineNum() {
-    calculateLineAndColumn();
+    if (lineNum == -1) {
+      calculateLineAndColumn();
+    }
     return lineNum;
   }
 
   public int getColumn() {
-    calculateLineAndColumn();
+    if (column == -1) {
+      calculateLineAndColumn();
+    }
     return column;
   }
 
@@ -73,9 +79,6 @@ public class Location implements SourceLocation {
   }
 
   private void calculateLineAndColumn() {
-    if (lineNum != -1 || source == null) {
-      return;
-    }
     List<String> lines = RuntimeUtils.lines(source);
     int pos   = 0;
     int i;

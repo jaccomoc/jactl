@@ -73,7 +73,6 @@ public class Tokeniser {
   // Whether to return WHITESPACE and COMMENT tokens or just filter them out.
   private boolean tokeniseCommentsAndWhitespace = false;
 
-  private List<String> lines;
   private int[]        lineOffsets;
 
   private boolean inString     = false;   // True if parsing expression string content (but not
@@ -106,7 +105,7 @@ public class Tokeniser {
   public Tokeniser(String source) {
     this.source = source;
     this.length = this.source.length();
-    calculateLineOffsets();
+    lineOffsets = RuntimeUtils.lineOffsets(source);
   }
 
   public Tokeniser(String source, boolean tokeniseCommentsAndWhitespace) {
@@ -846,6 +845,8 @@ public class Tokeniser {
     }
   }
 
+  private static Token SPACE_COMMENT = new Token(null, 0);
+  
   private Token getSpaceOrComment() {
     if (inString) {
       return null;
@@ -853,22 +854,21 @@ public class Tokeniser {
     if (!available(1)) {
       return null;
     }
+    Token token = tokeniseCommentsAndWhitespace ? createToken() : null;
     if (isSpace(charAt(0))) {
-      Token token = createToken();
       do { advance(1); } while (available(1) && isSpace(charAt(0)));
-      return token.setType(WHITESPACE).setEnd(offset);
+      return token == null ? SPACE_COMMENT : token.setType(WHITESPACE).setEnd(offset);
     }
 
     if (charAt(0) != '/' || !available(2) || charAt(1) != '/' && charAt(1) != '*') {
       return null;  // Not start of line or multi-line comment
     }
 
-    Token token = createToken();
     advance(1);
     if (charAt(0) == '/') {
       // Single line comment
       do { advance(1); } while (available(1) && charAt(0) != '\n');
-      return token.setType(COMMENT).setEnd(offset);
+      return token == null ? SPACE_COMMENT : token.setType(COMMENT).setEnd(offset);
     }
 
     // Multi-line comment
@@ -876,12 +876,12 @@ public class Tokeniser {
     while (available(2)) {
       if (charAt(0) == '*' && charAt(1) == '/') {
         advance(2);
-        return token.setType(COMMENT).setEnd(offset);
+        return token == null ? SPACE_COMMENT : token.setType(COMMENT).setEnd(offset);
       }
       advance(1);
     }
 
-    return error("Unexpected end of file in comment", token);
+    return error("Unexpected end of file in comment", createToken());
   }
 
   private Token stringError(String msg, Token token) {
@@ -926,10 +926,9 @@ public class Tokeniser {
   }
 
   private Token createToken(int start) {
-    int lineNum = lineNumIdx(start);
-    int colNum  = start - lineOffsets[lineNum];
-    String line = lineNum < lines.size() ? lines.get(lineNum) : "";
-    return new Token(source, start, line, lineNum + 1, colNum + 1);
+    int line = lineNumIdx(start);
+    int col  = start - lineOffsets[lineNum];
+    return new Token(source, start, line + 1, col + 1);
   }
 
   public static boolean isIdentifier(String s) {
@@ -939,21 +938,6 @@ public class Tokeniser {
 
   //////////////////////////////////////////////////////////////////////
 
-  private void calculateLineOffsets() {
-    lines = RuntimeUtils.lines(source);
-    if (source.endsWith("\n")) {
-      lines.add("");
-    }
-    lineOffsets = new int[lines.size()+1];
-    int pos = 0;
-    int i;
-    for (i = 0; i < lines.size(); i++) {
-      lineOffsets[i] = pos;
-      pos += lines.get(i).length() + 1;  // Include extra char for the newline
-    }
-    lineOffsets[lines.size()] = source.length() + 1;
-  }
-
   /**
    * Return the index into the lineOffsets table for the given pos
    * @param pos  the position in the source
@@ -962,33 +946,12 @@ public class Tokeniser {
   private int lineNumIdx(int pos) {
     // Keep track of current line number and search forward
     assert pos >= lineOffsets[lineNum] && pos <= lineOffsets[lineOffsets.length - 1];
-    while (lineNum < lineOffsets.length && pos >= lineOffsets[lineNum + 1]) {
+    while (lineNum < lineOffsets.length && lineNum < lineOffsets.length - 1 && pos >= lineOffsets[lineNum + 1]) {
       lineNum++;
     }
     return lineNum;
   }
   
-  private int oldLineNum(int pos) {
-    int lower = 0;
-    int upper = lineOffsets.length - 1;
-    while (true) {
-      int line = lower + (upper - lower) / 2;
-      if (line == lineOffsets.length) {
-        // EOF
-        return line - 1;
-      }
-      if (pos < lineOffsets[line]) {
-        upper = line;
-      }
-      else if (line == lineOffsets.length -1 || pos < lineOffsets[line+1]) {
-        return line;
-      }
-      else {
-        lower = line + 1;
-      }
-    }
-  }
-
   // = INIT
 
   private static class Symbol {

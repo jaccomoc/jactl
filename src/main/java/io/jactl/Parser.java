@@ -1538,6 +1538,8 @@ public class Parser {
     return parseExpression(0);
   }
 
+  private static final Expr NOOP = new Expr.Noop(null);
+  
   private Expr parseExpression(int level) {
     skipNewLines();
 
@@ -1559,7 +1561,7 @@ public class Parser {
 
     Marker mark = tokeniser.mark();
     Marker rhsMark = null;
-    Expr expr = new Expr.Noop(peek());  // Default to Noop so if we get an error we still return something non-null
+    Expr expr = NOOP;  // Default to Noop so if we get an error we still return something non-null
     try {
       expr = parseExpression(level + 1);
 
@@ -3418,15 +3420,13 @@ public class Parser {
   }
 
   private Token peekIgnoreEOL() {
-    Marker mark = tokeniser.mark();
     Token token = tokeniser.peek();
     if (token.is(EOL)) {
+      Token previous = tokeniser.previous();
+      Token current  = token;
       advance();
       token = tokeniser.peek();
-      mark.rollback();
-    }
-    else {
-      mark.drop();
+      tokeniser.rewind(previous, current);
     }
     return token;
   }
@@ -3497,45 +3497,39 @@ public class Parser {
     return false;
   }
 
-  private boolean matchAnyNoEOL(List<TokenType> types) {
-    for (TokenType type : types) {
-      if (peekNoEOL().is(type)) {
-        advance();
-        return true;
-      }
-    }
-    return false;
-  }
-
   /**
    * Match any type after optionally consuming EOL. If not match then state is
    * unchanged (including not consuming EOL)
    */
   private boolean matchAnyIgnoreEOL(TokenType... types) {
     // Remember current tokens in case we need to rewind
-    Marker mark = tokeniser.mark();
-    Token current  = tokeniser.peek();
+    Token token  = tokeniser.peek();
 
+    Token previous = null;
+    Token current  = null;
     boolean eolConsumed = false;
-    if (current.is(EOL)) {
+    if (token.is(EOL)) {
+      previous = tokeniser.previous();
+      current  = token;
       advance();
+      token = tokeniser.peek();
       eolConsumed = true;
     }
 
     for (TokenType type : types) {
       if (type.is(EOL) && eolConsumed) {
-        mark.drop();
         return true;    // we have already advanced
       }
-      if (peek().is(type)) {
-        mark.drop();
+      if (token.is(type)) {
         advance();
         return true;
       }
     }
 
-    // No match so rewind if necessary
-    mark.rollback();
+    if (eolConsumed) {
+      // We have consumed so we need to rewind
+      tokeniser.rewind(previous, current);
+    }
     return false;
   }
 

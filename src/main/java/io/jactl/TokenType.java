@@ -183,12 +183,34 @@ public enum TokenType {
   NUMBER();
 
   public final String asString;
-
+  private boolean isAssignmentLike;
+  private boolean isNumericOperator;
+  private boolean isBooleanOperator;
+  private boolean isBitOperator;
+  private boolean isBitShift;
+  private boolean isNumber;
+    
+  TokenType() {
+    this(null);
+  }
+  
   TokenType(String str) {
     this.asString = str;
   }
-  TokenType()           { this.asString = null; }
 
+  private void _init() {
+    isAssignmentLike  = _isAssignmentLike();
+    isNumericOperator = _isNumericOperator();
+    isBooleanOperator = _isBooleanOperator();
+    isBitOperator     = _isBitOperator();
+    isBitShift        = _isBitShift();
+    isNumber          = _isNumber();
+  }
+  
+  public boolean is(TokenType type) {
+    return this == type;
+  }
+  
   public boolean is(TokenType... types) {
     for (TokenType type: types) {
       if (this == type) {
@@ -198,7 +220,39 @@ public enum TokenType {
     return false;
   }
 
+  /**
+   * Check if operator is an operator that mutates the value of the variable or field
+   * that it acts on. This is true for assignment and any assignment like operator such
+   * as +=, -=, etc
+   * @return true if operator is an assignment operator
+   */
+  public boolean isAssignmentLike() {
+    return isAssignmentLike;
+  }
+
   public boolean isNumericOperator() {
+    return this.isNumericOperator;
+  }
+  
+  public boolean isBooleanOperator() {
+    return isBooleanOperator;
+  }
+  
+  public boolean isBitOperator() {
+    return isBitOperator;
+  }
+  
+  public boolean isBitShift() {
+    return isBitShift;
+  }
+  
+  public boolean isNumber() {
+    return isNumber;
+  }
+    
+  //////////////////////////
+  
+  private boolean _isNumericOperator() {
     switch (this) {
       case PLUS:
       case MINUS:
@@ -212,35 +266,29 @@ public enum TokenType {
     }
   }
 
-  /**
-   * Check if operator is an operator that mutates the value of the variable or field
-   * that it acts on. This is true for assignment and any assignment like operator such
-   * as +=, -=, etc
-   * @return true if operator is an assignment operator
-   */
-  public boolean isAssignmentLike() {
+  private boolean _isAssignmentLike() {
     return this.is(EQUAL, STAR_STAR_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL, PERCENT_PERCENT_EQUAL,
                    PLUS_EQUAL, MINUS_EQUAL, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN_EQUAL,
                    TRIPLE_GREATER_THAN_EQUAL, AMPERSAND_EQUAL, PIPE_EQUAL, ACCENT_EQUAL, QUESTION_EQUAL);
   }
 
-  public boolean isBooleanOperator() {
+  private boolean _isBooleanOperator() {
     return this.is(AMPERSAND_AMPERSAND, PIPE_PIPE, BANG, BANG_EQUAL, EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL,
                    LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN, GREATER_THAN_EQUAL, IN, BANG_IN, INSTANCE_OF,
                    BANG_INSTANCE_OF, QUESTION_QUESTION);
   }
 
-  public boolean isBitOperator() {
+  private boolean _isBitOperator() {
     return this.is(AMPERSAND, AMPERSAND_EQUAL, PIPE, PIPE_EQUAL, ACCENT, ACCENT_EQUAL, GRAVE,
                    DOUBLE_LESS_THAN, DOUBLE_LESS_THAN_EQUAL, DOUBLE_GREATER_THAN,
                    DOUBLE_GREATER_THAN_EQUAL, TRIPLE_GREATER_THAN, TRIPLE_GREATER_THAN_EQUAL);
   }
 
-  public boolean isBitShift() {
+  private boolean _isBitShift() {
     return this.is(DOUBLE_LESS_THAN,DOUBLE_GREATER_THAN,TRIPLE_GREATER_THAN);
   }
 
-  public boolean isNumber() { return this.is(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST); }
+  private boolean _isNumber() { return this.is(BYTE_CONST,INTEGER_CONST,LONG_CONST,DOUBLE_CONST,DECIMAL_CONST); }
 
   public static final TokenType[] TOKENS_WITH_UPPERCASE;
   static{
@@ -255,6 +303,12 @@ public enum TokenType {
     return asString != null ? asString : super.toString();
   }
 
+  static {
+    for (TokenType type: values()) {
+      type._init();
+    }
+  }
+  
   public static void main(String[] args) {
     Arrays.stream(io.jactl.TokenType.values()).forEach(t -> {
       System.out.println("  IElementType " + t.name() + " = new JactlTokenType(\"" + t.name() + "\", TokenType." + t.name() + ");");

@@ -2705,6 +2705,19 @@ public class RuntimeUtils {
     return lines;
   }
 
+  public static int[] lineOffsets(String str) {
+    int offset = 0;
+    int lastOffset = 0;
+    List<Integer> offsets = new ArrayList<>();
+    offsets.add(0);
+    while ((offset = str.indexOf('\n', lastOffset)) != -1) {
+      lastOffset = offset + 1;  // skip new line
+      offsets.add(lastOffset);
+    }
+    offsets.add(str.length() + 1);
+    return offsets.stream().mapToInt(i -> i).toArray();
+  }
+
   /**
    * Get the string value of an object.
    */
