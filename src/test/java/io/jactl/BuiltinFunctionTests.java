@@ -1133,7 +1133,6 @@ public class BuiltinFunctionTests extends BaseTest {
     }).start();
     Future<Object> result = script.run(new HashMap(), in, (Writer) null);
     assertTrue(result.isDone());
-    ((Exception)result.get()).printStackTrace();
     assertEquals("abc", result.get());
   }
 }

@@ -685,7 +685,7 @@ public class BuiltinFunctions {
     try {
       // If we have data (so no blocking needed) or we are in sync mode (in which case we
       // don't care if we block), then read data
-      if (input.ready() ) { //|| !state.getContext().isAsync) {
+      if (input.ready() || !state.getContext().isAsync) {
         result = readLine(input);
       }
       else {
