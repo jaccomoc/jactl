@@ -95,51 +95,70 @@ The _increment_ is a statement that is executed after each iteration of the loop
 
 For example:
 ```groovy
-for (int i = 0; i < 5; i++) { println i }
+for (int i = 0; i < 5; i++) { 
+  println i
+}
 ```
+
+If no type is specified for the loop variable, the variable will be declared with a type of `Object` and its
+value will be available after the loop completes:
+```groovy
+for (i = 0; i < 10; i++) {
+  println i
+}
+println "Final value of i: $i"      // i will be 10
+```
+
+If the variable has already been declared earlier, it will be reused in the `for` loop.
 
 The second form of `for` loop is the "for-each" loop that iterates over a collection of values:
 > `for` `(` _variable_ `in` _collection_ `)` _statement_
 
+A variant of this form uses `:` instead of `in` to retain compatibility with Java:
+> `for` `(` _variable_ `:` _collection_ `)` _statement_
+
 The _collection_ can be a `List`, `Map`, `String`, or a number.
 The _variable_ is a variable that will be assigned the value of each element in the collection in turn.
+It can optionally have a type attached to it.
+If no type is specified and the variable does not already exist, its type will be inferred from the
+element type of the collection (if the collection is an array or the types of the elements is known
+at compile-time), or will default to `Object` if iterating over a list or other collection type.
+
+Like the standard form of `for`, if no type is specified, the variable remains in scope even after the
+loop has completed and will have the value of the last element iterated over.
 
 For example:
 ```groovy
-for (i in [1,2,3]) { println i }
+for (i in [1,2,3]) { 
+  println i
+}
+println "Last value of i : $i"
 // Output:
 // 1
 // 2
 // 3
+// Last value of i : 3
+
 for (c in 'abc') { println c }
 // Output:
 // a
 // b
 // c
-for (i in 3) { println i }
+
+for (int i in 3) { 
+  println i
+}
+println "Final i: $i"
 // Output:
 // 0
 // 1
 // 2
-```
+// Final i: 3
 
-If the collection is a `Map` then the variable will be a two-element list containing the key and value of each entry
-in the map:
-```groovy
-for (entry in [a:1, b:2]) { println entry }
-// Output:
-// ['a', 1]
-// ['b', 2]
+for (i : list.map{ it * it }) {
+  println it
+}
 ```
-
-You can also use a multi-variable declaration to get the key and value in separate variables:
-```groovy
-for ((key,value) in [a:1, b:2]) { println "$key -> $value" }
-// Output:
-// a -> 1
-// b -> 2
-```
-
 ### While Loops
 
 The `while` loop executes a block of code as long as a condition is `true`:
