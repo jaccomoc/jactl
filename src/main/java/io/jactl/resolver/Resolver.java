@@ -120,6 +120,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private boolean isScript = false;
   private Token   contextLocation;                 // Used by Intellij plugin when resolving expression within an existing context
 
+  private Stmt.Block cachedBlock = null;
+  
   private List<CompileError> errors = new ArrayList<>();
 
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
@@ -226,12 +228,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.setBlock(context);
     classStack.push(context.owningClass);
     getFunctions().push(context.owningFunction);
-    currentFunction().blocks.push(context);
+    pushBlock(context);
     try {
       resolve(expr);
     }
     finally {
-      currentFunction().blocks.pop();
+      popBlock();
       getFunctions().pop();
       classStack.pop();
     }
@@ -252,6 +254,24 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   
   //////////////////////////////////////////////
 
+  private void pushBlock(Expr.FunDecl fn, Stmt.Block block) {
+    fn.blocks.push(block);
+    cachedBlock = null;
+  }
+  
+  private void pushBlock(Stmt.Block block) {
+    pushBlock(currentFunction(), block);
+  }
+
+  private void popBlock() {
+    popBlock(currentFunction());
+  }
+
+  private void popBlock(Expr.FunDecl fn) {
+    fn.blocks.pop();
+    cachedBlock = null;
+  }
+  
   Void resolve(Stmt stmt) {
     if (stmt != null) {
       if (!stmt.isResolved) {
@@ -354,7 +374,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private void prepareClass(Stmt.ClassDecl classDecl) {
     resolve(classDecl.baseClass);
     classStack.push(classDecl);
-
+    cachedBlock = null;
+    
     JactlClassDescriptor classDescriptor = classDecl.classDescriptor;
     JactlType            classType       = JactlType.createClass(classDescriptor);
 
@@ -448,11 +469,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       classStmts.stmts.addAll(superStmts);
       classStmts.stmts.addAll(classDecl.innerClasses);
       classStmts.stmts.add(thisStmt);
-//      // Update the field VarDecls to remove initialisation because we will move the
-//      // initialisation into a separate init method
-//      classDecl.fields.stream()
-//                      .filter(decl -> !decl.declExpr.isConstVar)
-//                      .forEach(decl -> decl.declExpr.initialiser = null);
       classStmts.stmts.addAll(classDecl.fields);
       classStmts.stmts.addAll(classDecl.methods);
     }
@@ -461,6 +477,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     classDecl.innerClasses.forEach(innerClass -> prepareClass(innerClass));
 
     classStack.pop();
+    cachedBlock = null;
   }
 
   private void checkForCyclicInheritance(Stmt.ClassDecl classDecl, JactlClassDescriptor classDescriptor) {
@@ -570,6 +587,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     dummy.functionDescriptor = new FunctionDescriptor();
     classDecl.nestedFunctions.push(dummy);
     classStack.push(classDecl);
+    cachedBlock = null;
     try {
       resolve(classDecl.classBlock);
       resolve(classDecl.scriptMain);
@@ -585,6 +603,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     finally {
       classStack.pop();
+      cachedBlock = null;
     }
     return null;
   }
@@ -808,7 +827,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     stmt.owningClass             = currentClass();
     Expr.FunDecl currentFunction = currentFunction();
     stmt.owningFunction          = currentFunction;
-    currentFunction.blocks.push(stmt);
+    pushBlock(currentFunction, stmt);
     try {
       // We first define our nested functions so that we can support
       // forward references to functions declared at same level as us
@@ -821,7 +840,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return null;
     }
     finally {
-      currentFunction.blocks.pop();
+      popBlock(currentFunction);
     }
   }
 
@@ -1537,6 +1556,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     expr.owner = parent;
     resolve(expr.returnType);
     getFunctions().push(expr);
+    cachedBlock = null;
     try {
       // Add explicit return in places where we would implicity return the result
       explicitReturn(expr.block, expr.returnType);
@@ -1545,6 +1565,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     finally {
       getFunctions().pop();
+      cachedBlock = null;
       if (parent != null) {
         // Check if parent needs to have any additional heap vars passed to it in order for it to
         // be able to pass them to its nested function and add them to the parent.heapLocals map.
@@ -2628,6 +2649,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * @return the current block
    */
   private Stmt.Block getBlock() {
+    if (cachedBlock == null) {
+      cachedBlock = _getBlock();
+    }
+    return cachedBlock;
+  }
+  
+  private Stmt.Block _getBlock() {
     Expr.FunDecl funDecl = currentFunction();
     if (funDecl == null) {
       return topBlock;

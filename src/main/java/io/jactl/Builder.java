@@ -19,6 +19,7 @@ package io.jactl;
 
 public interface Builder {
   Marker mark();
+  Marker markForRollback();
   Token previous();
   Token peek();
   Token advance();

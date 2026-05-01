@@ -66,6 +66,7 @@ public class Tokeniser {
   private       Token  currentToken;      // The current token
   private       Token  previousToken;     // The previous token we parsed
   private final String source;            // The source code of the script
+  private final char[] sourceChars;
   private final int    length;            // Length of source code
   private       int    offset = 0;        // The current position in the source code as offset
   private       int    lineNum = 0;
@@ -104,6 +105,7 @@ public class Tokeniser {
    */
   public Tokeniser(String source) {
     this.source = source;
+    this.sourceChars = source.toCharArray();
     this.length = this.source.length();
     lineOffsets = RuntimeUtils.lineOffsets(source);
   }
@@ -113,6 +115,10 @@ public class Tokeniser {
     this.tokeniseCommentsAndWhitespace = tokeniseCommentsAndWhitespace;
   }
 
+  public boolean tokeniseCommentsAndWhitespace() {
+    return tokeniseCommentsAndWhitespace;
+  }
+  
   public String getSource() {
     return source;
   }
@@ -441,7 +447,7 @@ public class Tokeniser {
         case '"': {
           if (c == endChar) {
             // If close quote/quotes
-            if (charsAtEquals(0, endChars.length(), endChars)) {
+            if (charsAtEquals(endChars)) {
               finished = true;
               if (!stringExpr) {
                 popStringState();
@@ -568,7 +574,7 @@ public class Tokeniser {
       }
 
       case '/': {
-        if (charsAtEquals(0, endChars.length(), endChars)) {
+        if (charsAtEquals(endChars)) {
           advance(1);
           if (isSubstitute) {
             // Return token to indicate we have reached end of pattern part of s/pattern/replacement/
@@ -599,7 +605,7 @@ public class Tokeniser {
         break;
       }
       case '"': {
-        if (charsAtEquals(0, endChars.length(), endChars)) {
+        if (charsAtEquals(endChars)) {
           advance(endChars.length());
           popStringState();
           return token.setType(EXPR_STRING_END).setLength(endChars.length());
@@ -705,9 +711,10 @@ public class Tokeniser {
   
   private Token parseNumber(Token token, int remaining) {
     // Check for binary or hex number
-    int base = charsAtEquals(0, "0b", "0B") ? 2 :
-               charsAtEquals(0, "0x", "0X") ? 16 :
-                                                   /* default */ 10;
+    int base = charAt(0) != '0' || remaining < 2 ? 10 
+                                                 : charAt(1) == 'b' || charAt(1) == 'B' ? 2 :
+                                                   charAt(1) == 'x' || charAt(1) == 'X' ? 16 :
+                                                                            /* default */ 10;
 
     int i = base == 10 ? 0 : 2;
     i = skipToNonDigit(i, base, remaining);
@@ -794,20 +801,20 @@ public class Tokeniser {
    * @return character at given location
    */
   private int charAt(int lookahead) {
-    return source.charAt(offset + lookahead);
+    return sourceChars[offset + lookahead];
   }
 
-  private boolean charsAtEquals(int lookahead, String... value) {
-    for (String str : value) {
-      if (charsAtEquals(lookahead, str.length(), str)) {
-        return true;
+  private boolean charsAtEquals(String value) {
+    int len = value.length();
+    if (!available(len)) {
+      return false;
+    }
+    for (int i = 0; i < len; i++) {
+      if (sourceChars[offset + i] != value.charAt(i)) {
+        return false;
       }
     }
-    return false;
-  }
-
-  private boolean charsAtEquals(int lookahead, int length, String value) {
-    return available(length) && source.regionMatches(offset + lookahead, value, 0, length);
+    return true;
   }
 
   private boolean available(int avail) {

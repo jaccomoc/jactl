@@ -55,7 +55,7 @@ import static io.jactl.TokenType.STRING;
  * To extract the EBNF grammar from the comments grep out lines starting with '  *#'
  */
 public class Parser {
-  Builder               tokeniser;
+  BuilderImpl           tokeniser;
   List<CompileError>    errors       = new ArrayList<>();
   Deque<Stmt.ClassDecl> classes      = new ArrayDeque<>();
   boolean               ignoreEol    = false;   // Whether EOL should be treated as whitespace or not
@@ -71,10 +71,16 @@ public class Parser {
   int lookaheadCount = 0;
 
   public Parser(Tokeniser tokeniser, JactlContext context, String packageName) {
-    this(new BuilderImpl(tokeniser), context, packageName);
+    this(tokeniser.tokeniseCommentsAndWhitespace() ? new BuilderImpl(tokeniser) : new BuilderImpl(tokeniser) {
+           @Override
+           protected Token _skipCommentsAndWhiteSpace() {
+             return tokeniser.peek();
+           }
+         },
+         context, packageName);
   }
 
-  public Parser(Builder tokeniser, JactlContext context, String packageName) {
+  public Parser(BuilderImpl tokeniser, JactlContext context, String packageName) {
     this.tokeniser = tokeniser;
     this.context = context;
     this.packageName = packageName;
@@ -246,7 +252,7 @@ public class Parser {
    */
   private void packageDecl() {
     matchAny(EOL);
-    Marker mark = tokeniser.mark();
+    Marker mark = tokeniser.markForRollback();
     try {
       if (matchAny(PACKAGE)) {
         Token packagePathToken = peek();
@@ -2203,7 +2209,7 @@ public class Parser {
    */
   private Expr.ClassPath classPath(boolean validatePackageName) {
     List<Token> path  = new ArrayList<>();
-    Marker mark = tokeniser.mark();
+    Marker mark = tokeniser.markForRollback();
     try {
       while (matchAny(IDENTIFIER_AND_UPPERCASE)) {
         Token token = previous();
@@ -2216,14 +2222,14 @@ public class Parser {
               // Build package name
               String pkg = path.stream().map(Token::getStringValue).collect(Collectors.joining("."));
               if (context.allowHostAccess) {
-                Marker hostAccessMark = tokeniser.mark();
+                Marker hostAccessMark = tokeniser.markForRollback();
                 // Check for a host class. We need to parse entire class including nested classes
                 // and then validate against the accessHostClassLookup predicate.
                 Token outerClass = token;
                 List<Token> innerClassPath = new ArrayList();
                 Token lastToken = token;
                 while (peekIgnoreEolIs(DOT)) {
-                  Marker mark2 = tokeniser.mark();
+                  Marker mark2 = tokeniser.markForRollback();
                   matchAnyIgnoreEOL(DOT);
                   if (matchAny(IDENTIFIER) && Utils.isValidClassName(previous().getStringValue())) {
                     lastToken = previous();
@@ -3479,12 +3485,12 @@ public class Parser {
     return false;
   }
 
-  /**
-   * Match any type after optionally consuming EOL. If not match then state is
-   * unchanged (EOL is not consumed).
-   */
-  private boolean matchAnyIgnoreEOL(List<TokenType> types) {
-    return matchAnyIgnoreEOL(types.toArray(new TokenType[types.size()]));
+  private boolean matchAnyNoEOL(TokenType type) {
+    if (peekNoEOL().is(type)) {
+      advance();
+      return true;
+    }
+    return false;
   }
 
   private boolean matchAnyNoEOL(TokenType... types) {
@@ -3539,31 +3545,6 @@ public class Parser {
       return true;
     }
     return false;
-
-//    // Remember current tokens in case we need to rewind
-//    Marker mark = tokeniser.mark();
-//    Token current  = tokeniser.peek();
-//
-//    boolean eolConsumed = false;
-//    if (current.is(EOL)) {
-//      advance();
-//      eolConsumed = true;
-//    }
-//
-//    if (peek().isKeyword()) {
-//      mark.drop();
-//      advance();
-//      return true;
-//    }
-//
-//    // No match so rewind if necessary
-//    if (eolConsumed) {
-//      mark.rollback();
-//    }
-//    else {
-//      mark.drop();
-//    }
-//    return false;
   }
 
   /**
@@ -3601,7 +3582,8 @@ public class Parser {
   @SafeVarargs
   private final boolean lookahead(Supplier<Boolean>... lambdas) {
     // Remember current state
-    Marker mark = tokeniser.mark();
+    Token previous = tokeniser.previous();
+    Token current = tokeniser.peek();
     boolean currentIgnoreEol         = ignoreEol;
     List<CompileError> currentErrors = errors.isEmpty() ? errors : new ArrayList<>(errors);
 
@@ -3610,9 +3592,9 @@ public class Parser {
     lookaheadCount++;
 
     try {
-      for (Supplier<Boolean> lamdba: lambdas) {
+      for (Supplier<Boolean> lambda: lambdas) {
         try {
-          if (!lamdba.get()) {
+          if (!lambda.get()) {
             return false;
           }
         }
@@ -3624,7 +3606,36 @@ public class Parser {
     }
     finally {
       // Restore state
-      mark.rollback();
+      tokeniser.rewind(previous, current);
+      errors = currentErrors;
+      lookaheadCount--;
+      ignoreEol = currentIgnoreEol;
+    }
+  }
+
+  private boolean lookahead(Supplier<Boolean> lambda) {
+    // Remember current state
+    Token previous = tokeniser.previous();
+    Token current = tokeniser.peek();
+    boolean currentIgnoreEol         = ignoreEol;
+    List<CompileError> currentErrors = errors.isEmpty() ? errors : new ArrayList<>(errors);
+
+    // Set flag so that we know not to collect state such as functions per block etc
+    // while doing a lookahead
+    lookaheadCount++;
+
+    try {
+      if (!lambda.get()) {
+        return false;
+      }
+      return errors.isEmpty();
+    }
+    catch (CompileError e) {
+      return false;
+    }
+    finally {
+      // Restore state
+      tokeniser.rewind(previous, current);
       errors = currentErrors;
       lookaheadCount--;
       ignoreEol = currentIgnoreEol;

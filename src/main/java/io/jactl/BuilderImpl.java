@@ -57,6 +57,9 @@ public class BuilderImpl implements Builder {
   @Override public Marker mark() {
     return new MarkerImpl();
   }
+  @Override public Marker markForRollback() {
+    return new MarkerImpl(true);
+  }
 
   void rollbackTo(Marker marker) {
     MarkerImpl impl = (MarkerImpl)marker;
@@ -118,7 +121,7 @@ public class BuilderImpl implements Builder {
     _skipCommentsAndWhiteSpace();
   }
 
-  private Token _skipCommentsAndWhiteSpace() {
+  protected Token _skipCommentsAndWhiteSpace() {
     while (true) {
       Token token = tokeniser.peek();
       if (!token.is(COMMENT,WHITESPACE)) {
@@ -133,14 +136,17 @@ public class BuilderImpl implements Builder {
     Tokeniser.State savedState;
     boolean         isError;
 
-    MarkerImpl() {
+    MarkerImpl(boolean rollback) {
       this.ourPreviousToken = previousToken;
       this.savedState       = tokeniser.saveState();
     }
 
+    MarkerImpl() {
+    }
+
     @Override
     public Marker precede() {
-      return new MarkerImpl();
+      return new MarkerImpl(true);
     }
 
     @Override
@@ -171,9 +177,11 @@ public class BuilderImpl implements Builder {
     @Override public void done(List list) {}
   }
 
+  private static final Marker DUMMY_MARKER = new DummyMarker();
+
   private static class DummyMarker implements Marker {
     boolean isError = false;
-    @Override public Marker precede() { return new DummyMarker(); }
+    @Override public Marker precede() { return DUMMY_MARKER; }
     @Override public void rollback() {}
     @Override public void error(CompileError err) { isError = true; }
     @Override public boolean isError() { return isError; }

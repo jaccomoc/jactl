@@ -47,7 +47,7 @@ public class JactlScript {
   private JactlContext                                      jactlContext;
   private Class<?>                                          compiledClass;
   private boolean                                           isAsync;
-  private volatile Constructor<?>                           scriptConstructor;
+  private volatile MethodHandle                             scriptConstructor;
   private volatile MethodHandle                             scriptMainMethodHandle;
 
   private JactlScript(Class<?> compiledClass, JactlContext jactlContext, boolean isAsync) {
@@ -104,8 +104,8 @@ public class JactlScript {
       invoker = map -> {
         JactlScriptObject instance = null;
         try {
-          instance = (JactlScriptObject) getScriptConstructor().newInstance();
-          Object result = getScriptMainMethodHandle().invoke(instance, (Continuation) null, map);
+          instance = (JactlScriptObject) getScriptConstructor().invokeExact();
+          Object result = (Object)getScriptMainMethodHandle().invokeExact(instance, (Continuation) null, map);
           cleanUp(instance, jactlContext);
           return result;
         }
@@ -125,7 +125,7 @@ public class JactlScript {
     else {
       invoker = map -> {
         try {
-          return getScriptMainMethodHandle().invoke(getScriptConstructor().newInstance(), map);
+          return (Object)getScriptMainMethodHandle().invokeExact((JactlScriptObject)getScriptConstructor().invokeExact(), map);
         }
         catch (RuntimeError e) {
           throw e;
@@ -137,16 +137,18 @@ public class JactlScript {
     }
   }
 
-  public Constructor<?> getScriptConstructor() {
-    Constructor<?> result = scriptConstructor;
+  public MethodHandle getScriptConstructor() {
+    MethodHandle result = scriptConstructor;
     if (result == null) { 
       synchronized(this) {
         result = scriptConstructor;
         if (result == null) {
           try {
-            scriptConstructor = result = compiledClass.getDeclaredConstructor();
+            result = MethodHandles.publicLookup().findConstructor(compiledClass, MethodType.methodType(void.class));
+            result = result.asType(MethodType.methodType(JactlScriptObject.class));
+            scriptConstructor = result;
           }
-          catch (NoSuchMethodException e) {
+          catch (NoSuchMethodException | IllegalAccessException e) {
             throw new RuntimeException(e);
           }
         }
@@ -165,7 +167,10 @@ public class JactlScript {
             Method method = isAsync ? compiledClass.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Continuation.class, Map.class)
                                     : compiledClass.getDeclaredMethod(Utils.JACTL_SCRIPT_MAIN, Map.class);
             MethodType methodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
-            scriptMainMethodHandle = result = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACTL_SCRIPT_MAIN, methodType);
+            MethodType narrowedTypes = isAsync ? MethodType.methodType(Object.class, JactlScriptObject.class, Continuation.class, Map.class)
+                                               : MethodType.methodType(Object.class, JactlScriptObject.class, Map.class);
+            scriptMainMethodHandle = result = MethodHandles.publicLookup().findVirtual(compiledClass, Utils.JACTL_SCRIPT_MAIN, methodType)
+                                                           .asType(narrowedTypes);
           }
           catch (NoSuchMethodException | IllegalAccessException e) {
             throw new IllegalStateException("Internal error: " + e, e);

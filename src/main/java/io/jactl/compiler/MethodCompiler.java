@@ -1700,7 +1700,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         pushType(expr.type);
       };
       // Check for divide by zero or remainder 0 if int/long (double returns NaN or INFINITY)
-      if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
+      boolean rightMaybeZero = !expr.right.isConst || expr.right.constValue == null || RuntimeUtils.compareTo(expr.right.constValue, 0, "", 0) == 0;
+      if (rightMaybeZero && expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
         _dupVal();
         Label nonZero = new Label();
         if (expr.type.isBoxedOrUnboxed(LONG)) {
@@ -1711,17 +1712,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _popVal();
         throwError("Divide by zero error", expr.operator);
         mv.visitLabel(nonZero);
-//        tryCatch(ArithmeticException.class, false,
-//                 () -> compileOps.run(),
-//                 () -> {
-//                   popVal();
-//                   throwError("Divide by zero error", expr.operator);
-//                 });
-        compileOps.run();
       }
-      else {
-        compileOps.run();
-      }
+      compileOps.run();
     }
     else
     if (expr.type.is(DECIMAL)) {

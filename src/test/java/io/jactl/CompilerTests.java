@@ -208,6 +208,7 @@ class CompilerTests extends BaseTest {
     test("1.0D/0", Double.POSITIVE_INFINITY);
     test("-1.0D/0", Double.NEGATIVE_INFINITY);
     testError("1L/0", "divide by zero");
+    testError("1L/sleep(0,0)", "divide by zero");
     testError("1.0/0", "divide by zero");
     testError("1/0.0", "divide by zero");
     testError("1%0", "divide by zero");
