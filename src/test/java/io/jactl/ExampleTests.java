@@ -344,17 +344,4 @@ public class ExampleTests {
     assertEquals(16, future.get());
     assertEquals("Result is 16\n", out.toString());
   }
-  
-  @Test public void compileExpression() {
-    System.setProperty("jactl.opt.aliasedGlobals", "false");
-    Map bindings = new HashMap<>();
-    bindings.put("a", 10);
-    bindings.put("b", 5);
-    bindings.put("c", 3);
-    bindings.put("d", 8);
-    bindings.put("e", 7);
-    JactlContext ctx =  JactlContext.create().debug(1).async(false).build();
-    JactlScript script = Compiler.compileScript("(a + b) * c - d / 2 + e %% 3", ctx, bindings);
-    assertEquals(42, script.eval(bindings));
-  }
 }

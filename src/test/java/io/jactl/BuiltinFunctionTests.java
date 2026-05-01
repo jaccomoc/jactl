@@ -940,7 +940,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[a:1,b:2,c:3].collect{ x,y -> x + y }", Utils.listOf("a1","b2","c3"));
     test("[a:1,b:2,c:3].collect(mapper:{ x,y -> x + y })", Utils.listOf("a1","b2","c3"));
   }
-
+  
   @Test public void collectEntries() {
     test("[].collectEntries()", Utils.mapOf());
     test("[].collectEntries{}", Utils.mapOf());

@@ -2202,7 +2202,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
 
       if (functionDescriptor.isBuiltin) {
-        invokeBuiltinFunction(expr, functionDescriptor);
+        invokeBuiltinFunction(expr, (JactlFunction)functionDescriptor);
         if (functionDescriptor.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
           // If Iterator is not going to have another method invoked on it then we need to convert
           // to List since Iterators are not standard Jactl types.
@@ -2347,8 +2347,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Need to decide whether to invoke the method or the wrapper. If we have exact number
     // of arguments we can invoke the method directly. If we don't have all the arguments
     // (and method allows optional args) then invoke wrapper which will worry about filling
-    // missing values.
-    if (args.size() == method.paramCount && !Utils.isNamedArgs(args) && validateArgsAtCompileTime) {
+    // missing values. Exception is for built-in methods since we know that the default values
+    // will all be simple constants that we generate code for here.
+    if ((args.size() == method.paramCount || method.isBuiltin) && !Utils.isNamedArgs(args) && validateArgsAtCompileTime) {
       // We can invoke the method directly as we have exact number of args required
       invokeMaybeAsync(isAsync, method.returnType, 0, location,
                        () -> {
@@ -2373,12 +2374,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            loadLocation(methodNameLocation);
                          }
                          // Get the args
-                         for (int i = 0; i < args.size(); i++) {
-                           Expr arg = args.get(i);
+                         for (int i = 0; i < method.paramCount; i++) {
                            JactlType paramType = method.paramTypes.get(i);
                            desiredType = paramType;
-                           compile(arg);
-                           convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
+                           if (i < args.size()) {
+                             Expr arg = args.get(i);
+                             compile(arg);
+                             convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
+                           }
+                           else {
+                             // Must have a built-in method
+                             JactlFunction builtinMethod = (JactlFunction)method;
+                             Object        defaultValue  = builtinMethod.getDefaultValue(i);
+                             loadConst(defaultValue);
+                             if (defaultValue != null) {
+                               convertTo(paramType, null, !peek().isPrimitive(), argsLocation);
+                             }
+                             else {
+                               popType();
+                               pushType(paramType);
+                             }
+                           }
                          }
                        },
                        () -> {
@@ -4790,7 +4806,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     );
   }
 
-  private void invokeBuiltinFunction(Expr.Call expr, FunctionDescriptor func) {
+  private void invokeBuiltinFunction(Expr.Call expr, JactlFunction func) {
     // We invoke wrapper for named args or if we don't have enough args since it will fill
     // in missing values for optional parameters. We need last param to be of type Object[]
     // since this means varArgs.
@@ -4798,7 +4814,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean         varArgs    = func.isVarArgs;
     int nonVarArgCount = varArgs ? paramTypes.size() - 1
                                  : paramTypes.size();
-    boolean invokeWrapper = Utils.isNamedArgs(expr.args) || expr.args.size() < nonVarArgCount;
+    boolean invokeWrapper = Utils.isNamedArgs(expr.args);
 
     if (invokeWrapper) {
       // Add location types to the front
@@ -4845,11 +4861,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
                          int argIdx = 0;
                          for (; argIdx < nonVarArgCount; argIdx++, param++) {
-                           Expr       arg       = expr.args.get(argIdx);
                            JactlType paramType = finalParamTypes.get(param);
                            desiredType = paramType;
-                           compile(arg);
-                           convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
+                           if (argIdx < expr.args.size()) {
+                             Expr arg = expr.args.get(argIdx);
+                             compile(arg);
+                             convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
+                           }
+                           else {
+                             loadConst(func.getDefaultValue(argIdx));
+                             convertTo(paramType, null, !peek().isPrimitive(), expr.location);
+                           }
                          }
 
                          // Load the rest of the args (could be none) as var args into Object[]

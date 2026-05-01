@@ -270,6 +270,10 @@ public class JactlFunction extends FunctionDescriptor {
     return aliases;
   }
 
+  public Object getDefaultValue(int argIdx) {
+    return defaultVals[argIdx];
+  }
+  
   private Set<String> getMandatoryParams() {
     return IntStream.range(0, defaultVals.length)
                     .filter(i -> defaultVals[i] == MANDATORY)
