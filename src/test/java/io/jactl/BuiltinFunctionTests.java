@@ -24,10 +24,12 @@ import io.jactl.runtime.RuntimeError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -1094,5 +1096,44 @@ public class BuiltinFunctionTests extends BaseTest {
     test("int[][] a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4,8,12));
     test("def a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4,8,12));
     test("var a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4,8,12));
+  }
+  
+  @Test public void nextLineAsync() throws IOException, ExecutionException, InterruptedException {
+    JactlContext ctx    = JactlContext.create().async(true).build();
+    JactlScript  script = Compiler.compileScript("nextLine()", ctx, new HashMap<>());
+    PipedReader  in     = new PipedReader();
+    PipedWriter  src    = new PipedWriter();
+    in.connect(src);
+    Future<Object> result = script.run(new HashMap(), in, (Writer) null);
+    assertFalse(result.isDone());
+    src.write("abc\n");
+    src.flush();
+    src.close();
+    Thread.sleep(500);
+    assertTrue(result.isDone());
+    assertEquals("abc", result.get());
+  }
+  
+  @Test public void nextLineSync() throws IOException, ExecutionException, InterruptedException {
+    JactlContext ctx    = JactlContext.create().async(false).build();
+    JactlScript  script = Compiler.compileScript("nextLine()", ctx, new HashMap<>());
+    PipedReader  in     = new PipedReader();
+    PipedWriter  src    = new PipedWriter();
+    in.connect(src);
+    new Thread(() -> {
+      try {
+        Thread.sleep(500);
+        src.write("abc\n");
+        src.flush();
+        src.close();
+      }
+      catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }).start();
+    Future<Object> result = script.run(new HashMap(), in, (Writer) null);
+    assertTrue(result.isDone());
+    ((Exception)result.get()).printStackTrace();
+    assertEquals("abc", result.get());
   }
 }

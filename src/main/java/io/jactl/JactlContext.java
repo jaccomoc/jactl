@@ -558,7 +558,12 @@ public class JactlContext {
   public Object getThreadContext() { return executionEnv.getThreadContext(); }
 
   public void scheduleEvent(Object threadContext, Runnable event) {
-    executionEnv.scheduleEvent(threadContext, event);
+    if (executionEnv != null) {
+      executionEnv.scheduleEvent(threadContext, event);
+    }
+    else {
+      event.run();
+    }
   }
 
   public void scheduleEvent(Runnable runnable, long timeMs) {

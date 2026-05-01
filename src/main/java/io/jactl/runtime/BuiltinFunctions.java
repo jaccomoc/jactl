@@ -676,17 +676,20 @@ public class BuiltinFunctions {
 
   // = nextLine()
   public static String nextLine(Continuation c, String source, int offset) {
-    BufferedReader input = RuntimeState.getState().getInput();
+    RuntimeState   state = RuntimeState.getState();
+    BufferedReader input = state.getInput();
     if (input == null) {
       return null;
     }
     String result = null;
     try {
-      if (input.ready()) {
+      // If we have data (so no blocking needed) or we are in sync mode (in which case we
+      // don't care if we block), then read data
+      if (input.ready() ) { //|| !state.getContext().isAsync) {
         result = readLine(input);
       }
       else {
-        // Might block so schedule blocking operation and suspend
+        // Async mode and we might block so schedule blocking operation and suspend
         Continuation.suspendBlocking(source, offset, null, data -> readLine(input));
       }
     }

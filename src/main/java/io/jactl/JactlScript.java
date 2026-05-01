@@ -222,7 +222,7 @@ public class JactlScript {
    */
   public Future<Object> run(Map<String,Object> globals, Reader input, PrintStream output) {
     CompletableFuture<Object> future = new CompletableFuture<>();
-    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
+    jactlContext.scheduleEvent(null, () -> run(globals, input, output, future::complete));
     return future;
   }
 
@@ -238,7 +238,7 @@ public class JactlScript {
    */
   public Future<Object> run(Map<String,Object> globals, Reader input, Writer output) {
     CompletableFuture<Object> future = new CompletableFuture<>();
-    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
+    jactlContext.scheduleEvent(null, () -> run(globals, input, output, future::complete));
     return future;
   }
 
