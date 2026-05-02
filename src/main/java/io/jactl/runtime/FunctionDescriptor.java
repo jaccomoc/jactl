@@ -38,7 +38,8 @@ public class FunctionDescriptor {
   public List<JactlType>  paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
-  public String           implementingClassName;    // internal form (a/b/c/Name)
+  public Object[]         defaultVals = new Object[0]; // Default values for each parameter - null if mandatory or if default is not a trivial constant
+  public String           implementingClassName;       // internal form (a/b/c/Name)
   public String           implementingMethod;
   public String           inlineMethodName;         // Name of method that compiler can invoke to inline function (if supported)
   public Method           inlineMethod;             // The inlining method (takes MethodVisitor as arg and generates byte code)

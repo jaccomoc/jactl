@@ -614,12 +614,27 @@ public class Utils {
                                                            false);
     descriptor.isStaticImplementation = isStatic;
     descriptor.isStaticMethod = isStatic;
-    descriptor.mandatoryParams = params.stream()
-                                       .filter(p -> p.declExpr.initialiser == null)
-                                       .map(p -> p.declExpr.name.getStringValue())
-                                       .collect(Collectors.toSet());
-    descriptor.paramNames = params.stream().map(p -> p.declExpr.name.getStringValue()).collect(Collectors.toList());
-    descriptor.paramTypes = params.stream().map(p -> p.declExpr.type).collect(Collectors.toList());
+    descriptor.mandatoryParams = new HashSet<>();
+    descriptor.paramNames = new ArrayList<>();
+    descriptor.paramTypes = new ArrayList<>();
+    List<Object> defaultValues = new ArrayList<>();
+    for (int i = 0; i < params.size(); i++) {
+      Stmt.VarDecl varDecl = params.get(i);
+      String name = varDecl.name.getStringValue();
+      descriptor.paramNames.add(name);
+      Expr initialiser = varDecl.declExpr.initialiser;
+      if (initialiser == null) {
+        descriptor.mandatoryParams.add(name);
+      }
+      if (initialiser != null && initialiser instanceof Expr.Literal) {
+        defaultValues.add(((Expr.Literal) initialiser).value.getValue());
+      }
+      else {
+        defaultValues.add(null);
+      }
+      descriptor.paramTypes.add(varDecl.declExpr.type);
+    }
+    descriptor.defaultVals = defaultValues.toArray(new Object[defaultValues.size()]);
     descriptor.isInitMethod = isInitMethod;
     descriptor.isFinal = isFinal;
     funDecl.functionDescriptor = descriptor;
@@ -926,8 +941,21 @@ public class Utils {
     return t1.getOffset() < t2.getOffset();
   }
 
-  public static boolean isInvokeWrapper(Expr.Call expr, FunctionDescriptor func) {
-    return expr.args.size() != func.paramTypes.size() || isNamedArgs(expr.args) || !expr.validateArgsAtCompileTime;
+  public static boolean isInvokeWrapper(List<Expr> args, boolean validateArgsAtCompileTime, FunctionDescriptor func) {
+    // Invoke wrapper if we have named args or we rely on runtime arg validation
+    if (isNamedArgs(args) || !validateArgsAtCompileTime) {
+      return true;
+    }
+    // If we don't have arguments for all parameters then we will invoke wrapper to
+    // fill in default values if the default values are non-trivial (i.e. not constant values)
+    if (args.size() < func.paramTypes.size()) {
+      for (int i = args.size(); i < func.paramTypes.size(); i++) {
+        if (func.defaultVals[i] == null) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   public static void setReplMode(JactlContext context) {

@@ -2199,7 +2199,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (isFunctionCall) {
       Expr.FunDecl    funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
 
-      expr.validateArgsAtCompileTime = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
+      Pair<Boolean,List<Expr>> result = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
+      expr.validateArgsAtCompileTime = result.first;
+      expr.args = result.second;
 
       if (functionDescriptor.isBuiltin) {
         invokeBuiltinFunction(expr, (JactlFunction)functionDescriptor);
@@ -2260,7 +2262,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If we know what method to invoke
     JactlType parentType = expr.parent.type;
     if (expr.methodDescriptor != null) {
-      invokeMethodDescriptor(expr.methodDescriptor, expr.parent, expr.args, expr.validateArgsAtCompileTime, expr.isMethodCallTarget, expr.isAsync, expr.leftParen, expr.methodNameLocation, expr.location);
+      invokeMethodDescriptor(expr);
       return null;
     }
 
@@ -2329,9 +2331,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
              });
   }
 
-  private void invokeMethodDescriptor(FunctionDescriptor method, Expr parent, List<Expr> args, boolean validateArgsAtCompileTime, boolean isMethodCallTarget, boolean isAsync, Token argsLocation, SourceLocation methodNameLocation, Token location) {
-    if (validateArgsAtCompileTime) {
-      validateArgsAtCompileTime = validateArgs(args, method, argsLocation, method.isInitMethod, method.returnType);
+  private void invokeMethodDescriptor(Expr.MethodCall expr) {
+    FunctionDescriptor method = expr.methodDescriptor;
+    Expr parent = expr.parent;
+    boolean isMethodCallTargetMethod = expr.isMethodCallTarget;
+    boolean isAsync = expr.isAsync;
+    if (expr.validateArgsAtCompileTime) {
+      Pair<Boolean,List<Expr>> result = validateArgs(expr.args, method, expr.leftParen, method.isInitMethod, method.returnType);
+      expr.validateArgsAtCompileTime = result.first;
+      expr.args = result.second;
     }
 
     // Check for "super" since we will need to do INVOKESPECIAL if invoking via super
@@ -2349,13 +2357,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // (and method allows optional args) then invoke wrapper which will worry about filling
     // missing values. Exception is for built-in methods since we know that the default values
     // will all be simple constants that we generate code for here.
-    if ((args.size() == method.paramCount || method.isBuiltin) && !Utils.isNamedArgs(args) && validateArgsAtCompileTime) {
+    //Utils.isInvokeWrapper(
+    if (method.isBuiltin || !Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, method)) {
       // We can invoke the method directly as we have exact number of args required
-      invokeMaybeAsync(isAsync, method.returnType, 0, location,
+      invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
                        () -> {
                          compile(parent);
                          if (couldBeNull(parent)) {
-                           throwIfNull("Cannot invoke method " + method.name + "() on null object", methodNameLocation);
+                           throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                          }
                          if (method.isBuiltin && method.firstArgtype != null) {
                            // If we are calling a "method" that is ANY but we have a primitive then we need to box it
@@ -2371,24 +2380,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            loadNullContinuation();
                          }
                          if (method.needsLocation) {
-                           loadLocation(methodNameLocation);
+                           loadLocation(expr.methodNameLocation);
                          }
                          // Get the args
                          for (int i = 0; i < method.paramCount; i++) {
                            JactlType paramType = method.paramTypes.get(i);
                            desiredType = paramType;
-                           if (i < args.size()) {
-                             Expr arg = args.get(i);
+                           if (i < expr.args.size()) {
+                             Expr arg = expr.args.get(i);
                              compile(arg);
                              convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
                            }
                            else {
-                             // Must have a built-in method
-                             JactlFunction builtinMethod = (JactlFunction)method;
-                             Object        defaultValue  = builtinMethod.getDefaultValue(i);
+                             // Must have simple constant for default value (built-in function or simple default value for user method)
+                             Object        defaultValue  = method.defaultVals[i];
                              loadConst(defaultValue);
                              if (defaultValue != null) {
-                               convertTo(paramType, null, !peek().isPrimitive(), argsLocation);
+                               convertTo(paramType, null, !peek().isPrimitive(), expr.leftParen);
                              }
                              else {
                                popType();
@@ -2409,11 +2417,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       // Need to invoke the wrapper
-      invokeMaybeAsync(isAsync, method.returnType, 0, location,
+      invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
                        () -> {
                          compile(parent);
                          if (couldBeNull(parent)) {
-                           throwIfNull("Cannot invoke method " + method.name + "() on null object", methodNameLocation);
+                           throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                          }
                          if (!method.isBuiltin && method.isStaticImplementation && !parent.type.is(CLASS)) {
                            popVal();
@@ -2430,8 +2438,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            }
                          }
                          loadNullContinuation();
-                         loadLocation(methodNameLocation);
-                         loadArgsAsObjectArr(args);
+                         loadLocation(expr.methodNameLocation);
+                         loadArgsAsObjectArr(expr.args);
                        },
                        () -> {
                          List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
@@ -2451,10 +2459,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        });
     }
-    if (method.returnType.is(ITERATOR) && !isMethodCallTarget) {
+    if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
       // If Iterator is not going to have another method invoked on it then we need to convert
       // to List since Iterators are not standard Jactl types.
-      invokeMaybeAsync(isAsync, ANY, 1, location, () -> {
+      invokeMaybeAsync(isAsync, ANY, 1, expr.location, () -> {
                        },
                        () -> {
                          loadNullContinuation();
@@ -2950,15 +2958,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * If the function has more than one mandatory argument or the type of the first parameter is not compatible
    * with the arg being a list then we assume that the List/ANY must be a list of arg values and we then defer
    * any further validation until runtime (since we usually don't know what is inside the list at compile time).</p>
-   * <p>We also allow Lis/ANY to be passed to a function taking no args and then validate at runtime that the
+   * <p>We also allow List/ANY to be passed to a function taking no args and then validate at runtime that the
    * List is empty.</p>
    * <p>If the single argument is a Map then we might have named args or we might just have a Map.
    * For normal functions/methods we only support named args which are flagged as named args (by the Parser at
    * compile time). For constructors (init method) we allow arbitrary Maps to be used to populate the fields of
    * the object.</p>
-   * @return true if args validated and false if validation should be deferred to runtime
+   * <p>For normal methods/functions, if we have named args, we convert them to an ordered list of
+   * args. This allows us to use standard method/function invocation (as long as any additional
+   * optional args are simple constants - otherwise we fallback to invoking wrapper).</p>
+   * @return Pair of (true if args validated and false if validation should be deferred to runtime) and
+   *         (original args or named args converted to ordered arg list)
    */
-  private boolean validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
+  private Pair<Boolean,List<Expr>> validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
     int       argCount = args.size();
     JactlType arg0Type = argCount > 0 ? args.get(0).type : null;
     if (!isInitMethod && argCount == 1 && arg0Type.is(ANY, LIST)) {
@@ -2968,7 +2980,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             arg0Type.is(ANY) ||
             !func.paramTypes.get(0).is(LIST)) {
           // Runtime validation if more than one mandatory arg or first arg is compatible with List/ANY
-          return false;
+          return Pair.of(false,args);
         }
       }
     }
@@ -2980,7 +2992,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     if (namedArgs) {
-      validateNamedArgs(args, func, location, isInitMethod, initClass);
+      return Pair.of(true, validateNamedArgs(args, func, location, isInitMethod, initClass));
     }
     else {
       List<String> missingArgs = new ArrayList<>();
@@ -3018,10 +3030,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         throw new CompileError("Missing mandatory " + Utils.plural(isInitMethod ? "field" : "argument", missingArgs.size()) + ": " + String.join(", ", missingArgs), location);
       }
     }
-    return true;
+    return Pair.of(true,args);
   }
 
-  private void validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
+  /**
+   * Validate named arguments and turn them back into an order list of args based on parameter order
+   * @param args          singleton list of Expr.MapLiteral representing the named args
+   * @param func          the function/method
+   * @param location      location for errors
+   * @param isInitMethod  true if this is for a "new" invocation
+   * @param initClass     the JactlType for the class (if doing "new")
+   * @return the ordered args (or null if isInitMethod is true or we found an error)
+   */
+  private List<Expr> validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
     List<String> missingArgs = new ArrayList<>();
 
     // For init methods the parameter names and types come from the ClassDescriptor because the init method only
@@ -3033,6 +3054,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     List<Pair<Expr, Expr>> mapEntries  = ((Expr.MapLiteral) args.get(0)).entries;
     Map<String, Expr>      namedArgMap = mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
 
+    // Make sure there are no missing arguments and check argument types are compatible
+    // with parameter types. Remove each named arg as we validate.
+    // Build up list of args in correct order.
+    List<Expr> orderedArgs = isInitMethod ? null : new ArrayList<>();
     for (int i = 0; i < paramNames.size(); i++) {
       String     paramName = paramNames.get(i);
       JactlType paramType = paramTypes.get(i);
@@ -3044,10 +3069,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         validateArg(argExpr, paramType, namedArgMap.get(paramName).location);
+        if (!isInitMethod && orderedArgs != null) {
+          if (func.isVarArgs && i == paramNames.size() - 1) {
+            // For varargs, the last list arg turns into multiple positional args
+            if (argExpr instanceof Expr.ListLiteral) {
+              orderedArgs.addAll(((Expr.ListLiteral) argExpr).exprs);
+            }
+            else {
+              orderedArgs = null;    // Will need to use wrapper
+            }
+          }
+          else {
+            orderedArgs.add(argExpr);
+          }
+        }
         namedArgMap.remove(paramName);
       }
     }
 
+    boolean hasError = !namedArgMap.isEmpty() || !missingArgs.isEmpty();
+    
+    // If there are any named args left then they are unknown ones
     if (namedArgMap.size() > 0) {
       // Use location of first extraneous argument for error
       List<Expr> keys = mapEntries.stream()
@@ -3062,6 +3104,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (missingArgs.size() > 0) {
       error("Missing mandatory " + Utils.plural(isInitMethod ? "field" : "argument", missingArgs.size()) + ": " + String.join(", ", missingArgs), location);
     }
+    
+    // If there are no errors, we can convert the named args back into a positioned args
+    // for more efficient method invocation
+    return hasError || isInitMethod || orderedArgs == null ? args : orderedArgs;
   }
 
   private void validateArg(Expr argExpr, JactlType paramType, Token location) {
@@ -4736,9 +4782,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // = Method invocation
 
   private void invokeUserFunction(Expr.Call expr, Expr.FunDecl funDecl, FunctionDescriptor func) {
-    // We invoke wrapper if we don't have enough args since it will fill in missing
-    // values for optional parameters
-    boolean invokeWrapper = Utils.isInvokeWrapper(expr, func);
+    // We invoke wrapper if we don't have enough args and any missing ones have non-trivial defaults
+    boolean invokeWrapper = Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, func);
 
     // We need to get any HeapLocals that need to be passed in so we can check if we have access to them
     Collection<Expr.VarDecl> heapLocals = (invokeWrapper ? funDecl.wrapper.heapLocals : funDecl.heapLocals).values();
@@ -4798,6 +4843,17 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              invokeMethod(HeapLocal.SET_VALUE_METHOD);
                              loadLocal(temp);
                              stack.freeSlot(temp);
+                           }
+                         }
+                         if (!invokeWrapper) {
+                           // Add missing optional args
+                           for (int i = expr.args.size(); i < func.defaultVals.length; i++) {
+                             Expr.VarDecl paramDecl  = funDecl.parameters.get(i).declExpr;
+                             Object       defaultVal = func.defaultVals[i];
+                             loadConst(defaultVal);
+                             if (defaultVal != null) {
+                               convertTo(paramDecl.type, null, !peek().isPrimitive(), expr.location);
+                             }
                            }
                          }
                        }

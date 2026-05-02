@@ -226,7 +226,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
       }
       if (!function.isBuiltin && isFirstPass) {
-        resolveHeapLocals(currentFunction(), Utils.isInvokeWrapper(expr, function) ? funDecl.wrapper : funDecl);
+        resolveHeapLocals(currentFunction(), Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, function) ? funDecl.wrapper : funDecl);
       }
     }
     else {

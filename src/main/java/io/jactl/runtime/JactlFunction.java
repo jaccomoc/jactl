@@ -85,7 +85,6 @@ public class JactlFunction extends FunctionDescriptor {
 
   String[]    paramNamesArr;                   // Cache of the names as an array for faster runtime access
   Class[]     paramClassesArr;                 // Class of each parameter
-  Object[]    defaultVals = new Object[0];     // Default values for each parameter (or null)
   boolean     isAsyncInstance;                 // Actually async if instance is async (e.g. async ITERATOR)
   int         additionalArgs  = 0;             // needsLocation and methods need more args than just passed in
 

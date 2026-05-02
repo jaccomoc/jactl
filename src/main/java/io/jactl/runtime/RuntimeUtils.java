@@ -2759,7 +2759,7 @@ public class RuntimeUtils {
 
   /**
    * Return a JactlMethodHandle that points to the given static method of the given JactlIterator class.
-   * @param clss       teh class
+   * @param clss       the class
    * @param type       the JactlIterator type (one of JactlIterator.IteratorType)
    * @param method     the name of the static method
    * @param returnType the return type of the method

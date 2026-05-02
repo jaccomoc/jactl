@@ -79,25 +79,62 @@ public abstract class JactlMethodHandle implements Checkpointable {
     return new BoundHandle(this, obj);
   }
 
+  /**
+   * Create a Handle that wraps a MethodHandle pointing to a given method of a class.
+   * Used for built-in functions and host class methods.
+   * For built-in functions the handleName is the name of a field in the handleClass
+   * that holds the value of handle. This is used for recovery. We store the handle
+   * name in the checkpoint and use this to then lookup the handle during restore.
+   * Note: not sure why we don't just do another MethodHandles.lookup at that point
+   * since both mechanisms need reflection to work.
+   * @param handle       the handle returned by MethodHandles.lookup() 
+   * @param handleClass  the class in which the method lives
+   * @param handleName   the name of a static field in the handleClass that holds the handle value
+   * @return the new Handle object
+   */
   public static JactlMethodHandle create(MethodHandle handle, Class handleClass, String handleName) {
     return new Handle(handle, handleClass, handleName);
   }
 
+  /**
+   * Return an InteratorHandle that points to the static method of a JactlIterator class.
+   * @param handle      the MethodHandle for the method
+   * @param type        the type of iterator
+   * @param handleName  the static field of the class holding the value of the underlying MethodHandle
+   * @return the IteratorHandle
+   */
   public static JactlMethodHandle create(MethodHandle handle, JactlIterator.IteratorType type, String handleName) {
     return new IteratorHandle(handle, type, handleName);
   }
 
+  /**
+   * Create a FunctionWrapperHandle that points to the wrapper function for a built-in function.
+   * @param handle   the MethodHandle pointing to the wrapper function
+   * @param type     the Jactl type for which this is a built-in method or null if this is a global function 
+   * @param name     the method/function name
+   * @param function the FunctionDescriptor for the function/method
+   * @return the FunctionWrapperHandle
+   */
   public static FunctionWrapperHandle createFuncHandle(MethodHandle handle, JactlType type, String name, FunctionDescriptor function) {
     return new FunctionWrapperHandle(handle, type, name, function);
   }
-  
+
+  /**
+   * When host access is enabled this returns a HostClassWrapperHandle that points to the wrapper()
+   * method of HostClassMethodInvoker that has been bound to an instance of that class that knows
+   * how to invoke the given host class method.
+   * @param handle    a MethodHandle pointing to HostClassMethodInvoker.wrapper() bound to an instance of that type
+   * @param isStatic  whether the host method is static or not
+   * @return the HostClassWrapperHandle
+   */
   public static HostClassWrapperHandle createHostClassHandle(MethodHandle handle, boolean isStatic) {
     return new HostClassWrapperHandle(handle, isStatic);
   }
 
   /////////////////////////////////////////////////////////////
 
-  public static JactlMethodHandle create(int type) {
+  // Used by Restorer
+  static JactlMethodHandle create(int type) {
     switch (HandleType.values()[type]) {
       case HANDLE:             return new Handle();
       case ITERATOR_HANDLE:    return new IteratorHandle();
