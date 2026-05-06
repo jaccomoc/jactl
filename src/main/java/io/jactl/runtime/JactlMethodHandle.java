@@ -51,27 +51,22 @@ public abstract class JactlMethodHandle implements Checkpointable {
   }
 
   public int parameterCount() {
-    if (handle == null) { populateHandle(); }
     return handle.type().parameterCount();
   }
 
   public Object invoke(JactlObject obj, Continuation c, String source, int offset, Object[] args) throws Throwable {
-    if (handle == null) { populateHandle(); }
     return handle.invoke(obj, c, source, offset, args);
   }
 
   public Object invoke(Continuation c) throws Throwable {
-    if (handle == null) { populateHandle(); }
     return handle.invokeExact(c);
   }
 
   public Object invoke(Continuation c, String source, int offset, Object[] args) throws Throwable {
-    if (handle == null) { populateHandle(); }
     return handle.invokeExact(c, source, offset, args);
   }
 
   public Object invokeWithArguments(Object... args) throws Throwable {
-    if (handle == null) { populateHandle(); }
     return handle.invokeWithArguments(args);
   }
 
@@ -143,9 +138,6 @@ public abstract class JactlMethodHandle implements Checkpointable {
       case HOST_METHOD:        throw new UnsupportedOperationException("Checkpointing not supported for host class methods");
     }
     return null;
-  }
-
-  protected void populateHandle() {
   }
 
   private static class Handle extends JactlMethodHandle {
@@ -311,9 +303,37 @@ public abstract class JactlMethodHandle implements Checkpointable {
       wrappedHandle = (JactlMethodHandle)restorer.readObject();
       boundObj      = restorer.readObject();
     }
-    @Override protected void populateHandle() {
+
+    @Override public Object invoke(JactlObject obj, Continuation c, String source, int offset, Object[] args) throws Throwable {
+      populateHandle();
+      return handle.invoke(obj, c, source, offset, args);
+    }
+
+    @Override public Object invoke(Continuation c) throws Throwable {
+      populateHandle();
+      return handle.invokeExact(c);
+    }
+
+    @Override public Object invoke(Continuation c, String source, int offset, Object[] args) throws Throwable {
+      populateHandle();
+      return handle.invokeExact(c, source, offset, args);
+    }
+
+    @Override public Object invokeWithArguments(Object... args) throws Throwable {
+      populateHandle();
+      return handle.invokeWithArguments(args);
+    }
+
+    @Override public int parameterCount() {
+      populateHandle();
+      return handle.type().parameterCount();
+    }
+
+    private void populateHandle() {
       if (handle == null) {
-        wrappedHandle.populateHandle();
+        if (wrappedHandle instanceof BoundHandle) {
+          ((BoundHandle) wrappedHandle).populateHandle();
+        }
         handle = wrappedHandle.handle.bindTo(boundObj);
       }
     }

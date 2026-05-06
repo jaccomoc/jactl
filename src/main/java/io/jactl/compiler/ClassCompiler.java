@@ -403,7 +403,7 @@ public class ClassCompiler {
     assert !method.functionDescriptor.isFinal || !method.isWrapper;
 
     // Parameter types: heapLocals + params
-    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC | (method.isStatic() ? ACC_STATIC : 0) | (method.functionDescriptor.isFinal ? ACC_FINAL : 0),
+    MethodVisitor mv = cv.visitMethod(ACC_PUBLIC | (method.isStatic() ? ACC_STATIC : 0) | (method.functionDescriptor.isFinal || method.isClosure() ? ACC_FINAL : 0),
                                       methodName,
                                       MethodCompiler.getMethodDescriptor(method),
                                       null, null);

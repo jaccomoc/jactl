@@ -2174,8 +2174,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
     
-    // If we have an explicit function name and exact number of args then we can invoke directly without
-    // needing to go through a method handle or via method wrapper that fills in missing args.
+    // If we have an explicit function name and exact number of args (or missing args have trivial default
+    // values), then we can invoke directly without needing to go through a method handle or via method 
+    // wrapper that fills in missing args.
     // The only exception is if there are closed over variables (HeapLocals) that need to be passed to it
     // and those HeapLocals don't exist in our current scope. E.g. when we are invoking another function
     // from within a separate nested function:  def x; def g(){x}; def f(){g()}
@@ -2185,6 +2186,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean isFunctionCall = false;
     FunctionDescriptor functionDescriptor = null;
     Expr.Identifier callee = null;
+    Expr.FunDecl funDecl = null;
     if (expr.callee.isFunctionCall()) {
       callee = (Expr.Identifier) expr.callee;
       functionDescriptor = callee.getFuncDescriptor();
@@ -2195,10 +2197,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        || functionDescriptor.implementingClassName == null
                        || functionDescriptor.implementingClassName.equals(classCompiler.internalName)
                        || callee.varDecl.isField;
+      funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
     }
+    
+    // If we have a final or effectively final closure variable we can call directly without having
+    // to go through the MethodHandle.
+    if (expr.callee instanceof Expr.Identifier) {
+      callee = (Expr.Identifier) expr.callee;
+      Expr.VarDecl varDecl = callee.varDecl;
+      if ((varDecl.isFinal || varDecl.isEffectivelyFinal) && varDecl.initialiser instanceof Expr.Closure) {
+        isFunctionCall = true;
+        funDecl = ((Expr.Closure) varDecl.initialiser).funDecl;
+        functionDescriptor = funDecl.functionDescriptor;
+      }
+    }
+    
     if (isFunctionCall) {
-      Expr.FunDecl    funDecl = callee.varDecl == null ? null : callee.varDecl.funDecl;
-
       Pair<Boolean,List<Expr>> result = validateArgs(expr.args, functionDescriptor, callee.location, funDecl.isInitMethod(), funDecl.returnType);
       expr.validateArgsAtCompileTime = result.first;
       expr.args = result.second;

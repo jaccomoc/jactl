@@ -2623,7 +2623,7 @@ public class CompilerTests2 extends BaseTest {
     testError("def f(){3}; f([4])", "too many arguments");
     testError("def f(){3}; def g = f; g([4])", "too many arguments");
     testError("def f(int x){x}; f([3])", "cannot convert");
-    testError("def f = { int x -> x}; f([3])", "cannot be cast");
+    testError("def f = { int x -> x}; f([3])", "cannot convert");
     testError("def f(int x){x}; def g = f; g([3])", "cannot be cast");
     testError("def f(int x){x}; def a = [3]; f(a)", "cannot be cast");
     testError("def f(int x, int y=0){x+y}; def a = [3]; f(a)", "cannot be cast");
@@ -2651,7 +2651,7 @@ public class CompilerTests2 extends BaseTest {
     test("def f(List x, int y = 4) { x + y }; def a = [[1,2],3]; def g = f; g(a)", Utils.listOf(Utils.listOf(1,2),3,4));
     test("def f(int x, int y) { x + y }; f([1,2])", 3);
     test("def f(int x, int y) { x + y }; def g = f; g([1,2])", 3);
-    testError("def f = {int x, int y = 4 -> x + y }; f([1,2])", "cannot be cast to int");
+    testError("def f = {int x, int y = 4 -> x + y }; f([1,2])", "cannot convert");
     test("def f = {int x, int y -> x + y }; f([1,2])", 3);
     test("def f = {int x, int y -> x + y }; def g = f; g([1,2])", 3);
     testError("def f = {int x, int y = 4 -> x + y }; def a = [1,2]; f(a)", "cannot be cast to int");
