@@ -21,6 +21,8 @@ import io.jactl.compiler.Compiler;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.Functions;
 import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.RuntimeState;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -40,6 +43,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class BuiltinFunctionTests extends BaseTest {
 
+  @AfterEach
+  void tearDown() {
+    Functions.INSTANCE.deregisterFunction("testFunction");
+  }
+  
   @Test public void aliasedFunction() {
     Jactl.function()
          .name("testFunction")
@@ -56,8 +64,83 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("testFunction2()", "unknown");
   }
 
-  public static Object testFunctionData;
   public static int testFunction() { return 3; }
+
+  @Test public void applicationContext() {
+    Jactl.function()
+         .name("testFunction")
+         .impl(BuiltinFunctionTests.class, "testFunctionAppCtx")
+         .register();
+
+    JactlContext jactlContext = JactlContext.create().build();
+    assertEquals(null, Jactl.eval("testFunction()", new HashMap<>(), jactlContext));
+    JactlScript script = Jactl.compileScript("testFunction()", new HashMap<>(), jactlContext);
+    assertEquals(null, script.eval(new HashMap<>()));
+
+    Object applicationContext = new Object();
+    JactlContext jactlContext2 = JactlContext.create().applicationContext(applicationContext).build();
+    assertEquals(applicationContext, Jactl.eval("testFunction()", new HashMap<>(), jactlContext2));
+    script = Jactl.compileScript("testFunction()", new HashMap<>(), jactlContext2);
+    assertEquals(applicationContext, script.eval(new HashMap<>()));
+    
+    script = Jactl.compileScript("sleep(0, testFunction())", new HashMap<>(), jactlContext2);
+    assertEquals(applicationContext, script.eval(new HashMap<>()));
+    script = Jactl.compileScript("sleep(0, testFunction()); sleep(0, testFunction())", new HashMap<>(), jactlContext2);
+    assertEquals(applicationContext, script.eval(new HashMap<>()));
+  }
+
+  public static Object testFunctionAppCtx() {
+    return RuntimeState.getState().getContext().getApplicationContext();
+  }
+
+  @Test public void invocationContext() throws ExecutionException, InterruptedException {
+    Jactl.function()
+         .name("testFunction")
+         .impl(BuiltinFunctionTests.class, "testFunctionScriptCtx")
+         .register();
+
+    Object invocationContext = new Object();
+    JactlScript script = Jactl.compileScript("testFunction()", new HashMap<>());
+    assertEquals(null, script.eval(new HashMap<>()));
+    assertEquals(null, script.eval(new HashMap<>(), null));
+    assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
+    
+    script = Jactl.compileScript("sleep(0, testFunction())", new HashMap<>());
+    assertEquals(null, script.eval(new HashMap<>()));
+    assertEquals(null, script.eval(new HashMap<>(), null));
+    assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
+    script = Jactl.compileScript("sleep(0, testFunction()); sleep(0, testFunction())", new HashMap<>());
+    assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
+    assertEquals(invocationContext, script.eval(new HashMap<>(), null, null, invocationContext));
+    assertEquals(invocationContext, script.run(new HashMap<>(), invocationContext).get());
+    assertEquals(invocationContext, script.run(new HashMap<>(), null, null, invocationContext).get());
+
+    JactlContext jactlContext = JactlContext.create().async(false).build();
+    script = Jactl.compileScript("testFunction()", new HashMap<>(),  jactlContext);
+    assertEquals(null, script.eval(new HashMap<>()));
+    assertEquals(null, script.eval(new HashMap<>(), null));
+    assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
+    
+    script = Jactl.compileScript("sleep(0, testFunction())", new HashMap<>(), jactlContext);
+    assertEquals(null, script.eval(new HashMap<>()));
+    assertEquals(null, script.eval(new HashMap<>(), null));
+    assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
+    script = Jactl.compileScript("sleep(0, testFunction()); sleep(0, testFunction())", new HashMap<>(), jactlContext);
+    assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
+    assertEquals(invocationContext, script.eval(new HashMap<>(), null, null, invocationContext));
+    assertEquals(invocationContext, script.run(new HashMap<>(), invocationContext).get());
+    assertEquals(invocationContext, script.run(new HashMap<>(), null, null, invocationContext).get());
+    AtomicReference result = new AtomicReference();
+    script.run(new HashMap<>(), invocationContext, v -> result.set(v));
+    assertEquals(invocationContext, result.get());
+    result.set(null);
+    script.run(new HashMap<>(), null, null, invocationContext, v -> result.set(v));
+    assertEquals(invocationContext, result.get());
+  }
+
+  public static Object testFunctionScriptCtx() {
+    return RuntimeState.getState().getInvocationContext();
+  }
 
   @Test public void sleep() {
     test("sleep(0,1)", 1);

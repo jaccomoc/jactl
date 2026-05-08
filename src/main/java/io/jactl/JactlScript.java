@@ -200,13 +200,40 @@ public class JactlScript {
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
    * @param completion  code to be run once script finishes
+   * @deprecated Use {@link #run(Map, Reader, Writer, Consumer)} instead 
    */
   public void run(Map<String,Object> globals, Reader input, PrintStream output, Consumer<Object> completion) {
-    run(globals, input, output == null ? null : new PrintWriter(output), completion);
+    run(globals, input, output == null ? null : new PrintWriter(output), null, completion);
   }
   
+  /**
+   * <p>Run the script with the given global variables. When finished it will invoke the
+   * completion with the result. The completion may or may not be invoked on the same
+   * thread depending on whether the script has any asynchronous/blocking function calls.
+   * </p>
+   * @param globals     a Map of global variables and their values
+   * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output      Writer where print/println output will go (can be null)
+   * @param completion  code to be run once script finishes
+   */
   public void run(Map<String,Object> globals, Reader input, Writer output, Consumer<Object> completion) {
-    RuntimeState.setState(jactlContext, globals, input, output);
+    RuntimeState.setState(jactlContext, globals, input, output, null);
+    asyncInvoker.accept(globals, completion);
+  }
+
+  /**
+   * <p>Run the script with the given global variables. When finished it will invoke the
+   * completion with the result. The completion may or may not be invoked on the same
+   * thread depending on whether the script has any asynchronous/blocking function calls.
+   * </p>
+   * @param globals           a Map of global variables and their values
+   * @param input             Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output            Writer where print/println output will go (can be null)
+   * @param invocationContext per invocation context that registered functions can access
+   * @param completion    code to be run once script finishes
+   */
+  public void run(Map<String,Object> globals, Reader input, Writer output, Object invocationContext, Consumer<Object> completion) {
+    RuntimeState.setState(jactlContext, globals, input, output, invocationContext);
     asyncInvoker.accept(globals, completion);
   }
 
@@ -219,6 +246,7 @@ public class JactlScript {
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
    * @return a {@link Future} that will be completed with the script's result
+   * @deprecated Use {@link #run(Map, Reader, Writer)} instead 
    */
   public Future<Object> run(Map<String,Object> globals, Reader input, PrintStream output) {
     CompletableFuture<Object> future = new CompletableFuture<>();
@@ -234,11 +262,28 @@ public class JactlScript {
    * @param globals     a Map of global variables and their values
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      Writer where print/println output will go (can be null)
-   *  @return a {@link Future} that will be completed with the script's result
+   * @return a {@link Future} that will be completed with the script's result
    */
   public Future<Object> run(Map<String,Object> globals, Reader input, Writer output) {
     CompletableFuture<Object> future = new CompletableFuture<>();
-    jactlContext.scheduleEvent(null, () -> run(globals, input, output, future::complete));
+    jactlContext.scheduleEvent(null, () -> run(globals, input, output, null, future::complete));
+    return future;
+  }
+
+  /**
+   * <p>
+   * Runs the script with the provided global variables, input, and output, returning
+   * a future that completes with the script's result when it finishes executing.
+   * </p>
+   * @param globals           a Map of global variables and their values
+   * @param input             Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output            Writer where print/println output will go (can be null)
+   * @param invocationContext per invocation context that registered functions can access
+   * @return a {@link Future} that will be completed with the script's result
+   */
+  public Future<Object> run(Map<String,Object> globals, Reader input, Writer output, Object invocationContext) {
+    CompletableFuture<Object> future = new CompletableFuture<>();
+    jactlContext.scheduleEvent(null, () -> run(globals, input, output, invocationContext, future::complete));
     return future;
   }
 
@@ -252,7 +297,21 @@ public class JactlScript {
    * @param completion  code to be run once script finishes
    */
   public void run(Map<String,Object> globals, Consumer<Object> completion) {
-    run(globals, null, (Writer)null, completion);
+    run(globals, null, (Writer)null, null, completion);
+  }
+
+  /**
+   * <p>Run the script with the given global variables. When finished it will invoke the
+   * completion with the result. The completion may or may not be invoked on the same
+   * thread depending on whether the script has any asynchronous/blocking function calls.
+   * The globals should be a Map of global variable names whose values are simple Java
+   * objects.</p>
+   * @param globals           a Map of global variables and their values
+   * @param invocationContext per invocation context available to registered functions
+   * @param completion    code to be run once script finishes
+   */
+  public void run(Map<String,Object> globals, Object invocationContext, Consumer<Object> completion) {
+    run(globals, null, (Writer)null, invocationContext, completion);
   }
 
   /**
@@ -261,11 +320,26 @@ public class JactlScript {
    * that will return the script's result when it finishes executing.
    * </p>
    * @param globals     a Map of global variables and their values
-   *  @return a {@link Future} that will be completed with the script's result
+   * @return a {@link Future} that will be completed with the script's result
    */
   public Future<Object> run(Map<String,Object> globals) {
     CompletableFuture<Object> future = new CompletableFuture<>();
-    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, future::complete));
+    jactlContext.scheduleEvent(null, () -> run(globals, null, null, null, future::complete));
+    return future;
+  }
+
+  /**
+   * <p>
+   * Runs the script with the provided global variables and return a future
+   * that will return the script's result when it finishes executing.
+   * </p>
+   * @param globals           a Map of global variables and their values
+   * @param invocationContext per invocation context that registered functions can access
+   * @return a {@link Future} that will be completed with the script's result
+   */
+  public Future<Object> run(Map<String,Object> globals, Object invocationContext) {
+    CompletableFuture<Object> future = new CompletableFuture<>();
+    jactlContext.scheduleEvent(null, () -> run(globals, null, null, invocationContext, future::complete));
     return future;
   }
 
@@ -280,7 +354,7 @@ public class JactlScript {
    * @deprecated Use {@link #eval(Map)} instead
    */
   public Object runSync(Map<String,Object> globals) {
-    return eval(globals, null, (Writer)null);
+    return eval(globals, null, (Writer)null, null);
   }
 
   /**
@@ -293,7 +367,7 @@ public class JactlScript {
    * @return the result returned from the script
    */
   public Object eval(Map<String,Object> globals) {
-    return eval(globals, null, (Writer)null);
+    return eval(globals, null, (Writer)null, null);
   }
 
   /**
@@ -302,6 +376,25 @@ public class JactlScript {
    * thread and wait for the script to complete before returning.</p>
    * <p>This should not be invoked if caller is already on an event-loop thread as
    * it blocks the current thread until the script completes.</p>
+   * <p>Suitable for use in situations where JactlContext.async(false) has been
+   * used.</p>
+   * @param globals           a Map of global variables and their values
+   * @param invocationContext an object that registered functions can access to allow for
+   *                          per invocation level context
+   * @return the result returned from the script
+   */
+  public Object eval(Map<String,Object> globals, Object invocationContext) {
+    return eval(globals, null, (Writer)null, invocationContext);
+  }
+
+  /**
+   * <p>Run the script with the given global variables and wait for the result.</p>
+   * <p>This will schedule the script invocation on an event-loop (non-blocking)
+   * thread and wait for the script to complete before returning.</p>
+   * <p>This should not be invoked if caller is already on an event-loop thread as
+   * it blocks the current thread until the script completes.</p>
+   * <p>Suitable for use in situations where JactlContext.async(false) has been
+   * used.</p>
    * @param globals     a Map of global variables and their values
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
@@ -309,7 +402,7 @@ public class JactlScript {
    * @deprecated Use {@link #eval(Map, Reader, PrintStream)} instead
    */
   public Object runSync(Map<String,Object> globals, Reader input, PrintStream output) {
-    return eval(globals, input, output == null ? null : new PrintWriter(output));
+    return eval(globals, input, output == null ? null : new PrintWriter(output), null);
   }
   
   /**
@@ -318,33 +411,51 @@ public class JactlScript {
    * thread and wait for the script to complete before returning.</p>
    * <p>This should not be invoked if caller is already on an event-loop thread as
    * it blocks the current thread until the script completes.</p>
+   * <p>Suitable for use in situations where JactlContext.async(false) has been
+   * used.</p>
    * @param globals     a Map of global variables and their values
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintStream where print/println output will go (can be null)
    * @return the result returned from the script
    */
   public Object eval(Map<String,Object> globals, Reader input, PrintStream output) {
-    return eval(globals, input, output == null ? null : new PrintWriter(output));
+    return eval(globals, input, output == null ? null : new PrintWriter(output), null);
   }
   
   /**
    * <p>Run script with given global variables and wait for result.</p>
+   * <p>Suitable for use in situations where JactlContext.async(false) has been
+   * used.</p>
    * @param globals     a Map of global variables and their values
    * @param input       Reader with input for the script (if it uses nextLine()) (can be null)
    * @param output      PrintWriter where print/println output will go (can be null)
    * @return the result of the script
    */
   public Object eval(Map<String,Object> globals, Reader input, Writer output) {
+    return eval(globals, input, output, null);
+  }
+  
+  /**
+   * <p>Run script with given global variables and wait for result.</p>
+   * <p>Suitable for use in situations where JactlContext.async(false) has been
+   * used.</p>
+   * @param globals           a Map of global variables and their values
+   * @param input             Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output            PrintWriter where print/println output will go (can be null)
+   * @param invocationContext per invocation context that registered functions can access
+   * @return the result of the script
+   */
+  public Object eval(Map<String,Object> globals, Reader input, Writer output, Object invocationContext) {
     if (!isAsync) {
       // We can run directly on this thread and return the result since we know script won't
       // throw a Continuation for async functions
-      RuntimeState.setState(jactlContext, globals, input, output);
+      RuntimeState.setState(jactlContext, globals, input, output, invocationContext);
       return invoker.apply(globals);
     }
 
     // Potentially async code so run on a separate thread and wait for result
     CompletableFuture<Object> future = new CompletableFuture<Object>();
-    jactlContext.executionEnv.scheduleEvent(null, () -> run(globals, input, output, future::complete));
+    jactlContext.scheduleEvent(null, () -> run(globals, input, output, invocationContext, future::complete));
     try {
       Object result = future.get();
       if (result instanceof RuntimeException) {

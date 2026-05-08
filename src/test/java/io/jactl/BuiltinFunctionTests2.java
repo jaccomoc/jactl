@@ -17,8 +17,7 @@
 
 package io.jactl;
 
-import io.jactl.runtime.Continuation;
-import io.jactl.runtime.RuntimeError;
+import io.jactl.runtime.*;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -1187,11 +1186,15 @@ public class BuiltinFunctionTests2 extends BaseTest {
   }
 
   private void checkpointTest(String source, Object commitExpected, Object recoverExpected) throws InterruptedException, ExecutionException {
-    _checkpointTest(source, commitExpected, recoverExpected, false);
-    _checkpointTest(source, commitExpected, recoverExpected, true);
+    checkpointTest(source, commitExpected, recoverExpected, null);
+  }
+  
+  private void checkpointTest(String source, Object commitExpected, Object recoverExpected, Object scriptContext) throws InterruptedException, ExecutionException {
+    _checkpointTest(source, commitExpected, recoverExpected, false, scriptContext);
+    _checkpointTest(source, commitExpected, recoverExpected, true, scriptContext);
   }
 
-  private void _checkpointTest(String source, Object commitExpected, Object recoverExpected, boolean loopDetection) throws InterruptedException, ExecutionException {
+  private void _checkpointTest(String source, Object commitExpected, Object recoverExpected, boolean loopDetection, Object scriptContext) throws InterruptedException, ExecutionException {
     Map<UUID,List<Pair<Integer,byte[]>>> checkpoints = new HashMap<>();
     jactlEnv = new DefaultEnv() {
       @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
@@ -1209,7 +1212,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     };
     JactlContext context = getJactlContext(loopDetection);
     JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
-    assertEquals(commitExpected, script.eval(Utils.mapOf()));
+    assertEquals(commitExpected, script.eval(Utils.mapOf(), scriptContext));
     if (!isAsync) {
       return;
     }
@@ -1255,6 +1258,46 @@ public class BuiltinFunctionTests2 extends BaseTest {
     checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ [1,2,3] }{ 'abc' }", Utils.listOf(1,2,3), "abc");
     checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", Utils.listOf(1,2,3), "abc");
     checkpointTest("def x = checkpoint{ [1,2,3].map{ sleep(0,it) } }{ 'abc'.map{ sleep(0,it) }.join() }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", Utils.listOf(1,2,3), "abc");
+  }
+  
+  @Test public void checkpointWithInvocationContext() throws ExecutionException, InterruptedException {
+    try {
+      Jactl.function()
+           .name("testFunction")
+           .impl(BuiltinFunctionTests2.class, "testFunctionCheckpoint")
+           .register();
+      Jactl.function()
+           .name("testFunction2")
+           .impl(BuiltinFunctionTests2.class, "testFunctionCheckpoint2")
+           .register();
+      
+      Object invocationContext = new Object();
+      checkpointTest("checkpoint{ testFunction() }{ testFunction() }", invocationContext, null, invocationContext);
+
+      JactlContext jactlContext = JactlContext.create().build();
+      jactlContext.getRegisteredClasses().registerCheckpointer(InvocationContext.class, (checkpointer, obj) -> checkpointer.writeCInt(((InvocationContext)obj).value));
+      jactlContext.getRegisteredClasses().registerRestorer(InvocationContext.class, restorer -> new InvocationContext(restorer.readCInt()));
+      
+      Object invocationContext2 = new InvocationContext(123);
+      checkpointTest("checkpoint{ testFunction2() }{ testFunction2() }", 123, 123, invocationContext2);
+    }
+    finally {
+      Functions.INSTANCE.deregisterFunction("testFunction");
+      Functions.INSTANCE.deregisterFunction("testFunction2");
+    }
+  }
+  
+  public static Object testFunctionCheckpoint() {
+    return RuntimeState.getState().getInvocationContext();
+  }
+
+  private static class InvocationContext {
+    int value;
+    InvocationContext(int value) { this.value = value; }
+  }
+  
+  public static Object testFunctionCheckpoint2() {
+    return ((InvocationContext)RuntimeState.getState().getInvocationContext()).value;
   }
 
   @Test public void functionWithDefaults() {

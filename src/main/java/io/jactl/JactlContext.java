@@ -33,6 +33,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -45,7 +46,7 @@ import static io.jactl.JactlType.*;
 
 public class JactlContext {
 
-  JactlEnv executionEnv     = null;
+  private JactlEnv executionEnv     = null;
 
   public boolean printSize              = false;
   public boolean evaluateConstExprs     = true;
@@ -59,6 +60,8 @@ public class JactlContext {
   public boolean allowUndeclaredGlobals = false;   // Whether to allow compilation of access to undeclared globals
   public boolean allowHostAccess        = false;   // Whether to allow calls to methods on binding variables of unknown type
   public boolean isAsync                = true;    // Whether async functions use Continuations (true) or block (false)
+  
+  private Object applicationContext = null;
   
   public Predicate<String> allowHostClassLookup = s -> false; // A Predicate that returns true for host classes on which static methods can be invoked
   
@@ -79,6 +82,10 @@ public class JactlContext {
 
   // Total number of compiled scripts we keep for use by eval() function
   public static int scriptCacheSize = Integer.getInteger("jactl.eval.cache-size", 100);
+
+  // Map of class to handle of its no-arg constructor
+  private ConcurrentHashMap<Class<?>, MethodHandle> constructors = new ConcurrentHashMap<>();
+
 
   // Testing
   boolean checkpoint = false;
@@ -138,19 +145,6 @@ public class JactlContext {
   }
 
   private JactlContext() {}
-
-//  /**
-//   * Get the current context by finding our thread current class loader.
-//   * @return the current context
-//   * @throws IllegalStateException if current class loader is not of correct type
-//   */
-//  public static JactlContext getContext() {
-//    ClassLoader loader = Thread.currentThread().getContextClassLoader();
-//    if (loader instanceof DynamicClassLoader) {
-//      return ((DynamicClassLoader)loader).getJactlContext();
-//    }
-//    throw new IllegalStateException("Expected class loader of type " + DynamicClassLoader.class.getName() + " but found " + loader.getClass().getName());
-//  }
 
   /**
    * Lookup class based on fully qualified internal name (a/b/c/X$Y)
@@ -351,25 +345,33 @@ public class JactlContext {
     public JactlContextBuilder maxExecutionTime(int limitMs)     { maxExecutionTimeMs = limitMs; return this; }
 
     /**
-     * Diable the use of eval() in scripts
+     * Disable the use of eval() in scripts
      * @param value true if eval should be disabled
      * @return the JactlContextBuilder
      */
     public JactlContextBuilder disableEval(boolean value)        { disableEval = value;   return this; }
 
     /**
-     * Diable the use of print/println in scripts
+     * Disable the use of print/println in scripts
      * @param value true if print should be disabled
      * @return the JactlContextBuilder
      */
     public JactlContextBuilder disablePrint(boolean value)      { disablePrint = value;   return this; }
     
     /**
-     * Diable the use of die in scripts
+     * Disable the use of die in scripts
      * @param value true if die should be disabled
      * @return the JactlContextBuilder
      */
     public JactlContextBuilder disableDie(boolean value)        { disableDie = value;   return this; }
+
+    /**
+     * Register an application context object that can then be accessed by custom functions
+     * that the application registers with Jactl.
+     * @param ctx  the application context object
+     * @return the JactlContextBuilder
+     */
+    public JactlContextBuilder applicationContext(Object ctx)   { applicationContext = ctx; return this; }
     
     /**
      * Build the JactlContext. This should be invoked last after chaining all the other calls used to configure
@@ -426,6 +428,21 @@ public class JactlContext {
 
   //////////////////////////////////
 
+  public Object getApplicationContext() {
+    return applicationContext;
+  }
+  
+  public MethodHandle getConstructor(Class<?> clss) {
+    return constructors.computeIfAbsent(clss, c -> {
+      try {
+        return MethodHandles.lookup().unreflectConstructor(c.getConstructor());
+      }
+      catch (IllegalAccessException | NoSuchMethodException | ClassCastException e) {
+        throw new IllegalStateException("Error looking up no-arg constructor for " + clss.getName(), e);
+      }
+    });
+  }
+  
   public Functions getFunctions() {
     return functions == null ? Functions.INSTANCE : functions;
   }

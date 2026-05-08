@@ -17,6 +17,8 @@
 
 package io.jactl.runtime;
 
+import org.objectweb.asm.Type;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -138,7 +140,10 @@ public class RegisteredClasses {
     if (parent != null) {
       return parent.getRegisteredClass(javaClass);
     }
-    throw new IllegalStateException("Cannot find class " + javaClass.getName() + " as a registered Jactl type");
+    // Nothing registered, so return the passed in class. This is only used when checkpointing and we have
+    // already checked for a checkpointer for the class so the fact that we haven't registered the class
+    // is ok. Used for checkpointing script context objects (for example).
+    return javaClass;
   }
   
   public BiConsumer<Checkpointer,Object> getCheckpointer(Class<?> javaClass) {
@@ -154,8 +159,9 @@ public class RegisteredClasses {
     return null;
   }
   
-  void registerCheckpointer(Class<?> javaClass, BiConsumer<Checkpointer,Object> checkpointer) {
+  public void registerCheckpointer(Class<?> javaClass, BiConsumer<Checkpointer,Object> checkpointer) {
     checkpointers.put(javaClass, checkpointer);
+    classByInternalJavaName.put(Type.getInternalName(javaClass), javaClass);
   }
   
   public Function<Restorer, Object> getRestorer(Class<?> javaClass) {
@@ -166,7 +172,7 @@ public class RegisteredClasses {
     return restorer;
   }
   
-  void registerRestorer(Class<?> javaClass, Function<Restorer, Object> restorer) {
+  public void registerRestorer(Class<?> javaClass, Function<Restorer, Object> restorer) {
     restorers.put(javaClass, restorer);
   }
 }

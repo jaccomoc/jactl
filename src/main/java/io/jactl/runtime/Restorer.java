@@ -22,8 +22,9 @@ import io.jactl.JactlType;
 import io.jactl.Pair;
 
 import java.io.PrintWriter;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Array;
-import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Function;
@@ -41,6 +42,8 @@ public class Restorer {
 
   private CircularBuffer<Pair<Integer,Object>> toBeProcessed = new CircularBuffer<>(127, true);
 
+  /////////////////
+  
   private static Restorer get(JactlContext context, byte[] buf) {
     return new Restorer().init(context, buf);
   }
@@ -64,9 +67,10 @@ public class Restorer {
 
   public static Object restore(JactlContext context, byte[] buf) {
     Restorer restorer = get(context, buf);
-    // We checkpoint a two element list (globals, continuation) so restore the globals and return the continuation
+    // We checkpoint a three element list (globals, continuation, scriptContext) so
+    // restore the globals and scriptContext and return the continuation
     List restored = (List)restorer.restore();
-    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), null, (PrintWriter)null);
+    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), null, (PrintWriter)null, restored.size() > 2 ? restored.get(2) : null);
     return restored.get(1);
   }
 
@@ -491,15 +495,19 @@ public class Restorer {
 
   private Object newInstance(Class clss) {
     try {
-      return clss.getConstructor().newInstance();
+      MethodHandle constructor = context.getConstructor(clss);
+      return constructor.invoke();
     }
-    catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException | ClassCastException e) {
-      throw new IllegalStateException("Error trying to construct JactlObject of type " + clss.getName(), e);
+    catch (Throwable e) {
+      throw new IllegalStateException("Error trying to construct object of type " + clss.getName(), e);
     }
   }
 
   public Class getJactlClass(String internalName) {
     Class clss = context.getClass(internalName);
+    if (clss == null) {
+      clss = context.getRegisteredClasses().findClassByInternalJavaName(internalName);
+    }
     if (clss == null) {
       throw new IllegalStateException("Unknown class: " + internalName);
     }

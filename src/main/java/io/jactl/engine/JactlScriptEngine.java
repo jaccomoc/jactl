@@ -158,7 +158,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
         }
       }
       try {
-        RuntimeState.setState(getJactlContext(), globals, context.getReader(), context.getWriter());
+        RuntimeState.setState(getJactlContext(), globals, context.getReader(), context.getWriter(), null);
         return handle.invoke( null, "unknown", -1, args);
       }
       catch (Continuation c) {
@@ -202,7 +202,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
       
       // Bind handle to the instance and invoke it 
       handle = handle.bindTo(instance);
-      RuntimeState.setState(getJactlContext(), globals, context.getReader(), context.getWriter());
+      RuntimeState.setState(getJactlContext(), globals, context.getReader(), context.getWriter(), null);
       return handle.invoke(null, "unknown", 0, args == null ? new Object[0] : args);
     }
     catch (Continuation c) {

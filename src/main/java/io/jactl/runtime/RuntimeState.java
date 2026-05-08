@@ -22,7 +22,6 @@ import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 
 import java.io.*;
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -46,6 +45,7 @@ public class RuntimeState {
   private Map<String, Object> globals;
   private Writer              writer;
   private BufferedReader      input;
+  private Object              invocationContext;
   private long                loopIterationCount;
   private long                endTime;
 
@@ -71,7 +71,7 @@ public class RuntimeState {
     threadLocalState.set(null);
   }
 
-  public static void setState(JactlContext context, Map<String, Object> globals, Reader input, Writer writer) {
+  public static void setState(JactlContext context, Map<String, Object> globals, Reader input, Writer writer, Object invocationContext) {
     RuntimeState state = getState();
     state.context = context;
     state.input = input == null ? null
@@ -82,6 +82,7 @@ public class RuntimeState {
     if (context.maxExecutionTimeMs >= 0) {
       state.endTime = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(context.maxExecutionTimeMs);
     }
+    state.invocationContext = invocationContext;
   }
   
   public BufferedReader getInput() {
@@ -97,6 +98,8 @@ public class RuntimeState {
   }
 
   public JactlContext getContext() { return context; }
+  
+  public Object getInvocationContext() { return invocationContext; }
 
   private static final int TIMEOUT_FREQ_CHECK = Integer.getInteger("jactl.loop.timeout-freq-check", 100);
 

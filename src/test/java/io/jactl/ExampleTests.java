@@ -84,12 +84,12 @@ public class ExampleTests {
     globalValues.put("y", 3);
     ByteArrayOutputStream out    = new ByteArrayOutputStream();
     AtomicInteger         result = new AtomicInteger();
-    script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintStream(out), res -> result.set((int)res));
+    script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintWriter(out), res -> result.set((int)res));
     assertEquals(16, result.get());
     assertEquals("Result is 16\n", out.toString());
 
     out.reset();
-    Future<Object> future = script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintStream(out));
+    Future<Object> future = script.run(globalValues, new BufferedReader(new StringReader("1\n2\n3\n")), new PrintWriter(out));
     assertEquals(16, future.get());
     assertEquals("Result is 16\n", out.toString());
   }

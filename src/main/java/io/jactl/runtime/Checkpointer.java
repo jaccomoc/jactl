@@ -114,8 +114,14 @@ public class Checkpointer {
   }
 
   public static byte[] checkpoint(Object obj, RuntimeState state, JactlContext context, String source, int offset) {
-    // Add globals to checkpoint
-    obj = Arrays.asList(state.getGlobals(), obj);
+    Object scriptContext = state.getInvocationContext();
+    // If we don't have a way of checkpointing the script context then write null instead
+    if (scriptContext != null && context.getRegisteredClasses().getCheckpointer(scriptContext.getClass()) == null) {
+      scriptContext = null;
+    }
+    
+    // Add globals and scriptContext to checkpoint
+    obj = Arrays.asList(state.getGlobals(), obj, scriptContext);
 
     Checkpointer checkpointer = Checkpointer.get(source, offset, context);
     checkpointer._checkpoint(obj);
