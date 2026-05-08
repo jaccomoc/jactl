@@ -129,7 +129,6 @@ class FilterIterator extends JactlIterator {
             location = 4;
             break;
           case 4:
-            elem = RuntimeUtils.mapEntryToList(elem);
             filterCond = closure == null ? RuntimeUtils.isTruth(elem, false)
                                          : closure.invoke((Continuation) null, source, offset, new Object[]{elem});
             location = 6;

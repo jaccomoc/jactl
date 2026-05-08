@@ -2236,10 +2236,6 @@ public class RuntimeUtils {
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
-            if (elem instanceof Map.Entry) {
-              Map.Entry entry = (Map.Entry) elem;
-              elem = Utils.listOf(entry.getKey(), entry.getValue());
-            }
             result.add(elem);
             methodLocation = 0;       // Back to initial state
             break;
@@ -2800,21 +2796,6 @@ public class RuntimeUtils {
     catch (Throwable e) {
       throw new RuntimeError("Error invoking closure/function", source, offset, e);
     }
-  }
-
-
-  /**
-   * If we have a Map.Entry then convert to List so that when passed to a closure
-   * the closure will see a list of [key,value]
-   * @param elem  the element
-   * @return a two entry List if elem is a Map.Entry or return elem otherwise
-   */
-  public static Object mapEntryToList(Object elem) {
-    if (elem instanceof Map.Entry) {
-      Map.Entry entry = (Map.Entry) elem;
-      elem = Arrays.asList(entry.getKey(), entry.getValue());
-    }
-    return elem;
   }
 
   public static final MethodRef LIST_TO_OBJECT_ARRAY_METHOD = Utils.getMethod(RuntimeUtils.class, "listToObjectArray", Object.class);

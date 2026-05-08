@@ -144,7 +144,6 @@ public class Reducer implements Checkpointable {
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
-            elem = RuntimeUtils.mapEntryToList(elem);
             switch (type) {
               case REDUCE:
                 value = closure.invoke(null, source, offset, new Object[]{ Arrays.asList(value, elem) });

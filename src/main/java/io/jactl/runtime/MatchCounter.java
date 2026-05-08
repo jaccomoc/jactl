@@ -113,7 +113,6 @@ public class MatchCounter implements Checkpointable {
             location = 4;
             break;
           case 4:
-            elem = RuntimeUtils.mapEntryToList(elem);
             filterCond = predicate == null ? RuntimeUtils.isTruth(elem, false)
                                            : predicate.invoke((Continuation) null, source, offset, new Object[]{elem});
             location = 6;

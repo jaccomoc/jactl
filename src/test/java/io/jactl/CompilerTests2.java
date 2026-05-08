@@ -2392,6 +2392,7 @@ public class CompilerTests2 extends BaseTest {
     test("int sum; String i; for (i in ['1'])sum++; sum", 1);
     test("def sum = ''; String i; for (i in 'abc')sum=i+sum; sum", "cba");
     test("def sum = ''; for (i in 'abc')sum=i+sum; sum", "cba");
+    test("def list = []; for (i in [a:1,b:2]) { list <<= i }; list", Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2)));
   }
 
   @Test public void breakContinue() {

@@ -1148,7 +1148,6 @@ public class BuiltinFunctions {
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
-            elem = RuntimeUtils.mapEntryToList(elem);
             Object ignored = closure == null ? null : closure.invoke((Continuation)null, source, (int)offset, new Object[]{ elem });
             methodLocation = 0;       // Back to initial state to get next element
             break;
@@ -1217,7 +1216,6 @@ public class BuiltinFunctions {
             methodLocation = 4;
             break;
           case 4:                      // Have result of iter.next()
-            elem = RuntimeUtils.mapEntryToList(elem);
             transformedElem = closure == null ? elem : closure.invoke((Continuation)null, source, (int)offset, new Object[]{ elem });
             methodLocation = 6;
             break;

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlType;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -155,11 +156,16 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     }
   }
 
-  public static <K,V> JactlIterator<Map.Entry<K,V>> of(Map<K,V> map) {
+  public static <K,V> JactlIterator<List> of(Map<K,V> map) {
     return new MapEntryIterator<K,V>().setMap(map);
   }
 
-  private static class MapEntryIterator<K,V> extends JactlIterator<Map.Entry<K,V>> {
+  /**
+   * Turn each Map.Entry<K,V> into a List of [K,V]
+   * @param <K> the Map key type
+   * @param <V> the Map value type
+   */
+  private static class MapEntryIterator<K,V> extends JactlIterator<List> {
     Map<K,V>                 map;
     Iterator<Map.Entry<K,V>> iter;
     int                      count = 0;
@@ -172,10 +178,11 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       if (iter == null) { initIter(); }
       return iter.hasNext();
     }
-    @Override public Map.Entry<K,V> next() {
+    @Override public List next() {
       if (iter == null) { initIter(); }
       count++;
-      return iter.next();
+      Map.Entry<K,V> e = iter.next();
+      return Arrays.asList(e.getKey(), e.getValue());
     }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);

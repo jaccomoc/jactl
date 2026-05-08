@@ -120,7 +120,7 @@ public class FlatMapIterator extends JactlIterator {
           }
           case 4: {
             mappedNext = closure == null ? iterNext
-                                         : closure.invoke((Continuation)null, source, offset, new Object[]{RuntimeUtils.mapEntryToList(iterNext)});
+                                         : closure.invoke((Continuation)null, source, offset, new Object[]{iterNext});
             location = 6;
             break;
           }

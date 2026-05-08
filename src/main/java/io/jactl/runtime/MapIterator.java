@@ -115,7 +115,6 @@ class MapIterator extends JactlIterator {
         location = 2;
       }
       if (location == 2) {
-        elem = RuntimeUtils.mapEntryToList(elem);
         if (withIndex) {
           ArrayList<Object> elemList = new ArrayList<>();
           elemList.add(elem);

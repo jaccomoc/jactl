@@ -151,7 +151,6 @@ public class TranposeIterator extends JactlIterator {
             break;
           }
           case 4: {
-            iterNext = RuntimeUtils.mapEntryToList(iterNext);
             current.add(iterNext);
             location = 0;
             break;
