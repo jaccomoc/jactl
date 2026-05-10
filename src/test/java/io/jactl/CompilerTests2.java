@@ -2366,6 +2366,19 @@ public class CompilerTests2 extends BaseTest {
     testError("long f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
     testError("double f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
     testError("boolean f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
+    testError("int sum; for (int i = 0, j = 3; i < 5; i++,j++) { sum += i + j }; sum + j", "unknown variable");
+    test("int sum; for (int i = 0, j = 3; i < 5; i++,j++) { sum += i + j }; sum", 35);
+    testError("for (int i = 0, j; i < 5; i++) { j = 'abcdef' }", "cannot be cast");
+    testError("for (int i = 0, String s = ''; i < 10; i++) {}", "unexpected symbol 'string'");
+    testError("for (i = 0, String s = ''; i < 10; i++) {}", "unexpected symbol 'string'");
+    testError("for (i; i < 10; i++) {}", "missing initialiser");
+    testError("for (var i = 0, j; i < 10; i++) {}", "missing initialiser");
+    testError("for (i = 0, j; i < 10; i++) {}", "missing initialiser");
+    testError("def j; for (i = 0, j; i < 10; i++) {}", "missing initialiser");
+    testError("def j; for ((i = 0, j=0); i < 10; i++) {}", "unexpected token '('");
+    testError("def j; for ([i = 0, j=0]; i < 10; i++) {}", "unexpected token '['");
+    testError("def j; for ([i = 0, j=0; i < 10; i++) {}", "unexpected token '['");
+    testError("int sum; for (i = 0, j = 3; i < 5; i++,j++) { sum += i + j }; for (i='xxx'; false; ) {}", "cannot be cast");
   }
   
   @Test public void forInLoops() {
@@ -2374,25 +2387,56 @@ public class CompilerTests2 extends BaseTest {
     test("int sum; for (int i in [1,2,3]) { sum += i }; sum", 6);
     testError("int sum; for (var i = 1 in [1,2,3]) { sum += i }; sum", "unexpected token ')'");
     testError("int sum; for (var i = 1: [1,2,3]) { sum += i }; sum", "unexpected token ':'");
-    testError("int sum; for (var i; i < 10; i++) { sum += i }; sum", "declaration using 'var' must have an initialiser");
+    testError("int sum; for (var i; i < 10; i++) { sum += i }; sum", "missing initialiser");
     test("int sum; for (var i in [1,2,3]) { sum += i }; sum", 6);
     test("int sum; for (def i in [1,2,3]) { sum += i }; sum", 6);
-    test("int sum; int i; for (i in [1,2,3]) { sum += i }; sum", 6);
+    testError("int sum; int i; for (i in [1,2,3]) { sum += i }; sum", "shadows another variable");
     testError("for (int i in [1,2,3]) i++; i",  "unknown variable 'i'");
     testError("for (var i in [1,2,3]) i++; i",  "unknown variable 'i'");
-    test("for (i in 3) {}; i", 2);
-    test("for (i in [1,2,3]) {}; i", 3);
-    test("int sum; for (i in 3.map{ it + 1 }) { sum += i }; i + sum", 9);
-    test("int sum; int i; for (i in 3.map{ it + 1 }) { sum += i }; i + sum", 9);
+    test("int sum; for (i in 3.map{ it + 1 }) { sum += i }; sum", 6);
     test("int sum; for (int i in 3.map{ it + 1 }) { sum += i }; sum", 6);
-    test("int sum; String i; for (int i in 3.map{ it + 1 }) { sum += i }; sum", 6);
-    test("int sum; String i; for (i: []); sum", 0);
-    test("int sum; String i; for (i: 'abc'); sum", 0);
-    test("int sum; String i; for (i in [])sum++; sum", 0);
-    test("int sum; String i; for (i in ['1'])sum++; sum", 1);
-    test("def sum = ''; String i; for (i in 'abc')sum=i+sum; sum", "cba");
+    testError("int sum; String i; for (int i in 3.map{ it + 1 }) { sum += i }; sum", "shadows another variable");
+    testError("int sum; String i; for (i: []); sum", "shadows another variable");
+    test("String sum; for (i in 'abc') { sum += i }; sum", "abc");
+    test("int sum; for (i: 'abc'); sum", 0);
+    test("String sum; for (i: 'abc') { sum += i }; sum", "abc");
+    test("int sum; for (i in []) sum++; sum", 0);
+    testError("int sum; String i; for (i in [])sum++; sum", "shadows another variable");
+    test("int sum; for (i in ['1'])sum++; sum", 1);
     test("def sum = ''; for (i in 'abc')sum=i+sum; sum", "cba");
     test("def list = []; for (i in [a:1,b:2]) { list <<= i }; list", Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2)));
+  }
+  
+  @Test public void destructuringForLoops() {
+    test("int sum; for ([i,j] in [[1,2],[3,4]]) { sum += i + j }; sum", 10);
+    test("def sum = 0; for ([i,i] in [[1,2],[2,2],[3,3],[3,4]]) { sum += i }; sum", 5);
+    testError("def sum = 0; for ([i,i]: [[1,2],[2,2],[3,3],[3,4]]) { sum += i }; sum", "did not match");
+    test("def list = []; for ([i,i] in [[1,2],[2,2],[3,3],[3,4]]) { list <<= it }; list", Utils.listOf(Utils.listOf(2,2),Utils.listOf(3,3)));
+    test("int sum; for ([int i,j] in [[1,2],[3,4]]) { sum += i + j }; sum", 10);
+    test("int sum; for ([_,j] in [[1,2],[3,4]]) { sum += j }; sum", 6);
+    test("int sum; for ([_,j,_] in [[1,2],[3,4]]) { sum += j }; sum", 0);
+    testError("int sum; for ([_,j,_]: [[1,2],[3,4]]) { sum += j }; sum", "did not match expected pattern");
+    testError("int sum; for ([i,j] in [[1,2],[3,4]]) { sum += i + j }; i + j", "unknown variable");
+    test("int sum; for ([h,*t] in [[1,2,3],[3,4,5,6,7,8]]) { sum += h + t.size() }; sum", 11);
+    test("int sum; for ([h,*t] in [[1,2,3],[3,4,5,6,7,8],[4,5]]) { break if h > 3; sum += h + t.size() }; sum", 11);
+    test("int sum; LOOP: for ([h,*t] in [[1,2,3],[3,4,5,6,7,8],[4,5]]) { break LOOP if h > 3; sum += h + t.size() }; sum", 11);
+    test("int sum; LOOP: for ([h,*t] in [[1,2,3],[3,4,5,6,7,8],[4,5]]) { continue LOOP if h > 3; sum += h + t.size() }; sum", 11);
+    test("int sum; LOOP: for ([h,*t] in [[1,2,3],[3,4,5,6,7,8],[4,5]]) { sum += h; continue LOOP if h > 3; sum += t.size() }; sum", 15);
+    test("int sum; for ([_,[i,j]] in [[1,[2,3]],[3,[4,5]],[6,7]]) { sum += i + j }; sum", 14);
+    testError("int sum; int i = 4; for ([_,[i,j]] in [[1,[2,3]],[3,[4,5]],[6,7]]) { sum += i + j }; sum", "shadows another variable");
+    testError("int sum; for ([_,[i,j]]: [[1,[2,3]],[3,[4,5]],[6,7]]) { sum += i + j }; sum", "did not match");
+    test("class X { int i; int j }; def list = [new X(1,2), new X(3,4), new X(5,6)]; int sum; for (X(i,j) in list) { sum += i + j }; sum", 21);
+    test("class X { int i; int j }; def list = [new X(1,2), new X(3,4), new X(5,6)]; int sum; for (X(i:x,j:y) in list) { sum += x + y }; sum", 21);
+    test("class X { int i; int j }; def list = [new X(1,2), new X(3,4), new X(5,6)]; int sum; def v = 3; for (X(i:$v,j:y) in list) { sum += y }; sum", 4);
+    test("class Y{}; class X extends Y { int i; int j }; def list = [new X(1,2), new Y(), new X(5,6)]; int cnt; for (Y in list) { cnt++ }; cnt", 3);
+    test("class Y{}; class X extends Y { int i; int j }; def list = [new X(1,2), new Y(), new X(5,6)]; int cnt; for (X in list) { cnt++ }; cnt", 2);
+    test("int count = 0; for (int in [1,2,'abc',3]) count++; count", 3);
+    testError("int count = 0; for (int : [1,2,'abc',3]) count++; count", "did not match");
+    test("int sum; for ([_,[i,*,i]] in [[1,[2,2]],[3,[4,5]],[4,[1,2,3,4,1]]]) { sum += i }; sum", 3);
+    test("def sum = 0; for (var i in [1,2]) sum += i; sum", 3);
+    test("for ([var i,j] in [[1,2]]);", null);
+    test("int sum; for ([var i,j] in [[1,2]]) { sum += i + j + it.sum() }; sum", 6);
+    test("int sum; for ([var i,j] in [[1,2]]) { def it = 7; sum += i + j + it}; sum", 10);
   }
 
   @Test public void breakContinue() {
@@ -2423,6 +2467,7 @@ public class CompilerTests2 extends BaseTest {
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) break; sum += i * j } }; sum", 18);
     test("int sum = 0; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
     test("int sum = 0; for (i in [0,1,2,3]) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
+    test("int sum = 0; OUTER: for (i in [0,1,2,3]) { for (int j = 0; j < 4; j++) { if (j == 2) continue OUTER; sum += i * j } }; sum", 6);
     test("int sum = 0; for (i : [0,1,2,3]) { for (int j = 0; j < 4; j++) { if (j == 3) continue; sum += i * j } }; sum", 18);
     test("int x; for (int i = 0; i < 10; i++) { i < 5 and continue or x += i }; x", 35);
     test("int x; for (int i in 10) { i < 5 and continue or x += i }; x", 35);

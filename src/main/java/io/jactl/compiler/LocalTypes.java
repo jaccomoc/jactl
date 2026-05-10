@@ -291,7 +291,7 @@ public class LocalTypes {
   public void _popVal(int n) {
     assert stack.size() >= n : "stack depth should be at least " + n + " but is only " + stack.size() + ": stack=" + stack;
     // Pop real values off stack but leave type stack unchanged
-    for (int i = stack.size() - 1; i >= 0; i--) {
+    for (int i = stack.size() - 1; i >= 0 && n > 0; i--, n--) {
       StackEntry entry = stack.get(i);
       if (entry.slot != -1) {
         continue;  // Nothing to do since "stack" location is a local var

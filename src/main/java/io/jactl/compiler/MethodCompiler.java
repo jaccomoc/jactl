@@ -184,10 +184,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private       int           objArr  = -1;
   private       int           globalsVar = -1;    // For when access globals from classes
   
-  private       JactlType     desiredType;        // Used when compiling expressions to indicate the type we are
-                                                  // about to convert to. For literal values this lets us load a
-                                                  // constant of the right type to avoid having to do an unnecessary
-                                                  // runtime conversion
+  JactlType     desiredType;        // Used when compiling expressions to indicate the type we are
+                                    // about to convert to. For literal values this lets us load a
+                                    // constant of the right type to avoid having to do an unnecessary
+                                    // runtime conversion
 
   private List<CompileError>  errors = new ArrayList<>();
 

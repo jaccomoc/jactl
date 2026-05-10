@@ -21,6 +21,7 @@ import io.jactl.runtime.RuntimeUtils;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -495,11 +496,12 @@ public class Parser {
    */
   private Stmt statement() {
     matchAny(EOL);
-    return marked(true, () -> _statement());
+    return marked(true, this::_statement);
   }
 
   private Stmt _statement() {
     Stmt stmt = null;
+    skipNewLines();
     switch (peek().getType()) {
       case LEFT_BRACE:        if (isMapLiteral())       stmt = exprStmt();      break;
       case BEGIN: case END:   if (isAtScriptTopLevel()) return beginEndBlock(); break;
@@ -702,7 +704,7 @@ public class Parser {
           return null;
         }
       }
-      Stmt.VarDecl varDecl = marked(false, this::singleVarWithOptionalType);
+      Stmt.VarDecl varDecl = marked(false, () -> singleVarWithOptionalType(ANY, false));
       if (varDecl != null) {
         varDecl.declExpr.isParam = true;
         parameters.add(varDecl);
@@ -719,13 +721,15 @@ public class Parser {
     return parameters;
   }
 
-  private Stmt.VarDecl singleVarWithOptionalType() {
-    // Check for optional type. Default to "def".
-    JactlType type = optionalType();
+  private Stmt.VarDecl singleVarWithOptionalType(JactlType defaultType, boolean allowVarWithoutInitialiser) {
+    Token token = peekIgnoreEOL();
+    JactlType type = optionalType(defaultType);
     // Note that unlike a normal varDecl where commas separate different vars of the same type,
     // with parameters we expect a separate comma for parameter with a separate type for each one,
     // so we build up a list of singleVarDecl.
-    return singleVarDecl(type, false, false, true, false, false);
+    Stmt.VarDecl varDecl = singleVarDecl(type, false, false, true, false, allowVarWithoutInitialiser);
+    varDecl.typeToken = token;
+    return varDecl;
   }
 
   /**
@@ -733,19 +737,19 @@ public class Parser {
    * on its own.
    * @return the type or ANY if no type specified
    */
-  private JactlType optionalType() {
+  private JactlType optionalType(JactlType defaultType) {
     Marker mark = tokeniser.mark();
     JactlType type = null;
     Token next = peek();
     if (next.is(typesAndVar)) {
       type = type(true, false, false, false);
     }
-    if (type == null && !peek().is(IDENTIFIER)) {
+    if (type == null && !peekIgnoreEolIs(IDENTIFIER)) {
       unexpected("Expected valid type or parameter name", false, EOL, LEFT_BRACE, RIGHT_BRACE, RIGHT_PAREN);
       mark.drop();
       return ANY;
     }
-    if (type == null && peek().is(IDENTIFIER) && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
+    if (type == null && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
       type = createInstanceType(className(false), context);   // we have a class name
     }
     if (type == null) {
@@ -754,7 +758,7 @@ public class Parser {
     else {
       mark.done(type, next);
     }
-    return type == null ? ANY : type;
+    return type == null ? defaultType : type;
   }
 
   private boolean isVarDecl() {
@@ -809,6 +813,7 @@ public class Parser {
     }
     else {
       isFinal = matchAny(FINAL);
+      skipNewLines();
       type = type(true, false, false, false);
     }
     Stmt.Stmts stmts     = new Stmt.Stmts(peek());
@@ -917,7 +922,7 @@ public class Parser {
         }
         matchAny(EOL);
         Token typeToken = peek();
-        identifierAndTypes.add(Triple.create(typeToken, optionalType(), expectOrNull(true, IDENTIFIER)));
+        identifierAndTypes.add(Triple.create(typeToken, optionalType(ANY), expectOrNull(true, IDENTIFIER)));
       }
       return identifierAndTypes;
     }, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
@@ -1035,8 +1040,23 @@ public class Parser {
   }
 
   /**
+   *# varDeclList ::= varDecl ( COMMA varDecl ) *
+   */
+  private List<Stmt.VarDecl> varDeclList() {
+    List<Stmt.VarDecl> varDecls = new ArrayList<>();
+    while (true) {
+      varDecls.add(singleVarWithOptionalType(OPTIONAL, true));
+      if (!matchAnyIgnoreEOL(COMMA)) {
+        return varDecls;
+      }
+    }
+  }
+  
+  /**
    * <pre>
-   *# forStmt ::= FOR LEFT_PAREN declaration ( SEMICOLON condition SEMICOLON commaSeparatedStatements | COLON expr | IN expr ) RIGHT_PAREN statement
+   *# forStmt ::= FOR LEFT_PAREN varDeclList ( SEMICOLON condition SEMICOLON commaSeparatedStatements | COLON expr | IN expr ) RIGHT_PAREN statement
+   *#             | FOR LEFT_PAREN varDecl ( COLON | IN ) expr RIGHT_PAREN statement
+   *              | destructuringForLoop
    * </pre>
    */
   private Stmt forStmt(Token label) {
@@ -1045,83 +1065,38 @@ public class Parser {
     skipNewLines();
     List forParts = new ArrayList();
     Marker mark = tokeniser.mark();
-    Stmt forInLoopAssignment = null;      // Will contain the v = iter.next() stmt if we have a for/in loop
-    boolean forVarDecl = isForVarDecl();
     try {
-      Stmt init = forVarDecl ? marked(false, () -> varDecl(false, true), SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, COLON, IN, EOL)
-                             : commaSeparatedStatements();
-      Token next = peekIgnoreEOL();
-      switch (next.getType()) {
-        case SEMICOLON:
-          if (init != null && init instanceof Stmt.VarDecl && ((Stmt.VarDecl) init).declExpr.initialiser == null) {
-            error("Declaration using 'var' must have an initialiser", init.location);
-          }
-          advanceIgnoreEol();
-          forParts.add(init);
-          forParts.add(peekIgnoreEolIs(SEMICOLON, EOF, RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
-                                                                    : marked(false, () -> condition(false, SEMICOLON)));
-          expectOrNull(true, SEMICOLON);
-          forParts.add(peekIgnoreEolIs(EOF,RIGHT_PAREN) ? null : commaSeparatedStatements());
-          break;
-        case COLON: case IN:
-          if (!forVarDecl || init instanceof Stmt.Stmts) {
-            expect(COLON,IN);
-            if (init instanceof Stmt.Stmts) {
-              if (((Stmt.Stmts) init).stmts.isEmpty()) {
-                error("Missing variable declaration", init.location);
-              }
-              else {
-                error("Multiple variables not supported when using '" + previous() + "'", init.location);
-              }
-            }
-            expect(SEMICOLON);
-          }
-          else {
-            Stmt.VarDecl loopVar = (Stmt.VarDecl)init;
-            if (loopVar.declExpr.initialiser != null) {
-              expect(SEMICOLON);
-              break;
-            }
-            Token token = expect(COLON,IN);
-            Expr iterableExpr = new Expr.ForLoopIterableInit(peek(), expression());
-            if (loopVar.declExpr.type.is(UNKNOWN)) {
-              // If type not declared then we will infer type from type of array (if we have an array or equivalent)
-              // or else it will result in ANY if we have a generic list, or we don't know the type
-              loopVar.declExpr.type.typeDependsOnElementOf(iterableExpr);
-            }
-            else if (loopVar.declExpr.type.is(OPTIONAL)) {
-              Expr.Noop initialiser = new Expr.Noop(loopVar.location);
-              loopVar.declExpr.initialiser = initialiser;
-              initialiser.type = JactlType.createUnknown();
-              initialiser.type.typeDependsOnElementOf(iterableExpr);
-              initialiser.originalExpr = iterableExpr;      // A bit of a hack but we need access to this during Resolve.visitVarDecl()
-            }
-            Token        iterableName = loopVar.name.newIdent(Utils.JACTL_PREFIX + "iterable" + uniqueVarCnt);
-            JactlType    iterableType = createUnknown();
-            iterableType.typeDependsOn(iterableExpr);
-            Stmt.VarDecl iterable     = createVarDecl(iterableName, iterableType, new Token(EQUAL, token), iterableExpr, false, false, true);
-            Token        iteratorName = loopVar.name.newIdent(Utils.JACTL_PREFIX + "iterator" + uniqueVarCnt);
-            Expr         iteratorInit = new Expr.ForLoopIteratorInit(iteratorName, iterable.declExpr);
-            JactlType    iteratorType = createUnknown();
-            iteratorType.typeDependsOn(iteratorInit);
-            Stmt.VarDecl iterator     = createVarDecl(iteratorName, iteratorType, new Token(EQUAL, token), iteratorInit, false, false, true);
-            Stmt.Stmts   initStmts    = new Stmt.Stmts(token);
-            initStmts.stmts.add(loopVar);
-            initStmts.stmts.add(iterable);
-            initStmts.stmts.add(iterator);
-            forParts.add(initStmts);  // Initialisations
-            Expr varAssign = new Expr.VarAssign(new Expr.Identifier(loopVar.name), new Token(EQUAL, token), new Expr.ForLoopIterNext(iterableExpr.location, iterable.declExpr, iterator.declExpr));
-            varAssign.isResultUsed = false;
-            forInLoopAssignment = new Stmt.ExprStmt(token, varAssign);
-            Expr hasnext = new Expr.ForLoopIterHasNext(iterableExpr.location, iterable.declExpr, iterator.declExpr);
-            forParts.add(hasnext);   // Condition
-            forParts.add(null);      // Nothing to do here
-          }
-          break;
-        default:
-          expectOrNull(true, SEMICOLON,COLON,IN);
-          break;
+      if (lookahead(() -> switchPattern() != null, () -> peekIgnoreEolIs(COLON,IN))) {
+        return destructuringForLoop(forToken, label);
       }
+      Token initToken = peek();
+      List<Stmt.VarDecl> init = initToken.is(SEMICOLON) ? new ArrayList<>()
+                                                        : marked(false, this::varDeclList, SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, COLON, IN, EOL);
+      skipNewLines();
+      expect(SEMICOLON);
+      JactlType type = null;
+      for (int i = 0; i < init.size(); i++) {
+        Stmt.VarDecl varDecl = init.get(i);
+        if (i == 0) {
+          type = varDecl.declExpr.type;
+        }
+        else {
+          if (!varDecl.declExpr.type.is(OPTIONAL)) {
+            error("Unexpected symbol '" + varDecl.typeToken.getStringValue() + "' (cannot declare mixed types in for(;;) loops)", varDecl.typeToken);
+          }
+          varDecl.declExpr.type = type;
+        }
+        if (type.is(UNKNOWN) && varDecl.declExpr.initialiser == null) {
+          error("Missing initialiser", varDecl.location);
+        }
+      }
+      Stmt.Stmts initStmts = new Stmt.Stmts(initToken);
+      initStmts.stmts.addAll(init);
+      forParts.add(initStmts);
+      forParts.add(peekIgnoreEolIs(SEMICOLON, EOF, RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
+                                                                : marked(false, () -> condition(false, SEMICOLON)));
+      expectOrNull(true, SEMICOLON);
+      forParts.add(peekIgnoreEolIs(EOF, RIGHT_PAREN) ? null : commaSeparatedStatements());
       if (!peekIgnoreEolIs(EOF)) {
         expectOrNull(true, RIGHT_PAREN);
       }
@@ -1135,31 +1110,13 @@ public class Parser {
     whileStmt.updates = (Stmt)forParts.get(2);
     matchAny(EOL);
     whileStmt.body = marked(false, this::_statement, EOL, RIGHT_BRACE);
-    if (forInLoopAssignment != null) {
-      // if we have "for (x in xxx)" then add the "x = xxx.next()" statement as first in body
-      if (whileStmt.body == null) {
-        whileStmt.body = forInLoopAssignment;
-      }
-      else if (whileStmt.body instanceof Stmt.Stmts) {
-        ((Stmt.Stmts) whileStmt.body).stmts.add(0, whileStmt);
-      }
-      else if (whileStmt.body instanceof Stmt.Block) {
-        insertStmtsInto(Utils.listOf(forInLoopAssignment), (Stmt.Block)whileStmt.body);
-      }
-      else {
-        Stmt.Stmts stmts = new Stmt.Stmts(forToken);
-        stmts.stmts.add(forInLoopAssignment);
-        stmts.stmts.add(whileStmt.body);
-        whileStmt.body = stmts;
-      }
-    }
 
     Stmt forStmt;
     Stmt initialisation = (Stmt)forParts.get(0);
     if (initialisation != null) {
       Stmt       firstStmt = initialisation;
       Stmt.Stmts stmts     = null;
-      if (initialisation instanceof Stmt.Stmts) {
+      if (initialisation instanceof Stmt.Stmts && !((Stmt.Stmts) initialisation).stmts.isEmpty()) {
         stmts = (Stmt.Stmts) initialisation;
         firstStmt = stmts.stmts.get(0);
       }
@@ -1191,7 +1148,86 @@ public class Parser {
     }
     return forStmt;
   }
+  
+  private Expr[] forInInitialisations(List<Stmt> initStmts, Expr collectionExpr) {
+    Token token = collectionExpr.location;
+    Expr  iterableExpr = new Expr.ForLoopIterableInit(peek(), collectionExpr);
+    Token        iterableName = iterableExpr.location.newIdent(Utils.JACTL_PREFIX + "iterable" + uniqueVarCnt);
+    JactlType    iterableType = createUnknown();
+    iterableType.typeDependsOn(iterableExpr);
+    Stmt.VarDecl iterable     = createVarDecl(iterableName, iterableType, new Token(EQUAL, token), iterableExpr, false, false, true);
+    Token        iteratorName = iterableExpr.location.newIdent(Utils.JACTL_PREFIX + "iterator" + uniqueVarCnt);
+    Expr         iteratorInit = new Expr.ForLoopIteratorInit(iteratorName, iterable.declExpr);
+    JactlType    iteratorType = createUnknown();
+    iteratorType.typeDependsOn(iteratorInit);
+    Stmt.VarDecl iterator     = createVarDecl(iteratorName, iteratorType, new Token(EQUAL, token), iteratorInit, false, false, true);
+    initStmts.add(iterable);
+    initStmts.add(iterator);
+    Expr hasNext = new Expr.ForLoopIterHasNext(iterableExpr.location, iterable.declExpr, iterator.declExpr);
+    Expr iterNext = new Expr.ForLoopIterNext(iterableExpr.location, iterable.declExpr, iterator.declExpr);
+    return new Expr[]{ iterableExpr, hasNext, iterNext};
+  }
+  
+  /**
+   *# destructuringForLoop ::= LEFT_PAREN (listPattern | mapPattern ) RIGHT_PAREN ( COLON | IN ) expr RIGHT_PAREN statement
+   */
+  private Stmt destructuringForLoop(Token forToken, Token label) {
+    Expr pattern = switchPattern();
+    Token colonOrIn = expect(COLON,IN);
+    Expr collection = expression();
+    Token bodyToken = expect(RIGHT_PAREN);
 
+    List<Stmt> initStmts = new ArrayList<>();
+    Expr[] iterExprs = forInInitialisations(initStmts, collection);
+    Expr iterableExpr = iterExprs[0];
+    Expr hasNext      = iterExprs[1];
+    Expr iterNext     = iterExprs[2];
+    
+    Function<Stmt,Stmt.Stmts> maybeWrap = stmt -> {
+      if (stmt instanceof Stmt.Stmts) { return (Stmt.Stmts)stmt; }
+      Stmt.Stmts stmts = new Stmt.Stmts(stmt.location);
+      stmts.stmts.add(stmt);
+      return stmts;
+    };
+    Stmt body  = marked(false, this::_statement, EOL, RIGHT_BRACE);
+    if (body == null) {
+      // Need something for the result expression of a case statement
+      Expr.Literal noop = new Expr.Literal(new Token(TRUE, bodyToken));
+      body = new Stmt.ExprStmt(bodyToken, noop);
+    }
+    bodyToken = body.location;
+    Stmt.Block block = body instanceof Stmt.Block ? (Stmt.Block) body 
+                                                  : new Stmt.Block(bodyToken, maybeWrap.apply(body));
+    Expr.Block bodyExpr = new Expr.Block(bodyToken, block);
+    
+    // We will use our existing switch statement handling to implement the destructuring for loop
+    // by wrapping a switch statement in a while loop
+    Stmt.While whileStmt = new Stmt.While(forToken, hasNext, label);
+    whileStmt.updates = null;   // Nothing need in update section
+    
+    List<Pair<Expr,Expr>> patterns = new ArrayList<>();
+    patterns.add(Pair.of(pattern, null));
+    Expr.SwitchCase switchCase = new Expr.SwitchCase(patterns, bodyExpr, iterNext); 
+    
+    // For 'in' we allow non-matches to be ignored. For ':' we throw an error
+    Expr defaultCase = colonOrIn.is(IN) ? null
+                                        : new Expr.InvokeUtility(bodyToken,
+                                                                 RuntimeUtils.THROW_RUNTIME_ERROR,
+                                                                 Utils.listOf(
+                                                                   new Expr.Literal(bodyToken.newLiteral("Element of collection did not match expected pattern")),
+                                                                   new Expr.Literal(bodyToken.newLiteral(bodyToken.getSource())),
+                                                                   new Expr.Literal(new Token(INTEGER_CONST, bodyToken).setValue(collection.location.getOffset()))
+                                                                 ));
+    Expr.Switch switchExpr = new Expr.Switch(collection.location, iterNext, Collections.singletonList(switchCase), defaultCase);
+    switchExpr.isForStatement = true;
+    switchExpr.isResultUsed = false;
+    
+    whileStmt.body = new Stmt.ExprStmt(bodyToken, switchExpr);
+
+    Stmt.Stmts initialisation = new Stmt.Stmts(pattern.location);
+    initialisation.stmts.addAll(initStmts);
+    return stmtBlock(forToken, initialisation, whileStmt);
+  }
 
   /**
    * <pre>
@@ -1820,8 +1856,6 @@ public class Parser {
     }
   }
 
-
-
   private <T> T marked(boolean throwIfError, Supplier<T> lambda, TokenType... skipUntil) {
     return maybeMarked(true, throwIfError, lambda, skipUntil);
   }
@@ -2360,7 +2394,7 @@ public class Parser {
         if (!expr.exprs.isEmpty()) {
           if (!peekIgnoreEolIs(COMMA)) {
             mark.done(expr.exprs);
-            expectOrNull(true, COMMA);
+            expectOrNull(true, COMMA, RIGHT_SQUARE);
             return expr;
           }
           expectOrNull(true, COMMA);
@@ -2820,8 +2854,7 @@ public class Parser {
           defaultCase.set(expr);
         }
         else {
-          Expr.SwitchCase switchCase = new Expr.SwitchCase(patterns, expr);
-          switchCase.switchSubject = subject;
+          Expr.SwitchCase switchCase = new Expr.SwitchCase(patterns, expr, subject);
           cases.add(switchCase);
         }
         matchAnyIgnoreEOL(SEMICOLON, EOL);
@@ -3041,7 +3074,6 @@ public class Parser {
       Expr elemExpr;
       if (starAllowed && matchAnyIgnoreEOL(STAR)) {
         if (matchAnyIgnoreEOL(IDENTIFIER)) {
-          boolean isFirst = expr.exprs.size() == 0;
           Token   identifier = previous();
           // Use token of '*' in place of '=' to flag this as a list wildcard
           elemExpr = new Expr.VarDecl(identifier, new Token(STAR,identifier), null);
@@ -3124,8 +3156,8 @@ public class Parser {
     Expr  expr;
     Token token = peek();
     // We either have a type on its own or a type and an identifier for a binding variable
-    JactlType type = type(false, false, false, true);
-    if (matchAny(IDENTIFIER)) {
+    JactlType type = type(true, false, false, true);
+    if (matchAnyIgnoreEOL(IDENTIFIER)) {
       expr = Utils.createVarDeclExpr(previous(), type, new Token(EQUAL, previous()), null, false, false, true, false);
     }
     else {
@@ -3136,7 +3168,7 @@ public class Parser {
   }
 
   private boolean isType() {
-    return lookahead(() -> type(false, false, false, true) != null);
+    return lookahead(() -> type(true, false, false, true) != null);
   }
 
   /////////////////////////////////////////////////

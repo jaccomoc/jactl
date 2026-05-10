@@ -112,7 +112,7 @@ public abstract class Expr extends JactlUserDataHolder {
   // determine whether we can duplicate the code for the result when there are multiple patterns that give
   // the same result.
   public boolean isSimple() {
-    return this instanceof Expr.Literal || this instanceof Expr.Identifier;
+    return this instanceof Expr.Literal || this instanceof Expr.Identifier || this instanceof Expr.Noop;
   }
 
   public boolean isLiteral() {
@@ -796,6 +796,7 @@ public abstract class Expr extends JactlUserDataHolder {
     public Expr             subject;
     public List<SwitchCase> cases;
     public Expr             defaultCase;
+    public boolean          isForStatement;  // True if we are using a switch expression to implement 'for (x in xxx)'
     public VarDecl          itVar;
     public Stmt.Block       block;     // Need a block for tracking it var
     public Switch(Token matchToken, Expr subject, List<SwitchCase> cases, Expr defaultCase) {
@@ -812,14 +813,15 @@ public abstract class Expr extends JactlUserDataHolder {
   public static class SwitchCase extends Expr {
     public List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/ifExpression
     public Expr                  result;
+    public Expr                  switchSubject;   // Need to know type of switch expression for binding variables
     public Stmt.Block            block;          // Need a block for captured regex and destructured vars
-    public Expr                  switchSubject;  // Need to know type of switch expression for binding variables
-    public SwitchCase(List<Pair<Expr,Expr>> patterns, Expr result) {
+    public SwitchCase(List<Pair<Expr,Expr>> patterns, Expr result, Expr switchSubject) {
       this.patterns = patterns;
       this.result = result;
+      this.switchSubject = switchSubject;
     }
     @Override public <T> T accept(Visitor<T> visitor) { return visitor.visitSwitchCase(this); }
-    @Override public String toString() { return "SwitchCase[" + "patterns=" + patterns + ", " + "result=" + result + "]"; }
+    @Override public String toString() { return "SwitchCase[" + "patterns=" + patterns + ", " + "result=" + result + ", " + "switchSubject=" + switchSubject + "]"; }
   }
 
   /**

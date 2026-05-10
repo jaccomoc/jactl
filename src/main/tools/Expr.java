@@ -535,6 +535,7 @@ class Expr extends JactlUserDataHolder {
     Expr             subject;
     List<SwitchCase> cases;
     Expr             defaultCase;
+    boolean          @isForStatement;  // True if we are using a switch expression to implement 'for (x in xxx)'
     VarDecl          @itVar;
     Stmt.Block       @block;     // Need a block for tracking it var
   }
@@ -542,8 +543,8 @@ class Expr extends JactlUserDataHolder {
   class SwitchCase extends Expr {
     List<Pair<Expr,Expr>> patterns;        // List of pairs of pattern/ifExpression
     Expr                  result;
+    Expr                  switchSubject;   // Need to know type of switch expression for binding variables
     Stmt.Block            @block;          // Need a block for captured regex and destructured vars
-    Expr                  @switchSubject;  // Need to know type of switch expression for binding variables
   }
 
   /**

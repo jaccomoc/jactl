@@ -148,6 +148,7 @@ class Stmt extends JactlUserDataHolder {
   class VarDecl extends Stmt {
     Token        name;
     Expr.VarDecl declExpr;
+    Token        @typeToken;
   }
 
   /**

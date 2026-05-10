@@ -1434,7 +1434,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     mv.visitEnd();
   }
 
-  private void loadConstant(Object obj) {
+  private JactlType loadConstant(Object obj) {
     if (obj instanceof List) {
       List list = (List)obj;
       String listClassName = Utils.JACTL_LIST_INTERNAL;
@@ -1449,7 +1449,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
         classInit.visitInsn(POP);   // don't need result of add
       });
       classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;", false);
-      return;
+      return LIST;
     }
     if (obj instanceof Map) {
       Map map = (Map)obj;
@@ -1467,7 +1467,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
         classInit.visitInsn(POP);   // don't need result of put
       });
       classInit.visitMethodInsn(INVOKESTATIC, "java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;", false);
-      return;
+      return MAP;
     }
     if (obj != null && obj.getClass().isArray()) {
       int arrLen = Array.getLength(obj);
@@ -1478,12 +1478,15 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       for (int i = 0; i < arrLen; i++) {
         classInit.visitInsn(DUP);
         Utils.loadConst(classInit, i, context);
-        loadConstant(Array.get(obj, i));
+        JactlType type = loadConstant(Array.get(obj, i));
+        if (elemType.isRef()) {
+          Utils.box(classInit,type); 
+        }
         Utils.storeArrayElement(classInit, elemType);
       }
-      return;
+      return JactlType.arrayOf(elemType);
     }
     // Must be a simple value
-    Utils.loadConst(classInit, obj, context);
+    return Utils.loadConst(classInit, obj, context);
   }
 }

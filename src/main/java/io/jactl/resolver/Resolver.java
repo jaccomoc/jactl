@@ -1411,6 +1411,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // This is a brand-new variable which will have type corresponding to the initialiser
         expr.type = JactlType.createUnknown();
         expr.type.typeDependsOn(expr.initialiser);
+        if (expr.initialiser == null) {
+          error("Missing initialiser", expr.location);
+        }
         if (expr.initialiser instanceof Expr.Noop) {
           resolve(((Expr.Noop) expr.initialiser).originalExpr);
           expr.type = expr.initialiser.type;
@@ -1428,6 +1431,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           return expr.type;
         }
         
+        if (expr.initialiser == null) {
+          error("Missing initialiser", expr.location);
+          return expr.type;
+        }
         expr.initialiser = new Expr.VarAssign(new Expr.Identifier(varDecl.name), expr.initialiser.location, expr.initialiser);
         expr.initialiser.isResultUsed = false;
         resolve(expr.initialiser);

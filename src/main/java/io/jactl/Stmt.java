@@ -188,6 +188,7 @@ public abstract class Stmt extends JactlUserDataHolder {
   public static class VarDecl extends Stmt {
     public Token        name;
     public Expr.VarDecl declExpr;
+    public Token        typeToken;
     public VarDecl(Token name, Expr.VarDecl declExpr) {
       this.name = name;
       this.declExpr = declExpr;

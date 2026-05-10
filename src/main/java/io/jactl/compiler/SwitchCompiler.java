@@ -79,6 +79,7 @@ public class SwitchCompiler {
       mc.mv.visitJumpInsn(GOTO, end);
       nonSimpleLabels.forEach((resultExpr, label) -> {
         mc.mv.visitLabel(label);
+        mc.desiredType = expr.type;
         mc.compile(resultExpr);
         mc.convertTo(expr.type, expr, true, resultExpr.location);
         mc.popType();

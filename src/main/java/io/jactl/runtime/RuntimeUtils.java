@@ -3162,4 +3162,9 @@ public class RuntimeUtils {
   public static JactlMethodHandle lookupMethodHandle(String name) {
     return RuntimeState.getState().getContext().getFunctions().lookupMethodHandle(name);
   }
+  
+  public static final MethodRef THROW_RUNTIME_ERROR = Utils.getMethod(RuntimeUtils.class, "throwRuntimeError", String.class, String.class, int.class);
+  public static Object throwRuntimeError(String msg, String source, int offset) {
+    throw new RuntimeError(msg, source, offset);
+  }
 }

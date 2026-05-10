@@ -63,7 +63,13 @@ public class SwitchResolver {
         }
       }));
       if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
-        resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+        if (expr.isForStatement) {
+          // In for loop we just remove the redundant default case (which was to throw an error if no match found)
+          expr.defaultCase = null;
+        }
+        else {
+          resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+        }
       }
       validateNotCovered(resolver, expr.cases.stream().flatMap(c -> c.patterns.stream().filter(pair -> pair.second == null).map(pair -> pair.first)).collect(Collectors.toList()));
     }
@@ -101,7 +107,7 @@ public class SwitchResolver {
 
   public static boolean isCompatible(Resolver resolver, JactlType parentType, JactlType subjectType, Expr pat) {
     if (!doIsCompatible(resolver, parentType, subjectType, pat)) {
-      resolver.error("Type " + subjectType + " can never match type " + pat.patternType() + " with value " + pat.constValue, pat.location);
+      resolver.error("Type " + subjectType + " can never match pattern type " + pat.patternType() + (pat.isConst ? " with value " + pat.constValue : ""), pat.location);
       return false;
     }
     return true;
@@ -351,10 +357,27 @@ public class SwitchResolver {
 
   private static List<Pair<Expr,Expr>> _validateSwitchPattern(Resolver resolver, List<Pair<Expr,Expr>> exprs, Set<String> bindingVars) {
     return exprs.stream()
-                .map(p -> Pair.of(_validateSwitchPattern(resolver, p.first, bindingVars, new HashSet<>()), p.second))
+                .map(p -> Pair.of(_validatePatternAndVarDecl(resolver, p.first, bindingVars), p.second))
                 .collect(Collectors.toList());
   }
 
+  // For top level VarDecl we don't set their type (if they are 'var') as we will do that during
+  // resolve and try to match type with subject type. For all nested VarDecl we will set any unknown
+  // types to ANY.
+  private static Expr _validatePatternAndVarDecl(Resolver resolver, Expr expr, Set<String> bindingVars) {
+    if (expr instanceof Expr.VarDecl) {
+      String name = ((Expr.VarDecl) expr).name.getStringValue();
+      if (bindingVars.contains(name)) {
+        resolver.error("Binding variable '" + name + "' already declared in switch pattern", expr.location);
+      }
+      bindingVars.add(name);
+      return expr;
+    }
+    else {
+      return _validateSwitchPattern(resolver, expr, bindingVars, new HashSet<>());
+    }
+  }
+  
   /**
    * Validate variables in pattern of a switch case and replace Identifier with VarDecl where appropriate.
    *
@@ -409,6 +432,9 @@ public class SwitchResolver {
       }
       bindingVars.add(name);
       varsSeen.add(name);
+      if (expr.type.is(UNKNOWN)) {
+        expr.type = ANY;
+      }
       return expr;
     }
     if (expr instanceof Expr.Identifier && !((Expr.Identifier) expr).identifier.is(DOLLAR_IDENTIFIER)) {
@@ -428,6 +454,7 @@ public class SwitchResolver {
       if (!name.is(UNDERSCORE,STAR)) {
         if (!bindingVars.contains(varName)) {
           bindingVars.add(varName);
+          varsSeen.add(varName);
           expr = Utils.createVarDeclExpr(name, ANY, new Token(EQUAL, name), null, false, false, true, false);
         }
         else {
