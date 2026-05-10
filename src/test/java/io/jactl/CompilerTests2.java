@@ -2318,7 +2318,8 @@ public class CompilerTests2 extends BaseTest {
   }
 
   @Test public void forLoops() {
-    testError("for (const i = 0; i < 10; i++) {}", "unexpected token 'const'");
+    testError("for (const i = 0; i < 10; i++) {}", "cannot modify a constant value");
+    testError("for (const i = 0, j = 3; i < 10; j++) {}", "cannot modify a constant value");
     testError("for (int i = 0;", "Unexpected end-of-file");
     testError("for (int i = 0;\n", "Unexpected end-of-file");
     testError("for (int i = 0; i < 10;", "Unexpected end-of-file");
@@ -2368,17 +2369,25 @@ public class CompilerTests2 extends BaseTest {
     testError("boolean f() { if (false) { return 7 } else for (int i = 0; i < 10; ) { i++ if i >= 0 } }; f()", "implicit return of null incompatible with function return type");
     testError("int sum; for (int i = 0, j = 3; i < 5; i++,j++) { sum += i + j }; sum + j", "unknown variable");
     test("int sum; for (int i = 0, j = 3; i < 5; i++,j++) { sum += i + j }; sum", 35);
+    testError("int sum; for (var i, j = 3; i < 5; i++,j++) { sum += i + j }; sum", "initialiser expression required");
     testError("for (int i = 0, j; i < 5; i++) { j = 'abcdef' }", "cannot be cast");
-    testError("for (int i = 0, String s = ''; i < 10; i++) {}", "unexpected symbol 'string'");
-    testError("for (i = 0, String s = ''; i < 10; i++) {}", "unexpected symbol 'string'");
-    testError("for (i; i < 10; i++) {}", "missing initialiser");
-    testError("for (var i = 0, j; i < 10; i++) {}", "missing initialiser");
-    testError("for (i = 0, j; i < 10; i++) {}", "missing initialiser");
-    testError("def j; for (i = 0, j; i < 10; i++) {}", "missing initialiser");
-    testError("def j; for ((i = 0, j=0); i < 10; i++) {}", "unexpected token '('");
-    testError("def j; for ([i = 0, j=0]; i < 10; i++) {}", "unexpected token '['");
-    testError("def j; for ([i = 0, j=0; i < 10; i++) {}", "unexpected token '['");
+    testError("for (int i = 0, String s = ''; i < 10; i++) {}", "unexpected token 'string'");
+    testError("for (i = 0, String s = ''; i < 10; i++) {}", "unexpected token 'string'");
+    test("for (i = 0; i < 10; i++) {}; i", 10);
+    testError("for (i; i < 10; i++) {}", "unknown variable");
+    testError("for (var i = 0, j; i < 10; i++) {}", "initialiser expression required");
+    testError("for (i = 0, j; i < 10; i++) {}", "unknown variable");
+    testError("def j; for (i = 0, j; i < 10; i++) {}", "unknown variable");
+    test("def j; for (i = 0, j = 0; i < 10; i++) {}", null);
+    testError("def j; for ((i = 0, j=0); i < 10; i++) {}", "expression lists not supported");
+    testError("def j; for ([i = 0, j=0]; i < 10; i++) {}", "unknown variable");
+    testError("def j; for ([i = 0, j=0; i < 10; i++) {}", "unexpected token ';'");
     testError("int sum; for (i = 0, j = 3; i < 5; i++,j++) { sum += i + j }; for (i='xxx'; false; ) {}", "cannot be cast");
+    test("def x = 7; def reset() { x = 0 }; for (reset(); x < 10; x++) {}; x", 10);
+    testError("def x = 7; def reset() { x = 0 }; for (int i = 0, reset(); x < 10; x++) {}; x", "unexpected token '('");
+    testError("def x = 7; def reset() { x = 0 }; for (reset(), int i = 0; x < 10; x++) {}; x", "unexpected token 'int'");
+    test("def x = 7; def reset() { x = 0 }; for (reset(), x=5, reset(); x < 10; x++) {}; x", 10);
+    test("def x = 7; def reset() { x = 0 }; for (x=5, reset(), reset(); x < 10; x++) {}; x", 10);
   }
   
   @Test public void forInLoops() {
@@ -2387,7 +2396,7 @@ public class CompilerTests2 extends BaseTest {
     test("int sum; for (int i in [1,2,3]) { sum += i }; sum", 6);
     testError("int sum; for (var i = 1 in [1,2,3]) { sum += i }; sum", "unexpected token ')'");
     testError("int sum; for (var i = 1: [1,2,3]) { sum += i }; sum", "unexpected token ':'");
-    testError("int sum; for (var i; i < 10; i++) { sum += i }; sum", "missing initialiser");
+    testError("int sum; for (var i; i < 10; i++) { sum += i }; sum", "initialiser expression required");
     test("int sum; for (var i in [1,2,3]) { sum += i }; sum", 6);
     test("int sum; for (def i in [1,2,3]) { sum += i }; sum", 6);
     testError("int sum; int i; for (i in [1,2,3]) { sum += i }; sum", "shadows another variable");

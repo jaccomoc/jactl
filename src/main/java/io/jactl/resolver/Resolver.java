@@ -1013,7 +1013,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return expr.type = ANY;
     }
 
-    expr.isConst = expr.left.isConst && expr.right.isConst && jactlContext.evaluateConstExprs;
+    expr.isConst = isConst(expr.left) && isConst(expr.right);
 
     if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS, IN, BANG_IN)) {
       expr.isConst = false;
@@ -1253,7 +1253,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
-    expr.isConst = expr.expr.isConst && jactlContext.evaluateConstExprs;
+    expr.isConst = isConst(expr.expr);
     if (expr.operator.is(BANG,QUESTION_QUESTION)) {
       expr.type = BOOLEAN;
       if (expr.isConst) {
@@ -1299,9 +1299,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type;
   }
 
+  private boolean isConst(Expr expr) {
+    if (expr instanceof Expr.Identifier) {
+      if (((Expr.Identifier)expr).varDecl.isConstVar) {
+        return true;
+      }
+    }
+    return expr.isConst && jactlContext.evaluateConstExprs;
+  }
+  
   @Override public JactlType visitPostfixUnary(Expr.PostfixUnary expr) {
     resolve(expr.expr);
-    expr.isConst      = expr.expr.isConst && jactlContext.evaluateConstExprs;
+    expr.isConst      = isConst(expr.expr);
     expr.type         = expr.expr.type;
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
       if (expr.isConst) {

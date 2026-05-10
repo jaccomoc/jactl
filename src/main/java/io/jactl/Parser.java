@@ -22,6 +22,7 @@ import io.jactl.runtime.RuntimeUtils;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -467,7 +468,7 @@ public class Parser {
       return funDecl(inClassDecl);
     }
     if ((typeOrVar || isStaticFinalIdent) && isVarDecl()) {
-      return varDecl(inClassDecl, false);
+      return varDecl(inClassDecl);
     }
     if (token.is(CLASS)) {
       return classDecl();
@@ -773,16 +774,6 @@ public class Parser {
     });
   }
 
-  private boolean isForVarDecl() {
-    if (lookahead(() -> matchAnyIgnoreEOL(IDENTIFIER), () -> matchAnyIgnoreEOL(EQUAL,COLON,IN))) {
-      return true;
-    }
-    return lookahead(() -> {
-      type(true, false, true, true);
-      return matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeyWord();
-    });
-  }
-
   /**
    * <pre>
    *# varDecl ::= type singleVarDecl ? ( COMMA singleVarDecl ? ) *
@@ -790,7 +781,7 @@ public class Parser {
    * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
    *       a list of VarDecls if multiple variables declared.
    */
-  private Stmt varDecl(boolean inClassDecl, boolean allowVarWithoutInitialiser) {
+  private Stmt varDecl(boolean inClassDecl) {
     if (matchAny(STATIC)) {
       error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
     }
@@ -821,7 +812,7 @@ public class Parser {
     stmts.stmts = marked(false, () -> {
       List<Stmt> varDecls = new ArrayList<>();
       // For first variable we could be in "for (var x in [...])" so we allow no initialiser
-      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, allowVarWithoutInitialiser));
+      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, false));
       while (matchAny(COMMA)) {
         matchAny(EOL);
         varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, false)));
@@ -1040,19 +1031,6 @@ public class Parser {
   }
 
   /**
-   *# varDeclList ::= varDecl ( COMMA varDecl ) *
-   */
-  private List<Stmt.VarDecl> varDeclList() {
-    List<Stmt.VarDecl> varDecls = new ArrayList<>();
-    while (true) {
-      varDecls.add(singleVarWithOptionalType(OPTIONAL, true));
-      if (!matchAnyIgnoreEOL(COMMA)) {
-        return varDecls;
-      }
-    }
-  }
-  
-  /**
    * <pre>
    *# forStmt ::= FOR LEFT_PAREN varDeclList ( SEMICOLON condition SEMICOLON commaSeparatedStatements | COLON expr | IN expr ) RIGHT_PAREN statement
    *#             | FOR LEFT_PAREN varDecl ( COLON | IN ) expr RIGHT_PAREN statement
@@ -1063,40 +1041,22 @@ public class Parser {
     Token forToken = expect(FOR);
     expect(LEFT_PAREN);
     skipNewLines();
-    List forParts = new ArrayList();
     Marker mark = tokeniser.mark();
+    Stmt.Stmts initialisation = null;
+    Expr condition = null;
+    Stmt.Stmts updates = null;
     try {
       if (lookahead(() -> switchPattern() != null, () -> peekIgnoreEolIs(COLON,IN))) {
         return destructuringForLoop(forToken, label);
       }
-      Token initToken = peek();
-      List<Stmt.VarDecl> init = initToken.is(SEMICOLON) ? new ArrayList<>()
-                                                        : marked(false, this::varDeclList, SEMICOLON, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE, COLON, IN, EOL);
-      skipNewLines();
-      expect(SEMICOLON);
-      JactlType type = null;
-      for (int i = 0; i < init.size(); i++) {
-        Stmt.VarDecl varDecl = init.get(i);
-        if (i == 0) {
-          type = varDecl.declExpr.type;
-        }
-        else {
-          if (!varDecl.declExpr.type.is(OPTIONAL)) {
-            error("Unexpected symbol '" + varDecl.typeToken.getStringValue() + "' (cannot declare mixed types in for(;;) loops)", varDecl.typeToken);
-          }
-          varDecl.declExpr.type = type;
-        }
-        if (type.is(UNKNOWN) && varDecl.declExpr.initialiser == null) {
-          error("Missing initialiser", varDecl.location);
-        }
+      initialisation = commaSeparatedStatements();
+      if (!previous().is(SEMICOLON)) {
+        expectOrNull(true, SEMICOLON);
       }
-      Stmt.Stmts initStmts = new Stmt.Stmts(initToken);
-      initStmts.stmts.addAll(init);
-      forParts.add(initStmts);
-      forParts.add(peekIgnoreEolIs(SEMICOLON, EOF, RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
-                                                                : marked(false, () -> condition(false, SEMICOLON)));
+      condition = peekIgnoreEolIs(SEMICOLON,EOF,RIGHT_PAREN) ? new Expr.Literal(new Token(TRUE, previous()))
+                                                             : marked(false, () -> condition(false, SEMICOLON));
       expectOrNull(true, SEMICOLON);
-      forParts.add(peekIgnoreEolIs(EOF, RIGHT_PAREN) ? null : commaSeparatedStatements());
+      updates = peekIgnoreEolIs(EOF,RIGHT_PAREN) ? null : commaSeparatedStatements();
       if (!peekIgnoreEolIs(EOF)) {
         expectOrNull(true, RIGHT_PAREN);
       }
@@ -1104,42 +1064,76 @@ public class Parser {
     catch (CompileError error) {
       // Ignore
     }
-    mark.done(forParts);
+    mark.done(Utils.listOf(initialisation,condition,updates));
 
-    Stmt.While whileStmt = new Stmt.While(forToken, (Expr)forParts.get(1), label);
-    whileStmt.updates = (Stmt)forParts.get(2);
+    Stmt.While whileStmt = new Stmt.While(forToken, condition, label);
+    whileStmt.updates = updates;
     matchAny(EOL);
     whileStmt.body = marked(false, this::_statement, EOL, RIGHT_BRACE);
 
+    Predicate<Stmt> isVarAssign = s -> s instanceof Stmt.ExprStmt
+                                       && ((Stmt.ExprStmt)s).expr instanceof Expr.VarAssign
+                                       && ((Expr.VarAssign)(((Stmt.ExprStmt)s).expr)).operator.is(EQUAL);
+    
     Stmt forStmt;
-    Stmt initialisation = (Stmt)forParts.get(0);
     if (initialisation != null) {
-      Stmt       firstStmt = initialisation;
-      Stmt.Stmts stmts     = null;
-      if (initialisation instanceof Stmt.Stmts && !((Stmt.Stmts) initialisation).stmts.isEmpty()) {
-        stmts = (Stmt.Stmts) initialisation;
-        firstStmt = stmts.stmts.get(0);
+      List<Stmt> initStmts = initialisation.stmts;
+      Stmt firstStmt = initStmts.get(0);
+      if (firstStmt instanceof Stmt.Stmts) {
+        assert initStmts.size() == 1;
+        initStmts = ((Stmt.Stmts) firstStmt).stmts;
+        initialisation.stmts = initStmts;
+        firstStmt = initStmts.get(0);
       }
-      if (firstStmt instanceof Stmt.VarDecl && ((Stmt.VarDecl) firstStmt).declExpr.type.is(OPTIONAL)) {
-        // If there are optionally typed initialisers then we just make the initialisation
-        // as a separate statement before the while loop since we want the scope to be
-        // outside the for loop so that we can refer to the loop variable after the
-        // loop has finished.
-        // Add the while to the stmts rather than creating a new block scope
-        if (stmts == null) {
-          // Initialiser was not Stmts so create one
-          stmts = new Stmt.Stmts(forToken);
-          stmts.stmts.add(firstStmt);
+      JactlType firstVarDeclType = null;
+      if (firstStmt instanceof Stmt.VarDecl) {
+        Expr.VarDecl firstVarDecl = ((Stmt.VarDecl) firstStmt).declExpr;
+        firstVarDeclType = firstVarDecl.type;
+      }
+      // If first statement is a VarDecl then all statements must be VarAssign that we turn into VarDecl
+      // with the same type or else we generate an error.
+      if (firstStmt instanceof Stmt.VarDecl && initStmts.size() > 1) {
+        Expr.VarDecl firstVarDecl = ((Stmt.VarDecl) firstStmt).declExpr;
+        List<Stmt> newInit = new ArrayList<>();
+        newInit.add(firstStmt);
+        for (int i = 1; i < initStmts.size(); i++) {
+          Stmt stmt = initStmts.get(i);
+          if (isVarAssign.test(stmt)) {
+            Expr.VarAssign varAssign = (Expr.VarAssign) ((Stmt.ExprStmt) stmt).expr;
+            newInit.add(createVarDecl(varAssign.identifierExpr.identifier, firstVarDecl.type, varAssign.operator, varAssign.expr, false, false, false));
+          }
+          else if (stmt instanceof Stmt.VarDecl) {
+            newInit.add(stmt);
+          }
+          else {
+            error("Unexpected statement (expecting continuation of variable declaration)", stmt.location);
+          }
         }
-        // Add while to stmts
-        stmts.stmts.add(whileStmt);
-        forStmt = stmts;
+        initialisation.stmts = newInit;
       }
-      else {
+      // If all statements are VarAssign, we turn them into VarDecls with type OPTIONAL and let Resolver
+      // work out which ones are new vars and which ones are reusing existing vars.
+      // If there are a mixture of VarAssign and other statements then we don't perform any modifications.
+      else if (initStmts.stream().allMatch(isVarAssign)) {
+        initialisation.stmts = initStmts.stream()
+                                        .map(s -> (Expr.VarAssign)(((Stmt.ExprStmt)s).expr))
+                                        .map(varAssign -> createVarDecl(varAssign.identifierExpr.identifier, OPTIONAL, varAssign.operator, varAssign.expr, false, false, false))
+                                        .collect(Collectors.toList());
+        firstVarDeclType = OPTIONAL;
+      }
+      
+      if (firstVarDeclType != null && !firstVarDeclType.is(OPTIONAL)) {
         // If there are typed initialisers then wrap the while loop in a block
         // that has the initialisers as the first statements (this way any vars
         // declared will have a scope that includes only the for/while loop)
         forStmt = stmtBlock(forToken, initialisation, whileStmt);
+      }
+      else {
+        // This means no type specified or we have normal statements.
+        // We want scope of any variable declarations to persist after for loop so we
+        // keep variable declarations at same scope as while loop.
+        initialisation.stmts.add(whileStmt);
+        forStmt = initialisation;
       }
     }
     else {
@@ -1242,7 +1236,7 @@ public class Parser {
     }
     List<Stmt> stmtList = marked(false, () -> {
       List<Stmt> stmts = new ArrayList<>();
-      stmts.add(statement());
+      stmts.add(_declaration(false));
       while (matchAny(COMMA)) {
         stmts.add(statement());
       }

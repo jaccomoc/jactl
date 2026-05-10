@@ -159,6 +159,7 @@ for (i : list.map{ it * it }) {
   println it
 }
 ```
+
 ### While Loops
 
 The `while` loop executes a block of code as long as a condition is `true`:
@@ -216,6 +217,20 @@ for (i in 10) {
 // 4
 ```
 
+When you have nested loops, and you would like to be able to use `break` or `continue` and specify which loop you
+wish the `break`/`continue` to operate on, you can add labels to the loops and then pass the label to the `break`
+or `continue`.
+To add a label to a loop, you prepend the loop with a name and a `:` as in this example:
+```groovy
+int sum = 0;
+OUTER: for (int i = 0; i < 10; i++) {
+  for (int j = 0; j < 20; i++) {
+    continue OUTER if j == i
+    sum += i + j
+  }
+}
+```
+
 ## Do Expression
 
 The `do` expression allows you to turn a block of statements into an expression.
@@ -227,16 +242,12 @@ def x = do { def i = 3; def j = 4; i + j }
 x      // 7
 ```
 
-This is useful when you want to assign the result of a complex calculation to a variable:
+This can be useful when you want to use a complex calculation where an expression is needed.
+For example, rather than using a temporary variable to store the calculation you can pass the calculation
+as a `do` block directly as an argument to a function:
 ```groovy
-def x = do {
-  def sum = 0
-  for (i in 10) {
-    sum += i
-  }
-  sum
-}
-x      // 45
+def func(int x) { ... }
+def x = func(do { def sum = 0; for (i=0; i < 10; i++) { sum += func(i) }; sum })
 ```
 
 ## Eval Statement
