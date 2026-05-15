@@ -1439,7 +1439,8 @@ class CompilerTests extends BaseTest {
     testError("const x = 'abc'.length(); x", "simple constant value");
 
     test("def x\n  = 1", 1);
-    test("def x\n = 1 +\n 2\n + 3", 6);
+    test("def x\n = 1 +\n 2", 3);
+    test("def x\n = 1 +\n 2\n + 4", 4);
   }
 
   @Test public void multipleVarDecls() {

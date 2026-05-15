@@ -43,7 +43,7 @@ public class AsyncTest {
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(context);
     analyser.analyseClass(script);
-    return script.scriptMain.declExpr.functionDescriptor.isAsync;
+    return script.scriptMain.declExpr.functionDescriptor.isAsync();
   }
 
   private void sync(String source, Object expected) {

@@ -92,6 +92,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private boolean isFirstPass = true;       // True if doing first pass through
 
   private boolean asyncEnabled = true;
+  private boolean heapLocals   = false;
   
   public Analyser(JactlContext context) {
     this.context = context;
@@ -104,7 +105,18 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (asyncEnabled) {
       resolveAsyncDependencies();
-
+    }
+    
+    // If we have heapLocals we need to do a second pass to cater for some forward declaration
+    // scenarios that a single pass can't manage.
+    // E.g.:
+    //   def NEWLINE = 8
+    //   def move() { draw() }
+    //   def draw() { line() }
+    //   int line() { NEWLINE }
+    //   move()
+    // A single pass would not add heapLocals to the move() function.
+    if (heapLocals) {
       isFirstPass = false;
       analyse(classDecl);
     }
@@ -213,7 +225,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (function != null) {
       if (function.isAsync == null) {
-        assert isFirstPass;
         // Forward reference to a function, so we don't yet know if it will be async or not.
         // Add ourselves to dependency map, so we can be re-analysed at the end when we will
         // hopefully know whether callee is async or not.
@@ -225,7 +236,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           async(expr);
         }
       }
-      if (!function.isBuiltin && isFirstPass) {
+      if (!function.isBuiltin) {
         resolveHeapLocals(currentFunction(), Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, function) ? funDecl.wrapper : funDecl);
       }
     }
@@ -242,7 +253,6 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expr.args.forEach(this::analyse);
     if (expr.methodDescriptor != null) {
       if (expr.methodDescriptor.isAsync == null) {
-        assert isFirstPass;
         addAsyncCallDependency(currentFunction(), expr, expr.methodDescriptor);
       }
       else {
@@ -705,7 +715,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     JactlClassDescriptor existingClass = context.getClassDescriptor(classDescriptor.getInternalName());
     if (existingClass != null) {
-      if (existingClass.getInitMethod().isAsync) {
+      if (existingClass.getInitMethod().isAsync()) {
         async(expr);
       }
     }
@@ -715,7 +725,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         addAsyncCallDependency(currentFunction(), expr, classDescriptor.getInitMethod());
       }
       else
-      if (classDescriptor.getInitMethod().isAsync) {
+      if (classDescriptor.getInitMethod().isAsync()) {
         async(expr);
       }
     }
@@ -876,26 +886,26 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Find heapLocals that are not in the caller scope or in caller heapLocals
     // and add them to caller's heapLocals (and to its parent etc) until we get to
     // place where variable actually resides.
-    callee.heapLocals.entrySet()
-                     .stream()
-                     .filter(entry -> !isOwnerOrHeapLocal(caller, entry.getValue()))
-                     .forEach(entry -> {
-                       Expr.VarDecl varDecl = entry.getValue();
-                       String       name      = varDecl.name.getStringValue();
-                       Expr.VarDecl childDecl = Utils.createVarDecl(name, varDecl, caller);
-                       Expr.FunDecl funDecl   = caller.owner;
-                       for (; !isOwnerOrHeapLocal(funDecl, varDecl); funDecl = funDecl.owner) {
-                         Expr.VarDecl parentDecl = Utils.createVarDecl(name, varDecl, funDecl);
-                         childDecl.parentVarDecl = parentDecl;
-                         childDecl = parentDecl;
-                       }
-                       if (funDecl == varDecl.owner) {
-                         childDecl.parentVarDecl = varDecl.originalVarDecl;
-                       }
-                       else {
-                         childDecl.parentVarDecl = funDecl.heapLocals.get(varDecl.originalVarDecl);
-                       }
-                     });
+    for (Map.Entry<Expr.VarDecl, Expr.VarDecl> entry : callee.heapLocals.entrySet()) {
+      heapLocals = true;
+      if (!isOwnerOrHeapLocal(caller, entry.getValue())) {
+        Expr.VarDecl varDecl   = entry.getValue();
+        String       name      = varDecl.name.getStringValue();
+        Expr.VarDecl childDecl = Utils.createVarDecl(name, varDecl, caller);
+        Expr.FunDecl funDecl   = caller.owner;
+        for (; !isOwnerOrHeapLocal(funDecl, varDecl); funDecl = funDecl.owner) {
+          Expr.VarDecl parentDecl = Utils.createVarDecl(name, varDecl, funDecl);
+          childDecl.parentVarDecl = parentDecl;
+          childDecl = parentDecl;
+        }
+        if (funDecl == varDecl.owner) {
+          childDecl.parentVarDecl = varDecl.originalVarDecl;
+        }
+        else {
+          childDecl.parentVarDecl = funDecl.heapLocals.get(varDecl.originalVarDecl);
+        }
+      }
+    }
   }
 
   private boolean isOwnerOrHeapLocal(Expr.FunDecl funDecl, Expr.VarDecl varDecl) {

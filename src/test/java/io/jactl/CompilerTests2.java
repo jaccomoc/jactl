@@ -3217,19 +3217,37 @@ public class CompilerTests2 extends BaseTest {
     testError("superFields and print 'xxx'", "reference to unknown variable");
   }
   
-  @Test public void parseTests() {
-    test("def it\n" +
-         "  3 and it = 'abc'\n" +
-         "  /^(\\d+) +(.*)$/n and it = 4\n", false);
-    test("def LINE = 3\n" +
-         "def line() { LINE }\n" +
-         "def line2() { line() }\n" +
-         "line2()", 3);
+  @Test public void heapLocalTest() {
     test("def NEWLINE = 8 \n" +
          "def move() { draw() }\n" +
-         "def draw() { line(); true }\n" +
+         "def draw() { line() }\n" +
          "int line() { NEWLINE }\n" +
-         "",null);
+         "move()",8);
+  }
+  
+  @Test public void heapLocalTestSync() {
+    isAsync = false;
+    test("def NEWLINE = 8 \n" +
+         "def move() { draw() }\n" +
+         "def draw() { line() }\n" +
+         "int line() { NEWLINE }\n" +
+         "move()",8);
+  }
+  
+  @Test public void operatorOnNewLineTest() {
+    test("false\n!false", true);
+    test("false\n??false", true);
+    test("int x = 1\n--x", 0);
+    test("int x = 1\n++x", 2);
+    test("int x = 1\n[]", Utils.listOf());
+    test("int x = 1\n(1+2)", 3);
+    test("int x = 1\n-(1+2)", -3);
+    test("int x = 1\n+2", 2);
+    test("int x = 1\n+ 2", 2);
+    test("int x = 1\n- 2", -2);
+    test("int x = 1\n-(1 + 2)", -3);
+    test("def it = 'a'\n/a/r", true);
+    test("def it = 'b=a'\n/=a/r", true);
   }
   
 }

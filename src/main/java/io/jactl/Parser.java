@@ -1388,8 +1388,9 @@ public class Parser {
   // when we are checking if an expression continues on the next line whether the next operator
   // should be treated as part of the current expression or the start of a new one.
   // NOTE: we include '/' and '/=' since they could indicate start of a regex.
-  //       '-' is also included since it can be the start of a negative number
-  private static Set<TokenType> exprStartingOps = Utils.setOf(LEFT_SQUARE, LEFT_PAREN, LEFT_BRACE, SLASH, SLASH_EQUAL, MINUS);
+  private static Set<TokenType> exprStartingOps = Utils.setOf(LEFT_SQUARE, LEFT_PAREN, LEFT_BRACE, SLASH, SLASH_EQUAL,
+                                                              QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS,
+                                                              MINUS, PLUS);
 
   /**
    *# condition ::= expression
@@ -1910,7 +1911,7 @@ public class Parser {
   }
 
   private boolean isPlusMinusNumber() {
-    return peek().is(PLUS,MINUS) && lookahead(() -> matchAny(PLUS, MINUS) && matchAny(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
+    return lookahead(() -> matchAny(PLUS, MINUS) && peek().is(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
   }
 
   /**
@@ -3162,30 +3163,6 @@ public class Parser {
     finally {
       ignoreEol = currentIgnoreEol;
     }
-  }
-
-  /**
-   * Operator match. Returns true if next token matches any in list.
-   * If there is an EOL as first token then we ignore unless operator is one that could
-   * start an expression and we are not already in a nested expression of some sort.
-   */
-  boolean peekOp(TokenType[] types) {
-    if (!peekIsEOL()) {
-      return peek().is(types);
-    }
-    for (TokenType type: types) {
-      if (!ignoreEol && exprStartingOps.contains(type)) {
-        if (peekNoEOL().is(type)) {
-          return true;
-        }
-      }
-      else {
-        if (peekIgnoreEolIs(type)) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   private boolean isImplicitRegexSubstitute(Expr rhs) {

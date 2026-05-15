@@ -206,10 +206,11 @@ public class CompilerTest3 extends BaseTest {
     test("('123'\n[2])", "3");
     test("def x=[1,2,3]; x\n[2]", Utils.listOf(2));
     test("def x=[1,2,3]; def f={it}; f(x\n[2])", 3);
-    testError("def x = 1; ++\n++\nx\n++\n++\nx\nx", "cannot be used here");
-    testError("def x = 1; ++\n++\nx\n++\n++", "cannot be used here");
+    testError("def x = 1; ++\n++\nx\n++\n++;\n++\nx\nx", "unexpected token ';'");
+    testError("def x = 1; ++\n++\nx++ ++", "cannot be used here");
+    testError("def x = 1; ++\n++\nx\n++\n++", "unexpected end-of-file");
     test("[\n1\n,\n2\n,\n3\n]", Utils.listOf(1,2,3));
-    test("def f(x\n,\ny\n)\n{\nx\n+\ny\n}\nf(1,2)", 3);
+    test("def f(x\n,\ny\n)\n{\nx +\ny\n}\nf(1,2)", 3);
     testError("4\n/2", "unexpected end of file in string");
     test("4\n-3*2", -6);
     test("int\ni\n=\n3\n", 3);
@@ -224,7 +225,8 @@ public class CompilerTest3 extends BaseTest {
     test("def x = [1,2]; if\n(\nx\n[\n0\n]\n)\n4", 4);
     test("def x = [1,2]; def i = 0; while\n(\nx\n[\n0\n]\n>\n10\n||\ni++\n<2\n)\nx[\n2\n]\n=\n7\nx[2]", 7);
     test("def (i\n,\nj\n)\n=\n[\n1\n,\n2\n]\ni+j\n", 3);
-    test("(1 + 2)\n + 3\n", 6);
+    test("(1 + 2) +\n 3\n", 6);
+    test("(1 + 2)\n + 3\n", 3);
   }
 
   @Test public void eof() {

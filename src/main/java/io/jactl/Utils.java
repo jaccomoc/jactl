@@ -998,10 +998,13 @@ public class Utils {
     if (isNamedArgs(args) || !validateArgsAtCompileTime) {
       return true;
     }
-    // If we don't have arguments for all parameters then we will invoke wrapper to
-    // fill in default values if the default values are non-trivial (i.e. not constant values)
+    // If we don't have arguments for all parameters and defaults are not simple constants,
+    // then we will invoke wrapper to fill in default values if the default values are
+    // non-trivial (i.e. not constant values)
     if (args.size() < func.paramTypes.size()) {
       for (int i = args.size(); i < func.paramTypes.size(); i++) {
+        // If our defaultVals[i] is null it means that param is mandatory or that
+        // its default value is non-trivial
         if (func.defaultVals[i] == null) {
           return true;
         }
