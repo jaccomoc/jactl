@@ -78,13 +78,13 @@ public class CompilerTests2 extends BaseTest {
     test("def v = '2'; { v = v + 1; { v }}", "21");
   }
 
-  @Test
-  public void constExprArithmeticPrecedence() {
+  @Test public void constExprArithmeticPrecedence() {
     alwaysEvalConsts = true;
     test("1 + -2 * -3 + 4", 11);
     test("1 + (2 + 3) * 4 - 5", 16);
     test("13 + 12 %% 7L", 18L);
     test("13 + 12 %% 7 - 3", 15);
+    test("int x = 6; 13 + 12 %% ++x - 3", 15);
     testError("13 + 12 %% ++6 - 3", "cannot modify a constant value");
     test("13 + 12 % 7L", 18L);
     test("13 + 12 % 7 - 3", 15);
@@ -208,7 +208,7 @@ public class CompilerTests2 extends BaseTest {
 
     test("def x = 1; (x + x)++", 2);
     test("def x = 1; (x + x)++; x", 1);
-    testError("def x = 1; (x + x)++ ++", "expecting end of statement");
+    testError("def x = 1; (x + x)++ ++", "cannot be used");
 
     testError("def x = 'a'; ++x", "non-numeric operand");
     testError("def x = [a:'a']; ++x.a", "non-numeric operand");
@@ -1523,7 +1523,7 @@ public class CompilerTests2 extends BaseTest {
     comparisonTests.accept("-i3", "l5");
     comparisonTests.accept("-i3 * d7", "dec13");
     comparisonTests.accept("-i3 * l5", "dec13");
-    comparisonTests.accept("l5", "-db2 * 5");
+    comparisonTests.accept("-db2 * 5", "l5");
     comparisonTests.accept("-di3 * 5", "l5");
     comparisonTests.accept("-di3 * (byte)5", "l5");
     comparisonTests.accept("-di3 * 5", "l5 * ddec13");
@@ -2178,7 +2178,7 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 1; x as String as byte", (byte)1);
     test("def x = 1; x as String as int", 1);
     test("def x = 1; (x as String as int) + 2", 3);
-    testError("def x = 1; x as String as int + 2", "unexpected token '+'");
+    test("def x = 1; x as String as int + 2", 3);
     testError("def x = 1.0; x as String as int", "not a valid int");
     test("def x = 1.0; x as String as double", 1.0D);
     test("def x = 1.0; x as String as Decimal", "#1.0");
@@ -3216,4 +3216,20 @@ public class CompilerTests2 extends BaseTest {
     test("int f() { true and return 1; return 0 }; f()", 1);
     testError("superFields and print 'xxx'", "reference to unknown variable");
   }
+  
+  @Test public void parseTests() {
+    test("def it\n" +
+         "  3 and it = 'abc'\n" +
+         "  /^(\\d+) +(.*)$/n and it = 4\n", false);
+    test("def LINE = 3\n" +
+         "def line() { LINE }\n" +
+         "def line2() { line() }\n" +
+         "line2()", 3);
+    test("def NEWLINE = 8 \n" +
+         "def move() { draw() }\n" +
+         "def draw() { line(); true }\n" +
+         "int line() { NEWLINE }\n" +
+         "",null);
+  }
+  
 }

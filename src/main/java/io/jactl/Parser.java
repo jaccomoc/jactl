@@ -530,7 +530,7 @@ public class Parser {
       return stmt;
     }
     Stmt.ExprStmt exprStmt = (Stmt.ExprStmt)stmt;
-    if (matchAny(IF,UNLESS)) {
+    if ((ignoreEol || !previousWas(EOL)) && matchAny(IF,UNLESS)) {
       // For all other expressions we allow a following "if" or "unless" so if we have one
       // of those we will convert into an if statement
       Token ifToken = previous();
@@ -1422,7 +1422,7 @@ public class Parser {
    */
   private Expr ifUnlessExpr(boolean ignoreEol) {
     Expr  expr = expression(ignoreEol);
-    if (matchAny(IF,UNLESS)) {
+    if ((ignoreEol || !previousWas(EOL)) && matchAny(IF,UNLESS)) {
       Token ifToken = previous();
       Expr  condition = expression(ignoreEol);
       Stmt  stmt;
@@ -1571,264 +1571,249 @@ public class Parser {
    * (for example) when it normally could signal the end of a statement.
    */
   private Expr parseExpression() {
+    skipNewLines();
     return parseExpression(0);
   }
-
+  
   private static final Expr NOOP = new Expr.Noop(null);
   
-  private Expr parseExpression(int level) {
+  private Expr parseExpression(int precedence) {
     skipNewLines();
 
-    // If we have reached highest precedence
-    if (level == Utils.operatorsByPrecedence.size()) {
-      return primary();
-    }
+    Token operator = peek();
 
-    // Get list of operators at this level of precedence along with flag
-    // indicating whether they are left-associative or not.
-    Pair<Boolean, TokenType[]> operatorsPair     = Utils.operatorsByPrecedence.get(level);
-    boolean                    isLeftAssociative = operatorsPair.first;
-    TokenType[] operators = operatorsPair.second;
-
-    // If this level of precedence is for our unary operators (includes type cast)
-    if (operators == Utils.unaryOps) {
-      return unary(level);
-    }
-
-    Marker mark = tokeniser.mark();
-    Marker rhsMark = null;
     Expr expr = NOOP;  // Default to Noop so if we get an error we still return something non-null
     try {
-      expr = parseExpression(level + 1);
-
-      while (peekOp(operators)) {
-        skipNewLines();
-        Token operator = peek();
-        if (operator.is(INSTANCE_OF, BANG_INSTANCE_OF, AS)) {
-          advance();
-          Token     token = peek();
-          JactlType type  = type(false, false, false, true);
-          expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
-        }
-        else if (operator.is(QUESTION)) {
-          advance();
-          Expr  trueExpr  = parseExpression(level);
-          Token operator2 = expectOrNull(true, COLON);
-          Expr  falseExpr = parseExpression(level);
-          expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
-        }
-        else if (operator.is(LEFT_PAREN, LEFT_BRACE)) {
-          // Call starts with "(" but sometimes can have just "{" if no args before
-          // a closure arg
-          List<Expr> arguments = arguments();
-          expr = createCallExpr(expr, operator, arguments);
-        }
-        else {
-          advance();
-
-          // Set flag if next token is '(' so that we can check for x.(y).z below
-          boolean bracketedExpression = peek().is(LEFT_PAREN);
-
-          if (operator.getType().isAssignmentLike()) {
-            rhsMark = tokeniser.mark();
+      // Check for prefix operators
+      // NOTE: when recursing from a prefix operator we pass (precedence - 1) because prefix
+      //       operators are right associative.
+      switch (operator.getType()) {
+        case MINUS: case PLUS:
+          if (isPlusMinusNumber()) {
+            // Ignore +number or -number where we want to parse as a number rather than as a unary expression
+            // This is to allow us to invoke methods on negative numbers (e.g. -6.toBase(2)) which wouldn't
+            // work normally since "." has higher precedence than "-". We will ignore here and deal with this
+            // in primary().
+            expr = primary();
+            break;
           }
-          Expr rhs;
-          if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
-            // '[' and '?[' can be followed by any expression and then a ']'
-            // Allow a comma separated list as syntatic sugar for a chain of [][][]...
-            rhs = ifUnlessExpr(true);
-            while (true) {
-              if (!peekIgnoreEolIs(COMMA)) {
-                break;
-              }
-              expectOrNull(true, COMMA);
-              expr = new Expr.Binary(expr, operator, rhs);
-              operator = new Token(LEFT_SQUARE,previous());  // pretend comma was '['
-              rhs = ifUnlessExpr(true);
-            }
+          // Fall through for unary() call
+        case QUESTION_QUESTION: case GRAVE: case BANG:
+          advance();
+          expr = new Expr.PrefixUnary(operator, parseExpression(Utils.precedence(operator)));
+          break;
+        case MINUS_MINUS: case PLUS_PLUS:
+          advance();
+          Expr term = parseExpression(Utils.precedence(operator) - 1);
+          if (term instanceof Expr.Binary && ((Expr.Binary) term).operator.is(Utils.fieldAccessOp)) {
+            // If we are acting on a field (rather than directly on a variable) then
+            // we might need to create intermediate fields etc so turn the inc/dec
+            // into the equivalent of:
+            //   ++a.b.c ==> a.b.c += 1
+            //   --a.b.c ==> a.b.c -= 1
+            // That way we can use the lvalue mechanism of creating missing fields if
+            // necessary.
+            expr = convertToLValue(term, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
           }
           else {
-            if (operator.is(DOT, QUESTION_DOT)) {
-              if (peek().is(LEFT_SQUARE, QUESTION_SQUARE)) {
-                unexpected("invalid token after '" + operator.getChars() + "'");
-              }
+            if (term instanceof Expr.Identifier) {
+              term.isLValue = true;
             }
-            rhs = parseExpression(level + (isLeftAssociative ? 1 : 0));
+            expr = new Expr.PrefixUnary(operator, term);
           }
-
-          // For List/Map literals that are constant values (no expressions) we compile as class
-          // static consts if they are used in contexts where it is obvious that the values won't
-          // be mutated:
-          // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
-          if (operator.is(IN, BANG_IN, EQUAL_EQUAL, BANG_EQUAL_EQUAL, TRIPLE_EQUAL, BANG_EQUAL_EQUAL, LEFT_SQUARE, QUESTION_SQUARE)) {
-            if (expr.isLiteral() && Utils.isConstListOrMap(expr)) {
-              expr.isConst = true;
-              expr.constValue = getLiteralValue(expr);
-              addClassConstant(expr);
-            }
-            if (rhs.isLiteral() && Utils.isConstListOrMap(rhs)) {
-              rhs.isConst = true;
-              rhs.constValue = getLiteralValue(rhs);
-              addClassConstant(rhs);
-            }
-          }
-
-          // Check for lvalue for assignment operators
-          if (operator.getType().isAssignmentLike()) {
-            rhsMark.doneExpr(rhs);
-            rhsMark = null;
-            expr = convertToLValue(expr, operator, rhs, false, true);
-          }
-          else {
-            // Check for '.' and '?.' where we treat identifiers as literals for field access.
-            // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
-            // Note: we checked for '(' immediately after the '.' so we can use value of y if
-            // expression is something like x.(y)
-            if (operator.is(DOT, QUESTION_DOT) && rhs instanceof Expr.Identifier && !bracketedExpression) {
-              rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
-            }
-
-            // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
-            // by default, we need to strip off the "it =~" and replace with current one
-            if (operator.is(EQUAL_GRAVE, BANG_GRAVE)) {
-              if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
-                if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
-                  error("Operator '!~' cannot be used with regex substitution", operator);
-                }
-                Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
-                regex.string = expr;
-                regex.operator = operator;
-                regex.implicitItMatch = false;
-                expr = regex;
-              }
-              else if (isImplicitRegexSubstitute(rhs)) {
-                if (operator.is(BANG_GRAVE)) {
-                  error("Operator '!~' cannot be used with regex substitution", operator);
-                }
-                Expr.RegexSubst regexSubst = (Expr.RegexSubst) ((Expr.VarOpAssign) rhs).expr;
-                regexSubst.implicitItMatch = false;
-                expr = convertToLValue(expr, operator, regexSubst, false, false);
-              }
-              else {
-                expr = new Expr.RegexMatch(expr, operator, rhs, "", false);
-              }
-            }
-            else {
-              expr = new Expr.Binary(expr, operator, rhs);
-            }
-          }
-          // Check for closing ']' if required
-          if (operator.is(LEFT_SQUARE, QUESTION_SQUARE)) {
-            expectOrNull(true, RIGHT_SQUARE);
+          break;
+        case LEFT_PAREN: {
+          if (isCast()) {
+            // Type cast. Rather than create a separate operator for each type case we just use the
+            // token for the type as the operator if we detect a type cast.
+            expect(LEFT_PAREN);
+            skipNewLines();
+            Token     typeToken = peek();
+            JactlType castType  = type(false, false, false, true);
+            skipNewLines();
+            expect(RIGHT_PAREN);
+            expr = new Expr.Cast(typeToken, castType, parseExpression(Utils.precedence(operator) - 1));
+            break;
           }
         }
-        mark.done(expr);
-        mark = mark.precede();
+        default:
+          expr = primary();
+          break;
       }
-      mark.drop();
-      return expr;
-    }
-    catch (CompileError error ) {
-      markError(mark, error);
-      skipUntil(EOL, EOF, COMMA);
-      return expr;
-    }
-    finally {
-      if (rhsMark != null) {
-        rhsMark.drop();
-      }
-    }
-  }
+    
+      while (true) {
+        operator = peek();
+        if (operator.is(EOL)) {
+          // If we have a following operator and operator can start its own expression then
+          // we assume we have got to end of this expression (unless ignoreEol is true which
+          // it will be inside bracketed expressions, or parameter values, etc)
+          Token previous = previous();
+          Token current  = operator;
+          advance();
+          operator = peek();
+          if (!ignoreEol) {
+            if (exprStartingOps.contains(operator.getType())) {
+              tokeniser.rewind(previous, current);
+              return expr;
+            }
+          }
+        }
 
-  /**
-   * <pre>
-   * unary ::= ( QUESTION_QUESTION | BANG | MINUS_MINUS | PLUS_PLUS | MINUS | PLUS | GRAVE | LEFT_PAREN type RIGHT_PAREN )
-   *                  unary ( MINUS_MINUS | PLUS_PLUS )
-   *         | expression
-   * </pre>
-   */
-  private Expr unary(int precedenceLevel) {
-    Expr expr = null;
-    skipNewLines();
-    Marker mark = tokeniser.mark();
-    try {
-      if (isCast()) {
-        // Type cast. Rather than create a separate operator for each type case we just use the
-        // token for the type as the operator if we detect a type cast.
-        expect(LEFT_PAREN);
-        skipNewLines();
-        Token     typeToken = peek();
-        JactlType castType  = type(false, false, false, true);
-        skipNewLines();
-        expect(RIGHT_PAREN);
-        expr = marked(true, () -> {
-          Expr e = unary(precedenceLevel);
-          return new Expr.Cast(typeToken, castType, e);
-        });
-      }
-      else if (!isPlusMinusNumber() && peek().is(Utils.unaryOps)) {
-        // Ignore +number or -number where we want to parse as a number rather than as a unary expression
-        // This is to allow us to invoke methods on negative numbers (e.g. -6.toBase(2)) which wouldn't
-        // work normally since "." has higher precedence than "-". We will ignore here and deal with this
-        // in primary().
-        Marker mark2 = tokeniser.mark();
-        try {
-          Token operator   = expect(Utils.unaryOps);
-          Expr  unary      = unary(precedenceLevel);
-          Expr  prefixExpr = new Expr.PrefixUnary(operator, unary);
-          expr = prefixExpr;
-          if (operator.is(PLUS_PLUS, MINUS_MINUS)) { 
-            if (unary instanceof Expr.Binary && ((Expr.Binary) unary).operator.is(Utils.fieldAccessOp)) {
+        boolean isLeftAssociative = Utils.isLeftAssoc(operator);
+
+        // If precedence of next operator is less than us then we return.
+        // This works even if next token is not an operator since non-operators have minimum precedence
+        int nextPrecedence = Utils.precedence(operator);
+        if (precedence >= nextPrecedence) {
+          return expr;
+        }
+
+        switch (operator.getType()) {
+          case INSTANCE_OF: case BANG_INSTANCE_OF: case AS: {
+            advanceIgnoreEol();
+            Token     token = peek();
+            JactlType type  = type(false, false, false, true);
+            expr = new Expr.Binary(expr, operator, new Expr.TypeExpr(token, type));
+            break;
+          }
+          case QUESTION: {
+            advanceIgnoreEol();
+            Expr  trueExpr  = parseExpression(nextPrecedence - 1);
+            Token operator2 = expectOrNull(true, COLON);
+            Expr  falseExpr = parseExpression(nextPrecedence - 1);
+            expr = new Expr.Ternary(expr, operator, trueExpr, operator2, falseExpr);
+            break;
+          }
+          case LEFT_PAREN: case LEFT_BRACE: {
+            // Call starts with "(" but sometimes can have just "{" if no args before
+            // a closure arg
+            List<Expr> arguments = arguments();
+            expr = createCallExpr(expr, operator, arguments);
+            break;
+          }
+          case PLUS_PLUS: case MINUS_MINUS: {
+            if (expr instanceof Expr.PostfixUnary) {
+              unexpected("cannot be used here");
+            }
+            Expr postfix = new Expr.PostfixUnary(expr, advanceIgnoreEol());
+            if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(Utils.fieldAccessOp)) {
               // If we are acting on a field (rather than directly on a variable) then
               // we might need to create intermediate fields etc so turn the inc/dec
               // into the equivalent of:
-              //   ++a.b.c ==> a.b.c += 1
-              //   --a.b.c ==> a.b.c -= 1
+              //   a.b.c++ ==> a.b.c += 1
+              //   a.b.c-- ==> a.b.c -= 1
               // That way we can use the lvalue mechanism of creating missing fields if
               // necessary.
-              expr = convertToLValue(unary, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), false, true);
+              // NOTE: for postfix we need the beforeValue if result is being used.
+              postfix = convertToLValue(expr, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), true, true);
             }
-            else if (unary instanceof Expr.Identifier) {
-              unary.isLValue = true;
+            else if (expr instanceof Expr.Identifier) {
+              expr.isLValue = true;
+            }
+            expr = postfix;
+            break;
+          }
+          default: {
+            advanceIgnoreEol();
+            
+            // Set flag if next token is '(' so that we can check for x.(y).z below
+            boolean bracketedExpression = peek().is(LEFT_PAREN);
+            
+            Expr rhs;
+            switch (operator.getType()) {
+              case LEFT_SQUARE: case QUESTION_SQUARE: {
+                // '[' and '?[' can be followed by any expression and then a ']'
+                // Allow a comma separated list as syntactic sugar for a chain of [][][]...
+                rhs = ifUnlessExpr(true);
+                while (true) {
+                  if (!peekIgnoreEolIs(COMMA)) {
+                    break;
+                  }
+                  expectOrNull(true, COMMA);
+                  expr = new Expr.Binary(expr, operator, rhs);
+                  operator = new Token(LEFT_SQUARE, previous());  // pretend comma was '['
+                  rhs = ifUnlessExpr(true);
+                }
+                expectOrNull(true, RIGHT_SQUARE);
+                break;
+              }
+              case DOT: case QUESTION_DOT:
+                if (peek().is(LEFT_SQUARE, QUESTION_SQUARE)) {
+                  unexpected("invalid token after '" + operator.getChars() + "'");
+                }
+                // Fall through:
+              default:
+                rhs = parseExpression(nextPrecedence + (isLeftAssociative ? 0 : -1));
+            }
+            
+            // For List/Map literals that are constant values (no expressions) we compile as class
+            // static consts if they are used in contexts where it is obvious that the values won't
+            // be mutated:
+            // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
+            switch (operator.getType()) {
+              case IN: case BANG_IN: case EQUAL_EQUAL: case BANG_EQUAL: case TRIPLE_EQUAL:
+              case BANG_EQUAL_EQUAL: case LEFT_SQUARE: case QUESTION_SQUARE:
+                if (expr.isLiteral() && Utils.isConstListOrMap(expr)) {
+                  expr.isConst = true;
+                  expr.constValue = getLiteralValue(expr);
+                  addClassConstant(expr);
+                }
+                if (rhs.isLiteral() && Utils.isConstListOrMap(rhs)) {
+                  rhs.isConst = true;
+                  rhs.constValue = getLiteralValue(rhs);
+                  addClassConstant(rhs);
+                }
+            }
+            
+            // Check for lvalue for assignment operators
+            if (operator.getType().isAssignmentLike()) {
+              expr = convertToLValue(expr, operator, rhs, false, true);
+            }
+            else {
+              // Check for '.' and '?.' where we treat identifiers as literals for field access.
+              // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
+              // Note: we checked for '(' immediately after the '.' so we can use value of y if
+              // expression is something like x.(y)
+              if (operator.is(DOT, QUESTION_DOT) && rhs instanceof Expr.Identifier && !bracketedExpression) {
+                rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
+              }
+              
+              // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"
+              // by default, we need to strip off the "it =~" and replace with current one
+              if (operator.is(EQUAL_GRAVE, BANG_GRAVE)) {
+                if (rhs instanceof Expr.RegexMatch && ((Expr.RegexMatch) rhs).implicitItMatch) {
+                  if (rhs instanceof Expr.RegexSubst && operator.is(BANG_GRAVE)) {
+                    error("Operator '!~' cannot be used with regex substitution", operator);
+                  }
+                  Expr.RegexMatch regex = (Expr.RegexMatch) rhs;
+                  regex.string = expr;
+                  regex.operator = operator;
+                  regex.implicitItMatch = false;
+                  expr = regex;
+                }
+                else if (isImplicitRegexSubstitute(rhs)) {
+                  if (operator.is(BANG_GRAVE)) {
+                    error("Operator '!~' cannot be used with regex substitution", operator);
+                  }
+                  Expr.RegexSubst regexSubst = (Expr.RegexSubst) ((Expr.VarOpAssign) rhs).expr;
+                  regexSubst.implicitItMatch = false;
+                  expr = convertToLValue(expr, operator, regexSubst, false, false);
+                }
+                else {
+                  expr = new Expr.RegexMatch(expr, operator, rhs, "", false);
+                }
+              }
+              else {
+                expr = new Expr.Binary(expr, operator, rhs);
+              }
             }
           }
-          mark2.done(prefixExpr);
-        }
-        catch (CompileError error) {
-          mark2.error(error);
-          // Don't throw since we want to keep parsing to gather more errors (if there are any)
         }
       }
-      else {
-        expr = parseExpression(precedenceLevel + 1);
-      }
-
-      if (matchAny(PLUS_PLUS, MINUS_MINUS)) {
-        Token operator = previous();
-        Expr postfix = new Expr.PostfixUnary(expr, operator);
-        mark.done(postfix);
-        if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(Utils.fieldAccessOp)) {
-          // If we are acting on a field (rather than directly on a variable) then
-          // we might need to create intermediate fields etc so turn the inc/dec
-          // into the equivalent of:
-          //   a.b.c++ ==> a.b.c += 1
-          //   a.b.c-- ==> a.b.c -= 1
-          // That way we can use the lvalue mechanism of creating missing fields if
-          // necessary.
-          // NOTE: for postfix we need the beforeValue if result is being used.
-          postfix = convertToLValue(expr, operator, new Expr.Literal(new Token(BYTE_CONST, operator).setValue(1)), true, true);
-        }
-        else if (expr instanceof Expr.Identifier) {
-          expr.isLValue = true;
-        }
-        return postfix;
-      }
-      mark.drop();
-      return expr;
     }
     catch (CompileError error) {
-      mark.drop();
-      throw error;
+      skipUntil(EOL, EOF, COMMA);
+      return expr;
     }
   }
 
@@ -2063,7 +2048,8 @@ public class Parser {
   }
 
   private Expr _primary(Token prev) {
-    switch (peek().getType()) {
+    Token next = peek();
+    switch (next.getType()) {
       case PLUS:          case MINUS:
       case BYTE_CONST:    case INTEGER_CONST: case TRUE:
       case DECIMAL_CONST: case DOUBLE_CONST:  case FALSE:
@@ -3963,40 +3949,22 @@ public class Parser {
   }
 
   /**
-   * Create a call expr. The result will be an Expr.Call for runtime lookup of
-   * method or an Expr.MethodCall if we have enough information that we might be
-   * able to do a compile time lookup during Resolver phase.
+   * Create a Call or MethodCall expr
    */
   private static Expr createCallExpr(Expr callee, Token leftParen, List<Expr> args) {
-    // When calling a method on an object where we don't know the type we must be
-    // able to dynamically lookup up the method. The problem is that the method
-    // name might also be the name of a field in a map but we still want to invoke
-    // the method rather than look for a method handle in the field.
-    // Consider this example:  Map m = [size:{it*it}]; m.size()
-    // We want to invoke the Map.size() method not get the value of the size field
-    // and invoke it.
-    // In order to know whether the field lookup is looking up a field or a method
-    // we mark the callee with a flag so we can tell at compile time what type of
-    // look up to do. (Note that if there is not a method of that name we then
-    // we fallback to looking for a field.)
     callee.isCallee = true;
-
-    // Turn x.a.b(args) into Expr.Call(x.a, b, args) so that we can check at compile
-    // time if x.a.b is a method (if we know type of a.x) or not.
     if (callee instanceof Expr.Binary) {
-      Expr.Binary binaryExpr = (Expr.Binary) callee;
-      // Make sure we have a '.' or '.?' which means we might have a method call
-      if (binaryExpr.operator.is(DOT, QUESTION_DOT)) {
+      Expr.Binary binary = (Expr.Binary) callee;
+      if (binary.operator.is(DOT,QUESTION_DOT)) {
+        // Turn into MethodCall if we know method name
         // Get potential method name if right-hand side of '.' is a string or identifier
-        String methodName = getStringValue(binaryExpr.right);
+        String methodName = getStringValue(binary.right);
         if (methodName != null) {
-          return new Expr.MethodCall(leftParen, binaryExpr.left, binaryExpr.operator, methodName, binaryExpr.right.location, binaryExpr.right, args);
+          return new Expr.MethodCall(leftParen, binary.left, binary.operator, methodName, binary.right.location, binary.right, args);
         }
       }
     }
-
-    Expr.Call expr = new Expr.Call(leftParen, callee, args);
-    return expr;
+    return new Expr.Call(leftParen, callee, args);
   }
 
   private static String getStringValue(Expr expr) {

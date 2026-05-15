@@ -231,10 +231,62 @@ public class Utils {
       Pair.of(true, new TokenType[] {MINUS, PLUS}),
       Pair.of(true, new TokenType[] {STAR, SLASH, PERCENT, PERCENT_PERCENT}),
       //      Utils.listOf(STAR_STAR)
-      Pair.of(true, unaryOps),
+      //Pair.of(true, unaryOps),
+      Pair.of(false, new TokenType[] { QUESTION_QUESTION, GRAVE, BANG, MINUS_MINUS, PLUS_PLUS }),
       Pair.of(true, Stream.concat(Arrays.stream(fieldAccessOp), Stream.of(LEFT_PAREN, LEFT_BRACE)).toArray(TokenType[]::new))
     );
 
+  static int[]     operatorPrecedence  = new int[TokenType.values().length];
+  static boolean[] operatorIsLeftAssoc = new boolean[TokenType.values().length];
+  static {
+    Arrays.fill(operatorPrecedence, -1);
+    
+    int MIN = 0;
+    
+    // These can be the start of terms so they have MIN precedence (but still higher than default -1)
+    operatorPrecedence[IDENTIFIER.ordinal()] = MIN;
+    operatorPrecedence[DOLLAR_IDENTIFIER.ordinal()] = MIN;
+    operatorPrecedence[INTEGER_CONST.ordinal()] = MIN;
+    operatorPrecedence[LONG_CONST.ordinal()] = MIN;
+    operatorPrecedence[DOUBLE_CONST.ordinal()] = MIN;
+    operatorPrecedence[DECIMAL_CONST.ordinal()] = MIN;
+    operatorPrecedence[BYTE_CONST.ordinal()] = MIN;
+    operatorPrecedence[STRING_CONST.ordinal()] = MIN;
+    operatorPrecedence[TokenType.NULL.ordinal()] = MIN;
+    operatorPrecedence[REGEX_REPLACE.ordinal()] = MIN;
+    operatorPrecedence[REGEX_SUBST_START.ordinal()] = MIN;
+    operatorPrecedence[UNDERSCORE.ordinal()] = MIN;
+    operatorPrecedence[TRUE.ordinal()] = MIN;
+    operatorPrecedence[FALSE.ordinal()] = MIN;
+    operatorPrecedence[EXPR_STRING_START.ordinal()] = MIN;
+    operatorPrecedence[EXPR_STRING_START.ordinal()] = MIN;
+    operatorPrecedence[TokenType.NEW.ordinal()] = MIN;
+    operatorPrecedence[TokenType.INT.ordinal()] = MIN;
+    operatorPrecedence[TokenType.BYTE.ordinal()] = MIN;
+    operatorPrecedence[TokenType.BOOLEAN.ordinal()] = MIN;
+    operatorPrecedence[TokenType.DOUBLE.ordinal()] = MIN;
+    operatorPrecedence[TokenType.DECIMAL.ordinal()] = MIN;
+    operatorPrecedence[TokenType.STRING.ordinal()] = MIN;
+    operatorPrecedence[TokenType.OBJECT.ordinal()] = MIN;
+    operatorPrecedence[TokenType.DEF.ordinal()] = MIN;
+    
+    for (int i = 0; i < operatorsByPrecedence.size(); i++) {
+      Pair<Boolean, TokenType[]> pair = operatorsByPrecedence.get(i);
+      for (TokenType type: pair.second) {
+        operatorPrecedence[type.ordinal()] = i + 1;   // i + 1 to make higher than MIN
+        operatorIsLeftAssoc[type.ordinal()] = pair.first;
+      }
+    }
+  }
+  
+  public static int precedence(Token type) {
+    return operatorPrecedence[type.getType().ordinal()];
+  }
+  
+  public static boolean isLeftAssoc(Token type) {
+    return operatorIsLeftAssoc[type.getType().ordinal()];
+  }
+  
   private static Set<TokenType> operators = new HashSet<TokenType>() {{
     addAll(Arrays.asList(fieldAccessOp));
     addAll(Arrays.asList(unaryOps));

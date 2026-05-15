@@ -206,8 +206,8 @@ public class CompilerTest3 extends BaseTest {
     test("('123'\n[2])", "3");
     test("def x=[1,2,3]; x\n[2]", Utils.listOf(2));
     test("def x=[1,2,3]; def f={it}; f(x\n[2])", 3);
-    test("def x = 1; ++\n++\nx\n++\n++\nx\nx", 3);
-    testError("def x = 1; ++\n++\nx\n++\n++", "expected start of expression");
+    testError("def x = 1; ++\n++\nx\n++\n++\nx\nx", "cannot be used here");
+    testError("def x = 1; ++\n++\nx\n++\n++", "cannot be used here");
     test("[\n1\n,\n2\n,\n3\n]", Utils.listOf(1,2,3));
     test("def f(x\n,\ny\n)\n{\nx\n+\ny\n}\nf(1,2)", 3);
     testError("4\n/2", "unexpected end of file in string");
