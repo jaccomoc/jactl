@@ -731,25 +731,25 @@ public class Utils {
 
   public static boolean isLowerCase(String s) {
     for (int i = 0; i < s.length(); i++) {
-      char ch = s.charAt(i);
-      if (!Character.isLowerCase(ch) && !Character.isDigit(ch) && ch != '_') {
-        return false;
+      if (isLower(s.charAt(i))) {
+        continue;
       }
+      return false;
     }
     return true;
   }
 
   public static boolean isValidClassName(String s) {
-    if (!Character.isUpperCase(s.charAt(0))) {
-      return false;
-    }
-    for (int i = 1; i < s.length(); i++) {
-      char ch = s.charAt(i);
-      if (ch == '$' || !Character.isJavaIdentifierPart(ch)) {
-        return false;
+    if (isUpper(s.charAt(0))) {
+      for (int i = 1; i < s.length(); i++) {
+        char ch = s.charAt(i);
+        if (!isIdentifierPart(ch)) {
+          return false;
+        }
       }
+      return true;
     }
-    return true;
+    return false;
   }
 
   public static boolean isNamedArgs(List<Expr> args) {
@@ -1123,7 +1123,8 @@ public class Utils {
 
   public static boolean isDigits(String str) {
     for (int i = 0; i < str.length(); i++) {
-      if (!Character.isDigit(str.charAt(i))) {
+      char ch = str.charAt(i);
+      if (ch < '0' || ch > '9') {
         return false;
       }
     }
@@ -1305,9 +1306,33 @@ public class Utils {
     return idx == -1 ? str : str.substring(0, idx);
   }
   
+  private static final boolean[] isUpperCase = new boolean[128];
+  private static final boolean[] isLowerCase = new boolean[128];
+  static {
+    for (int i = 0; i < 128; i++) {
+      isUpperCase[i] = Character.isUpperCase(i);
+      isLowerCase[i] = Character.isLowerCase(i);
+    }
+  }
+  
+  private static boolean isUpper(char c) {
+    if (c < 128) {
+      return isUpperCase[c];
+    }
+    return Character.isUpperCase(c);
+  }
+  
+  private static boolean isLower(char c) {
+    if (c < 128) {
+      return isLowerCase[c];
+    }
+    return Character.isLowerCase(c);
+  }
+  
   public static boolean hasUpperCase(String str) {
     for (int i = 0; i < str.length(); i++) {
-      if (Character.isUpperCase(str.charAt(i))) {
+      char ch = str.charAt(i);
+      if (isUpper(ch)) {
         return true;
       }
     }
@@ -1324,11 +1349,20 @@ public class Utils {
       return true;
     }
     if (expr instanceof Expr.ListLiteral) {
-      return ((Expr.ListLiteral) expr).exprs.stream().allMatch(Utils::isConstListOrMap);
+      for (Expr e: ((Expr.ListLiteral) expr).exprs) {
+        if (!isConstListOrMap(e)) {
+          return false;
+        }
+      }
+      return true;
     }
     if (expr instanceof Expr.MapLiteral) {
-      return ((Expr.MapLiteral) expr).entries.stream().allMatch(entry -> isConstListOrMap(entry.first) &&
-                                                                         isConstListOrMap(entry.second));
+      for (Pair<Expr,Expr> p: ((Expr.MapLiteral) expr).entries) {
+        if (!isConstListOrMap(p.first) || !isConstListOrMap(p.second)) {
+          return false;
+        }
+      }
+      return true;
     }
     return false;
   }
@@ -1338,11 +1372,17 @@ public class Utils {
       return ((Expr.Literal) expr).value.getValue();
     }
     if (expr instanceof Expr.ListLiteral) {
-      return ((Expr.ListLiteral) expr).exprs.stream().map(Utils::literalValue).collect(Collectors.toList());
+      ArrayList<Object> list = new ArrayList<>();
+      for (Expr e: ((Expr.ListLiteral) expr).exprs) {
+        list.add(Utils.literalValue(e));
+      }
+      return list;
     }
     if (expr instanceof Expr.MapLiteral) {
       Map map = new LinkedHashMap();
-      ((Expr.MapLiteral) expr).entries.stream().forEach(pair -> map.put(literalValue(pair.first), literalValue(pair.second)));
+      for (Pair<Expr,Expr> p: ((Expr.MapLiteral) expr).entries) {
+        map.put(Utils.literalValue(p.first), Utils.literalValue(p.second));
+      }
       return map;
     }
     throw new RuntimeException("Unexpected type " + expr.getClass().getName());
@@ -1355,5 +1395,20 @@ public class Utils {
     } catch (NoSuchMethodException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private static final boolean[] isIdentPart = new boolean[128];
+  static {
+    for (int i = 0; i < 128; i++) {
+      isIdentPart[i] = Character.isJavaIdentifierPart(i);
+    }
+    isIdentPart['$'] = false;
+  }
+
+  public static boolean isIdentifierPart(int c) {
+    if (c < 128) {
+      return isIdentPart[c];
+    }
+    return Character.isJavaIdentifierPart(c);
   }
 }

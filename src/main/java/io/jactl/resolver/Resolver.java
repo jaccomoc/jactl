@@ -349,7 +349,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     JactlClassDescriptor       outerClass           = outerClassDecl == null || outerClassDecl.isScriptClass() && jactlContext.replMode ? null : outerClassDecl.classDescriptor;
     //List<JactlClassDescriptor> interfaces           = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
     List<JactlClassDescriptor> interfaces = Collections.EMPTY_LIST;
-    boolean                    allFieldsAreDefaults = classDecl.fields.stream().allMatch(field -> Utils.isDefaultValue(field.declExpr));
+    boolean allFieldsAreDefaults = true;
+    for (Stmt.VarDecl field: classDecl.fields) {
+      if (!Utils.isDefaultValue(field.declExpr)) {
+        allFieldsAreDefaults = false;
+        break;
+      }
+    }
     JactlClassDescriptor classDescriptor = outerClass == null ? new JactlClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, classDecl.packageName, classDecl.baseClass, interfaces, allFieldsAreDefaults)
                                                               : new JactlClassDescriptor(classDecl.name.getStringValue(), classDecl.isInterface, jactlContext.javaPackage, outerClass, classDecl.baseClass, interfaces, allFieldsAreDefaults);
     classDecl.classDescriptor = classDescriptor;
@@ -368,7 +374,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Do same for our inner classes where we now become the outerclass
     classDecl.innerClasses.forEach(innerClass -> createClassDescriptors(innerClass, classDecl));
-    classDecl.classDescriptor.addInnerClasses(classDecl.innerClasses.stream().map(decl -> decl.classDescriptor).collect(Collectors.toList()));
+    classDecl.innerClasses.forEach(decl -> classDecl.classDescriptor.addInnerClass(decl.classDescriptor));
   }
 
   private void prepareClass(Stmt.ClassDecl classDecl) {
@@ -831,7 +837,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     try {
       // We first define our nested functions so that we can support
       // forward references to functions declared at same level as us
-      stmt.functions.stream().map(nested -> nested.declExpr).forEach(nested -> {
+      stmt.functions.forEach(fn -> {
+        Expr.FunDecl nested = fn.declExpr;
         nested.varDecl.owner = currentFunction();
         define(nested.nameToken, nested.varDecl);
       });
@@ -2057,7 +2064,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           error("Host class method invocation does not support named arguments", expr.leftParen);
           return expr.type = ANY;
         }
-        List<JactlType> argTypes = expr.args.stream().map(a -> a.type).collect(Collectors.toList());
+        List<JactlType> argTypes = new ArrayList<>();
+        for (Expr arg: expr.args) {
+          argTypes.add(arg.type);
+        }
         Method m = jactlContext.findMatchingMethod(parentType.getJavaClass(), expr.methodName, argTypes, parentType.is(CLASS), msg -> { throw new CompileError(msg, expr.location); });
         return expr.type = jactlContext.typeFromClass(m.getReturnType());
       }
@@ -2808,7 +2818,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         ClassDescriptor importedClass = imports.importedClasses.get(firstClass);
         if (importedClass == null) {
           // Check imported packages for a Jactl class
-          importedClass = imports.importedPackages.stream().map(pkg -> jactlContext.getClassDescriptor(pkg, firstClass)).filter(Objects::nonNull).findFirst().orElse(null);
+          for (String pkg: imports.importedPackages) {
+            JactlClassDescriptor desc = jactlContext.getClassDescriptor(pkg, firstClass);
+            if (desc != null) {
+              importedClass = desc;
+              break;
+            }
+          }
         }
         if (importedClass == null && jactlContext.allowHostAccess) {
           // Check for a host class
@@ -3118,7 +3134,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private boolean inStaticContext() {
-    return getFunctions().stream().anyMatch(func -> func.isStatic());
+    for (Expr.FunDecl funDecl: getFunctions()) {
+      if (funDecl.isStatic()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /////////////////////////////////////////////////
@@ -3514,19 +3535,21 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Assign values for all fields. Mandatory fields get values from corresponding parameter and optional fields
     // are assigned from their initialiser.
-    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isConstVar).forEach(entry -> {
-      Expr.VarDecl varDecl = entry.getValue();
-      Token fieldToken     = varDecl.name;
-      Token paramToken     = fieldToken.newIdent(paramName.apply(fieldToken.getStringValue()));
-      Expr value = varDecl.initialiser == null ? new Expr.Identifier(paramToken)
-                                               : varDecl.initialiser;
-      Expr.FieldAssign assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
-                                                     new Token(DOT, fieldToken),
-                                                     new Expr.Literal(fieldToken),
-                                                     new Token(EQUAL, fieldToken),
-                                                     value);
-      assign.isResultUsed = false;
-      initStmts.stmts.add(new Stmt.ExprStmt(fieldToken, assign));
+    classDecl.fieldVars.entrySet().forEach(entry -> {
+      if (!entry.getValue().isConstVar) {
+        Expr.VarDecl varDecl    = entry.getValue();
+        Token        fieldToken = varDecl.name;
+        Token        paramToken = fieldToken.newIdent(paramName.apply(fieldToken.getStringValue()));
+        Expr value = varDecl.initialiser == null ? new Expr.Identifier(paramToken)
+                                                 : varDecl.initialiser;
+        Expr.FieldAssign assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
+                                                       new Token(DOT, fieldToken),
+                                                       new Expr.Literal(fieldToken),
+                                                       new Token(EQUAL, fieldToken),
+                                                       value);
+        assign.isResultUsed = false;
+        initStmts.stmts.add(new Stmt.ExprStmt(fieldToken, assign));
+      }
     });
     // Finally, return "this"
     initStmts.stmts.add(new Stmt.Return(token,
@@ -3625,28 +3648,30 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Assign value to each field from map or from initialiser
     Expr.Literal trueLiteral = new Expr.Literal(new Token(TRUE, classToken).setValue(true));
-    classDecl.fieldVars.entrySet().stream().filter(e -> !e.getValue().isConstVar).forEach(entry -> {
-      Expr.VarDecl varDecl          = entry.getValue();
-      Token        fieldToken       = varDecl.name;
-      Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
-      Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.REMOVE_OR_THROW_METHOD,
-                                                                        Utils.listOf(argMapIdent, fieldNameLiteral,
-                                                                               trueLiteral, new Expr.Identifier(sourceToken), new Expr.Identifier(offsetToken)))
-                                               : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, Utils.MAP_CONTAINS_KEY_METHOD, Utils.listOf(argMapIdent, fieldNameLiteral)),
-                                                                 new Token(QUESTION, fieldToken),
-                                                                 new Expr.Cast(fieldToken, varDecl.type,
-                                                                               new Expr.InvokeUtility(fieldToken, Utils.MAP_REMOVE_METHOD, Utils.listOf(argMapIdent, fieldNameLiteral))),
-                                                                 new Token(COLON, fieldToken),
-                                                                 new Expr.Cast(fieldToken, varDecl.type, varDecl.initialiser));
-      value.isInitialiser = true;
-      Expr.FieldAssign assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
-                                                     new Token(DOT, fieldToken),
-                                                     new Expr.Literal(fieldToken),
-                                                     new Token(EQUAL, fieldToken),
-                                                     value);
+    classDecl.fieldVars.entrySet().forEach(entry -> {
+      if (!entry.getValue().isConstVar) {
+        Expr.VarDecl varDecl          = entry.getValue();
+        Token        fieldToken       = varDecl.name;
+        Expr.Literal fieldNameLiteral = new Expr.Literal(new Token(STRING_CONST, fieldToken).setValue(fieldToken.getStringValue()));
+        Expr value = varDecl.initialiser == null ? new Expr.InvokeUtility(fieldToken, RuntimeUtils.REMOVE_OR_THROW_METHOD,
+                                                                          Utils.listOf(argMapIdent, fieldNameLiteral,
+                                                                                       trueLiteral, new Expr.Identifier(sourceToken), new Expr.Identifier(offsetToken)))
+                                                 : new Expr.Ternary(new Expr.InvokeUtility(fieldToken, Utils.MAP_CONTAINS_KEY_METHOD, Utils.listOf(argMapIdent, fieldNameLiteral)),
+                                                                    new Token(QUESTION, fieldToken),
+                                                                    new Expr.Cast(fieldToken, varDecl.type,
+                                                                                  new Expr.InvokeUtility(fieldToken, Utils.MAP_REMOVE_METHOD, Utils.listOf(argMapIdent, fieldNameLiteral))),
+                                                                    new Token(COLON, fieldToken),
+                                                                    new Expr.Cast(fieldToken, varDecl.type, varDecl.initialiser));
+        value.isInitialiser = true;
+        Expr.FieldAssign assign = new Expr.FieldAssign(new Expr.Identifier(fieldToken.newIdent(Utils.THIS_VAR)),
+                                                       new Token(DOT, fieldToken),
+                                                       new Expr.Literal(fieldToken),
+                                                       new Token(EQUAL, fieldToken),
+                                                       value);
 
-      assign.isResultUsed = false;
-      wrapperSmts.stmts.add(new Stmt.ExprStmt(fieldToken, assign));
+        assign.isResultUsed = false;
+        wrapperSmts.stmts.add(new Stmt.ExprStmt(fieldToken, assign));
+      }
     });
 
     // If we created arg map copy (arg0 isn't NamedArgsMapCopy) then check that there are no additional arg values left in named args map

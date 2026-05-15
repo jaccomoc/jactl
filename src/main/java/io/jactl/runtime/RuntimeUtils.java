@@ -728,18 +728,18 @@ public class RuntimeUtils {
       }
       // Have two instances of same class so check that each field is equal
       Map<String, Object> fieldAndMethods = ((JactlObject) leftObj)._$j$getFieldsAndMethods();
-      for (Iterator<Map.Entry<String, Object>> iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
-           iter.hasNext(); ) {
-        Map.Entry<String, Object> entry = iter.next();
-        Field                     field = (Field) entry.getValue();
-        try {
-          // If field values differ then we are done
-          if (!isEquals(field.get(leftObj), field.get(rightObj), source, offset)) {
-            return operator == BANG_EQUAL;
+      for (Map.Entry<String, Object> entry: fieldAndMethods.entrySet()) {
+        if (entry.getValue() instanceof Field) {
+          Field field = (Field) entry.getValue();
+          try {
+            // If field values differ then we are done
+            if (!isEquals(field.get(leftObj), field.get(rightObj), source, offset)) {
+              return operator == BANG_EQUAL;
+            }
           }
-        }
-        catch (IllegalAccessException e) {
-          throw new IllegalStateException("Internal error: accessing field '" + entry.getKey() + "': " + e, e);
+          catch (IllegalAccessException e) {
+            throw new IllegalStateException("Internal error: accessing field '" + entry.getKey() + "': " + e, e);
+          }
         }
       }
       return operator == EQUAL_EQUAL;
@@ -747,23 +747,23 @@ public class RuntimeUtils {
 
     if (leftObj instanceof JactlObject && rightObj instanceof Map || leftObj instanceof Map && rightObj instanceof JactlObject) {
       Map<String,Object> map = (Map<String,Object>)(leftObj instanceof Map ? leftObj : rightObj);
-      JactlObject       obj = (JactlObject)(leftObj instanceof JactlObject ? leftObj : rightObj);
-      Set<String>         mapKeys         = new HashSet<>(map.keySet());
+      JactlObject        obj = (JactlObject)(leftObj instanceof JactlObject ? leftObj : rightObj);
+      Set<String> mapKeys = new HashSet<>(map.keySet());
       Map<String, Object> fieldAndMethods = obj._$j$getFieldsAndMethods();
-      for (Iterator<Map.Entry<String, Object>> iter = fieldAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).iterator();
-           iter.hasNext(); ) {
-        Map.Entry<String, Object> entry = iter.next();
-        Field                     field = (Field) entry.getValue();
-        String key  = entry.getKey();
-        try {
-          // If field values differ then we are done
-          if (!isEquals(field.get(obj), map.get(key), source, offset)) {
-            return operator == BANG_EQUAL;
+      for (Map.Entry<String, Object> entry: fieldAndMethods.entrySet()) {
+        if (entry.getValue() instanceof Field) {
+          Field  field = (Field) entry.getValue();
+          String key   = entry.getKey();
+          try {
+            // If field values differ then we are done
+            if (!isEquals(field.get(obj), map.get(key), source, offset)) {
+              return operator == BANG_EQUAL;
+            }
+            mapKeys.remove(key);
           }
-          mapKeys.remove(key);
-        }
-        catch (IllegalAccessException e) {
-          throw new IllegalStateException("Internal error: accessing field '" + key + "': " + e, e);
+          catch (IllegalAccessException e) {
+            throw new IllegalStateException("Internal error: accessing field '" + key + "': " + e, e);
+          }
         }
       }
       if (mapKeys.size() > 0) {
@@ -1077,6 +1077,10 @@ public class RuntimeUtils {
     return doToString(obj, new HashSet<>(), "", indent);
   }
 
+  public static String _toString(Object obj) {
+    return doToString(obj, null, "", 0);
+  }
+  
   /**
    * Output a nice string form.
    *
@@ -1100,7 +1104,7 @@ public class RuntimeUtils {
     if (obj instanceof List || obj instanceof Map || obj instanceof JactlObject || obj.getClass().isArray()) {
       // If we have already visited this object then we have a circular reference so to avoid infinite recursion
       // we output "<CIRCULAR_REF>"
-      if (!previousObjects.add(System.identityHashCode(obj))) {
+      if (previousObjects != null && !previousObjects.add(System.identityHashCode(obj))) {
         return "<CIRCULAR_REF>";
       }
     }
@@ -1192,25 +1196,27 @@ public class RuntimeUtils {
         sb.append(']');
         return sb.toString();
       }
-
-      if (obj instanceof BigDecimal) {
-        return ((BigDecimal)obj).toPlainString();
-      }
-
-      if (obj instanceof JactlMethodHandle) {
-        return "Function@" + System.identityHashCode(obj);
-      }
-
-      if (obj instanceof Byte) {
-        return Integer.toString(((int)(byte)obj) & 0xff);
-      }
-
-      // All other types use default toString()
-      return obj.toString();
     }
     finally {
-      previousObjects.remove(System.identityHashCode(obj));
+      if (previousObjects != null) {
+        previousObjects.remove(System.identityHashCode(obj));
+      }
     }
+
+    if (obj instanceof BigDecimal) {
+      return ((BigDecimal)obj).toPlainString();
+    }
+    
+    if (obj instanceof JactlMethodHandle) {
+      return "Function@" + System.identityHashCode(obj);
+    }
+    
+    if (obj instanceof Byte) {
+      return Integer.toString(((int)(byte)obj) & 0xff);
+    }
+    
+    // All other types use default toString()
+    return obj.toString();
   }
 
   private static String byteArrayToString(byte[] array) {
@@ -2711,7 +2717,11 @@ public class RuntimeUtils {
       offsets.add(lastOffset);
     }
     offsets.add(str.length() + 1);
-    return offsets.stream().mapToInt(i -> i).toArray();
+    int[] offArr = new int[offsets.size()];
+    for (int i = 0; i < offsets.size(); i++) {
+      offArr[i] = offsets.get(i);
+    }
+    return offArr;
   }
 
   /**
@@ -2915,7 +2925,12 @@ public class RuntimeUtils {
     if (obj instanceof String) { return ((String)obj).chars().mapToObj(c -> String.valueOf((char)c)).collect(Collectors.toList()); }
     if (obj instanceof Map) {
       Map<Object,Object> map = (Map)obj;
-      return map.entrySet().stream().map(e -> Utils.listOf(e.getKey(), e.getValue())).collect(Collectors.toList());
+      List<List<Object>> list = new ArrayList<>();
+      for (Map.Entry<Object, Object> e : map.entrySet()) {
+        List<Object> objects = Utils.listOf(e.getKey(), e.getValue());
+        list.add(objects);
+      }
+      return list;
     }
     if (obj instanceof Object[]) {
       return Arrays.asList((Object[])obj);
@@ -2981,21 +2996,22 @@ public class RuntimeUtils {
       Map<String,Object> fieldsAndMethods = ((JactlObject)obj)._$j$getFieldsAndMethods();
       Map result = new LinkedHashMap();   // Utils.JACTL_MAP_TYPE
       fieldValues.put(obj,result);        // We use this to detect circular references
-      fieldsAndMethods.entrySet().stream().filter(entry -> entry.getValue() instanceof Field).forEach(entry -> {
-        String field = entry.getKey();
-        try {
-          Object value = ((Field) entry.getValue()).get(obj);
-          if (value instanceof JactlObject) {
-            // Check we don't already have a value for this object due to circular reference somewhere
-            value = fieldValues.get(value);
-            if (value == null) {
-              value = doAsMap(value, source, offset, fieldValues);
+      fieldsAndMethods.forEach((field, value1) -> {
+        if (value1 instanceof Field) {
+          try {
+            Object value = ((Field) value1).get(obj);
+            if (value instanceof JactlObject) {
+              // Check we don't already have a value for this object due to circular reference somewhere
+              value = fieldValues.get(value);
+              if (value == null) {
+                value = doAsMap(value, source, offset, fieldValues);
+              }
             }
+            result.put(field, value);
           }
-          result.put(field, value);
-        }
-        catch (IllegalAccessException e) {
-          throw new IllegalStateException("Internal error: problem accessing field '" + field + "': " + e, e);
+          catch (IllegalAccessException e) {
+            throw new IllegalStateException("Internal error: problem accessing field '" + field + "': " + e, e);
+          }
         }
       });
       return result;
@@ -3051,7 +3067,11 @@ public class RuntimeUtils {
   public static final MethodRef CHECK_FOR_EXTRA_ARGS_METHOD = Utils.getMethod(RuntimeUtils.class, "checkForExtraArgs", Map.class, boolean.class, String.class, int.class);
   public static boolean checkForExtraArgs(Map<String,Object> map, boolean isInitMethod, String source, int offset) {
     if (!map.isEmpty()) {
-      String names = map.keySet().stream().collect(Collectors.joining(", "));
+      StringJoiner joiner = new StringJoiner(", ");
+      for (String s : map.keySet()) {
+        joiner.add(s);
+      }
+      String names = joiner.toString();
       throw new RuntimeError("No such " + (isInitMethod ? "field" : "parameter") + (map.size() > 1 ? "s":"") + ": " + names, source, offset);
     }
     return true;

@@ -790,17 +790,34 @@ public class JactlContext {
         errorHandler.accept("Multiple methods named " + methodName + " found in class " + parentClass.getName());
       }
       // Try to find matching method based on exact arg types
-      List<Method> exactMethods = methods.stream().filter(m -> this.paramsMatchArgs(m.getParameterTypes(), argTypes, false)).collect(Collectors.toList());
+      List<Method> exactMethods = new ArrayList<>(); 
+      for (Method m: methods) {
+        if (paramsMatchArgs(m.getParameterTypes(), argTypes, false)) {
+          exactMethods.add(m);
+        }
+      }
       if (exactMethods.isEmpty()) {
         // Look for methods where arg types are "compatible"
-        methods = methods.stream().filter(m -> this.paramsMatchArgs(m.getParameterTypes(), argTypes, true)).collect(Collectors.toList());
+        List<Method> compatibleMethods = new ArrayList<>();
+        for (Method m : methods) {
+          if (paramsMatchArgs(m.getParameterTypes(), argTypes, true)) {
+            compatibleMethods.add(m);
+          }
+        }
+        methods = compatibleMethods;
       }
       else {
         methods = exactMethods;
       }
       if (methods.size() > 1) {
         // Eliminate methods belonging to base classes that have not been enabled
-        methods = methods.stream().filter(m -> this.allowHostClassLookup.test(m.getDeclaringClass().getName())).collect(Collectors.toList());
+        List<Method> enabledMethods = new ArrayList<>();
+        for (Method m: methods) {
+          if (allowHostClassLookup.test(m.getDeclaringClass().getName())) {
+            enabledMethods.add(m);
+          }
+        }
+        methods = enabledMethods;
       }
       if (methods.size() > 1) {
         errorHandler.accept("Multiple methods named '" + methodName + "' with compatible parameter types found class " + parentClass.getName());
@@ -833,14 +850,19 @@ public class JactlContext {
                                            .collect(Collectors.toList());
 
     // Find method that matches on arg types
-    List<JactlType> argTypes = args.stream().map(a -> a.type).collect(Collectors.toList());
+    List<JactlType> argTypes = new ArrayList<>(); 
+    for (Expr a: args) argTypes.add(a.type);
     boolean multipleConstructors = constructors.size() > 1;
     if (multipleConstructors) {
       // Try to find matching method based on exact arg types
-      constructors = constructors.stream().filter(c -> this.paramsMatchArgs(c.getParameterTypes(), argTypes, false)).collect(Collectors.toList());
+      List<Constructor> exactConstructors = new ArrayList<>();
+      for (Constructor c: constructors) if (paramsMatchArgs(c.getParameterTypes(), argTypes, false)) exactConstructors.add(c);
+      constructors = exactConstructors;
       if (constructors.isEmpty()) {
         // Look for constructors where arg types are "compatible"
-        constructors = constructors.stream().filter(c -> this.paramsMatchArgs(c.getParameterTypes(), argTypes, true)).collect(Collectors.toList());
+        List<Constructor> compatibleConstructors = new ArrayList<>();
+        for (Constructor c: constructors) if (paramsMatchArgs(c.getParameterTypes(), argTypes, true)) compatibleConstructors.add(c);
+        constructors = compatibleConstructors;
       }
       if (constructors.size() > 1) {
         throw new CompileError("Multiple constructors with compatible parameter types found in class " + parentClass.getName(), location);

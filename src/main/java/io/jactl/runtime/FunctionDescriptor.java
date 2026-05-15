@@ -106,8 +106,11 @@ public class FunctionDescriptor {
   
   public String getMethodDescriptor(JactlType returnType, List<JactlType> paramTypes) {
     // Method descriptor is return type followed by array of parameter types.
-    return Type.getMethodDescriptor(returnType.descriptorType(),
-                                    paramTypes.stream().map(JactlType::descriptorType).toArray(Type[]::new));
+    Type[] types = new Type[paramTypes.size()];
+    for (int i = 0; i < paramTypes.size(); i++) {
+      types[i] = paramTypes.get(i).descriptorType();
+    }
+    return Type.getMethodDescriptor(returnType.descriptorType(), types);
   }
   
   public List<String> getAliases() {

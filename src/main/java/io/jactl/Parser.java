@@ -443,13 +443,23 @@ public class Parser {
 
   private Stmt declaration(boolean inClassDecl) {
     matchAny(EOL);
-    return marked(false, () -> {
-      Stmt _decl = _declaration(inClassDecl);
-      if (_decl != null && !previousWas(EOL,EOF,SEMICOLON) && !peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
-        unexpected("Expecting end of statement");
-      }
-      return _decl;
-    }, EOL, EOF, SEMICOLON, RIGHT_BRACE);
+    return marked(false, inClassDecl ? this::declarationInClassDecl : this::declarationNotInClassDecl, EOL, EOF, SEMICOLON, RIGHT_BRACE);
+  }
+  
+  private Stmt declarationInClassDecl() {
+    Stmt _decl = _declaration(true);
+    if (_decl != null && !previousWas(EOL,EOF,SEMICOLON) && !peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
+      unexpected("Expecting end of statement");
+    }
+    return _decl;
+  }
+  
+  private Stmt declarationNotInClassDecl() {
+    Stmt _decl = _declaration(false);
+    if (_decl != null && !previousWas(EOL,EOF,SEMICOLON) && !peekIsEOL() && peek().isNot(EOF, SEMICOLON, RIGHT_BRACE)) {
+      unexpected("Expecting end of statement");
+    }
+    return _decl;
   }
 
   private Stmt _declaration(boolean inClassDecl) {
@@ -691,7 +701,16 @@ public class Parser {
    * </pre>
    */
   private List<Stmt.VarDecl> parameters(TokenType endToken) {
-    return marked(false, () -> _parameters(endToken), EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+    assert endToken.is(ARROW,RIGHT_PAREN);
+    return marked(false, endToken.is(RIGHT_PAREN) ? this::_parametersRightParen : this::_parametersArrow, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+  }
+  
+  private List<Stmt.VarDecl> _parametersArrow() {
+    return _parameters(ARROW);
+  }
+  
+  private List<Stmt.VarDecl> _parametersRightParen() {
+    return _parameters(RIGHT_PAREN);
   }
 
   private List<Stmt.VarDecl> _parameters(TokenType endToken) {
@@ -705,7 +724,7 @@ public class Parser {
           return null;
         }
       }
-      Stmt.VarDecl varDecl = marked(false, () -> singleVarWithOptionalType(ANY, false));
+      Stmt.VarDecl varDecl = marked(false, this::singleVarWithOptionalType);
       if (varDecl != null) {
         varDecl.declExpr.isParam = true;
         parameters.add(varDecl);
@@ -722,13 +741,13 @@ public class Parser {
     return parameters;
   }
 
-  private Stmt.VarDecl singleVarWithOptionalType(JactlType defaultType, boolean allowVarWithoutInitialiser) {
+  private Stmt.VarDecl singleVarWithOptionalType() {
     Token token = peekIgnoreEOL();
-    JactlType type = optionalType(defaultType);
+    JactlType type = optionalType(ANY);
     // Note that unlike a normal varDecl where commas separate different vars of the same type,
     // with parameters we expect a separate comma for parameter with a separate type for each one,
     // so we build up a list of singleVarDecl.
-    Stmt.VarDecl varDecl = singleVarDecl(type, false, false, true, false, allowVarWithoutInitialiser);
+    Stmt.VarDecl varDecl = singleVarDecl(type, false, false, true, false, false);
     varDecl.typeToken = token;
     return varDecl;
   }
@@ -926,7 +945,14 @@ public class Parser {
       Token      rhsName    = rhsToken.newIdent(Utils.JACTL_PREFIX + "multiAssign" + uniqueVarCnt++);
 
       Expr rhsExpr = expression();
-      Token firstVarTok = identifiers.stream().filter(p -> p.second.is(UNKNOWN)).map(p -> p.first).findFirst().orElse(null);
+      Token firstVarTok = null;
+      for (Triple<Token, JactlType, Token> p : identifiers) {
+        if (p.second.is(UNKNOWN)) {
+          Token first = p.first;
+          firstVarTok = first;
+          break;
+        }
+      }
       if (firstVarTok != null) {
         if (!(rhsExpr instanceof Expr.ListLiteral)) {
           error("Cannot infer type in multi-assignment (right-hand side is non-list type)", firstVarTok, false);
@@ -1114,12 +1140,24 @@ public class Parser {
       // If all statements are VarAssign, we turn them into VarDecls with type OPTIONAL and let Resolver
       // work out which ones are new vars and which ones are reusing existing vars.
       // If there are a mixture of VarAssign and other statements then we don't perform any modifications.
-      else if (initStmts.stream().allMatch(isVarAssign)) {
-        initialisation.stmts = initStmts.stream()
-                                        .map(s -> (Expr.VarAssign)(((Stmt.ExprStmt)s).expr))
-                                        .map(varAssign -> createVarDecl(varAssign.identifierExpr.identifier, OPTIONAL, varAssign.operator, varAssign.expr, false, false, false))
-                                        .collect(Collectors.toList());
-        firstVarDeclType = OPTIONAL;
+      else {
+        boolean allVarAsign = true;
+        for (Stmt initStmt : initStmts) {
+          if (!isVarAssign.test(initStmt)) {
+            allVarAsign = false;
+            break;
+          }
+        }
+        if (allVarAsign) {
+          List<Stmt> list = new ArrayList<>();
+          for (Stmt s : initStmts) {
+            Expr.VarAssign varAssign = (Expr.VarAssign) (((Stmt.ExprStmt) s).expr);
+            Stmt.VarDecl   varDecl   = createVarDecl(varAssign.identifierExpr.identifier, OPTIONAL, varAssign.operator, varAssign.expr, false, false, false);
+            list.add(varDecl);
+          }
+          initialisation.stmts = list;
+          firstVarDeclType = OPTIONAL;
+        }
       }
       
       if (firstVarDeclType != null && !firstVarDeclType.is(OPTIONAL)) {
@@ -1896,9 +1934,13 @@ public class Parser {
 
   private void skipUntil(List<TokenType> types) {
     if (!isLookahead() && !types.isEmpty()) {
-      if (previousWas(EOL) && types.stream().anyMatch(t -> t == EOL)) {
+      if (previousWas(EOL)) {
         // Special case for EOL if EOL caused the problem and we are skipping until EOL.
-        return;
+        for (TokenType t : types) {
+          if (t == EOL) {
+            return;
+          }
+        }
       }
       while (!peek().is(EOF) && peek().isNot(types)) {
         advance();
@@ -2235,7 +2277,12 @@ public class Parser {
           if (Utils.isValidClassName(token.getStringValue())) {
             if (!path.isEmpty()) {
               // Build package name
-              String pkg = path.stream().map(Token::getStringValue).collect(Collectors.joining("."));
+              StringJoiner joiner = new StringJoiner(".");
+              for (Token token1 : path) {
+                String stringValue = token1.getStringValue();
+                joiner.add(stringValue);
+              }
+              String pkg = joiner.toString();
               if (context.allowHostAccess) {
                 Marker hostAccessMark = tokeniser.markForRollback();
                 // Check for a host class. We need to parse entire class including nested classes
@@ -2612,7 +2659,14 @@ public class Parser {
     // is not just a reference to an identifier. We also check for any references to capture vars
     // greater than $9 in the replacement string since Java does not support them natively.
     // Check that we have a simple replacement string:
-    if (replace.exprList.stream().allMatch(this::isSimpleIdentOrLiteral)) {
+    boolean allSimpleOrLiteral = true;
+    for (Expr expr1 : replace.exprList) {
+      if (!isSimpleIdentOrLiteral(expr1)) {
+        allSimpleOrLiteral = false;
+        break;
+      }
+    }
+    if (allSimpleOrLiteral) {
       // Replace all capture vars with a String literal so that we leave them unexpanded and let
       // the Java replaceAll deal with them
       for (int i = 0; i < replace.exprList.size(); i++) {
@@ -3880,17 +3934,61 @@ public class Parser {
       @Override public Boolean visitForLoopIterHasNext(Expr.ForLoopIterHasNext expr)   { return true; }
 
 
-      @Override public Boolean visitExprList(Expr.ExprList expr)           { return expr.exprs.stream().allMatch(this::isSimple); }
-      @Override public Boolean visitCall(Expr.Call expr)                   { return isSimple(expr.callee) && expr.args.stream().allMatch(this::isSimple); }
-      @Override public Boolean visitMethodCall(Expr.MethodCall expr)       { return isSimple(expr.parent) && expr.args.stream().allMatch(this::isSimple); }
+      @Override public Boolean visitExprList(Expr.ExprList expr)           {
+        for (Expr expr1 : expr.exprs) {
+          if (!isSimple(expr1)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      @Override public Boolean visitCall(Expr.Call expr)                   {
+        if (!isSimple(expr.callee)) return false;
+        for (Expr arg : expr.args) {
+          if (!isSimple(arg)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      @Override public Boolean visitMethodCall(Expr.MethodCall expr)       {
+        if (!isSimple(expr.parent)) return false;
+        for (Expr arg : expr.args) {
+          if (!isSimple(arg)) {
+            return false;
+          }
+        }
+        return true;
+      }
       @Override public Boolean visitBinary(Expr.Binary expr)               { return isSimple(expr.left) && isSimple(expr.right);  }
       @Override public Boolean visitTernary(Expr.Ternary expr)             { return isSimple(expr.first) && isSimple(expr.second) && isSimple(expr.third); }
       @Override public Boolean visitPrefixUnary(Expr.PrefixUnary expr)     { return isSimple(expr.expr); }
       @Override public Boolean visitPostfixUnary(Expr.PostfixUnary expr)   { return isSimple(expr.expr); }
       @Override public Boolean visitCast(Expr.Cast expr)                   { return isSimple(expr.expr); }
-      @Override public Boolean visitListLiteral(Expr.ListLiteral expr)     { return expr.exprs.stream().allMatch(this::isSimple); }
-      @Override public Boolean visitMapLiteral(Expr.MapLiteral expr)       { return expr.entries.stream().allMatch(e -> isSimple(e.first) && isSimple(e.second)); }
-      @Override public Boolean visitExprString(Expr.ExprString expr)       { return expr.exprList.stream().allMatch(this::isSimple); }
+      @Override public Boolean visitListLiteral(Expr.ListLiteral expr)     {
+        for (Expr expr1 : expr.exprs) {
+          if (!isSimple(expr1)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      @Override public Boolean visitMapLiteral(Expr.MapLiteral expr)       {
+        for (Pair<Expr, Expr> e : expr.entries) {
+          if (!isSimple(e.first) || !isSimple(e.second)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      @Override public Boolean visitExprString(Expr.ExprString expr)       {
+        for (Expr expr1 : expr.exprList) {
+          if (!isSimple(expr1)) {
+            return false;
+          }
+        }
+        return true;
+      }
       @Override public Boolean visitVarDecl(Expr.VarDecl expr)             { return isSimple(expr.initialiser); }
       @Override public Boolean visitVarAssign(Expr.VarAssign expr)         { return isSimple(expr.expr); }
       @Override public Boolean visitVarOpAssign(Expr.VarOpAssign expr)     { return isSimple(expr.expr); }
@@ -3900,11 +3998,22 @@ public class Parser {
       @Override public Boolean visitDie(Expr.Die expr)                     { return isSimple(expr.expr); }
 
       @Override public Boolean visitSwitch(Expr.Switch expr) {
-        return isSimple(expr.subject) && expr.cases.stream().allMatch(this::isSimple);
+        if (!isSimple(expr.subject)) return false;
+        for (Expr.SwitchCase switchCase : expr.cases) {
+          if (!isSimple(switchCase)) {
+            return false;
+          }
+        }
+        return true;
       }
 
       @Override public Boolean visitSwitchCase(Expr.SwitchCase expr) {
-        return expr.patterns.stream().allMatch(pair -> isSimple(pair.first)) && isSimple(expr.result);
+        for (Pair<Expr, Expr> pair : expr.patterns) {
+          if (!isSimple(pair.first)) {
+            return false;
+          }
+        }
+        return isSimple(expr.result);
       }
 
       @Override public Boolean visitConstructorPattern(Expr.ConstructorPattern expr) { return false; }
@@ -4162,7 +4271,14 @@ public class Parser {
 
       @Override public Stmt visitBlock(Stmt.Block stmt) {
         // Special case for while block
-        if (stmt.stmts.stmts.stream().anyMatch(s -> s instanceof Stmt.While)) {
+        boolean hasWhileStmt = false;
+        for (Stmt s : stmt.stmts.stmts) {
+          if (s instanceof Stmt.While) {
+            hasWhileStmt = true;
+            break;
+          }
+        }
+        if (hasWhileStmt) {
           Stmt.Stmts stmts = new Stmt.Stmts(stmt.location);
           stmts.stmts.add(stmt);
           stmts.stmts.add(setLastResultIsUsed(nullStmt.get()));

@@ -346,7 +346,11 @@ public class JactlClass {
     }
     paramTypes.add(i++, String.class);  // source
     paramTypes.add(i++, int.class);     // offset
-    MethodVisitor methodVisitor = cv.visitMethod(ACC_PUBLIC | ACC_STATIC, methodName, Type.getMethodDescriptor(Type.getType(mappedReturnType), paramTypes.stream().map(Type::getType).toArray(Type[]::new)) , null, null);
+    Type[] pTypes = new Type[paramTypes.size()];
+    for (int j = 0; j < paramTypes.size(); j++) {
+      pTypes[j] = Type.getType(paramTypes.get(j));
+    }
+    MethodVisitor methodVisitor = cv.visitMethod(ACC_PUBLIC | ACC_STATIC, methodName, Type.getMethodDescriptor(Type.getType(mappedReturnType), pTypes) , null, null);
     methodVisitor.visitCode();
     Label label0 = new Label();
     Label label1 = new Label();

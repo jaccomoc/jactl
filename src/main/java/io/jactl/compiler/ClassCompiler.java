@@ -264,7 +264,10 @@ public class ClassCompiler {
                                           .collect(Collectors.toList()));
 
       // Wrap in a JactlMethodHandle
-      Type[] paramTypeArr = paramTypes.stream().map(Type::getType).toArray(Type[]::new);
+      Type[] paramTypeArr = new  Type[paramTypes.size()];
+      for (int i = 0; i < paramTypes.size(); i++) {
+        paramTypeArr[i] = Type.getType(paramTypes.get(i));
+      }
       String descriptor = Type.getMethodDescriptor(Utils.OBJECT_TYPE, paramTypeArr);
       classInit.visitLdcInsn(new Handle(wrapper.isStatic() ? Opcodes.H_INVOKESTATIC : H_INVOKEVIRTUAL, internalName, methodName, descriptor, false));
       classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
@@ -461,7 +464,7 @@ public class ClassCompiler {
   protected void compileJactlObjectFunctions() {
     // Only generate Json and Checkpoint functions if there are no fields that are hosts classes since we
     // have no access to fields for host class types
-    if (!context.allowHostAccess || classDescriptor.getAllFields().entrySet().stream().noneMatch(value -> value.getValue().isHostClass())) {
+    if (!context.allowHostAccess || noHostClass(classDescriptor.getAllFields())) {
       compileToJsonFunction();
       compileReadJsonFunction();
       compileCheckpointFunction();
@@ -470,6 +473,15 @@ public class ClassCompiler {
     compileInitNoAsync();
     compileEqualsFunction();
     compileHashCodeFunction();
+  }
+
+  private boolean noHostClass(Map<String,JactlType> fields) {
+    for (Map.Entry<String, JactlType> entry : fields.entrySet()) {
+      if (entry.getValue().isHostClass()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private void compileEqualsFunction() {
@@ -844,8 +856,15 @@ NEXT:   mv.visitLabel(NEXT);
     // to that hash. This will be used to build the lookupTable for our switch on field name.
     // We get all fields, including fields from our base classes.
     List<String>               fieldNames   = classDecl.classDescriptor.getAllFieldNames();
-    Map<Integer, List<String>> fieldNameMap = fieldNames.stream().collect(groupingBy(Object::hashCode));
-    List<Integer>              hashCodeList = fieldNameMap.keySet().stream().sorted().collect(Collectors.toList());
+    Map<Integer, List<String>> fieldNameMap = new HashMap<>();
+    for (String s : fieldNames) {
+      fieldNameMap.computeIfAbsent(s.hashCode(), k -> new ArrayList<>()).add(s);
+    }
+    List<Integer> hashCodeList = new ArrayList<>();
+    for (Integer integer : fieldNameMap.keySet()) {
+      hashCodeList.add(integer);
+    }
+    hashCodeList.sort(null);
     Label[]       fieldLabels  = IntStream.range(0, fieldNameMap.size()).mapToObj(i -> new Label()).toArray(Label[]::new);
 
 BRACE: mv.visitLabel(BRACE);
@@ -915,7 +934,15 @@ QUOTE: mv.visitLabel(QUOTE);
     Label   DEFAULT_LABEL = new Label();
     Label   DUP_FOUND     = new Label();
 
-    mv.visitLookupSwitchInsn(DEFAULT_LABEL, hashCodeList.stream().mapToInt(i -> i).toArray(), fieldLabels);
+    int[] arr   = new int[10];
+    int   count = 0;
+    for (Integer integer : hashCodeList) {
+      int i1 = integer;
+      if (arr.length == count) arr = Arrays.copyOf(arr, count * 2);
+      arr[count++] = i1;
+    }
+    arr = Arrays.copyOfRange(arr, 0, count);
+    mv.visitLookupSwitchInsn(DEFAULT_LABEL, arr, fieldLabels);
     for (int h = 0; h < hashCodeList.size(); h++) {
       mv.visitLabel(fieldLabels[h]);
       List<String> hashFields = fieldNameMap.get(hashCodeList.get(h));   // Fields with same hash
@@ -1289,21 +1316,23 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, JACTL_PREFIX + "checkpoint", "(Lio/jactl/runtime/Checkpointer;)V", false);
     }
 
-    classDecl.fields.stream().filter(f -> !f.declExpr.isConstVar).forEach(f -> {
-      mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
-      mv.visitVarInsn(ALOAD, THIS_SLOT);
-      mv.visitFieldInsn(GETFIELD, internalName, f.name.getStringValue(), f.declExpr.type.descriptor());
-      BiConsumer<String,String> writer = (name, type) -> mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", name, "(" + type + ")V", false);
-      switch (f.declExpr.type.getType()) {
-        case BOOLEAN: writer.accept("writeBoolean", "Z");                      break;
-        case BYTE:    writer.accept("writeByte", "B");                         break;
-        case INT:     writer.accept(Checkpointer.WRITE_CINT, "I");                break;
-        case LONG:    writer.accept(Checkpointer.WRITE_CLONG, "J");            break;
-        case DOUBLE:  writer.accept("writeDouble", "D");                       break;
-        case DECIMAL: writer.accept("writeDecimal", "Ljava/math/BigDecimal;"); break;
-        default:      writer.accept("writeObject", "Ljava/lang/Object;");      break;
+    for (Stmt.VarDecl f : classDecl.fields) {
+      if (!f.declExpr.isConstVar) {
+        mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
+        mv.visitVarInsn(ALOAD, THIS_SLOT);
+        mv.visitFieldInsn(GETFIELD, internalName, f.name.getStringValue(), f.declExpr.type.descriptor());
+        BiConsumer<String, String> writer = (name, type) -> mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", name, "(" + type + ")V", false);
+        switch (f.declExpr.type.getType()) {
+          case BOOLEAN: writer.accept("writeBoolean", "Z");                      break;
+          case BYTE:    writer.accept("writeByte", "B");                         break;
+          case INT:     writer.accept(Checkpointer.WRITE_CINT, "I");                break;
+          case LONG:    writer.accept(Checkpointer.WRITE_CLONG, "J");               break;
+          case DOUBLE:  writer.accept("writeDouble", "D");                       break;
+          case DECIMAL: writer.accept("writeDecimal", "Ljava/math/BigDecimal;"); break;
+          default:      writer.accept("writeObject", "Ljava/lang/Object;");      break;
+        }
       }
-    });
+    }
 
     mv.visitInsn(RETURN);
 
@@ -1344,23 +1373,25 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
       mv.visitMethodInsn(INVOKESPECIAL, internalBaseName, JACTL_PREFIX + "restore", "(Lio/jactl/runtime/Restorer;)V", false);
     }
 
-    classDecl.fields.stream().filter(f -> !f.declExpr.isConstVar).forEach(f -> {
-      mv.visitVarInsn(ALOAD, THIS_SLOT);
-      mv.visitVarInsn(ALOAD, RESTORER_SLOT);
-      switch (f.declExpr.type.getType()) {
-        case BOOLEAN: reader.accept("readBoolean", "Z");                      break;
-        case BYTE:    reader.accept("readByte", "B");                         break;
-        case INT:     reader.accept(Restorer.READ_CINT, "I");                         break;
-        case LONG:    reader.accept(Restorer.READ_CLONG, "J");                        break;
-        case DOUBLE:  reader.accept("readDouble", "D");                       break;
-        case DECIMAL: reader.accept("readDecimal", "Ljava/math/BigDecimal;"); break;
-        default:
-          reader.accept("readObject", "Ljava/lang/Object;");
-          Utils.checkCast(mv, f.declExpr.type);
-          break;
+    for (Stmt.VarDecl f : classDecl.fields) {
+      if (!f.declExpr.isConstVar) {
+        mv.visitVarInsn(ALOAD, THIS_SLOT);
+        mv.visitVarInsn(ALOAD, RESTORER_SLOT);
+        switch (f.declExpr.type.getType()) {
+          case BOOLEAN: reader.accept("readBoolean", "Z");                      break;
+          case BYTE:    reader.accept("readByte", "B");                         break;
+          case INT:     reader.accept(Restorer.READ_CINT, "I");                    break;
+          case LONG:    reader.accept(Restorer.READ_CLONG, "J");                   break;
+          case DOUBLE:  reader.accept("readDouble", "D");                       break;
+          case DECIMAL: reader.accept("readDecimal", "Ljava/math/BigDecimal;"); break;
+          default:
+            reader.accept("readObject", "Ljava/lang/Object;");
+            Utils.checkCast(mv, f.declExpr.type);
+            break;
+        }
+        mv.visitFieldInsn(PUTFIELD, internalName, f.name.getStringValue(), f.declExpr.type.descriptor());
       }
-      mv.visitFieldInsn(PUTFIELD, internalName, f.name.getStringValue(), f.declExpr.type.descriptor());
-    });
+    }
 
     mv.visitInsn(RETURN);
 

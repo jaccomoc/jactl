@@ -46,16 +46,25 @@ public class SwitchCompiler {
                                                                                      !pattern.first.isNull() &&
                                                                                      pattern.second == null;
 
-    List<Triple<Expr,Expr,Expr.SwitchCase>> flattened = expr.cases.stream()
-                                                                  .flatMap(c -> c.patterns.stream().map(pair -> Triple.create(pair.first, pair.second, c)))
-                                                                  .collect(Collectors.toList());
+    List<Triple<Expr, Expr, Expr.SwitchCase>> flattened = new ArrayList<>();
+    for (Expr.SwitchCase switchCase : expr.cases) {
+      for (Pair<Expr, Expr> pair : switchCase.patterns) {
+        Triple<Expr, Expr, Expr.SwitchCase> exprExprSwitchCaseTriple = Triple.create(pair.first, pair.second, switchCase);
+        flattened.add(exprExprSwitchCaseTriple);
+      }
+    }
 
     for (int i = 0; i < flattened.size(); i++) {
       // Find subList with all literals that we can use emitSwitch with
       int j = i;
       for (; j < flattened.size() && isSimplePattern.apply(flattened.get(j)); j++) {}
       if (j - i > 2) {
-        emitSwitch(mc, flattened.subList(i, j).stream().map(t -> Pair.of(t.first, t.third.result)).collect(Collectors.toList()),
+        List<Pair<Expr, Expr>> list = new ArrayList<>();
+        for (Triple<Expr, Expr, Expr.SwitchCase> t : flattened.subList(i, j)) {
+          Pair<Expr, Expr> exprExprPair = Pair.of(t.first, t.third.result);
+          list.add(exprExprPair);
+        }
+        emitSwitch(mc, list,
                    expr.type, end, nonSimpleLabels, () -> mc.loadVar(expr.itVar));
         i = j - 1;
       }
@@ -210,12 +219,26 @@ public class SwitchCompiler {
       else if (pattern instanceof Expr.ListLiteral) {
         if (!subjectType.is(ITERATOR, LIST, ARRAY, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
         List<Expr> exprs = ((Expr.ListLiteral) pattern).exprs;
-        compileDestructuring(mc, subjectType, patternType, exprs.size(), exprs.stream().anyMatch(Expr::isStar), exprs, loadValue, subjectLocation, endCheck);
+        boolean    anyIsStar     = false;
+        for (Expr expr : exprs) {
+          if (expr.isStar()) {
+            anyIsStar = true;
+            break;
+          }
+        }
+        compileDestructuring(mc, subjectType, patternType, exprs.size(), anyIsStar, exprs, loadValue, subjectLocation, endCheck);
       }
       else if (pattern instanceof Expr.MapLiteral) {
         if (!subjectType.is(ITERATOR, MAP, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
         List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral) pattern).entries;
-        compileDestructuring(mc, subjectType, patternType, exprs.size(), exprs.stream().anyMatch(p -> p.first.isStar()), exprs, loadValue, subjectLocation, endCheck);
+        boolean anyIsStar = false;
+        for (Pair<Expr, Expr> p : exprs) {
+          if (p.first.isStar()) {
+            anyIsStar = true;
+            break;
+          }
+        }
+        compileDestructuring(mc, subjectType, patternType, exprs.size(), anyIsStar, exprs, loadValue, subjectLocation, endCheck);
       }
     } else if (pattern instanceof Expr.ConstructorPattern) {
       if (!subjectType.is(INSTANCE, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
@@ -488,7 +511,13 @@ public class SwitchCompiler {
                                               !(e.constValue instanceof Double || e.constValue instanceof BigDecimal || e.constValue instanceof Long);
 
     // Check if all patterns are an integer value in which case we might be able to use a TABLESWITCH
-    boolean useTable = cases.stream().allMatch(t -> isIntegral.apply(t.first));
+    boolean useTable = true;
+    for (Pair<Expr, Expr> exprExprPair : cases) {
+      if (!isIntegral.apply(exprExprPair.first)) {
+        useTable = false;
+        break;
+      }
+    }
 
     Label noMatch = new Label();
 
@@ -537,13 +566,15 @@ public class SwitchCompiler {
         mc.mv.visitTableSwitchInsn(min, max, noMatch, labels);
         mc.popType();
         // For any results that are simple we compile on the spot. Non-simple ones are left for later.
-        switchLabels.entrySet().stream().filter(e -> !nonSimpleLabels.containsKey(e.getKey())).forEach(entry -> {
-          mc.mv.visitLabel(entry.getValue());
-          mc.compile(entry.getKey());
-          mc.convertTo(resultType, entry.getKey(), true, entry.getKey().location);
-          mc.popType();
-          mc.mv.visitJumpInsn(GOTO, end);
-        });
+        for (Map.Entry<Expr, Label> e : switchLabels.entrySet()) {
+          if (!nonSimpleLabels.containsKey(e.getKey())) {
+            mc.mv.visitLabel(e.getValue());
+            mc.compile(e.getKey());
+            mc.convertTo(resultType, e.getKey(), true, e.getKey().location);
+            mc.popType();
+            mc.mv.visitJumpInsn(GOTO, end);
+          }
+        }
         mc.mv.visitLabel(noMatch);
         return;
       }
@@ -570,8 +601,8 @@ public class SwitchCompiler {
            .collect(Collectors.toList());
 
     mc.mv.visitLookupSwitchInsn(noMatch,
-                             hashed.stream().mapToInt(Map.Entry::getKey).toArray(),
-                             hashed.stream().map(e -> e.getValue().first).toArray(Label[]::new));
+                                hashed.stream().mapToInt(Map.Entry::getKey).toArray(),
+                                hashed.stream().map(e -> e.getValue().first).toArray(Label[]::new));
     mc.popType();
 
     hashed.forEach(entry -> {

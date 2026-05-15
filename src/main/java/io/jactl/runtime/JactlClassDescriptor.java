@@ -358,6 +358,11 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     innerClasses.putAll(classes.stream().collect(Collectors.toMap(desc -> desc.namePath, desc -> desc, (desc1,desc2) -> desc1)));
     classes.forEach(c -> c.enclosingClass = this);
   }
+  
+  public void addInnerClass(JactlClassDescriptor classDesc) {
+    innerClasses.put(classDesc.namePath, classDesc);
+    classDesc.enclosingClass = this;
+  }
 
   public JactlClassDescriptor getInnerClass(String className) {
     return innerClasses.get(namePath + '$' + className);
@@ -417,7 +422,12 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
       return true;
     }
     if (clss.isInterface) {
-      return interfaces.stream().anyMatch(intf -> intf.isSameOrChildOf(clss));
+      for (JactlClassDescriptor intf : interfaces) {
+        if (intf.isSameOrChildOf(clss)) {
+          return true;
+        }
+      }
+      return false;
     }
     if (hasBaseClass()) {
       return ((JactlClassDescriptor)getBaseClass()).isSameOrChildOf(clss);

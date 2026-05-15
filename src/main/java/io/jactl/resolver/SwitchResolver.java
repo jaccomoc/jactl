@@ -34,14 +34,14 @@ public class SwitchResolver {
     block.stmts = new Stmt.Stmts(expr.matchToken);
     block.stmts.stmts.add(itVar);
     // Create a statement wrapper for each case in the match so we can resolve them
-    block.stmts.stmts.addAll(expr.cases.stream().map(c -> {
+    expr.cases.forEach(c -> {
       // Create a block in case we have regex/destructured capture vars
       Token location = c.patterns.get(0).first.location;
       c.block = new Stmt.Block(location, null);
       c.block.stmts = new Stmt.Stmts(location);
       c.block.stmts.stmts.add(new Stmt.ExprStmt(location, c));
-      return c.block;
-    }).collect(Collectors.toList()));
+      block.stmts.stmts.add(c.block);
+    });
     resolver.resolve(block);
     resolver.resolve(expr.defaultCase);
 
@@ -51,27 +51,48 @@ public class SwitchResolver {
       
       // Check that if there is a pattern covering all cases that there are no subsequent patterns and no default
       Set<JactlType> coveredTypes = new HashSet<>();
-      expr.cases.forEach(c -> c.patterns.stream().forEach(pair -> {
+      expr.cases.forEach(c -> c.patterns.forEach(pair -> {
         Expr      pattern = pair.first;
         Expr      ifCond  = pair.second;
         JactlType type    = coveringType(pattern);
-        if (coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type)))) {
-          resolver.error("Unreachable switch case (covered by a previous case)", pattern.location);
+        for (JactlType ct : coveredTypes) {
+          if (ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type))) {
+            resolver.error("Unreachable switch case (covered by a previous case)", pattern.location);
+            break;
+          }
         }
         if (type != null && ifCond == null) {
           coveredTypes.add(type);
         }
       }));
-      if (expr.defaultCase != null && coveredTypes.stream().anyMatch(ct -> ct.is(ANY) || ct.isAssignableFrom(subjectType))) {
-        if (expr.isForStatement) {
-          // In for loop we just remove the redundant default case (which was to throw an error if no match found)
-          expr.defaultCase = null;
+      if (expr.defaultCase != null) {
+        boolean coveredIsAnyOrIsAssignable = false;
+        for (JactlType ct : coveredTypes) {
+          if (ct.is(ANY) || ct.isAssignableFrom(subjectType)) {
+            coveredIsAnyOrIsAssignable = true;
+            break;
+          }
         }
-        else {
-          resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+        if (coveredIsAnyOrIsAssignable) {
+          if (expr.isForStatement) {
+            // In for loop we just remove the redundant default case (which was to throw an error if no match found)
+            expr.defaultCase = null;
+          }
+          else {
+            resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+          }
         }
       }
-      validateNotCovered(resolver, expr.cases.stream().flatMap(c -> c.patterns.stream().filter(pair -> pair.second == null).map(pair -> pair.first)).collect(Collectors.toList()));
+      List<Expr> list = new ArrayList<>();
+      for (Expr.SwitchCase c : expr.cases) {
+        for (Pair<Expr, Expr> pair : c.patterns) {
+          if (pair.second == null) {
+            Expr first = pair.first;
+            list.add(first);
+          }
+        }
+      }
+      validateNotCovered(resolver, list);
     }
     
     if (expr.defaultCase == null) {
@@ -147,7 +168,12 @@ public class SwitchResolver {
     }
     if (subjectType.is(ARRAY)) {
       if (!(pat instanceof Expr.ListLiteral)) { return false; }
-      return ((Expr.ListLiteral) pat).exprs.stream().allMatch(subPat -> isCompatible(resolver, subjectType, subjectType.getArrayElemType(), subPat));
+      for (Expr subPat : ((Expr.ListLiteral) pat).exprs) {
+        if (!isCompatible(resolver, subjectType, subjectType.getArrayElemType(), subPat)) {
+          return false;
+        }
+      }
+      return true;
     }
     return subjectType.isConvertibleTo(patType, true);
   }
@@ -191,8 +217,18 @@ public class SwitchResolver {
       if (!(pattern2 instanceof Expr.ListLiteral))           { return false; }
       List<Expr> l1 = ((Expr.ListLiteral) pattern1).exprs;
       List<Expr> l2 = ((Expr.ListLiteral) pattern2).exprs;
-      if (l2.stream().anyMatch(Expr::isStar))            { return false; }
-      boolean l1HasStar = l1.stream().anyMatch(Expr::isStar);
+      for (Expr expr : l2) {
+        if (expr.isStar()) {
+          return false;
+        }
+      }
+      boolean l1HasStar = false;
+      for (Expr expr : l1) {
+        if (expr.isStar()) {
+          l1HasStar = true;
+          break;
+        }
+      }
       if (l1.size() - (l1HasStar ? 1 : 0) > l2.size())   { return false; }
       if (l2.size() > l1.size() && !l1HasStar)           { return false; }
       for (int i = 0, star = 0; i < l1.size(); i++) {
@@ -207,13 +243,40 @@ public class SwitchResolver {
       if (!(pattern2 instanceof Expr.MapLiteral))                   { return false; }
       List<Pair<Expr,Expr>> entries1 = ((Expr.MapLiteral) pattern1).entries;
       List<Pair<Expr,Expr>> entries2 = ((Expr.MapLiteral) pattern2).entries;
-      if (entries2.stream().anyMatch(p -> p.first.isStar()))         { return false; }
-      boolean l1HasStar = entries1.stream().anyMatch(p -> p.first.isStar());
+      for (Pair<Expr, Expr> exprExprPair : entries2) {
+        if (exprExprPair.first.isStar()) {
+          return false;
+        }
+      }
+      boolean l1HasStar = false;
+      for (Pair<Expr, Expr> exprExprPair : entries1) {
+        if (exprExprPair.first.isStar()) {
+          l1HasStar = true;
+          break;
+        }
+      }
       if (entries1.size() - (l1HasStar ? 1 : 0) > entries2.size())   { return false; }
       if (entries2.size() > entries1.size() && !l1HasStar)           { return false; }
-      Map<String,Expr> m1 = entries1.stream().filter(p -> !p.first.isStar()).collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
-      Map<String,Expr> m2 = entries2.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.getStringValue(), p -> p.second));
-      return m1.keySet().stream().allMatch(k -> m2.containsKey(k) && covers(m1.get(k), m2.get(k), bindings));
+      Map<String, Expr> m1 = new HashMap<>();
+      for (Pair<Expr, Expr> exprExprPair : entries1) {
+        if (!exprExprPair.first.isStar()) {
+          if (m1.put(((Expr.Literal) exprExprPair.first).value.getStringValue(), exprExprPair.second) != null) {
+            throw new IllegalStateException("Duplicate key");
+          }
+        }
+      }
+      Map<String, Expr> m2 = new HashMap<>();
+      for (Pair<Expr, Expr> p : entries2) {
+        if (m2.put(((Expr.Literal) p.first).value.getStringValue(), p.second) != null) {
+          throw new IllegalStateException("Duplicate key");
+        }
+      }
+      for (String k : m1.keySet()) {
+        if (!m2.containsKey(k) || !covers(m1.get(k), m2.get(k), bindings)) {
+          return false;
+        }
+      }
+      return true;
     }
     if (pattern1 instanceof Expr.ConstructorPattern) {
       if (!(pattern2 instanceof Expr.ConstructorPattern))                      { return false; }
@@ -221,7 +284,12 @@ public class SwitchResolver {
       Map<String, Expr> keyMap1 = ((Expr.MapLiteral)((Expr.ConstructorPattern)pattern1).args).literalKeyMap;
       Map<String, Expr> keyMap2 = ((Expr.MapLiteral)((Expr.ConstructorPattern)pattern2).args).literalKeyMap;
       if (!keyMap1.keySet().equals(keyMap2.keySet()))                          { return false; }
-      return keyMap1.keySet().stream().allMatch(k -> keyMap2.containsKey(k) && covers(keyMap1.get(k), keyMap2.get(k), bindings));
+      for (String k : keyMap1.keySet()) {
+        if (!keyMap2.containsKey(k) || !covers(keyMap1.get(k), keyMap2.get(k), bindings)) {
+          return false;
+        }
+      }
+      return true;
     }
     if (pattern1 instanceof Expr.Identifier && pattern1.isTypePattern()) {
       return covers(bindings.get(((Expr.Identifier) pattern1).identifier.getStringValue()), pattern2, bindings);
@@ -269,8 +337,10 @@ public class SwitchResolver {
   }
 
   public static JactlType visitSwitchCase(Resolver resolver, Expr.SwitchCase caseExpr) {
-    caseExpr.patterns = caseExpr.patterns.stream().map(pair -> {
-      Expr pattern = pair.first;
+    // Work out type from switch expression type if unknown
+    List<Pair<Expr, Expr>> list = new ArrayList<>();
+    for (Pair<Expr, Expr> exprExprPair : caseExpr.patterns) {
+      Expr pattern = exprExprPair.first;
       if (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).identifier.is(UNDERSCORE)) {
         pattern.type = ANY;
       }
@@ -282,7 +352,7 @@ public class SwitchResolver {
         else if (!caseExpr.switchSubject.type.isConvertibleTo(pattern.type)) {
           resolver.error("Type of binding variable not compatible with switch expression type", pattern.location);
         }
-        Stmt.VarDecl varDecl = resolver.createVarDecl((Expr.VarDecl)pattern);
+        Stmt.VarDecl varDecl = resolver.createVarDecl((Expr.VarDecl) pattern);
         resolver.resolve(varDecl);
         resolver.insertStmt(varDecl);
       }
@@ -292,9 +362,11 @@ public class SwitchResolver {
           ((Expr.TypeExpr) pattern).typeVal = ((Expr.TypeExpr) pattern).typeVal.createInstanceType();
         }
       }
-      resolver.resolve(pair.second);
-      return Pair.of(pattern, pair.second);
-    }).collect(Collectors.toList());
+      resolver.resolve(exprExprPair.second);
+      Pair<Expr, Expr> apply = Pair.of(pattern, exprExprPair.second);
+      list.add(apply);
+    }
+    caseExpr.patterns = list;
     resolver.resolve(caseExpr.result);
     return caseExpr.type = ANY;
   }
@@ -390,7 +462,12 @@ public class SwitchResolver {
   private static Expr _validateSwitchPattern(Resolver resolver, Expr expr, Set<String> bindingVars, Set<String> varsSeen) {
     if (expr instanceof Expr.ListLiteral) {
       Expr.ListLiteral listExpr = (Expr.ListLiteral) expr;
-      listExpr.exprs = listExpr.exprs.stream().map(e -> _validateSwitchPattern(resolver, e, bindingVars, varsSeen)).collect(Collectors.toList());
+      List<Expr>       list     = new ArrayList<>();
+      for (Expr e1 : listExpr.exprs) {
+        Expr validateSwitchPattern = _validateSwitchPattern(resolver, e1, bindingVars, varsSeen);
+        list.add(validateSwitchPattern);
+      }
+      listExpr.exprs = list;
       listExpr.exprs.stream()
                     .filter(e -> e instanceof Expr.Identifier && ((Expr.Identifier) e).identifier.is(STAR))
                     .skip(1)
@@ -404,24 +481,43 @@ public class SwitchResolver {
         resolver.error("Field names must be constant strings",
               mapLiteral.entries.stream().filter(pair -> !(pair.first instanceof Expr.Literal)).map(p -> p.first).findFirst().orElse(expr).location);
       }
-      mapLiteral.entries = mapLiteral.entries.stream().map(pair -> {
-        if (!(pair.first instanceof Expr.Literal)) {
-          resolver.error("Expected string constant for map key", pair.first.location);
+      List<Pair<Expr, Expr>> list = new ArrayList<>();
+      for (Pair<Expr, Expr> entry : mapLiteral.entries) {
+        if (!(entry.first instanceof Expr.Literal)) {
+          resolver.error("Expected string constant for map key", entry.first.location);
         }
-        return Pair.of(pair.first, _validateSwitchPattern(resolver, pair.second, bindingVars, varsSeen));
-      }).collect(Collectors.toList());
+        Pair<Expr, Expr> apply = Pair.of(entry.first, _validateSwitchPattern(resolver, entry.second, bindingVars, varsSeen));
+        list.add(apply);
+      }
+      mapLiteral.entries = list;
       return mapLiteral;
     }
     if (expr instanceof Expr.ConstructorPattern) {
       Expr.ConstructorPattern constructorPattern = (Expr.ConstructorPattern) expr;
       if (constructorPattern.args instanceof Expr.MapLiteral) {
         Expr.MapLiteral args = (Expr.MapLiteral) constructorPattern.args;
-        args.entries = args.entries.stream().map(a -> Pair.of(a.first, _validateSwitchPattern(resolver, a.second, bindingVars, varsSeen))).collect(Collectors.toList());
-        args.literalKeyMap = args.entries.stream().collect(Collectors.toMap(p -> ((Expr.Literal)p.first).value.toString(), p -> p.second));
+        List<Pair<Expr, Expr>> list = new ArrayList<>();
+        for (Pair<Expr, Expr> a : args.entries) {
+          Pair<Expr, Expr> exprExprPair = Pair.of(a.first, _validateSwitchPattern(resolver, a.second, bindingVars, varsSeen));
+          list.add(exprExprPair);
+        }
+        args.entries = list;
+        Map<String, Expr> map = new HashMap<>();
+        for (Pair<Expr, Expr> p : args.entries) {
+          if (map.put(((Expr.Literal) p.first).value.toString(), p.second) != null) {
+            throw new IllegalStateException("Duplicate key");
+          }
+        }
+        args.literalKeyMap = map;
       }
       else {
         Expr.ListLiteral args = (Expr.ListLiteral) constructorPattern.args;
-        args.exprs = args.exprs.stream().map(a -> _validateSwitchPattern(resolver, a, bindingVars, varsSeen)).collect(Collectors.toList());
+        List<Expr>       list = new ArrayList<>();
+        for (Expr a : args.exprs) {
+          Expr validateSwitchPattern = _validateSwitchPattern(resolver, a, bindingVars, varsSeen);
+          list.add(validateSwitchPattern);
+        }
+        args.exprs = list;
       }
       return constructorPattern;
     }

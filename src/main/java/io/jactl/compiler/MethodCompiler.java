@@ -341,7 +341,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Label end = new Label();
     mv.visitLabel(end);
-    methodFunDecl.heapLocals.values().stream().filter(v -> !v.isParam).forEach(varDecl -> undefineVar(varDecl, end));
+    methodFunDecl.heapLocals.values().forEach(v -> { if (!v.isParam) undefineVar(v, end); });
 
     if (classCompiler.classDecl.isScriptClass() || classCompiler.context.classAccessToGlobals) {
       // This will call mv.visitLocalVariable() in order to create debug symbols for globals
@@ -2284,7 +2284,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (parentType.is(CLASS, INSTANCE) && parentType.isHostClass()) {
       compile(expr.parent);
       Class<?> hostClass = parentType.getJavaClass();
-      List<JactlType> argTypes = expr.args.stream().map(a -> a.type).collect(Collectors.toList());
+      List<JactlType> argTypes = new ArrayList<>(); 
+      for (Expr arg : expr.args) {
+        argTypes.add(arg.type);
+      }
       Method m = classCompiler.context.findMatchingMethod(hostClass, expr.methodName, argTypes, parentType.is(CLASS), msg -> { throw new CompileError(msg, expr.location); });
       if (Modifier.isStatic(m.getModifiers()) && !parentType.is(CLASS)) {
         popVal();
@@ -2665,7 +2668,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitInvokeNew(Expr.InvokeNew expr) {
     JactlType type          = expr.type;
-    int       maybeNegative = (int)expr.dimensions.stream().filter(d -> !compilePositiveInt(d)).count();
+    int       maybeNegative = 0;
+    for (Expr dim: expr.dimensions) {
+      if (!compilePositiveInt(dim)) maybeNegative++;
+    }
     if (maybeNegative == 0) {
       // Guaranteed that all dimensions are positive
       newInstance(expr.type, expr.dimensions.size(), expr.callInit, expr.args, expr.leftParen);
@@ -3066,7 +3072,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     Function<Expr,String>  argName     = expr -> ((Expr.Literal)expr).value.getStringValue();
     List<Pair<Expr, Expr>> mapEntries  = ((Expr.MapLiteral) args.get(0)).entries;
-    Map<String, Expr>      namedArgMap = mapEntries.stream().collect(Collectors.toMap(entry -> argName.apply(entry.first), entry -> entry.second));
+    Map<String, Expr>      namedArgMap = new HashMap<>();
+    for (Pair<Expr, Expr> pair : mapEntries) {
+      namedArgMap.put(argName.apply(pair.first), pair.second);
+    }
 
     // Make sure there are no missing arguments and check argument types are compatible
     // with parameter types. Remove each named arg as we validate.
@@ -3237,7 +3246,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // of an uninitialised instance. Normally we would just rely on invokeMaybeAsync() to take
         // care of preserving the stack and any locals but a freshly "newed" instance (before call to
         // to "<init>" can't be saved. It must be initialised first.
-        boolean asyncArgs = args.stream().anyMatch(a -> a.isAsync);
+        boolean asyncArgs = false;
+        for (Expr arg : args) {
+          if (arg.isAsync) {
+            asyncArgs = true;
+          }
+        }
         if (asyncArgs) {
           compileAndConvert(args, constructor.getParameterTypes());
           // Save args (in reverse order since they are on a stack)
@@ -3387,15 +3401,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private static String getMethodDescriptor(JactlType returnType, List<JactlType> paramTypes) {
     // Method descriptor is return type followed by array of parameter types.
-    return Type.getMethodDescriptor(returnType.descriptorType(),
-                                    paramTypes.stream().map(p -> p.descriptorType()).toArray(Type[]::new));
+    Type[] pTypes = new Type[paramTypes.size()];
+    for (int i = 0; i < pTypes.length; i++) {
+      pTypes[i] = paramTypes.get(i).descriptorType();
+    }
+    return Type.getMethodDescriptor(returnType.descriptorType(), pTypes);
   }
 
   public static MethodType getMethodType(Expr.FunDecl funDecl) {
-    return MethodType.methodType(funDecl.returnType.classFromType(),
-                                 methodParamTypes(funDecl).stream()
-                                                          .map(p -> p.classFromType())
-                                                          .toArray(Class[]::new));
+    List<JactlType> paramTypes = methodParamTypes(funDecl);
+    Class[] paramClasses = new Class[paramTypes.size()];
+    for (int i = 0; i < paramTypes.size(); i++) {
+      paramClasses[i] = paramTypes.get(i).classFromType();
+    }
+    return MethodType.methodType(funDecl.returnType.classFromType(), paramClasses);
   }
 
   private static List<JactlType> methodParamTypes(Expr.FunDecl funDecl) {
@@ -4809,12 +4828,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                       : new Pair(name, methodFunDecl.heapLocals.get(p.originalVarDecl));
     };
 
-    List<Pair<String, Expr.VarDecl>> varDeclPairs = heapLocals.stream().map(p -> getVarDecl.apply(p)).collect(Collectors.toList());
+    boolean haveBadVars = false;
+    List<Pair<String, Expr.VarDecl>> varDeclPairs = new ArrayList<>();
+    for (Expr.VarDecl heapLocal : heapLocals) {
+      Pair<String, Expr.VarDecl> pair = getVarDecl.apply(heapLocal);
+      varDeclPairs.add(pair);
+      if (pair.second == null) {
+        haveBadVars = true;
+      }
+    }
 
     // Make sure either we have variable already in our heap local params or we are the function where
     // the heap local param we need was declared.
-    List<String> badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
-    if (badVars.size() > 0) {
+    if (haveBadVars) {
+      List<String> badVars = varDeclPairs.stream().filter(vp -> vp.second == null).map(vp -> vp.first).collect(Collectors.toList());
       boolean plural = badVars.size() > 1;
       error("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
             (plural?"s ":" ") + String.join(",", badVars.toArray(new String[badVars.size()])) +

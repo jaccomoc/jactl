@@ -150,19 +150,53 @@ public class Functions {
 
     // Look for exact match and then generic match.
     // List/Map/Object[]/String can match on Iterable.
-    Optional<FunctionDescriptor> match = functions.stream().filter(f -> f.type.equals(type)).findFirst();
+    Optional<FunctionDescriptor> match = Optional.empty();
+    for (FunctionDescriptor function : functions) {
+      if (function.type.equals(type)) {
+        match = Optional.of(function);
+        break;
+      }
+    }
     if (!match.isPresent() && type.is(ARRAY) && type.isCastableTo(OBJECT_ARR)) {
-      match = functions.stream().filter(f -> f.type.is(OBJECT_ARR)).findFirst();
+      Optional<FunctionDescriptor> found = Optional.empty();
+      for (FunctionDescriptor f : functions) {
+        if (f.type.is(OBJECT_ARR)) {
+          found = Optional.of(f);
+          break;
+        }
+      }
+      match = found;
     }
     if (!match.isPresent() && type.is(LIST,MAP,STRING,BYTE,INT,LONG,DOUBLE,DECIMAL,ARRAY)) {
-      match = functions.stream().filter(f -> f.type.is(ITERATOR)).findFirst();
+      Optional<FunctionDescriptor> found = Optional.empty();
+      for (FunctionDescriptor f : functions) {
+        if (f.type.is(ITERATOR)) {
+          found = Optional.of(f);
+          break;
+        }
+      }
+      match = found;
     }
     if (!match.isPresent() && type.is(BYTE,INT,LONG,DOUBLE,DECIMAL)) {
-      match = functions.stream().filter(f -> f.type.is(NUMBER)).findFirst();
+      Optional<FunctionDescriptor> found = Optional.empty();
+      for (FunctionDescriptor f : functions) {
+        if (f.type.is(NUMBER)) {
+          found = Optional.of(f);
+          break;
+        }
+      }
+      match = found;
     }
     // Final check is for ANY
     if (!match.isPresent()) {
-      match = functions.stream().filter(f -> f.type.is(ANY)).findFirst();
+      Optional<FunctionDescriptor> found = Optional.empty();
+      for (FunctionDescriptor f : functions) {
+        if (f.type.is(ANY)) {
+          found = Optional.of(f);
+          break;
+        }
+      }
+      match = found;
     }
     return match.orElse(NO_SUCH_METHOD);
   }

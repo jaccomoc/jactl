@@ -84,7 +84,14 @@ public class JactlClassLoader extends ClassLoader {
     // further classes (such as newly added built-in types) that we have defined.
     // Otherwise, if we let the parent class loader load the class, the class loader
     // for the class won't be able to find these additional classes when needed.
-    if (packages.stream().anyMatch(name::startsWith)) {
+    boolean anyStartsWith = false;
+    for (String s : packages) {
+      if (name.startsWith(s)) {
+        anyStartsWith = true;
+        break;
+      }
+    }
+    if (anyStartsWith) {
       try (InputStream is = this.getClass().getResourceAsStream("/" + name.replace('.', '/') + ".class")) {
         if (is != null) {
           byte[]   bytes = Utils.readAllBytes(is);

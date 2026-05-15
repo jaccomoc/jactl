@@ -421,7 +421,7 @@ public class Tokeniser {
     // Check that if symbol ends in a word character that following char is not a word character
     if (sym.endsWithAlpha() &&
         sym.length() + 1 <= remaining &&
-        isIdentifierPart(charAt(sym.length()))) {
+        Utils.isIdentifierPart(charAt(sym.length()))) {
       return false;
     }
 
@@ -494,7 +494,7 @@ public class Tokeniser {
         case '$': {
           if (stringExpr) {
             int nextChar = available(2) ? charAt(1) : -1;
-            if (nextChar == '{' || isIdentifierStart(nextChar) || Character.isDigit(nextChar)) {
+            if (nextChar != -1 && (nextChar == '{' || isIdentifierStart(nextChar) || Character.isDigit(nextChar))) {
               finished = true;
               continue;
             }
@@ -643,7 +643,7 @@ public class Tokeniser {
     int     i          = 1;
     int     digitCount = 0;
     boolean isDigits   = startChar == '$' && remaining > 1 && isDigit(charAt(1), 10);
-    for (; i < remaining && (isDigits ? isDigit(charAt(i), 10) : isIdentifierPart(charAt(i))); i++) {
+    for (; i < remaining && (isDigits ? isDigit(charAt(i), 10) : Utils.isIdentifierPart(charAt(i))); i++) {
       digitCount += isDigit(charAt(i), 10) ? 1 : 0;
     }
     advance(i);
@@ -666,12 +666,19 @@ public class Tokeniser {
                 .setLength(i);
   }
 
+  private static final boolean[] isIdentStart = new boolean[128];
+  static {
+    for (int i = 0; i < 128; i++) {
+      isIdentStart[i] = Character.isJavaIdentifierStart(i);
+    }
+    isIdentStart['$'] = false;
+  } 
+  
   private static boolean isIdentifierStart(int c) {
-    return Character.isJavaIdentifierStart(c) && c != '$';
-  }
-
-  private static boolean isIdentifierPart(int c) {
-    return Character.isJavaIdentifierPart(c) && c != '$';
+    if (c < 128) {
+      return isIdentStart[c];
+    }
+    return Character.isJavaIdentifierPart(c);
   }
 
   private boolean isDigit(int c, int base) {
@@ -679,9 +686,22 @@ public class Tokeniser {
       case 2:
         return c == '0' || c == '1';
       case 10:
-        return Character.isDigit(c);
+        switch (c) {
+          case '0': case '1': case '2': case '3': case '4':
+          case '5': case '6': case '7': case '8': case '9':
+            return true;
+        }
+        return false;
       case 16:
-        return Character.isDigit(c) || "abcdefABCDEF".indexOf(c) != -1;
+        switch (c) {
+          case '0': case '1': case '2': case '3': case '4':
+          case '5': case '6': case '7': case '8': case '9':
+          case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+          case 'a': case 'b':case 'c':case 'd': case 'e': case 'f':
+            return true;
+          default:
+            return false;
+        }
     }
     throw new IllegalStateException("Internal error: unexpected base " + base);
   }
@@ -940,7 +960,7 @@ public class Tokeniser {
 
   public static boolean isIdentifier(String s) {
     return isIdentifierStart(s.charAt(0)) &&
-           s.chars().skip(1).allMatch(Tokeniser::isIdentifierPart);
+           s.chars().skip(1).allMatch(Utils::isIdentifierPart);
   }
 
   //////////////////////////////////////////////////////////////////////
