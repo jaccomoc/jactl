@@ -132,7 +132,9 @@ public class Tokeniser {
    * @return the next token in the stream of tokens
    */
   public Token next() {
-    populateCurrentToken();
+    if (currentToken == null) {
+      populateCurrentToken();
+    }
 
     Token result = currentToken;
     previousToken = currentToken;
@@ -157,7 +159,9 @@ public class Tokeniser {
    * @return the next token
    */
   public Token peek() {
-    populateCurrentToken();
+    if (currentToken == null) {
+      populateCurrentToken();
+    }
     if (currentToken.isException()) {
       throw currentToken.getException();
     }
@@ -235,25 +239,23 @@ public class Tokeniser {
   }
 
   /**
-   * If currentToken already has a value then do nothing. If we don't have a current
-   * token then read the next token.
+   * Called when currentToken is null. Use linked value from previous token or
+   * get the next one if we haven't already got it.
    */
   private void populateCurrentToken() {
+    if (previousToken != null) {
+      currentToken = previousToken.getNext();
+    }
     if (currentToken == null) {
-      if (previousToken != null) {
-        currentToken = previousToken.getNext();
+      try {
+        currentToken = parseToken();
       }
-      if (currentToken == null) {
-        try {
-          currentToken = parseToken();
-        }
-        catch (CompileError e) {
-          currentToken = new Token(e);
-        }
+      catch (CompileError e) {
+        currentToken = new Token(e);
+      }
 
-        if (previousToken != null) {
-          previousToken.setNext(currentToken);
-        }
+      if (previousToken != null) {
+        previousToken.setNext(currentToken);
       }
     }
   }

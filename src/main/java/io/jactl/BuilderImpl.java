@@ -17,6 +17,7 @@
 
 package io.jactl;
 
+import java.io.PipedReader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -29,12 +30,16 @@ public class BuilderImpl implements Builder {
   protected Tokeniser                   tokeniser;
   protected Token                       previousToken = null;
   protected LinkedHashSet<CompileError> errors        = new LinkedHashSet<>();
+  private final boolean tokeniseCommentsAndWhitespace;
 
   public BuilderImpl(Tokeniser tokeniser) {
     this.tokeniser = tokeniser;
+    this.tokeniseCommentsAndWhitespace = tokeniser.tokeniseCommentsAndWhitespace();
   }
 
-  protected BuilderImpl() {}
+  protected BuilderImpl() {
+    tokeniseCommentsAndWhitespace = true;
+  }
 
   public void done() {
     if (errors.size() == 1) {
@@ -122,12 +127,17 @@ public class BuilderImpl implements Builder {
   }
 
   protected Token _skipCommentsAndWhiteSpace() {
-    while (true) {
-      Token token = tokeniser.peek();
-      if (!token.is(COMMENT,WHITESPACE)) {
-        return token;
+    if (tokeniseCommentsAndWhitespace) {
+      while (true) {
+        Token token = tokeniser.peek();
+        if (!token.is(COMMENT, WHITESPACE)) {
+          return token;
+        }
+        _advance();
       }
-      _advance();
+    }
+    else {
+      return tokeniser.peek();
     }
   }
 

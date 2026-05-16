@@ -28,7 +28,6 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
@@ -1007,6 +1006,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type = STRING;
   }
 
+  private static final TokenType[] notConstOps = {QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS, IN, BANG_IN};
+  
   @Override public JactlType visitBinary(Expr.Binary expr) {
     if (expr.operator.is(DOT,QUESTION_DOT)) {
       resolveClassAllowed(expr.left);
@@ -1022,7 +1023,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     expr.isConst = isConst(expr.left) && isConst(expr.right);
 
-    if (expr.operator.is(QUESTION_COLON, EQUAL_GRAVE, BANG_GRAVE, COMPARE, AS, IN, BANG_IN)) {
+    if (expr.operator.is(notConstOps)) {
       expr.isConst = false;
     }
 
@@ -3465,13 +3466,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // Now invoke the real function (unless we are the init method). For init method we already initialise
     // the fields in the varargs wrapper, so we don't need to invoke the non-wrapper version of the function.
-    Stream<Expr> args = funDecl.parameters.stream()
-                                          .map(p -> new Expr.LoadParamValue(startToken.newIdent(p.declExpr.name.getStringValue()), p.declExpr));
+    List<Expr> args = new ArrayList<>();
     if (funDecl.functionDescriptor.needsLocation) {
-      args = Stream.concat(Stream.of(sourceIdent, offsetIdent), args);
+      args.add(sourceIdent);
+      args.add(offsetIdent);
     }
-    stmtList.add(returnStmt(startToken, new Expr.InvokeFunDecl(startToken, funDecl, args.collect(Collectors.toList())),
-                            funDecl.returnType));
+    for (Stmt.VarDecl p: funDecl.parameters) {
+      args.add(new Expr.LoadParamValue(startToken.newIdent(p.declExpr.name.getStringValue()), p.declExpr));
+    }
+    stmtList.add(returnStmt(startToken, new Expr.InvokeFunDecl(startToken, funDecl, args), funDecl.returnType));
 
     wrapperFunDecl.block      = new Stmt.Block(startToken, stmts);
 

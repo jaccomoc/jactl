@@ -73,13 +73,7 @@ public class Parser {
   int lookaheadCount = 0;
 
   public Parser(Tokeniser tokeniser, JactlContext context, String packageName) {
-    this(tokeniser.tokeniseCommentsAndWhitespace() ? new BuilderImpl(tokeniser) : new BuilderImpl(tokeniser) {
-           @Override
-           protected Token _skipCommentsAndWhiteSpace() {
-             return tokeniser.peek();
-           }
-         },
-         context, packageName);
+    this(new BuilderImpl(tokeniser), context, packageName);
   }
 
   public Parser(BuilderImpl tokeniser, JactlContext context, String packageName) {
@@ -442,9 +436,10 @@ public class Parser {
     return declaration(false);
   }
 
+  private static final TokenType[] endOfDeclaration = {EOL, EOF, SEMICOLON, RIGHT_BRACE};
   private Stmt declaration(boolean inClassDecl) {
     matchAny(EOL);
-    return marked(false, inClassDecl ? this::declarationInClassDecl : this::declarationNotInClassDecl, EOL, EOF, SEMICOLON, RIGHT_BRACE);
+    return marked(false, inClassDecl ? this::declarationInClassDecl : this::declarationNotInClassDecl, endOfDeclaration);
   }
   
   private Stmt declarationInClassDecl() {
@@ -1888,12 +1883,13 @@ public class Parser {
   }
 
   private <T> T maybeMarked(boolean shouldMark, boolean throwIfError, Supplier<T> lambda, TokenType... skipUntil) {
+    shouldMark = shouldMark && !isLookahead();
     Marker mark = shouldMark ? tokeniser.mark() : null;
     T item;
     try {
       Token token = peek();
       item = lambda.get();
-      if (item != null && !isLookahead() && shouldMark) {
+      if (item != null && shouldMark) {
         markDone(mark, item, token);
       }
       else {
@@ -3247,8 +3243,10 @@ public class Parser {
     return false;
   }
 
+  private static final TokenType[] endOfExpression = {EOF, AND, OR, RIGHT_BRACE, RIGHT_PAREN, RIGHT_SQUARE, SEMICOLON, IF, UNLESS};
+  
   private boolean isEndOfExpression() {
-    return peekIsEOL() || peek().is(EOF,AND,OR,RIGHT_BRACE,RIGHT_PAREN,RIGHT_SQUARE,SEMICOLON,IF,UNLESS);
+    return peekIsEOL() || peek().is(endOfExpression);
   }
 
   /**
@@ -3778,6 +3776,8 @@ public class Parser {
     return unexpected(msg, throwError, EOL);
   }
 
+  private static final CompileError LOOKAHEAD_ERROR = new CompileError(Collections.EMPTY_LIST);
+  
   private Expr unexpected(String msg, boolean throwError, TokenType... nonConsumable) {
     Marker mark = tokeniser.mark();
     Token token = peek();
@@ -3786,19 +3786,24 @@ public class Parser {
       advance();
     }
     CompileError error;
-    if (token.is(ERROR)) {
-      error = createError(token.getStringValue(), token);
-    }
-    else if (token.is(EOF)) {
-      error = new EOFError("Unexpected end-of-file: " + msg, token, !isLookahead());
+    if (lookaheadCount > 0) {
+      error = LOOKAHEAD_ERROR;
     }
     else {
-      final String chars = token.is(EOL)               ? "new-line" :
-                           token.is(EOF)               ? "end-of-file" :
-                           token.is(EXPR_STRING_START) ? "token " + "'\"'" :
-                           token.is(STRING_CONST)      ? "token " + "\"'\""
-                                                       : "token " + "'" + token.getChars() + "'";
-      error = createError("Unexpected " + chars + ": " + msg, token);
+      if (token.is(ERROR)) {
+        error = createError(token.getStringValue(), token);
+      }
+      else if (token.is(EOF)) {
+        error = new EOFError("Unexpected end-of-file: " + msg, token, !isLookahead());
+      }
+      else {
+        final String chars = token.is(EOL) ? "new-line" :
+                             token.is(EOF) ? "end-of-file" :
+                             token.is(EXPR_STRING_START) ? "token " + "'\"'" :
+                             token.is(STRING_CONST) ? "token " + "\"'\""
+                                                    : "token " + "'" + token.getChars() + "'";
+        error = createError("Unexpected " + chars + ": " + msg, token);
+      }
     }
     markError(mark, error);
     if (lookaheadCount > 0 || throwError) {

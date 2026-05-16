@@ -213,6 +213,19 @@ public class Token extends Location {
     return true;
   }
 
+  public boolean isNot(TokenType type) {
+    return this.type != type;
+  }
+
+  public boolean isNot(TokenType type1, TokenType type2) {
+    return this.type != type1 && this.type != type2;
+  }
+
+  public boolean isNot(TokenType type1, TokenType type2, TokenType type3) {
+    return this.type != type1 && this.type != type2 && this.type != type3;
+  }
+
+
   public boolean isNot(List<TokenType> types) {
     for (TokenType type: types) {
       if (this.type == type) {

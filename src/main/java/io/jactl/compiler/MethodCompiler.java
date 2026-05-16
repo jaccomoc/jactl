@@ -417,9 +417,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitBlock(Stmt.Block stmt) {
     // Compile all statements except filter out any parameter statements
     // as they will have already been compiled
-    stmt.stmts.stmts.stream()
-                    .filter(st -> !isParam(st))
-                    .forEach(this::compile);
+    for (Stmt st: stmt.stmts.stmts) {
+      if (!isParam(st)) {
+        compile(st);
+      }
+    }
 
     // Emit description of local variables for debugger
     if (stmt.variables.size() > 0) {
@@ -605,7 +607,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     switch (type.getType()) {
       case BOOLEAN: return RuntimeUtils.isTruth(val, false);
-      case STRING:  return RuntimeUtils.toString(val);
+      case STRING:  return RuntimeUtils._toString(val);
       case INT: {
         if (val instanceof Number) { return ((Number) val).intValue(); }
         return val;
@@ -3363,27 +3365,34 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If there are implicit closed over heap var params then bind them so we don't need to pass
     // them every time
-
-    // First check that we don't have forward references to variables that have not yet been initialised
-    List<String> badVars = wrapperFunDecl.heapLocals.values()
-                                                    .stream()
-                                                    .filter(p -> p.parentVarDecl.slot == -1)
-                                                    .map(p -> p.name.getStringValue())
-                                                    .collect(Collectors.toList());
-
-    if (badVars.size() > 0) {
-      boolean plural = badVars.size() > 1;
-      error("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
-                             (plural?"s ":" ") + String.join(",", badVars.toArray(new String[badVars.size()])) +
-                             " that " + (plural?"have":"has") + " not yet been initialised", funDecl.location);
+    boolean badVar = false;
+    for (Map.Entry<Expr.VarDecl,Expr.VarDecl> entry: wrapperFunDecl.heapLocals.entrySet()) {
+      Expr.VarDecl p = entry.getValue();
+      if (p.parentVarDecl.slot == -1) {
+        badVar = true;
+      }
+      else {
+        // Load HeapLocal  (not the value contained in it) from _our_ copy of this
+        // var (p.varDecl.slot not p.slot)
+        loadLocal(p.parentVarDecl.slot);
+        invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
+      }
     }
 
-    wrapperFunDecl.heapLocals.values().forEach(p -> {
-      // Load HeapLocal  (not the value contained in it) from _our_ copy of this
-      // var (p.varDecl.slot not p.slot)
-      loadLocal(p.parentVarDecl.slot);
-      invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
-    });
+    // If we have forward references to variables that have not yet been initialised
+    if (badVar) {
+      List<String> badVars = wrapperFunDecl.heapLocals.values()
+                                                      .stream()
+                                                      .filter(p -> p.parentVarDecl.slot == -1)
+                                                      .map(p -> p.name.getStringValue())
+                                                      .collect(Collectors.toList());
+      if (badVars.size() > 0) {
+        boolean plural = badVars.size() > 1;
+        error("Function " + funDecl.nameToken.getStringValue() + " closes over variable" +
+              (plural ? "s " : " ") + String.join(",", badVars.toArray(new String[badVars.size()])) +
+              " that " + (plural ? "have" : "has") + " not yet been initialised", funDecl.location);
+      }
+    }
   }
 
   private void emitReturn(JactlType returnType) {
@@ -3420,17 +3429,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private static List<JactlType> methodParamTypes(Expr.FunDecl funDecl) {
     // We include a HeapLocal object for each heap var param that the function needs
     // before adding a type for each actual parameter.
-    Stream<JactlType> params = Collections.nCopies(funDecl.heapLocals.size(), HEAPLOCAL).stream();
+    List<JactlType> params = new ArrayList<>();
+    for (int i = 0; i < funDecl.heapLocals.size(); i++) {
+      params.add(HEAPLOCAL);
+    }
     // Add Continuation after HeapLocals for async functions and for wrappers
     if (funDecl.functionDescriptor.isAsync() || funDecl.isWrapper) {
-      params = Stream.concat(params, Stream.of(CONTINUATION));
+      params.add(CONTINUATION);
     }
     if (funDecl.functionDescriptor.needsLocation) {
-      params = Stream.concat(params, Stream.of(STRING, INT));
+      params.add(STRING);
+      params.add(INT);
     }
-    params = Stream.concat(params, funDecl.parameters.stream()
-                                                     .map(p -> p.declExpr.isPassedAsHeapLocal ? HEAPLOCAL : p.declExpr.type));
-    return params.collect(Collectors.toList());
+    for (Stmt.VarDecl p: funDecl.parameters) {
+      params.add(p.declExpr.isPassedAsHeapLocal ? HEAPLOCAL : p.declExpr.type);
+    }
+    return params;
   }
 
   ///////////////////////////////////////////////

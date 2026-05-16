@@ -795,9 +795,13 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Lambda to extract ith arg. For methods arg0 is 0th arg and param counting starts at 1:
       Function<Integer, Expr> getrArg = i -> arg0 != null ? (i == 0 ? arg0 : namedArgs.get(func.paramNames.get(i - 1)))
                                                           : namedArgs.get(func.paramNames.get(i));
-      return func.asyncArgs.stream()
-                           .map(getrArg)
-                           .anyMatch(this::isAsyncArg);
+      for (Integer asyncArg : func.asyncArgs) {
+        Expr expr = getrArg.apply(asyncArg);
+        if (isAsyncArg(expr)) {
+          return true;
+        }
+      }
+      return false;
     }
     else {
       Function<Integer, Expr> getArg = i -> {
@@ -811,9 +815,13 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return args.size() > i ? args.get(i) : null;
       };
 
-      return func.asyncArgs.stream()
-                           .map(getArg)
-                           .anyMatch(this::isAsyncArg);
+      for (Integer asyncArg : func.asyncArgs) {
+        Expr expr = getArg.apply(asyncArg);
+        if (isAsyncArg(expr)) {
+          return true;
+        }
+      }
+      return false;
     }
   }
 

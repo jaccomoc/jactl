@@ -669,7 +669,7 @@ public class Utils {
     descriptor.mandatoryParams = new HashSet<>();
     descriptor.paramNames = new ArrayList<>();
     descriptor.paramTypes = new ArrayList<>();
-    List<Object> defaultValues = new ArrayList<>();
+    List<Object> defaultValues = new ArrayList<>(params.size());
     for (int i = 0; i < params.size(); i++) {
       Stmt.VarDecl varDecl = params.get(i);
       String name = varDecl.name.getStringValue();

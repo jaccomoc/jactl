@@ -35,12 +35,12 @@ import static org.objectweb.asm.Opcodes.*;
  */
 public class LocalTypes {
 
-  private List<LocalEntry>       locals        = new ArrayList<>();
-  private Map<String,LocalEntry> globalAliases = new HashMap<>();
+  private List<LocalEntry>       locals        = new ArrayList<>(32);
+  private Map<String,LocalEntry> globalAliases = null;
   private int minimumSlot = 0;
   private int maxIndex    = -1;
 
-  private ArrayList<StackEntry> stack  = new ArrayList<>();
+  private ArrayList<StackEntry> stack  = new ArrayList<>(32);
 
   private final MethodVisitor mv;
   private final boolean       isStatic;
@@ -68,7 +68,7 @@ public class LocalTypes {
     copy.locals = copyLocals();
     copy.minimumSlot = minimumSlot;
     copy.maxIndex = maxIndex;
-    copy.globalAliases = new HashMap<>(globalAliases);
+    copy.globalAliases = globalAliases == null ? null : new HashMap<>(globalAliases);
     return copy;
   }
 
@@ -556,12 +556,15 @@ public class LocalTypes {
     LocalEntry localEntry = locals.get(slot);
     localEntry.isGlobalVar = true;
     minimumSlot = locals.size();
+    if (globalAliases == null) {
+      globalAliases = new HashMap<>();
+    }
     globalAliases.put(name, localEntry);
     return slot;
   }
 
   public int globalVarSlot(String name) {
-    LocalEntry localEntry = globalAliases.get(name);
+    LocalEntry localEntry = globalAliases == null ? null : globalAliases.get(name);
     if (localEntry == null) {
       throw new IllegalStateException("Could not find local alias for global var " + name);
     }
