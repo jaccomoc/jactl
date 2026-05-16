@@ -361,17 +361,18 @@ public class Parser {
    *#
    * </pre>
    */
-  private Stmt.Block block(TokenType blockStart, TokenType endBlock) {
-    return this.marked(true, () -> {
-      Token      openBlock = expect(blockStart);
-      Stmt.Block block     = blockBody(openBlock, endBlock, this::declaration);
-      expect(endBlock);
-      return block;
-    });
+  private Stmt.Block block(boolean isDollarBrace) {
+    return marked(true, isDollarBrace ? this::getDollarBraceBlock : this::getBraceBlock);
   }
 
-  private Stmt.Block markedBlockBody(Token openBlock, TokenType endBlock) {
-    return this.marked(true, () -> blockBody(openBlock, endBlock, this::declaration));
+  private Stmt.Block getBraceBlock() { return getBlock(false); }
+  private Stmt.Block getDollarBraceBlock() { return getBlock(true); }
+  
+  private Stmt.Block getBlock(boolean isDollarBrace) {
+    Token      openBlock = expect(isDollarBrace ? DOLLAR_BRACE : LEFT_BRACE);
+    Stmt.Block block     = blockBody(openBlock, TokenType.RIGHT_BRACE, this::declaration);
+    expect(TokenType.RIGHT_BRACE);
+    return block;
   }
 
   private Stmt.Block blockBody(Token openBlock, TokenType endBlock, Supplier<Stmt> stmtSupplier) {
@@ -465,9 +466,18 @@ public class Parser {
   private Stmt _declaration(boolean inClassDecl) {
     matchAny(EOL);
     Token token = peek();
+    if (token.is(CLASS)) {
+      return classDecl();
+    }
+    if (token.is(SEMICOLON)) {
+      // Empty statement
+      advance();
+      return null;
+    }
+
     // Look for multi var declaration: def (x, y) = [1,2]
     //                             or: def (int x, def y) = [1,2]
-    if (token.is(DEF) && lookahead(() -> expect(DEF) != null, () -> expect(LEFT_PAREN) != null)) {
+    if (lookahead(DEF, LEFT_PAREN)) {
       return multiVarDecl(inClassDecl);
     }
     // Look for function declaration: <type> <identifier> "(" ...
@@ -479,13 +489,6 @@ public class Parser {
     }
     if ((typeOrVar || isStaticFinalIdent) && isVarDecl()) {
       return varDecl(inClassDecl);
-    }
-    if (token.is(CLASS)) {
-      return classDecl();
-    }
-    if (matchAny(SEMICOLON)) {
-      // Empty statement
-      return null;
     }
     if (inClassDecl) {
       unexpected("Expected field, method, or class declaration", false, IDENTIFIER, EOL);
@@ -747,7 +750,7 @@ public class Parser {
     // Note that unlike a normal varDecl where commas separate different vars of the same type,
     // with parameters we expect a separate comma for parameter with a separate type for each one,
     // so we build up a list of singleVarDecl.
-    Stmt.VarDecl varDecl = singleVarDecl(type, false, false, true, false, false);
+    Stmt.VarDecl varDecl = singleVarDecl(type, false, false, true, false);
     varDecl.typeToken = token;
     return varDecl;
   }
@@ -831,10 +834,10 @@ public class Parser {
     stmts.stmts = marked(false, () -> {
       List<Stmt> varDecls = new ArrayList<>();
       // For first variable we could be in "for (var x in [...])" so we allow no initialiser
-      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, false));
+      varDecls.add(singleVarDecl(finalType, inClassDecl, isConst, false, isFinal));
       while (matchAny(COMMA)) {
         matchAny(EOL);
-        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false, isFinal, false)));
+        varDecls.add(this.marked(true, () -> singleVarDecl(finalType, inClassDecl, isConst, false, isFinal)));
       }
       return varDecls;
     });
@@ -853,7 +856,7 @@ public class Parser {
   /**
    *# singleVarDecl ::= IDENTIFIER ( EQUAL expression ) ?
    */
-  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst, boolean isParameter, boolean isFinal, boolean allowVarWithoutInitialiser) {
+  private Stmt.VarDecl singleVarDecl(JactlType type, boolean inClassDecl, boolean isConst, boolean isParameter, boolean isFinal) {
     if (isConst && peek().is(LEFT_SQUARE)) {
       // Catches: const int[] x = [1,2,3] (for example)
       error("Constants can only be simple types", previous());
@@ -885,7 +888,7 @@ public class Parser {
       }
     }
 
-    if ((type.is(UNKNOWN) || isConst) && initialiser == null && !allowVarWithoutInitialiser) {
+    if ((type.is(UNKNOWN) || isConst) && initialiser == null && !false) {
       if (isConst && peek().is(IDENTIFIER,LEFT_SQUARE) && Character.isUpperCase(identifier.getStringValue().charAt(0))) {
         error("Constants can only be simple types", previous());
       }
@@ -1007,7 +1010,7 @@ public class Parser {
     expectOrNull(true, RIGHT_PAREN);
     Stmt trueStmt  = statement();
     Stmt falseStmt = null;
-    if (lookahead(() -> skipNewLines() || true, () -> matchAny(ELSE))) {
+    if (peekIgnoreEolIs(ELSE)) {
       skipNewLines();
       if (matchAny(ELSE)) {
         falseStmt = statement();
@@ -1272,17 +1275,19 @@ public class Parser {
     if (start.is(RIGHT_PAREN,SEMICOLON)) {
       return null;
     }
-    List<Stmt> stmtList = marked(false, () -> {
-      List<Stmt> stmts = new ArrayList<>();
-      stmts.add(_declaration(false));
-      while (matchAny(COMMA)) {
-        stmts.add(statement());
-      }
-      return stmts;
-    }, EOL, SEMICOLON, RIGHT_PAREN, RIGHT_BRACE, RIGHT_SQUARE);
+    List<Stmt> stmtList = marked(false, this::commaStatements, EOL, SEMICOLON, RIGHT_PAREN, RIGHT_BRACE, RIGHT_SQUARE);
     Stmt.Stmts stmts = new Stmt.Stmts(start);
     if (stmtList != null) {
       stmts.stmts.addAll(stmtList);
+    }
+    return stmts;
+  }
+
+  private List<Stmt> commaStatements() {
+    List<Stmt> stmts = new ArrayList<>();
+    stmts.add(_declaration(false));
+    while (matchAny(COMMA)) {
+      stmts.add(statement());
     }
     return stmts;
   }
@@ -1294,7 +1299,7 @@ public class Parser {
    */
   Stmt.Block beginEndBlock() {
     Token blockType = expect(BEGIN, END);
-    Stmt.Block block = block(LEFT_BRACE, RIGHT_BRACE);
+    Stmt.Block block = block(false);
     block.isBeginBlock = blockType.is(BEGIN);
     block.isEndBlock   = blockType.is(END);
     return block;
@@ -1357,7 +1362,7 @@ public class Parser {
       JactlType baseClass      = null;
       if (matchAny(EXTENDS)) {
         baseClassToken = peek();
-        baseClass = marked(true, () -> createClass(className(false), context));
+        baseClass = marked(true, this::createClass);
       }
       else if (peek().is(IDENTIFIER)) {
         unexpected("Expected 'extends' or '{'", false);
@@ -1416,6 +1421,10 @@ public class Parser {
         classMark.error(classError);
       }
     }
+  }
+
+  private JactlType createClass() {
+    return JactlType.createClass(className(false), context);
   }
 
   ////////////////////////////////////////////
@@ -2027,17 +2036,18 @@ public class Parser {
     if (token != null && lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
       // For named args we create a list with single entry being the map literal that represents
       // the name:value pairs.
-      List<Expr> entries = marked(false, () -> {
-                                    Expr.MapLiteral mapLiteral = mapEntries(RIGHT_PAREN);
-                                    expectOrNull(true, RIGHT_PAREN);
-                                    return Utils.listOf(mapLiteral);
-                                  },
-                                  EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+      List<Expr> entries = marked(false, this::namedArgs, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
       return entries;
     }
     else {
       return argList(token);
     }
+  }
+
+  private List<Expr> namedArgs() {
+    Expr.MapLiteral mapLiteral = mapEntries(RIGHT_PAREN);
+    expectOrNull(true, RIGHT_PAREN);
+    return Utils.listOf(mapLiteral);
   }
 
   /**
@@ -2049,7 +2059,7 @@ public class Parser {
     List<Expr> args = new ArrayList<>();
     // If we have a token we know we had a LEFT_PAREN
     if (token != null) {
-      args.addAll(marked(false, () -> expressionList(RIGHT_PAREN), EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE));
+      args.addAll(marked(false, this::argListRightParen, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE));
     }
     token = peekIgnoreEOL();
     // If closure appears immediately after a function call it is passed as last argument.
@@ -2065,6 +2075,10 @@ public class Parser {
       } while (peek().is(LEFT_BRACE));
     }
     return args;
+  }
+
+  private List<Expr> argListRightParen() {
+    return expressionList(RIGHT_PAREN);
   }
 
   /**
@@ -2087,16 +2101,19 @@ public class Parser {
   private Expr primary() {
     Token prev = previous();                // Need to know if previous token was a '.' for parsing field names
     skipNewLines();
-    return marked(true, () -> _primary(prev));
+    return marked(true, prev != null && prev.is(DOT,QUESTION_DOT) ? this::_primaryAfterDot : this::_primaryNotAfterDot);
   }
 
-  private Expr _primary(Token prev) {
+  private Expr _primaryAfterDot() { return _primary(true); }
+  private Expr _primaryNotAfterDot() { return _primary(false); }
+  
+  private Expr _primary(boolean previousWasDot) {
     Token next = peek();
     switch (next.getType()) {
       case PLUS:          case MINUS:
       case BYTE_CONST:    case INTEGER_CONST: case TRUE:
       case DECIMAL_CONST: case DOUBLE_CONST:  case FALSE:
-      case STRING_CONST:  case LONG_CONST:    case NULL:     return literal(prev);
+      case STRING_CONST:  case LONG_CONST:    case NULL:     return literal(previousWasDot);
 
       case SLASH: case SLASH_EQUAL: case EXPR_STRING_START:  return exprString();
       case REGEX_SUBST_START:                                return regexSubstitute();
@@ -2113,7 +2130,7 @@ public class Parser {
       case IMPORT:                                           return unexpected("Import statements can only occur at start or immediately following package declaration", false);
     }
 
-    if (prev != null && prev.is(DOT,QUESTION_DOT) && peek().isKeyword()) {
+    if (previousWasDot && peek().isKeyword()) {
       // Allow keywords to be used in dotted paths. E.g: x.y.while.z
       return new Expr.Literal(new Token(STRING_CONST, advance()).setValue(previous().getChars()));
     }
@@ -2129,7 +2146,7 @@ public class Parser {
   Expr doBlock() {
     expect(DO);
     skipNewLines();
-    Expr expr = new Expr.Block(peek(), block(LEFT_BRACE, RIGHT_BRACE));
+    Expr expr = new Expr.Block(peek(), block(false));
     return expr;
   }
 
@@ -2158,8 +2175,8 @@ public class Parser {
     return new Expr.ExprList(lparen, exprs);
   }
 
-  private Expr.Literal literal(Token previous) {
-    if (previous != null && previous.is(DOT,QUESTION_DOT) && peek().is(NULL)) {
+  private Expr.Literal literal(boolean previousWasDot) {
+    if (previousWasDot && peek().is(NULL)) {
       // Special case for 'null' when used as field name
       Token current = expect(NULL);
       return new Expr.Literal(current.newLiteral("null"));
@@ -2368,17 +2385,8 @@ public class Parser {
       }
     }
 
-    Supplier<Expr.Identifier> markedIdentifier = () -> marked(true, () -> {
-      Token  identifier = expect(IDENTIFIER);
-      String name       = identifier.getStringValue();
-      if (!Utils.isValidClassName(name)) {
-        unexpected("Expected valid class name", throwIfError);
-      }
-      return new Expr.Identifier(identifier);
-    });
-
     if (className.isEmpty()) {
-      className.add(markedIdentifier.get());
+      className.add(marked(true, throwIfError ? this::getClassNameIdentifierThrows : this::getClassNameIdentifier));
     }
 
     // We have already parsed package name if any so now match nested class names X.Y.Z
@@ -2387,9 +2395,21 @@ public class Parser {
         expectOrNull(true, IDENTIFIER);
         break;
       }
-      className.add(markedIdentifier.get());
+      className.add(marked(true, throwIfError ? this::getClassNameIdentifierThrows : this::getClassNameIdentifier));
     };
     return className;
+  }
+
+  private Expr.Identifier getClassNameIdentifier() { return getClassNameIdentifier(false); }
+  private Expr.Identifier getClassNameIdentifierThrows() { return getClassNameIdentifier(true); }
+  
+  private Expr.Identifier getClassNameIdentifier(boolean throwIfError) {
+    Token  identifier = expect(IDENTIFIER);
+    String name       = identifier.getStringValue();
+    if (!Utils.isValidClassName(name)) {
+      unexpected("Expected valid class name", throwIfError);
+    }
+    return new Expr.Identifier(identifier);
   }
 
   /**
@@ -2715,7 +2735,7 @@ public class Parser {
   private Expr exprStringBlockExpr() {
     Marker mark = tokeniser.mark();
     try {
-      Stmt.Block block     = block(DOLLAR_BRACE, RIGHT_BRACE);
+      Stmt.Block block     = block(true);
       Token      leftBrace = block.location;
       if (block.stmts.stmts.size() == 0) {
         Expr expr = new Expr.Literal(new Token(NULL, leftBrace));
@@ -3464,6 +3484,10 @@ public class Parser {
     return token;
   }
 
+  private boolean peekIgnoreEolIs(TokenType type) {
+    return peekIgnoreEOL().is(type);
+  }
+  
   private boolean peekIgnoreEolIs(TokenType... types) {
     return peekIgnoreEOL().is(types);
   }
@@ -3703,6 +3727,23 @@ public class Parser {
     });
   }
 
+  private boolean lookahead(TokenType type1, TokenType type2) {
+    Token current  = tokeniser.peek();
+    if (!current.is(type1)) {
+      return false;
+    }
+    Token previous = previous();
+    if (ignoreEol) {
+      advanceIgnoreEol();
+    }
+    else {
+      advance();
+    }
+    boolean result = peek().is(type2);
+    tokeniser.rewind(previous, current);
+    return result;
+  }
+  
   /////////////////////////////////////
 
   private Expr error(String msg, Token token) {
