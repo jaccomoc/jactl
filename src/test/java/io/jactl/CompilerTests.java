@@ -468,7 +468,7 @@ class CompilerTests extends BaseTest {
     testError("int $a = 1", "expecting identifier");
     testError("int a = 1; $a", "unexpected token '$'");
     testError("int a = 1; $_", "unexpected token '$'");
-    testError("int : = 1", "expected start of expression");
+    testError("int : = 1", "unexpected token ':'");
     test("int a = 1", 1);
     test("def \u0100 = 2; \u0100", 2);
     test("int _1 = 1", 1);

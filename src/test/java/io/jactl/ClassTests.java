@@ -1474,13 +1474,13 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void finalMethods() {
-    testError("class X{ static static def f(){1} }", "'static' cannot appear multiple times");
-    testError("class X{ static final static def f(){1} }", "cannot be combined");
-    testError("class X{ final static def f(){1} }", "cannot be combined");
-    testError("class X{ final final def f(){1} }", "'final' cannot appear multiple times");
-    testError("class X{ final final static def f(){1} }", "'final' cannot appear multiple times");
-    testError("class X{ static final def f(){1} }", "cannot be combined");
-    testError("class X{ final static def f(){1} }", "cannot be combined");
+    testError("class X{ static static def f(){1} }", "cannot combine");
+    testError("class X{ static final static def f(){1} }", "cannot combine");
+    testError("class X{ final static def f(){1} }", "cannot combine");
+    testError("class X{ final final def f(){1} }", "cannot combine");
+    testError("class X{ final final static def f(){1} }", "cannot combine");
+    testError("class X{ static final def f(){1} }", "cannot combine");
+    testError("class X{ final static def f(){1} }", "cannot combine");
     testError("class X{ final def f(){1} }; class Y extends X { def f(){2} }", "method f() is final");
     testError("class X{ final def f(){1} }; class Y extends X { }; class Z extends Y { def f(){2} }", "method f() is final");
     test("class X{ def f(){1} }; class Y extends X { final def f(){2} }; new Y().f()", 2);

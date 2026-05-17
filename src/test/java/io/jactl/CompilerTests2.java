@@ -3174,7 +3174,7 @@ public class CompilerTests2 extends BaseTest {
     testError("class X{}; X; 1", "class name not allowed");
     testError("class X{}; X", "class name not allowed");
     testError("class X{}; def x = X; 1", "class name not allowed");
-    testError("int; 1", "unexpected token 'int'");
+    testError("int; 1", "unexpected token ';'");
     testError("def x = int; 1", "unexpected token 'int'");
   }
 

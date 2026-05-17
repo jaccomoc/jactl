@@ -304,7 +304,7 @@ public class Parser {
     return stmts;
   }
 
-  private static final TokenType[] IDENTIFIER_AND_UPPERCASE      = Stream.concat(Stream.of(IDENTIFIER), Stream.of(TOKENS_WITH_UPPERCASE)).toArray(TokenType[]::new);
+  private static final TokenType[] IDENTIFIER_OR_UPPERCASE_TOKEN = Stream.concat(Stream.of(IDENTIFIER), Stream.of(TOKENS_WITH_UPPERCASE)).toArray(TokenType[]::new);
   private static final TokenType[] IDENTIFIER_STAR_AND_UPPERCASE = Stream.concat(Stream.of(IDENTIFIER,STAR), Stream.of(TOKENS_WITH_UPPERCASE)).toArray(TokenType[]::new);
 
                                                                                                              /**
@@ -324,7 +324,7 @@ public class Parser {
         error("Unexpected token '.' after '*'", previous(), false);
       }
       // Can't have '*' after a class path unless a static import
-      Expr.Identifier identifier = isClassPath && !isStatic ? marked(true, () -> context.allowHostAccess ? identifier(IDENTIFIER_AND_UPPERCASE) : identifier(IDENTIFIER))
+      Expr.Identifier identifier = isClassPath && !isStatic ? marked(true, () -> context.allowHostAccess ? identifier(IDENTIFIER_OR_UPPERCASE_TOKEN) : identifier(IDENTIFIER))
                                                             : marked(true, () -> context.allowHostAccess ? identifier(IDENTIFIER_STAR_AND_UPPERCASE) : identifier(IDENTIFIER,STAR));
       if (identifier.identifier.is(STAR)) {
         starCount++;
@@ -475,15 +475,17 @@ public class Parser {
     if (lookahead(DEF, LEFT_PAREN)) {
       return multiVarDecl(inClassDecl);
     }
+    
+    // Check for label
+    boolean isLabel = token.is(IDENTIFIER) && lookahead(IDENTIFIER, COLON);
+    
     // Look for function declaration: <type> <identifier> "(" ...
-    boolean typeOrVar          = token.is(typesAndVar);
-    boolean isStaticFinalIdent = token.is(STATIC, FINAL, IDENTIFIER, CONST);
-    if ((typeOrVar || isStaticFinalIdent) && isFunDecl(inClassDecl)) {
-      //return this.marked(true, () -> funDecl(inClassDecl), EOL, RIGHT_BRACE);
-      return funDecl(inClassDecl);
-    }
-    if ((typeOrVar || isStaticFinalIdent) && isVarDecl()) {
-      return varDecl(inClassDecl);
+    boolean mightBeVarFunDecl = !isLabel && token.is(typesAndVar) || token.is(STATIC, FINAL, IDENTIFIER, CONST);
+    if (mightBeVarFunDecl) {
+      Stmt decl = varOrFunDecl(inClassDecl);
+      if (decl != null) {
+        return decl;
+      }
     }
     if (inClassDecl) {
       unexpected("Expected field, method, or class declaration", false, IDENTIFIER, EOL);
@@ -612,64 +614,7 @@ public class Parser {
     }
   }
 
-  private boolean isFunDecl(boolean inClassDecl) {
-    return lookahead(() -> {
-      if (inClassDecl) {
-        // Allow static or final for methods. We do not allow both to be specified, but we will detect that later.
-        while (matchAnyIgnoreEOL(STATIC,FINAL)) {}
-        matchAny(EOL);
-      }
-      if (type(false, false, false, true).is(OPTIONAL)) {
-        return false;
-      }
-      if (!matchAnyIgnoreEOL(IDENTIFIER) && !matchKeyWord()) {
-        return false;
-      }
-      expect(LEFT_PAREN);
-      return true;
-    });
-  }
-
-  /**
-   * <pre>
-   *# funDecl ::= STATIC? type IDENTIFIER LEFT_PAREN parameters? RIGHT_PAREN block
-   * </pre>
-   */
-  private Stmt.FunDecl funDecl(boolean inClassDecl) {
-    Marker mark = tokeniser.mark();
-    boolean isStatic = false;
-    boolean isFinal  = false;
-    if (inClassDecl) {
-      while (peekIgnoreEolIs(STATIC, FINAL)) {
-        if (peekIgnoreEolIs(STATIC)) {
-          if (isStatic) {
-            unexpected("'static' cannot appear multiple times", false);
-          }
-          else
-          if (isFinal) {
-            unexpected("'static' cannot be combined with 'final' for methods", false);
-          }
-          else {
-            advance();
-            isStatic = true;
-          }
-        }
-        else {
-          if (isFinal) {
-            unexpected("'final' cannot appear multiple times", false);
-          }
-          if (isStatic) {
-            unexpected("'static' cannot be combined with 'final' for methods", false);
-          }
-          else {
-            advance();
-            isFinal = true;
-          }
-        }
-      }
-    }
-    Token     start      = peek();
-    JactlType returnType = type(false, false, false, true);
+  private Stmt.FunDecl _funDecl(boolean inClassDecl, boolean isStatic, JactlType returnType, Marker mark, Token start, boolean isFinal) {
     Token     name       = markName(() -> expect(IDENTIFIER), inClassDecl ? JactlName.NameType.METHOD : JactlName.NameType.FUNCTION);
     expect(LEFT_PAREN);
     matchAny(EOL);
@@ -687,7 +632,7 @@ public class Parser {
       mark.drop();
     }
     matchAny(EOL);
-    Stmt.FunDecl funDecl       = parseFunDecl(start, true, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
+    Stmt.FunDecl funDecl = parseFunDecl(start, true, name, returnType, parameters, RIGHT_BRACE, false, isStatic, isFinal);
     Utils.createVariableForFunction(funDecl);
     funDecl.declExpr.varDecl.isField = inClassDecl;
     return funDecl;
@@ -779,51 +724,105 @@ public class Parser {
     return type == null ? defaultType : type;
   }
 
-  private boolean isVarDecl() {
-    return lookahead(() -> {
-      boolean isConst = matchAny(CONST);
-      while(matchAny(STATIC,FINAL)) {}
-      matchAny(CONST);
-      if (!isConst || peek().is(simpleTypes)) {
-        type(true, false, true, true);
-      }
-      return matchError() || matchAnyIgnoreEOL(IDENTIFIER,UNDERSCORE,DOLLAR_IDENTIFIER) || matchKeyWord();
-    });
-  }
-
   /**
-   * <pre>
-   *# varDecl ::= type singleVarDecl ? ( COMMA singleVarDecl ? ) *
-   * </pre>
-   * NOTE: we turn either a single Stmt.VarDecl if only one variable declared or we return Stmt.Stmts with
-   *       a list of VarDecls if multiple variables declared.
+   *# varOrFunDecl ::= ( STATIC | FINAL | CONST )* type ( STATIC FINAL CONST )* IDENTIFIER ( LEFT_PAREN parameters? RIGHT_PAREN block ) ?
    */
-  private Stmt varDecl(boolean inClassDecl) {
-    if (matchAny(STATIC)) {
-      error("Unexpected token: fields/variables cannot be " + previous().getStringValue() + " (perhaps 'const' was intended)", previous());
-    }
-    boolean   isConst = matchAny(CONST);
-    JactlType type    = isConst ? createUnknown() : ANY;
-    boolean   isFinal;
-    if (isConst) {
-      isFinal = false;
-      if (peek().is(simpleTypes)) {
-        // Only simple types allowed for constants. If no type given then will work like 'var' and
-        // inherit type from initialiser.
-        type = JactlType.valueOf(expect(simpleTypes).getType());
-      }
-      else if (peek().is(FINAL)) {
-        unexpected("Const and final cannot be combined");
-      }
-      else if (peek().is(builtinTypes)) {
-        unexpected("Constants can only be simple types");
-      }
-    }
-    else {
-      isFinal = matchAny(FINAL);
+  private Stmt varOrFunDecl(boolean inClassDecl) {
+    Token start = peek();
+    Marker mark = tokeniser.markForRollback();
+    Token finalToken  = null;
+    Token constToken  = null;
+    Token staticToken = null;
+    Token typeToken   = null;
+    JactlType type = null;
+    LOOP: while (true) {
       skipNewLines();
-      type = type(true, false, false, false);
+      Token token = peek();
+      switch (token.getType()) {
+        case CONST:
+          if (constToken == null && finalToken == null && staticToken == null) {
+            constToken = token;
+            advance();
+          }
+          else {
+            unexpected("cannot combine with " + combinedErr(constToken, finalToken, staticToken), false);
+          }
+          break;
+        case STATIC:
+          if (staticToken == null && finalToken == null && constToken == null) {
+            staticToken = token;
+            advance();
+          }
+          else {
+            unexpected("cannot combine with " + combinedErr(constToken, finalToken, staticToken), false);
+          }
+          break;
+        case FINAL:
+          if (finalToken == null && constToken == null && staticToken == null) {
+            finalToken = token;
+            advance();
+          }
+          else {
+            unexpected("cannot combine with " + combinedErr(constToken, finalToken, staticToken), false);
+          }
+          break;
+        default:
+          break LOOP;
+      }
     }
+
+    Token token = peek();
+    if (token.is(typesAndVar) || (constToken == null && token.is(IDENTIFIER))) {
+      typeToken = token;
+      type = type(true, false, false, false);
+      if (type.is(OPTIONAL)) {
+        // Identifier was not a type
+        mark.rollback();
+        return null;
+      }
+      skipNewLines();
+      if (token.is(IDENTIFIER) && peek().isNot(IDENTIFIER)) {
+        mark.rollback();
+        return null;
+      }
+    }
+    if (constToken != null) {
+      // Check for simple types
+      if (type != null) {
+        if (type.is(UNKNOWN,ANY)) {
+          error("unexpected token '" + typeToken.getChars() + "'", typeToken);
+        }
+        else if (!type.is(JactlType.BOOLEAN, JactlType.BYTE, JactlType.INT, JactlType.LONG, JactlType.DOUBLE, JactlType.DECIMAL, JactlType.STRING)) {
+          error("Constants can only be simple types", typeToken);
+        }
+      }
+      else {
+        // Type will be based on type of intialiser
+        type = createUnknown();
+      }
+    }
+    if (constToken == null && lookahead(IDENTIFIER, LEFT_PAREN)) {
+      return _funDecl(inClassDecl, staticToken != null, type, mark, start, finalToken != null);
+    }
+    try {
+      if (staticToken != null) {
+        error("Class field cannot be static", staticToken);
+      }
+      return _varDecl(inClassDecl, type, constToken != null, finalToken != null);
+    }
+    finally {
+      mark.drop();
+    }
+  }
+  
+  private static String combinedErr(Token constToken, Token finalToken, Token staticToken) {
+    if (constToken != null) { return "const"; }
+    if (finalToken != null) { return "final"; }
+    if (staticToken != null) { return "static"; }
+    throw new IllegalStateException("Internal error");
+  }
+  
+  private Stmt _varDecl(boolean inClassDecl, JactlType type, boolean isConst, boolean isFinal) {
     Stmt.Stmts stmts     = new Stmt.Stmts(peek());
     JactlType  finalType = type;
     stmts.stmts = marked(false, () -> {
@@ -2281,7 +2280,7 @@ public class Parser {
     List<Token> path  = new ArrayList<>();
     Marker mark = tokeniser.markForRollback();
     try {
-      while (matchAny(IDENTIFIER_AND_UPPERCASE)) {
+      while (matchAny(IDENTIFIER_OR_UPPERCASE_TOKEN)) {
         Token token = previous();
         if (Utils.isLowerCase(token.getStringValue())) {
           path.add(token);
@@ -2388,7 +2387,8 @@ public class Parser {
     // We have already parsed package name if any so now match nested class names X.Y.Z
     while (matchAny(DOT)) {
       if (!peekIgnoreEolIs(IDENTIFIER)) {
-        expectOrNull(true, IDENTIFIER);
+        skipNewLines();
+        expect(IDENTIFIER);
         break;
       }
       className.add(marked(true, throwIfError ? this::getClassNameIdentifierThrows : this::getClassNameIdentifier));
