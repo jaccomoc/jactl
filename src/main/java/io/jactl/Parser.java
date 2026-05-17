@@ -585,8 +585,12 @@ public class Parser {
         type = JactlType.valueOf(typeToken.getType());
       }
       else {
-        if (peekIgnoreEOL().is(IDENTIFIER) && lookahead(() -> className(true) != null)){
-          type = createInstanceType(className(throwIfError), context);
+        List<Expr> classNm = null;
+        if (peekIgnoreEOL().is(IDENTIFIER)) {
+          classNm = tryOrNull(throwIfError ? this::classNameThrows : this::classNameNoThrow);
+        }
+        if (classNm != null) {
+          type = createInstanceType(classNm, context);
         }
         else {
           if (throwIfError) {
@@ -619,6 +623,9 @@ public class Parser {
     expect(LEFT_PAREN);
     matchAny(EOL);
     List<Stmt.VarDecl> parameters = parameters(RIGHT_PAREN);
+    if (parameters == null) {
+      parameters = Collections.emptyList();
+    }
     if (inClassDecl && !isStatic && name.getStringValue().equals(Utils.TO_STRING)) {
       if (!returnType.is(JactlType.STRING, ANY)) {
         mark.error(createError(Utils.TO_STRING + "() must return String or use 'def'", start));
@@ -645,7 +652,10 @@ public class Parser {
    */
   private List<Stmt.VarDecl> parameters(TokenType endToken) {
     assert endToken.is(ARROW,RIGHT_PAREN);
-    return marked(false, endToken.is(RIGHT_PAREN) ? this::_parametersRightParen : this::_parametersArrow, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+    if (endToken.is(RIGHT_PAREN)) {
+      return marked(false, this::_parametersRightParen, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+    }
+    return tryOrNull(this::_parametersArrow);
   }
   
   private List<Stmt.VarDecl> _parametersArrow() {
@@ -659,25 +669,22 @@ public class Parser {
   private List<Stmt.VarDecl> _parameters(TokenType endToken) {
     List<Stmt.VarDecl> parameters = new ArrayList<>();
     while (!peek().is(EOF,endToken)) {
+      skipNewLines();
       if (!parameters.isEmpty()) {
-        if (expectOrSkip(COMMA, true, EOL, COMMA, endToken, LEFT_BRACE, RIGHT_BRACE) != null) {
-          matchAny(EOL);
-        }
-        else if (isLookahead()) {
-          return null;
-        }
+        expect(COMMA);
+        matchAny(EOL);
       }
       Stmt.VarDecl varDecl = marked(false, this::singleVarWithOptionalType);
       if (varDecl != null) {
         varDecl.declExpr.isParam = true;
         parameters.add(varDecl);
       }
-      else if (isLookahead()) {
+      else {
         return null;
       }
       matchAny(EOL);
     }
-    if (peek().is(EOF) && isLookahead()) {
+    if (peek().is(EOF)) {
       return null;
     }
     matchAny(endToken);
@@ -686,7 +693,7 @@ public class Parser {
 
   private Stmt.VarDecl singleVarWithOptionalType() {
     Token token = peekIgnoreEOL();
-    JactlType type = optionalType(ANY);
+    JactlType type = optionalType();
     // Note that unlike a normal varDecl where commas separate different vars of the same type,
     // with parameters we expect a separate comma for parameter with a separate type for each one,
     // so we build up a list of singleVarDecl.
@@ -700,7 +707,7 @@ public class Parser {
    * on its own.
    * @return the type or ANY if no type specified
    */
-  private JactlType optionalType(JactlType defaultType) {
+  private JactlType optionalType() {
     Marker mark = tokeniser.mark();
     JactlType type = null;
     Token next = peek();
@@ -712,8 +719,9 @@ public class Parser {
       mark.drop();
       return ANY;
     }
-    if (type == null && lookahead(() -> matchAny(IDENTIFIER), () -> matchAny(DOT,IDENTIFIER))) {
-      type = createInstanceType(className(false), context);   // we have a class name
+    if (type == null) {
+      List<Expr> classNm = tryOrNull(this::classNameNoThrow);
+      type = classNm == null ? null : createInstanceType(classNm, context);
     }
     if (type == null) {
       mark.drop();
@@ -721,7 +729,7 @@ public class Parser {
     else {
       mark.done(type, next);
     }
-    return type == null ? defaultType : type;
+    return type == null ? ANY : type;
   }
 
   /**
@@ -929,7 +937,7 @@ public class Parser {
         }
         matchAny(EOL);
         Token typeToken = peek();
-        identifierAndTypes.add(Triple.create(typeToken, optionalType(ANY), expectOrNull(true, IDENTIFIER)));
+        identifierAndTypes.add(Triple.create(typeToken, optionalType(), expectOrNull(true, IDENTIFIER)));
       }
       return identifierAndTypes;
     }, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
@@ -1957,7 +1965,15 @@ public class Parser {
   }
 
   private boolean isPlusMinusNumber() {
-    return lookahead(() -> matchAny(PLUS, MINUS) && peek().is(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST));
+    Token current = peek();
+    if (!current.is(MINUS,PLUS)) {
+      return false;
+    }
+    Token previous = previous();
+    advance();
+    boolean result = peek().is(BYTE_CONST, INTEGER_CONST, LONG_CONST, DECIMAL_CONST, DOUBLE_CONST);
+    tokeniser.rewind(previous, current);
+    return result;
   }
 
   /**
@@ -2028,15 +2044,16 @@ public class Parser {
     // Advance past '('
     Token token = peekIgnoreEOL().is(LEFT_PAREN) ? advanceIgnoreEol() : null;
     // Check for named args
-    if (token != null && lookahead(() -> mapKey() != null, () -> matchAnyIgnoreEOL(COLON))) {
-      // For named args we create a list with single entry being the map literal that represents
-      // the name:value pairs.
-      List<Expr> entries = marked(false, this::namedArgs, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
-      return entries;
+    if (token != null) {
+      Token next = peekIgnoreEOL();
+      if ((next.is(IDENTIFIER) || next.isKeyword()) && lookahead(true, next.getType(), COLON)) {
+        // For named args we create a list with single entry being the map literal that represents
+        // the name:value pairs.
+        List<Expr> entries = marked(false, this::namedArgs, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
+        return entries;
+      }
     }
-    else {
-      return argList(token);
-    }
+    return argList(token);
   }
 
   private List<Expr> namedArgs() {
@@ -2360,6 +2377,14 @@ public class Parser {
     }
   }
 
+  private List<Expr> classNameThrows() {
+    return className(true);
+  }
+  
+  private List<Expr> classNameNoThrow() {
+    return className(false);
+  }
+  
   /**
    * <pre>
    *# className ::= classPathOrIdentifier ( DOT IDENTIFIER ) *
@@ -2783,15 +2808,10 @@ public class Parser {
     Token openBrace = advanceIgnoreEol();
     skipNewLines();
     // We need to do a lookahead to see if we have a parameter list or not
-    List<Stmt.VarDecl> parameters;
-    boolean            noParamsDefined = false;
-//    if (peekIgnoreEolIs(ARROW) || lookahead(() -> singleVarWithOptionalType() != null, () -> peekIgnoreEolIs(COMMA,ARROW))) {
-    if (peekIgnoreEolIs(ARROW) || lookahead(() -> parameters(ARROW) != null)) {
-      parameters = parameters(ARROW);
-    }
-    else {
+    List<Stmt.VarDecl> parameters = parameters(ARROW);
+    boolean            noParamsDefined = parameters == null;
+    if (noParamsDefined) {
       // No parameter and no "->" so fill in with default "it" parameter
-      noParamsDefined = true;
       parameters = Utils.listOf(createItParam(openBrace));
     }
     Stmt.FunDecl funDecl = parseClosure(openBrace, parameters);
@@ -3441,11 +3461,50 @@ public class Parser {
   }
 
   private boolean isMapLiteral() {
-    // Check for start of a Map literal. We need to lookahead to know the difference between
-    // a Map literal using '{' and '}' and a statement block or a closure.
-    if (!peekIgnoreEOL().is(LEFT_SQUARE,LEFT_BRACE)) {
-      return false;
+    // Remember state for rewind
+    Token previous = previous();
+    Token current  = peekNoEOL();
+
+    try {
+      Token open = advanceIgnoreEol();  // '[' or '{'
+
+      // Check for start of a Map literal
+      if (!open.is(LEFT_SQUARE, LEFT_BRACE)) {
+        return false;
+      }
+
+      Token next = advanceIgnoreEol();
+
+      // Check for [:] / {:}
+      if (next.is(COLON)) {
+        return advanceIgnoreEol().is(open.is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE);
+      }
+
+      if (next.is(STRING_CONST, IDENTIFIER) || next.isKeyword()) {
+        next = advanceIgnoreEol();
+        if (!next.is(COLON)) {
+          return false;
+        }
+        if (!open.is(LEFT_BRACE)) {
+          return true;
+        }
+        // Check for label immediately following '{'
+        next = advanceIgnoreEol();
+        if (next.is(WHILE,FOR,DO)) {
+          return false;
+        }
+        return true;
+      }
+
+      if (!next.is(EXPR_STRING_START, LEFT_PAREN, LEFT_SQUARE)) {
+        return false;
+      }
     }
+    finally {
+      tokeniser.rewind(previous, current);
+    }
+    
+    // Fall through after rewind if we are still unsure and do an expensive lookahead()
     return lookahead(() -> {
       if (!matchAnyIgnoreEOL(LEFT_SQUARE, LEFT_BRACE)) { return false; }
       TokenType close = previous().is(LEFT_SQUARE) ? RIGHT_SQUARE : RIGHT_BRACE;
@@ -3753,31 +3812,58 @@ public class Parser {
     }
   }
 
-  /**
-   * Lookahead to check if next tokens match given types in order.
-   * @types  the sequence of types to match against
-   */
-  private boolean lookaheadNoEOL(TokenType... types) {
-    if (!peek().is(types[0])) {
-      return false;
-    }
-    return lookahead(() -> {
-      for (TokenType type: types) {
-        if (!matchAnyNoEOL(type)) {
-          return false;
-        }
+  private <T> T tryOrNull(Supplier<T> lambda) {
+    // Remember current state
+    Token previous = tokeniser.previous();
+    Token current = tokeniser.peek();
+    boolean currentIgnoreEol         = ignoreEol;
+    List<CompileError> currentErrors = errors.isEmpty() ? errors : new ArrayList<>(errors);
+
+    lookaheadCount++;
+    
+    try {
+      T result = lambda.get();
+      if (result != null) {
+        return result;
       }
-      return true;
-    });
+    }
+    catch (CompileError e) {
+    }
+    finally {
+      lookaheadCount--;
+    }
+    // Restore state if error or lambda returned null
+    tokeniser.rewind(previous, current);
+    errors = currentErrors;
+    ignoreEol = currentIgnoreEol;
+    return null;
   }
 
+  /**
+   * Lookahead to check if next tokens match given types in order.
+   */
   private boolean lookahead(TokenType type1, TokenType type2) {
+    return lookahead(ignoreEol, type1, type2);
+  }
+
+  private boolean lookahead(TokenType type1, TokenType type2, TokenType type3) {
+    return lookahead(ignoreEol, type1, type2, type3);
+  }
+
+  /**
+   * Lookahead to check next two tokens match in order, ignoring new lines
+   */
+  private boolean lookaheadNoEOL(TokenType type1, TokenType type2) {
+    return lookahead(false, type1, type2);
+  }
+
+  private boolean lookahead(boolean ignoreNewLines, TokenType type1, TokenType type2) {
     Token current  = tokeniser.peek();
     if (!current.is(type1)) {
       return false;
     }
     Token previous = previous();
-    if (ignoreEol) {
+    if (ignoreNewLines) {
       advanceIgnoreEol();
     }
     else {
@@ -3786,6 +3872,36 @@ public class Parser {
     boolean result = peek().is(type2);
     tokeniser.rewind(previous, current);
     return result;
+  }
+  
+  private boolean lookahead(boolean ignoreNewLines, TokenType type1, TokenType type2, TokenType type3) {
+    Token current  = tokeniser.peek();
+    if (!current.is(type1)) {
+      return false;
+    }
+    Token previous = previous();
+    try {
+      Token next;
+      if (ignoreNewLines) {
+        next = advanceIgnoreEol();
+      }
+      else {
+        next = advance();
+      }
+      if (!next.is(type2)) {
+        return false;
+      }
+      if (ignoreNewLines) {
+        next = advanceIgnoreEol();
+      }
+      else {
+        next = advance();
+      }
+      return next.is(type3);
+    }
+    finally {
+      tokeniser.rewind(previous, current);
+    }  
   }
   
   /////////////////////////////////////
