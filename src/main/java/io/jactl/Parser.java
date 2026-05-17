@@ -3519,6 +3519,11 @@ public class Parser {
     return token != null && token.is(types);
   }
 
+  private boolean previousWas(TokenType type) {
+    Token token = previous();
+    return token != null && token.is(type);
+  }
+
   private boolean skipNewLines() {
     matchAny(EOL);
     skipCommentsAndWhiteSpace();
@@ -3546,6 +3551,17 @@ public class Parser {
         advance();
         return true;
       }
+    }
+    return false;
+  }
+
+  private boolean matchAny(TokenType type) {
+    if (ignoreEol) {
+      return matchAnyIgnoreEOL(type);
+    }
+    if (peek().is(type)) {
+      advance();
+      return true;
     }
     return false;
   }
@@ -3595,6 +3611,36 @@ public class Parser {
         advance();
         return true;
       }
+    }
+
+    if (eolConsumed) {
+      // We have consumed so we need to rewind
+      tokeniser.rewind(previous, current);
+    }
+    return false;
+  }
+
+  private boolean matchAnyIgnoreEOL(TokenType type) {
+    // Remember current tokens in case we need to rewind
+    Token token  = tokeniser.peek();
+
+    Token previous = null;
+    Token current  = null;
+    boolean eolConsumed = false;
+    if (token.is(EOL)) {
+      previous = tokeniser.previous();
+      current  = token;
+      advance();
+      token = tokeniser.peek();
+      eolConsumed = true;
+    }
+
+    if (type.is(EOL) && eolConsumed) {
+      return true;    // we have already advanced
+    }
+    if (token.is(type)) {
+      advance();
+      return true;
     }
 
     if (eolConsumed) {
@@ -3834,7 +3880,7 @@ public class Parser {
     return null;
   }
 
-  private Token expectOrSkip(TokenType type, boolean ignoreEol, TokenType... skipTypes) {
+  private Token expectOrSkip(TokenType type, boolean ignoreEol, TokenType skip1, TokenType skip2, TokenType skip3, TokenType skip4, TokenType skip5) {
     if (ignoreEol ? matchAnyIgnoreEOL(type) : matchAnyNoEOL(type)) {
       return previous();
     }
@@ -3845,7 +3891,23 @@ public class Parser {
       if (isLookahead()) {
         throw error;
       }
-      skipUntil(skipTypes);
+      skipUntil(skip1, skip2, skip3, skip4, skip5);
+    }
+    return null;
+  }
+  
+  private Token expectOrSkip(TokenType type, boolean ignoreEol, TokenType skipType) {
+    if (ignoreEol ? matchAnyIgnoreEOL(type) : matchAnyNoEOL(type)) {
+      return previous();
+    }
+    try {
+      expectError(type);
+    }
+    catch (CompileError error) {
+      if (isLookahead()) {
+        throw error;
+      }
+      skipUntil(skipType);
     }
     return null;
   }

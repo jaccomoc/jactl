@@ -52,6 +52,7 @@ import static io.jactl.JactlType.STRING_ARR;
 import static io.jactl.JactlType.VOID;
 import static io.jactl.TokenType.*;
 import static io.jactl.Utils.JACTL_JAVA_INIT;
+import static io.jactl.Utils.parseArgs;
 import static org.objectweb.asm.Opcodes.NEW;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -202,6 +203,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   LocalTypes stack;
 
   private Deque<TryCatch>   tryCatches = new ArrayDeque<>();
+  private int               nestedTryCatchNullError = 0;
   
   // Static data
   public static final MethodRef STRING_BUFFER_TO_STRING_METHOD = Utils.getMethod(StringBuffer.class, "toString");
@@ -300,10 +302,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // converted into heap locals. The original slot will have the stack local value
     // and the second slot will have the HeapLocal with the original value then stored
     // in it.
-    methodFunDecl.parameters.stream()
-                            .filter(p -> p.declExpr.isHeapLocal)
-                            .filter(p -> !p.declExpr.isPassedAsHeapLocal)
-                            .forEach(this::promoteToHeapLocal);
+    for (Stmt.VarDecl p: methodFunDecl.parameters) {
+      if (p.declExpr.isHeapLocal && !p.declExpr.isPassedAsHeapLocal) {
+        promoteToHeapLocal(p);
+      }
+    }
 
     // Check to see if we have been resumed after a suspend
     Label isContinuation = new Label();
@@ -4461,7 +4464,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private boolean insideTryCatchNullError() {
-    return tryCatches.stream().anyMatch(tryCatch -> tryCatch.catchClass.equals(NullError.class));
+    return nestedTryCatchNullError > 0;
   }
 
   /**
@@ -4601,6 +4604,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     mv.visitTryCatchBlock(blockStart, blockEnd, catchLabel, Type.getInternalName(exceptionClass));
 
     tryCatches.push(new TryCatch(exceptionClass, blockEnd, catchLabel));
+    if (exceptionClass.equals(NullError.class)) {
+      nestedTryCatchNullError++;
+    }
 
     mv.visitLabel(blockStart);   // :blockStart
 
@@ -4614,6 +4620,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     LocalTypes postTryState = stack.copy();
 
     TryCatch myTryCatch = tryCatches.pop();
+    if (myTryCatch.catchClass.equals(NullError.class)) {
+      nestedTryCatchNullError--;
+    }
 
     Label after = new Label();
     mv.visitJumpInsn(GOTO, after);
@@ -4948,13 +4957,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        });
     }
     else {
-      if (func.needsLocation) {
+      if (func.needsLocation || func.isAsync()) {
         // Add location types to the front
-        paramTypes = Stream.concat(Stream.of(STRING, INT), paramTypes.stream()).collect(Collectors.toList());
-      }
-      if (func.isAsync()) {
-        // Add Continuation to the front if async
-        paramTypes = Stream.concat(Stream.of(CONTINUATION), paramTypes.stream()).collect(Collectors.toList());
+        List<JactlType> newParamTypes = new ArrayList<>(paramTypes.size() + (func.needsLocation ? 2 : 0) + (func.isAsync() ? 1 : 0));
+        if (func.isAsync()) {
+          newParamTypes.add(CONTINUATION);
+        }
+        if (func.needsLocation) {
+          newParamTypes.add(STRING);
+          newParamTypes.add(INT);
+        }
+        newParamTypes.addAll(paramTypes);
+        paramTypes = newParamTypes;
       }
       List<JactlType> finalParamTypes = paramTypes;
 

@@ -668,7 +668,7 @@ public class LocalTypes {
   }
 
   private List<LocalEntry> copyLocals() {
-    List<LocalEntry> copy =  new ArrayList<>(locals.size());
+    List<LocalEntry> copy = new ArrayList<>(locals.size());
     for (int i = 0; i < locals.size(); i++) {
       LocalEntry localEntry = locals.get(i);
       copy.add(localEntry == null ? null : new LocalEntry(localEntry));
