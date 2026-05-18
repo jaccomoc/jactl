@@ -35,7 +35,6 @@ import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.LONG;
 import static io.jactl.Utils.JACTL_PREFIX;
-import static java.util.stream.Collectors.groupingBy;
 import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
@@ -56,6 +55,7 @@ public class ClassCompiler {
   protected Class                compiledClass;
   protected Textifier            printer;
   protected int                  printSize = 0;
+  protected Type                 classType;
 
   final         Map<Object,String> classConstantNames = new HashMap<>();
   private       int                classConstantCnt   = 0;
@@ -69,6 +69,7 @@ public class ClassCompiler {
     this.classDecl       = classDecl;
     this.classDescriptor = classDecl.classDescriptor;
     internalName         = classDescriptor.getInternalName();
+    this.classType       = Type.getType("L" + internalName + ";");
     this.source          = source;
     this.sourceName      = sourceName;
     cw = new JactlClassWriter(context);
@@ -238,7 +239,7 @@ public class ClassCompiler {
 
       // Wrap in a JactlMethodHandle
       classInit.visitLdcInsn(new Handle(decl.isStatic() ? Opcodes.H_INVOKESTATIC : H_INVOKESPECIAL, internalName, continuationMethod, CONTINUATION_METHOD_DESCRIPTOR, false));
-      classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
+      classInit.visitLdcInsn(classType);
       classInit.visitLdcInsn(handleName);
       classInit.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/JactlMethodHandle", "create", "(Ljava/lang/invoke/MethodHandle;Ljava/lang/Class;Ljava/lang/String;)Lio/jactl/runtime/JactlMethodHandle;", false);
 
@@ -252,25 +253,22 @@ public class ClassCompiler {
       String staticHandleName = Utils.staticHandleName(methodName);
 
       // Get all parameter types
-      List<Class> paramTypes = new ArrayList<>();
-      if (wrapper.heapLocals.size() > 0) {
-        paramTypes.addAll(Collections.nCopies(wrapper.heapLocals.size(), HeapLocal.class));
+      Type[] paramTypeArr = new  Type[wrapper.heapLocals.size() + 1 + wrapper.parameters.size()];
+      int i = 0;
+      for (i = 0; i < wrapper.heapLocals.size(); i++) {
+        paramTypeArr[i] = HEAPLOCAL.descriptorType();
       }
       // Wrapper method always has a Continuation argument even if it doesn't need it since when invoking through
       // a MethodHandle we have no way of knowing whether it needs a Continuation or not
-      paramTypes.add(Continuation.class);
-      paramTypes.addAll(wrapper.parameters.stream()
-                                          .map(p -> p.declExpr.type.classFromType())
-                                          .collect(Collectors.toList()));
-
-      // Wrap in a JactlMethodHandle
-      Type[] paramTypeArr = new  Type[paramTypes.size()];
-      for (int i = 0; i < paramTypes.size(); i++) {
-        paramTypeArr[i] = Type.getType(paramTypes.get(i));
+      paramTypeArr[i++] = CONTINUATION.descriptorType();
+      for (Stmt.VarDecl p: wrapper.parameters) {
+        paramTypeArr[i++] = p.declExpr.type.descriptorType();
       }
+      
+      // Wrap in a JactlMethodHandle
       String descriptor = Type.getMethodDescriptor(Utils.OBJECT_TYPE, paramTypeArr);
       classInit.visitLdcInsn(new Handle(wrapper.isStatic() ? Opcodes.H_INVOKESTATIC : H_INVOKEVIRTUAL, internalName, methodName, descriptor, false));
-      classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
+      classInit.visitLdcInsn(classType);
       classInit.visitLdcInsn(staticHandleName);
       classInit.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/JactlMethodHandle", "create", "(Ljava/lang/invoke/MethodHandle;Ljava/lang/Class;Ljava/lang/String;)Lio/jactl/runtime/JactlMethodHandle;", false);
 
@@ -442,7 +440,7 @@ public class ClassCompiler {
         classInit.visitFieldInsn(GETSTATIC, internalName, Utils.JACTL_FIELDS_METHODS_MAP, MAP.descriptor());
         Utils.loadConst(classInit, name, context);
 
-        classInit.visitLdcInsn(Type.getType("L" + internalName + ";"));
+        classInit.visitLdcInsn(classType);
         classInit.visitLdcInsn(name);
         classInit.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getField", "(Ljava/lang/String;)Ljava/lang/reflect/Field;", false);
 
@@ -1409,7 +1407,6 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     final int SOURCE_SLOT       = 1;
     final int OFFSET_SLOT       = 2;
 
-    Type classType = Type.getType(classDecl.classDescriptor.getClassType().descriptor());
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_INIT_NOASYNC,
                                       Type.getMethodDescriptor(classType, Utils.STRING_TYPE, Utils.INT_TYPE),
                                       null, null);

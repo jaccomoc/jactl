@@ -923,6 +923,19 @@ class TokeniserTest {
     assertEquals(EOF, tokeniser.next().getType());
   }
 
+  @Test public void simpleStrings2() {
+    Tokeniser tokeniser = new Tokeniser("'a' + 'b'");
+    Token     token     = tokeniser.next();
+    assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals("a", token.getValue());
+    token = tokeniser.next();
+    assertEquals(TokenType.PLUS, token.getType());
+    token = tokeniser.next();
+    assertEquals(TokenType.STRING_CONST, token.getType());
+    assertEquals("b", token.getValue());
+    assertEquals(EOF, tokeniser.next().getType());
+  }
+
   @Test public void strings() {
     Tokeniser tokeniser = new Tokeniser("a = 'a\\'b//\\n/*\\t*/\\b\\r\\fc'\n b = 2");
     Token     token     = tokeniser.next();

@@ -140,9 +140,6 @@ public class Tokeniser {
     previousToken = currentToken;
     currentToken = previousToken.getNext();
 
-//    if (result.isError()) {
-//      throw result.getError();
-//    }
     return result;
   }
 
@@ -342,7 +339,7 @@ public class Tokeniser {
     }
 
     // We found matching symbol
-    advance(symbol.length());
+    advance(symbol.length);
 
     // Some special handling for specific tokens
     switch (symbol.type) {
@@ -413,27 +410,27 @@ public class Tokeniser {
     }
 
     return token.setType(symbol.type)
-                .setLength(symbol.length())
+                .setLength(symbol.length)
                 .setKeyword(symbol.isKeyword);
   }
 
   private boolean symbolMatches(Symbol sym, int remaining) {
-    if (sym.length() > remaining) return false;
+    if (sym.length > remaining) return false;
 
     // Check that if symbol ends in a word character that following char is not a word character
-    if (sym.endsWithAlpha() &&
-        sym.length() + 1 <= remaining &&
-        Utils.isIdentifierPart(charAt(sym.length()))) {
+    if (sym.endsWithAlpha &&
+        sym.length + 1 <= remaining &&
+        Utils.isIdentifierPart(charAt(sym.length))) {
       return false;
     }
 
     // Check if string at current offset matches symbol
     int i = 1;
-    while (i < sym.length() && sym.charAt(i) == charAt(i)) {
+    while (i < sym.length && sym.charAt(i) == charAt(i)) {
       i++;
     }
 
-    return i == sym.length();
+    return i == sym.length;
   }
 
   private Token parseString(boolean stringExpr, String endChars, boolean newlinesAllowed, boolean escapeChars, boolean isReplace, int stringStart) {
@@ -718,10 +715,11 @@ public class Tokeniser {
     // i is always position of last digit seen
     // Skip '_' chars as long as following char is a digit
     for (int j = i + 1; j < remaining; j++) {
-      if (charAt(j) == '_') {
+      int ch = charAt(j);
+      if (ch == '_') {
         continue;
       }
-      if (isDigit(charAt(j), base)) {
+      if (isDigit(ch, base)) {
         i = j;          // record last digit position
       }
       else {
@@ -733,7 +731,7 @@ public class Tokeniser {
   
   private Token parseNumber(Token token, int remaining) {
     // Check for binary or hex number
-    int base = charAt(0) != '0' || remaining < 2 ? 10 
+    int base = charAt(0) != '0' || remaining < 2 ? 10
                                                  : charAt(1) == 'b' || charAt(1) == 'B' ? 2 :
                                                    charAt(1) == 'x' || charAt(1) == 'X' ? 16 :
                                                                             /* default */ 10;
@@ -889,7 +887,8 @@ public class Tokeniser {
       return token == null ? SPACE_COMMENT : token.setType(WHITESPACE).setEnd(offset);
     }
 
-    if (charAt(0) != '/' || !available(2) || charAt(1) != '/' && charAt(1) != '*') {
+    int ch;
+    if (charAt(0) != '/' || !available(2) || (ch = charAt(1)) != '/' && ch != '*') {
       return null;  // Not start of line or multi-line comment
     }
 
@@ -919,18 +918,10 @@ public class Tokeniser {
 
   private Token error(String msg, Token token) {
     return token.setType(ERROR).setEnd(offset).setValue(msg);
-//    if (tokeniseCommentsAndWhitespace) {
-//      return token.setType(ERROR).setEnd(offset);
-//    }
-//    throw new TokeniserError(msg, token.setType(ERROR).setEnd(offset));
   }
 
   private Token eofError(String msg, Token token) {
     return token.setType(ERROR).setEnd(offset).setValue(msg);
-//    if (tokeniseCommentsAndWhitespace) {
-//      return token.setType(ERROR).setEnd(offset);
-//    }
-//    throw new EOFError(msg, token.setType(ERROR).setEnd(offset));
   }
 
   private int escapedChar(int c) {
@@ -961,8 +952,15 @@ public class Tokeniser {
   }
 
   public static boolean isIdentifier(String s) {
-    return isIdentifierStart(s.charAt(0)) &&
-           s.chars().skip(1).allMatch(Utils::isIdentifierPart);
+    if (isIdentifierStart(s.charAt(0))) {
+      for (int i = 1; i < s.length(); i++) {
+        if (!Utils.isIdentifierPart(s.charAt(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   //////////////////////////////////////////////////////////////////////
@@ -988,20 +986,15 @@ public class Tokeniser {
     public int       length;
     public TokenType type;
     public boolean   isKeyword;
+    
+    public final boolean endsWithAlpha;
 
     public Symbol(String symbol, TokenType type) {
       this.symbol = symbol;
       this.type = type;
       this.length = symbol.length();
       this.isKeyword = isIdentifier(symbol);
-    }
-
-    public boolean endsWithAlpha() {
-      return Character.isAlphabetic(symbol.charAt(symbol.length() - 1));
-    }
-
-    public int length() {
-      return length;
+      endsWithAlpha = Character.isAlphabetic(symbol.charAt(length - 1));
     }
 
     public char charAt(int offset) {

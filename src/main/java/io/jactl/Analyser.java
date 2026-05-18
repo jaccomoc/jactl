@@ -375,10 +375,10 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     getFunctions().push(expr);
-    debug("+ Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
+    //debug("+ Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
     analyse(expr.block);
     getFunctions().pop();
-    debug("- Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
+    //debug("- Analysing " + expr.functionDescriptor.implementingClassName + "." + expr.functionDescriptor.name);
 
     // If still not marked async then we must be sync...
     if (expr.functionDescriptor.isAsync == null) {
@@ -697,7 +697,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     functionDescriptor.isAsync = true;
     expr.isAsync = true;
 
-    debug("Set " + functionDescriptor.implementingClassName + "." + functionDescriptor.name + " is async");
+    //debug("Set " + functionDescriptor.implementingClassName + "." + functionDescriptor.name + " is async");
   }
 
   private void asyncIfTypeIsAsync(Expr expr) {
@@ -774,14 +774,14 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private boolean isAsync(FunctionDescriptor func, Expr arg0, List<Expr> args) {
     if (testAsync)                  { return true;  }
     if (!func.isAsync)              { return false; }
-    if (func.asyncArgs.size() == 0) {
+    if (func.asyncArgs.isEmpty()) {
       // If function has not specified any async args but has flagged itself as async then all calls to it are async
-      debug("Test " + func.implementingClassName + "." + func.name + " --> async func with no async args");
+      //debug("Test " + func.implementingClassName + "." + func.name + " --> async func with no async args");
       return true;
     }
 
     boolean result = hasAsyncArg(func, arg0, args);
-    debug("Test " + func.implementingClassName + "." + func.name + " --> async args = " + result);
+    //debug("Test " + func.implementingClassName + "." + func.name + " --> async args = " + result);
     return result;
   }
 
@@ -949,7 +949,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           if (callee.isAsync != null) {
             if (callee.isAsync) {
               caller.functionDescriptor.isAsync = true;
-              debug("Set " + caller.functionDescriptor.implementingClassName + "." + caller.functionDescriptor.name + " is async (call to " + callee.implementingClassName + "." + callee.name + " is async)");
+              //debug("Set " + caller.functionDescriptor.implementingClassName + "." + caller.functionDescriptor.name + " is async (call to " + callee.implementingClassName + "." + callee.name + " is async)");
               callSite.isAsync = true;
               resolvedAsyncCall = true;
             }

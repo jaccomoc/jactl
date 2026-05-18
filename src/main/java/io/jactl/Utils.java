@@ -1213,12 +1213,27 @@ public class Utils {
     return methods.get(0);
   }
   
-  public static String pkgPathOf(String... parts) {
-    return Arrays.asList(parts)
-                 .stream()
-                 .filter(Objects::nonNull)
-                 .filter(p -> !p.isEmpty())
-                 .collect(Collectors.joining("."));
+  public static String pkgPathOf(String part1, String part2) {
+    if (part1.isEmpty()) {
+      return part2;
+    }
+    if (part2.isEmpty()) {
+      return part1;
+    }
+    return part1 + '.' + part2;
+  }
+  
+  public static String pkgPathOf(String part1, String part2, String part3) {
+    if (part1.isEmpty()) {
+      return pkgPathOf(part2, part3);
+    }
+    if (part2.isEmpty()) {
+      return pkgPathOf(part1, part3);
+    }
+    if (part3.isEmpty()) {
+      return pkgPathOf(part1, part2);
+    }
+    return part1 + '.' + part2 + '.' + part3;
   }
 
   /**

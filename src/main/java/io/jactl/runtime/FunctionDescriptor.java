@@ -60,6 +60,8 @@ public class FunctionDescriptor {
   public boolean               isBuiltin;
   public Boolean               isAsync = null;            // NOTE: null means unknown. Once known will be set to true/false
 
+  private String methodDescriptor = null;
+  
   // Async if any of these args are async. If none listed then always async. Counting starts at 0 for the instance
   // itself (e.g. ITERATOR) and then 1 is the first arg and so on.
   public List<Integer>    asyncArgs = new ArrayList<>();
@@ -101,7 +103,7 @@ public class FunctionDescriptor {
   }
 
   public String getMethodDescriptor() {
-    return getMethodDescriptor(returnType, paramTypes);
+    return methodDescriptor == null ? (methodDescriptor = getMethodDescriptor(returnType, paramTypes)) : methodDescriptor;
   }
   
   public String getMethodDescriptor(JactlType returnType, List<JactlType> paramTypes) {

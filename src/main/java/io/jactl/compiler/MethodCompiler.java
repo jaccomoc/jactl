@@ -1055,9 +1055,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   void compileRegexMatch(Expr.RegexMatch expr, Runnable compileString) {
-    boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
-    boolean captureAsNums  = expr.modifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
-    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS + "]", "");
+    String        exprModifiers  = expr.modifiers;
+    boolean       globalModifier = exprModifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
+    boolean       captureAsNums  = exprModifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
+    String        modifiers      = getStrippedModifiers(exprModifiers);
 
     // Set captureAsNums flag as necessary
     loadVar(expr.captureArrVarDecl);
@@ -1080,10 +1081,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
+  private static String getStrippedModifiers(String exprModifiers) {
+    String        modifiers = "";
+    if (!exprModifiers.isEmpty()) {
+      char[] modifierChars = new char[10];
+      int idx = 0;
+      for (int i = 0; i < exprModifiers.length(); i++) {
+        char c = exprModifiers.charAt(i);
+        if (c != Utils.REGEX_GLOBAL && c != Utils.REGEX_NON_DESTRUCTIVE && c != Utils.REGEX_CAPTURE_NUMS) {
+          modifierChars[idx++] = c;
+        }
+      }
+      modifiers = new String(modifierChars, 0, idx);
+    }
+    return modifiers;
+  }
+
   @Override public Void visitRegexSubst(Expr.RegexSubst expr) {
     boolean globalModifier = expr.modifiers.indexOf(Utils.REGEX_GLOBAL) != -1;
     boolean captureAsNums  = expr.modifiers.indexOf(Utils.REGEX_CAPTURE_NUMS) != -1;    // parse as nums if possible
-    String modifiers = expr.modifiers.replaceAll("[" + Utils.REGEX_GLOBAL + Utils.REGEX_NON_DESTRUCTIVE + Utils.REGEX_CAPTURE_NUMS + "]", "");
+    String modifiers = getStrippedModifiers(expr.modifiers);
 
     compile(expr.string);
     castToString(expr.string.location);
@@ -2429,7 +2446,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        },
                        () -> {
                          if (methodClass.equals(method.implementingClassName)) {
-                           invokeMethod(method, method.methodParamTypes(), invokeSpecial);
+                           invokeMethod(method, invokeSpecial);
                          }
                          else {
                            invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.implementingMethod,

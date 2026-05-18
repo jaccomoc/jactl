@@ -320,7 +320,7 @@ public class ExampleTests {
   
   @Test public void jactlGenerateClasses() throws IOException {
     String       jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
-    JactlContext ctx         = JactlContext.create().debug(0).async(false).build();
+    JactlContext ctx         = JactlContext.create().debug(1).async(false).build();
     HashMap      globals     = new HashMap() {{ put("source", ""); }};
     JactlScript  script      = Jactl.compileScript(jactlSource, globals, ctx);
     script.eval(globals);

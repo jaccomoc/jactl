@@ -151,6 +151,8 @@ public class JactlType extends JactlUserDataHolder {
   // For array types
   private JactlType       arrayType       = null;
 
+  private Type            classType       = null;
+  
   protected JactlType() {}
 
   private JactlType(TypeEnum type, boolean boxed, boolean isRef, int slotsNeeded) {
@@ -467,6 +469,7 @@ public class JactlType extends JactlUserDataHolder {
   }
 
   private boolean typeMatches(JactlType type) {
+    if (this == type) return true;
     type = type.getDelegate();
     if (this == type) {
       return true;
@@ -879,9 +882,9 @@ public class JactlType extends JactlUserDataHolder {
       case STRING:         return Utils.STRING_TYPE;
       case MAP:            return Utils.MAP_TYPE;
       case LIST:           return Utils.LIST_TYPE;
-      case INSTANCE:       return Type.getType(descriptor());
-      case CLASS:          return Type.getType(descriptor());
-      case ARRAY:          return Type.getType(descriptor());
+      case INSTANCE:       return classType == null ? (classType = Type.getType(descriptor())) : classType;
+      case CLASS:          return classType == null ? (classType = Type.getType(descriptor())) : classType;
+      case ARRAY:          return classType == null ? (classType = Type.getType(descriptor())) : classType;
       case ANY:            return Utils.OBJECT_TYPE;
       case FUNCTION:       return Utils.JACTL_METHOD_HANDLE_TYPE;
       case HEAPLOCAL:      return Utils.HEAP_LOCAL_TYPE;
