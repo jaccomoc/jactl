@@ -42,7 +42,8 @@ public class ScriptCompiler extends ClassCompiler {
 
     compileInnerClasses();
     compileScriptMain();
-    compileJactlObjectFunctions();
+    compileCheckpointFunction();
+    compileRestoreFunction();
     finishClassCompile();
     return compiledClass;
   }

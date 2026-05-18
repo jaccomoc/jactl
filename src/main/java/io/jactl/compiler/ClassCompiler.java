@@ -1284,7 +1284,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
 
   private static final int VERSION = 1;
 
-  private void compileCheckpointFunction() {
+  protected void compileCheckpointFunction() {
     final int THIS_SLOT         = 0;
     final int CHECKPOINTER_SLOT = 1;
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_CHECKPOINT_FN, Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.CHECKPOINTER_TYPE),
@@ -1338,7 +1338,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     mv.visitEnd();
   }
 
-  private void compileRestoreFunction() {
+  protected void compileRestoreFunction() {
     final int THIS_SLOT         = 0;
     final int RESTORER_SLOT     = 1;
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_RESTORE_FN, Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.RESTORER_TYPE),
