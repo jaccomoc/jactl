@@ -114,6 +114,10 @@ If the variable has already been declared earlier, it will be reused in the `for
 The second form of `for` loop is the "for-each" loop that iterates over a collection of values:
 > `for` `(` _variable_ `in` _collection_ `)` _statement_
 
+or
+
+> `for` `(` _variable_ `:` _collection_ `)` _statment_
+
 A variant of this form uses `:` instead of `in` to retain compatibility with Java:
 > `for` `(` _variable_ `:` _collection_ `)` _statement_
 
