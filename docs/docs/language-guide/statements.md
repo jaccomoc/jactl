@@ -86,12 +86,12 @@ Jactl provides `for`, `while`, and `do/until` loops for iterating over a block o
 
 The `for` loop has two forms.
 The first form is the same as in Java and Groovy:
-> `for` `(` _initialiser_ `;` _condition_ `;` _increment_ `)` _statement_
+> `for` `(` _initialiser_ `;` _condition_ `;` _updates_ `)` _statement_
 
-The _initialiser_ is a statement that is executed once at the start of the loop.
+The _initialiser_ is a comma-separated list of statements that are executed once at the start of the loop.
 The _condition_ is an expression that is evaluated before each iteration of the loop and the loop continues as long as
 the condition is `true`.
-The _increment_ is a statement that is executed after each iteration of the loop.
+The _updates_ is a comma-separated list of statements that are executed after each iteration of the loop.
 
 For example:
 ```groovy
@@ -100,8 +100,8 @@ for (int i = 0; i < 5; i++) {
 }
 ```
 
-If no type is specified for the loop variable, the variable will be declared with a type of `Object` and its
-value will be available after the loop completes:
+If the initialiser is a variable declaration with no type specified, 
+the variable will be declared with a type of `Object` and its value will be available after the loop completes:
 ```groovy
 for (i = 0; i < 10; i++) {
   println i
@@ -111,6 +111,17 @@ println "Final value of i: $i"      // i will be 10
 
 If the variable has already been declared earlier, it will be reused in the `for` loop.
 
+As with normal variable declarations, multiple variables can be declared in the initialiser, all inheriting the
+same type:
+```groovy
+for (int i = 0, j = 10; i < 10 && j < 20; i++, j += i) {
+  println "i=$i, j=$j"
+}
+```
+
+If other types of statements are used in the initialiser, variables cannot be declared.
+The comma-separated statements must either be variable declarations, or other statement types, but not a mix of the two.
+
 The second form of `for` loop is the "for-each" loop that iterates over a collection of values:
 > `for` `(` _variable_ `in` _collection_ `)` _statement_
 
@@ -118,18 +129,12 @@ or
 
 > `for` `(` _variable_ `:` _collection_ `)` _statment_
 
-A variant of this form uses `:` instead of `in` to retain compatibility with Java:
-> `for` `(` _variable_ `:` _collection_ `)` _statement_
-
-The _collection_ can be a `List`, `Map`, `String`, or a number.
+The _collection_ can be a `List`, `Map`, `String`, array, or a number.
 The _variable_ is a variable that will be assigned the value of each element in the collection in turn.
 It can optionally have a type attached to it.
 If no type is specified and the variable does not already exist, its type will be inferred from the
 element type of the collection (if the collection is an array or the types of the elements is known
 at compile-time), or will default to `Object` if iterating over a list or other collection type.
-
-Like the standard form of `for`, if no type is specified, the variable remains in scope even after the
-loop has completed and will have the value of the last element iterated over.
 
 For example:
 ```groovy
@@ -163,6 +168,285 @@ for (i : list.map{ it * it }) {
   println it
 }
 ```
+
+The _variable_ is actually just a special case of a more generic _pattern_ that is used to match the
+elements of the collection. Without a type, a single variable will match all elements. With a type
+supplied, only elements of that type will match and be used in the `for` loop.
+For example:
+```groovy
+for (int i in [1,2,'abc',3]) {
+  println i
+}
+// Output:
+// 1
+// 2
+// 3
+```
+If you want to generate an error if there is a non-matching element, you can use `:` instead of `in` to
+force a match on each element:
+```groovy
+// This will generate an error:
+for (int i: [1,2,'abc']) {
+  println i
+}
+```
+
+The _pattern_ can be more complex than a single typed variable.
+If you have a collection of two-element lists, for example, you can iterate over these nested lists and bind the first
+and second elements of each list to two different binding variables.
+This is done using a deconstructing pattern where you specify the shape of the structure for the match
+(in this case a two-element list) and optionally bind variables to parts of that structure:
+```groovy
+for ([i,j] in [[1,2], [3,4], [4,5]]) {
+  println "i=$i, j=$j"
+}
+// Output:
+// i=1, j=2
+// i=3, j=4
+// i=5, j=6
+```
+You can specify types as well:
+```groovy
+for ([int idx, String str] in [[1,2], [3,'abc'], ['AAA', 'xyz']]) {
+  println "idx=$idx, str=$str"
+}
+// Output:
+// idx=3, str=abc
+```
+You can use a type on its own to match on the type without actually creating a binding variable:
+```groovy
+for ([int, String str] in [[1,2], [3,'abc'], ['AAA', 'xyz']]) {
+  println "str=$str"
+}
+// Output:
+// str=abc
+```
+If you don't care about the type and don't need to bind the value you can use `_` as a placeholder:
+```groovy
+for ([_, String str] in [[1,2], [3,'abc'], ['AAA', 'xyz']]) {
+  println "str=$str"
+}
+// Output:
+// str=abc
+// str=xyz
+```
+As well as the binding variables, an implicit variable `it` is bound to the element:
+```groovy
+for ([_, String str] in [[1,2], [3,'abc'], ['AAA', 'xyz']]) {
+  println "it=$it"
+}
+// Output:
+// it=[3, 'abc']
+// it=['AAA', 'xyz']
+```
+You can use constant values in the matching:
+```groovy
+for ([3, String str] in [[1,2], [3,'abc'], ['AAA', 'xyz']]) {
+  println "str=$str"
+}
+// Output:
+// str=abc
+```
+If you want to use a value from an existing variable to match against you can use `$` to expand
+the variable at the relevant place in the pattern (similar to using `$` to expand variables in expression
+strings):
+```groovy
+def id = 3
+for ([$id, str] in [[1,2], [3,'abc'], [4,'xyz']) {
+  println "str=$str"
+}
+// Output:
+// str=abc
+```
+A binding variable can appear multiple times, in which case the value at each position must be the same
+to match.
+For example, to find all two-element sublists with have both elements the same:
+```groovy
+for ([x,x] in [[1,2], [3,3], [4,5]]) {
+  println "x=$x"
+}
+// Output:
+// x=3
+```
+If a type is specified and the binding variable appears multiple times, the type must be declared on the
+first occurrence:
+```groovy
+for ([int x,_,x] in [[1,2,3], [3,4,3], [4,5,4]]) {
+  println "x=$x"
+}
+// Output:
+// x=3
+// x=4
+```
+As well as using `_` as a placeholder for a single value, you can use `*` as a placeholder for any number
+of values in a list:
+```groovy
+for ([a,*] in [[1],[2,3],[4,5,6]]) {
+  println "a=$a"
+}
+// Output:
+// a=1
+// a=2
+// a=4
+```
+You can also bind a variable to the `*` portion of the list:
+```groovy
+for ([head,*tail] in [[1],[2,3],[4,5,6]]) {
+  println "head=$head, tail=$tail"
+}
+// Output:
+// head=1, tail=[]
+// head=2, tail=[3]
+// head=4, tail=[5,6]
+```
+You can, of course, also match against more complex structures and bind variables to parts of those structures:
+```groovy
+for ([a,[_,int b, a]] in [['a',[1,2,'a']], ['b',[3,4,'c']], [1,2]]) {
+  println "a=$a, b=$b"
+}
+// Output:
+// a=a, b=2
+```
+Maps can also be matched against by specifying which keys the candidate elements need to have in order
+to match:
+```groovy
+for ([name:_,age:_] in [[name:'Jane',age:57], [name:'John',age:33,phone:'1234567']]) {
+  println it
+}
+// Output:
+// [name:'Jane', age:57]
+```
+Note in the example that the second map did not match because it had additional keys in it.
+If you would like to match maps that have more than just the keys listed you can use `*` to
+match any number of keys:
+```groovy
+for ([name:_,age:_,*] in [[name:'Jane',age:57], [name:'John',age:33,phone:'1234567']]) {
+  println it
+}
+// Output:
+// [name:'Jane', age:57]
+// [name:'John', age:33, phone:'1234567']
+```
+As well as matching individual maps, you can also bind variables to the values of the keys in the maps:
+```groovy
+for ([name:custName,age:custAge,*] in [[name:'Jane',age:57], [name:'John',age:33,phone:'1234567']]) {
+  println "name=$custName, age=$custAge"
+}
+// Output:
+// name=Jane, age=57
+// name=John, age=33
+```
+Unlike when matching with lists, you cannot bind the `*` to a variable.
+
+Another way to match with a deconstructing pattern is to specify a type that is a user defined class.
+For example:
+```groovy
+class X { int i; long j }
+class Y extends X { String k }
+
+def collection = [ new X(1,2), new Y(3,4,'abc'), new X(3,4) ]
+for (X : collection) {
+  println it
+}
+// Output:
+// [i:1, j:2]
+// [i:3, j:4, k:'abc']
+// [i:3, j:4]
+
+for (Y y in collection) {
+  println y
+}
+// Output:
+// [i:3, j:4, k:'abc']
+```
+
+You can also use a pattern that looks like a constructor for the class and specify values for fields
+you want to match against:
+```groovy
+for (X(3,4) in collection) {
+  println it
+}
+// Output:
+// [i:3, j:4, k:'abc']
+// [i:3, j:4]
+```
+Note how in this example `X(3,4)` also matched the instance of `Y` because `Y` extends `X` and the
+instance had fields for `X` that matched.
+
+You can use binding variables instead of constant values:
+```groovy
+for (X(a,b) in collection) {
+  println "a=$a, b=$b"
+}
+// Output:
+// a=1, b=2
+// a=3, b=4
+// a=3, b=4
+```
+
+As well as using positional parameters for the constructor-like pattern, you can use named arguments:
+```groovy
+for (X(i:3,j:b) in collection) {
+  println "b=$b"
+}
+// Output:
+// b=4
+// b=4
+```
+Note that the name of the argument cannot be bound to a variable so the identifier before the `:` 
+it is always a fixed string value.
+It is only that value that can be bound to a variable.
+
+Fields that are complex types themselves can also be deconstructed in the pattern:
+```groovy
+class ZZZ { X x; Y y }
+def collection = [new X(1,2), new ZZZ(new X(3,4), new Y(5,6,'xyz')), new Y(1,2,'a')]
+
+for (ZZZ(X(a,b), Y(5,6,c)) in collection) {
+  println "a=$a, b=$b, c=$c"
+}
+// Output:
+// a=3, b=4, c=xyz
+```
+
+:::note
+In most of the examples we have shown single letter names for binding variables but the binding variables
+can be any legal variable name that does not clash with an existing variable of the same name.
+:::
+
+The following table summarises all the pattern forms supported in `for (... in ...)` / `for (... : ...)` loops:
+
+| Pattern                   | Example                               | Description                                                                                                                 |
+|---------------------------|---------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| Simple variable           | `for (i in list)`                     | Matches all elements and binds each one to `i`.<br/>Type of `i` is inferred if collection is an array or defaults to `def`. |
+| Typed variable            | `for (int i in list)`                 | Matches elements that match on type and ignores others.                                                                     |
+| Strict match (`:`)        | `for (int i: list)`                   | Use of `:` instead of `in` means there will be an error if an element does not match.                                       |
+| List structure            | `for ([i,j] in list)`                 | Matches 2-element sub-lists and binds the contents to the binding variables.                                                |
+| Typed list structure      | `for ([int i, String s] in list)`     | Matches 2-element sub-lists with elements of given types and binds values to the variables.                                 |
+| Type only                 | `for ([int, String s] in list)`       | Match on type only without binding for one of the elements.                                                                 |
+| Wildcard `_`              | `for ([_, String s] in list)`         | Wildcard `_` matches any value at that position.                                                                            |
+| Constant value            | `for ([3, String s] in list)`         | Value at given position must match supplied constant value.                                                                 |
+| Variable expansion `$`    | `for ([$id, s] in list)`              | Value to match against can come from an existing variable using `$` to expand its value.                                    |
+| Repeated variable         | `for ([x, x] in list)`                | Variables occurring multiple times require match to have same value in each position.                                       |
+| Wildcard `*`              | `for ([a, *] in list)`                | Wildcard `*` matches any number of elements (including none).                                                               |
+| Wildcard `*` with binding | `for ([head, *tail] in list)`         | Variable can be bound to `*` part of a sub-list.                                                                            |
+| Nested list               | `for ([a, [_, int b, a]] in list)`    | Recursively match nested list structure.                                                                                    |
+| Map key presence          | `for ([name:_, age:_] in list)`       | Match against maps based on presence of keys.                                                                               |
+| Map with extra keys `*`   | `for ([name:_, age:_, *] in list)`    | Match against maps using `*` to match against any keys.                                                                     |
+| Map value binding         | `for ([name:n, age:a, *] in list)`    | Match agianst maps binding variables to values in the map.                                                                  |
+| Class type match          | `for (X : list)`                      | Match based on user class type.                                                                                             |
+| Class type with binding   | `for (Y y in list)`                   | Match based on user class type with binding variable.                                                                       |
+| Constructor positional    | `for (X(3, 4) in list)`               | Match on user class type where instance fields match constant values.                                                       |
+| Constructor with bindings | `for (X(a, b) in list)`               | Match on user class instances binding instance fields to variables.                                                         |
+| Constructor named args    | `for (X(i:3, j:b) in list)`           | Match on user class instances with binding variables using named arguments.                                                 |
+| Nested class pattern      | `for (ZZZ(X(a,b), Y(5,6,c)) in list)` | Nested constructors with constants and binding variables.                                                                   |
+
+**Notes:**
+- `it` is always implicitly bound to the full current element, regardless of the pattern.
+- Binding variables can appear multiple times in a pattern and all positions must be equal to match.
+- Type must be declared on the **first** occurrence of a repeated variable.
+- Map patterns do **not** support binding the `*` wildcard to a variable (unlike list patterns).
+- Use of `:` instaed of `in` means that the matching is strict and any element that does not match will generate an error.
 
 ### While Loops
 
