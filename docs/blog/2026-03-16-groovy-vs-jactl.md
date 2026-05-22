@@ -451,7 +451,7 @@ In order to compare compile time performance and runtime performance we will use
 The reason we are using Groovy 4 (rather than Groovy 5) is that Groovy 4 is the most recent version that still
 supports Java 8.
 
-The [Compilation Benchmark](https://github.com/jaccomoc/jactl/blob/main/src/test/java/io/jactl/benchmarks/CompilationBenchmark.java)
+The [Compilation Benchmark](https://github.com/jaccomoc/jactl/blob/main/src/jmh/java/io/jactl/benchmarks/CompilationBenchmark.java)
 compiles 100 files each time and uses the [Java Microbenchmark Harness](https://github.com/openjdk/jmh) to measure the
 performance after a suitable warm-up period.
 
@@ -468,8 +468,8 @@ Both Jactl and Groovy compile to byte code but the metaobject protocol mechanism
 does introduce some overhead.
 
 There are two benchmarks that were run:
-1. The [GenerateClasses](https://github.com/jaccomoc/jactl/blob/main/src/test/java/io/jactl/benchmarks/GenerateClassesBenchmark.java) benchmark, and
-2. the [MonteCarlo Simulation](https://github.com/jaccomoc/jactl/blob/main/src/test/java/io/jactl/benchmarks/MonteCarloBenchmark.java) benchmark.
+1. The [GenerateClasses](https://github.com/jaccomoc/jactl/blob/main/src/jmh/java/io/jactl/benchmarks/GenerateClassesBenchmark.java) benchmark, and
+2. the [MonteCarlo Simulation](https://github.com/jaccomoc/jactl/blob/main/src/jmh/java/io/jactl/benchmarks/MonteCarloBenchmark.java) benchmark.
 
 ### Generate Classes
 
@@ -483,9 +483,9 @@ The source code for each version can be found here:
 
 | Language | Source Code                                                                                                                         |
 |----------|-------------------------------------------------------------------------------------------------------------------------------------|
-| Jactl    | [GenerateClasses.jactl](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/GenerateClasses.jactl)   |
-| Groovy   | [GenerateClasses.groovy](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/GenerateClasses.groovy) |
-| Java     | [GenerateClasses.java](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/GenerateClasses.java)     |
+| Jactl    | [GenerateClasses.jactl](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/GenerateClasses.jactl)   |
+| Groovy   | [GenerateClasses.groovy](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/GenerateClasses.groovy) |
+| Java     | [GenerateClasses.java](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/GenerateClasses.java)     |
 
 <iframe src="/charts/generate-classes-chart-java8.html"  width="660" height="320" style={{border:'none'}} />                                                                                                                                                                                                                                                                                                                                                                                   
 
@@ -501,10 +501,10 @@ out by each version.
 
 | Language      | Source Code                                                                                                                               |
 |---------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| Jactl         | [MonteCarloPI.jactl](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/MonteCarloPI.jactl)               |
-| Groovy        | [MonteCarloPI.groovy](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/MonteCarloPI.groovy)             |
-| Groovy Static | [MonteCarloPIStatic.groovy](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/MonteCarloPIStatic.groovy) |
-| Java          | [MonteCarloPI.java](https://github.com/jaccomoc/jactl/blob/main/src/test/resources/io/jactl/benchmarks/MonteCarloPI.java)                 |
+| Jactl         | [MonteCarloPI.jactl](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/MonteCarloPI.jactl)               |
+| Groovy        | [MonteCarloPI.groovy](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/MonteCarloPI.groovy)             |
+| Groovy Static | [MonteCarloPIStatic.groovy](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/MonteCarloPIStatic.groovy) |
+| Java          | [MonteCarloPI.java](https://github.com/jaccomoc/jactl/blob/main/src/jmh/resources/io/jactl/benchmarks/MonteCarloPI.java)                 |
 
 Note that the code is essentially the same between all versions except that in Jactl `%` is the modulo operator
 whereas in Java and Groovy `%` is a remainder operator so to get `a mod b` in Java you have to use `(a % b) % b`.
