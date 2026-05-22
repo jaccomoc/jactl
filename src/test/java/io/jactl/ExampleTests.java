@@ -17,8 +17,6 @@
 
 package io.jactl;
 
-import io.jactl.benchmarks.BaseExecutionBenchmark;
-import io.jactl.benchmarks.CompilationBenchmark;
 import io.jactl.compiler.Compiler;
 import io.jactl.runtime.Continuation;
 import io.jactl.runtime.JactlMethodHandle;
@@ -311,15 +309,24 @@ public class ExampleTests {
     }
   }
 
+  private String readResource(String resource) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    try (InputStream in = getClass().getResourceAsStream(resource)) {
+      int c;
+      while ((c = in.read()) != -1) { sb.append((char) c); }
+    }
+    return sb.toString();
+  }
+
   @Test public void jactlMonteCarlo() throws IOException {
-    String jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/MonteCarloPI.jactl");
+    String jactlSource = readResource("/io/jactl/benchmarks/MonteCarloPI.jactl");
     JactlContext ctx = JactlContext.create().debug(0).async(false).build();
     JactlScript script = Jactl.compileScript(jactlSource, new HashMap<>(), ctx);
     script.eval(new HashMap<>());
   }
   
   @Test public void jactlGenerateClasses() throws IOException {
-    String       jactlSource = BaseExecutionBenchmark.readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
+    String       jactlSource = readResource("/io/jactl/benchmarks/GenerateClasses.jactl");
     JactlContext ctx         = JactlContext.create().debug(1).async(false).build();
     HashMap      globals     = new HashMap() {{ put("source", ""); }};
     JactlScript  script      = Jactl.compileScript(jactlSource, globals, ctx);

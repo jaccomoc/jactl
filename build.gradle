@@ -30,11 +30,21 @@ repositories {
 }
 
 sourceSets {
+    jmh {
+        java.srcDirs = ['src/jmh/java']
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
     test {
         resources {
-            srcDirs = ["src/test/resources", "src/main/tools"]
+            srcDirs = ["src/test/resources", "src/main/tools", "src/jmh/resources"]
         }
     }
+}
+
+configurations {
+    jmhAnnotationProcessor
+    jmhImplementation.extendsFrom implementation
 }
 
 dependencies {
@@ -42,9 +52,9 @@ dependencies {
     implementation 'org.ow2.asm:asm-util:9.7.1'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
-    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
-    testImplementation 'org.apache.groovy:groovy:4.0.31'
+    jmhImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+    jmhImplementation 'org.apache.groovy:groovy:4.0.31'
 }
 
 tasks.withType(JavaCompile) { options.deprecation = true }
@@ -144,13 +154,17 @@ publishing {
 //    sign publishing.publications.mavenJava
 //}
 
+tasks.named('compileJmhJava') {
+    options.annotationProcessorPath = configurations.jmhAnnotationProcessor
+}
+
 tasks.register('jmh', Jar) {
     group = 'Benchmarks'
     description = 'Standalone JMH benchmark jar'
     archiveClassifier = 'jmh'
-    from sourceSets.test.output
+    from sourceSets.jmh.output
     from sourceSets.main.output
-    from configurations.testRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    from configurations.jmhRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     manifest { attributes 'Main-Class': 'org.openjdk.jmh.Main' }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
